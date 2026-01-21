@@ -8,9 +8,7 @@ export default function ChatScreen() {
     <ThemedView style={styles.container}>
       <View style={styles.content}>
         <ThemedText type="title">Chat</ThemedText>
-        <ThemedText style={styles.subtitle}>
-          Collaborative dialogue coming soon
-        </ThemedText>
+        <ThemedText style={styles.subtitle}>Collaborative dialogue coming soon</ThemedText>
       </View>
     </ThemedView>
   );

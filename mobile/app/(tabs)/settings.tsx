@@ -8,9 +8,7 @@ export default function SettingsScreen() {
     <ThemedView style={styles.container}>
       <View style={styles.content}>
         <ThemedText type="title">Settings</ThemedText>
-        <ThemedText style={styles.subtitle}>
-          Configuration options coming soon
-        </ThemedText>
+        <ThemedText style={styles.subtitle}>Configuration options coming soon</ThemedText>
       </View>
     </ThemedView>
   );
