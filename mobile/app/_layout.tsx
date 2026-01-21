@@ -1,15 +1,58 @@
+/**
+ * ARCHITECTURE: Root layout with session and lock providers.
+ * WHY: Centralized auth state management with biometric/PIN unlock support.
+ * TRADEOFF: Nested providers add complexity but enable clean separation of concerns.
+ */
+
 import { useEffect } from 'react';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
+} from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SessionProvider, useSession } from '@/contexts/session-context';
+import { LockProvider, useLock } from '@/contexts/lock-context';
+import { useBiometric } from '@/hooks/use-biometric';
+
+function BiometricSetupPrompt() {
+  const { shouldPromptBiometricSetup, dismissBiometricPrompt } = useLock();
+  const { isAvailable, enable, getBiometricLabel } = useBiometric();
+
+  useEffect(() => {
+    if (shouldPromptBiometricSetup && isAvailable) {
+      Alert.alert(
+        `Enable ${getBiometricLabel()}?`,
+        `Would you like to use ${getBiometricLabel()} to quickly unlock Dialectic?`,
+        [
+          {
+            text: 'Not Now',
+            style: 'cancel',
+            onPress: dismissBiometricPrompt,
+          },
+          {
+            text: 'Enable',
+            onPress: async () => {
+              await enable();
+              dismissBiometricPrompt();
+            },
+          },
+        ]
+      );
+    }
+  }, [shouldPromptBiometricSetup, isAvailable]);
+
+  return null;
+}
 
 function RootLayoutNav() {
   const { session, isLoading } = useSession();
+  const { isLocked } = useLock();
   const segments = useSegments();
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -19,11 +62,18 @@ function RootLayoutNav() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const inAppGroup = segments[0] === '(app)';
+    const isUnlockScreen = segments[1] === 'unlock';
+    const isSetPinScreen = segments[1] === 'set-pin';
 
     if (!session) {
       // Not signed in - redirect to sign-in
-      if (!inAuthGroup) {
+      if (!inAuthGroup || isUnlockScreen || isSetPinScreen) {
         router.replace('/(auth)/sign-in');
+      }
+    } else if (isLocked) {
+      // Signed in but locked - redirect to unlock
+      if (!isUnlockScreen && !isSetPinScreen) {
+        router.replace('/(auth)/unlock');
       }
     } else if (!session.user.emailVerified) {
       // Signed in but email not verified - redirect to verify
@@ -31,12 +81,12 @@ function RootLayoutNav() {
         router.replace('/(auth)/verify-email');
       }
     } else {
-      // Signed in and verified - redirect to app
+      // Signed in, unlocked, and verified - redirect to app
       if (!inAppGroup) {
         router.replace('/(app)');
       }
     }
-  }, [session, isLoading, segments]);
+  }, [session, isLoading, isLocked, segments]);
 
   // Show loading screen while checking session
   if (isLoading) {
@@ -49,6 +99,7 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <BiometricSetupPrompt />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(app)" />
@@ -62,7 +113,9 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <SessionProvider>
-      <RootLayoutNav />
+      <LockProvider>
+        <RootLayoutNav />
+      </LockProvider>
     </SessionProvider>
   );
 }
