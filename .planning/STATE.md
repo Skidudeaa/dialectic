@@ -54,6 +54,8 @@ Recent decisions affecting current work:
 - [02-01]: No refresh token rotation (simpler, can add later if needed)
 - [02-02]: expo-secure-store plugin added to app.config.js for keychain access
 - [02-02]: API interceptor queues requests during token refresh to prevent race conditions
+- [02-03]: Zod v4 for form validation with TypeScript type inference
+- [02-03]: Generic FormInput with Controller for type-safe controlled inputs
 - [02-04]: Reused full auth screens from 02-03 rather than placeholders (already existed)
 
 ### Pending Todos
