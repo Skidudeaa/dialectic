@@ -9,10 +9,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Authentication
 
-- [ ] **AUTH-01**: User can sign up with email and password
-- [ ] **AUTH-02**: User can log in with email and password
-- [ ] **AUTH-03**: User session persists across app restarts
-- [ ] **AUTH-04**: User can unlock app with biometric auth (Face ID / fingerprint)
+- [x] **AUTH-01**: User can sign up with email and password
+- [x] **AUTH-02**: User can log in with email and password
+- [x] **AUTH-03**: User session persists across app restarts
+- [x] **AUTH-04**: User can unlock app with biometric auth (Face ID / fingerprint)
 
 ### Real-Time Communication
 
@@ -105,10 +105,10 @@ Which phases cover which requirements.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 2 | Pending |
-| AUTH-02 | Phase 2 | Pending |
-| AUTH-03 | Phase 2 | Pending |
-| AUTH-04 | Phase 2 | Pending |
+| AUTH-01 | Phase 2 | Complete |
+| AUTH-02 | Phase 2 | Complete |
+| AUTH-03 | Phase 2 | Complete |
+| AUTH-04 | Phase 2 | Complete |
 | RTCOM-01 | Phase 3 | Pending |
 | RTCOM-02 | Phase 3 | Pending |
 | RTCOM-03 | Phase 3 | Pending |

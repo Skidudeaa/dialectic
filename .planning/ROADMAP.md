@@ -13,7 +13,7 @@ This roadmap delivers Dialectic as a cross-platform collaborative workspace (iOS
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Project Foundation** - React Native/Expo scaffolding with iOS and Android baseline
-- [ ] **Phase 2: Authentication** - User accounts with session persistence and biometric unlock
+- [x] **Phase 2: Authentication** - User accounts with session persistence and biometric unlock
 - [ ] **Phase 3: Real-Time Core** - WebSocket messaging with presence, typing, and reconnection
 - [ ] **Phase 4: LLM Participation** - LLM context, streaming responses, and explicit mentions
 - [ ] **Phase 5: Session & History** - Conversation persistence, pagination, and search
@@ -51,11 +51,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Backend auth module with JWT, Argon2, and email verification
-- [ ] 02-02-PLAN.md — Mobile auth infrastructure with SecureStore and API client
-- [ ] 02-03-PLAN.md — Auth screens (sign-in, sign-up, verify, reset password)
-- [ ] 02-04-PLAN.md — Route protection with session-based navigation
-- [ ] 02-05-PLAN.md — Biometric unlock with PIN fallback
+- [x] 02-01-PLAN.md — Backend auth module with JWT, Argon2, and email verification
+- [x] 02-02-PLAN.md — Mobile auth infrastructure with SecureStore and API client
+- [x] 02-03-PLAN.md — Auth screens (sign-in, sign-up, verify, reset password)
+- [x] 02-04-PLAN.md — Route protection with session-based navigation
+- [x] 02-05-PLAN.md — Biometric unlock with PIN fallback
 
 ### Phase 3: Real-Time Core
 **Goal**: Users experience real-time messaging with presence awareness and graceful disconnection handling
@@ -158,7 +158,7 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Project Foundation | 3/3 | Complete | 2026-01-21 |
-| 2. Authentication | 0/5 | Planning complete | - |
+| 2. Authentication | 5/5 | Complete | 2026-01-20 |
 | 3. Real-Time Core | 0/TBD | Not started | - |
 | 4. LLM Participation | 0/TBD | Not started | - |
 | 5. Session & History | 0/TBD | Not started | - |
@@ -168,4 +168,4 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-21*
+*Last updated: 2026-01-20*
