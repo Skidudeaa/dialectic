@@ -52,6 +52,7 @@ Recent decisions affecting current work:
 ### Pending Todos
 
 - User setup required: Expo account and EXPO_TOKEN for EAS builds (see 01-02-SUMMARY.md)
+- Deferred: iOS/Android manual testing for Phase 1 (automated checks pass, user will verify later)
 
 ### Blockers/Concerns
 
