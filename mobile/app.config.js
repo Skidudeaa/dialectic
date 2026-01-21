@@ -46,5 +46,10 @@ export default {
       typedRoutes: true,
       reactCompiler: true,
     },
+    extra: {
+      eas: {
+        projectId: 'your-project-id', // Set by running: npx eas-cli build:configure
+      },
+    },
   },
 };
