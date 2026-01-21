@@ -47,8 +47,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Platform Support
 
-- [ ] **PLAT-01**: App runs on iOS (iPhone)
-- [ ] **PLAT-02**: App runs on Android
+- [x] **PLAT-01**: App runs on iOS (iPhone)
+- [x] **PLAT-02**: App runs on Android
 - [ ] **PLAT-03**: App runs on macOS (desktop)
 - [ ] **PLAT-04**: App runs on Windows (desktop)
 
@@ -128,8 +128,8 @@ Which phases cover which requirements.
 | HIST-04 | Phase 5 | Pending |
 | HIST-05 | Phase 7 | Pending |
 | HIST-06 | Phase 7 | Pending |
-| PLAT-01 | Phase 1 | Pending |
-| PLAT-02 | Phase 1 | Pending |
+| PLAT-01 | Phase 1 | Complete |
+| PLAT-02 | Phase 1 | Complete |
 | PLAT-03 | Phase 8 | Pending |
 | PLAT-04 | Phase 8 | Pending |
 

@@ -12,7 +12,7 @@ This roadmap delivers Dialectic as a cross-platform collaborative workspace (iOS
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Project Foundation** - React Native/Expo scaffolding with iOS and Android baseline
+- [x] **Phase 1: Project Foundation** - React Native/Expo scaffolding with iOS and Android baseline
 - [ ] **Phase 2: Authentication** - User accounts with session persistence and biometric unlock
 - [ ] **Phase 3: Real-Time Core** - WebSocket messaging with presence, typing, and reconnection
 - [ ] **Phase 4: LLM Participation** - LLM context, streaming responses, and explicit mentions
@@ -35,9 +35,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Expo project scaffold with ESLint/Prettier and Jest testing
-- [ ] 01-02-PLAN.md — EAS Build configuration and GitHub Actions CI
-- [ ] 01-03-PLAN.md — Platform verification (iOS and Android)
+- [x] 01-01-PLAN.md — Expo project scaffold with ESLint/Prettier and Jest testing
+- [x] 01-02-PLAN.md — EAS Build configuration and GitHub Actions CI
+- [x] 01-03-PLAN.md — Platform verification (iOS and Android)
 
 ### Phase 2: Authentication
 **Goal**: Users can create accounts, log in, and maintain sessions across app restarts
@@ -154,7 +154,7 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Project Foundation | 0/3 | Planned | - |
+| 1. Project Foundation | 3/3 | Complete | 2026-01-21 |
 | 2. Authentication | 0/TBD | Not started | - |
 | 3. Real-Time Core | 0/TBD | Not started | - |
 | 4. LLM Participation | 0/TBD | Not started | - |
@@ -165,4 +165,4 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-20*
+*Last updated: 2026-01-21*
