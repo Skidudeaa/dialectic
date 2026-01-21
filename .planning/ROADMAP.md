@@ -48,11 +48,14 @@ Plans:
   2. User can log in with email and password
   3. User remains logged in after closing and reopening app
   4. User can unlock app with Face ID or fingerprint after brief absence
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md — Backend auth module with JWT, Argon2, and email verification
+- [ ] 02-02-PLAN.md — Mobile auth infrastructure with SecureStore and API client
+- [ ] 02-03-PLAN.md — Auth screens (sign-in, sign-up, verify, reset password)
+- [ ] 02-04-PLAN.md — Route protection with session-based navigation
+- [ ] 02-05-PLAN.md — Biometric unlock with PIN fallback
 
 ### Phase 3: Real-Time Core
 **Goal**: Users experience real-time messaging with presence awareness and graceful disconnection handling
@@ -155,7 +158,7 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Project Foundation | 3/3 | Complete | 2026-01-21 |
-| 2. Authentication | 0/TBD | Not started | - |
+| 2. Authentication | 0/5 | Planning complete | - |
 | 3. Real-Time Core | 0/TBD | Not started | - |
 | 4. LLM Participation | 0/TBD | Not started | - |
 | 5. Session & History | 0/TBD | Not started | - |
