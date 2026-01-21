@@ -1,9 +1,10 @@
 import { render, screen } from '@testing-library/react-native';
-import Index from '../app/(tabs)/index';
+import IndexScreen from '../app/index';
 
-describe('<Index />', () => {
-  it('renders chat tab content', () => {
-    render(<Index />);
-    expect(screen.getByText(/chat/i)).toBeTruthy();
+describe('<IndexScreen />', () => {
+  it('renders loading indicator', () => {
+    render(<IndexScreen />);
+    // Index screen shows a loading indicator while determining redirect
+    expect(screen.getByTestId('activity-indicator')).toBeTruthy();
   });
 });
