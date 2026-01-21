@@ -5,33 +5,33 @@
 See: .planning/PROJECT.md (updated 2026-01-20)
 
 **Core value:** Real-time collaborative creation with an LLM as a first-class participant
-**Current focus:** Phase 2 - Authentication
+**Current focus:** Phase 2 - Authentication (COMPLETE)
 
 ## Current Position
 
-Phase: 2 of 8 (Authentication)
-Plan: 4 of 5 in current phase
-Status: In progress
-Last activity: 2026-01-21 - Completed 02-04-PLAN.md (Route Protection)
+Phase: 2 of 8 (Authentication) - COMPLETE
+Plan: 5 of 5 in current phase
+Status: Phase complete
+Last activity: 2026-01-21 - Completed 02-05-PLAN.md (Biometric Unlock)
 
-Progress: [███░░░░░░░] 30%
+Progress: [████░░░░░░] 35%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
+- Total plans completed: 8
 - Average duration: 3 min
-- Total execution time: 0.35 hours
+- Total execution time: 0.4 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-project-foundation | 3 | 6 min | 2 min |
-| 02-authentication | 4 | 14 min | 3.5 min |
+| 02-authentication | 5 | 19 min | 3.8 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (1 min), 01-03 (deferred), 02-01 (6 min), 02-02 (2 min), 02-04 (3 min)
+- Last 5 plans: 01-03 (deferred), 02-01 (6 min), 02-02 (2 min), 02-04 (3 min), 02-05 (5 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -57,6 +57,9 @@ Recent decisions affecting current work:
 - [02-03]: Zod v4 for form validation with TypeScript type inference
 - [02-03]: Generic FormInput with Controller for type-safe controlled inputs
 - [02-04]: Reused full auth screens from 02-03 rather than placeholders (already existed)
+- [02-05]: 6-digit PIN for consistency with TOTP verification code length
+- [02-05]: 3 biometric attempts before PIN fallback (security vs UX balance)
+- [02-05]: 15-minute background timeout per CONTEXT.md spec
 
 ### Pending Todos
 
@@ -72,7 +75,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-21
-Stopped at: Completed 02-04-PLAN.md (Route Protection)
+Stopped at: Completed 02-05-PLAN.md (Biometric Unlock) - Phase 2 complete
 Resume file: None
 
 ---
