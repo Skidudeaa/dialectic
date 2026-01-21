@@ -32,11 +32,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. App launches on Android emulator and physical device
   3. Shared React Native codebase compiles for both platforms
   4. CI pipeline builds both platform artifacts
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md — Expo project scaffold with ESLint/Prettier and Jest testing
+- [ ] 01-02-PLAN.md — EAS Build configuration and GitHub Actions CI
+- [ ] 01-03-PLAN.md — Platform verification (iOS and Android)
 
 ### Phase 2: Authentication
 **Goal**: Users can create accounts, log in, and maintain sessions across app restarts
@@ -153,7 +154,7 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Project Foundation | 0/TBD | Not started | - |
+| 1. Project Foundation | 0/3 | Planned | - |
 | 2. Authentication | 0/TBD | Not started | - |
 | 3. Real-Time Core | 0/TBD | Not started | - |
 | 4. LLM Participation | 0/TBD | Not started | - |
