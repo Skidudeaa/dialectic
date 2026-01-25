@@ -67,6 +67,9 @@ Recent decisions affecting current work:
 - [03-02]: Singleton WebSocket service pattern (one connection per room)
 - [03-02]: 30-second heartbeat interval for connection keep-alive
 - [03-02]: Ref-based onMessage to avoid reconnection on callback changes
+- [03-03]: 5-minute inactivity timeout for auto-away (per CONTEXT.md)
+- [03-03]: Manual away persists through activity (requires explicit setOnline)
+- [03-03]: PresenceProvider at app root ensures presence tracked from app launch
 - [03-04]: 500ms debounce for typing_start per RESEARCH.md spec
 - [03-04]: 3 second auto-stop timeout per CONTEXT.md
 - [03-04]: ReturnType<typeof setTimeout> for cross-platform timer types
