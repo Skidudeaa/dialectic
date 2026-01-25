@@ -66,11 +66,15 @@ Plans:
   2. Typing indicator shows when another participant is composing
   3. Presence indicator shows online/away/offline status for each participant
   4. App reconnects automatically after network interruption and syncs missed messages
-**Plans**: TBD
+**Plans**: 6 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md — Backend presence and receipt handlers
+- [ ] 03-02-PLAN.md — Mobile WebSocket service with reconnection
+- [ ] 03-03-PLAN.md — Presence tracking with auto-away
+- [ ] 03-04-PLAN.md — Typing indicators with debounce
+- [ ] 03-05-PLAN.md — Offline queue and gap sync
+- [ ] 03-06-PLAN.md — Message delivery states
 
 ### Phase 4: LLM Participation
 **Goal**: LLM participates in conversations with streamed responses and can be explicitly summoned
@@ -159,7 +163,7 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 |-------|----------------|--------|-----------|
 | 1. Project Foundation | 3/3 | Complete | 2026-01-21 |
 | 2. Authentication | 5/5 | Complete | 2026-01-20 |
-| 3. Real-Time Core | 0/TBD | Not started | - |
+| 3. Real-Time Core | 0/6 | Planning complete | - |
 | 4. LLM Participation | 0/TBD | Not started | - |
 | 5. Session & History | 0/TBD | Not started | - |
 | 6. Push Notifications | 0/TBD | Not started | - |
@@ -168,4 +172,4 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-20*
+*Last updated: 2026-01-25*
