@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 3 of 8 (Real-Time Core)
-Plan: 1 of TBD in current phase
+Plan: 2 of TBD in current phase
 Status: In progress
-Last activity: 2026-01-25 - Completed 03-01-PLAN.md (Backend Presence & Receipts)
+Last activity: 2026-01-25 - Completed 03-02-PLAN.md (WebSocket Service Layer)
 
-Progress: [███░░░░░░░] 28%
+Progress: [███░░░░░░░] 31%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9
+- Total plans completed: 10
 - Average duration: 3 min
-- Total execution time: 0.4 hours
+- Total execution time: 0.5 hours
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: [███░░░░░░░] 28%
 |-------|-------|-------|----------|
 | 01-project-foundation | 3 | 6 min | 2 min |
 | 02-authentication | 5 | 19 min | 3.8 min |
-| 03-real-time-core | 1 | 2 min | 2 min |
+| 03-real-time-core | 2 | 5 min | 2.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-01 (6 min), 02-02 (2 min), 02-04 (3 min), 02-05 (5 min), 03-01 (2 min)
+- Last 5 plans: 02-02 (2 min), 02-04 (3 min), 02-05 (5 min), 03-01 (2 min), 03-02 (3 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -64,6 +64,9 @@ Recent decisions affecting current work:
 - [03-01]: PRESENCE_BROADCAST uses same wire value as PRESENCE_UPDATE for client simplicity
 - [03-01]: Receipts sent only to message sender, not broadcast to room
 - [03-01]: Presence status validated to online/away/offline only
+- [03-02]: Singleton WebSocket service pattern (one connection per room)
+- [03-02]: 30-second heartbeat interval for connection keep-alive
+- [03-02]: Ref-based onMessage to avoid reconnection on callback changes
 
 ### Pending Todos
 
@@ -79,7 +82,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Completed 03-01-PLAN.md (Backend Presence & Receipts)
+Stopped at: Completed 03-02-PLAN.md (WebSocket Service Layer)
 Resume file: None
 
 ---
