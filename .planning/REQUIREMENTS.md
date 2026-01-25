@@ -16,10 +16,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Real-Time Communication
 
-- [ ] **RTCOM-01**: Messages sync in real-time across all participants (< 100ms latency)
-- [ ] **RTCOM-02**: Typing indicators show when other participants are composing
-- [ ] **RTCOM-03**: Presence indicators show online/away/offline status
-- [ ] **RTCOM-04**: WebSocket reconnects automatically with gap sync after disconnection
+- [x] **RTCOM-01**: Messages sync in real-time across all participants (< 100ms latency)
+- [x] **RTCOM-02**: Typing indicators show when other participants are composing
+- [x] **RTCOM-03**: Presence indicators show online/away/offline status
+- [x] **RTCOM-04**: WebSocket reconnects automatically with gap sync after disconnection
 
 ### Push Notifications
 
@@ -109,10 +109,10 @@ Which phases cover which requirements.
 | AUTH-02 | Phase 2 | Complete |
 | AUTH-03 | Phase 2 | Complete |
 | AUTH-04 | Phase 2 | Complete |
-| RTCOM-01 | Phase 3 | Pending |
-| RTCOM-02 | Phase 3 | Pending |
-| RTCOM-03 | Phase 3 | Pending |
-| RTCOM-04 | Phase 3 | Pending |
+| RTCOM-01 | Phase 3 | Complete |
+| RTCOM-02 | Phase 3 | Complete |
+| RTCOM-03 | Phase 3 | Complete |
+| RTCOM-04 | Phase 3 | Complete |
 | PUSH-01 | Phase 6 | Pending |
 | PUSH-02 | Phase 6 | Pending |
 | PUSH-03 | Phase 6 | Pending |
