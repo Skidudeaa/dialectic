@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 3 of 8 (Real-Time Core)
-Plan: 2 of TBD in current phase
+Plan: 4 of TBD in current phase
 Status: In progress
-Last activity: 2026-01-25 - Completed 03-02-PLAN.md (WebSocket Service Layer)
+Last activity: 2026-01-25 - Completed 03-04-PLAN.md (Typing Indicators)
 
-Progress: [███░░░░░░░] 31%
+Progress: [███░░░░░░░] 34%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10
+- Total plans completed: 11
 - Average duration: 3 min
 - Total execution time: 0.5 hours
 
@@ -29,10 +29,10 @@ Progress: [███░░░░░░░] 31%
 |-------|-------|-------|----------|
 | 01-project-foundation | 3 | 6 min | 2 min |
 | 02-authentication | 5 | 19 min | 3.8 min |
-| 03-real-time-core | 2 | 5 min | 2.5 min |
+| 03-real-time-core | 3 | 7 min | 2.3 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-02 (2 min), 02-04 (3 min), 02-05 (5 min), 03-01 (2 min), 03-02 (3 min)
+- Last 5 plans: 02-04 (3 min), 02-05 (5 min), 03-01 (2 min), 03-02 (3 min), 03-04 (2 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -67,6 +67,9 @@ Recent decisions affecting current work:
 - [03-02]: Singleton WebSocket service pattern (one connection per room)
 - [03-02]: 30-second heartbeat interval for connection keep-alive
 - [03-02]: Ref-based onMessage to avoid reconnection on callback changes
+- [03-04]: 500ms debounce for typing_start per RESEARCH.md spec
+- [03-04]: 3 second auto-stop timeout per CONTEXT.md
+- [03-04]: ReturnType<typeof setTimeout> for cross-platform timer types
 
 ### Pending Todos
 
@@ -82,7 +85,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Completed 03-02-PLAN.md (WebSocket Service Layer)
+Stopped at: Completed 03-04-PLAN.md (Typing Indicators)
 Resume file: None
 
 ---
