@@ -19,6 +19,16 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SessionProvider, useSession } from '@/contexts/session-context';
 import { LockProvider, useLock } from '@/contexts/lock-context';
 import { useBiometric } from '@/hooks/use-biometric';
+import { usePresence } from '@/hooks/use-presence';
+
+/**
+ * Provider component that initializes presence tracking at app root.
+ * Must be inside SessionProvider and LockProvider to have access to auth state.
+ */
+function PresenceProvider({ children }: { children: React.ReactNode }) {
+  usePresence(); // Initialize presence tracking (inactivity timer, app lifecycle)
+  return <>{children}</>;
+}
 
 function BiometricSetupPrompt() {
   const { shouldPromptBiometricSetup, dismissBiometricPrompt } = useLock();
@@ -114,7 +124,9 @@ export default function RootLayout() {
   return (
     <SessionProvider>
       <LockProvider>
-        <RootLayoutNav />
+        <PresenceProvider>
+          <RootLayoutNav />
+        </PresenceProvider>
       </LockProvider>
     </SessionProvider>
   );
