@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 3 of 8 (Real-Time Core)
-Plan: 4 of TBD in current phase
+Plan: 5 of TBD in current phase
 Status: In progress
-Last activity: 2026-01-25 - Completed 03-04-PLAN.md (Typing Indicators)
+Last activity: 2026-01-25 - Completed 03-05-PLAN.md (Offline Queue and Gap Sync)
 
-Progress: [███░░░░░░░] 34%
+Progress: [████░░░░░░] 37%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11
+- Total plans completed: 12
 - Average duration: 3 min
-- Total execution time: 0.5 hours
+- Total execution time: 0.6 hours
 
 **By Phase:**
 
@@ -29,10 +29,10 @@ Progress: [███░░░░░░░] 34%
 |-------|-------|-------|----------|
 | 01-project-foundation | 3 | 6 min | 2 min |
 | 02-authentication | 5 | 19 min | 3.8 min |
-| 03-real-time-core | 3 | 7 min | 2.3 min |
+| 03-real-time-core | 4 | 9 min | 2.3 min |
 
 **Recent Trend:**
-- Last 5 plans: 02-04 (3 min), 02-05 (5 min), 03-01 (2 min), 03-02 (3 min), 03-04 (2 min)
+- Last 5 plans: 02-05 (5 min), 03-01 (2 min), 03-02 (3 min), 03-04 (2 min), 03-05 (2 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -70,6 +70,9 @@ Recent decisions affecting current work:
 - [03-04]: 500ms debounce for typing_start per RESEARCH.md spec
 - [03-04]: 3 second auto-stop timeout per CONTEXT.md
 - [03-04]: ReturnType<typeof setTimeout> for cross-platform timer types
+- [03-05]: MMKV for offline queue (30-100x faster than AsyncStorage)
+- [03-05]: 100-message queue limit to prevent unbounded memory growth
+- [03-05]: Gap sync first on reconnect, then flush queued messages
 
 ### Pending Todos
 
@@ -85,7 +88,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-25
-Stopped at: Completed 03-04-PLAN.md (Typing Indicators)
+Stopped at: Completed 03-05-PLAN.md (Offline Queue and Gap Sync)
 Resume file: None
 
 ---
