@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 3 of 8 (Real-Time Core)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-01-20 - Phase 2 complete (5/5 plans)
+Plan: 1 of TBD in current phase
+Status: In progress
+Last activity: 2026-01-25 - Completed 03-01-PLAN.md (Backend Presence & Receipts)
 
-Progress: [██░░░░░░░░] 25%
+Progress: [███░░░░░░░] 28%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
+- Total plans completed: 9
 - Average duration: 3 min
 - Total execution time: 0.4 hours
 
@@ -29,9 +29,10 @@ Progress: [██░░░░░░░░] 25%
 |-------|-------|-------|----------|
 | 01-project-foundation | 3 | 6 min | 2 min |
 | 02-authentication | 5 | 19 min | 3.8 min |
+| 03-real-time-core | 1 | 2 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-03 (deferred), 02-01 (6 min), 02-02 (2 min), 02-04 (3 min), 02-05 (5 min)
+- Last 5 plans: 02-01 (6 min), 02-02 (2 min), 02-04 (3 min), 02-05 (5 min), 03-01 (2 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -60,6 +61,9 @@ Recent decisions affecting current work:
 - [02-05]: 6-digit PIN for consistency with TOTP verification code length
 - [02-05]: 3 biometric attempts before PIN fallback (security vs UX balance)
 - [02-05]: 15-minute background timeout per CONTEXT.md spec
+- [03-01]: PRESENCE_BROADCAST uses same wire value as PRESENCE_UPDATE for client simplicity
+- [03-01]: Receipts sent only to message sender, not broadcast to room
+- [03-01]: Presence status validated to online/away/offline only
 
 ### Pending Todos
 
@@ -74,10 +78,10 @@ Research flags for later phases:
 
 ## Session Continuity
 
-Last session: 2026-01-20
-Stopped at: Phase 2 complete, ready for Phase 3 planning
+Last session: 2026-01-25
+Stopped at: Completed 03-01-PLAN.md (Backend Presence & Receipts)
 Resume file: None
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-20*
+*Last updated: 2026-01-25*
