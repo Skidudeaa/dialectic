@@ -1,0 +1,25 @@
+{
+  "name": "@dialectic/windows",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "react-native start",
+    "windows": "react-native run-windows",
+    "build": "react-native run-windows --release"
+  },
+  "dependencies": {
+    "@dialectic/app": "workspace:*",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-windows": "^0.81.0"
+  },
+  "devDependencies": {
+    "@react-native/babel-preset": "^0.81.0",
+    "@react-native/metro-config": "^0.81.0",
+    "babel-plugin-module-resolver": "^5.0.0",
+    "typescript": "~5.9.2"
+  },
+  "installConfig": {
+    "hoistingLimits": "workspaces"
+  }
+}
