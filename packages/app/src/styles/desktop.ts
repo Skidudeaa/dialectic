@@ -8,7 +8,9 @@
 
 import { StyleSheet, Platform, ViewStyle, TextStyle } from 'react-native';
 
-export const isDesktop = Platform.OS === 'macos' || Platform.OS === 'windows';
+// Note: isDesktop is also exported from services/platform.ts
+// Use isDesktopPlatform for style-specific checks to avoid collision
+export const isDesktopPlatform = Platform.OS === 'macos' || Platform.OS === 'windows';
 export const isMacOS = Platform.OS === 'macos';
 export const isWindows = Platform.OS === 'windows';
 
@@ -97,7 +99,7 @@ export function withDesktopStyles<T extends ViewStyle | TextStyle>(
   baseStyle: T,
   desktopStyle: T
 ): T {
-  if (!isDesktop) return baseStyle;
+  if (!isDesktopPlatform) return baseStyle;
   return { ...baseStyle, ...desktopStyle } as T;
 }
 

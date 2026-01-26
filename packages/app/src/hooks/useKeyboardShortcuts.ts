@@ -14,7 +14,20 @@ export interface KeyboardShortcut {
   description?: string;
 }
 
-const isModifierPressed = (event: KeyboardEvent): boolean => {
+/**
+ * DOM KeyboardEvent interface for desktop platforms.
+ * React Native doesn't include DOM types, but document.addEventListener
+ * is available on desktop platforms (macOS, Windows).
+ */
+interface DOMKeyboardEvent {
+  key: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  preventDefault(): void;
+}
+
+const isModifierPressed = (event: DOMKeyboardEvent): boolean => {
   // macOS uses Cmd (metaKey), Windows uses Ctrl (ctrlKey)
   return Platform.OS === 'macos' ? event.metaKey : event.ctrlKey;
 };
@@ -38,7 +51,7 @@ const isModifierPressed = (event: KeyboardEvent): boolean => {
  */
 export function useKeyboardShortcuts(shortcuts: KeyboardShortcut[]): void {
   const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
+    (event: DOMKeyboardEvent) => {
       // Find matching shortcut
       const shortcut = shortcuts.find((s) => {
         const keyMatch = s.key.toLowerCase() === event.key.toLowerCase();
@@ -61,10 +74,11 @@ export function useKeyboardShortcuts(shortcuts: KeyboardShortcut[]): void {
       return;
     }
 
-    // @ts-ignore - document exists in desktop RN but not typed
-    if (typeof document !== 'undefined') {
-      document.addEventListener('keydown', handleKeyDown);
-      return () => document.removeEventListener('keydown', handleKeyDown);
+    // document exists in desktop RN but not typed in React Native
+    const doc = typeof globalThis !== 'undefined' ? (globalThis as unknown as { document?: { addEventListener: Function; removeEventListener: Function } }).document : undefined;
+    if (doc) {
+      doc.addEventListener('keydown', handleKeyDown);
+      return () => doc.removeEventListener('keydown', handleKeyDown);
     }
   }, [handleKeyDown]);
 }

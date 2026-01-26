@@ -3,12 +3,11 @@
  *
  * ARCHITECTURE: Remembers window size/position across app sessions.
  * WHY: Desktop users expect windows to reopen where they left them.
- * TRADEOFF: Requires MMKV; actual window resize needs native module.
+ * TRADEOFF: Uses injection pattern; platform provides storage implementation.
  */
 
 import { useEffect, useRef } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
-import { MMKV } from 'react-native-mmkv';
 
 const STORAGE_KEY = 'window-state';
 
@@ -19,19 +18,28 @@ interface WindowState {
   y?: number;
 }
 
-// Storage for window state (platform-specific initialization)
-let storage: MMKV | null = null;
+/**
+ * Simple key-value storage interface for window persistence.
+ * Platform apps inject their implementation (e.g., MMKV).
+ */
+interface WindowStorage {
+  getString(key: string): string | undefined;
+  set(key: string, value: string): void;
+}
 
-function getStorage(): MMKV | null {
-  if (storage) return storage;
+// Injected storage instance
+let storage: WindowStorage | null = null;
 
-  try {
-    storage = new MMKV({ id: 'dialectic-window' });
-    return storage;
-  } catch {
-    console.warn('MMKV not available for window persistence');
-    return null;
-  }
+/**
+ * Set the storage implementation for window persistence.
+ * Called by platform apps during initialization.
+ */
+export function setWindowStorageImplementation(impl: WindowStorage): void {
+  storage = impl;
+}
+
+function getStorage(): WindowStorage | null {
+  return storage;
 }
 
 /**

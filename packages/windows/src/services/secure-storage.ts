@@ -1,4 +1,3 @@
-import { MMKV } from 'react-native-mmkv';
 import { SecureStorage } from '@dialectic/app';
 
 /**
@@ -15,28 +14,48 @@ import { SecureStorage } from '@dialectic/app';
  *       for true OS-level secure storage.
  */
 
-// Create encrypted MMKV instance for secure storage
-// Note: MMKV Windows support may be experimental - test thoroughly
-const storage = new MMKV({
-  id: 'dialectic-secure',
-  encryptionKey: 'dialectic-encryption-key-windows', // Should be dynamically generated in production
-});
+/**
+ * MMKV wrapper interface with delete method.
+ * The actual MMKV library uses 'delete' which is a reserved word issue.
+ */
+interface MMKVStorage {
+  set(key: string, value: string): void;
+  getString(key: string): string | undefined;
+  delete(key: string): void;
+  contains(key: string): boolean;
+}
+
+// Lazy-initialized MMKV instance
+let storage: MMKVStorage | null = null;
+
+function getStorage(): MMKVStorage {
+  if (!storage) {
+    // Dynamic import to avoid instantiation at module load time
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { MMKV } = require('react-native-mmkv');
+    storage = new MMKV({
+      id: 'dialectic-secure',
+      encryptionKey: 'dialectic-encryption-key-windows', // Should be dynamically generated in production
+    }) as MMKVStorage;
+  }
+  return storage;
+}
 
 export const secureStorage: SecureStorage = {
   async setItem(key: string, value: string): Promise<void> {
-    storage.set(key, value);
+    getStorage().set(key, value);
   },
 
   async getItem(key: string): Promise<string | null> {
-    const value = storage.getString(key);
+    const value = getStorage().getString(key);
     return value ?? null;
   },
 
   async deleteItem(key: string): Promise<void> {
-    storage.delete(key);
+    getStorage().delete(key);
   },
 
   async hasItem(key: string): Promise<boolean> {
-    return storage.contains(key);
+    return getStorage().contains(key);
   },
 };

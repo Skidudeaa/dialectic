@@ -8,7 +8,7 @@
 
 import React, { ReactNode } from 'react';
 import { View, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
-import { DESKTOP, isDesktop } from '../../styles/desktop';
+import { DESKTOP, isDesktopPlatform } from '../../styles/desktop';
 
 interface DesktopLayoutProps {
   children: ReactNode;
@@ -45,7 +45,7 @@ export function DesktopLayout({
   const { width: windowWidth } = useWindowDimensions();
 
   // On mobile, just render children
-  if (!isDesktop) {
+  if (!isDesktopPlatform) {
     return <>{children}</>;
   }
 
@@ -105,6 +105,6 @@ const styles = StyleSheet.create({
   },
   chatContainer: {
     flex: 1,
-    paddingHorizontal: isDesktop ? DESKTOP.padding : 0,
+    paddingHorizontal: isDesktopPlatform ? DESKTOP.padding : 0,
   },
 });

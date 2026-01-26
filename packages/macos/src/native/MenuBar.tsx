@@ -70,13 +70,13 @@ export function MenuBar({
         title="New Room"
         icon="plus.circle"
         keyEquivalent="n"
-        onItemClick={onNewRoom}
+        onItemPress={onNewRoom}
       />
       <MenuBarExtraItem
         title="Search"
         icon="magnifyingglass"
         keyEquivalent="f"
-        onItemClick={onSearch}
+        onItemPress={onSearch}
       />
       <MenuBarExtraSeparator />
 
@@ -87,7 +87,7 @@ export function MenuBar({
               key={room.id}
               title={room.hasUnread ? `* ${room.name}` : room.name}
               icon={room.hasUnread ? 'circle.fill' : 'circle'}
-              onItemClick={() => onSelectRoom?.(room.id)}
+              onItemPress={() => onSelectRoom?.(room.id)}
             />
           ))}
           <MenuBarExtraSeparator />
@@ -98,13 +98,13 @@ export function MenuBar({
         title="Preferences..."
         icon="gearshape"
         keyEquivalent=","
-        onItemClick={onPreferences}
+        onItemPress={onPreferences}
       />
       <MenuBarExtraSeparator />
       <MenuBarExtraItem
         title="Quit Dialectic"
         keyEquivalent="q"
-        onItemClick={onQuit}
+        onItemPress={onQuit}
       />
     </MenubarExtraView>
   );
