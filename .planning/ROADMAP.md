@@ -102,11 +102,16 @@ Plans:
   2. User can scroll up to load older messages (pagination works smoothly)
   3. User can search within current conversation and find matching messages
   4. User can search across all conversations by topic or date
-**Plans**: TBD
+**Plans**: 7 plans
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
+- [ ] 05-01-PLAN.md — Backend search infrastructure (tsvector, GIN index, search endpoints)
+- [ ] 05-02-PLAN.md — Mobile SQLite database with Drizzle ORM and FTS5
+- [ ] 05-03-PLAN.md — Session state store (MMKV) and draft auto-save
+- [ ] 05-04-PLAN.md — Message cache with 500-message limit and pagination hook
+- [ ] 05-05-PLAN.md — FlashList message list with bidirectional pagination
+- [ ] 05-06-PLAN.md — Search feature (local FTS5 + server, overlay UI with filters)
+- [ ] 05-07-PLAN.md — Session continuity (app launch restoration, scroll position)
 
 ### Phase 6: Push Notifications
 **Goal**: Users receive timely notifications when messages arrive while app is backgrounded
@@ -167,11 +172,11 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 | 2. Authentication | 5/5 | Complete | 2026-01-20 |
 | 3. Real-Time Core | 6/6 | Complete | 2026-01-25 |
 | 4. LLM Participation | 4/4 | Complete | 2026-01-25 |
-| 5. Session & History | 0/TBD | Not started | - |
+| 5. Session & History | 0/7 | Planning complete | - |
 | 6. Push Notifications | 0/TBD | Not started | - |
 | 7. Dialectic Differentiators | 0/TBD | Not started | - |
 | 8. Desktop Expansion | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-25 (Phase 4 complete)*
+*Last updated: 2026-01-25 (Phase 5 planned)*
