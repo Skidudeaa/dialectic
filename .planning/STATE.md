@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 8 of 8 (Desktop Expansion)
-Plan: 6 of 9 in current phase
+Plan: 7 of 9 in current phase
 Status: In progress
-Last activity: 2026-01-26 - Completed 08-05-PLAN.md (macOS Platform Implementation)
+Last activity: 2026-01-26 - Completed 08-07-PLAN.md (Desktop UX Features)
 
 Progress: [█████████░] 96%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 41
+- Total plans completed: 42
 - Average duration: 2.6 min
-- Total execution time: 1.9 hours
+- Total execution time: 2.0 hours
 
 **By Phase:**
 
@@ -34,10 +34,10 @@ Progress: [█████████░] 96%
 | 05-session-history | 7 | 15 min | 2.1 min |
 | 06-push-notifications | 5 | 14 min | 2.8 min |
 | 07-dialectic-differentiators | 5 | 19 min | 3.8 min |
-| 08-desktop-expansion | 6 | 20 min | 3.3 min |
+| 08-desktop-expansion | 7 | 23 min | 3.3 min |
 
 **Recent Trend:**
-- Last 5 plans: 08-02 (3 min), 08-03 (3 min), 08-04 (3 min), 08-05 (4 min), 08-06 (3 min)
+- Last 5 plans: 08-03 (3 min), 08-04 (3 min), 08-05 (4 min), 08-06 (3 min), 08-07 (3 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -175,6 +175,9 @@ Recent decisions affecting current work:
 - [08-06]: react-native-sqlite-2 WebSQL API wrapping for Database interface
 - [08-06]: WinRT Toast API via react-native-winrt for Windows notifications
 - [08-06]: SystemTray placeholder with menu structure for future native implementation
+- [08-07]: Cmd on macOS, Ctrl on Windows for keyboard shortcuts via Platform.OS detection
+- [08-07]: Desktop-only components return children unchanged on mobile platforms
+- [08-07]: Spring animation for collapsible sidebar (tension:100, friction:15)
 
 ### Pending Todos
 
@@ -190,7 +193,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 08-05-PLAN.md (macOS Platform Implementation)
+Stopped at: Completed 08-07-PLAN.md (Desktop UX Features)
 Resume file: None
 
 ---
