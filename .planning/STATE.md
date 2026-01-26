@@ -158,6 +158,9 @@ Recent decisions affecting current work:
 - [08-01]: hoistingLimits: workspaces instead of deprecated nohoist
 - [08-01]: nodeLinker: node-modules for React Native compatibility
 - [08-01]: Mobile relocated to packages/mobile, shared code in packages/app
+- [08-02]: react-native-macos 0.81.1 (matches mobile RN 0.81.x)
+- [08-02]: Manual Xcode project creation (Linux environment, react-native-macos-init requires macOS)
+- [08-02]: macOS 10.15 deployment target for modern React Native
 - [08-03]: cpp-app template for New Architecture (Fabric) support on Windows
 - [08-03]: Metro blockList excludes mobile and macos packages for clean Windows builds
 - [08-03]: VS project generation documented (requires Windows machine with VS 2022)
