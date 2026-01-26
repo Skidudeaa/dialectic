@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "commonjs",
+    "lib": ["es2017"],
+    "allowJs": true,
+    "jsx": "react-native",
+    "noEmit": true,
+    "isolatedModules": true,
+    "strict": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@dialectic/app": ["../app/src"],
+      "@dialectic/app/*": ["../app/src/*"]
+    }
+  },
+  "extends": "@react-native/typescript-config/tsconfig.json",
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", "macos"]
+}

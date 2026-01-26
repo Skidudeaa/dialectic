@@ -1,0 +1,33 @@
+{
+  "name": "@dialectic/macos",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "react-native start",
+    "macos": "react-native run-macos",
+    "build": "react-native run-macos --configuration Release"
+  },
+  "dependencies": {
+    "@dialectic/app": "workspace:*",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-macos": "^0.81.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.10",
+    "@babel/preset-env": "^7.26.9",
+    "@babel/runtime": "^7.27.1",
+    "@react-native/babel-preset": "0.81.3",
+    "@react-native/metro-config": "0.81.3",
+    "@react-native/typescript-config": "0.81.3",
+    "@types/react": "~19.1.0",
+    "babel-plugin-module-resolver": "^5.0.2",
+    "typescript": "~5.9.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "installConfig": {
+    "hoistingLimits": "workspaces"
+  }
+}
