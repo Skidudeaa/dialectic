@@ -12,14 +12,14 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 Phase: 6 of 8 (Push Notifications)
 Plan: 2 of 5 in current phase
 Status: In progress
-Last activity: 2026-01-26 - Completed 06-02-PLAN.md (Mobile Notification Setup)
+Last activity: 2026-01-26 - Completed 06-01-PLAN.md (Backend Infrastructure)
 
 Progress: [████████░░] 86.7%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 26
+- Total plans completed: 27
 - Average duration: 2.5 min
 - Total execution time: 1.0 hours
 
@@ -32,10 +32,10 @@ Progress: [████████░░] 86.7%
 | 03-real-time-core | 6 | 13 min | 2.2 min |
 | 04-llm-participation | 4 | 13 min | 3.25 min |
 | 05-session-history | 7 | 15 min | 2.1 min |
-| 06-push-notifications | 1 | 2 min | 2 min |
+| 06-push-notifications | 2 | 7 min | 3.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-05 (2 min), 05-06 (2 min), 05-07 (3 min), 06-02 (2 min)
+- Last 5 plans: 05-05 (2 min), 05-06 (2 min), 05-07 (3 min), 06-02 (2 min), 06-01 (5 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -120,6 +120,10 @@ Recent decisions affecting current work:
 - [06-02]: Different vibration patterns: human [0,250,250,250] vs LLM [0,100,100,100,100,100]
 - [06-02]: Purple (#8b5cf6) light color for LLM messages to match Claude brand
 - [06-02]: Re-register token on every call (prevents stale tokens per RESEARCH.md)
+- [06-01]: Badge count = rooms with unread (not total message count) per CONTEXT.md
+- [06-01]: LLM messages use robot emoji prefix in notification title
+- [06-01]: DeviceNotRegisteredError marks tokens inactive (not deleted)
+- [06-01]: Token upsert pattern for re-registration with ON CONFLICT DO UPDATE
 
 ### Pending Todos
 
@@ -136,7 +140,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 06-02-PLAN.md (Mobile Notification Setup)
+Stopped at: Completed 06-01-PLAN.md (Backend Infrastructure)
 Resume file: None
 
 ---
