@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-01-20)
 
 **Core value:** Real-time collaborative creation with an LLM as a first-class participant
-**Current focus:** Phase 5 - Session & History
+**Current focus:** Phase 5 - Session & History (Complete)
 
 ## Current Position
 
 Phase: 5 of 8 (Session & History)
-Plan: 6 of 7 in current phase
-Status: In progress
-Last activity: 2026-01-26 - Completed 05-06-PLAN.md (Search Functionality)
+Plan: 7 of 7 in current phase
+Status: Phase complete
+Last activity: 2026-01-26 - Completed 05-07-PLAN.md (Session Restore)
 
-Progress: [██████░░░░] 64.9%
+Progress: [██████░░░░] 67.5%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 24
+- Total plans completed: 25
 - Average duration: 2.5 min
 - Total execution time: 1.0 hours
 
@@ -31,10 +31,10 @@ Progress: [██████░░░░] 64.9%
 | 02-authentication | 5 | 19 min | 3.8 min |
 | 03-real-time-core | 6 | 13 min | 2.2 min |
 | 04-llm-participation | 4 | 13 min | 3.25 min |
-| 05-session-history | 6 | 12 min | 2 min |
+| 05-session-history | 7 | 15 min | 2.1 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-02 (2 min), 05-03 (2 min), 05-04 (2 min), 05-05 (2 min), 05-06 (2 min)
+- Last 5 plans: 05-03 (2 min), 05-04 (2 min), 05-05 (2 min), 05-06 (2 min), 05-07 (3 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -112,11 +112,15 @@ Recent decisions affecting current work:
 - [05-06]: expo.getAllSync for raw FTS5 queries (Drizzle ORM doesn't support)
 - [05-06]: Local-first search with server extension for full history
 - [05-06]: BM25 scoring for relevance ranking
+- [05-07]: Database migrations run during loading state (before auth check completes)
+- [05-07]: Restoration triggers only after: db ready AND auth complete AND signed in AND not locked AND email verified
+- [05-07]: Database errors are non-fatal (app continues with warning)
 
 ### Pending Todos
 
 - User setup required: Expo account and EXPO_TOKEN for EAS builds (see 01-02-SUMMARY.md)
 - Deferred: iOS/Android manual testing for Phase 1 (automated checks pass, user will verify later)
+- Deferred: Session restore manual verification to Phase 8 (see 05-07-SUMMARY.md)
 
 ### Blockers/Concerns
 
@@ -127,7 +131,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 05-06-PLAN.md (Search Functionality)
+Stopped at: Completed 05-07-PLAN.md (Session Restore) - Phase 5 complete
 Resume file: None
 
 ---
