@@ -94,6 +94,10 @@ Recent decisions affecting current work:
 - [04-04]: react-native-controlled-mentions v3 API (triggersConfig, onTriggersChange)
 - [04-04]: Case-insensitive @Claude detection with word boundary regex
 - [04-04]: External suggestions rendering via onTriggersChange callback
+- [05-02]: expo-sqlite v16 with Drizzle ORM for type-safe local database
+- [05-02]: FTS5 with porter unicode61 tokenizer for local full-text search
+- [05-02]: Babel inline-import plugin for bundling SQL migrations
+- [05-02]: Triggers for automatic FTS sync on insert/update/delete
 - [05-03]: Separate MMKV instance for session data (id: session-storage)
 - [05-03]: 500ms debounce for draft saves per RESEARCH.md guidance
 - [05-03]: ReturnType<typeof setTimeout> for cross-platform timer types
