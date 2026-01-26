@@ -12,11 +12,15 @@ import type { InboundMessage, OutboundMessage, WebSocketConfig } from './types';
 
 const HEARTBEAT_INTERVAL_MS = 30000; // 30 seconds
 
+// LLM event types for callback dispatch
+const LLM_EVENT_TYPES = ['llm_thinking', 'llm_streaming', 'llm_done', 'llm_error'] as const;
+
 class WebSocketService {
   private ws: ReconnectingWebSocket | null = null;
   private config: WebSocketConfig | null = null;
   private lastSequence: number = 0;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private llmEventCallback: ((type: string, payload: Record<string, unknown>) => void) | null = null;
 
   /**
    * Connect to a room's WebSocket endpoint.
@@ -98,6 +102,20 @@ class WebSocketService {
     return this.lastSequence;
   }
 
+  /**
+   * Register callback for LLM events (llm_thinking, llm_streaming, llm_done, llm_error).
+   */
+  onLLMEvent(callback: (type: string, payload: Record<string, unknown>) => void): void {
+    this.llmEventCallback = callback;
+  }
+
+  /**
+   * Unregister LLM event callback.
+   */
+  offLLMEvent(): void {
+    this.llmEventCallback = null;
+  }
+
   // Event handlers bound to preserve `this` context
   private handleOpen = (): void => {
     console.log('[WebSocket] Connected');
@@ -118,6 +136,14 @@ class WebSocketService {
       // Track sequence for gap detection
       if (message.sequence !== undefined) {
         this.lastSequence = message.sequence;
+      }
+
+      // Dispatch LLM events to registered callback
+      if (
+        LLM_EVENT_TYPES.includes(message.type as (typeof LLM_EVENT_TYPES)[number]) &&
+        this.llmEventCallback
+      ) {
+        this.llmEventCallback(message.type, message.payload);
       }
 
       this.config?.onMessage(message);
