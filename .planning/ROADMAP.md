@@ -85,11 +85,13 @@ Plans:
   2. LLM responses stream token-by-token with visible typing animation
   3. User can summon LLM with @Claude mention and receive response
   4. LLM "thinking" indicator appears during response generation
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md — Backend streaming handler with token broadcast
+- [ ] 04-02-PLAN.md — Mobile LLM store and WebSocket types
+- [ ] 04-03-PLAN.md — LLM UI components (thinking indicator, markdown, bubble)
+- [ ] 04-04-PLAN.md — @Claude mention input and detection
 
 ### Phase 5: Session & History
 **Goal**: Conversations persist across sessions with full history access and search
@@ -164,7 +166,7 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 | 1. Project Foundation | 3/3 | Complete | 2026-01-21 |
 | 2. Authentication | 5/5 | Complete | 2026-01-20 |
 | 3. Real-Time Core | 6/6 | Complete | 2026-01-25 |
-| 4. LLM Participation | 0/TBD | Not started | - |
+| 4. LLM Participation | 0/4 | Planning complete | - |
 | 5. Session & History | 0/TBD | Not started | - |
 | 6. Push Notifications | 0/TBD | Not started | - |
 | 7. Dialectic Differentiators | 0/TBD | Not started | - |
