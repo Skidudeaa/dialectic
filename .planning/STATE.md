@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 8 of 8 (Desktop Expansion)
-Plan: 5 of 5 in current phase
+Plan: 6 of 9 in current phase
 Status: In progress
-Last activity: 2026-01-26 - Completed 08-06-PLAN.md (Windows Platform Implementation)
+Last activity: 2026-01-26 - Completed 08-05-PLAN.md (macOS Platform Implementation)
 
-Progress: [█████████░] 98%
+Progress: [█████████░] 96%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 40
+- Total plans completed: 41
 - Average duration: 2.6 min
-- Total execution time: 1.86 hours
+- Total execution time: 1.9 hours
 
 **By Phase:**
 
@@ -34,10 +34,10 @@ Progress: [█████████░] 98%
 | 05-session-history | 7 | 15 min | 2.1 min |
 | 06-push-notifications | 5 | 14 min | 2.8 min |
 | 07-dialectic-differentiators | 5 | 19 min | 3.8 min |
-| 08-desktop-expansion | 5 | 16 min | 3.2 min |
+| 08-desktop-expansion | 6 | 20 min | 3.3 min |
 
 **Recent Trend:**
-- Last 5 plans: 08-01 (4 min), 08-02 (3 min), 08-03 (3 min), 08-04 (3 min), 08-06 (3 min)
+- Last 5 plans: 08-02 (3 min), 08-03 (3 min), 08-04 (3 min), 08-05 (4 min), 08-06 (3 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -167,6 +167,10 @@ Recent decisions affecting current work:
 - [08-04]: Registration pattern: setXxxImplementation() + getXxx() for platform injection
 - [08-04]: Optional registerForPushNotifications in NotificationService (desktop may not support)
 - [08-04]: @types/react-native@0.73.0 for Platform API type checking
+- [08-05]: react-native-keychain for macOS Keychain access with WHEN_UNLOCKED_THIS_DEVICE_ONLY
+- [08-05]: WebSQL-style async API for react-native-sqlite-2 database operations
+- [08-05]: SF Symbols (message.circle, message.badge.filled) for menu bar icons
+- [08-05]: MenubarExtraView API (corrected from plan's MenuBarExtraProvider)
 - [08-06]: MMKV with encryption as secure storage fallback (Windows Credential Manager needs native module)
 - [08-06]: react-native-sqlite-2 WebSQL API wrapping for Database interface
 - [08-06]: WinRT Toast API via react-native-winrt for Windows notifications
@@ -186,7 +190,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 08-06-PLAN.md (Windows Platform Implementation)
+Stopped at: Completed 08-05-PLAN.md (macOS Platform Implementation)
 Resume file: None
 
 ---
