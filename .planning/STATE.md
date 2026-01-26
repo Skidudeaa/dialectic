@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 5 of 8 (Session & History)
-Plan: 3 of 7 in current phase
+Plan: 4 of 7 in current phase
 Status: In progress
-Last activity: 2026-01-26 - Completed 05-03-PLAN.md (Session State Management)
+Last activity: 2026-01-26 - Completed 05-04-PLAN.md (Message Cache & Pagination)
 
-Progress: [██████░░░░] 56.8%
+Progress: [██████░░░░] 59.5%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21
-- Average duration: 2.7 min
-- Total execution time: 0.95 hours
+- Total plans completed: 22
+- Average duration: 2.6 min
+- Total execution time: 0.98 hours
 
 **By Phase:**
 
@@ -31,10 +31,10 @@ Progress: [██████░░░░] 56.8%
 | 02-authentication | 5 | 19 min | 3.8 min |
 | 03-real-time-core | 6 | 13 min | 2.2 min |
 | 04-llm-participation | 4 | 13 min | 3.25 min |
-| 05-session-history | 3 | 6 min | 2 min |
+| 05-session-history | 4 | 8 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-03 (3 min), 04-04 (3 min), 05-01 (2 min), 05-02 (2 min), 05-03 (2 min)
+- Last 5 plans: 04-04 (3 min), 05-01 (2 min), 05-02 (2 min), 05-03 (2 min), 05-04 (2 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -101,6 +101,10 @@ Recent decisions affecting current work:
 - [05-03]: Separate MMKV instance for session data (id: session-storage)
 - [05-03]: 500ms debounce for draft saves per RESEARCH.md guidance
 - [05-03]: ReturnType<typeof setTimeout> for cross-platform timer types
+- [05-04]: 500-message limit per thread matches CONTEXT.md spec
+- [05-04]: Eviction by sequence (oldest first) maintains recent availability
+- [05-04]: Cache-first loading with server fallback for offline+fresh data
+- [05-04]: loadOlder checks cache before server to minimize API calls
 
 ### Pending Todos
 
@@ -116,7 +120,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 05-03-PLAN.md (Session State Management)
+Stopped at: Completed 05-04-PLAN.md (Message Cache & Pagination)
 Resume file: None
 
 ---
