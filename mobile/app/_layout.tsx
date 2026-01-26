@@ -13,8 +13,11 @@ import {
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet, Alert } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { HoldMenuProvider } from 'react-native-hold-menu';
 import 'react-native-reanimated';
 
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SessionProvider, useSession } from '@/contexts/session-context';
 import { LockProvider, useLock } from '@/contexts/lock-context';
@@ -30,6 +33,19 @@ import { NotificationProvider } from '@/contexts/notification-context';
 function PresenceProvider({ children }: { children: React.ReactNode }) {
   usePresence(); // Initialize presence tracking (inactivity timer, app lifecycle)
   return <>{children}</>;
+}
+
+/**
+ * HoldMenuWrapper component that provides context menu support.
+ * Must be inside SafeAreaProvider to access safe area insets.
+ */
+function HoldMenuWrapper({ children }: { children: React.ReactElement }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <HoldMenuProvider theme="light" safeAreaInsets={insets}>
+      {children}
+    </HoldMenuProvider>
+  );
 }
 
 function BiometricSetupPrompt() {
@@ -145,19 +161,28 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <SessionProvider>
-      <LockProvider>
-        <NotificationProvider>
-          <PresenceProvider>
-            <RootLayoutNav />
-          </PresenceProvider>
-        </NotificationProvider>
-      </LockProvider>
-    </SessionProvider>
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <SafeAreaProvider>
+        <SessionProvider>
+          <LockProvider>
+            <NotificationProvider>
+              <PresenceProvider>
+                <HoldMenuWrapper>
+                  <RootLayoutNav />
+                </HoldMenuWrapper>
+              </PresenceProvider>
+            </NotificationProvider>
+          </LockProvider>
+        </SessionProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
