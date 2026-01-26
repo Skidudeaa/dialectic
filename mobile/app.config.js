@@ -11,6 +11,9 @@ export default {
     ios: {
       supportsTablet: false,
       bundleIdentifier: 'com.dialectic.app',
+      entitlements: {
+        'aps-environment': 'production',
+      },
     },
     android: {
       adaptiveIcon: {
@@ -41,6 +44,17 @@ export default {
           dark: {
             backgroundColor: '#000000',
           },
+        },
+      ],
+      [
+        'expo-notifications',
+        {
+          icon: './assets/images/icon.png',
+          color: '#3b82f6',
+          sounds: [
+            './assets/sounds/human_notification.wav',
+            './assets/sounds/llm_notification.wav',
+          ],
         },
       ],
     ],
