@@ -21,6 +21,7 @@ import { LockProvider, useLock } from '@/contexts/lock-context';
 import { useBiometric } from '@/hooks/use-biometric';
 import { usePresence } from '@/hooks/use-presence';
 import { useSessionRestore } from '@/hooks/use-session-restore';
+import { NotificationProvider } from '@/contexts/notification-context';
 
 /**
  * Provider component that initializes presence tracking at app root.
@@ -146,9 +147,11 @@ export default function RootLayout() {
   return (
     <SessionProvider>
       <LockProvider>
-        <PresenceProvider>
-          <RootLayoutNav />
-        </PresenceProvider>
+        <NotificationProvider>
+          <PresenceProvider>
+            <RootLayoutNav />
+          </PresenceProvider>
+        </NotificationProvider>
       </LockProvider>
     </SessionProvider>
   );

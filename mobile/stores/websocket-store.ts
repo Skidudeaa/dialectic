@@ -10,18 +10,21 @@ interface WebSocketState {
   isConnected: boolean;
   lastSequence: number;
   reconnectAttempts: number;
+  currentRoomId: string | null;
 
   // Actions
   setConnected: (connected: boolean) => void;
   setLastSequence: (sequence: number) => void;
   incrementReconnectAttempts: () => void;
   resetReconnectAttempts: () => void;
+  setCurrentRoomId: (roomId: string | null) => void;
 }
 
 export const useWebSocketStore = create<WebSocketState>()((set) => ({
   isConnected: false,
   lastSequence: 0,
   reconnectAttempts: 0,
+  currentRoomId: null,
 
   setConnected: (connected) =>
     set((state) => {
@@ -40,4 +43,6 @@ export const useWebSocketStore = create<WebSocketState>()((set) => ({
     })),
 
   resetReconnectAttempts: () => set({ reconnectAttempts: 0 }),
+
+  setCurrentRoomId: (roomId) => set({ currentRoomId: roomId }),
 }));
