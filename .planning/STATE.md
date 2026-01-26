@@ -12,16 +12,16 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 Phase: 4 of 8 (LLM Participation)
 Plan: 2 of 4 in current phase
 Status: In progress
-Last activity: 2026-01-26 - Completed 04-02-PLAN.md
+Last activity: 2026-01-25 - Completed 04-01-PLAN.md (Backend LLM Streaming)
 
 Progress: [████░░░░░░] 41.7%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 15
-- Average duration: 2.7 min
-- Total execution time: 0.7 hours
+- Total plans completed: 16
+- Average duration: 2.8 min
+- Total execution time: 0.75 hours
 
 **By Phase:**
 
@@ -30,10 +30,10 @@ Progress: [████░░░░░░] 41.7%
 | 01-project-foundation | 3 | 6 min | 2 min |
 | 02-authentication | 5 | 19 min | 3.8 min |
 | 03-real-time-core | 6 | 13 min | 2.2 min |
-| 04-llm-participation | 1 | 3 min | 3 min |
+| 04-llm-participation | 2 | 7 min | 3.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 03-04 (2 min), 03-05 (2 min), 03-06 (2 min), 04-02 (3 min)
+- Last 5 plans: 03-05 (2 min), 03-06 (2 min), 04-01 (4 min), 04-02 (3 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -80,6 +80,10 @@ Recent decisions affecting current work:
 - [03-06]: Color-based delivery status per CONTEXT.md (gray->light blue->blue->green, red for failed)
 - [03-06]: Client ID correlation for matching optimistic updates to server acknowledgments
 - [03-06]: Sequence-based insertion for gap sync message ordering
+- [04-01]: 100k token context window with 4k reserved for output
+- [04-01]: Priority scoring for truncation: recency > @Claude > LLM responses > questions
+- [04-01]: Always include last 10 messages regardless of priority score
+- [04-01]: tiktoken for token counting with 4-char fallback
 - [04-02]: Handlers object pattern for useLLM WebSocket event wiring
 - [04-02]: State scoped to active thread for multi-thread support
 - [04-02]: LLM events dual dispatch (callback AND onMessage)
@@ -97,10 +101,10 @@ Research flags for later phases:
 
 ## Session Continuity
 
-Last session: 2026-01-26
-Stopped at: Completed 04-02-PLAN.md (Mobile LLM State)
+Last session: 2026-01-25
+Stopped at: Completed 04-01-PLAN.md (Backend LLM Streaming)
 Resume file: None
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26*
+*Last updated: 2026-01-25*
