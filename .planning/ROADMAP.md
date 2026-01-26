@@ -122,12 +122,14 @@ Plans:
   2. App icon badge shows unread message count
   3. Push notification shows message preview (sender name and content)
   4. Tapping notification opens the relevant conversation at the new message
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
-- [ ] 06-03: TBD
+- [ ] 06-01-PLAN.md — Backend push infrastructure (schema, Expo SDK service, token endpoints)
+- [ ] 06-02-PLAN.md — Mobile notification setup (packages, channels, token registration)
+- [ ] 06-03-PLAN.md — Message handler push trigger (foreground suppression)
+- [ ] 06-04-PLAN.md — Notification handlers and deep linking
+- [ ] 06-05-PLAN.md — Badge management (server-synced counts, visibility tracking)
 
 ### Phase 7: Dialectic Differentiators
 **Goal**: Users access Dialectic's unique features: thread forking, genealogy visualization, and LLM behavior configuration
@@ -173,10 +175,10 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 | 3. Real-Time Core | 6/6 | Complete | 2026-01-25 |
 | 4. LLM Participation | 4/4 | Complete | 2026-01-25 |
 | 5. Session & History | 7/7 | Complete | 2026-01-25 |
-| 6. Push Notifications | 0/TBD | Not started | - |
+| 6. Push Notifications | 0/5 | Ready | - |
 | 7. Dialectic Differentiators | 0/TBD | Not started | - |
 | 8. Desktop Expansion | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-25 (Phase 5 complete)*
+*Last updated: 2026-01-25 (Phase 6 planned)*
