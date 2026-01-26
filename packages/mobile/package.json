@@ -80,5 +80,8 @@
     "prettier": "^3.8.0",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "installConfig": {
+    "hoistingLimits": "workspaces"
+  }
 }
