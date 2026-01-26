@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 8 of 8 (Desktop Expansion)
-Plan: 0 of TBD in current phase
-Status: Ready to discuss
-Last activity: 2026-01-25 - Phase 7 verified complete (5/5 plans)
+Plan: 1 of 5 in current phase
+Status: In progress
+Last activity: 2026-01-26 - Completed 08-01-PLAN.md (Monorepo Setup)
 
-Progress: [█████████░] 88%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 35
-- Average duration: 2.5 min
-- Total execution time: 1.59 hours
+- Total plans completed: 36
+- Average duration: 2.6 min
+- Total execution time: 1.66 hours
 
 **By Phase:**
 
@@ -34,9 +34,10 @@ Progress: [█████████░] 88%
 | 05-session-history | 7 | 15 min | 2.1 min |
 | 06-push-notifications | 5 | 14 min | 2.8 min |
 | 07-dialectic-differentiators | 5 | 19 min | 3.8 min |
+| 08-desktop-expansion | 1 | 4 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 07-01 (4 min), 07-02 (4 min), 07-03 (3 min), 07-04 (4 min), 07-05 (4 min)
+- Last 5 plans: 07-02 (4 min), 07-03 (3 min), 07-04 (4 min), 07-05 (4 min), 08-01 (4 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -153,6 +154,10 @@ Recent decisions affecting current work:
 - [07-05]: Support both lowercase and uppercase speakerType values for flexibility
 - [07-05]: Provoker uses amber color scheme (#f59e0b) vs indigo for primary
 - [07-05]: Stop button is red-500 for prominence during streaming
+- [08-01]: Yarn 4 upgrade required for workspace:* protocol support
+- [08-01]: hoistingLimits: workspaces instead of deprecated nohoist
+- [08-01]: nodeLinker: node-modules for React Native compatibility
+- [08-01]: Mobile relocated to packages/mobile, shared code in packages/app
 
 ### Pending Todos
 
@@ -168,7 +173,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 07-05-PLAN.md (LLM Interjection UX) - Phase 7 complete
+Stopped at: Completed 08-01-PLAN.md (Monorepo Setup)
 Resume file: None
 
 ---
