@@ -33,8 +33,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **LLM-01**: LLM receives full conversation context for each interaction
 - [x] **LLM-02**: LLM responses stream token-by-token (not all at once)
 - [x] **LLM-03**: User can explicitly mention/summon LLM (e.g., @Claude)
-- [ ] **LLM-04**: LLM interjects proactively based on heuristics (turn count, questions, stagnation)
-- [ ] **LLM-05**: LLM interjection heuristics are configurable by users
+- [x] **LLM-04**: LLM interjects proactively based on heuristics (turn count, questions, stagnation)
+- [x] **LLM-05**: LLM interjection heuristics are configurable by users
 
 ### Session & History
 
@@ -42,8 +42,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **HIST-02**: User can scroll up to load older messages (pagination)
 - [x] **HIST-03**: User can search within current conversation
 - [x] **HIST-04**: User can search across all conversations by topic/date
-- [ ] **HIST-05**: User can fork a thread from any message (branch conversations)
-- [ ] **HIST-06**: User can view thread genealogy (parent/child relationships)
+- [x] **HIST-05**: User can fork a thread from any message (branch conversations)
+- [x] **HIST-06**: User can view thread genealogy (parent/child relationships)
 
 ### Platform Support
 
@@ -120,14 +120,14 @@ Which phases cover which requirements.
 | LLM-01 | Phase 4 | Complete |
 | LLM-02 | Phase 4 | Complete |
 | LLM-03 | Phase 4 | Complete |
-| LLM-04 | Phase 7 | Pending |
-| LLM-05 | Phase 7 | Pending |
+| LLM-04 | Phase 7 | Complete |
+| LLM-05 | Phase 7 | Complete |
 | HIST-01 | Phase 5 | Complete |
 | HIST-02 | Phase 5 | Complete |
 | HIST-03 | Phase 5 | Complete |
 | HIST-04 | Phase 5 | Complete |
-| HIST-05 | Phase 7 | Pending |
-| HIST-06 | Phase 7 | Pending |
+| HIST-05 | Phase 7 | Complete |
+| HIST-06 | Phase 7 | Complete |
 | PLAT-01 | Phase 1 | Complete |
 | PLAT-02 | Phase 1 | Complete |
 | PLAT-03 | Phase 8 | Pending |
@@ -140,4 +140,4 @@ Which phases cover which requirements.
 
 ---
 *Requirements defined: 2026-01-20*
-*Last updated: 2026-01-25 (Phase 6 complete)*
+*Last updated: 2026-01-25 (Phase 7 complete)*

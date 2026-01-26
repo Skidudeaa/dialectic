@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: LLM Participation** - LLM context, streaming responses, and explicit mentions
 - [x] **Phase 5: Session & History** - Conversation persistence, pagination, and search
 - [x] **Phase 6: Push Notifications** - Background notifications with badges and deep linking
-- [ ] **Phase 7: Dialectic Differentiators** - Thread forking, genealogy, and LLM heuristic controls
+- [x] **Phase 7: Dialectic Differentiators** - Thread forking, genealogy, and LLM heuristic controls
 - [ ] **Phase 8: Desktop Expansion** - macOS and Windows clients via React Native
 
 ## Phase Details
@@ -143,11 +143,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Backend genealogy endpoint and settings API
-- [ ] 07-02-PLAN.md — Mobile fork infrastructure (long-press menu, fork hook)
-- [ ] 07-03-PLAN.md — Cladogram genealogy visualization
-- [ ] 07-04-PLAN.md — LLM heuristic settings UI (presets and sliders)
-- [ ] 07-05-PLAN.md — LLM interjection UX (proactive indicator, stop button, provoker)
+- [x] 07-01-PLAN.md — Backend genealogy endpoint and settings API
+- [x] 07-02-PLAN.md — Mobile fork infrastructure (long-press menu, fork hook)
+- [x] 07-03-PLAN.md — Cladogram genealogy visualization
+- [x] 07-04-PLAN.md — LLM heuristic settings UI (presets and sliders)
+- [x] 07-05-PLAN.md — LLM interjection UX (proactive indicator, stop button, provoker)
 
 ### Phase 8: Desktop Expansion
 **Goal**: Dialectic runs natively on macOS and Windows with feature parity to mobile
@@ -179,9 +179,9 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 | 4. LLM Participation | 4/4 | Complete | 2026-01-25 |
 | 5. Session & History | 7/7 | Complete | 2026-01-25 |
 | 6. Push Notifications | 5/5 | Complete | 2026-01-25 |
-| 7. Dialectic Differentiators | 0/5 | Planning complete | - |
+| 7. Dialectic Differentiators | 5/5 | Complete | 2026-01-25 |
 | 8. Desktop Expansion | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-25 (Phase 7 planned)*
+*Last updated: 2026-01-25 (Phase 7 complete)*
