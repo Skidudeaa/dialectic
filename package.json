@@ -7,6 +7,7 @@
   "scripts": {
     "mobile": "yarn workspace @dialectic/mobile",
     "app": "yarn workspace @dialectic/app",
+    "macos": "yarn workspace @dialectic/macos",
     "windows": "yarn workspace @dialectic/windows",
     "build:app": "yarn workspace @dialectic/app build",
     "test:app": "yarn workspace @dialectic/app test",

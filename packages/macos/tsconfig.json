@@ -19,7 +19,6 @@
       "@dialectic/app/*": ["../app/src/*"]
     }
   },
-  "extends": "@react-native/typescript-config/tsconfig.json",
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "macos"]
 }
