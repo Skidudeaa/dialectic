@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 5 of 8 (Session & History)
-Plan: 4 of 7 in current phase
+Plan: 6 of 7 in current phase
 Status: In progress
-Last activity: 2026-01-26 - Completed 05-04-PLAN.md (Message Cache & Pagination)
+Last activity: 2026-01-26 - Completed 05-06-PLAN.md (Search Functionality)
 
-Progress: [██████░░░░] 59.5%
+Progress: [██████░░░░] 64.9%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 22
-- Average duration: 2.6 min
-- Total execution time: 0.98 hours
+- Total plans completed: 24
+- Average duration: 2.5 min
+- Total execution time: 1.0 hours
 
 **By Phase:**
 
@@ -31,10 +31,10 @@ Progress: [██████░░░░] 59.5%
 | 02-authentication | 5 | 19 min | 3.8 min |
 | 03-real-time-core | 6 | 13 min | 2.2 min |
 | 04-llm-participation | 4 | 13 min | 3.25 min |
-| 05-session-history | 4 | 8 min | 2 min |
+| 05-session-history | 6 | 12 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-04 (3 min), 05-01 (2 min), 05-02 (2 min), 05-03 (2 min), 05-04 (2 min)
+- Last 5 plans: 05-02 (2 min), 05-03 (2 min), 05-04 (2 min), 05-05 (2 min), 05-06 (2 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -105,6 +105,10 @@ Recent decisions affecting current work:
 - [05-04]: Eviction by sequence (oldest first) maintains recent availability
 - [05-04]: Cache-first loading with server fallback for offline+fresh data
 - [05-04]: loadOlder checks cache before server to minimize API calls
+- [05-06]: 300ms debounce for search queries per RESEARCH.md guidance
+- [05-06]: expo.getAllSync for raw FTS5 queries (Drizzle ORM doesn't support)
+- [05-06]: Local-first search with server extension for full history
+- [05-06]: BM25 scoring for relevance ranking
 
 ### Pending Todos
 
@@ -120,7 +124,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 05-04-PLAN.md (Message Cache & Pagination)
+Stopped at: Completed 05-06-PLAN.md (Search Functionality)
 Resume file: None
 
 ---
