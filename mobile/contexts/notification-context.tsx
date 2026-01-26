@@ -5,10 +5,12 @@
  */
 
 import { createContext, useContext, useEffect, useRef } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useSession } from './session-context';
 import { useLock } from './lock-context';
 import { useWebSocketStore } from '@/stores/websocket-store';
+import { syncBadgeFromStore } from '@/services/notifications/badge';
 import {
   setupNotificationHandler,
   setupNotificationResponseListener,
@@ -55,6 +57,18 @@ export function NotificationProvider({
     return () => {
       responseListener.current?.remove();
     };
+  }, []);
+
+  // Sync badge when app comes to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (state === 'active') {
+        // Sync badge from store when app comes to foreground
+        syncBadgeFromStore();
+      }
+    });
+
+    return () => subscription.remove();
   }, []);
 
   // Register for push when user is authenticated and unlocked
