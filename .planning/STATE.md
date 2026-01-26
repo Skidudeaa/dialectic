@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 6 of 8 (Push Notifications)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-01-25 - Phase 5 verified complete (7/7 plans)
+Plan: 2 of 5 in current phase
+Status: In progress
+Last activity: 2026-01-26 - Completed 06-02-PLAN.md (Mobile Notification Setup)
 
-Progress: [██████░░░░] 67.5%
+Progress: [████████░░] 86.7%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 25
+- Total plans completed: 26
 - Average duration: 2.5 min
 - Total execution time: 1.0 hours
 
@@ -32,9 +32,10 @@ Progress: [██████░░░░] 67.5%
 | 03-real-time-core | 6 | 13 min | 2.2 min |
 | 04-llm-participation | 4 | 13 min | 3.25 min |
 | 05-session-history | 7 | 15 min | 2.1 min |
+| 06-push-notifications | 1 | 2 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-03 (2 min), 05-04 (2 min), 05-05 (2 min), 05-06 (2 min), 05-07 (3 min)
+- Last 5 plans: 05-05 (2 min), 05-06 (2 min), 05-07 (3 min), 06-02 (2 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -115,6 +116,10 @@ Recent decisions affecting current work:
 - [05-07]: Database migrations run during loading state (before auth check completes)
 - [05-07]: Restoration triggers only after: db ready AND auth complete AND signed in AND not locked AND email verified
 - [05-07]: Database errors are non-fatal (app continues with warning)
+- [06-02]: 880Hz for human notification, 659Hz for LLM (distinct sounds per CONTEXT.md)
+- [06-02]: Different vibration patterns: human [0,250,250,250] vs LLM [0,100,100,100,100,100]
+- [06-02]: Purple (#8b5cf6) light color for LLM messages to match Claude brand
+- [06-02]: Re-register token on every call (prevents stale tokens per RESEARCH.md)
 
 ### Pending Todos
 
@@ -131,7 +136,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 05-07-PLAN.md (Session Restore) - Phase 5 complete
+Stopped at: Completed 06-02-PLAN.md (Mobile Notification Setup)
 Resume file: None
 
 ---
