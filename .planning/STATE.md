@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 6 of 8 (Push Notifications)
-Plan: 4 of 5 in current phase
-Status: In progress
-Last activity: 2026-01-25 - Completed 06-04-PLAN.md (Mobile Notification Handlers)
+Plan: 5 of 5 in current phase
+Status: Phase complete
+Last activity: 2026-01-26 - Completed 06-05-PLAN.md (Badge Management)
 
-Progress: [█████████░] 93.3%
+Progress: [██████████] 96.7%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 29
+- Total plans completed: 30
 - Average duration: 2.5 min
-- Total execution time: 1.1 hours
+- Total execution time: 1.2 hours
 
 **By Phase:**
 
@@ -32,10 +32,10 @@ Progress: [█████████░] 93.3%
 | 03-real-time-core | 6 | 13 min | 2.2 min |
 | 04-llm-participation | 4 | 13 min | 3.25 min |
 | 05-session-history | 7 | 15 min | 2.1 min |
-| 06-push-notifications | 4 | 12 min | 3.0 min |
+| 06-push-notifications | 5 | 14 min | 2.8 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-07 (3 min), 06-02 (2 min), 06-01 (5 min), 06-03 (2 min), 06-04 (3 min)
+- Last 5 plans: 06-01 (5 min), 06-02 (2 min), 06-03 (2 min), 06-04 (3 min), 06-05 (2 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -132,6 +132,10 @@ Recent decisions affecting current work:
 - [06-04]: 300ms delay on cold start navigation to ensure router ready
 - [06-04]: NotificationProvider placed after LockProvider, before PresenceProvider
 - [06-04]: currentRoomId added to websocket-store for foreground suppression
+- [06-05]: seenMessageIds not persisted (session-based for scroll detection)
+- [06-05]: 50% visible for 500ms counts as message "seen"
+- [06-05]: Badge sync on app foreground via AppState listener
+- [06-05]: Backend needs GET /notifications/badge endpoint (noted for follow-up)
 
 ### Pending Todos
 
@@ -147,10 +151,10 @@ Research flags for later phases:
 
 ## Session Continuity
 
-Last session: 2026-01-25
-Stopped at: Completed 06-04-PLAN.md (Mobile Notification Handlers)
+Last session: 2026-01-26
+Stopped at: Completed 06-05-PLAN.md (Badge Management) - Phase 6 complete
 Resume file: None
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-25*
+*Last updated: 2026-01-26*
