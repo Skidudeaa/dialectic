@@ -15,6 +15,7 @@ export interface Message {
   content: string;
   senderId: string;
   senderName?: string;
+  speakerType?: 'HUMAN' | 'LLM_PRIMARY' | 'LLM_PROVOKER';
   createdAt: string;
   deliveryStatus: DeliveryStatus;
   readBy: string[]; // User IDs who have read
@@ -59,6 +60,7 @@ export const useMessagesStore = create<MessagesState>()((set, get) => ({
         ...message,
         id: clientId,
         clientId,
+        speakerType: message.speakerType || 'HUMAN',
         deliveryStatus: 'sending',
         readBy: [],
         isMine: message.senderId === currentUserId,
