@@ -38,10 +38,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Session & History
 
-- [ ] **HIST-01**: Conversation history persists across app sessions
-- [ ] **HIST-02**: User can scroll up to load older messages (pagination)
-- [ ] **HIST-03**: User can search within current conversation
-- [ ] **HIST-04**: User can search across all conversations by topic/date
+- [x] **HIST-01**: Conversation history persists across app sessions
+- [x] **HIST-02**: User can scroll up to load older messages (pagination)
+- [x] **HIST-03**: User can search within current conversation
+- [x] **HIST-04**: User can search across all conversations by topic/date
 - [ ] **HIST-05**: User can fork a thread from any message (branch conversations)
 - [ ] **HIST-06**: User can view thread genealogy (parent/child relationships)
 
@@ -122,10 +122,10 @@ Which phases cover which requirements.
 | LLM-03 | Phase 4 | Complete |
 | LLM-04 | Phase 7 | Pending |
 | LLM-05 | Phase 7 | Pending |
-| HIST-01 | Phase 5 | Pending |
-| HIST-02 | Phase 5 | Pending |
-| HIST-03 | Phase 5 | Pending |
-| HIST-04 | Phase 5 | Pending |
+| HIST-01 | Phase 5 | Complete |
+| HIST-02 | Phase 5 | Complete |
+| HIST-03 | Phase 5 | Complete |
+| HIST-04 | Phase 5 | Complete |
 | HIST-05 | Phase 7 | Pending |
 | HIST-06 | Phase 7 | Pending |
 | PLAT-01 | Phase 1 | Complete |
@@ -140,4 +140,4 @@ Which phases cover which requirements.
 
 ---
 *Requirements defined: 2026-01-20*
-*Last updated: 2026-01-25 (Phase 4 complete)*
+*Last updated: 2026-01-25 (Phase 5 complete)*

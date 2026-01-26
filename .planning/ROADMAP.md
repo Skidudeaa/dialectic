@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Authentication** - User accounts with session persistence and biometric unlock
 - [x] **Phase 3: Real-Time Core** - WebSocket messaging with presence, typing, and reconnection
 - [x] **Phase 4: LLM Participation** - LLM context, streaming responses, and explicit mentions
-- [ ] **Phase 5: Session & History** - Conversation persistence, pagination, and search
+- [x] **Phase 5: Session & History** - Conversation persistence, pagination, and search
 - [ ] **Phase 6: Push Notifications** - Background notifications with badges and deep linking
 - [ ] **Phase 7: Dialectic Differentiators** - Thread forking, genealogy, and LLM heuristic controls
 - [ ] **Phase 8: Desktop Expansion** - macOS and Windows clients via React Native
@@ -105,13 +105,13 @@ Plans:
 **Plans**: 7 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Backend search infrastructure (tsvector, GIN index, search endpoints)
-- [ ] 05-02-PLAN.md — Mobile SQLite database with Drizzle ORM and FTS5
-- [ ] 05-03-PLAN.md — Session state store (MMKV) and draft auto-save
-- [ ] 05-04-PLAN.md — Message cache with 500-message limit and pagination hook
-- [ ] 05-05-PLAN.md — FlashList message list with bidirectional pagination
-- [ ] 05-06-PLAN.md — Search feature (local FTS5 + server, overlay UI with filters)
-- [ ] 05-07-PLAN.md — Session continuity (app launch restoration, scroll position)
+- [x] 05-01-PLAN.md — Backend search infrastructure (tsvector, GIN index, search endpoints)
+- [x] 05-02-PLAN.md — Mobile SQLite database with Drizzle ORM and FTS5
+- [x] 05-03-PLAN.md — Session state store (MMKV) and draft auto-save
+- [x] 05-04-PLAN.md — Message cache with 500-message limit and pagination hook
+- [x] 05-05-PLAN.md — FlashList message list with bidirectional pagination
+- [x] 05-06-PLAN.md — Search feature (local FTS5 + server, overlay UI with filters)
+- [x] 05-07-PLAN.md — Session continuity (app launch restoration, scroll position)
 
 ### Phase 6: Push Notifications
 **Goal**: Users receive timely notifications when messages arrive while app is backgrounded
@@ -172,11 +172,11 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 | 2. Authentication | 5/5 | Complete | 2026-01-20 |
 | 3. Real-Time Core | 6/6 | Complete | 2026-01-25 |
 | 4. LLM Participation | 4/4 | Complete | 2026-01-25 |
-| 5. Session & History | 0/7 | Planning complete | - |
+| 5. Session & History | 7/7 | Complete | 2026-01-25 |
 | 6. Push Notifications | 0/TBD | Not started | - |
 | 7. Dialectic Differentiators | 0/TBD | Not started | - |
 | 8. Desktop Expansion | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-25 (Phase 5 planned)*
+*Last updated: 2026-01-25 (Phase 5 complete)*
