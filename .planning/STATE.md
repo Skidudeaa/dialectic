@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 6 of 8 (Push Notifications)
-Plan: 2 of 5 in current phase
+Plan: 3 of 5 in current phase
 Status: In progress
-Last activity: 2026-01-26 - Completed 06-01-PLAN.md (Backend Infrastructure)
+Last activity: 2026-01-26 - Completed 06-03-PLAN.md (WebSocket Handler Integration)
 
-Progress: [████████░░] 86.7%
+Progress: [████████░░] 90.0%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 27
+- Total plans completed: 28
 - Average duration: 2.5 min
 - Total execution time: 1.0 hours
 
@@ -32,10 +32,10 @@ Progress: [████████░░] 86.7%
 | 03-real-time-core | 6 | 13 min | 2.2 min |
 | 04-llm-participation | 4 | 13 min | 3.25 min |
 | 05-session-history | 7 | 15 min | 2.1 min |
-| 06-push-notifications | 2 | 7 min | 3.5 min |
+| 06-push-notifications | 3 | 9 min | 3.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-05 (2 min), 05-06 (2 min), 05-07 (3 min), 06-02 (2 min), 06-01 (5 min)
+- Last 5 plans: 05-06 (2 min), 05-07 (3 min), 06-02 (2 min), 06-01 (5 min), 06-03 (2 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -124,6 +124,10 @@ Recent decisions affecting current work:
 - [06-01]: LLM messages use robot emoji prefix in notification title
 - [06-01]: DeviceNotRegisteredError marks tokens inactive (not deleted)
 - [06-01]: Token upsert pattern for re-registration with ON CONFLICT DO UPDATE
+- [06-03]: Foreground suppression checks WebSocket connection AND presence status
+- [06-03]: Sentinel UUID (all zeros) for LLM sender_id to avoid self-exclusion
+- [06-03]: Push failures logged but don't block message delivery (fire and forget)
+- [06-03]: Lazy import of notification service to avoid circular imports
 
 ### Pending Todos
 
@@ -140,7 +144,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 06-01-PLAN.md (Backend Infrastructure)
+Stopped at: Completed 06-03-PLAN.md (WebSocket Handler Integration)
 Resume file: None
 
 ---
