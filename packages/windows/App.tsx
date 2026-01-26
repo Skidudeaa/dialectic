@@ -1,22 +1,117 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { initializePlatform } from './src/platform-init';
-
 /**
- * Main App component for Dialectic Windows.
+ * Dialectic for Windows
  *
- * Initializes platform services on startup before rendering content.
- * This ensures secure storage, database, and notifications are available
- * before any shared code from @dialectic/app attempts to use them.
+ * ARCHITECTURE: Bootstrap app with platform service initialization and chat UI.
+ * WHY: Bare workflow required for react-native-windows (no Expo support).
+ * TRADEOFF: Separate entry point vs code sharing - needed for platform init.
  */
+
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import { initializePlatform } from './src/platform-init';
+import { SystemTray } from './src/native/SystemTray';
+import {
+  ChatLayout,
+  CollapsibleSidebar,
+  KeyboardShortcutsProvider,
+  DropZone,
+  useWindowPersistence,
+  PlatformMessageList,
+  MessageListEmpty,
+} from '@dialectic/app';
+
+// Message type for display
+interface Message {
+  id: string;
+  content: string;
+  speaker_type: 'HUMAN' | 'LLM_PRIMARY' | 'LLM_PROVOKER';
+  speaker_name?: string;
+  created_at: string;
+}
+
+// Placeholder message bubble - replace with actual import from @dialectic/app
+// when mobile components are extracted to shared package
+function MessageBubble({ message }: { message: Message }) {
+  const isLLM = message.speaker_type !== 'HUMAN';
+  return (
+    <View style={[messageBubbleStyles.container, isLLM && messageBubbleStyles.llmContainer]}>
+      <Text style={messageBubbleStyles.speaker}>
+        {message.speaker_name || (isLLM ? 'Claude' : 'You')}
+      </Text>
+      <Text style={messageBubbleStyles.content}>{message.content}</Text>
+    </View>
+  );
+}
+
+const messageBubbleStyles = StyleSheet.create({
+  container: {
+    padding: 12,
+    marginVertical: 4,
+    marginHorizontal: 16,
+    borderRadius: 8, // Windows uses sharper corners
+    backgroundColor: '#e2e8f0',
+    maxWidth: '80%',
+    alignSelf: 'flex-end',
+  },
+  llmContainer: {
+    backgroundColor: '#eef2ff', // Indigo-50 for Claude
+    alignSelf: 'flex-start',
+  },
+  speaker: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+    marginBottom: 4,
+  },
+  content: {
+    fontSize: 14,
+    color: '#1e293b',
+    lineHeight: 20,
+  },
+});
+
 export default function App() {
   const [initialized, setInitialized] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
 
+  // Initialize platform services
   useEffect(() => {
-    // Initialize Windows platform services
     initializePlatform();
     setInitialized(true);
+
+    // TODO: Load actual messages from WebSocket/API
+    setMessages([
+      {
+        id: '1',
+        content: 'Welcome to Dialectic for Windows!',
+        speaker_type: 'LLM_PRIMARY',
+        speaker_name: 'Claude',
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: '2',
+        content: 'This is a placeholder. Connect to a room to start chatting.',
+        speaker_type: 'LLM_PRIMARY',
+        speaker_name: 'Claude',
+        created_at: new Date().toISOString(),
+      },
+    ]);
   }, []);
+
+  // Persist window size/position
+  useWindowPersistence();
+
+  // Keyboard shortcuts (Ctrl key on Windows)
+  const shortcuts = [
+    { key: 'n', withModifier: true, onPress: () => console.log('New room'), description: 'New room' },
+    { key: 'f', withModifier: true, onPress: () => console.log('Search'), description: 'Search' },
+  ];
+
+  const renderMessage = useCallback(({ item }: { item: Message }) => (
+    <MessageBubble message={item} />
+  ), []);
+
+  const keyExtractor = useCallback((item: Message) => item.id, []);
 
   if (!initialized) {
     return (
@@ -27,32 +122,69 @@ export default function App() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Dialectic for Windows</Text>
-      <Text style={styles.subtext}>Platform services initialized</Text>
-    </View>
+    <KeyboardShortcutsProvider shortcuts={shortcuts}>
+      <SafeAreaView style={styles.container}>
+        {/* System tray integration */}
+        <SystemTray
+          unreadCount={0}
+          onShowWindow={() => console.log('Show window')}
+          onNewRoom={() => console.log('New room')}
+          onSearch={() => console.log('Search')}
+          onQuit={() => console.log('Quit')}
+        />
+
+        {/* Main layout with collapsible sidebar */}
+        <DropZone onDrop={(files) => console.log('Files dropped:', files)}>
+          <CollapsibleSidebar
+            sidebar={
+              <View style={styles.sidebar}>
+                <Text style={styles.sidebarTitle}>Rooms</Text>
+                <Text style={styles.sidebarItem}>General</Text>
+                <Text style={styles.sidebarItem}>Random</Text>
+              </View>
+            }
+          >
+            <ChatLayout>
+              <PlatformMessageList
+                data={messages}
+                renderItem={renderMessage}
+                keyExtractor={keyExtractor}
+                estimatedItemSize={80}
+                ListEmptyComponent={<MessageListEmpty text="No messages yet. Join a room to start." />}
+                inverted={false}
+              />
+            </ChatLayout>
+          </CollapsibleSidebar>
+        </DropZone>
+      </SafeAreaView>
+    </KeyboardShortcutsProvider>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#fff',
-  },
-  text: {
-    fontSize: 24,
-    color: '#000',
-    fontWeight: '600',
-  },
-  subtext: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
   },
   loadingText: {
     fontSize: 16,
     color: '#999',
+    textAlign: 'center',
+    marginTop: 100,
+  },
+  sidebar: {
+    padding: 16,
+    backgroundColor: '#f9fafb',
+  },
+  sidebarTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+    color: '#1f2937',
+  },
+  sidebarItem: {
+    fontSize: 14,
+    paddingVertical: 8,
+    color: '#374151',
   },
 });
