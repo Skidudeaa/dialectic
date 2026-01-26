@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 7 of 8 (Dialectic Differentiators)
-Plan: 3 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-01-26 - Completed 07-03-PLAN.md (Cladogram Genealogy Visualization)
+Last activity: 2026-01-26 - Completed 07-04-PLAN.md (LLM Heuristic Settings UI)
 
-Progress: [████████░░] 82.5%
+Progress: [█████████░] 85%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 33
+- Total plans completed: 34
 - Average duration: 2.5 min
-- Total execution time: 1.45 hours
+- Total execution time: 1.52 hours
 
 **By Phase:**
 
@@ -33,10 +33,10 @@ Progress: [████████░░] 82.5%
 | 04-llm-participation | 4 | 13 min | 3.25 min |
 | 05-session-history | 7 | 15 min | 2.1 min |
 | 06-push-notifications | 5 | 14 min | 2.8 min |
-| 07-dialectic-differentiators | 3 | 11 min | 3.7 min |
+| 07-dialectic-differentiators | 4 | 15 min | 3.75 min |
 
 **Recent Trend:**
-- Last 5 plans: 06-04 (3 min), 06-05 (2 min), 07-01 (4 min), 07-02 (4 min), 07-03 (3 min)
+- Last 5 plans: 06-05 (2 min), 07-01 (4 min), 07-02 (4 min), 07-03 (3 min), 07-04 (4 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -147,6 +147,9 @@ Recent decisions affecting current work:
 - [07-03]: react-native-svg for cladogram connector lines
 - [07-03]: Depth-first traversal with leaf advancement for tree layout
 - [07-03]: Type assertion for expo-router dynamic route push
+- [07-04]: Non-persist middleware MMKV pattern for settings store (direct MMKV calls)
+- [07-04]: Presets: quiet (turn=8), balanced (turn=4), active (turn=2)
+- [07-04]: Type assertion for router.push to new settings routes
 
 ### Pending Todos
 
@@ -162,7 +165,7 @@ Research flags for later phases:
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 07-03-PLAN.md (Cladogram Genealogy Visualization)
+Stopped at: Completed 07-04-PLAN.md (LLM Heuristic Settings UI)
 Resume file: None
 
 ---
