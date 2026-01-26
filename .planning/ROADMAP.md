@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Real-Time Core** - WebSocket messaging with presence, typing, and reconnection
 - [x] **Phase 4: LLM Participation** - LLM context, streaming responses, and explicit mentions
 - [x] **Phase 5: Session & History** - Conversation persistence, pagination, and search
-- [ ] **Phase 6: Push Notifications** - Background notifications with badges and deep linking
+- [x] **Phase 6: Push Notifications** - Background notifications with badges and deep linking
 - [ ] **Phase 7: Dialectic Differentiators** - Thread forking, genealogy, and LLM heuristic controls
 - [ ] **Phase 8: Desktop Expansion** - macOS and Windows clients via React Native
 
@@ -125,11 +125,11 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Backend push infrastructure (schema, Expo SDK service, token endpoints)
-- [ ] 06-02-PLAN.md — Mobile notification setup (packages, channels, token registration)
-- [ ] 06-03-PLAN.md — Message handler push trigger (foreground suppression)
-- [ ] 06-04-PLAN.md — Notification handlers and deep linking
-- [ ] 06-05-PLAN.md — Badge management (server-synced counts, visibility tracking)
+- [x] 06-01-PLAN.md — Backend push infrastructure (schema, Expo SDK service, token endpoints)
+- [x] 06-02-PLAN.md — Mobile notification setup (packages, channels, token registration)
+- [x] 06-03-PLAN.md — Message handler push trigger (foreground suppression)
+- [x] 06-04-PLAN.md — Notification handlers and deep linking
+- [x] 06-05-PLAN.md — Badge management (server-synced counts, visibility tracking)
 
 ### Phase 7: Dialectic Differentiators
 **Goal**: Users access Dialectic's unique features: thread forking, genealogy visualization, and LLM behavior configuration
@@ -175,10 +175,10 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 | 3. Real-Time Core | 6/6 | Complete | 2026-01-25 |
 | 4. LLM Participation | 4/4 | Complete | 2026-01-25 |
 | 5. Session & History | 7/7 | Complete | 2026-01-25 |
-| 6. Push Notifications | 0/5 | Ready | - |
+| 6. Push Notifications | 5/5 | Complete | 2026-01-25 |
 | 7. Dialectic Differentiators | 0/TBD | Not started | - |
 | 8. Desktop Expansion | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-25 (Phase 6 planned)*
+*Last updated: 2026-01-25 (Phase 6 complete)*

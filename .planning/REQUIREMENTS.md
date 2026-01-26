@@ -23,10 +23,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Push Notifications
 
-- [ ] **PUSH-01**: User receives push notification when message arrives while app backgrounded
-- [ ] **PUSH-02**: App icon badge shows unread message count
-- [ ] **PUSH-03**: Push notifications show message preview (rich notifications)
-- [ ] **PUSH-04**: Tapping notification opens relevant conversation
+- [x] **PUSH-01**: User receives push notification when message arrives while app backgrounded
+- [x] **PUSH-02**: App icon badge shows unread message count
+- [x] **PUSH-03**: Push notifications show message preview (rich notifications)
+- [x] **PUSH-04**: Tapping notification opens relevant conversation
 
 ### LLM Participation
 
@@ -113,10 +113,10 @@ Which phases cover which requirements.
 | RTCOM-02 | Phase 3 | Complete |
 | RTCOM-03 | Phase 3 | Complete |
 | RTCOM-04 | Phase 3 | Complete |
-| PUSH-01 | Phase 6 | Pending |
-| PUSH-02 | Phase 6 | Pending |
-| PUSH-03 | Phase 6 | Pending |
-| PUSH-04 | Phase 6 | Pending |
+| PUSH-01 | Phase 6 | Complete |
+| PUSH-02 | Phase 6 | Complete |
+| PUSH-03 | Phase 6 | Complete |
+| PUSH-04 | Phase 6 | Complete |
 | LLM-01 | Phase 4 | Complete |
 | LLM-02 | Phase 4 | Complete |
 | LLM-03 | Phase 4 | Complete |
@@ -140,4 +140,4 @@ Which phases cover which requirements.
 
 ---
 *Requirements defined: 2026-01-20*
-*Last updated: 2026-01-25 (Phase 5 complete)*
+*Last updated: 2026-01-25 (Phase 6 complete)*
