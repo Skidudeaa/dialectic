@@ -20,6 +20,7 @@ import { SessionProvider, useSession } from '@/contexts/session-context';
 import { LockProvider, useLock } from '@/contexts/lock-context';
 import { useBiometric } from '@/hooks/use-biometric';
 import { usePresence } from '@/hooks/use-presence';
+import { useSessionRestore } from '@/hooks/use-session-restore';
 
 /**
  * Provider component that initializes presence tracking at app root.
@@ -63,9 +64,17 @@ function BiometricSetupPrompt() {
 function RootLayoutNav() {
   const { session, isLoading } = useSession();
   const { isLocked } = useLock();
+  const { isReady: isDbReady, isRestoring, restoreNavigation, error: dbError } = useSessionRestore();
   const segments = useSegments();
   const router = useRouter();
   const colorScheme = useColorScheme();
+
+  // Log database errors (non-fatal, app continues)
+  useEffect(() => {
+    if (dbError) {
+      console.warn('[RootLayout] Database init error (non-fatal):', dbError.message);
+    }
+  }, [dbError]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -98,8 +107,21 @@ function RootLayoutNav() {
     }
   }, [session, isLoading, isLocked, segments]);
 
-  // Show loading screen while checking session
-  if (isLoading) {
+  // Session restoration - runs AFTER auth routing settles
+  useEffect(() => {
+    if (
+      isDbReady &&
+      !isLoading &&
+      session &&
+      !isLocked &&
+      session.user.emailVerified
+    ) {
+      restoreNavigation();
+    }
+  }, [isDbReady, isLoading, session, isLocked, restoreNavigation]);
+
+  // Show loading screen while checking session or initializing database
+  if (isLoading || isRestoring) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3b82f6" />
