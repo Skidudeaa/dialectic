@@ -1,19 +1,18 @@
 import { Stack } from 'expo-router';
 
-export default function AppLayout() {
+export default function SettingsLayout() {
   return (
     <Stack>
       <Stack.Screen
         name="index"
         options={{
-          title: 'Dialectic',
-          headerShown: true,
+          title: 'Settings',
         }}
       />
       <Stack.Screen
-        name="settings"
+        name="claude-behavior"
         options={{
-          headerShown: false,
+          title: 'Claude Behavior',
         }}
       />
     </Stack>
