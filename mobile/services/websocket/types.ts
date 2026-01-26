@@ -20,7 +20,8 @@ export type InboundMessageType =
   | 'llm_thinking'
   | 'llm_streaming'
   | 'llm_done'
-  | 'llm_error';
+  | 'llm_error'
+  | 'llm_cancelled';
 
 export type OutboundMessageType =
   | 'send_message'
@@ -74,6 +75,11 @@ export interface LLMDonePayload {
   message_id: string;
   content: string;
   model_used: string;
+  truncated?: boolean;
+  // Interjection metadata
+  speaker_type: 'llm_primary' | 'llm_provoker';
+  interjection_type: 'summoned' | 'proactive';
+  interjection_reason?: string; // e.g., "turn_threshold", "question_detected"
 }
 
 export interface LLMErrorPayload {
@@ -86,4 +92,8 @@ export interface LLMErrorPayload {
 export interface SummonLLMPayload {
   thread_id: string;
   trigger_content?: string;
+}
+
+export interface LLMCancelledPayload {
+  thread_id: string;
 }
