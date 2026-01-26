@@ -10,11 +10,13 @@ import { FlashList } from '@shopify/flash-list';
 import type { ListRenderItemInfo, FlashListRef } from '@shopify/flash-list';
 import { MessageBubble } from '@/components/ui/message-bubble';
 import { LLMMessageBubble } from '@/components/ui/llm-message-bubble';
+import { MessageContextMenu } from './message-context-menu';
 import type { Message } from '@/stores/messages-store';
 import { useSessionStore } from '@/stores/session-store';
 
 interface MessageListProps {
   threadId: string;
+  roomId: string;
   messages: Message[];
   isLoading: boolean;
   isLoadingOlder: boolean;
@@ -29,6 +31,7 @@ const APPROXIMATE_ITEM_SIZE = 80; // For scroll position approximation
 
 export function MessageList({
   threadId,
+  roomId,
   messages,
   isLoading,
   isLoadingOlder,
@@ -93,6 +96,7 @@ export function MessageList({
   );
 
   // Render message item - use existing component interfaces
+  // Wrapped with MessageContextMenu for long-press fork capability
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<Message>) => {
       // Check if this is an LLM message using speakerType or senderId
@@ -100,20 +104,27 @@ export function MessageList({
         item.senderId === 'llm' ||
         ['LLM_PRIMARY', 'LLM_PROVOKER'].includes(item.speakerType || '');
 
-      if (isLLM) {
+      const messageContent = isLLM ? (
         // LLMMessageBubble interface: content, createdAt, isThinking, isStreaming, etc.
-        return (
-          <LLMMessageBubble
-            content={item.content}
-            createdAt={item.createdAt}
-          />
-        );
-      }
+        <LLMMessageBubble content={item.content} createdAt={item.createdAt} />
+      ) : (
+        // MessageBubble expects a message prop with the full Message object
+        <MessageBubble message={item} />
+      );
 
-      // MessageBubble expects a message prop with the full Message object
-      return <MessageBubble message={item} />;
+      // Wrap all messages with context menu for fork capability
+      return (
+        <MessageContextMenu
+          messageId={item.id}
+          messageContent={item.content}
+          threadId={threadId}
+          roomId={roomId}
+        >
+          {messageContent}
+        </MessageContextMenu>
+      );
     },
-    []
+    [threadId, roomId]
   );
 
   // Header component (loading indicator for older messages)
