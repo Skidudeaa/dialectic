@@ -13,6 +13,7 @@ import { LLMMessageBubble } from '@/components/ui/llm-message-bubble';
 import { MessageContextMenu } from './message-context-menu';
 import type { Message } from '@/stores/messages-store';
 import { useSessionStore } from '@/stores/session-store';
+import { useLLM } from '@/hooks/use-llm';
 
 interface MessageListProps {
   threadId: string;
@@ -42,6 +43,16 @@ export function MessageList({
   const listRef = useRef<FlashListRef<Message>>(null);
   const { getScrollPosition, setScrollPosition } = useSessionStore();
   const isInitialMount = useRef(true);
+
+  // Get LLM stream state for this thread
+  const {
+    isThinking,
+    isStreaming,
+    partialResponse,
+    speakerType: streamSpeakerType,
+    interjectionType: streamInterjectionType,
+    cancel,
+  } = useLLM({ threadId });
 
   // Restore scroll position on mount
   useEffect(() => {
@@ -98,15 +109,33 @@ export function MessageList({
   // Render message item - use existing component interfaces
   // Wrapped with MessageContextMenu for long-press fork capability
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<Message>) => {
+    ({ item, index }: ListRenderItemInfo<Message>) => {
       // Check if this is an LLM message using speakerType or senderId
       const isLLM =
         item.senderId === 'llm' ||
         ['LLM_PRIMARY', 'LLM_PROVOKER'].includes(item.speakerType || '');
 
+      // Check if this is the active streaming message (last message when streaming)
+      const isActiveStream =
+        (isThinking || isStreaming) &&
+        index === messages.length - 1 &&
+        isLLM;
+
       const messageContent = isLLM ? (
-        // LLMMessageBubble interface: content, createdAt, isThinking, isStreaming, etc.
-        <LLMMessageBubble content={item.content} createdAt={item.createdAt} />
+        <LLMMessageBubble
+          content={isActiveStream && isStreaming ? undefined : item.content}
+          partialContent={isActiveStream ? partialResponse : undefined}
+          createdAt={item.createdAt}
+          isThinking={isActiveStream && isThinking}
+          isStreaming={isActiveStream && isStreaming}
+          speakerType={
+            isActiveStream && streamSpeakerType
+              ? streamSpeakerType
+              : (item.speakerType?.toLowerCase() as 'llm_primary' | 'llm_provoker' | undefined)
+          }
+          interjectionType={isActiveStream ? streamInterjectionType : undefined}
+          onStopPress={isActiveStream ? cancel : undefined}
+        />
       ) : (
         // MessageBubble expects a message prop with the full Message object
         <MessageBubble message={item} />
@@ -124,8 +153,53 @@ export function MessageList({
         </MessageContextMenu>
       );
     },
-    [threadId, roomId]
+    [
+      threadId,
+      roomId,
+      messages.length,
+      isThinking,
+      isStreaming,
+      partialResponse,
+      streamSpeakerType,
+      streamInterjectionType,
+      cancel,
+    ]
   );
+
+  // Render thinking bubble when LLM is thinking but no message yet
+  // (e.g., when last message is from human and LLM started thinking)
+  const ListFooterComponent = useCallback(() => {
+    // Show thinking bubble if LLM is active and last message isn't an LLM message
+    const lastMessage = messages[messages.length - 1];
+    const lastIsHuman =
+      !lastMessage ||
+      (lastMessage.senderId !== 'llm' &&
+        !['LLM_PRIMARY', 'LLM_PROVOKER'].includes(lastMessage.speakerType || ''));
+
+    if ((isThinking || isStreaming) && lastIsHuman) {
+      return (
+        <LLMMessageBubble
+          content={undefined}
+          partialContent={partialResponse}
+          isThinking={isThinking}
+          isStreaming={isStreaming}
+          speakerType={streamSpeakerType}
+          interjectionType={streamInterjectionType}
+          onStopPress={cancel}
+        />
+      );
+    }
+
+    return null;
+  }, [
+    messages,
+    isThinking,
+    isStreaming,
+    partialResponse,
+    streamSpeakerType,
+    streamInterjectionType,
+    cancel,
+  ]);
 
   // Header component (loading indicator for older messages)
   const ListHeaderComponent = useCallback(() => {
@@ -188,6 +262,7 @@ export function MessageList({
       scrollEventThrottle={100}
       // Headers and empty state
       ListHeaderComponent={ListHeaderComponent}
+      ListFooterComponent={ListFooterComponent}
       ListEmptyComponent={ListEmptyComponent}
       // Style
       contentContainerStyle={styles.contentContainer}
