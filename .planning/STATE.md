@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 ## Current Position
 
 Phase: 6 of 8 (Push Notifications)
-Plan: 3 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: In progress
-Last activity: 2026-01-26 - Completed 06-03-PLAN.md (WebSocket Handler Integration)
+Last activity: 2026-01-25 - Completed 06-04-PLAN.md (Mobile Notification Handlers)
 
-Progress: [████████░░] 90.0%
+Progress: [█████████░] 93.3%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 28
+- Total plans completed: 29
 - Average duration: 2.5 min
-- Total execution time: 1.0 hours
+- Total execution time: 1.1 hours
 
 **By Phase:**
 
@@ -32,10 +32,10 @@ Progress: [████████░░] 90.0%
 | 03-real-time-core | 6 | 13 min | 2.2 min |
 | 04-llm-participation | 4 | 13 min | 3.25 min |
 | 05-session-history | 7 | 15 min | 2.1 min |
-| 06-push-notifications | 3 | 9 min | 3.0 min |
+| 06-push-notifications | 4 | 12 min | 3.0 min |
 
 **Recent Trend:**
-- Last 5 plans: 05-06 (2 min), 05-07 (3 min), 06-02 (2 min), 06-01 (5 min), 06-03 (2 min)
+- Last 5 plans: 05-07 (3 min), 06-02 (2 min), 06-01 (5 min), 06-03 (2 min), 06-04 (3 min)
 - Trend: Stable
 
 *Updated after each plan completion*
@@ -128,6 +128,10 @@ Recent decisions affecting current work:
 - [06-03]: Sentinel UUID (all zeros) for LLM sender_id to avoid self-exclusion
 - [06-03]: Push failures logged but don't block message delivery (fire and forget)
 - [06-03]: Lazy import of notification service to avoid circular imports
+- [06-04]: Foreground suppression: notifications suppressed when viewing same room
+- [06-04]: 300ms delay on cold start navigation to ensure router ready
+- [06-04]: NotificationProvider placed after LockProvider, before PresenceProvider
+- [06-04]: currentRoomId added to websocket-store for foreground suppression
 
 ### Pending Todos
 
@@ -143,10 +147,10 @@ Research flags for later phases:
 
 ## Session Continuity
 
-Last session: 2026-01-26
-Stopped at: Completed 06-03-PLAN.md (WebSocket Handler Integration)
+Last session: 2026-01-25
+Stopped at: Completed 06-04-PLAN.md (Mobile Notification Handlers)
 Resume file: None
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-01-26*
+*Last updated: 2026-01-25*
