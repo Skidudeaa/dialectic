@@ -6,7 +6,12 @@
  * TRADEOFF: WebSQL API is async-callback based, different from Drizzle ORM.
  */
 
-import SQLite from 'react-native-sqlite-2';
+import SQLite, {
+  type WebsqlDatabase,
+  type SQLTransaction,
+  type SQLResultSet,
+  type SQLError,
+} from 'react-native-sqlite-2';
 import type { Database, DatabaseResult, Transaction } from '@dialectic/app';
 
 const DB_NAME = 'dialectic.db';
@@ -18,9 +23,9 @@ const DB_NAME = 'dialectic.db';
  * Drizzle ORM may not work directly - use raw SQL queries.
  */
 class MacOSDatabase implements Database {
-  private db: SQLite.Database | null = null;
+  private db: WebsqlDatabase | null = null;
 
-  private getDb(): SQLite.Database {
+  private getDb(): WebsqlDatabase {
     if (!this.db) {
       this.db = SQLite.openDatabase(
         DB_NAME,
@@ -34,11 +39,11 @@ class MacOSDatabase implements Database {
 
   async execute(sql: string, params: unknown[] = []): Promise<DatabaseResult> {
     return new Promise((resolve, reject) => {
-      this.getDb().transaction((tx) => {
+      this.getDb().transaction((tx: SQLTransaction) => {
         tx.executeSql(
           sql,
           params as (string | number)[],
-          (_, result) => {
+          (_tx: SQLTransaction, result: SQLResultSet) => {
             resolve({
               insertId: result.insertId,
               rowsAffected: result.rowsAffected,
@@ -47,7 +52,7 @@ class MacOSDatabase implements Database {
               ),
             });
           },
-          (_, error) => {
+          (_tx: SQLTransaction, error: SQLError) => {
             reject(error);
             return false;
           }
@@ -59,14 +64,14 @@ class MacOSDatabase implements Database {
   async transaction<T>(callback: (tx: Transaction) => Promise<T>): Promise<T> {
     return new Promise((resolve, reject) => {
       this.getDb().transaction(
-        async (sqlTx) => {
+        async (sqlTx: SQLTransaction) => {
           const tx: Transaction = {
             execute: (sql, params = []) =>
               new Promise((res, rej) => {
                 sqlTx.executeSql(
                   sql,
                   params as (string | number)[],
-                  (_, result) =>
+                  (_tx: SQLTransaction, result: SQLResultSet) =>
                     res({
                       insertId: result.insertId,
                       rowsAffected: result.rowsAffected,
@@ -74,7 +79,7 @@ class MacOSDatabase implements Database {
                         result.rows.item(i)
                       ),
                     }),
-                  (_, error) => {
+                  (_tx: SQLTransaction, error: SQLError) => {
                     rej(error);
                     return false;
                   }
@@ -95,7 +100,9 @@ class MacOSDatabase implements Database {
 
   async close(): Promise<void> {
     if (this.db) {
-      this.db.close();
+      // WebsqlDatabase doesn't have a close method in the interface
+      // but the underlying implementation may support it
+      (this.db as unknown as { close?: () => void }).close?.();
       this.db = null;
     }
   }
