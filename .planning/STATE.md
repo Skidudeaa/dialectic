@@ -105,6 +105,9 @@ Recent decisions affecting current work:
 - [05-04]: Eviction by sequence (oldest first) maintains recent availability
 - [05-04]: Cache-first loading with server fallback for offline+fresh data
 - [05-04]: loadOlder checks cache before server to minimize API calls
+- [05-05]: FlashList v2 API (estimatedItemSize removed, auto-measures items)
+- [05-05]: maintainVisibleContentPosition with autoscrollToTopThreshold:10 for stable upward scroll
+- [05-05]: speakerType field added to Message for LLM message type detection
 - [05-06]: 300ms debounce for search queries per RESEARCH.md guidance
 - [05-06]: expo.getAllSync for raw FTS5 queries (Drizzle ORM doesn't support)
 - [05-06]: Local-first search with server extension for full history
