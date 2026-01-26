@@ -11,7 +11,10 @@
     "@dialectic/app": "workspace:*",
     "react": "19.1.0",
     "react-native": "0.81.5",
-    "react-native-macos": "^0.81.1"
+    "react-native-keychain": "^10.0.0",
+    "react-native-macos": "^0.81.1",
+    "react-native-menubar-extra": "^0.3.1",
+    "react-native-sqlite-2": "^3.6.3"
   },
   "devDependencies": {
     "@babel/core": "^7.26.10",
