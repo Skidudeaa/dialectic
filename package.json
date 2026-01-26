@@ -1,0 +1,28 @@
+{
+  "name": "dialectic-monorepo",
+  "private": true,
+  "workspaces": {
+    "packages": ["packages/*"],
+    "nohoist": [
+      "**/react-native",
+      "**/react-native/**",
+      "**/react-native-windows",
+      "**/react-native-windows/**",
+      "**/react-native-macos",
+      "**/react-native-macos/**",
+      "**/@react-native-*",
+      "**/@react-native-*/**"
+    ]
+  },
+  "scripts": {
+    "mobile": "yarn workspace @dialectic/mobile",
+    "app": "yarn workspace @dialectic/app",
+    "build:app": "yarn workspace @dialectic/app build",
+    "test:app": "yarn workspace @dialectic/app test",
+    "test:mobile": "yarn workspace @dialectic/mobile test",
+    "lint:mobile": "yarn workspace @dialectic/mobile lint"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.2"
+  }
+}
