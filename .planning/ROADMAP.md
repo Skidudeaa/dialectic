@@ -158,11 +158,18 @@ Plans:
   2. App runs natively on Windows with platform-appropriate UI conventions
   3. All core features work identically to mobile (messaging, LLM, forking)
   4. Desktop apps share codebase with mobile (React Native Windows/macOS)
-**Plans**: TBD
+**Plans**: 9 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md — Monorepo setup with Yarn Workspaces and shared app package
+- [ ] 08-02-PLAN.md — macOS workspace with react-native-macos and Xcode project
+- [ ] 08-03-PLAN.md — Windows workspace with react-native-windows and Visual Studio project
+- [ ] 08-04-PLAN.md — Platform service abstractions (secure storage, database, notifications)
+- [ ] 08-05-PLAN.md — macOS platform implementation (Keychain, SQLite, menu bar)
+- [ ] 08-06-PLAN.md — Windows platform implementation (MMKV, SQLite, WinRT notifications)
+- [ ] 08-07-PLAN.md — Desktop UX features (keyboard shortcuts, hover, context menu, drag-drop, sidebar)
+- [ ] 08-08-PLAN.md — Desktop visual polish (centered layout, scrollbars, window persistence)
+- [ ] 08-09-PLAN.md — Platform verification checkpoint
 
 ## Progress
 
@@ -180,8 +187,8 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 | 5. Session & History | 7/7 | Complete | 2026-01-25 |
 | 6. Push Notifications | 5/5 | Complete | 2026-01-25 |
 | 7. Dialectic Differentiators | 5/5 | Complete | 2026-01-25 |
-| 8. Desktop Expansion | 0/TBD | Not started | - |
+| 8. Desktop Expansion | 0/9 | Planned | - |
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-25 (Phase 7 complete)*
+*Last updated: 2026-01-26 (Phase 8 planned)*
