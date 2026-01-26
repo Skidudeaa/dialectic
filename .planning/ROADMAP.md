@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Project Foundation** - React Native/Expo scaffolding with iOS and Android baseline
 - [x] **Phase 2: Authentication** - User accounts with session persistence and biometric unlock
 - [x] **Phase 3: Real-Time Core** - WebSocket messaging with presence, typing, and reconnection
-- [ ] **Phase 4: LLM Participation** - LLM context, streaming responses, and explicit mentions
+- [x] **Phase 4: LLM Participation** - LLM context, streaming responses, and explicit mentions
 - [ ] **Phase 5: Session & History** - Conversation persistence, pagination, and search
 - [ ] **Phase 6: Push Notifications** - Background notifications with badges and deep linking
 - [ ] **Phase 7: Dialectic Differentiators** - Thread forking, genealogy, and LLM heuristic controls
@@ -88,10 +88,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Backend streaming handler with token broadcast
-- [ ] 04-02-PLAN.md — Mobile LLM store and WebSocket types
-- [ ] 04-03-PLAN.md — LLM UI components (thinking indicator, markdown, bubble)
-- [ ] 04-04-PLAN.md — @Claude mention input and detection
+- [x] 04-01-PLAN.md — Backend streaming handler with token broadcast
+- [x] 04-02-PLAN.md — Mobile LLM store and WebSocket types
+- [x] 04-03-PLAN.md — LLM UI components (thinking indicator, markdown, bubble)
+- [x] 04-04-PLAN.md — @Claude mention input and detection
 
 ### Phase 5: Session & History
 **Goal**: Conversations persist across sessions with full history access and search
@@ -166,7 +166,7 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 | 1. Project Foundation | 3/3 | Complete | 2026-01-21 |
 | 2. Authentication | 5/5 | Complete | 2026-01-20 |
 | 3. Real-Time Core | 6/6 | Complete | 2026-01-25 |
-| 4. LLM Participation | 0/4 | Planning complete | - |
+| 4. LLM Participation | 4/4 | Complete | 2026-01-25 |
 | 5. Session & History | 0/TBD | Not started | - |
 | 6. Push Notifications | 0/TBD | Not started | - |
 | 7. Dialectic Differentiators | 0/TBD | Not started | - |
@@ -174,4 +174,4 @@ Note: Phase 6 (Push Notifications) depends on Phase 3, not Phase 5. Can execute 
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-25*
+*Last updated: 2026-01-25 (Phase 4 complete)*

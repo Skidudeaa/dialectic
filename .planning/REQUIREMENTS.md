@@ -30,9 +30,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### LLM Participation
 
-- [ ] **LLM-01**: LLM receives full conversation context for each interaction
-- [ ] **LLM-02**: LLM responses stream token-by-token (not all at once)
-- [ ] **LLM-03**: User can explicitly mention/summon LLM (e.g., @Claude)
+- [x] **LLM-01**: LLM receives full conversation context for each interaction
+- [x] **LLM-02**: LLM responses stream token-by-token (not all at once)
+- [x] **LLM-03**: User can explicitly mention/summon LLM (e.g., @Claude)
 - [ ] **LLM-04**: LLM interjects proactively based on heuristics (turn count, questions, stagnation)
 - [ ] **LLM-05**: LLM interjection heuristics are configurable by users
 
@@ -117,9 +117,9 @@ Which phases cover which requirements.
 | PUSH-02 | Phase 6 | Pending |
 | PUSH-03 | Phase 6 | Pending |
 | PUSH-04 | Phase 6 | Pending |
-| LLM-01 | Phase 4 | Pending |
-| LLM-02 | Phase 4 | Pending |
-| LLM-03 | Phase 4 | Pending |
+| LLM-01 | Phase 4 | Complete |
+| LLM-02 | Phase 4 | Complete |
+| LLM-03 | Phase 4 | Complete |
 | LLM-04 | Phase 7 | Pending |
 | LLM-05 | Phase 7 | Pending |
 | HIST-01 | Phase 5 | Pending |
@@ -140,4 +140,4 @@ Which phases cover which requirements.
 
 ---
 *Requirements defined: 2026-01-20*
-*Last updated: 2026-01-20 after roadmap creation*
+*Last updated: 2026-01-25 (Phase 4 complete)*
