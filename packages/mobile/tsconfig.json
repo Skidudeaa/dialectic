@@ -3,9 +3,9 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"],
+      "@dialectic/app": ["../app/src/index.ts"],
+      "@dialectic/app/*": ["../app/src/*"]
     }
   },
   "include": [
@@ -13,5 +13,8 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
+  ],
+  "references": [
+    { "path": "../app" }
   ]
 }

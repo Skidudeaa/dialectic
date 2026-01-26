@@ -4,48 +4,54 @@ on:
   pull_request:
     branches: [main, master]
     paths:
-      - 'mobile/**'
+      - 'packages/mobile/**'
+      - 'packages/app/**'
       - '.github/workflows/mobile-ci.yml'
+      - 'package.json'
+      - 'yarn.lock'
   push:
     branches: [main, master]
     paths:
-      - 'mobile/**'
+      - 'packages/mobile/**'
+      - 'packages/app/**'
       - '.github/workflows/mobile-ci.yml'
+      - 'package.json'
+      - 'yarn.lock'
 
 jobs:
   lint-and-test:
     name: Lint, Type Check, Test
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: mobile/package-lock.json
+          cache: yarn
+          cache-dependency-path: yarn.lock
 
       - name: Install dependencies
-        run: npm ci
+        run: yarn install --frozen-lockfile
 
       - name: Lint
+        working-directory: packages/mobile
         run: npx expo lint
 
       - name: Type check
+        working-directory: packages/mobile
         run: npx tsc --noEmit
 
       - name: Test
-        run: npm test -- --ci --coverage
+        working-directory: packages/mobile
+        run: yarn test --ci --coverage
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: coverage-report
-          path: mobile/coverage/
+          path: packages/mobile/coverage/
           retention-days: 7
 
   build:
@@ -53,17 +59,14 @@ jobs:
     needs: lint-and-test
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: mobile/package-lock.json
+          cache: yarn
+          cache-dependency-path: yarn.lock
 
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
@@ -72,7 +75,8 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
-        run: npm ci
+        run: yarn install --frozen-lockfile
 
       - name: Build on EAS
+        working-directory: packages/mobile
         run: eas build --platform all --non-interactive --no-wait
