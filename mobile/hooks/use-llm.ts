@@ -13,6 +13,7 @@ import type {
   LLMStreamingPayload,
   LLMDonePayload,
   LLMErrorPayload,
+  LLMCancelledPayload,
 } from '@/services/websocket/types';
 
 interface UseLLMOptions {
@@ -26,11 +27,15 @@ export function useLLM({ threadId }: UseLLMOptions) {
     partialResponse,
     streamingMessageId,
     activeThreadId,
+    speakerType,
+    interjectionType,
+    interjectionReason,
     startThinking,
     startStreaming,
     appendToken,
     finishStreaming,
     cancelResponse,
+    cancelStream,
   } = useLLMStore();
 
   const { addMessage } = useMessagesStore();
@@ -66,6 +71,12 @@ export function useLLM({ threadId }: UseLLMOptions) {
     (payload: LLMDonePayload) => {
       if (payload.thread_id !== threadId) return;
 
+      // Map speaker_type to speakerType for Message store
+      const speakerTypeMap: Record<string, 'LLM_PRIMARY' | 'LLM_PROVOKER'> = {
+        llm_primary: 'LLM_PRIMARY',
+        llm_provoker: 'LLM_PROVOKER',
+      };
+
       // Add complete message to messages store
       addMessage({
         id: payload.message_id,
@@ -76,10 +87,15 @@ export function useLLM({ threadId }: UseLLMOptions) {
         createdAt: new Date().toISOString(),
         deliveryStatus: 'delivered',
         readBy: [],
+        speakerType: speakerTypeMap[payload.speaker_type] || 'LLM_PRIMARY',
       });
 
-      // Reset LLM state
-      finishStreaming();
+      // Reset LLM state with metadata
+      finishStreaming({
+        speakerType: payload.speaker_type || 'llm_primary',
+        interjectionType: payload.interjection_type || 'summoned',
+        interjectionReason: payload.interjection_reason,
+      });
     },
     [threadId, addMessage, finishStreaming]
   );
@@ -108,6 +124,15 @@ export function useLLM({ threadId }: UseLLMOptions) {
     [threadId, addMessage, cancelResponse]
   );
 
+  const handleCancelled = useCallback(
+    (payload: LLMCancelledPayload) => {
+      if (payload.thread_id !== threadId) return;
+      // Server confirmed cancellation, clear local state
+      cancelResponse();
+    },
+    [threadId, cancelResponse]
+  );
+
   // Actions for calling LLM
   const summonClaude = useCallback(
     (triggerContent?: string) => {
@@ -123,12 +148,8 @@ export function useLLM({ threadId }: UseLLMOptions) {
   );
 
   const cancel = useCallback(() => {
-    websocketService.send({
-      type: 'cancel_llm',
-      payload: { thread_id: threadId },
-    });
-    cancelResponse();
-  }, [threadId, cancelResponse]);
+    cancelStream(threadId);
+  }, [threadId, cancelStream]);
 
   // Handlers object for WebSocket event wiring
   const handlers = useMemo(
@@ -137,8 +158,9 @@ export function useLLM({ threadId }: UseLLMOptions) {
       handleStreaming,
       handleDone,
       handleError,
+      handleCancelled,
     }),
-    [handleThinking, handleStreaming, handleDone, handleError]
+    [handleThinking, handleStreaming, handleDone, handleError, handleCancelled]
   );
 
   return {
@@ -147,6 +169,10 @@ export function useLLM({ threadId }: UseLLMOptions) {
     isStreaming: isActiveInThread && isStreaming,
     partialResponse: isActiveInThread ? partialResponse : '',
     streamingMessageId: isActiveInThread ? streamingMessageId : null,
+    // Interjection metadata (from last completed response)
+    speakerType: isActiveInThread ? speakerType : null,
+    interjectionType: isActiveInThread ? interjectionType : null,
+    interjectionReason: isActiveInThread ? interjectionReason : null,
 
     // Actions
     summonClaude,
