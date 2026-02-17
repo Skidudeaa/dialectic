@@ -1,0 +1,3118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dialectic</title>
+    <!-- Google Fonts: Space Grotesk + JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #0a0a0b;
+            --surface: #141416;
+            --surface-2: #1c1c1f;
+            --border: #2a2a2e;
+            --text: #e4e4e7;
+            --text-dim: #71717a;
+            --accent: #6366f1;
+            --accent-dim: #4f46e5;
+            --human-bg: #1e1e24;
+            --llm-bg: #1a1a2e;
+            --provoker-bg: #2a1a1a;
+            --system-bg: #1a1a1a;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+
+        body {
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        h1, h2, h3, .room-name, .thread-title {
+            font-weight: 600;
+        }
+
+        /* Auth Screen */
+        #authScreen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            padding: 2rem;
+        }
+
+        #authScreen h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 300;
+            letter-spacing: -0.02em;
+        }
+
+        #authScreen p {
+            color: var(--text-dim);
+            margin-bottom: 2rem;
+        }
+
+        .auth-form {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .auth-tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .auth-tab {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            font-size: 0.875rem;
+        }
+
+        .auth-tab.active {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        .auth-tab-content {
+            display: none;
+        }
+
+        .auth-tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.875rem;
+            color: var(--text-dim);
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+        }
+
+        .form-group input:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--accent-dim);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .btn-danger {
+            background: var(--error);
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-sm {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+        }
+
+        /* Setup Screen (Quick Join) */
+        #setup {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            padding: 2rem;
+        }
+
+        #setup h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            font-weight: 300;
+            letter-spacing: -0.02em;
+        }
+
+        #setup p {
+            color: var(--text-dim);
+            margin-bottom: 2rem;
+        }
+
+        .setup-form {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .setup-form h2 {
+            font-size: 1rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+        }
+
+        .setup-tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .setup-tab {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+
+        .setup-tab.active {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Main App */
+        #app {
+            display: none;
+            flex-direction: row;
+            height: 100vh;
+        }
+
+        #app.active {
+            display: flex;
+        }
+
+        /* Room Sidebar */
+        .room-sidebar {
+            width: 260px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .room-sidebar-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .room-sidebar-header h2 {
+            font-size: 1rem;
+            font-weight: 500;
+        }
+
+        .room-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+
+        .room-item {
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 0.25rem;
+            transition: background 0.15s;
+            position: relative;
+        }
+
+        .room-item:hover {
+            background: var(--surface-2);
+        }
+
+        .room-item.active {
+            background: var(--accent);
+        }
+
+        .room-item-name {
+            font-weight: 500;
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .room-item-preview {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .room-item.active .room-item-preview {
+            color: rgba(255,255,255,0.7);
+        }
+
+        .unread-badge {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: var(--accent);
+            color: white;
+            font-size: 0.625rem;
+            padding: 0.125rem 0.375rem;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        .room-item.active .unread-badge {
+            background: white;
+            color: var(--accent);
+        }
+
+        .room-sidebar-footer {
+            padding: 1rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .user-name {
+            flex: 1;
+            font-size: 0.875rem;
+        }
+
+        /* Main Content Area */
+        .main-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface);
+        }
+
+        .room-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .room-name {
+            font-weight: 500;
+        }
+
+        .thread-selector {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .thread-selector select {
+            padding: 0.5rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-dim);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--error);
+        }
+
+        .status-dot.connected {
+            background: var(--success);
+        }
+
+        /* Main Content */
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Messages */
+        .messages-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .load-more-indicator {
+            text-align: center;
+            padding: 1rem;
+            color: var(--text-dim);
+            font-size: 0.875rem;
+        }
+
+        .load-more-indicator.loading::after {
+            content: '';
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .loading-spinner .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 1rem;
+            border-radius: 12px;
+            position: relative;
+        }
+
+        .message.human {
+            background: var(--human-bg);
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.llm_primary {
+            background: var(--llm-bg);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+            border-left: 3px solid var(--accent);
+        }
+
+        .message.llm_provoker {
+            background: var(--provoker-bg);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+            border-left: 3px solid var(--warning);
+        }
+
+        .message.system {
+            background: var(--system-bg);
+            align-self: center;
+            font-style: italic;
+            color: var(--text-dim);
+            font-size: 0.875rem;
+        }
+
+
+        /* Streaming message enhancements */
+        .message.streaming {
+            position: relative;
+            overflow: hidden;
+            background: var(--llm-bg);
+            border-left: 3px solid var(--accent);
+        }
+
+        /* Blinking cursor at end of content */
+        .message.streaming .message-content::after {
+            content: '\25CB';
+            color: var(--accent);
+            animation: cursor-blink 1s step-end infinite;
+            margin-left: 2px;
+        }
+
+        @keyframes cursor-blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        /* Shimmer effect across the message */
+        .message.streaming::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(99, 102, 241, 0.08),
+                transparent
+            );
+            animation: shimmer 2s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        /* Thinking indicator before content appears */
+        .message.streaming.thinking .message-content::before {
+            content: 'Thinking';
+            color: var(--text-dim);
+            font-style: italic;
+            animation: thinking-dots 1.5s infinite;
+        }
+
+        @keyframes thinking-dots {
+            0% { content: 'Thinking'; }
+            25% { content: 'Thinking.'; }
+            50% { content: 'Thinking..'; }
+            75% { content: 'Thinking...'; }
+        }
+
+        .message.streaming .streaming-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+
+        /* Cancel button styling */
+        .message.streaming .cancel-stream-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: var(--error);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        .message.streaming .cancel-stream-btn:hover {
+            opacity: 1;
+        }
+
+        /* Cancelled state */
+        .message.cancelled {
+            border-left-color: var(--warning);
+            opacity: 0.7;
+        }
+
+        .message.cancelled::before {
+            animation: none;
+            background: none;
+        }
+
+        .message.cancelled .message-content::after {
+            content: none;
+        }
+
+        .cancelled-label {
+            color: var(--warning);
+            font-size: 0.75rem;
+            font-style: italic;
+        }
+
+        /* Error state */
+        .message.error {
+            border-left-color: var(--error);
+        }
+
+        .message.error .message-content::after {
+            content: none;
+        }
+
+        .error-text {
+            color: var(--error);
+        }
+
+        /* Reply reference */
+        .message-reference {
+            background: var(--surface-2);
+            border-left: 2px solid var(--accent);
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            cursor: pointer;
+        }
+
+        .message-reference:hover {
+            background: var(--border);
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+
+        .message-author {
+            font-weight: 500;
+            color: var(--text);
+        }
+
+        .message-type {
+            padding: 0.125rem 0.375rem;
+            background: var(--surface-2);
+            border-radius: 4px;
+            font-size: 0.625rem;
+            text-transform: uppercase;
+        }
+
+        .message-content {
+            line-height: 1.6;
+        }
+
+        /* Markdown styles */
+        .message-content p {
+            margin-bottom: 0.5rem;
+        }
+
+        .message-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .message-content code {
+            background: var(--surface-2);
+            padding: 0.125rem 0.375rem;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.875em;
+        }
+
+        .message-content pre {
+            background: var(--surface-2);
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 0.5rem 0;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+
+        .message-content pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .message-content blockquote {
+            border-left: 3px solid var(--accent);
+            padding-left: 1rem;
+            margin: 0.5rem 0;
+            color: var(--text-dim);
+        }
+
+        .message-content ul, .message-content ol {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+        }
+
+        .message-content li {
+            margin-bottom: 0.25rem;
+        }
+
+        .message-content a {
+            color: var(--accent);
+            text-decoration: underline;
+        }
+
+        .message-actions {
+            display: none;
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            gap: 0.25rem;
+        }
+
+        .message:hover .message-actions {
+            display: flex;
+        }
+
+        .message-action {
+            padding: 0.25rem 0.5rem;
+            background: var(--surface-2);
+            border: none;
+            border-radius: 4px;
+            color: var(--text-dim);
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+
+        .message-action:hover {
+            background: var(--border);
+            color: var(--text);
+        }
+
+        /* Reply preview bar */
+        .reply-preview {
+            display: none;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: var(--surface-2);
+            border-left: 3px solid var(--accent);
+            margin-bottom: 0.5rem;
+            border-radius: 4px;
+        }
+
+        .reply-preview.active {
+            display: flex;
+        }
+
+        .reply-preview-content {
+            flex: 1;
+            font-size: 0.875rem;
+            color: var(--text-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .reply-preview-author {
+            font-weight: 500;
+            color: var(--text);
+            margin-right: 0.5rem;
+        }
+
+        .cancel-reply-btn {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            padding: 0.25rem;
+            font-size: 1rem;
+        }
+
+        .cancel-reply-btn:hover {
+            color: var(--text);
+        }
+
+        .typing-indicator {
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem;
+            color: var(--text-dim);
+            font-size: 0.875rem;
+        }
+
+        .typing-indicator.active {
+            display: flex;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .typing-dots span {
+            width: 6px;
+            height: 6px;
+            background: var(--text-dim);
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-4px); }
+        }
+
+        /* Input Area */
+        .input-area {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+        }
+
+        .input-container {
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-end;
+        }
+
+        .message-type-selector {
+            display: flex;
+            gap: 0.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .type-btn {
+            padding: 0.25rem 0.5rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-dim);
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+
+        .type-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 1rem;
+            resize: none;
+            min-height: 44px;
+            max-height: 200px;
+        }
+
+        #messageInput:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        #sendBtn {
+            padding: 0.75rem 1.25rem;
+            height: 44px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            border-left: 1px solid var(--border);
+            background: var(--surface);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-tab {
+            flex: 1;
+            padding: 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            font-size: 0.875rem;
+            border-bottom: 2px solid transparent;
+        }
+
+        .sidebar-tab.active {
+            color: var(--text);
+            border-bottom-color: var(--accent);
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .sidebar-panel {
+            display: none;
+        }
+
+        .sidebar-panel.active {
+            display: block;
+        }
+
+        /* Users Panel */
+        .user-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem;
+            border-radius: 6px;
+            margin-bottom: 0.25rem;
+        }
+
+        .user-item:hover {
+            background: var(--surface-2);
+        }
+
+        .presence-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-dim);
+        }
+
+        .presence-dot.online {
+            background: var(--success);
+        }
+
+        .presence-dot.away {
+            background: var(--warning);
+        }
+
+        .presence-dot.offline {
+            background: var(--text-dim);
+        }
+
+        .user-item-name {
+            flex: 1;
+            font-size: 0.875rem;
+        }
+
+        .user-item-status {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+
+        /* Memory Panel */
+        .memory-item {
+            padding: 0.75rem;
+            background: var(--surface-2);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+        }
+
+        .memory-key {
+            font-size: 0.75rem;
+            color: var(--accent);
+            margin-bottom: 0.25rem;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+
+        .memory-content {
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+
+        .memory-meta {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-top: 0.5rem;
+        }
+
+        .add-memory-form {
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .add-memory-form input,
+        .add-memory-form textarea {
+            width: 100%;
+            padding: 0.5rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .add-memory-form button {
+            width: 100%;
+        }
+
+        /* Thread Panel */
+        .thread-item {
+            padding: 0.75rem;
+            background: var(--surface-2);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .thread-item:hover {
+            background: var(--border);
+        }
+
+        .thread-item.active {
+            border-left: 3px solid var(--accent);
+        }
+
+        .thread-title {
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .thread-meta {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+        }
+
+        .fork-btn {
+            display: block;
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        /* Empty States */
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-dim);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            width: 100%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal h3 {
+            margin-bottom: 1rem;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .modal-actions button {
+            flex: 1;
+        }
+
+        /* Settings sliders */
+        .setting-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .setting-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .setting-value {
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        .setting-slider {
+            width: 100%;
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        .setting-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--accent);
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .setting-description {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-top: 0.25rem;
+        }
+
+        .setting-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 40px;
+            height: 22px;
+            background: var(--border);
+            border-radius: 11px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .toggle-switch.active {
+            background: var(--accent);
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+
+        .toggle-switch.active::after {
+            transform: translateX(18px);
+        }
+
+        /* Share Link */
+        .share-link {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--surface-2);
+            border-radius: 8px;
+        }
+
+        .share-link input {
+            flex: 1;
+            padding: 0.5rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text);
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.875rem;
+        }
+
+        .share-link button {
+            padding: 0.5rem 1rem;
+        }
+
+        /* Error message */
+        .error-message {
+            background: var(--error);
+            color: white;
+            padding: 0.75rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .room-sidebar {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+
+            .message {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Auth Screen -->
+    <div id="authScreen">
+        <h1>Dialectic</h1>
+        <p>A shared thinking space</p>
+
+        <div class="auth-form">
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="login">Sign In</button>
+                <button class="auth-tab" data-tab="register">Create Account</button>
+                <button class="auth-tab" data-tab="quick">Quick Join</button>
+            </div>
+
+            <div id="loginTabContent" class="auth-tab-content active">
+                <div id="loginError" class="error-message" style="display: none;"></div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="loginEmail" placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" placeholder="Your password">
+                </div>
+                <button class="btn" id="loginBtn" style="width: 100%;">Sign In</button>
+            </div>
+
+            <div id="registerTabContent" class="auth-tab-content">
+                <div id="registerError" class="error-message" style="display: none;"></div>
+                <div class="form-group">
+                    <label>Display Name</label>
+                    <input type="text" id="registerName" placeholder="How should others see you?">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="registerEmail" placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="registerPassword" placeholder="Choose a password">
+                </div>
+                <button class="btn" id="registerBtn" style="width: 100%;">Create Account</button>
+            </div>
+
+            <div id="quickTabContent" class="auth-tab-content">
+                <p style="color: var(--text-dim); margin-bottom: 1rem; font-size: 0.875rem;">
+                    Quick join without account (session-only)
+                </p>
+                <div class="form-group">
+                    <label>Your Name</label>
+                    <input type="text" id="quickName" placeholder="How should others see you?">
+                </div>
+                <div class="form-group">
+                    <label>Room Link (optional)</label>
+                    <input type="text" id="quickRoomLink" placeholder="Paste link or leave empty to create">
+                </div>
+                <button class="btn" id="quickJoinBtn" style="width: 100%;">Start</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app">
+        <!-- Room Sidebar -->
+        <div class="room-sidebar">
+            <div class="room-sidebar-header">
+                <h2>Rooms</h2>
+                <button class="btn btn-sm btn-secondary" id="newRoomBtn">+ New</button>
+            </div>
+            <div class="room-list" id="roomList"></div>
+            <div class="room-sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar" id="userAvatar">?</div>
+                    <span class="user-name" id="userDisplayName">User</span>
+                    <button class="btn btn-sm btn-secondary" id="logoutBtn">↪</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Area -->
+        <div class="main-area">
+            <header>
+                <div class="room-info">
+                    <span class="room-name" id="roomNameDisplay">Room</span>
+                    <div class="thread-selector">
+                        <select id="threadSelect"></select>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-sm btn-secondary" id="settingsBtn">⚙</button>
+                    <div class="connection-status">
+                        <span class="status-dot" id="statusDot"></span>
+                        <span id="statusText">Disconnected</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="main-content">
+                <div class="messages-container">
+                    <div id="messages"></div>
+                    <div class="typing-indicator" id="typingIndicator">
+                        <div class="typing-dots">
+                            <span></span><span></span><span></span>
+                        </div>
+                        <span id="typingText">Someone is typing...</span>
+                    </div>
+                    <div class="input-area">
+                        <div class="reply-preview" id="replyPreview">
+                            <div class="reply-preview-content">
+                                <span class="reply-preview-author" id="replyAuthor"></span>
+                                <span id="replyContent"></span>
+                            </div>
+                            <button class="cancel-reply-btn" id="cancelReplyBtn">×</button>
+                        </div>
+                        <div class="message-type-selector">
+                            <button class="type-btn active" data-type="text">Text</button>
+                            <button class="type-btn" data-type="claim">Claim</button>
+                            <button class="type-btn" data-type="question">Question</button>
+                            <button class="type-btn" data-type="definition">Definition</button>
+                        </div>
+                        <div class="input-container">
+                            <textarea id="messageInput" placeholder="Type a message... (use @llm to summon Claude)" rows="1"></textarea>
+                            <button class="btn" id="sendBtn">Send</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sidebar">
+                    <div class="sidebar-tabs">
+                        <button class="sidebar-tab" data-panel="users">Users</button>
+                        <button class="sidebar-tab active" data-panel="memory">Memory</button>
+                        <button class="sidebar-tab" data-panel="threads">Threads</button>
+                        <button class="sidebar-tab" data-panel="share">Share</button>
+                    </div>
+                    <div class="sidebar-content">
+                        <div id="usersPanel" class="sidebar-panel">
+                            <div id="usersList"></div>
+                        </div>
+                        <div id="memoryPanel" class="sidebar-panel active">
+                            <div class="add-memory-form">
+                                <input type="text" id="memoryKey" placeholder="Key (e.g., definition:truth)">
+                                <textarea id="memoryContent" placeholder="What should be remembered?" rows="2"></textarea>
+                                <button class="btn btn-secondary" id="addMemoryBtn">Add Memory</button>
+                            </div>
+                            <div id="memoryList"></div>
+                        </div>
+                        <div id="threadsPanel" class="sidebar-panel">
+                            <div id="threadList"></div>
+                            <button class="btn btn-secondary fork-btn" id="forkThreadBtn">Fork from last message</button>
+                        </div>
+                        <div id="sharePanel" class="sidebar-panel">
+                            <p style="margin-bottom: 1rem; color: var(--text-dim);">Share this link with your friend to invite them:</p>
+                            <div class="share-link">
+                                <input type="text" id="shareLink" readonly>
+                                <button class="btn btn-secondary" id="copyLinkBtn">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fork Modal -->
+    <div class="modal-overlay" id="forkModal">
+        <div class="modal">
+            <h3>Fork Thread</h3>
+            <div class="form-group">
+                <label>New Thread Title</label>
+                <input type="text" id="forkTitle" placeholder="What's this branch about?">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelForkBtn">Cancel</button>
+                <button class="btn" id="confirmForkBtn">Fork</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Room Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <h3>Room Settings</h3>
+
+            <div class="setting-group">
+                <div class="setting-label">
+                    <span>Interjection Threshold</span>
+                    <span class="setting-value" id="thresholdValue">4</span>
+                </div>
+                <input type="range" class="setting-slider" id="thresholdSlider" min="2" max="12" value="4">
+                <div class="setting-description">Messages before Claude may interject (2-12)</div>
+            </div>
+
+            <div class="setting-group">
+                <div class="setting-label">
+                    <span>Novelty Threshold</span>
+                    <span class="setting-value" id="noveltyValue">0.65</span>
+                </div>
+                <input type="range" class="setting-slider" id="noveltySlider" min="30" max="95" value="65">
+                <div class="setting-description">Semantic novelty required for interjection (0.3-0.95)</div>
+            </div>
+
+            <div class="setting-group">
+                <div class="setting-toggle">
+                    <div class="toggle-switch" id="autoInterjectionToggle"></div>
+                    <span>Auto Interjection</span>
+                </div>
+                <div class="setting-description">Allow Claude to interject without being mentioned</div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelSettingsBtn">Cancel</button>
+                <button class="btn" id="saveSettingsBtn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Room Modal -->
+    <div class="modal-overlay" id="newRoomModal">
+        <div class="modal">
+            <h3>Create New Room</h3>
+            <div class="form-group">
+                <label>Room Name</label>
+                <input type="text" id="newRoomName" placeholder="e.g., Philosophy Club">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelNewRoomBtn">Cancel</button>
+                <button class="btn" id="confirmNewRoomBtn">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // DEBUG UTILITIES
+        // ============================================================
+        // Debug mode - only log in development
+        const DEBUG = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+        function debug(...args) {
+            if (DEBUG) {
+                console.log('[Dialectic]', ...args);
+            }
+        }
+
+        function debugWarn(...args) {
+            if (DEBUG) {
+                console.warn('[Dialectic]', ...args);
+            }
+        }
+
+        function debugError(...args) {
+            // Always log errors, but with prefix
+            console.error('[Dialectic]', ...args);
+        }
+
+        // ============================================================
+        // STATE
+        // ============================================================
+        // Auto-detect backend URL from the page location.
+        // Override with window.DIALECTIC_API_PORT if needed (default: 8000).
+        const _host = window.location.hostname || 'localhost';
+        const _apiPort = window.DIALECTIC_API_PORT || 8000;
+        const _apiBase = `http://${_host}:${_apiPort}`;
+        const _wsBase = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${_host}:${_apiPort}`;
+
+        const state = {
+            apiUrl: _apiBase,
+            wsUrl: _wsBase,
+
+            // Auth
+            accessToken: null,
+            refreshToken: null,
+            isAuthenticated: false,
+
+            // User
+            userId: null,
+            userName: null,
+
+            // Rooms
+            rooms: [],
+            roomBadges: {},
+            roomId: null,
+            roomToken: null,
+
+            // Thread
+            currentThreadId: null,
+            threads: [],
+
+            // Messages
+            messages: [],
+            messageType: 'text',
+            lastMessageId: null,
+
+            // Pagination
+            hasMoreBefore: false,
+            oldestSequence: null,
+            newestSequence: null,
+            isLoadingMore: false,
+
+            // Reply
+            replyingToMessage: null,
+
+            // Memory
+            memories: [],
+
+            // Presence
+            onlineUsers: {},
+            typingUsers: new Set(),
+            userNames: {},
+            presenceInterval: null,
+
+            // Streaming
+            streamingMessage: null,
+            streamState: 'idle',  // idle | streaming | cancelling | error
+            currentStreamId: null,
+            pendingStreamContent: '',
+            rafPending: false,
+
+            // WebSocket
+            ws: null,
+            connectionState: 'disconnected',  // disconnected | connecting | connected | reconnecting
+            messageQueue: [],
+            reconnectAttempts: 0,
+            reconnectTimeout: null,
+        };
+
+        // ============================================================
+        // CONNECTION STATE CONSTANTS
+        // ============================================================
+        const ConnectionState = {
+            DISCONNECTED: 'disconnected',
+            CONNECTING: 'connecting',
+            CONNECTED: 'connected',
+            RECONNECTING: 'reconnecting'
+        };
+
+        // ============================================================
+        // STREAM STATE CONSTANTS
+        // ============================================================
+        const StreamState = {
+            IDLE: 'idle',
+            STREAMING: 'streaming',
+            CANCELLING: 'cancelling',
+            ERROR: 'error'
+        };
+
+        // ============================================================
+        // RECONNECTION CONSTANTS
+        // ============================================================
+        const RECONNECT_BASE_MS = 1000;
+        const RECONNECT_MAX_MS = 30000;
+        const RECONNECT_MAX_ATTEMPTS = 10;
+
+        // ============================================================
+        // ELEMENTS
+        // ============================================================
+        const $ = (sel) => document.querySelector(sel);
+        const $$ = (sel) => document.querySelectorAll(sel);
+
+        // ============================================================
+        // API HELPERS
+        // ============================================================
+        async function api(method, path, body = null) {
+            const url = new URL(path, state.apiUrl);
+            if (state.roomToken) url.searchParams.set('token', state.roomToken);
+            if (state.userId) url.searchParams.set('user_id', state.userId);
+
+            const opts = {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+            };
+            if (state.accessToken) {
+                opts.headers['Authorization'] = `Bearer ${state.accessToken}`;
+            }
+            if (body) opts.body = JSON.stringify(body);
+
+            const res = await fetch(url, opts);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ detail: res.statusText }));
+                throw new Error(err.detail || 'API error');
+            }
+            return res.json();
+        }
+
+        // ============================================================
+        // MARKDOWN RENDERING
+        // ============================================================
+        function renderMarkdown(content) {
+            if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') {
+                return escapeHtml(content);
+            }
+            const html = marked.parse(content, { breaks: true });
+            return DOMPurify.sanitize(html);
+        }
+
+        // ============================================================
+        // AUTH
+        // ============================================================
+        function initAuth() {
+            // Tab switching
+            $$('.auth-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    $$('.auth-tab').forEach(t => t.classList.remove('active'));
+                    $$('.auth-tab-content').forEach(c => c.classList.remove('active'));
+                    tab.classList.add('active');
+                    $(`#${tab.dataset.tab}TabContent`).classList.add('active');
+                });
+            });
+
+            // Login
+            $('#loginBtn').addEventListener('click', async () => {
+                const email = $('#loginEmail').value.trim();
+                const password = $('#loginPassword').value;
+
+                if (!email || !password) {
+                    showAuthError('login', 'Please fill in all fields');
+                    return;
+                }
+
+                try {
+                    const data = await api('POST', '/auth/login', { email, password });
+                    handleAuthSuccess(data, email);
+                } catch (e) {
+                    showAuthError('login', e.message);
+                }
+            });
+
+            // Register
+            $('#registerBtn').addEventListener('click', async () => {
+                const name = $('#registerName').value.trim();
+                const email = $('#registerEmail').value.trim();
+                const password = $('#registerPassword').value;
+
+                if (!name || !email || !password) {
+                    showAuthError('register', 'Please fill in all fields');
+                    return;
+                }
+
+                try {
+                    const data = await api('POST', '/auth/signup', {
+                        display_name: name,
+                        email,
+                        password,
+                    });
+                    handleAuthSuccess(data, name);
+                } catch (e) {
+                    showAuthError('register', e.message);
+                }
+            });
+
+            // Quick join
+            $('#quickJoinBtn').addEventListener('click', async () => {
+                const name = $('#quickName').value.trim();
+                const link = $('#quickRoomLink').value.trim();
+
+                if (!name) {
+                    alert('Please enter your name');
+                    return;
+                }
+
+                try {
+                    // Create user
+                    const user = await api('POST', '/users', { display_name: name });
+                    state.userId = user.id;
+                    state.userName = name;
+
+                    if (link) {
+                        // Join existing room
+                        const url = new URL(link);
+                        const roomId = url.searchParams.get('room');
+                        const token = url.searchParams.get('token');
+                        if (!roomId || !token) throw new Error('Invalid link');
+
+                        state.roomId = roomId;
+                        state.roomToken = token;
+                        await api('POST', `/rooms/${roomId}/join`, { user_id: user.id });
+                    } else {
+                        // Create new room
+                        const room = await api('POST', '/rooms', { name: 'Untitled Room' });
+                        state.roomId = room.id;
+                        state.roomToken = room.token;
+                        await api('POST', `/rooms/${room.id}/join`, { user_id: user.id });
+                    }
+
+                    saveSession();
+                    enterApp();
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                }
+            });
+
+            // Check for existing session
+            loadSession();
+        }
+
+        function showAuthError(type, message) {
+            const el = $(`#${type}Error`);
+            el.textContent = message;
+            el.style.display = 'block';
+        }
+
+        async function handleAuthSuccess(data, fallbackName) {
+            state.accessToken = data.access_token;
+            state.refreshToken = data.refresh_token;
+            // Backend may return {user: {id, display_name}} or flat {user_id}
+            if (data.user && data.user.id) {
+                state.userId = data.user.id;
+                state.userName = data.user.display_name || fallbackName || 'User';
+            } else {
+                state.userId = data.user_id;
+                state.userName = fallbackName || 'User';
+            }
+            state.isAuthenticated = true;
+
+            saveSession();
+            await loadUserRooms();
+
+            if (state.rooms.length > 0) {
+                await switchRoom(state.rooms[0].id);
+            }
+
+            enterApp();
+        }
+
+        function logout() {
+            state.accessToken = null;
+            state.refreshToken = null;
+            state.isAuthenticated = false;
+            state.userId = null;
+            state.userName = null;
+            state.rooms = [];
+            state.roomId = null;
+            state.roomToken = null;
+
+            localStorage.removeItem('dialectic_session');
+
+            if (state.ws) {
+                state.ws.close();
+            }
+            if (state.presenceInterval) {
+                clearInterval(state.presenceInterval);
+            }
+
+            $('#app').classList.remove('active');
+            $('#authScreen').style.display = 'flex';
+        }
+
+        function saveSession() {
+            localStorage.setItem('dialectic_session', JSON.stringify({
+                accessToken: state.accessToken,
+                refreshToken: state.refreshToken,
+                userId: state.userId,
+                userName: state.userName,
+                isAuthenticated: state.isAuthenticated,
+                roomId: state.roomId,
+                roomToken: state.roomToken,
+            }));
+        }
+
+        async function loadSession() {
+            const saved = localStorage.getItem('dialectic_session');
+            if (saved) {
+                const session = JSON.parse(saved);
+                Object.assign(state, session);
+
+                if (state.isAuthenticated) {
+                    await loadUserRooms();
+                }
+
+                if (state.roomId) {
+                    enterApp();
+                }
+            }
+        }
+
+        // ============================================================
+        // ROOMS
+        // ============================================================
+        async function loadUserRooms() {
+            if (!state.userId) return;
+
+            try {
+                const rooms = await api('GET', `/users/me/rooms?user_id=${state.userId}`);
+                state.rooms = rooms;
+                state.roomBadges = {};
+                rooms.forEach(r => {
+                    state.roomBadges[r.id] = r.unread_count;
+                });
+                renderRoomList();
+            } catch (e) {
+                debugError('Failed to load rooms:', e);
+            }
+        }
+
+        function renderRoomList() {
+            const list = $('#roomList');
+
+            if (state.rooms.length === 0) {
+                list.innerHTML = '<div class="empty-state">No rooms yet</div>';
+                return;
+            }
+
+            list.innerHTML = state.rooms.map(room => `
+                <div class="room-item ${room.id === state.roomId ? 'active' : ''}"
+                     onclick="switchRoom('${room.id}')">
+                    <div class="room-item-name">${escapeHtml(room.name || 'Untitled')}</div>
+                    <div class="room-item-preview">${escapeHtml(room.last_message_preview || 'No messages')}</div>
+                    ${room.unread_count > 0 ? `<span class="unread-badge">${room.unread_count}</span>` : ''}
+                </div>
+            `).join('');
+        }
+
+        async function switchRoom(roomId) {
+            // Close existing WebSocket
+            if (state.ws) {
+                state.ws.close();
+            }
+
+            // Find room in list
+            const room = state.rooms.find(r => r.id === roomId);
+
+            // Get room token if we don't have it
+            if (!room) {
+                debugError('Room not found in list');
+                return;
+            }
+
+            state.roomId = roomId;
+            // For quick join, we keep the existing token
+            // For authenticated users, we'd get it from the room data
+
+            saveSession();
+
+            // Update UI
+            renderRoomList();
+            $('#roomNameDisplay').textContent = room.name || 'Room';
+
+            // Generate share link
+            const shareUrl = new URL(window.location.href);
+            shareUrl.searchParams.set('room', state.roomId);
+            shareUrl.searchParams.set('token', state.roomToken);
+            $('#shareLink').value = shareUrl.toString();
+
+            // Reset state
+            state.currentThreadId = null;
+            state.threads = [];
+            state.messages = [];
+            state.onlineUsers = {};
+
+            // Load data and reconnect
+            await Promise.all([
+                loadThreads(),
+                loadMemories(),
+                loadPresence(),
+            ]);
+
+            connectWebSocket();
+            startPresenceHeartbeat();
+        }
+
+        // ============================================================
+        // MAIN APP
+        // ============================================================
+        async function enterApp() {
+            $('#authScreen').style.display = 'none';
+            $('#app').classList.add('active');
+
+            // Update user info
+            $('#userDisplayName').textContent = state.userName;
+            $('#userAvatar').textContent = state.userName ? state.userName[0].toUpperCase() : '?';
+
+            if (state.roomId) {
+                $('#roomNameDisplay').textContent = 'Room';
+
+                // Generate share link
+                const shareUrl = new URL(window.location.href);
+                shareUrl.searchParams.set('room', state.roomId);
+                shareUrl.searchParams.set('token', state.roomToken);
+                $('#shareLink').value = shareUrl.toString();
+
+                // Load initial data
+                await Promise.all([
+                    loadThreads(),
+                    loadMemories(),
+                    loadPresence(),
+                ]);
+
+                // Connect WebSocket
+                connectWebSocket();
+                startPresenceHeartbeat();
+            }
+
+            // Init UI handlers
+            initApp();
+        }
+
+        function initApp() {
+            // Message type selector
+            $$('.type-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    $$('.type-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    state.messageType = btn.dataset.type;
+                });
+            });
+
+            // Send message
+            $('#sendBtn').addEventListener('click', sendMessage);
+            $('#messageInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            // Typing indicator
+            let typingTimeout;
+            $('#messageInput').addEventListener('input', () => {
+                const el = $('#messageInput');
+                el.style.height = 'auto';
+                el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+
+                // Send typing start
+                send('typing_start', { typing: true });
+
+                // Clear previous timeout
+                clearTimeout(typingTimeout);
+
+                // Send typing stop after 2 seconds of inactivity
+                typingTimeout = setTimeout(() => {
+                    send('typing_stop', { typing: false });
+                }, 2000);
+            });
+
+            // Reply cancel
+            $('#cancelReplyBtn').addEventListener('click', cancelReply);
+
+            // Sidebar tabs
+            $$('.sidebar-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    $$('.sidebar-tab').forEach(t => t.classList.remove('active'));
+                    $$('.sidebar-panel').forEach(p => p.classList.remove('active'));
+                    tab.classList.add('active');
+                    $(`#${tab.dataset.panel}Panel`).classList.add('active');
+                });
+            });
+
+            // Add memory
+            $('#addMemoryBtn').addEventListener('click', addMemory);
+
+            // Fork thread
+            $('#forkThreadBtn').addEventListener('click', () => {
+                if (!state.lastMessageId) {
+                    alert('No messages to fork from');
+                    return;
+                }
+                $('#forkModal').classList.add('active');
+            });
+
+            $('#cancelForkBtn').addEventListener('click', () => {
+                $('#forkModal').classList.remove('active');
+            });
+
+            $('#confirmForkBtn').addEventListener('click', forkThread);
+
+            // Copy share link
+            $('#copyLinkBtn').addEventListener('click', () => {
+                $('#shareLink').select();
+                navigator.clipboard.writeText($('#shareLink').value);
+                $('#copyLinkBtn').textContent = 'Copied!';
+                setTimeout(() => $('#copyLinkBtn').textContent = 'Copy', 2000);
+            });
+
+            // Thread selector
+            $('#threadSelect').addEventListener('change', (e) => {
+                const threadId = e.target.value;
+                switchThread(threadId);
+            });
+
+            // Settings
+            $('#settingsBtn').addEventListener('click', openSettings);
+            $('#cancelSettingsBtn').addEventListener('click', () => {
+                $('#settingsModal').classList.remove('active');
+            });
+            $('#saveSettingsBtn').addEventListener('click', saveSettings);
+
+            // Settings sliders
+            $('#thresholdSlider').addEventListener('input', (e) => {
+                $('#thresholdValue').textContent = e.target.value;
+            });
+            $('#noveltySlider').addEventListener('input', (e) => {
+                $('#noveltyValue').textContent = (e.target.value / 100).toFixed(2);
+            });
+            $('#autoInterjectionToggle').addEventListener('click', (e) => {
+                e.target.classList.toggle('active');
+            });
+
+            // New room
+            $('#newRoomBtn').addEventListener('click', () => {
+                $('#newRoomModal').classList.add('active');
+            });
+            $('#cancelNewRoomBtn').addEventListener('click', () => {
+                $('#newRoomModal').classList.remove('active');
+            });
+            $('#confirmNewRoomBtn').addEventListener('click', createNewRoom);
+
+            // Logout
+            $('#logoutBtn').addEventListener('click', logout);
+
+            // Infinite scroll
+            setupInfiniteScroll();
+        }
+
+        // ============================================================
+        // WEBSOCKET
+        // ============================================================
+        function connectWebSocket() {
+            // ARCHITECTURE: State machine for connection management.
+            // WHY: Prevents duplicate connections and message loss during reconnection.
+            // TRADEOFF: Slightly more complex connection logic for better reliability.
+
+            state.connectionState = ConnectionState.CONNECTING;
+            const url = `${state.wsUrl}/ws/${state.roomId}`;
+            state.ws = new WebSocket(url);
+
+            state.ws.onopen = () => {
+                // Backend expects an auth JSON message immediately after connection
+                state.ws.send(JSON.stringify({
+                    token: state.roomToken,
+                    user_id: state.userId,
+                    thread_id: state.currentThreadId || null,
+                }));
+                state.connectionState = ConnectionState.CONNECTED;
+                state.reconnectAttempts = 0;
+                if (state.reconnectTimeout) {
+                    clearTimeout(state.reconnectTimeout);
+                    state.reconnectTimeout = null;
+                }
+                updateConnectionStatus(true);
+                flushMessageQueue();
+            };
+
+            state.ws.onclose = () => {
+                state.connectionState = ConnectionState.DISCONNECTED;
+                updateConnectionStatus(false);
+                // Schedule reconnect
+                state.connectionState = ConnectionState.RECONNECTING;
+                state.reconnectAttempts++;
+                state.reconnectTimeout = setTimeout(connectWebSocket, 3000);
+            };
+
+            state.ws.onerror = (e) => {
+                debugError('WebSocket error:', e);
+                state.connectionState = ConnectionState.DISCONNECTED;
+            };
+
+            state.ws.onmessage = (e) => {
+                const msg = JSON.parse(e.data);
+                handleServerMessage(msg);
+            };
+        }
+
+        function updateConnectionStatus(connected) {
+            $('#statusDot').classList.toggle('connected', connected);
+            $('#statusText').textContent = connected ? 'Connected' : 'Disconnected';
+        }
+
+        function sendWSMessage(msg) {
+            // ARCHITECTURE: Queue-based message sending with state awareness.
+            // WHY: Prevents message loss during reconnection.
+            // TRADEOFF: Messages may be delayed until connection restored.
+
+            if (state.connectionState !== ConnectionState.CONNECTED || !state.ws || state.ws.readyState !== WebSocket.OPEN) {
+                state.messageQueue.push(msg);
+                console.log('Message queued, connection not ready');
+                return false;
+            }
+
+            try {
+                state.ws.send(JSON.stringify(msg));
+                return true;
+            } catch (e) {
+                console.error('Send failed, queuing message:', e);
+                state.messageQueue.push(msg);
+                return false;
+            }
+        }
+
+        function flushMessageQueue() {
+            while (state.messageQueue.length > 0 && state.connectionState === ConnectionState.CONNECTED) {
+                const msg = state.messageQueue.shift();
+                try {
+                    state.ws.send(JSON.stringify(msg));
+                } catch (e) {
+                    // Put it back and stop
+                    state.messageQueue.unshift(msg);
+                    break;
+                }
+            }
+        }
+
+        function send(type, payload) {
+            // Wrapper that uses the new queue-based sending
+            return sendWSMessage({ type, payload });
+        }
+
+        function handleServerMessage(msg) {
+            switch (msg.type) {
+                case 'message_created':
+                    handleMessageCreated(msg.payload);
+                    break;
+
+                // LLM Streaming
+                case 'llm_thinking':
+                    showTypingIndicator(true, 'Claude is thinking...');
+                    break;
+                case 'llm_streaming':
+                    handleLLMStreaming(msg.payload);
+                    break;
+                case 'llm_done':
+                    handleLLMDone(msg.payload);
+                    break;
+                case 'llm_cancelled':
+                    handleLLMCancelled(msg.payload);
+                    break;
+                case 'llm_error':
+                    handleLLMError(msg.payload);
+                    break;
+
+                // Presence
+                case 'presence_update':
+                    handlePresenceUpdate(msg.payload);
+                    break;
+                case 'user_typing':
+                    handleUserTyping(msg.payload);
+                    break;
+                case 'user_joined':
+                    loadPresence();
+                    break;
+                case 'user_left':
+                    handleUserLeft(msg.payload);
+                    break;
+
+                // Other
+                case 'memory_updated':
+                    loadMemories();
+                    break;
+                case 'thread_created':
+                    loadThreads();
+                    break;
+                case 'error':
+                    debugError('Server error:', msg.payload.error);
+                    break;
+            }
+        }
+
+        // ============================================================
+        // LLM STREAMING - State Machine
+        // ============================================================
+        // ARCHITECTURE: State machine for LLM streaming.
+        // WHY: Prevents race conditions between cancel/done/error.
+        // TRADEOFF: More complexity vs bulletproof state transitions.
+
+        function startStreaming(messageId, threadId) {
+            // ARCHITECTURE: State machine entry point.
+            // WHY: Prevents race conditions between cancel/done/error.
+
+            if (state.streamState !== StreamState.IDLE) {
+                console.warn('Cannot start streaming, current state:', state.streamState);
+                return false;
+            }
+
+            state.streamState = StreamState.STREAMING;
+            state.currentStreamId = messageId;
+            state.streamingMessage = { id: messageId, content: '', threadId: threadId };
+            state.pendingStreamContent = '';
+
+            createStreamingMessageElement(messageId);
+            return true;
+        }
+
+        function handleStreamChunk(messageId, content) {
+            // Ignore chunks if not streaming or wrong message
+            if (state.streamState !== StreamState.STREAMING) {
+                return;
+            }
+            if (messageId && state.currentStreamId !== messageId) {
+                console.warn('Received chunk for different stream');
+                return;
+            }
+
+            state.streamingMessage.content = content;
+            updateStreamingMessage(content);
+        }
+
+        function finalizeStream(messageId, finalContent, modelUsed) {
+            if (state.streamState === StreamState.CANCELLING) {
+                // Already cancelling, let that complete
+                return;
+            }
+
+            if (state.streamState !== StreamState.STREAMING) {
+                console.warn('Cannot finalize, not streaming:', state.streamState);
+                return;
+            }
+
+            showTypingIndicator(false);
+
+            // Convert streaming element to permanent message
+            const streamingEl = $(`#streaming-${state.currentStreamId}`);
+            if (streamingEl) {
+                streamingEl.remove();
+            }
+
+            // Also try with data-id selector for backwards compatibility
+            const el = $(`.message[data-id="${messageId || state.currentStreamId}"]`);
+            if (el) {
+                el.classList.remove('streaming');
+                el.querySelector('.message-content').innerHTML = renderMarkdown(finalContent || state.streamingMessage.content);
+
+                // Remove streaming indicator
+                const indicator = el.querySelector('.streaming-indicator');
+                if (indicator) indicator.remove();
+
+                // Add model info if needed
+                if (modelUsed) {
+                    const meta = el.querySelector('.message-header');
+                    if (meta && !meta.querySelector('.model-badge')) {
+                        const badge = document.createElement('span');
+                        badge.className = 'message-type';
+                        badge.textContent = modelUsed;
+                        meta.appendChild(badge);
+                    }
+                }
+            }
+
+            state.lastMessageId = messageId || state.currentStreamId;
+            cleanupStreamState();
+            scrollToBottom();
+        }
+
+        function cancelStream() {
+            if (state.streamState !== StreamState.STREAMING) {
+                return;
+            }
+
+            state.streamState = StreamState.CANCELLING;
+
+            // Send cancel message to server
+            send('cancel_llm', {
+                thread_id: state.currentThreadId,
+                message_id: state.currentStreamId
+            });
+        }
+
+        function handleStreamCancelled() {
+            showTypingIndicator(false);
+
+            const streamingEl = $(`#streaming-${state.currentStreamId}`);
+            if (streamingEl) {
+                streamingEl.classList.add('cancelled');
+                // Mark as cancelled but keep visible
+                const cancelLabel = document.createElement('span');
+                cancelLabel.className = 'cancelled-label';
+                cancelLabel.textContent = ' (cancelled)';
+                streamingEl.querySelector('.message-content')?.appendChild(cancelLabel);
+            }
+
+            // Also try with data-id selector for backwards compatibility
+            if (state.streamingMessage) {
+                const el = $(`.message[data-id="${state.streamingMessage.id}"]`);
+                if (el) {
+                    el.classList.remove('streaming');
+                    el.classList.add('cancelled');
+
+                    // Remove streaming indicator
+                    const indicator = el.querySelector('.streaming-indicator');
+                    if (indicator) indicator.remove();
+                }
+            }
+
+            cleanupStreamState();
+        }
+
+        function handleStreamError(error, partialContent) {
+            state.streamState = StreamState.ERROR;
+            showTypingIndicator(false);
+
+            const streamingEl = $(`#streaming-${state.currentStreamId}`);
+            if (streamingEl) {
+                streamingEl.classList.add('error');
+                streamingEl.querySelector('.message-content').innerHTML =
+                    `<span class="error-text">Error: ${error || 'Stream failed'}</span>`;
+            }
+
+            // Also try with data-id selector for backwards compatibility
+            if (state.streamingMessage) {
+                const el = $(`.message[data-id="${state.streamingMessage.id}"]`);
+                if (el) {
+                    el.classList.remove('streaming');
+                    el.classList.add('error');
+
+                    // Show partial content if any
+                    if (partialContent) {
+                        el.querySelector('.message-content').innerHTML = renderMarkdown(partialContent);
+                    }
+
+                    // Remove streaming indicator and show error
+                    const indicator = el.querySelector('.streaming-indicator');
+                    if (indicator) {
+                        indicator.innerHTML = `<span style="color: var(--error);">Error: ${escapeHtml(error)}</span>`;
+                    }
+                }
+            }
+
+            cleanupStreamState();
+        }
+
+        function cleanupStreamState() {
+            state.streamState = StreamState.IDLE;
+            state.currentStreamId = null;
+            state.streamingMessage = null;
+            state.pendingStreamContent = '';
+            state.rafPending = false;
+        }
+
+        // Handler functions called from WebSocket message dispatch
+        function handleLLMStreaming(payload) {
+            const { thread_id, message_id, token, index } = payload;
+
+            // Start streaming if not already streaming
+            if (state.streamState === StreamState.IDLE) {
+                if (!startStreaming(message_id, thread_id)) {
+                    return; // Failed to start streaming
+                }
+            }
+
+            // Ignore chunks for different streams
+            if (state.currentStreamId !== message_id) {
+                console.warn('Received chunk for different stream:', message_id, 'expected:', state.currentStreamId);
+                return;
+            }
+
+            // Accumulate content
+            state.streamingMessage.content += token;
+            handleStreamChunk(message_id, state.streamingMessage.content);
+        }
+
+        function handleLLMDone(payload) {
+            const { message_id, content, model_used, truncated } = payload;
+            finalizeStream(message_id, content, model_used);
+        }
+
+        function handleLLMCancelled(payload) {
+            handleStreamCancelled();
+        }
+
+        function handleLLMError(payload) {
+            const { error, partial_content } = payload;
+            handleStreamError(error, partial_content);
+        }
+
+        function createStreamingMessageElement(messageId) {
+            const container = $('#messages');
+
+            // Remove empty state if present
+            const emptyState = container.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            const div = document.createElement('div');
+            div.className = 'message llm_primary streaming';
+            div.dataset.id = messageId;
+            div.id = `streaming-${messageId}`;
+
+            div.innerHTML = `
+                <div class="message-header">
+                    <span class="message-author">Claude</span>
+                    <span>${formatTime(new Date().toISOString())}</span>
+                </div>
+                <div class="message-content" id="streaming-content"></div>
+                <div class="streaming-indicator">
+                    <span>Generating...</span>
+                    <button class="cancel-stream-btn" onclick="cancelLLMStream()">Stop</button>
+                </div>
+            `;
+
+            container.appendChild(div);
+            scrollToBottom();
+        }
+
+        function updateStreamingMessage(content) {
+            // ARCHITECTURE: RAF-batched DOM updates for streaming.
+            // WHY: Prevents UI jank from per-token DOM manipulation.
+            // TRADEOFF: Slight visual delay (~16ms) for smooth rendering.
+
+            state.pendingStreamContent = content;
+
+            if (!state.rafPending) {
+                state.rafPending = true;
+                requestAnimationFrame(() => {
+                    const el = document.getElementById('streaming-content');
+                    if (el) {
+                        el.innerHTML = renderMarkdown(state.pendingStreamContent);
+
+                        // Only scroll if user is near bottom
+                        const container = document.getElementById('messages');
+                        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+                        if (isNearBottom) {
+                            scrollToBottom();
+                        }
+                    }
+                    state.rafPending = false;
+                });
+            }
+        }
+
+        window.cancelLLMStream = function() {
+            cancelStream();
+        };
+
+        // ============================================================
+        // PRESENCE
+        // ============================================================
+        async function loadPresence() {
+            if (!state.roomId || !state.roomToken) return;
+
+            try {
+                const users = await api('GET', `/rooms/${state.roomId}/presence`);
+                state.onlineUsers = {};
+                users.forEach(u => {
+                    state.onlineUsers[u.user_id] = {
+                        displayName: u.display_name,
+                        status: u.status,
+                    };
+                    state.userNames[u.user_id] = u.display_name;
+                });
+                renderOnlineUsers();
+            } catch (e) {
+                debugError('Failed to load presence:', e);
+            }
+        }
+
+        function handlePresenceUpdate(payload) {
+            const { user_id, status, display_name } = payload;
+
+            if (display_name) {
+                state.userNames[user_id] = display_name;
+            }
+
+            if (status === 'offline') {
+                delete state.onlineUsers[user_id];
+            } else {
+                state.onlineUsers[user_id] = {
+                    displayName: state.userNames[user_id] || 'Unknown',
+                    status: status,
+                };
+            }
+
+            renderOnlineUsers();
+        }
+
+        function handleUserLeft(payload) {
+            const { user_id } = payload;
+            delete state.onlineUsers[user_id];
+            state.typingUsers.delete(user_id);
+            renderOnlineUsers();
+            renderTypingIndicator();
+        }
+
+        function handleUserTyping(payload) {
+            const { user_id, typing } = payload;
+
+            if (user_id === state.userId) return; // Ignore self
+
+            if (typing) {
+                state.typingUsers.add(user_id);
+            } else {
+                state.typingUsers.delete(user_id);
+            }
+
+            renderTypingIndicator();
+        }
+
+        function renderTypingIndicator() {
+            if (state.typingUsers.size === 0) {
+                showTypingIndicator(false);
+                return;
+            }
+
+            const names = Array.from(state.typingUsers)
+                .map(id => state.userNames[id] || 'Someone')
+                .slice(0, 3);
+
+            let text;
+            if (names.length === 1) {
+                text = `${names[0]} is typing...`;
+            } else if (names.length === 2) {
+                text = `${names[0]} and ${names[1]} are typing...`;
+            } else {
+                text = `${names[0]}, ${names[1]} and others are typing...`;
+            }
+
+            showTypingIndicator(true, text);
+        }
+
+        function renderOnlineUsers() {
+            const list = $('#usersList');
+            const users = Object.entries(state.onlineUsers);
+
+            if (users.length === 0) {
+                list.innerHTML = '<div class="empty-state">No users online</div>';
+                return;
+            }
+
+            list.innerHTML = users.map(([id, user]) => `
+                <div class="user-item">
+                    <span class="presence-dot ${user.status}"></span>
+                    <span class="user-item-name">${escapeHtml(user.displayName)}</span>
+                    <span class="user-item-status">${user.status}</span>
+                </div>
+            `).join('');
+        }
+
+        function startPresenceHeartbeat() {
+            if (state.presenceInterval) {
+                clearInterval(state.presenceInterval);
+            }
+
+            // Send initial heartbeat
+            send('presence_heartbeat', {});
+
+            // Send heartbeat every 30 seconds
+            state.presenceInterval = setInterval(() => {
+                send('presence_heartbeat', {});
+            }, 30000);
+
+            // Track tab visibility
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    send('presence_update', { status: 'away' });
+                } else {
+                    send('presence_update', { status: 'online' });
+                }
+            });
+        }
+
+        // ============================================================
+        // MESSAGES
+        // ============================================================
+        async function loadMessages(threadId, options = {}) {
+            const { beforeSequence, afterSequence, prepend = false } = options;
+
+            try {
+                let url = `/threads/${threadId}/messages?limit=50`;
+                if (beforeSequence) url += `&before_sequence=${beforeSequence}`;
+                if (afterSequence) url += `&after_sequence=${afterSequence}`;
+
+                const response = await api('GET', url);
+
+                // Update pagination state
+                state.hasMoreBefore = response.has_more_before;
+                state.oldestSequence = response.oldest_sequence;
+                state.newestSequence = response.newest_sequence;
+
+                if (prepend) {
+                    prependMessages(response.messages);
+                } else {
+                    state.messages = response.messages;
+                    renderMessages();
+                }
+            } catch (e) {
+                debugError('Failed to load messages:', e);
+            }
+        }
+
+        function renderMessages() {
+            const container = $('#messages');
+            container.innerHTML = '';
+
+            // Add load more indicator if needed
+            if (state.hasMoreBefore) {
+                const indicator = document.createElement('div');
+                indicator.className = 'load-more-indicator';
+                indicator.id = 'loadMoreIndicator';
+                indicator.textContent = 'Scroll up for older messages';
+                container.appendChild(indicator);
+            }
+
+            if (state.messages.length === 0) {
+                container.innerHTML = '<div class="empty-state">No messages yet. Start the conversation!</div>';
+                return;
+            }
+
+            state.messages.forEach(msg => {
+                addMessageToUI(msg, false);
+            });
+
+            scrollToBottom();
+        }
+
+        function prependMessages(messages) {
+            const container = $('#messages');
+            const scrollHeight = container.scrollHeight;
+
+            // Remove load more indicator
+            const indicator = $('#loadMoreIndicator');
+            if (indicator) indicator.remove();
+
+            // Add new load more indicator if there's more
+            if (state.hasMoreBefore) {
+                const newIndicator = document.createElement('div');
+                newIndicator.className = 'load-more-indicator';
+                newIndicator.id = 'loadMoreIndicator';
+                newIndicator.textContent = 'Scroll up for older messages';
+                container.prepend(newIndicator);
+            }
+
+            // Prepend messages in order
+            messages.forEach(msg => {
+                const div = createMessageElement(msg);
+                const firstMsg = container.querySelector('.message');
+                if (firstMsg) {
+                    container.insertBefore(div, firstMsg);
+                } else {
+                    container.appendChild(div);
+                }
+
+                // Track in state
+                state.messages.unshift(msg);
+            });
+
+            // Maintain scroll position
+            container.scrollTop = container.scrollHeight - scrollHeight;
+            state.isLoadingMore = false;
+        }
+
+        function createMessageElement(msg) {
+            const div = document.createElement('div');
+            div.className = `message ${msg.speaker_type}`;
+            div.dataset.id = msg.id;
+            div.dataset.sequence = msg.sequence;
+
+            const isHuman = msg.speaker_type === 'human';
+            const authorName = msg.user_name || (isHuman ? 'You' : msg.speaker_type === 'llm_provoker' ? 'Provoker' : 'Claude');
+
+            // Build reference HTML if this is a reply
+            let referenceHtml = '';
+            if (msg.references_message_id) {
+                const refMsg = state.messages.find(m => m.id === msg.references_message_id);
+                if (refMsg) {
+                    const refAuthor = refMsg.user_name || (refMsg.speaker_type === 'human' ? 'You' : 'Claude');
+                    const refContent = refMsg.content.substring(0, 50) + (refMsg.content.length > 50 ? '...' : '');
+                    referenceHtml = `
+                        <div class="message-reference" onclick="scrollToMessage('${msg.references_message_id}')">
+                            <strong>${escapeHtml(refAuthor)}:</strong> ${escapeHtml(refContent)}
+                        </div>
+                    `;
+                }
+            }
+
+            div.innerHTML = `
+                ${referenceHtml}
+                <div class="message-header">
+                    <span class="message-author">${escapeHtml(authorName)}</span>
+                    ${msg.message_type !== 'text' ? `<span class="message-type">${msg.message_type}</span>` : ''}
+                    <span>${formatTime(msg.created_at)}</span>
+                </div>
+                <div class="message-content">${renderMarkdown(msg.content)}</div>
+                <div class="message-actions">
+                    <button class="message-action" onclick="replyToMessage('${msg.id}')">Reply</button>
+                    <button class="message-action" onclick="forkFromMessage('${msg.id}')">Fork</button>
+                </div>
+            `;
+
+            return div;
+        }
+
+        function handleMessageCreated(msg) {
+            // Skip if this is the streaming message (it's already displayed)
+            if (state.streamingMessage && state.streamingMessage.id === msg.id) {
+                return;
+            }
+
+            addMessageToUI(msg, true);
+        }
+
+        function addMessageToUI(msg, scroll = true) {
+            const container = $('#messages');
+
+            // Remove empty state if present
+            const emptyState = container.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            // Check if message already exists
+            if (container.querySelector(`.message[data-id="${msg.id}"]`)) {
+                return;
+            }
+
+            const div = createMessageElement(msg);
+            container.appendChild(div);
+
+            state.lastMessageId = msg.id;
+            state.messages.push(msg);
+
+            if (scroll) scrollToBottom();
+
+            // Hide typing indicator when LLM message arrives
+            if (msg.speaker_type.startsWith('llm')) {
+                showTypingIndicator(false);
+            }
+
+            // Update user names cache
+            if (msg.user_id && msg.user_name) {
+                state.userNames[msg.user_id] = msg.user_name;
+            }
+        }
+
+        function sendMessage() {
+            const input = $('#messageInput');
+            const content = input.value.trim();
+            if (!content) return;
+
+            const payload = {
+                content,
+                type: state.messageType,
+            };
+
+            // Include reply reference if replying
+            if (state.replyingToMessage) {
+                payload.references_message_id = state.replyingToMessage.id;
+            }
+
+            send('send_message', payload);
+
+            input.value = '';
+            input.style.height = 'auto';
+            cancelReply();
+        }
+
+        function showTypingIndicator(show, text = '') {
+            const indicator = $('#typingIndicator');
+            indicator.classList.toggle('active', show);
+            if (text) $('#typingText').textContent = text;
+        }
+
+        function scrollToBottom() {
+            const container = $('#messages');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ============================================================
+        // INFINITE SCROLL
+        // ============================================================
+
+        // ARCHITECTURE: Guarded infinite scroll loader.
+        // WHY: Prevents duplicate API calls from rapid scrolling.
+        async function handleInfiniteScroll() {
+            // Don't load if already loading or no more messages
+            if (state.isLoadingMore || !state.hasMoreBefore) {
+                return;
+            }
+
+            const container = $('#messages');
+
+            // Only trigger when near top (within 200px)
+            if (container.scrollTop > 200) {
+                return;
+            }
+
+            state.isLoadingMore = true;
+
+            // Show loading indicator
+            const spinner = document.createElement('div');
+            spinner.id = 'scroll-spinner';
+            spinner.className = 'loading-spinner';
+            spinner.innerHTML = '<div class="spinner"></div>';
+            container.prepend(spinner);
+
+            // Save scroll position to restore after prepending
+            const scrollHeightBefore = container.scrollHeight;
+
+            try {
+                await loadMessages(state.currentThreadId, {
+                    beforeSequence: state.oldestSequence,
+                    prepend: true,
+                });
+
+                // Restore scroll position (keep user at same visual position)
+                const scrollHeightAfter = container.scrollHeight;
+                container.scrollTop = scrollHeightAfter - scrollHeightBefore;
+            } catch (e) {
+                debugError('Failed to load more messages:', e);
+            } finally {
+                state.isLoadingMore = false;
+                const existingSpinner = document.getElementById('scroll-spinner');
+                if (existingSpinner) {
+                    existingSpinner.remove();
+                }
+            }
+        }
+
+        function setupInfiniteScroll() {
+            const container = $('#messages');
+            if (container) {
+                container.addEventListener('scroll', handleInfiniteScroll);
+            }
+        }
+
+        // ============================================================
+        // REPLY
+        // ============================================================
+        window.replyToMessage = function(messageId) {
+            const msg = state.messages.find(m => m.id === messageId);
+            if (!msg) return;
+
+            const authorName = msg.user_name || (msg.speaker_type === 'human' ? 'You' : 'Claude');
+
+            state.replyingToMessage = {
+                id: messageId,
+                content: msg.content,
+                authorName: authorName,
+            };
+
+            $('#replyAuthor').textContent = authorName + ':';
+            $('#replyContent').textContent = msg.content.substring(0, 60) + (msg.content.length > 60 ? '...' : '');
+            $('#replyPreview').classList.add('active');
+
+            $('#messageInput').focus();
+        };
+
+        function cancelReply() {
+            state.replyingToMessage = null;
+            $('#replyPreview').classList.remove('active');
+        }
+
+        window.scrollToMessage = function(messageId) {
+            const el = $(`.message[data-id="${messageId}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.style.animation = 'none';
+                el.offsetHeight; // Trigger reflow
+                el.style.animation = 'highlight 2s';
+            }
+        };
+
+        // ============================================================
+        // THREADS
+        // ============================================================
+        async function loadThreads() {
+            try {
+                const threads = await api('GET', `/rooms/${state.roomId}/threads`);
+                state.threads = threads;
+                renderThreads();
+
+                // Set current thread if not set
+                if (!state.currentThreadId && threads.length > 0) {
+                    switchThread(threads[0].id);
+                }
+            } catch (e) {
+                debugError('Failed to load threads:', e);
+            }
+        }
+
+        function renderThreads() {
+            const select = $('#threadSelect');
+            const list = $('#threadList');
+
+            // Update select
+            select.innerHTML = state.threads.map(t =>
+                `<option value="${t.id}" ${t.id === state.currentThreadId ? 'selected' : ''}>
+                    ${t.title || 'Thread'} (${t.message_count})
+                </option>`
+            ).join('');
+
+            // Update list
+            list.innerHTML = state.threads.map(t => `
+                <div class="thread-item ${t.id === state.currentThreadId ? 'active' : ''}"
+                     onclick="switchThread('${t.id}')">
+                    <div class="thread-title">${escapeHtml(t.title || 'Thread')}</div>
+                    <div class="thread-meta">
+                        ${t.message_count} messages
+                        ${t.parent_thread_id ? '• forked' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.switchThread = async function(threadId) {
+            state.currentThreadId = threadId;
+            state.messages = [];
+            state.hasMoreBefore = false;
+            state.oldestSequence = null;
+            state.newestSequence = null;
+
+            send('switch_thread', { thread_id: threadId });
+            await loadMessages(threadId);
+            renderThreads();
+        };
+
+        async function forkThread() {
+            const title = $('#forkTitle').value.trim();
+
+            try {
+                await api('POST', `/threads/${state.currentThreadId}/fork`, {
+                    source_thread_id: state.currentThreadId,
+                    fork_after_message_id: state.lastMessageId,
+                    title: title || null,
+                });
+
+                $('#forkModal').classList.remove('active');
+                $('#forkTitle').value = '';
+                await loadThreads();
+            } catch (e) {
+                alert('Failed to fork: ' + e.message);
+            }
+        }
+
+        window.forkFromMessage = async function(messageId) {
+            state.lastMessageId = messageId;
+            $('#forkModal').classList.add('active');
+        };
+
+        // ============================================================
+        // MEMORY
+        // ============================================================
+        async function loadMemories() {
+            try {
+                const memories = await api('GET', `/rooms/${state.roomId}/memories`);
+                state.memories = memories;
+                renderMemories();
+            } catch (e) {
+                debugError('Failed to load memories:', e);
+            }
+        }
+
+        function renderMemories() {
+            const list = $('#memoryList');
+
+            if (state.memories.length === 0) {
+                list.innerHTML = '<div class="empty-state">No memories yet</div>';
+                return;
+            }
+
+            list.innerHTML = state.memories.map(m => `
+                <div class="memory-item">
+                    <div class="memory-key">${escapeHtml(m.key)}</div>
+                    <div class="memory-content">${escapeHtml(m.content)}</div>
+                    <div class="memory-meta">v${m.version}</div>
+                </div>
+            `).join('');
+        }
+
+        async function addMemory() {
+            const key = $('#memoryKey').value.trim();
+            const content = $('#memoryContent').value.trim();
+
+            if (!key || !content) {
+                alert('Please fill in both key and content');
+                return;
+            }
+
+            send('add_memory', { key, content });
+
+            $('#memoryKey').value = '';
+            $('#memoryContent').value = '';
+        }
+
+        // ============================================================
+        // SETTINGS
+        // ============================================================
+        async function openSettings() {
+            try {
+                const settings = await api('GET', `/rooms/${state.roomId}/settings`);
+
+                $('#thresholdSlider').value = settings.interjection_turn_threshold;
+                $('#thresholdValue').textContent = settings.interjection_turn_threshold;
+
+                $('#noveltySlider').value = Math.round(settings.semantic_novelty_threshold * 100);
+                $('#noveltyValue').textContent = settings.semantic_novelty_threshold.toFixed(2);
+
+                const toggle = $('#autoInterjectionToggle');
+                toggle.classList.toggle('active', settings.auto_interjection_enabled);
+
+                $('#settingsModal').classList.add('active');
+            } catch (e) {
+                alert('Failed to load settings: ' + e.message);
+            }
+        }
+
+        async function saveSettings() {
+            const threshold = parseInt($('#thresholdSlider').value);
+            const novelty = parseInt($('#noveltySlider').value) / 100;
+            const autoInterjection = $('#autoInterjectionToggle').classList.contains('active');
+
+            try {
+                await api('PATCH', `/rooms/${state.roomId}/settings`, {
+                    interjection_turn_threshold: threshold,
+                    semantic_novelty_threshold: novelty,
+                    auto_interjection_enabled: autoInterjection,
+                });
+
+                $('#settingsModal').classList.remove('active');
+            } catch (e) {
+                alert('Failed to save settings: ' + e.message);
+            }
+        }
+
+        // ============================================================
+        // NEW ROOM
+        // ============================================================
+        async function createNewRoom() {
+            const name = $('#newRoomName').value.trim() || 'Untitled Room';
+
+            try {
+                const room = await api('POST', '/rooms', { name });
+                await api('POST', `/rooms/${room.id}/join`, { user_id: state.userId });
+
+                state.roomToken = room.token;
+
+                // Reload rooms and switch
+                await loadUserRooms();
+                await switchRoom(room.id);
+
+                $('#newRoomModal').classList.remove('active');
+                $('#newRoomName').value = '';
+            } catch (e) {
+                alert('Failed to create room: ' + e.message);
+            }
+        }
+
+        // ============================================================
+        // UTILS
+        // ============================================================
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatTime(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // ============================================================
+        // INIT
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', initAuth);
+    </script>
+</body>
+</html>
