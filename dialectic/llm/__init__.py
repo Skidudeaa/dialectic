@@ -5,6 +5,8 @@ from .prompts import PromptBuilder, AssembledPrompt
 from .orchestrator import LLMOrchestrator, OrchestrationResult
 from .cross_session_context import CrossSessionContext, CrossSessionContextBuilder
 from .self_memory import LLMSelfMemory
+from .protocol_library import ProtocolDefinition, get_protocol_definition, get_protocol_instructions
+from .protocol_manager import ProtocolManager
 
 __all__ = [
     "LLMProvider", "LLMRequest", "LLMResponse", "ProviderName", "get_provider",
@@ -14,4 +16,6 @@ __all__ = [
     "LLMOrchestrator", "OrchestrationResult",
     "CrossSessionContext", "CrossSessionContextBuilder",
     "LLMSelfMemory",
+    "ProtocolDefinition", "get_protocol_definition", "get_protocol_instructions",
+    "ProtocolManager",
 ]

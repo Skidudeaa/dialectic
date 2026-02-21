@@ -414,3 +414,44 @@ FROM memory_versions WHERE version > 1;
 CREATE INDEX IF NOT EXISTS idx_knowledge_graph_source ON knowledge_graph(source_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_graph_target ON knowledge_graph(target_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_graph_type ON knowledge_graph(edge_type);
+
+-- ============================================================
+-- THINKING PROTOCOLS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS thread_protocols (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    thread_id UUID NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+    room_id UUID NOT NULL REFERENCES rooms(id),
+    protocol_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'invoked',
+    current_phase INT NOT NULL DEFAULT 0,
+    total_phases INT NOT NULL,
+    invoked_by_user_id UUID REFERENCES users(id),
+    invoked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    phase_advanced_at TIMESTAMPTZ,
+    concluded_at TIMESTAMPTZ,
+    synthesis_memory_id UUID REFERENCES memories(id),
+    config JSONB NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_thread_protocols_thread ON thread_protocols(thread_id);
+CREATE INDEX IF NOT EXISTS idx_thread_protocols_status ON thread_protocols(status)
+    WHERE status IN ('invoked', 'active', 'concluding');
+
+CREATE TABLE IF NOT EXISTS protocol_phases (
+    protocol_id UUID NOT NULL REFERENCES thread_protocols(id) ON DELETE CASCADE,
+    phase_number INT NOT NULL,
+    phase_name TEXT NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ended_at TIMESTAMPTZ,
+    PRIMARY KEY (protocol_id, phase_number)
+);
+
+-- Link messages to protocol phases for attribution
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS protocol_id UUID REFERENCES thread_protocols(id);
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS protocol_phase INT;
+
+-- ============================================================
+-- TYPING ANALYSIS
+-- ============================================================
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS enable_typing_analysis BOOLEAN DEFAULT false;

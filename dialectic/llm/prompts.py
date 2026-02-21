@@ -3,13 +3,20 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from models import Room, User, Message, Memory, SpeakerType, MessageType
+from models import Room, User, Message, Memory, SpeakerType, MessageType, ProtocolState
 
 # Optional import for cross-session context
 try:
     from .cross_session_context import CrossSessionContext
 except ImportError:
     CrossSessionContext = None
+
+# Optional import for protocol instructions
+try:
+    from .protocol_library import get_protocol_instructions, get_protocol_definition
+except ImportError:
+    get_protocol_instructions = None
+    get_protocol_definition = None
 
 
 @dataclass
@@ -51,6 +58,16 @@ You speak in your own voice. You are not neutral."""
 
 Keep responses SHORT (1-3 sentences). You are an interruption, not a lecture."""
 
+    FACILITATOR_IDENTITY = """You are a structured reasoning facilitator guiding a thinking protocol. You are NOT a free participant — you have a specific procedural role:
+
+- Follow the protocol phase instructions precisely
+- Keep participants on track within the current phase
+- Do not skip ahead or deviate from the protocol structure
+- Be neutral on substance, rigorous on process
+- Signal phase completion with [PHASE_COMPLETE: reason] when appropriate
+
+You speak with authority on procedure, not on content."""
+
     def build(
         self,
         room: Room,
@@ -59,25 +76,46 @@ Keep responses SHORT (1-3 sentences). You are an interruption, not a lecture."""
         memories: list[Memory],
         is_provoker: bool = False,
         cross_session_context: "CrossSessionContext" = None,
+        protocol: Optional[ProtocolState] = None,
     ) -> AssembledPrompt:
         """
         Assemble full prompt from components.
-        
+
+        ARCHITECTURE: Protocol-aware prompt assembly.
+        WHY: When a protocol is active, the LLM switches from participant to facilitator.
+        TRADEOFF: More conditional logic in build(), but avoids separate build paths.
+
         Args:
             cross_session_context: Optional memories from other rooms/sessions
+            protocol: Optional active protocol state — overrides identity when present
         """
 
-        identity = self.PROVOKER_IDENTITY if is_provoker else self.BASE_IDENTITY
+        # Protocol mode: use facilitator identity with protocol-specific override
+        if protocol is not None and get_protocol_definition is not None:
+            definition = get_protocol_definition(protocol.protocol_type.value)
+            identity = definition.facilitator_identity or self.FACILITATOR_IDENTITY
+        elif is_provoker:
+            identity = self.PROVOKER_IDENTITY
+        else:
+            identity = self.BASE_IDENTITY
+
         room_context = self._build_room_context(room)
         user_context = self._blend_user_modifiers(users)
         memory_context = self._build_memory_context(memories)
-        
+
         # Build cross-session context if provided
         cross_session_section = ""
         if cross_session_context and cross_session_context.total_injected > 0:
             cross_session_section = cross_session_context.to_prompt_section()
 
+        # Build protocol instructions section
+        protocol_section = ""
+        if protocol is not None and get_protocol_instructions is not None:
+            protocol_section = get_protocol_instructions(protocol)
+
         system_parts = [identity]
+        if protocol_section:
+            system_parts.append(f"\n\n{protocol_section}")
         if room_context:
             system_parts.append(f"\n\n## Room Context\n{room_context}")
         if user_context:

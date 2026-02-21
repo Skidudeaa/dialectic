@@ -1,5 +1,6 @@
 # transport/websocket.py — WebSocket connection management
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
@@ -20,6 +21,10 @@ class Connection:
     room_id: UUID
     thread_id: Optional[UUID] = None
     connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # Typing analysis cache (ephemeral, never persisted)
+    typing_cache: Optional[dict] = field(default=None)
+    _typing_analysis_task: Optional[asyncio.Task] = field(default=None, repr=False)
 
 
 @dataclass
@@ -188,6 +193,7 @@ class MessageTypes:
     EDIT_MEMORY = "edit_memory"
     INVALIDATE_MEMORY = "invalidate_memory"
     PING = "ping"
+    TYPING_CONTENT = "typing_content"
     # Presence & receipts (inbound)
     PRESENCE_HEARTBEAT = "presence_heartbeat"
     PRESENCE_UPDATE = "presence_update"
@@ -200,6 +206,10 @@ class MessageTypes:
     SEARCH_GLOBAL_MEMORIES = "search_global_memories"
     PROMOTE_MEMORY = "promote_memory"
     REFERENCE_MEMORY = "reference_memory"
+    # Thinking protocols (inbound)
+    INVOKE_PROTOCOL = "invoke_protocol"
+    ADVANCE_PROTOCOL = "advance_protocol"
+    ABORT_PROTOCOL = "abort_protocol"
 
     # Outbound
     MESSAGE_CREATED = "message_created"
@@ -226,3 +236,8 @@ class MessageTypes:
     MEMORY_PROMOTED = "memory_promoted"
     MEMORY_REFERENCED = "memory_referenced"
     CROSS_ROOM_CONTEXT = "cross_room_context"
+    # Thinking protocols (outbound)
+    PROTOCOL_STARTED = "protocol_started"
+    PROTOCOL_PHASE_ADVANCED = "protocol_phase_advanced"
+    PROTOCOL_CONCLUDED = "protocol_concluded"
+    PROTOCOL_ABORTED = "protocol_aborted"

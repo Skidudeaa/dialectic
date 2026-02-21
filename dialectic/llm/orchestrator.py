@@ -8,9 +8,12 @@ from uuid import UUID, uuid4
 import hashlib
 import logging
 
+import re
+
 from models import (
     Room, User, Thread, Message, Memory, Event, EventType,
-    SpeakerType, MessageType, MessageCreatedPayload
+    SpeakerType, MessageType, MessageCreatedPayload,
+    ProtocolState,
 )
 from .providers import ProviderName, LLMRequest, get_provider
 from .router import ModelRouter, RoutingResult
@@ -25,6 +28,9 @@ from memory.manager import MemoryManager
 logger = logging.getLogger(__name__)
 
 
+_PHASE_COMPLETE_RE = re.compile(r"\[PHASE_COMPLETE:\s*(.+?)\]")
+
+
 @dataclass
 class OrchestrationResult:
     """
@@ -36,6 +42,7 @@ class OrchestrationResult:
     response: Optional[Message]
     routing: Optional[RoutingResult]
     prompt_used: Optional[AssembledPrompt]
+    phase_complete_signal: Optional[str] = None
 
 
 class LLMOrchestrator:
@@ -108,14 +115,30 @@ class LLMOrchestrator:
         memories: list[Memory],
         mentioned: bool = False,
         semantic_novelty: Optional[float] = None,
+        protocol: Optional[ProtocolState] = None,
     ) -> OrchestrationResult:
-        """Called after each human message. Decides and executes LLM response."""
+        """
+        Called after each human message. Decides and executes LLM response.
 
-        decision = self.heuristics.decide(
-            messages=messages,
-            mentioned=mentioned,
-            semantic_novelty=semantic_novelty,
-        )
+        ARCHITECTURE: Protocol-aware orchestration.
+        WHY: When a protocol is active, skip heuristics and always interject as facilitator.
+        TRADEOFF: Extra conditional path vs separate method — keeps single entry point.
+        """
+
+        # Protocol mode: always interject, skip heuristics
+        if protocol is not None:
+            decision = InterjectionDecision(
+                should_interject=True,
+                reason="protocol_active",
+                confidence=1.0,
+                use_provoker=False,
+            )
+        else:
+            decision = self.heuristics.decide(
+                messages=messages,
+                mentioned=mentioned,
+                semantic_novelty=semantic_novelty,
+            )
 
         if not decision.should_interject:
             logger.debug(f"No interjection: {decision.reason}")
@@ -147,6 +170,7 @@ class LLMOrchestrator:
             memories=memories,
             is_provoker=decision.use_provoker,
             cross_session_context=cross_ctx,
+            protocol=protocol,
         )
 
         router = self._get_router(room)
@@ -169,13 +193,22 @@ class LLMOrchestrator:
                 prompt_used=prompt,
             )
 
+        # Detect and strip [PHASE_COMPLETE: ...] marker from response
+        content = routing.response.content
+        phase_complete_signal = None
+        match = _PHASE_COMPLETE_RE.search(content)
+        if match:
+            phase_complete_signal = match.group(1).strip()
+            content = _PHASE_COMPLETE_RE.sub("", content).rstrip()
+
         response_message = await self._persist_response(
             thread=thread,
-            content=routing.response.content,
-            speaker_type=SpeakerType.LLM_PROVOKER if decision.use_provoker else SpeakerType.LLM_PRIMARY,
+            content=content,
+            speaker_type=SpeakerType.LLM_PRIMARY,
             model_used=routing.response.model,
             prompt_hash=routing.prompt_hash,
             token_count=routing.response.input_tokens + routing.response.output_tokens,
+            protocol=protocol,
         )
 
         # Fire-and-forget: extract LLM self-memories in background
@@ -187,6 +220,7 @@ class LLMOrchestrator:
             response=response_message,
             routing=routing,
             prompt_used=prompt,
+            phase_complete_signal=phase_complete_signal,
         )
 
     async def force_response(
@@ -197,11 +231,13 @@ class LLMOrchestrator:
         messages: list[Message],
         memories: list[Memory],
         use_provoker: bool = False,
+        protocol: Optional[ProtocolState] = None,
     ) -> OrchestrationResult:
         """Force LLM response regardless of heuristics."""
+        reason = "protocol_active" if protocol else "forced"
         decision = InterjectionDecision(
             should_interject=True,
-            reason="forced",
+            reason=reason,
             confidence=1.0,
             use_provoker=use_provoker,
         )
@@ -224,6 +260,7 @@ class LLMOrchestrator:
             memories=memories,
             is_provoker=use_provoker,
             cross_session_context=cross_ctx,
+            protocol=protocol,
         )
 
         router = self._get_router(room)
@@ -245,13 +282,22 @@ class LLMOrchestrator:
                 prompt_used=prompt,
             )
 
+        # Detect and strip [PHASE_COMPLETE: ...] marker from response
+        content = routing.response.content
+        phase_complete_signal = None
+        match = _PHASE_COMPLETE_RE.search(content)
+        if match:
+            phase_complete_signal = match.group(1).strip()
+            content = _PHASE_COMPLETE_RE.sub("", content).rstrip()
+
         response_message = await self._persist_response(
             thread=thread,
-            content=routing.response.content,
-            speaker_type=SpeakerType.LLM_PROVOKER if use_provoker else SpeakerType.LLM_PRIMARY,
+            content=content,
+            speaker_type=SpeakerType.LLM_PRIMARY,
             model_used=routing.response.model,
             prompt_hash=routing.prompt_hash,
             token_count=routing.response.input_tokens + routing.response.output_tokens,
+            protocol=protocol,
         )
 
         # Fire-and-forget: extract LLM self-memories in background
@@ -263,6 +309,7 @@ class LLMOrchestrator:
             response=response_message,
             routing=routing,
             prompt_used=prompt,
+            phase_complete_signal=phase_complete_signal,
         )
 
     async def stream_response(
@@ -381,27 +428,33 @@ class LLMOrchestrator:
         model_used: str,
         prompt_hash: str,
         token_count: int,
+        protocol: Optional[ProtocolState] = None,
     ) -> Message:
-        """Create Message record and log event."""
+        """Create Message record and log event, with optional protocol attribution."""
 
         now = datetime.now(timezone.utc)
         message_id = uuid4()
         message_type = self._detect_message_type(content)
 
+        protocol_id = protocol.id if protocol else None
+        protocol_phase = protocol.current_phase if protocol else None
+
         # Atomic INSERT with inline sequence calculation to prevent TOCTOU race
         row = await self.db.fetchrow(
             """INSERT INTO messages
                (id, thread_id, sequence, created_at, speaker_type, user_id,
-                message_type, content, model_used, prompt_hash, token_count)
+                message_type, content, model_used, prompt_hash, token_count,
+                protocol_id, protocol_phase)
                VALUES (
                    $1, $2,
                    (SELECT COALESCE(MAX(sequence), 0) + 1 FROM messages WHERE thread_id = $2),
-                   $3, $4, $5, $6, $7, $8, $9, $10
+                   $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
                )
                RETURNING sequence""",
             message_id, thread.id, now,
             speaker_type.value, None, message_type.value,
-            content, model_used, prompt_hash, token_count
+            content, model_used, prompt_hash, token_count,
+            protocol_id, protocol_phase
         )
         sequence = row['sequence']
 

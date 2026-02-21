@@ -47,6 +47,11 @@ class EventType(str, Enum):
     COLLECTION_CREATED = "collection_created"
     COLLECTION_MEMORY_ADDED = "collection_memory_added"
     COLLECTION_MEMORY_REMOVED = "collection_memory_removed"
+    # Thinking protocol events
+    PROTOCOL_INVOKED = "protocol_invoked"
+    PROTOCOL_PHASE_ADVANCED = "protocol_phase_advanced"
+    PROTOCOL_CONCLUDED = "protocol_concluded"
+    PROTOCOL_ABORTED = "protocol_aborted"
 
 
 class MemoryScope(str, Enum):
@@ -266,6 +271,44 @@ class CrossRoomMemoryResult(BaseModel):
 # COLLECTION_CREATED = "collection_created"
 # COLLECTION_MEMORY_ADDED = "collection_memory_added"
 # COLLECTION_MEMORY_REMOVED = "collection_memory_removed"
+
+
+# ============================================================
+# THINKING PROTOCOL MODELS
+# ============================================================
+
+class ProtocolType(str, Enum):
+    STEELMAN = "steelman"
+    SOCRATIC = "socratic"
+    DEVIL_ADVOCATE = "devil_advocate"
+    SYNTHESIS = "synthesis"
+
+
+class ProtocolStatus(str, Enum):
+    INVOKED = "invoked"
+    ACTIVE = "active"
+    CONCLUDING = "concluding"
+    CONCLUDED = "concluded"
+    ABORTED = "aborted"
+
+
+class ProtocolState(BaseModel):
+    """
+    ARCHITECTURE: Runtime state of an active protocol instance.
+    WHY: Decoupled from protocol definition — state lives in DB, definition in code.
+    TRADEOFF: Requires join with definition for full context, but keeps state minimal.
+    """
+    id: UUID
+    thread_id: UUID
+    room_id: UUID
+    protocol_type: ProtocolType
+    status: ProtocolStatus
+    current_phase: int
+    total_phases: int
+    invoked_by_user_id: Optional[UUID] = None
+    invoked_at: datetime
+    config: dict = {}
+    synthesis_memory_id: Optional[UUID] = None
 
 
 class MemoryPromotedPayload(BaseModel):
