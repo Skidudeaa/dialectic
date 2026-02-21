@@ -6,12 +6,6 @@ from typing import AsyncIterator, Optional
 from uuid import UUID, uuid4
 import hashlib
 import logging
-import sys
-import pathlib
-
-_package_root = str(pathlib.Path(__file__).resolve().parent.parent)
-if _package_root not in sys.path:
-    sys.path.insert(0, _package_root)
 
 from models import (
     Room, User, Thread, Message, Memory, Event, EventType,
@@ -22,6 +16,8 @@ from .router import ModelRouter, RoutingResult
 from .heuristics import InterjectionEngine, InterjectionDecision
 from .prompts import PromptBuilder, AssembledPrompt
 from .context import assemble_context
+from .cross_session_context import CrossSessionContextBuilder, CrossSessionContext
+from memory.cross_session import CrossSessionMemoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +47,43 @@ class LLMOrchestrator:
         self.heuristics = InterjectionEngine()
         self.prompt_builder = PromptBuilder()
         self._routers: dict[UUID, ModelRouter] = {}
+        self._cross_session_builder = CrossSessionContextBuilder(
+            CrossSessionMemoryManager(db)
+        )
+
+    async def _get_cross_session_context(
+        self, messages: list[Message], room_id: UUID,
+    ) -> Optional[CrossSessionContext]:
+        """Fetch cross-session context for the triggering user, or None on failure."""
+        # Identify the user from the most recent human message
+        user_id = None
+        for msg in reversed(messages):
+            if msg.speaker_type == SpeakerType.HUMAN and msg.user_id:
+                user_id = msg.user_id
+                break
+        if user_id is None:
+            return None
+
+        # Build recent conversation text for semantic search (last ~10 messages)
+        recent_text = "\n".join(
+            msg.content for msg in messages[-10:] if msg.content
+        )
+
+        try:
+            ctx = await self._cross_session_builder.build_context(
+                user_id=user_id,
+                room_id=room_id,
+                recent_messages_text=recent_text,
+            )
+            if ctx.total_injected > 0:
+                logger.info(
+                    f"Cross-session context: {ctx.total_injected} memories "
+                    f"({len(ctx.global_memories)} global, {len(ctx.relevant_memories)} relevant)"
+                )
+                return ctx
+        except Exception as e:
+            logger.warning(f"Cross-session context unavailable: {e}")
+        return None
 
     def _get_router(self, room: Room) -> ModelRouter:
         """Get or create router for room."""
@@ -102,12 +135,15 @@ class LLMOrchestrator:
             f"truncated={context.truncated}, tokens={context.total_tokens}"
         )
 
+        cross_ctx = await self._get_cross_session_context(messages, thread.room_id)
+
         prompt = self.prompt_builder.build(
             room=room,
             users=users,
             messages=truncated_messages,
             memories=memories,
             is_provoker=decision.use_provoker,
+            cross_session_context=cross_ctx,
         )
 
         router = self._get_router(room)
@@ -173,12 +209,15 @@ class LLMOrchestrator:
             f"truncated={context.truncated}, tokens={context.total_tokens}"
         )
 
+        cross_ctx = await self._get_cross_session_context(messages, thread.room_id)
+
         prompt = self.prompt_builder.build(
             room=room,
             users=users,
             messages=truncated_messages,
             memories=memories,
             is_provoker=use_provoker,
+            cross_session_context=cross_ctx,
         )
 
         router = self._get_router(room)
@@ -247,6 +286,8 @@ class LLMOrchestrator:
             f"truncated={context.truncated}, tokens={context.total_tokens}"
         )
 
+        cross_ctx = await self._get_cross_session_context(messages, thread.room_id)
+
         # Build prompt with truncated messages
         prompt = self.prompt_builder.build(
             room=room,
@@ -254,6 +295,7 @@ class LLMOrchestrator:
             messages=truncated_messages,
             memories=memories,
             is_provoker=use_provoker,
+            cross_session_context=cross_ctx,
         )
 
         # Create request for streaming

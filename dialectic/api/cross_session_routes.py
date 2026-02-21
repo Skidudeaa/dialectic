@@ -12,13 +12,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-import sys
-import pathlib
-
-_package_root = str(pathlib.Path(__file__).resolve().parent.parent)
-if _package_root not in sys.path:
-    sys.path.insert(0, _package_root)
-
 from models import Memory, MemoryReference, UserMemoryCollection, CrossRoomMemoryResult
 from memory.cross_session import CrossSessionMemoryManager, GlobalSearchResult
 

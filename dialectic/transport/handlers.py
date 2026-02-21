@@ -6,12 +6,6 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 import logging
-import sys
-import pathlib
-
-_package_root = str(pathlib.Path(__file__).resolve().parent.parent)
-if _package_root not in sys.path:
-    sys.path.insert(0, _package_root)
 
 from models import (
     Room, User, Thread, Message, Memory, Event, EventType,
@@ -197,7 +191,7 @@ class MessageHandler:
         except Exception:
             novelty = 0.5
 
-        await self._trigger_llm(conn.room_id, thread_id, mentioned, novelty)
+        await self._trigger_llm(conn.room_id, thread_id, mentioned, novelty, content)
 
     async def _trigger_llm(
         self,
@@ -205,6 +199,7 @@ class MessageHandler:
         thread_id: UUID,
         mentioned: bool,
         semantic_novelty: float,
+        message_content: str = "",
     ) -> None:
         """Invoke LLM orchestrator and broadcast response."""
 
@@ -225,7 +220,14 @@ class MessageHandler:
         from operations import get_thread_messages
         messages = await get_thread_messages(self.db, thread_id, include_ancestry=True)
 
-        memories = await self.memory.get_context_for_prompt(room_id)
+        # Semantic search: use message content to find relevant memories
+        try:
+            memories = await self.memory.get_context_for_prompt(
+                room_id, query=message_content or None, max_memories=20
+            )
+        except Exception:
+            logger.warning("Semantic memory search failed, falling back to recent memories")
+            memories = await self.memory.get_context_for_prompt(room_id, max_memories=20)
 
         # Use streaming for explicit @Claude mentions
         if mentioned:
@@ -630,7 +632,15 @@ class MessageHandler:
         from operations import get_thread_messages
         messages = await get_thread_messages(self.db, thread_id, include_ancestry=True)
 
-        memories = await self.memory.get_context_for_prompt(conn.room_id)
+        # Semantic search: use latest message content to find relevant memories
+        last_content = messages[-1].content if messages else None
+        try:
+            memories = await self.memory.get_context_for_prompt(
+                conn.room_id, query=last_content, max_memories=20
+            )
+        except Exception:
+            logger.warning("Semantic memory search failed, falling back to recent memories")
+            memories = await self.memory.get_context_for_prompt(conn.room_id, max_memories=20)
 
         # Create streaming task for cancellation support
         task = asyncio.create_task(

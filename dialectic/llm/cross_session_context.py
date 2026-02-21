@@ -11,13 +11,6 @@ from typing import List, Optional
 from uuid import UUID
 import logging
 
-import sys
-import pathlib
-
-_package_root = str(pathlib.Path(__file__).resolve().parent.parent)
-if _package_root not in sys.path:
-    sys.path.insert(0, _package_root)
-
 from models import Memory, CrossRoomMemoryResult
 from memory.cross_session import CrossSessionMemoryManager
 

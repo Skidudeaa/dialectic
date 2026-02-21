@@ -12,13 +12,6 @@ from datetime import datetime, timezone
 import json
 import logging
 
-import sys
-import pathlib
-
-_package_root = str(pathlib.Path(__file__).resolve().parent.parent)
-if _package_root not in sys.path:
-    sys.path.insert(0, _package_root)
-
 from .websocket import Connection, OutboundMessage, MessageTypes
 from memory.cross_session import CrossSessionMemoryManager, GlobalSearchResult
 

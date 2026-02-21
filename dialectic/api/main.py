@@ -9,14 +9,6 @@ from uuid import UUID, uuid4
 import asyncpg
 import logging
 import os
-import sys
-import pathlib
-
-# Add the dialectic package root to sys.path relative to this file
-_package_root = str(pathlib.Path(__file__).resolve().parent.parent)
-if _package_root not in sys.path:
-    sys.path.insert(0, _package_root)
-
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel

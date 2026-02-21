@@ -5,12 +5,6 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 import logging
-import sys
-import pathlib
-
-_package_root = str(pathlib.Path(__file__).resolve().parent.parent)
-if _package_root not in sys.path:
-    sys.path.insert(0, _package_root)
 
 from models import (
     Memory, MemoryScope, MemoryStatus, Event, EventType,
