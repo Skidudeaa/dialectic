@@ -102,7 +102,7 @@ CREATE TABLE memories (
     key TEXT NOT NULL,
     content TEXT NOT NULL,
     source_message_id UUID REFERENCES messages(id),
-    created_by_user_id UUID NOT NULL REFERENCES users(id),
+    created_by_user_id UUID REFERENCES users(id), -- NULL for LLM-authored memories (scope='llm')
     status TEXT NOT NULL DEFAULT 'active',
     invalidated_by_user_id UUID REFERENCES users(id),
     invalidated_at TIMESTAMPTZ,
@@ -120,7 +120,7 @@ CREATE TABLE memory_versions (
     version INT NOT NULL,
     content TEXT NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
-    updated_by_user_id UUID NOT NULL REFERENCES users(id),
+    updated_by_user_id UUID REFERENCES users(id), -- NULL for LLM-authored memory versions
     PRIMARY KEY (memory_id, version)
 );
 
@@ -342,3 +342,75 @@ ALTER TABLE memories ADD COLUMN IF NOT EXISTS promoted_by_user_id UUID REFERENCE
 COMMENT ON TABLE memory_references IS 'Tracks citations of memories across rooms/sessions';
 COMMENT ON TABLE user_memory_collections IS 'User-defined collections of memories that persist across rooms';
 COMMENT ON TABLE collection_memories IS 'Many-to-many link between collections and memories';
+
+-- ============================================================
+-- LLM SELF-MEMORY SUPPORT
+-- ============================================================
+-- Allow NULL created_by_user_id for LLM-authored memories (scope='llm')
+ALTER TABLE memories ALTER COLUMN created_by_user_id DROP NOT NULL;
+-- Allow NULL updated_by_user_id for LLM-authored memory versions
+ALTER TABLE memory_versions ALTER COLUMN updated_by_user_id DROP NOT NULL;
+
+-- ============================================================
+-- KNOWLEDGE GRAPH
+-- ============================================================
+
+-- Materialized view: knowledge graph edges from existing relationships
+CREATE MATERIALIZED VIEW IF NOT EXISTS knowledge_graph AS
+-- Memory references (cross-room citations)
+SELECT
+    'memory_reference' as edge_type,
+    source_memory_id as source_id,
+    'memory' as source_type,
+    COALESCE(target_message_id::uuid, target_thread_id::uuid, target_room_id) as target_id,
+    CASE
+        WHEN target_message_id IS NOT NULL THEN 'message'
+        WHEN target_thread_id IS NOT NULL THEN 'thread'
+        ELSE 'room'
+    END as target_type,
+    COALESCE(relevance_score, 0.5) as weight,
+    referenced_at as created_at
+FROM memory_references
+
+UNION ALL
+
+-- Thread forks (genealogy)
+SELECT
+    'thread_fork' as edge_type,
+    parent_thread_id as source_id,
+    'thread' as source_type,
+    id as target_id,
+    'thread' as target_type,
+    1.0 as weight,
+    created_at
+FROM threads WHERE parent_thread_id IS NOT NULL
+
+UNION ALL
+
+-- Message references (reply chains)
+SELECT
+    'message_reference' as edge_type,
+    references_message_id as source_id,
+    'message' as source_type,
+    id as target_id,
+    'message' as target_type,
+    1.0 as weight,
+    created_at
+FROM messages WHERE references_message_id IS NOT NULL
+
+UNION ALL
+
+-- Memory version chains (belief evolution)
+SELECT
+    'memory_evolution' as edge_type,
+    memory_id as source_id,
+    'memory' as source_type,
+    memory_id as target_id,
+    'memory_version' as target_type,
+    1.0 as weight,
+    updated_at as created_at
+FROM memory_versions WHERE version > 1;
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_graph_source ON knowledge_graph(source_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_graph_target ON knowledge_graph(target_id);
+CREATE INDEX IF NOT EXISTS idx_knowledge_graph_type ON knowledge_graph(edge_type);

@@ -39,7 +39,7 @@ class MemoryManager:
         room_id: UUID,
         key: str,
         content: str,
-        created_by_user_id: UUID,
+        created_by_user_id: Optional[UUID] = None,
         scope: MemoryScope = MemoryScope.ROOM,
         owner_user_id: Optional[UUID] = None,
         source_message_id: Optional[UUID] = None,
@@ -101,7 +101,7 @@ class MemoryManager:
         await self.db.execute(
             """INSERT INTO memory_versions (memory_id, version, content, updated_at, updated_by_user_id)
                VALUES ($1, $2, $3, $4, $5)""",
-            memory.id, 1, content, now, created_by_user_id
+            memory.id, 1, content, now, created_by_user_id  # NULL for LLM-authored
         )
 
         # Generate embedding async
@@ -114,7 +114,7 @@ class MemoryManager:
         self,
         memory_id: UUID,
         new_content: str,
-        edited_by_user_id: UUID,
+        edited_by_user_id: Optional[UUID] = None,
         edit_reason: Optional[str] = None,
     ) -> Memory:
         """Edit existing memory. Creates new version, logs change."""

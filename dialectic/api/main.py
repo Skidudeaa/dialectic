@@ -23,6 +23,8 @@ from transport.websocket import ConnectionManager, InboundMessage
 from transport.handlers import MessageHandler
 from api.auth.routes import router as auth_router, set_db_pool as set_auth_db_pool
 from api.notifications.routes import router as notifications_router, set_notifications_db_pool
+from analytics.routes import router as analytics_router, set_analytics_db_pool
+from analytics.graph_routes import router as graph_router, set_graph_db_pool
 from collections import defaultdict
 import time
 
@@ -160,6 +162,12 @@ async def lifespan(app: FastAPI):
         # Set db_pool for notifications module
         set_notifications_db_pool(db_pool)
 
+        # Set db_pool for analytics module
+        set_analytics_db_pool(db_pool)
+
+        # Set db_pool for knowledge graph module
+        set_graph_db_pool(db_pool)
+
         async with db_pool.acquire() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
     except Exception as e:
@@ -209,6 +217,12 @@ app.include_router(auth_router, prefix="/auth", tags=["auth"], dependencies=[Dep
 
 # Include notifications router
 app.include_router(notifications_router)
+
+# Include analytics router
+app.include_router(analytics_router)
+
+# Include knowledge graph router
+app.include_router(graph_router)
 
 connection_manager = ConnectionManager()
 

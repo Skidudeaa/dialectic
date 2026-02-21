@@ -1,5 +1,6 @@
 # llm/orchestrator.py — Main orchestration entry point
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import AsyncIterator, Optional
@@ -17,7 +18,9 @@ from .heuristics import InterjectionEngine, InterjectionDecision
 from .prompts import PromptBuilder, AssembledPrompt
 from .context import assemble_context
 from .cross_session_context import CrossSessionContextBuilder, CrossSessionContext
+from .self_memory import LLMSelfMemory
 from memory.cross_session import CrossSessionMemoryManager
+from memory.manager import MemoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +178,9 @@ class LLMOrchestrator:
             token_count=routing.response.input_tokens + routing.response.output_tokens,
         )
 
+        # Fire-and-forget: extract LLM self-memories in background
+        self._schedule_self_memory_extraction(response_message, thread.room_id, messages)
+
         return OrchestrationResult(
             triggered=True,
             decision=decision,
@@ -247,6 +253,9 @@ class LLMOrchestrator:
             prompt_hash=routing.prompt_hash,
             token_count=routing.response.input_tokens + routing.response.output_tokens,
         )
+
+        # Fire-and-forget: extract LLM self-memories in background
+        self._schedule_self_memory_extraction(response_message, thread.room_id, messages)
 
         return OrchestrationResult(
             triggered=True,
@@ -335,6 +344,9 @@ class LLMOrchestrator:
                 token_count=0,  # Not available from streaming
             )
 
+            # Fire-and-forget: extract LLM self-memories in background
+            self._schedule_self_memory_extraction(response_message, thread.room_id, messages)
+
             yield ("done", {
                 "message_id": str(response_message.id),
                 "content": accumulated_content,
@@ -348,6 +360,18 @@ class LLMOrchestrator:
                 "error": str(e),
                 "partial_content": accumulated_content,
             })
+
+    def _schedule_self_memory_extraction(
+        self,
+        message: Message,
+        room_id: UUID,
+        messages: list[Message],
+    ) -> None:
+        """Schedule background extraction of LLM self-memories from a response."""
+        self_memory = LLMSelfMemory(self.db, MemoryManager(self.db))
+        asyncio.create_task(
+            self_memory.extract_and_store(message, room_id, messages[-10:])
+        )
 
     async def _persist_response(
         self,

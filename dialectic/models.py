@@ -53,6 +53,7 @@ class MemoryScope(str, Enum):
     ROOM = "room"      # Visible only in originating room
     USER = "user"      # Visible only to owner user
     GLOBAL = "global"  # Visible across all rooms user participates in
+    LLM = "llm"        # LLM-authored memories (positions, claims, frameworks)
 
 
 class MemoryStatus(str, Enum):
@@ -134,7 +135,7 @@ class Memory(BaseModel):
     key: str
     content: str
     source_message_id: Optional[UUID] = None
-    created_by_user_id: UUID
+    created_by_user_id: Optional[UUID] = None
     status: MemoryStatus = MemoryStatus.ACTIVE
     invalidated_by_user_id: Optional[UUID] = None
     invalidated_at: Optional[datetime] = None

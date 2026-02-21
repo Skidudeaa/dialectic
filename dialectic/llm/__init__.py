@@ -4,6 +4,7 @@ from .heuristics import InterjectionEngine, InterjectionDecision
 from .prompts import PromptBuilder, AssembledPrompt
 from .orchestrator import LLMOrchestrator, OrchestrationResult
 from .cross_session_context import CrossSessionContext, CrossSessionContextBuilder
+from .self_memory import LLMSelfMemory
 
 __all__ = [
     "LLMProvider", "LLMRequest", "LLMResponse", "ProviderName", "get_provider",
@@ -12,4 +13,5 @@ __all__ = [
     "PromptBuilder", "AssembledPrompt",
     "LLMOrchestrator", "OrchestrationResult",
     "CrossSessionContext", "CrossSessionContextBuilder",
+    "LLMSelfMemory",
 ]
