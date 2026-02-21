@@ -1,0 +1,36 @@
+.messages-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+}
+.messages-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 1.5rem 1.5rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 100%;
+    justify-content: flex-end;
+}
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-ghost);
+    font-size: 0.9rem;
+}
+.empty-state .empty-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    opacity: 0.3;
+}
+.empty-state h3 {
+    color: var(--text-tertiary);
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .messages-container { padding: 1rem; }
+}

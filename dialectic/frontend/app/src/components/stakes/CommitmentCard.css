@@ -1,0 +1,192 @@
+.commitment-card {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  transition: border-color 0.2s var(--ease-out);
+}
+
+.commitment-card:hover {
+  border-color: var(--border-default);
+}
+
+.commitment-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 10px;
+}
+
+.commitment-claim {
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.4;
+  flex: 1;
+}
+
+.commitment-badges {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.status-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.active {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--success);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.status-badge.resolved {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.status-badge.expired {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-subtle);
+}
+
+.status-badge.voided {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-subtle);
+}
+
+.category-badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--claude-primary-bg);
+  color: var(--claude-primary);
+  border: 1px solid var(--claude-primary-border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.commitment-criteria {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+.commitment-deadline {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.commitment-deadline.urgent {
+  color: var(--warning);
+}
+
+.confidence-section {
+  margin-bottom: 12px;
+}
+
+.confidence-section h5 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.confidence-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.confidence-bar-row .conf-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  width: 64px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.confidence-bar-row .conf-track {
+  flex: 1;
+  height: 5px;
+  background: var(--bg-overlay);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.confidence-bar-row .conf-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--claude-primary);
+  transition: width 0.3s var(--ease-out);
+}
+
+.confidence-bar-row .conf-value {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  width: 32px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.commitment-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.update-confidence {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.update-confidence input[type="range"] {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--claude-primary);
+}
+
+.update-confidence .conf-display {
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-secondary);
+  width: 32px;
+}
+
+.commitment-actions button {
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  border: none;
+  flex-shrink: 0;
+}
+
+.commitment-actions .resolve-btn {
+  background: var(--success);
+  color: #000;
+}
+
+.commitment-actions .update-btn {
+  background: var(--claude-primary);
+  color: #fff;
+}

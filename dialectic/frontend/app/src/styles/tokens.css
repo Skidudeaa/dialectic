@@ -1,0 +1,71 @@
+:root {
+    /* Backgrounds */
+    --bg-void: #07070a;
+    --bg-deep: #0a0a0e;
+    --bg-base: #0e0e13;
+    --bg-surface: #131318;
+    --bg-raised: #1a1a21;
+    --bg-overlay: #22222b;
+
+    /* Borders */
+    --border-subtle: #1e1e27;
+    --border-default: #2a2a35;
+    --border-strong: #3a3a48;
+
+    /* Text */
+    --text-primary: #eaeaf0;
+    --text-secondary: #a0a0b0;
+    --text-tertiary: #606070;
+    --text-ghost: #404050;
+
+    /* Participants */
+    --human-1: #2dd4bf;
+    --human-1-dim: #0d9488;
+    --human-1-bg: rgba(45, 212, 191, 0.06);
+    --human-1-border: rgba(45, 212, 191, 0.15);
+    --human-2: #f472b6;
+    --human-2-dim: #db2777;
+    --human-2-bg: rgba(244, 114, 182, 0.06);
+    --human-2-border: rgba(244, 114, 182, 0.15);
+    --claude-primary: #818cf8;
+    --claude-primary-dim: #6366f1;
+    --claude-primary-bg: rgba(129, 140, 248, 0.06);
+    --claude-primary-border: rgba(129, 140, 248, 0.15);
+    --claude-primary-glow: rgba(99, 102, 241, 0.25);
+    --claude-provoker: #fbbf24;
+    --claude-provoker-dim: #f59e0b;
+    --claude-provoker-bg: rgba(251, 191, 36, 0.06);
+    --claude-provoker-border: rgba(251, 191, 36, 0.15);
+    --claude-provoker-glow: rgba(245, 158, 11, 0.25);
+    --claude-annotator: #a78bfa;
+    --claude-annotator-dim: #7c3aed;
+    --claude-annotator-bg: rgba(167, 139, 250, 0.06);
+    --claude-annotator-border: rgba(167, 139, 250, 0.15);
+
+    /* Status */
+    --success: #34d399;
+    --warning: #fbbf24;
+    --error: #f87171;
+
+    /* Radii */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+    --radius-full: 9999px;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.5);
+    --shadow-glow-indigo: 0 0 20px rgba(99,102,241,0.15);
+    --shadow-glow-amber: 0 0 20px rgba(245,158,11,0.15);
+
+    /* Transitions */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* Energy */
+    --energy-level: 0;
+    --energy-color: var(--claude-primary-dim);
+}

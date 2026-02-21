@@ -1,0 +1,39 @@
+.dna-glyph {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.dna-glyph svg {
+  filter: drop-shadow(0 0 6px var(--glyph-glow, rgba(129, 140, 248, 0.3)));
+}
+
+.dna-fingerprint {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-tertiary);
+  letter-spacing: 0.5px;
+}
+
+.dna-glyph.small .dna-fingerprint {
+  font-size: 8px;
+}
+
+.dna-glyph.large .dna-fingerprint {
+  font-size: 11px;
+}
+
+.dna-archetype {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.dna-glyph.small .dna-archetype {
+  font-size: 8px;
+}
+
+.dna-glyph.large .dna-archetype {
+  font-size: 12px;
+}

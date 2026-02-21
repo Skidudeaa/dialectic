@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import './tokens.css';
+@import './animations.css';
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; overflow: hidden; }
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-void);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+code, pre { font-family: 'JetBrains Mono', monospace; }
+
+/* Shared utility classes */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.7rem 1.4rem;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+    gap: 0.5rem;
+}
+.btn-primary {
+    background: var(--claude-primary-dim);
+    color: white;
+}
+.btn-primary:hover { background: var(--claude-primary); transform: translateY(-1px); box-shadow: var(--shadow-glow-indigo); }
+.btn-secondary {
+    background: var(--bg-raised);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-default);
+}
+.btn-secondary:hover { background: var(--bg-overlay); color: var(--text-primary); }
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    padding: 0.4rem 0.6rem;
+}
+.btn-ghost:hover { background: var(--bg-raised); color: var(--text-primary); }
+.btn-full { width: 100%; }
+.btn-sm { padding: 0.35rem 0.7rem; font-size: 0.75rem; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+
+.form-input {
+    width: 100%;
+    padding: 0.7rem 0.9rem;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    outline: none;
+}
+.form-input:focus {
+    border-color: var(--claude-primary-dim);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+}
+.form-input::placeholder { color: var(--text-ghost); }

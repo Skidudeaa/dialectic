@@ -1,0 +1,115 @@
+.protocol-banner {
+  background: var(--claude-primary-bg);
+  border: 1px solid var(--claude-primary-border);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-glow-indigo);
+}
+
+.protocol-banner-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.protocol-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.protocol-banner-info .protocol-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--claude-primary);
+  box-shadow: 0 0 8px var(--claude-primary-glow);
+  animation: protocol-pulse 2s ease-in-out infinite;
+}
+
+@keyframes protocol-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.protocol-banner-info .protocol-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--claude-primary);
+}
+
+.protocol-banner-info .protocol-phase {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.protocol-banner-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.protocol-banner-actions button {
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s var(--ease-out);
+}
+
+.protocol-banner-actions .advance-btn {
+  background: var(--claude-primary);
+  color: #fff;
+}
+
+.protocol-banner-actions .abort-btn {
+  background: transparent;
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-subtle);
+}
+
+.protocol-banner-actions .abort-btn:hover {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.protocol-progress {
+  height: 3px;
+  background: var(--bg-overlay);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.protocol-progress-fill {
+  height: 100%;
+  background: var(--claude-primary);
+  border-radius: 2px;
+  transition: width 0.4s var(--ease-out);
+}
+
+.protocol-concluded {
+  background: var(--claude-primary-bg);
+  border: 1px solid var(--claude-primary-border);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.protocol-concluded span {
+  font-size: 13px;
+  color: var(--claude-primary);
+}
+
+.protocol-concluded .dismiss-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+}

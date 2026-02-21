@@ -1,0 +1,111 @@
+.replay-timeline {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.replay-controls .play-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--claude-primary);
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity 0.15s var(--ease-out);
+}
+
+.replay-controls .play-btn:hover {
+  opacity: 0.85;
+}
+
+.replay-timestamp {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 140px;
+}
+
+.speed-selector {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-raised);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  margin-left: auto;
+}
+
+.speed-selector button {
+  padding: 3px 8px;
+  border: none;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-tertiary);
+  transition: all 0.15s var(--ease-out);
+}
+
+.speed-selector button.active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Heatmap track */
+.replay-track-container {
+  position: relative;
+  height: 28px;
+  cursor: pointer;
+}
+
+.replay-heatmap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  gap: 1px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.heatmap-bar {
+  flex: 1;
+  border-radius: 2px;
+  transition: opacity 0.15s var(--ease-out);
+}
+
+/* Scrubber thumb */
+.replay-thumb {
+  position: absolute;
+  top: -2px;
+  width: 3px;
+  height: 32px;
+  background: var(--text-primary);
+  border-radius: 2px;
+  pointer-events: none;
+  box-shadow: 0 0 6px rgba(234, 234, 240, 0.3);
+  transition: left 0.05s linear;
+}
+
+.replay-loading {
+  text-align: center;
+  padding: 16px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}

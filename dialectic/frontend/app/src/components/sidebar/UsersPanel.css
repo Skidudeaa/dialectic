@@ -1,0 +1,19 @@
+.user-list-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.5rem;
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.15rem;
+}
+.user-list-item:hover { background: var(--bg-surface); }
+.user-list-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+.user-list-dot.online { background: var(--success); }
+.user-list-dot.away { background: var(--warning); }
+.user-list-dot.offline { background: var(--text-ghost); }
+.user-list-name { font-size: 0.82rem; flex: 1; }
+.user-list-status { font-size: 0.68rem; color: var(--text-ghost); }

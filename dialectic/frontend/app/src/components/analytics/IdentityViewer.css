@@ -1,0 +1,91 @@
+.identity-viewer {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.identity-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.identity-header h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.identity-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  display: flex;
+  gap: 12px;
+}
+
+.identity-header button {
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s var(--ease-out);
+}
+
+.identity-header .edit-btn {
+  background: var(--bg-raised);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+
+.identity-header .save-btn {
+  background: var(--claude-primary);
+  color: #fff;
+}
+
+.identity-header .cancel-btn {
+  background: transparent;
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-subtle);
+}
+
+.identity-content {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  font-family: 'Inter', sans-serif;
+}
+
+.identity-editor {
+  width: 100%;
+  min-height: 200px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 12px;
+  resize: vertical;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.identity-editor:focus {
+  outline: none;
+  border-color: var(--claude-primary);
+}
+
+.identity-loading,
+.identity-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}

@@ -1,0 +1,34 @@
+.thread-card {
+    padding: 0.6rem 0.7rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    margin-bottom: 0.4rem;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.thread-card:hover { background: var(--bg-raised); border-color: var(--border-default); }
+.thread-card.active {
+    border-color: var(--claude-primary-border);
+    background: var(--claude-primary-bg);
+}
+.thread-card-title {
+    font-weight: 500;
+    font-size: 0.82rem;
+    margin-bottom: 0.15rem;
+}
+.thread-card-meta {
+    font-size: 0.68rem;
+    color: var(--text-ghost);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.thread-card-fork-badge {
+    padding: 0.05rem 0.3rem;
+    background: rgba(99,102,241,0.1);
+    border-radius: var(--radius-sm);
+    color: var(--claude-primary);
+    font-size: 0.6rem;
+    font-weight: 600;
+}

@@ -1,0 +1,166 @@
+.commitment-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.commitment-dashboard h3 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.commitment-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-raised);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+}
+
+.commitment-tabs button {
+  flex: 1;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-secondary);
+  transition: all 0.15s var(--ease-out);
+}
+
+.commitment-tabs button.active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.commitment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.commitment-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.new-commitment-btn {
+  background: var(--bg-raised);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s var(--ease-out);
+}
+
+.new-commitment-btn:hover {
+  border-color: var(--claude-primary);
+  color: var(--claude-primary);
+}
+
+/* Create form */
+.commitment-create-form {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.commitment-create-form label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.commitment-create-form input,
+.commitment-create-form textarea,
+.commitment-create-form select {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.commitment-create-form input:focus,
+.commitment-create-form textarea:focus,
+.commitment-create-form select:focus {
+  outline: none;
+  border-color: var(--claude-primary);
+}
+
+.commitment-create-form textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+}
+
+.form-row label {
+  flex: 1;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.form-actions button {
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+  border: none;
+}
+
+.form-actions .cancel-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+
+.form-actions .submit-btn {
+  background: var(--claude-primary);
+  color: #fff;
+}
+
+.form-actions .submit-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Calibration chart */
+.calibration-section {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+.calibration-section h4 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}

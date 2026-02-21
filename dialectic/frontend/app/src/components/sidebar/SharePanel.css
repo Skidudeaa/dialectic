@@ -1,0 +1,19 @@
+.share-section { padding: 0.5rem 0; }
+.share-section p {
+    color: var(--text-tertiary);
+    font-size: 0.8rem;
+    margin-bottom: 0.75rem;
+    line-height: 1.5;
+}
+.share-link-row { display: flex; gap: 0.35rem; }
+.share-link-row input {
+    flex: 1;
+    padding: 0.45rem 0.6rem;
+    background: var(--bg-void);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    outline: none;
+}

@@ -1,0 +1,42 @@
+.memory-form {
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.memory-form input, .memory-form textarea {
+    width: 100%;
+    padding: 0.45rem 0.65rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-family: inherit;
+    margin-bottom: 0.35rem;
+    outline: none;
+}
+.memory-form input:focus, .memory-form textarea:focus { border-color: var(--claude-primary-dim); }
+.memory-card {
+    padding: 0.6rem 0.7rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    margin-bottom: 0.4rem;
+}
+.memory-key {
+    font-size: 0.68rem;
+    color: var(--claude-primary);
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 0.2rem;
+    font-weight: 500;
+}
+.memory-value {
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--text-secondary);
+}
+.memory-version {
+    font-size: 0.62rem;
+    color: var(--text-ghost);
+    margin-top: 0.3rem;
+}
