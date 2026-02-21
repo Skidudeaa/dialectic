@@ -210,6 +210,10 @@ class MessageTypes:
     INVOKE_PROTOCOL = "invoke_protocol"
     ADVANCE_PROTOCOL = "advance_protocol"
     ABORT_PROTOCOL = "abort_protocol"
+    # Stakes / commitments (inbound)
+    CREATE_COMMITMENT = "create_commitment"
+    RECORD_CONFIDENCE = "record_confidence"
+    RESOLVE_COMMITMENT = "resolve_commitment"
 
     # Outbound
     MESSAGE_CREATED = "message_created"
@@ -243,3 +247,7 @@ class MessageTypes:
     PROTOCOL_ABORTED = "protocol_aborted"
     # Async dialogue (outbound)
     ANNOTATION_CREATED = "annotation_created"
+    # Stakes / commitments (outbound)
+    COMMITMENT_CREATED = "commitment_created"
+    COMMITMENT_RESOLVED = "commitment_resolved"
+    COMMITMENT_SURFACED = "commitment_surfaced"

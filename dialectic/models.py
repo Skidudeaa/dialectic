@@ -56,6 +56,30 @@ class EventType(str, Enum):
     # Async dialogue events
     ANNOTATION_CREATED = "annotation_created"
     BRIEFING_REQUESTED = "briefing_requested"
+    # Stakes / commitment events
+    COMMITMENT_CREATED = "commitment_created"
+    COMMITMENT_CONFIDENCE_UPDATED = "commitment_confidence_updated"
+    COMMITMENT_RESOLVED = "commitment_resolved"
+
+
+class CommitmentStatus(str, Enum):
+    ACTIVE = "active"
+    RESOLVED = "resolved"
+    VOIDED = "voided"
+    EXPIRED = "expired"
+
+
+class CommitmentResolution(str, Enum):
+    CORRECT = "correct"
+    INCORRECT = "incorrect"
+    PARTIAL = "partial"
+    VOIDED = "voided"
+
+
+class CommitmentCategory(str, Enum):
+    PREDICTION = "prediction"
+    COMMITMENT = "commitment"
+    BET = "bet"
 
 
 class MemoryScope(str, Enum):

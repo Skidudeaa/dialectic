@@ -17,6 +17,8 @@ from llm.orchestrator import LLMOrchestrator
 from llm.annotator import AnnotatorEngine
 from llm.protocol_manager import ProtocolManager
 from llm.protocol_library import get_protocol_definition
+from stakes.manager import CommitmentManager
+from stakes.detector import CommitmentDetector
 from .websocket import (
     ConnectionManager, Connection, InboundMessage, OutboundMessage, MessageTypes
 )
@@ -70,6 +72,9 @@ class MessageHandler:
             MessageTypes.INVOKE_PROTOCOL: self._handle_invoke_protocol,
             MessageTypes.ADVANCE_PROTOCOL: self._handle_advance_protocol,
             MessageTypes.ABORT_PROTOCOL: self._handle_abort_protocol,
+            MessageTypes.CREATE_COMMITMENT: self._handle_create_commitment,
+            MessageTypes.RECORD_CONFIDENCE: self._handle_record_confidence,
+            MessageTypes.RESOLVE_COMMITMENT: self._handle_resolve_commitment,
         }
 
         handler = handlers.get(message.type)
@@ -426,6 +431,31 @@ class MessageHandler:
                     room_id, thread_id, protocol, result.phase_complete_signal,
                     room, thread, users, memories,
                 )
+
+        # After LLM response, check if any active commitments are relevant
+        try:
+            commitment_mgr = CommitmentManager(self.db)
+            relevant = await commitment_mgr.check_relevant_commitments(
+                room_id, message_content,
+            )
+            if relevant:
+                await self.connections.broadcast(room_id, OutboundMessage(
+                    type=MessageTypes.COMMITMENT_SURFACED,
+                    payload={
+                        "commitments": [
+                            {
+                                "id": str(c["id"]),
+                                "claim": c["claim"],
+                                "category": c.get("category", "prediction"),
+                                "relevance_score": c.get("relevance_score", 0),
+                                "deadline": c["deadline"].isoformat() if c.get("deadline") else None,
+                            }
+                            for c in relevant
+                        ],
+                    },
+                ))
+        except Exception as e:
+            logger.debug("Commitment surfacing failed (non-critical): %s", e)
 
     async def _handle_typing(self, conn: Connection, payload: dict) -> None:
         """Broadcast typing indicator."""
@@ -1382,6 +1412,158 @@ class MessageHandler:
                 "protocol_type": concluded.protocol_type.value,
                 "display_name": definition.display_name,
                 "synthesis_memory_id": str(synthesis_memory_id) if synthesis_memory_id else None,
+            },
+        ))
+
+    # ============================================================
+    # STAKES / COMMITMENTS HANDLERS
+    # ============================================================
+
+    async def _handle_create_commitment(self, conn: Connection, payload: dict) -> None:
+        """
+        Create a new commitment via WebSocket.
+
+        ARCHITECTURE: WebSocket path for in-conversation commitment creation.
+        WHY: Commitments arise naturally in dialogue; creating them should be seamless.
+        """
+        claim = payload.get("claim", "").strip()
+        resolution_criteria = payload.get("resolution_criteria", "").strip()
+
+        if not claim or not resolution_criteria:
+            await self._send_error(conn, "claim and resolution_criteria are required")
+            return
+
+        category = payload.get("category", "prediction")
+        if category not in ("prediction", "commitment", "bet"):
+            category = "prediction"
+
+        deadline_str = payload.get("deadline")
+        deadline = None
+        if deadline_str:
+            try:
+                deadline = datetime.fromisoformat(deadline_str)
+            except (ValueError, TypeError):
+                pass
+
+        initial_confidence = payload.get("initial_confidence")
+        if initial_confidence is not None:
+            try:
+                initial_confidence = float(initial_confidence)
+                if not (0 <= initial_confidence <= 1):
+                    initial_confidence = None
+            except (ValueError, TypeError):
+                initial_confidence = None
+
+        source_message_id = payload.get("source_message_id")
+        if source_message_id:
+            source_message_id = UUID(source_message_id)
+
+        mgr = CommitmentManager(self.db)
+        result = await mgr.create_commitment(
+            room_id=conn.room_id,
+            claim=claim,
+            resolution_criteria=resolution_criteria,
+            created_by_user_id=conn.user_id,
+            thread_id=conn.thread_id,
+            source_message_id=source_message_id,
+            deadline=deadline,
+            category=category,
+            initial_confidence=initial_confidence,
+        )
+
+        await self.connections.broadcast(conn.room_id, OutboundMessage(
+            type=MessageTypes.COMMITMENT_CREATED,
+            payload={
+                "id": str(result["id"]),
+                "room_id": str(result["room_id"]),
+                "claim": result["claim"],
+                "resolution_criteria": result["resolution_criteria"],
+                "category": result["category"],
+                "created_by_user_id": str(conn.user_id),
+                "deadline": result["deadline"].isoformat() if result["deadline"] else None,
+                "initial_confidence": result["initial_confidence"],
+                "status": "active",
+            },
+        ))
+
+    async def _handle_record_confidence(self, conn: Connection, payload: dict) -> None:
+        """Record confidence level via WebSocket."""
+        commitment_id_str = payload.get("commitment_id")
+        if not commitment_id_str:
+            await self._send_error(conn, "commitment_id required")
+            return
+
+        try:
+            confidence = float(payload.get("confidence", 0.5))
+            if not (0 <= confidence <= 1):
+                raise ValueError
+        except (ValueError, TypeError):
+            await self._send_error(conn, "confidence must be a number between 0 and 1")
+            return
+
+        reasoning = payload.get("reasoning")
+        commitment_id = UUID(commitment_id_str)
+
+        # SECURITY: Verify commitment belongs to user's room (prevent cross-room IDOR)
+        room_check = await self.db.fetchval(
+            "SELECT room_id FROM commitments WHERE id = $1", commitment_id
+        )
+        if room_check != conn.room_id:
+            await self._send_error(conn, "Commitment not found in this room")
+            return
+
+        mgr = CommitmentManager(self.db)
+        try:
+            await mgr.record_confidence(
+                commitment_id=commitment_id,
+                user_id=conn.user_id,
+                confidence=confidence,
+                reasoning=reasoning,
+            )
+        except ValueError as e:
+            await self._send_error(conn, str(e))
+
+    async def _handle_resolve_commitment(self, conn: Connection, payload: dict) -> None:
+        """Resolve a commitment via WebSocket."""
+        commitment_id_str = payload.get("commitment_id")
+        resolution = payload.get("resolution")
+
+        if not commitment_id_str or not resolution:
+            await self._send_error(conn, "commitment_id and resolution required")
+            return
+
+        commitment_id = UUID(commitment_id_str)
+        resolution_notes = payload.get("resolution_notes")
+
+        # SECURITY: Verify commitment belongs to user's room (prevent cross-room IDOR)
+        room_check = await self.db.fetchval(
+            "SELECT room_id FROM commitments WHERE id = $1", commitment_id
+        )
+        if room_check != conn.room_id:
+            await self._send_error(conn, "Commitment not found in this room")
+            return
+
+        mgr = CommitmentManager(self.db)
+        try:
+            result = await mgr.resolve(
+                commitment_id=commitment_id,
+                resolution=resolution,
+                resolved_by_user_id=conn.user_id,
+                resolution_notes=resolution_notes,
+            )
+        except ValueError as e:
+            await self._send_error(conn, str(e))
+            return
+
+        await self.connections.broadcast(conn.room_id, OutboundMessage(
+            type=MessageTypes.COMMITMENT_RESOLVED,
+            payload={
+                "id": str(commitment_id),
+                "resolution": result["resolution"],
+                "resolution_notes": result["resolution_notes"],
+                "resolved_at": result["resolved_at"].isoformat(),
+                "resolved_by_user_id": str(conn.user_id),
+                "status": result["status"],
             },
         ))
 

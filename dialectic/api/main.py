@@ -25,7 +25,9 @@ from api.auth.routes import router as auth_router, set_db_pool as set_auth_db_po
 from api.notifications.routes import router as notifications_router, set_notifications_db_pool
 from analytics.routes import router as analytics_router, set_analytics_db_pool
 from analytics.graph_routes import router as graph_router, set_graph_db_pool
+from replay.routes import router as replay_router, set_replay_db_pool
 from analytics.knowledge_graph import KnowledgeGraphEngine
+from stakes.routes import router as stakes_router, set_stakes_db_pool
 from collections import defaultdict
 import time
 
@@ -169,6 +171,12 @@ async def lifespan(app: FastAPI):
         # Set db_pool for knowledge graph module
         set_graph_db_pool(db_pool)
 
+        # Set db_pool for replay module
+        set_replay_db_pool(db_pool)
+
+        # Set db_pool for stakes module
+        set_stakes_db_pool(db_pool)
+
         async with db_pool.acquire() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
@@ -231,6 +239,12 @@ app.include_router(analytics_router)
 
 # Include knowledge graph router
 app.include_router(graph_router)
+
+# Include replay router
+app.include_router(replay_router)
+
+# Include stakes router
+app.include_router(stakes_router)
 
 connection_manager = ConnectionManager()
 

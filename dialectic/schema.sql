@@ -464,3 +464,47 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS protocol_phase INT;
 -- TYPING ANALYSIS
 -- ============================================================
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS enable_typing_analysis BOOLEAN DEFAULT false;
+
+-- ============================================================
+-- STAKES / COMMITMENTS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS commitments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    thread_id UUID REFERENCES threads(id),
+    source_message_id UUID REFERENCES messages(id),  -- message that triggered creation
+
+    -- Content
+    claim TEXT NOT NULL,              -- The prediction or commitment
+    resolution_criteria TEXT NOT NULL, -- How to determine if it came true
+    category TEXT DEFAULT 'prediction', -- 'prediction' | 'commitment' | 'bet'
+
+    -- Lifecycle
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_by_user_id UUID REFERENCES users(id),  -- NULL for LLM-created
+    deadline TIMESTAMPTZ,             -- When it should be resolved
+    resolved_at TIMESTAMPTZ,
+    resolved_by_user_id UUID REFERENCES users(id),
+    resolution TEXT,                  -- 'correct' | 'incorrect' | 'partial' | 'voided'
+    resolution_notes TEXT,
+
+    -- Status
+    status TEXT NOT NULL DEFAULT 'active'  -- 'active' | 'resolved' | 'voided' | 'expired'
+);
+
+CREATE INDEX IF NOT EXISTS idx_commitments_room ON commitments(room_id);
+CREATE INDEX IF NOT EXISTS idx_commitments_status ON commitments(room_id, status);
+CREATE INDEX IF NOT EXISTS idx_commitments_deadline ON commitments(deadline) WHERE status = 'active';
+
+-- Confidence levels per participant (including LLM)
+CREATE TABLE IF NOT EXISTS commitment_confidence (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    commitment_id UUID NOT NULL REFERENCES commitments(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id),  -- NULL for LLM
+    confidence FLOAT NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    reasoning TEXT                      -- Why this confidence level
+);
+
+CREATE INDEX IF NOT EXISTS idx_commitment_confidence ON commitment_confidence(commitment_id);
