@@ -1116,6 +1116,104 @@ async def search_memories(
 
 
 # ============================================================
+# LLM IDENTITY ENDPOINTS
+# ============================================================
+
+
+class LLMIdentityResponse(BaseModel):
+    """LLM's evolved identity document for a room."""
+    content: Optional[str]
+    exists: bool
+
+
+class UserModelResponse(BaseModel):
+    """LLM's model of a specific user's thinking patterns."""
+    content: Optional[str]
+    exists: bool
+
+
+class UpdateIdentityRequest(BaseModel):
+    """Human correction to LLM identity."""
+    content: str
+
+
+@app.get("/rooms/{room_id}/identity", response_model=LLMIdentityResponse)
+async def get_llm_identity(
+    room_id: UUID,
+    token: str = Query(...),
+    db=Depends(get_db),
+):
+    """
+    Get the LLM's evolved identity for this room.
+
+    ARCHITECTURE: Read-only view of the LLM's self-authored identity document.
+    WHY: Transparency — humans should see how the LLM models itself.
+    """
+    await verify_room_token(room_id, token, db)
+
+    from llm.identity import LLMIdentityManager
+    identity_mgr = LLMIdentityManager(db, MemoryManager(db))
+    content = await identity_mgr.get_identity(room_id)
+
+    return LLMIdentityResponse(content=content, exists=content is not None)
+
+
+@app.get("/rooms/{room_id}/user-models/{user_id}", response_model=UserModelResponse)
+async def get_user_model(
+    room_id: UUID,
+    user_id: UUID,
+    token: str = Query(...),
+    db=Depends(get_db),
+):
+    """
+    Get the LLM's model of a specific user's thinking patterns.
+
+    ARCHITECTURE: Per-user view of how the LLM understands each participant.
+    WHY: Users should be able to see (and correct) how the LLM models them.
+    """
+    await verify_room_token(room_id, token, db)
+
+    from llm.identity import LLMIdentityManager
+    identity_mgr = LLMIdentityManager(db, MemoryManager(db))
+    content = await identity_mgr.get_user_model(user_id, room_id)
+
+    return UserModelResponse(content=content, exists=content is not None)
+
+
+@app.put("/rooms/{room_id}/identity", response_model=LLMIdentityResponse)
+async def update_llm_identity(
+    room_id: UUID,
+    request: UpdateIdentityRequest,
+    token: str = Query(...),
+    user_id: UUID = Query(...),
+    db=Depends(get_db),
+):
+    """
+    Human can edit/correct the LLM's identity (creates new version).
+
+    ARCHITECTURE: Humans can intervene in the LLM's self-model.
+    WHY: The identity should be collaborative — humans can correct misunderstandings.
+    TRADEOFF: Human edits may conflict with next distillation, but versioning preserves history.
+    """
+    await verify_room_token(room_id, token, db)
+    await verify_room_member(room_id, user_id, db)
+
+    if not request.content or not request.content.strip():
+        raise HTTPException(status_code=400, detail="Identity content cannot be empty")
+
+    from llm.identity import LLMIdentityManager
+    identity_mgr = LLMIdentityManager(db, MemoryManager(db))
+
+    memory = await identity_mgr._upsert_identity_memory(
+        room_id=room_id,
+        key=identity_mgr._identity_key(room_id),
+        content=request.content.strip(),
+    )
+
+    return LLMIdentityResponse(content=memory.content, exists=True)
+
+
+# ============================================================
 # FULL-TEXT SEARCH ENDPOINTS
 # ============================================================
 
@@ -1261,6 +1359,95 @@ async def get_message_context(
 
 
 # ============================================================
+# IDENTITY DISTILLATION ON DISCONNECT
+# ============================================================
+
+async def _distill_identity_on_disconnect(
+    room_id: UUID,
+    user_id: UUID,
+    thread_id: Optional[UUID],
+) -> None:
+    """
+    Fire-and-forget identity distillation when a user disconnects.
+
+    ARCHITECTURE: Runs after WebSocket close, never blocks message flow.
+    WHY: Session end is the natural moment to reflect on what happened.
+    TRADEOFF: Delayed distillation vs real-time — identity updates on next session.
+    """
+    if not db_pool:
+        return
+
+    try:
+        async with db_pool.acquire() as db:
+            from llm.identity import LLMIdentityManager
+
+            # Count recent session messages (last hour from this room)
+            message_count = await db.fetchval(
+                """SELECT COUNT(*) FROM messages m
+                   JOIN threads t ON m.thread_id = t.id
+                   WHERE t.room_id = $1
+                     AND m.created_at > NOW() - INTERVAL '1 hour'""",
+                room_id,
+            )
+
+            if message_count < 5:
+                logger.debug(
+                    "Skipping identity distillation for room %s: only %d recent messages",
+                    room_id, message_count,
+                )
+                return
+
+            # Fetch session messages (last hour)
+            from models import Message as MessageModel, User as UserModel
+            rows = await db.fetch(
+                """SELECT m.* FROM messages m
+                   JOIN threads t ON m.thread_id = t.id
+                   WHERE t.room_id = $1
+                     AND m.created_at > NOW() - INTERVAL '1 hour'
+                   ORDER BY m.created_at""",
+                room_id,
+            )
+            session_messages = [MessageModel(**dict(r)) for r in rows]
+
+            # Fetch room users
+            user_rows = await db.fetch(
+                """SELECT u.* FROM users u
+                   JOIN room_memberships rm ON u.id = rm.user_id
+                   WHERE rm.room_id = $1""",
+                room_id,
+            )
+            users = [UserModel(**dict(r)) for r in user_rows]
+
+            identity_mgr = LLMIdentityManager(db, MemoryManager(db))
+
+            # Distill room identity
+            identity = await identity_mgr.distill_identity(
+                room_id=room_id,
+                session_messages=session_messages,
+                users=users,
+            )
+            if identity:
+                logger.info("Identity distilled for room %s (v%d)", room_id, identity.version)
+
+            # Distill user models for each human participant
+            for user in users:
+                user_model = await identity_mgr.distill_user_model(
+                    user_id=user.id,
+                    room_id=room_id,
+                    session_messages=session_messages,
+                    user=user,
+                )
+                if user_model:
+                    logger.info(
+                        "User model distilled for %s in room %s (v%d)",
+                        user.display_name, room_id, user_model.version,
+                    )
+
+    except Exception as e:
+        logger.error("Identity distillation failed on disconnect: %s", e)
+
+
+# ============================================================
 # WEBSOCKET ENDPOINT
 # ============================================================
 
@@ -1342,9 +1529,17 @@ async def websocket_endpoint(
 
     except WebSocketDisconnect:
         await connection_manager.disconnect(conn)
+        # Fire-and-forget: distill LLM identity on session end
+        asyncio.create_task(
+            _distill_identity_on_disconnect(room_id, user_id, conn.thread_id)
+        )
     except Exception as e:
         logger.exception(f"WebSocket error: {e}")
         await connection_manager.disconnect(conn)
+        # Fire-and-forget: distill LLM identity on session end (even on error)
+        asyncio.create_task(
+            _distill_identity_on_disconnect(room_id, user_id, conn.thread_id)
+        )
 
 
 # ============================================================
@@ -1495,6 +1690,155 @@ async def get_room_presence(
         status=row['status'],
         last_heartbeat=row['last_heartbeat'],
     ) for row in rows]
+
+
+# ============================================================
+# ASYNC DIALOGUE / BRIEFING
+# ============================================================
+
+class BriefingHighlight(BaseModel):
+    """A single highlight from missed activity."""
+    speaker: str
+    content_preview: str
+    message_type: str
+    timestamp: datetime
+
+
+class BriefingResponse(BaseModel):
+    """Morning briefing summarizing what happened while user was offline."""
+    summary: str
+    messages_missed: int
+    memories_created: int
+    threads_forked: int
+    highlights: List[BriefingHighlight]
+    last_seen: Optional[datetime]
+    generated_at: datetime
+
+
+@app.get("/rooms/{room_id}/briefing", response_model=BriefingResponse)
+async def get_morning_briefing(
+    room_id: UUID,
+    user_id: UUID = Query(...),
+    token: str = Query(...),
+    db=Depends(get_db),
+):
+    """
+    Generate a briefing of what happened since the user was last online.
+
+    ARCHITECTURE: On-demand summarization of missed activity.
+    WHY: Async dialogue needs a "catch-up" mechanism, not raw message history.
+    TRADEOFF: LLM call per briefing request vs pre-computed summaries.
+    """
+    await verify_room_token(room_id, token, db)
+    await verify_room_member(room_id, user_id, db)
+
+    now = datetime.now(timezone.utc)
+
+    # Find user's last presence timestamp
+    last_seen_row = await db.fetchrow(
+        """SELECT last_heartbeat FROM user_presence
+           WHERE user_id = $1 AND room_id = $2""",
+        user_id, room_id
+    )
+    last_seen = last_seen_row['last_heartbeat'] if last_seen_row else None
+
+    # If no last_seen, use 24 hours ago as default
+    if not last_seen:
+        from datetime import timedelta
+        last_seen = now - timedelta(hours=24)
+
+    # Fetch all messages since last_seen
+    message_rows = await db.fetch(
+        """SELECT m.*, COALESCE(u.display_name, m.speaker_type) as sender_name
+           FROM messages m
+           JOIN threads t ON m.thread_id = t.id
+           LEFT JOIN users u ON m.user_id = u.id
+           WHERE t.room_id = $1
+             AND m.created_at > $2
+             AND NOT m.is_deleted
+             AND (m.user_id IS NULL OR m.user_id != $3)
+           ORDER BY m.created_at ASC""",
+        room_id, last_seen, user_id
+    )
+
+    messages_missed = len(message_rows)
+
+    # Count memories created since last_seen
+    memories_created = await db.fetchval(
+        """SELECT COUNT(*) FROM memories
+           WHERE room_id = $1 AND created_at > $2""",
+        room_id, last_seen
+    ) or 0
+
+    # Count threads forked since last_seen
+    threads_forked = await db.fetchval(
+        """SELECT COUNT(*) FROM threads
+           WHERE room_id = $1 AND created_at > $2
+           AND parent_thread_id IS NOT NULL""",
+        room_id, last_seen
+    ) or 0
+
+    # Build highlights from messages (up to 10 most significant)
+    highlights = []
+    for row in message_rows[:10]:
+        highlights.append(BriefingHighlight(
+            speaker=row['sender_name'],
+            content_preview=row['content'][:200],
+            message_type=row['message_type'] if row['message_type'] else 'text',
+            timestamp=row['created_at'],
+        ))
+
+    # Generate LLM summary if there are messages to summarize
+    summary = "Nothing happened while you were away."
+    if message_rows:
+        try:
+            from llm.providers import get_provider, ProviderName, LLMRequest
+
+            messages_text = "\n".join(
+                f"[{row['sender_name']}] {row['content'][:300]}"
+                for row in message_rows[:30]  # Cap at 30 messages for context
+            )
+
+            provider = get_provider(ProviderName.ANTHROPIC)
+            request = LLMRequest(
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"Summarize what happened in this conversation. "
+                        f"Be concise (2-4 sentences). Focus on: who said what, "
+                        f"key claims made, questions raised, and any tensions.\n\n"
+                        f"{messages_text}"
+                    ),
+                }],
+                system="You are summarizing missed conversation activity for a returning user. Be brief and informative.",
+                model="claude-haiku-4-5-20251001",
+                max_tokens=256,
+                temperature=0.2,
+            )
+            response = await provider.complete(request)
+            summary = response.content
+        except Exception as e:
+            logger.warning(f"Briefing LLM summary failed: {e}")
+            summary = f"{messages_missed} messages were exchanged while you were away."
+
+    # Log briefing event
+    await db.execute(
+        """INSERT INTO events (id, timestamp, event_type, room_id, user_id, payload)
+           VALUES ($1, $2, $3, $4, $5, $6)""",
+        uuid4(), now, EventType.BRIEFING_REQUESTED.value,
+        room_id, user_id,
+        {"messages_missed": messages_missed, "last_seen": last_seen.isoformat()},
+    )
+
+    return BriefingResponse(
+        summary=summary,
+        messages_missed=messages_missed,
+        memories_created=memories_created,
+        threads_forked=threads_forked,
+        highlights=highlights,
+        last_seen=last_seen,
+        generated_at=now,
+    )
 
 
 @app.get("/rooms/{room_id}/events")

@@ -22,6 +22,7 @@ from .prompts import PromptBuilder, AssembledPrompt
 from .context import assemble_context
 from .cross_session_context import CrossSessionContextBuilder, CrossSessionContext
 from .self_memory import LLMSelfMemory
+from .identity import LLMIdentityManager
 from memory.cross_session import CrossSessionMemoryManager
 from memory.manager import MemoryManager
 
@@ -95,6 +96,38 @@ class LLMOrchestrator:
             logger.warning(f"Cross-session context unavailable: {e}")
         return None
 
+    async def _get_identity_context(
+        self, room_id: UUID, users: list[User],
+    ) -> tuple[Optional[str], Optional[dict[UUID, str]]]:
+        """
+        Fetch the LLM's evolved identity and per-user models for this room.
+
+        ARCHITECTURE: Graceful degradation — identity failures never block responses.
+        WHY: Identity is an enhancement, not a prerequisite for LLM participation.
+        TRADEOFF: Extra DB queries per response vs persistent intellectual continuity.
+        """
+        try:
+            identity_mgr = LLMIdentityManager(self.db, MemoryManager(self.db))
+
+            evolved_identity = await identity_mgr.get_identity(room_id)
+
+            user_models = {}
+            for user in users:
+                model = await identity_mgr.get_user_model(user.id, room_id)
+                if model:
+                    user_models[user.id] = model
+
+            if evolved_identity:
+                logger.info("Identity context: evolved identity loaded, %d user models", len(user_models))
+
+            return (
+                evolved_identity,
+                user_models if user_models else None,
+            )
+        except Exception as e:
+            logger.warning("Identity context unavailable: %s", e)
+            return None, None
+
     def _get_router(self, room: Room) -> ModelRouter:
         """Get or create router for room."""
         if room.id not in self._routers:
@@ -163,6 +196,11 @@ class LLMOrchestrator:
 
         cross_ctx = await self._get_cross_session_context(messages, thread.room_id)
 
+        # Fetch evolved identity and user models for prompt injection
+        evolved_identity, user_models = await self._get_identity_context(
+            thread.room_id, users
+        )
+
         prompt = self.prompt_builder.build(
             room=room,
             users=users,
@@ -171,6 +209,8 @@ class LLMOrchestrator:
             is_provoker=decision.use_provoker,
             cross_session_context=cross_ctx,
             protocol=protocol,
+            evolved_identity=evolved_identity,
+            user_models=user_models,
         )
 
         router = self._get_router(room)
@@ -253,6 +293,11 @@ class LLMOrchestrator:
 
         cross_ctx = await self._get_cross_session_context(messages, thread.room_id)
 
+        # Fetch evolved identity and user models for prompt injection
+        evolved_identity, user_models = await self._get_identity_context(
+            thread.room_id, users
+        )
+
         prompt = self.prompt_builder.build(
             room=room,
             users=users,
@@ -261,6 +306,8 @@ class LLMOrchestrator:
             is_provoker=use_provoker,
             cross_session_context=cross_ctx,
             protocol=protocol,
+            evolved_identity=evolved_identity,
+            user_models=user_models,
         )
 
         router = self._get_router(room)
@@ -344,6 +391,11 @@ class LLMOrchestrator:
 
         cross_ctx = await self._get_cross_session_context(messages, thread.room_id)
 
+        # Fetch evolved identity and user models for prompt injection
+        evolved_identity, user_models = await self._get_identity_context(
+            thread.room_id, users
+        )
+
         # Build prompt with truncated messages
         prompt = self.prompt_builder.build(
             room=room,
@@ -352,6 +404,8 @@ class LLMOrchestrator:
             memories=memories,
             is_provoker=use_provoker,
             cross_session_context=cross_ctx,
+            evolved_identity=evolved_identity,
+            user_models=user_models,
         )
 
         # Create request for streaming

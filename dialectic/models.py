@@ -25,6 +25,7 @@ class SpeakerType(str, Enum):
     HUMAN = "human"
     LLM_PRIMARY = "llm_primary"
     LLM_PROVOKER = "llm_provoker"
+    LLM_ANNOTATOR = "llm_annotator"
     SYSTEM = "system"
 
 
@@ -52,6 +53,9 @@ class EventType(str, Enum):
     PROTOCOL_PHASE_ADVANCED = "protocol_phase_advanced"
     PROTOCOL_CONCLUDED = "protocol_concluded"
     PROTOCOL_ABORTED = "protocol_aborted"
+    # Async dialogue events
+    ANNOTATION_CREATED = "annotation_created"
+    BRIEFING_REQUESTED = "briefing_requested"
 
 
 class MemoryScope(str, Enum):

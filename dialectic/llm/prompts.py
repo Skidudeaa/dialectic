@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from uuid import UUID
+
 from models import Room, User, Message, Memory, SpeakerType, MessageType, ProtocolState
 
 # Optional import for cross-session context
@@ -77,17 +79,22 @@ You speak with authority on procedure, not on content."""
         is_provoker: bool = False,
         cross_session_context: "CrossSessionContext" = None,
         protocol: Optional[ProtocolState] = None,
+        evolved_identity: Optional[str] = None,
+        user_models: Optional[dict[UUID, str]] = None,
     ) -> AssembledPrompt:
         """
         Assemble full prompt from components.
 
-        ARCHITECTURE: Protocol-aware prompt assembly.
+        ARCHITECTURE: Protocol-aware, identity-aware prompt assembly.
         WHY: When a protocol is active, the LLM switches from participant to facilitator.
+              Evolved identity and user models give the LLM persistent intellectual continuity.
         TRADEOFF: More conditional logic in build(), but avoids separate build paths.
 
         Args:
             cross_session_context: Optional memories from other rooms/sessions
             protocol: Optional active protocol state — overrides identity when present
+            evolved_identity: Optional distilled identity document from prior sessions
+            user_models: Optional per-user thinking models {user_id: model_text}
         """
 
         # Protocol mode: use facilitator identity with protocol-specific override
@@ -113,7 +120,21 @@ You speak with authority on procedure, not on content."""
         if protocol is not None and get_protocol_instructions is not None:
             protocol_section = get_protocol_instructions(protocol)
 
+        # Assemble system prompt in priority order:
+        # BASE_IDENTITY → Evolved Identity → User Models → Protocol → Room → Preferences → Memory
         system_parts = [identity]
+
+        # Evolved identity: injected between base identity and room context
+        # Suppressed for protocol mode (facilitator) and provoker mode (short disruptions)
+        if evolved_identity and protocol is None and not is_provoker:
+            system_parts.append(f"\n\n## Your Evolved Identity (This Room)\n{evolved_identity}")
+
+        # User models: the LLM's understanding of each participant
+        if user_models and protocol is None and not is_provoker:
+            user_model_section = self._build_user_models_section(user_models, users)
+            if user_model_section:
+                system_parts.append(f"\n\n## Your Understanding of the Participants\n{user_model_section}")
+
         if protocol_section:
             system_parts.append(f"\n\n{protocol_section}")
         if room_context:
@@ -129,6 +150,19 @@ You speak with authority on procedure, not on content."""
         formatted_messages = self._format_messages(messages, users)
 
         return AssembledPrompt(system=system, messages=formatted_messages)
+
+    def _build_user_models_section(
+        self,
+        user_models: dict[UUID, str],
+        users: list[User],
+    ) -> str:
+        """Format per-user models for prompt injection."""
+        user_map = {u.id: u.display_name for u in users}
+        parts = []
+        for uid, model_text in user_models.items():
+            name = user_map.get(uid, str(uid))
+            parts.append(f"### {name}\n{model_text}")
+        return "\n\n".join(parts)
 
     def _build_room_context(self, room: Room) -> str:
         parts = []

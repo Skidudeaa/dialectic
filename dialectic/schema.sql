@@ -344,6 +344,15 @@ COMMENT ON TABLE user_memory_collections IS 'User-defined collections of memorie
 COMMENT ON TABLE collection_memories IS 'Many-to-many link between collections and memories';
 
 -- ============================================================
+-- LLM IDENTITY DOCUMENTS (stored as memories)
+-- ============================================================
+-- LLM identity documents use the existing memories table with scope='llm':
+--   key='llm_identity:{room_id}', scope='llm' — per-room evolved identity
+--   key='user_model:{user_id}', scope='llm' — per-user thinking model
+-- The memory versioning system (memory_versions table) tracks identity evolution.
+-- Identity is distilled on WebSocket disconnect when 5+ messages occurred in session.
+
+-- ============================================================
 -- LLM SELF-MEMORY SUPPORT
 -- ============================================================
 -- Allow NULL created_by_user_id for LLM-authored memories (scope='llm')

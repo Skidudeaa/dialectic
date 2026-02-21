@@ -14,6 +14,7 @@ from models import (
 )
 from memory.manager import MemoryManager
 from llm.orchestrator import LLMOrchestrator
+from llm.annotator import AnnotatorEngine
 from llm.protocol_manager import ProtocolManager
 from llm.protocol_library import get_protocol_definition
 from .websocket import (
@@ -191,6 +192,41 @@ class MessageHandler:
             sender_name=user_row['display_name'] if user_row else "Unknown",
             sender_id=conn.user_id,
         )
+
+        # Check if annotator mode should activate (other user offline)
+        # ARCHITECTURE: Annotator replaces participant mode when only one human is present.
+        # WHY: LLM shifts from equal participant to curator/librarian in async conversations.
+        # TRADEOFF: No normal interjection in async mode; annotation is the only LLM output.
+        annotator = AnnotatorEngine(self.db, self.memory, self.llm)
+        if await annotator.should_annotate(conn.room_id, conn.user_id):
+            annotation = await annotator.annotate(
+                room_id=conn.room_id,
+                thread_id=thread_id,
+                message=message,
+            )
+            if annotation:
+                await self.connections.broadcast(conn.room_id, OutboundMessage(
+                    type=MessageTypes.ANNOTATION_CREATED,
+                    payload={
+                        "id": str(annotation.id),
+                        "thread_id": str(annotation.thread_id),
+                        "sequence": annotation.sequence,
+                        "speaker_type": SpeakerType.LLM_ANNOTATOR.value,
+                        "content": annotation.content,
+                        "created_at": annotation.created_at.isoformat(),
+                    },
+                ))
+                # Send enriched push notification with annotation context
+                await self._trigger_push_notifications(
+                    room_id=conn.room_id,
+                    thread_id=thread_id,
+                    message=message,
+                    sender_name=user_row['display_name'] if user_row else "Unknown",
+                    sender_id=conn.user_id,
+                    annotation_summary=annotation.content[:150],
+                )
+            # Do NOT trigger normal LLM — annotator replaces participant mode
+            return
 
         mentioned = "@llm" in content.lower()
 
@@ -932,8 +968,16 @@ class MessageHandler:
         message: Message,
         sender_name: str,
         sender_id: UUID,
+        annotation_summary: str = None,
     ) -> None:
-        """Send push notifications to offline/away room members."""
+        """
+        Send push notifications to offline/away room members.
+
+        ARCHITECTURE: Optional annotation_summary enriches push content in async mode.
+        WHY: "Alice says X — Claude annotated with connections to Y" is more useful
+             than "New message in room".
+        TRADEOFF: Slightly longer push body vs much more informative notification.
+        """
         from api.notifications.service import push_service, calculate_badge_count
 
         # Get room members except sender, respecting mute settings
@@ -968,8 +1012,13 @@ class MessageHandler:
             badge_counts[user_id] = await calculate_badge_count(self.db, user_id)
 
         # Determine if LLM message
-        is_llm = message.speaker_type.value in ('LLM_PRIMARY', 'LLM_PROVOKER')
+        is_llm = message.speaker_type.value in ('LLM_PRIMARY', 'LLM_PROVOKER', 'LLM_ANNOTATOR')
         display_name = "Claude" if is_llm else sender_name
+
+        # Enrich content with annotation summary when available
+        content = message.content
+        if annotation_summary:
+            content = f"{sender_name}: {message.content[:80]} — Claude annotated: {annotation_summary}"
 
         # Send push notifications (fire and forget, don't block message flow)
         try:
@@ -980,7 +1029,7 @@ class MessageHandler:
                 thread_id=str(thread_id),
                 message_id=str(message.id),
                 sender_name=display_name,
-                content=message.content,
+                content=content,
                 is_llm=is_llm,
                 badge_counts=badge_counts,
             )
