@@ -95,28 +95,23 @@ class AnnotatorEngine:
         # Build annotator prompt with offline user name
         identity = ANNOTATOR_IDENTITY.replace("{other_user}", offline_name)
 
-        # Search for related memories across rooms (cross-session context)
-        from memory.cross_session import CrossSessionMemoryManager
-        cross_session = CrossSessionMemoryManager(self.db)
-
+        # Search for related memories within THIS room only
+        # SECURITY: Cross-room memories must NOT appear in annotations visible to
+        # other users — they may reference rooms the other user doesn't have access to.
         related = []
         try:
-            results = await cross_session.search_user_memories(
-                user_id=message.user_id,
-                query=message.content,
-                current_room_id=room_id,
-                limit=5,
-            )
-            related = results
+            related = await self.memory.search_memories(room_id, message.content, limit=5)
         except Exception:
-            pass
+            logger.debug("Annotation memory search failed (non-critical)")
 
         # Format related context
         context_text = ""
         if related:
-            context_text = "\n\nRelated memories from other conversations:\n"
+            context_text = "\n\nRelated memories from this conversation:\n"
             for r in related:
-                context_text += f"- {r.key}: {r.content}\n"
+                key = r.key if hasattr(r, 'key') else r.get('key', '')
+                content_val = r.content if hasattr(r, 'content') else r.get('content', '')
+                context_text += f"- {key}: {content_val}\n"
 
         # Get recent thread messages for conversation context
         from operations import get_thread_messages

@@ -1172,6 +1172,8 @@ async def get_user_model(
     WHY: Users should be able to see (and correct) how the LLM models them.
     """
     await verify_room_token(room_id, token, db)
+    # Users can only view their own model — prevents reading others' psychological profiles
+    await verify_room_member(room_id, user_id, db)
 
     from llm.identity import LLMIdentityManager
     identity_mgr = LLMIdentityManager(db, MemoryManager(db))
@@ -1747,7 +1749,7 @@ async def get_morning_briefing(
         from datetime import timedelta
         last_seen = now - timedelta(hours=24)
 
-    # Fetch all messages since last_seen
+    # Fetch messages since last_seen (capped at 100 to prevent OOM on long absences)
     message_rows = await db.fetch(
         """SELECT m.*, COALESCE(u.display_name, m.speaker_type) as sender_name
            FROM messages m
@@ -1757,9 +1759,12 @@ async def get_morning_briefing(
              AND m.created_at > $2
              AND NOT m.is_deleted
              AND (m.user_id IS NULL OR m.user_id != $3)
-           ORDER BY m.created_at ASC""",
+           ORDER BY m.created_at DESC
+           LIMIT 100""",
         room_id, last_seen, user_id
     )
+    # Reverse to chronological order after LIMIT
+    message_rows = list(reversed(message_rows))
 
     messages_missed = len(message_rows)
 

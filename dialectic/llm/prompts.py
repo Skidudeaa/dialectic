@@ -225,7 +225,7 @@ You speak with authority on procedure, not on content."""
                 speaker_name = user_map.get(msg.user_id, "Unknown")
                 content = f"[{speaker_name}] {prefix}{msg.content}"
                 role = "user"
-            elif msg.speaker_type in (SpeakerType.LLM_PRIMARY, SpeakerType.LLM_PROVOKER):
+            elif msg.speaker_type in (SpeakerType.LLM_PRIMARY, SpeakerType.LLM_PROVOKER, SpeakerType.LLM_ANNOTATOR):
                 content = f"{prefix}{msg.content}"
                 role = "assistant"
             else:

@@ -184,21 +184,16 @@ class MessageHandler:
             }
         ))
 
-        # Trigger push notifications for offline/away users
-        await self._trigger_push_notifications(
-            room_id=conn.room_id,
-            thread_id=thread_id,
-            message=message,
-            sender_name=user_row['display_name'] if user_row else "Unknown",
-            sender_id=conn.user_id,
-        )
-
         # Check if annotator mode should activate (other user offline)
         # ARCHITECTURE: Annotator replaces participant mode when only one human is present.
         # WHY: LLM shifts from equal participant to curator/librarian in async conversations.
         # TRADEOFF: No normal interjection in async mode; annotation is the only LLM output.
+        # NOTE: Must check room has 2+ members to avoid firing in solo rooms (#16).
         annotator = AnnotatorEngine(self.db, self.memory, self.llm)
-        if await annotator.should_annotate(conn.room_id, conn.user_id):
+        member_count = await self.db.fetchval(
+            "SELECT COUNT(*) FROM room_memberships WHERE room_id = $1", conn.room_id
+        )
+        if member_count >= 2 and await annotator.should_annotate(conn.room_id, conn.user_id):
             annotation = await annotator.annotate(
                 room_id=conn.room_id,
                 thread_id=thread_id,
@@ -216,17 +211,27 @@ class MessageHandler:
                         "created_at": annotation.created_at.isoformat(),
                     },
                 ))
-                # Send enriched push notification with annotation context
-                await self._trigger_push_notifications(
-                    room_id=conn.room_id,
-                    thread_id=thread_id,
-                    message=message,
-                    sender_name=user_row['display_name'] if user_row else "Unknown",
-                    sender_id=conn.user_id,
-                    annotation_summary=annotation.content[:150],
-                )
-            # Do NOT trigger normal LLM — annotator replaces participant mode
+            # Push notifications with annotation context (single push, not double)
+            await self._trigger_push_notifications(
+                room_id=conn.room_id,
+                thread_id=thread_id,
+                message=message,
+                sender_name=user_row['display_name'] if user_row else "Unknown",
+                sender_id=conn.user_id,
+                annotation_summary=annotation.content[:150] if annotation else None,
+            )
+            # Clear typing cache since we're not going through the normal LLM path
+            conn.typing_cache = None
             return
+
+        # Normal path: push notifications + LLM interjection
+        await self._trigger_push_notifications(
+            room_id=conn.room_id,
+            thread_id=thread_id,
+            message=message,
+            sender_name=user_row['display_name'] if user_row else "Unknown",
+            sender_id=conn.user_id,
+        )
 
         mentioned = "@llm" in content.lower()
 
