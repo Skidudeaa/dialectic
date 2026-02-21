@@ -19,6 +19,112 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================
+# MATERIALIZED VIEW DDL
+# ============================================================
+
+KNOWLEDGE_GRAPH_VIEW_SQL = """
+CREATE MATERIALIZED VIEW IF NOT EXISTS knowledge_graph AS
+
+-- Memory cross-room citations
+SELECT
+    'citation'::text AS edge_type,
+    mr.source_memory_id AS source_id,
+    'memory'::text AS source_type,
+    COALESCE(mr.target_message_id, mr.source_memory_id) AS target_id,
+    CASE WHEN mr.target_message_id IS NOT NULL THEN 'message' ELSE 'memory' END AS target_type,
+    COALESCE(mr.relevance_score, 0.5)::float AS weight,
+    mr.target_room_id AS room_id,
+    mr.referenced_at AS created_at
+FROM memory_references mr
+
+UNION ALL
+
+-- Thread fork relationships
+SELECT
+    'fork'::text AS edge_type,
+    t.parent_thread_id AS source_id,
+    'thread'::text AS source_type,
+    t.id AS target_id,
+    'thread'::text AS target_type,
+    1.0::float AS weight,
+    t.room_id AS room_id,
+    t.created_at AS created_at
+FROM threads t
+WHERE t.parent_thread_id IS NOT NULL
+
+UNION ALL
+
+-- Message-to-message references
+SELECT
+    'message_reference'::text AS edge_type,
+    m.id AS source_id,
+    'message'::text AS source_type,
+    m.references_message_id AS target_id,
+    'message'::text AS target_type,
+    1.0::float AS weight,
+    t.room_id AS room_id,
+    m.created_at AS created_at
+FROM messages m
+JOIN threads t ON m.thread_id = t.id
+WHERE m.references_message_id IS NOT NULL AND NOT m.is_deleted
+
+UNION ALL
+
+-- Message-to-memory references
+SELECT
+    'memory_reference'::text AS edge_type,
+    m.id AS source_id,
+    'message'::text AS source_type,
+    m.references_memory_id AS target_id,
+    'memory'::text AS target_type,
+    1.0::float AS weight,
+    t.room_id AS room_id,
+    m.created_at AS created_at
+FROM messages m
+JOIN threads t ON m.thread_id = t.id
+WHERE m.references_memory_id IS NOT NULL AND NOT m.is_deleted
+
+UNION ALL
+
+-- Memory crystallization: memory sourced from a message
+SELECT
+    'crystallized'::text AS edge_type,
+    mem.source_message_id AS source_id,
+    'message'::text AS source_type,
+    mem.id AS target_id,
+    'memory'::text AS target_type,
+    1.0::float AS weight,
+    mem.room_id AS room_id,
+    mem.created_at AS created_at
+FROM memories mem
+WHERE mem.source_message_id IS NOT NULL AND mem.status = 'active'
+
+UNION ALL
+
+-- Memory evolution: version-to-version lineage
+SELECT
+    'memory_evolution'::text AS edge_type,
+    m.id AS source_id,
+    'memory'::text AS source_type,
+    m.id AS target_id,
+    'memory_version'::text AS target_type,
+    (mv.version::float / NULLIF(m.version, 0))::float AS weight,
+    m.room_id AS room_id,
+    mv.updated_at AS created_at
+FROM memory_versions mv
+JOIN memories m ON mv.memory_id = m.id
+WHERE mv.version > 1
+"""
+
+KNOWLEDGE_GRAPH_INDEXES_SQL = [
+    "CREATE INDEX IF NOT EXISTS idx_kg_source ON knowledge_graph (source_type, source_id)",
+    "CREATE INDEX IF NOT EXISTS idx_kg_target ON knowledge_graph (target_type, target_id)",
+    "CREATE INDEX IF NOT EXISTS idx_kg_room ON knowledge_graph (room_id)",
+    "CREATE INDEX IF NOT EXISTS idx_kg_edge_type ON knowledge_graph (edge_type)",
+]
+
+
+# ============================================================
 # RESPONSE MODELS
 # ============================================================
 
@@ -91,12 +197,36 @@ class KnowledgeGraphEngine:
         )
         return row is not None
 
+    async def ensure_view(self) -> None:
+        """
+        Create the materialized view and indexes if they don't exist.
+
+        ARCHITECTURE: Idempotent — safe to call on every startup.
+        WHY: Eliminates manual migration step for the knowledge graph.
+        TRADEOFF: Startup cost on first run; no-op thereafter.
+        """
+        await self.db.execute(KNOWLEDGE_GRAPH_VIEW_SQL)
+        for idx_sql in KNOWLEDGE_GRAPH_INDEXES_SQL:
+            await self.db.execute(idx_sql)
+        logger.info("Knowledge graph materialized view ensured")
+
     async def refresh(self) -> None:
-        """Refresh the materialized view."""
+        """
+        Refresh the materialized view with latest data.
+
+        ARCHITECTURE: CONCURRENTLY allows reads during refresh.
+        WHY: Graph queries don't block while the view rebuilds.
+        TRADEOFF: Requires a unique index for CONCURRENTLY; falls back to blocking refresh.
+        """
         if not await self._view_exists():
-            logger.warning("knowledge_graph materialized view does not exist — skipping refresh")
+            logger.warning("knowledge_graph materialized view does not exist — creating it")
+            await self.ensure_view()
             return
-        await self.db.execute("REFRESH MATERIALIZED VIEW knowledge_graph")
+        try:
+            await self.db.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY knowledge_graph")
+        except Exception:
+            logger.warning("CONCURRENTLY refresh failed, using blocking refresh")
+            await self.db.execute("REFRESH MATERIALIZED VIEW knowledge_graph")
 
     # ================================================================
     # CONCEPT MAP

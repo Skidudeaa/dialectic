@@ -25,6 +25,7 @@ from api.auth.routes import router as auth_router, set_db_pool as set_auth_db_po
 from api.notifications.routes import router as notifications_router, set_notifications_db_pool
 from analytics.routes import router as analytics_router, set_analytics_db_pool
 from analytics.graph_routes import router as graph_router, set_graph_db_pool
+from analytics.knowledge_graph import KnowledgeGraphEngine
 from collections import defaultdict
 import time
 
@@ -170,6 +171,13 @@ async def lifespan(app: FastAPI):
 
         async with db_pool.acquire() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+
+            # Ensure knowledge graph materialized view exists
+            try:
+                kg_engine = KnowledgeGraphEngine(conn)
+                await kg_engine.ensure_view()
+            except Exception as e:
+                logger.warning(f"Knowledge graph view creation failed: {e}")
     except Exception as e:
         logger.warning(f"Database connection failed: {e}")
         logger.warning("Running in demo mode without database")
