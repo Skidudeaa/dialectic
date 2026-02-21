@@ -90,16 +90,19 @@ async def replay_stream(
     await _verify_room_token(room_id, token, db)
 
     async def generate():
-        engine = EventReplayEngine(db)
-        async for replay_event in engine.replay_stream(room_id, start, end, speed):
-            # Apply delay for pacing (skip on first event where delay_ms=0)
-            if replay_event.delay_ms > 0:
-                await asyncio.sleep(replay_event.delay_ms / 1000.0)
+        try:
+            engine = EventReplayEngine(db)
+            async for replay_event in engine.replay_stream(room_id, start, end, speed):
+                if replay_event.delay_ms > 0:
+                    await asyncio.sleep(replay_event.delay_ms / 1000.0)
 
-            data = json.dumps(replay_event.model_dump(mode="json"), default=str)
-            yield f"data: {data}\n\n"
+                data = json.dumps(replay_event.model_dump(mode="json"), default=str)
+                yield f"data: {data}\n\n"
 
-        yield 'data: {"type": "replay_complete"}\n\n'
+            yield 'data: {"type": "replay_complete"}\n\n'
+        except (asyncio.CancelledError, GeneratorExit):
+            # Client disconnected mid-stream — normal for SSE
+            return
 
     return StreamingResponse(
         generate(),
