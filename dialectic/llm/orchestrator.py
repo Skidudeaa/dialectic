@@ -1,7 +1,7 @@
 # llm/orchestrator.py — Main orchestration entry point
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import AsyncIterator, Optional
 from uuid import UUID, uuid4
 import hashlib
@@ -93,10 +93,19 @@ class LLMOrchestrator:
 
         logger.info(f"Interjection triggered: {decision.reason}, provoker={decision.use_provoker}")
 
+        # Apply context truncation to prevent token overflow on long conversations
+        context = assemble_context(messages, thread)
+        truncated_messages = context.messages
+
+        logger.info(
+            f"on_message context: {context.included_count}/{context.original_count} messages, "
+            f"truncated={context.truncated}, tokens={context.total_tokens}"
+        )
+
         prompt = self.prompt_builder.build(
             room=room,
             users=users,
-            messages=messages,
+            messages=truncated_messages,
             memories=memories,
             is_provoker=decision.use_provoker,
         )
@@ -155,10 +164,19 @@ class LLMOrchestrator:
             use_provoker=use_provoker,
         )
 
+        # Apply context truncation to prevent token overflow on long conversations
+        context = assemble_context(messages, thread)
+        truncated_messages = context.messages
+
+        logger.info(
+            f"force_response context: {context.included_count}/{context.original_count} messages, "
+            f"truncated={context.truncated}, tokens={context.total_tokens}"
+        )
+
         prompt = self.prompt_builder.build(
             room=room,
             users=users,
-            messages=messages,
+            messages=truncated_messages,
             memories=memories,
             is_provoker=use_provoker,
         )
@@ -247,9 +265,10 @@ class LLMOrchestrator:
             stream=True,
         )
 
-        # Get provider directly for streaming
+        # Get provider from router cache to avoid creating new httpx clients per stream
+        router = self._get_router(room)
         provider_name = ProviderName(room.primary_provider)
-        provider = get_provider(provider_name)
+        provider = router._get_provider(provider_name)
 
         # Track accumulated content
         accumulated_content = ""
@@ -299,7 +318,7 @@ class LLMOrchestrator:
     ) -> Message:
         """Create Message record and log event."""
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         message_id = uuid4()
         message_type = self._detect_message_type(content)
 

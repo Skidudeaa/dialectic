@@ -8,7 +8,7 @@ TRADEOFF: More complex handler vs REST-only approach.
 
 from typing import Optional
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import logging
 
@@ -226,7 +226,7 @@ class CrossSessionHandlers:
         data = json.dumps({
             "type": msg_type,
             "payload": payload,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
         await conn.websocket.send_text(data)
 

@@ -261,3 +261,84 @@ CREATE TABLE room_notification_settings (
     muted_until TIMESTAMPTZ, -- Optional temporary mute
     PRIMARY KEY (user_id, room_id)
 );
+
+-- ============================================================
+-- CROSS-SESSION MEMORY INFRASTRUCTURE
+-- ============================================================
+-- Enables memories to be referenced and shared across rooms/sessions.
+-- Unlocks: Knowledge Graph, LLM Self-Memory, Persistent Identity, Dialectic Graph.
+
+-- Memory references: citations of memories across rooms
+CREATE TABLE IF NOT EXISTS memory_references (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    target_room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    target_thread_id UUID REFERENCES threads(id) ON DELETE SET NULL,
+    target_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+    referenced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    referenced_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    referenced_by_llm BOOLEAN NOT NULL DEFAULT FALSE,
+    citation_context TEXT,
+    relevance_score FLOAT,
+    UNIQUE (source_memory_id, target_message_id)
+);
+
+CREATE INDEX idx_memory_refs_source ON memory_references(source_memory_id);
+CREATE INDEX idx_memory_refs_target_room ON memory_references(target_room_id);
+CREATE INDEX idx_memory_refs_target_message ON memory_references(target_message_id);
+
+-- User memory collections: organize memories across rooms
+CREATE TABLE IF NOT EXISTS user_memory_collections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    auto_inject BOOLEAN NOT NULL DEFAULT FALSE,
+    display_order INT NOT NULL DEFAULT 0,
+    UNIQUE (user_id, name)
+);
+
+CREATE INDEX idx_collections_user ON user_memory_collections(user_id);
+
+-- Collection membership: links memories to collections (many-to-many)
+CREATE TABLE IF NOT EXISTS collection_memories (
+    collection_id UUID NOT NULL REFERENCES user_memory_collections(id) ON DELETE CASCADE,
+    memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    added_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    notes TEXT,
+    PRIMARY KEY (collection_id, memory_id)
+);
+
+CREATE INDEX idx_collection_memories_memory ON collection_memories(memory_id);
+
+-- Global memories view: all memories accessible to a user
+CREATE OR REPLACE VIEW user_accessible_memories AS
+SELECT
+    m.*,
+    r.id as source_room_id,
+    rm.user_id as accessor_user_id,
+    CASE
+        WHEN m.scope = 'global' THEN true
+        WHEN m.scope = 'user' AND m.owner_user_id = rm.user_id THEN true
+        WHEN m.scope = 'room' THEN true
+        ELSE false
+    END as is_accessible,
+    CASE
+        WHEN m.room_id = r.id THEN 'local'
+        ELSE 'cross_room'
+    END as memory_source
+FROM memories m
+JOIN rooms r ON m.room_id = r.id OR m.scope = 'global'
+JOIN room_memberships rm ON r.id = rm.room_id
+WHERE m.status = 'active';
+
+-- Add global scope support columns to memories
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS promoted_to_global_at TIMESTAMPTZ;
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS promoted_by_user_id UUID REFERENCES users(id);
+
+COMMENT ON TABLE memory_references IS 'Tracks citations of memories across rooms/sessions';
+COMMENT ON TABLE user_memory_collections IS 'User-defined collections of memories that persist across rooms';
+COMMENT ON TABLE collection_memories IS 'Many-to-many link between collections and memories';

@@ -129,8 +129,9 @@ async def signup(
         user_id, verification_code, "email_verification", now, expires_at
     )
 
-    # Log verification code (email sending is out of scope)
-    logger.info(f"Verification code for {request.email}: {verification_code}")
+    # NOTE: Email delivery not yet implemented. Code stored in DB for verification.
+    # SECURITY: Never log verification codes — they are one-time auth credentials.
+    logger.debug("Verification code generated for user %s", user_id)
 
     # Create session and return tokens
     access_token = create_access_token(data={"sub": str(user_id)})
@@ -352,10 +353,11 @@ async def forgot_password(
     )
 
     if user_row is None:
-        # Per CONTEXT.md: explicit error if no account exists
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No account found with this email address"
+        # SECURITY: Always return success to prevent email enumeration.
+        # An attacker cannot distinguish "email exists" from "email doesn't exist."
+        return MessageResponse(
+            message="Password reset code sent",
+            detail="If an account exists with this email, a reset code has been sent"
         )
 
     user_id = user_row["user_id"]
@@ -373,8 +375,9 @@ async def forgot_password(
         user_id, reset_code, "password_reset", now, expires_at
     )
 
-    # Log reset code (email sending is out of scope)
-    logger.info(f"Password reset code for {request.email}: {reset_code}")
+    # NOTE: Email delivery not yet implemented. Code stored in DB for verification.
+    # SECURITY: Never log reset codes — they are one-time auth credentials.
+    logger.debug("Password reset code generated for user %s", user_id)
 
     return MessageResponse(
         message="Password reset code sent",

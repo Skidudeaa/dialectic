@@ -1,7 +1,7 @@
 # transport/websocket.py — WebSocket connection management
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 import json
@@ -19,7 +19,7 @@ class Connection:
     user_id: UUID
     room_id: UUID
     thread_id: Optional[UUID] = None
-    connected_at: datetime = field(default_factory=datetime.utcnow)
+    connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -104,7 +104,7 @@ class ConnectionManager:
         payload = json.dumps({
             "type": message.type,
             "payload": message.payload,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         for conn in self._rooms[room_id]:
@@ -132,7 +132,7 @@ class ConnectionManager:
         payload = json.dumps({
             "type": message.type,
             "payload": message.payload,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         try:

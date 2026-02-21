@@ -3,7 +3,8 @@
 ## Milestones
 
 - ✅ **v1.0 Mobile MVP** — Phases 1-7 (shipped 2026-01-25)
-- 🚧 **v1.1 Desktop** — Phase 8 (in progress)
+- 🚧 **v1.1 Desktop** — Phase 8 (code complete, verification pending)
+- 🚧 **v2.0 Hardening + Vision** — Security, stability, then vision features (in progress)
 
 ## Phases
 
@@ -22,40 +23,37 @@ See: `.planning/milestones/v1.0-ROADMAP.md` for full details
 
 </details>
 
-### 🚧 v1.1 Desktop (In Progress)
+<details>
+<summary>🚧 v1.1 Desktop (Phase 8) — CODE COMPLETE</summary>
 
-- [ ] **Phase 8: Desktop Expansion** - macOS and Windows clients via React Native
+- [x] Phase 8: Desktop Expansion (9/9 plans) — code complete, verification pending
 
-## Phase Details
+**Status:** Awaiting platform verification on actual macOS/Windows machines.
 
-### Phase 8: Desktop Expansion
-**Goal**: Dialectic runs natively on macOS and Windows with feature parity to mobile
-**Depends on**: Phase 7
-**Requirements**: PLAT-03, PLAT-04
-**Success Criteria** (what must be TRUE):
-  1. App runs natively on macOS with platform-appropriate UI conventions
-  2. App runs natively on Windows with platform-appropriate UI conventions
-  3. All core features work identically to mobile (messaging, LLM, forking)
-  4. Desktop apps share codebase with mobile (React Native Windows/macOS)
-**Plans**: 9 plans
+</details>
 
-Plans:
-- [x] 08-01-PLAN.md — Monorepo setup with Yarn Workspaces and shared app package
-- [x] 08-02-PLAN.md — macOS workspace with react-native-macos and Xcode project
-- [x] 08-03-PLAN.md — Windows workspace with react-native-windows and Visual Studio project
-- [x] 08-04-PLAN.md — Platform service abstractions (secure storage, database, notifications)
-- [x] 08-05-PLAN.md — macOS platform implementation (Keychain, SQLite, menu bar)
-- [x] 08-06-PLAN.md — Windows platform implementation (MMKV, SQLite, WinRT notifications)
-- [x] 08-07-PLAN.md — Desktop UX features (keyboard shortcuts, hover, context menu, drag-drop, sidebar)
-- [x] 08-08-PLAN.md — Desktop visual polish (centered layout, scrollbars, window persistence)
-- [x] 08-09-PLAN.md — Platform verification checkpoint
+### 🚧 v2.0 Hardening + Vision (In Progress)
 
-**Status:** Code complete, awaiting platform verification on actual macOS/Windows machines
+**Goal**: Secure the foundation, activate dormant features, then build the vision.
+**Deep Audit**: 2026-02-20 (4-agent analysis: frontend, backend, LLM, vision gap)
+**See**: `.planning/NEXT-LEVEL-ROADMAP.md` for full execution plan
+
+#### Category 1: Fix What's Broken (days)
+- [ ] **Phase 9: Security Hardening** — Wire JWT auth to all endpoints, rate limiting, code logging, CVE fix, token handling
+- [ ] **Phase 10: Critical Bug Fixes** — Schema gaps, streaming resilience, context truncation, cross-session wiring, datetime fixes
+
+#### Category 2: Foundation Upgrades (weeks)
+- [ ] **Phase 11: Backend Foundations** — Python packaging, test suite (unit + integration), dependency updates, memory injection fix
+- [ ] **Phase 12: Frontend Architecture** — Component framework migration (decision pending)
+
+#### Category 3: Vision Features
+- [ ] **Phase A: Make Thinking Visible** — Conversation Analytics, LLM Self-Memory, Knowledge Graph Layer
+- [ ] **Phase B: Structure the Dialogue** — Thinking Protocols, Real-Time Typing Analysis
+- [ ] **Phase C: The Third Mind** — Persistent LLM Identity, Async Dialogue / Slow Channel
+- [ ] **Phase D: Accountability Layer** — Event Replay Engine, Stakes / Commitments
+- [ ] **Phase E: Scale & Visualize** — Redis Pub/Sub, Multi-Model Rooms, Dialectic Graph UI
 
 ## Progress
-
-**Execution Order:**
-Phase 8 builds on v1.0 Mobile MVP (Phases 1-7).
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -67,7 +65,9 @@ Phase 8 builds on v1.0 Mobile MVP (Phases 1-7).
 | 6. Push Notifications | v1.0 | 5/5 | Complete | 2026-01-25 |
 | 7. Dialectic Differentiators | v1.0 | 5/5 | Complete | 2026-01-25 |
 | 8. Desktop Expansion | v1.1 | 9/9 | Verification pending | - |
+| 9. Security Hardening | v2.0 | - | **In Progress** | - |
+| 10. Critical Bug Fixes | v2.0 | - | Pending | - |
 
 ---
 *Roadmap created: 2026-01-20*
-*Last updated: 2026-01-26 (v1.0 archived)*
+*Last updated: 2026-02-20 (v2.0 milestone added after deep audit)*

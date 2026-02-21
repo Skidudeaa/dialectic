@@ -209,12 +209,11 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-# Include auth router
-# NOTE: Auth routes in api/auth/routes.py should implement rate limiting:
-# - /auth/login: 5 requests per minute
-# - /auth/signup: 3 requests per minute
-# - /auth/refresh: 10 requests per minute
-app.include_router(auth_router, prefix="/auth", tags=["auth"])
+# Include auth router with rate limiting applied to all auth endpoints
+# ARCHITECTURE: Rate limit dependency applied at router level via dependencies param.
+# WHY: Prevents brute-force attacks on login/signup without per-route boilerplate.
+# TRADEOFF: Uniform 60/min limit; endpoint-specific limits (e.g., 5/min login) can be layered later.
+app.include_router(auth_router, prefix="/auth", tags=["auth"], dependencies=[Depends(check_rate_limit)])
 
 # Include notifications router
 app.include_router(notifications_router)
@@ -239,6 +238,28 @@ async def verify_room_token(
     if not row:
         raise HTTPException(status_code=401, detail="Invalid room token")
     return Room(**dict(row))
+
+
+async def verify_room_member(
+    room_id: UUID,
+    user_id: UUID,
+    db: asyncpg.Connection,
+) -> None:
+    """
+    Verify that user_id is a member of the room.
+
+    SECURITY: Prevents user impersonation on REST endpoints. Without this,
+    anyone with a room token could act as any user by supplying their UUID.
+    """
+    membership = await db.fetchrow(
+        "SELECT 1 FROM room_memberships WHERE room_id = $1 AND user_id = $2",
+        room_id, user_id
+    )
+    if not membership:
+        raise HTTPException(
+            status_code=403,
+            detail="User is not a member of this room"
+        )
 
 
 # ============================================================
@@ -624,6 +645,7 @@ async def update_room_settings(
     TRADEOFF: Slightly more complex than full replacement, but safer.
     """
     await verify_room_token(room_id, token, db)
+    await verify_room_member(room_id, user_id, db)
 
     # Build dynamic UPDATE query with only provided fields
     updates = []
@@ -859,6 +881,7 @@ async def send_message(
         raise HTTPException(status_code=404, detail="Thread not found")
 
     room = await verify_room_token(thread_row['room_id'], token, db)
+    await verify_room_member(room.id, user_id, db)
 
     now = datetime.now(timezone.utc)
     message_id = uuid4()
@@ -918,6 +941,7 @@ async def fork_thread_endpoint(
         raise HTTPException(status_code=404, detail="Thread not found")
 
     room = await verify_room_token(thread_row['room_id'], token, db)
+    await verify_room_member(room.id, user_id, db)
 
     from operations import fork_thread
     new_thread = await fork_thread(
@@ -972,6 +996,7 @@ async def add_memory(
 ):
     """Add a new memory."""
     await verify_room_token(room_id, token, db)
+    await verify_room_member(room_id, user_id, db)
 
     memory_manager = MemoryManager(db)
     memory = await memory_manager.add_memory(
@@ -1007,6 +1032,7 @@ async def edit_memory(
         raise HTTPException(status_code=404, detail="Memory not found")
 
     await verify_room_token(row['room_id'], token, db)
+    await verify_room_member(row['room_id'], user_id, db)
 
     memory_manager = MemoryManager(db)
     memory = await memory_manager.edit_memory(
@@ -1041,6 +1067,7 @@ async def invalidate_memory(
         raise HTTPException(status_code=404, detail="Memory not found")
 
     await verify_room_token(row['room_id'], token, db)
+    await verify_room_member(row['room_id'], user_id, db)
 
     memory_manager = MemoryManager(db)
     await memory_manager.invalidate_memory(

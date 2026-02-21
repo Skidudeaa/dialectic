@@ -1,6 +1,6 @@
 # operations.py — Core domain operations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -26,7 +26,7 @@ async def fork_thread(
     )
 
     new_thread_id = uuid4()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     thread = Thread(
         id=new_thread_id,

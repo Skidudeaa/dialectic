@@ -1,7 +1,7 @@
 # memory/manager.py — Memory lifecycle + conflict resolution
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 import logging
@@ -52,7 +52,7 @@ class MemoryManager:
     ) -> Memory:
         """Create a new memory entry."""
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         memory_id = uuid4()
 
         memory = Memory(
@@ -134,7 +134,7 @@ class MemoryManager:
         previous_version = row['version']
         previous_content = row['content']
         new_version = previous_version + 1
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         event = Event(
             id=uuid4(),
@@ -195,7 +195,7 @@ class MemoryManager:
         if not row:
             raise ValueError(f"Memory {memory_id} not found")
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         event = Event(
             id=uuid4(),

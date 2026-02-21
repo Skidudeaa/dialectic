@@ -2,7 +2,7 @@
 
 import asyncio
 from asyncio import Task, CancelledError
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 import logging
@@ -74,8 +74,8 @@ class MessageHandler:
             try:
                 await handler(conn, message.payload)
             except Exception as e:
-                logger.exception(f"Handler error for {message.type}")
-                await self._send_error(conn, str(e))
+                logger.exception(f"Handler error for {message.type}: %s", e)
+                await self._send_error(conn, "An internal error occurred. Please try again.")
         else:
             logger.warning(f"Unknown message type: {message.type}")
             await self._send_error(conn, f"Unknown message type: {message.type}")
@@ -104,7 +104,7 @@ class MessageHandler:
             await self._send_error(conn, "No active thread")
             return
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         message_id = uuid4()
         refs_msg_id = UUID(references_message_id) if references_message_id else None
 
@@ -270,7 +270,7 @@ class MessageHandler:
                         id=UUID(data["message_id"]) if isinstance(data["message_id"], str) else data["message_id"],
                         thread_id=thread_id,
                         sequence=0,  # Not needed for push
-                        created_at=datetime.utcnow(),
+                        created_at=datetime.now(timezone.utc),
                         speaker_type=SpeakerType.LLM_PRIMARY,
                         user_id=None,
                         message_type=MessageType.TEXT,
@@ -439,7 +439,7 @@ class MessageHandler:
         """Respond to ping."""
         await self.connections.send_to_user(conn.user_id, conn.room_id, OutboundMessage(
             type=MessageTypes.PONG,
-            payload={"timestamp": datetime.utcnow().isoformat()},
+            payload={"timestamp": datetime.now(timezone.utc).isoformat()},
         ))
 
     async def _handle_presence_heartbeat(self, conn: Connection, payload: dict) -> None:
@@ -447,7 +447,7 @@ class MessageHandler:
         Handle presence heartbeat from client.
         Updates user status to 'online' and broadcasts to room.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Upsert presence record
         await self.db.execute(
@@ -478,7 +478,7 @@ class MessageHandler:
             await self._send_error(conn, f"Invalid presence status: {status}")
             return
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Update presence record
         await self.db.execute(
@@ -511,7 +511,7 @@ class MessageHandler:
 
         from uuid import UUID
         message_uuid = UUID(message_id)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Insert delivery receipt (ignore if already exists)
         await self.db.execute(
@@ -554,7 +554,7 @@ class MessageHandler:
 
         from uuid import UUID
         message_uuid = UUID(message_id)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Insert read receipt (ignore if already exists)
         await self.db.execute(
