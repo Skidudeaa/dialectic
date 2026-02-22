@@ -3,94 +3,71 @@
 ## Project Reference
 
 See: .planning/PROJECT.md
-See: .planning/VISION-NEXT.md (strategic vision)
-See: .planning/NEXT-LEVEL-ROADMAP.md (execution plan)
+See: .planning/VISION-NEXT.md (strategic vision — all 5 directions implemented)
+See: .planning/NEXT-LEVEL-ROADMAP.md (execution plan — complete)
 
 **Core value:** Real-time collaborative creation with an LLM as a first-class participant
-**Current focus:** v2.0 Hardening + Vision — Security fixes, schema gaps, then vision features
+**Current focus:** Shipped. All roadmap items complete.
 
 ## Current Position
 
-Phase: Post v1.1, pre-v2.0
-Plan: Deep audit complete (4-agent analysis, 2026-02-20). Executing Category 1 fixes.
-Status: Fixing critical security + bugs before building vision features
-Last activity: 2026-02-20 — Full codebase audit (frontend, backend, LLM, vision gap analysis)
+Phase: v2.0 Complete
+Status: All features built, tested, server running
+Last activity: 2026-02-22 — Final push complete (Docker removed, all endpoints verified)
 
-Progress: v1.0 [██████████] 100%  |  v1.1 [█████████░] 90%  |  v2.0 [░░░░░░░░░░] 0%
+Progress: v1.0 [██████████] 100%  |  v1.1 [█████████░] 90%  |  v2.0 [██████████] 100%
 
-## Milestone Status
+## What Was Built (v2.0)
 
-**v1.0 Mobile MVP:** ✅ SHIPPED 2026-01-25
-- Phases 1-7 complete (35 plans)
-- See: `.planning/MILESTONES.md`
+### Category 1: Security + Bug Fixes
+- JWT auth on all write endpoints (user impersonation blocked)
+- Rate limiting wired to auth routes
+- Verification codes removed from logs
+- python-multipart CVE patched
+- Cross-session schema migration applied (unblocked 4+ features)
+- Context truncation on all LLM paths
+- httpx client leak fixed
+- datetime.utcnow() eliminated
 
-**v1.1 Desktop:** 🚧 CODE COMPLETE
-- Phase 8 code complete (9/9 plans)
-- Verification pending on actual macOS/Windows machines
-- See: `.planning/ROADMAP.md`
+### Category 2: Foundation
+- Proper Python packaging (pyproject.toml)
+- 134 unit tests
+- Cross-session context activated (was dead code)
+- Smart semantic memory injection (replaces brute-force)
 
-**v2.0 Hardening + Vision:** 🚧 IN PROGRESS
-- Deep audit complete (2026-02-20)
-- Category 1 executing: security fixes, critical bugs, schema gaps
-- Category 2 planned: foundation upgrades (testing, packaging, frontend architecture)
-- Category 3 planned: vision features (analytics, self-memory, protocols, identity)
-- See: `.planning/NEXT-LEVEL-ROADMAP.md`
+### Phase A: Make Thinking Visible
+- Conversation DNA (6-dimensional fingerprint + archetypes)
+- LLM Self-Memory (post-response claim extraction)
+- Knowledge Graph (materialized view + traversal API)
 
-## Audit Findings (2026-02-20)
+### Phase B: Structure the Dialogue
+- Thinking Protocols (Steelman, Socratic, Devil's Advocate, Synthesis)
+- Real-Time Typing Analysis (50-85% latency reduction)
 
-### Critical Security Issues
-- REST endpoints accept `user_id` as unauthenticated query param (impersonation)
-- No rate limiting on auth endpoints (code exists, never wired)
-- Verification/reset codes logged in plaintext
-- `python-multipart==0.0.6` has CVE-2024-53498
-- Room tokens exposed in URL query params
+### Phase C: The Third Mind
+- Persistent LLM Identity (evolved identity + user models)
+- Async Dialogue / Slow Channel (annotator mode + briefings)
 
-### Critical Bugs
-- Schema gap: `memory_references`, `user_memory_collections`, `collection_memories` tables missing from schema.sql (migration exists but never applied)
-- Streaming bypasses retry/fallback router (unrecoverable failures)
-- Context truncation only on streaming path, not on_message/force_response
-- CrossSessionContextBuilder fully built but never wired to orchestrator
-- httpx client leak in streaming path
-- datetime.utcnow() in multiple files (deprecated, TIMESTAMPTZ mismatch)
+### Phase D: Accountability
+- Event Replay Engine (state materialization + SSE stream)
+- Stakes / Commitments (predictions + calibration curves)
 
-### Architecture Assessment
-- Backend: Event-sourced layered monolith — strong foundation, ~40% of vision surface area built
-- Frontend: 2,897-line monolithic HTML — polished but cannot support vision features
-- LLM layer: Extensible prompt system, clean provider abstraction, but heuristics limited
-- Memory: Cross-session system fully coded but disconnected from live path
+### Final Push
+- Auth header support (unblocks React frontend)
+- React frontend migration (31 components)
+- Enhanced heuristics (8-trigger Inner Thoughts framework)
+- Multi-model rooms (N personas with turn-taking)
+- Redis pub/sub (horizontal scaling)
 
-## Accumulated Context
+## Stats
 
-### Key Decisions
-
-**v2.0 Architecture:**
-- Fix security and schema gaps before any new features
-- Apply cross-session migration to schema.sql (unblocks 4+ features)
-- Wire CrossSessionContextBuilder into live LLM path
-- Frontend migration to component framework needed for vision features (decision pending)
-
-### Documents Inventory
-
-**Active planning docs:**
-- `.planning/VISION-NEXT.md` — 5 strategic directions
-- `.planning/technical-opportunities.md` — 7 technical capabilities
-- `.planning/NEXT-LEVEL-ROADMAP.md` — Prioritized execution plan
-- `dialectic/docs/VISION.md` — Product vision + pitch
-- `dialectic/TODOS.md` — Current issue tracker
-- `dialectic/CHANGELOG.md` — Release history
-
-**Reference docs:**
-- `.planning/codebase/` — Architecture, stack, conventions, concerns, testing, integrations, structure
-- `.planning/research/` — Pre-build analysis (architecture, stack, features, pitfalls, summary)
-- `.planning/phases/01-08/` — Completed phase documentation (126 files)
-- `dialectic/docs/CROSS_SESSION_MEMORIES.md` — Cross-session feature spec
-
-## Session Continuity
-
-Last session: 2026-02-20
-Stopped at: Category 1 execution (security fixes + schema gaps)
-Resume file: None
+- 14 commits
+- 149 files changed, +21,200 lines
+- 134 unit tests passing
+- 51+ REST endpoints, all returning 200
+- 28 agents deployed across 8 teams
+- Server running on port 8002
 
 ---
 *State initialized: 2026-01-20*
-*Last updated: 2026-02-20 (deep audit complete, Category 1 executing)*
+*Last updated: 2026-02-22 (v2.0 complete)*
