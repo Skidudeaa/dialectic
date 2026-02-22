@@ -7,6 +7,7 @@ from .cross_session_context import CrossSessionContext, CrossSessionContextBuild
 from .self_memory import LLMSelfMemory
 from .protocol_library import ProtocolDefinition, get_protocol_definition, get_protocol_instructions
 from .protocol_manager import ProtocolManager
+from .multi_model import MultiModelCoordinator
 
 __all__ = [
     "LLMProvider", "LLMRequest", "LLMResponse", "ProviderName", "get_provider",
@@ -18,4 +19,5 @@ __all__ = [
     "LLMSelfMemory",
     "ProtocolDefinition", "get_protocol_definition", "get_protocol_instructions",
     "ProtocolManager",
+    "MultiModelCoordinator",
 ]

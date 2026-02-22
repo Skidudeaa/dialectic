@@ -26,6 +26,7 @@ class SpeakerType(str, Enum):
     LLM_PRIMARY = "llm_primary"
     LLM_PROVOKER = "llm_provoker"
     LLM_ANNOTATOR = "llm_annotator"
+    LLM_PERSONA = "llm_persona"
     SYSTEM = "system"
 
 
@@ -354,3 +355,37 @@ class MemoryReferencedPayload(BaseModel):
     target_room_id: UUID
     target_message_id: Optional[UUID] = None
     citation_context: Optional[str] = None
+
+
+# ============================================================
+# MULTI-MODEL ROOMS
+# ============================================================
+
+class TriggerStrategy(str, Enum):
+    """
+    ARCHITECTURE: Named strategies for when a persona should speak.
+    WHY: Each persona can have a distinct trigger; extensible without code changes.
+    TRADEOFF: Enum constrains options vs free-form strings that invite typos.
+    """
+    ON_MENTION = "on_mention"           # When @PersonaName is used
+    AFTER_PRIMARY = "after_primary"     # Responds after primary LLM
+    ON_DISAGREEMENT = "on_disagreement" # When humans disagree
+    PERIODIC = "periodic"               # Every N human messages
+
+
+class RoomPersona(BaseModel):
+    """
+    ARCHITECTURE: Named LLM persona bound to a room with its own model, identity, and trigger.
+    WHY: Different models/personalities create richer dialectic (Opus=deep, Haiku=quick, GPT=contrarian).
+    TRADEOFF: More LLM calls per conversation vs diverse perspectives.
+    """
+    id: UUID = Field(default_factory=uuid4)
+    room_id: UUID
+    name: str
+    provider: str = "anthropic"
+    model: str = "claude-sonnet-4-20250514"
+    identity_prompt: str
+    personality: dict = {}
+    trigger_strategy: str = "on_mention"
+    is_active: bool = True
+    display_order: int = 0

@@ -167,10 +167,47 @@ class LLMOrchestrator:
                 use_provoker=False,
             )
         else:
+            # Compute speaker balance from last 10 messages
+            speaker_balance: dict[str, int] = {}
+            for msg in messages[-10:]:
+                if msg.speaker_type == SpeakerType.HUMAN and msg.user_id:
+                    uid = str(msg.user_id)
+                    speaker_balance[uid] = speaker_balance.get(uid, 0) + 1
+
+            # Count unsurfaced memories: semantically similar to latest message
+            # but not yet referenced in recent conversation
+            unsurfaced_memory_count: Optional[int] = None
+            latest_human = next(
+                (m for m in reversed(messages) if m.speaker_type == SpeakerType.HUMAN),
+                None,
+            )
+            if latest_human:
+                try:
+                    mem_mgr = MemoryManager(self.db)
+                    similar = await mem_mgr.search_memories(
+                        room_id=thread.room_id,
+                        query=latest_human.content,
+                        limit=10,
+                        min_score=0.6,
+                    )
+                    # Memories are "surfaced" if their key or content appears in recent messages
+                    recent_text = " ".join(
+                        m.content for m in messages[-10:] if m.content
+                    ).lower()
+                    unsurfaced = [
+                        m for m in similar
+                        if m.key.lower() not in recent_text
+                    ]
+                    unsurfaced_memory_count = len(unsurfaced)
+                except Exception as e:
+                    logger.debug("Unsurfaced memory count unavailable: %s", e)
+
             decision = self.heuristics.decide(
                 messages=messages,
                 mentioned=mentioned,
                 semantic_novelty=semantic_novelty,
+                unsurfaced_memory_count=unsurfaced_memory_count,
+                speaker_balance=speaker_balance if speaker_balance else None,
             )
 
         if not decision.should_interject:

@@ -4,7 +4,7 @@ import pytest
 
 from llm.heuristics import InterjectionEngine, InterjectionDecision
 from models import SpeakerType, MessageType
-from tests.conftest import make_message
+from tests.conftest import make_message, USER_A_ID, USER_B_ID
 
 
 @pytest.fixture
@@ -195,6 +195,51 @@ class TestQuestionDetection:
         assert decision.use_provoker is False
 
 
+# ── Information gap trigger ──
+
+
+class TestInformationGap:
+    def test_information_gap_triggers(self, engine):
+        """unsurfaced_memory_count >= 2 triggers information_gap."""
+        msgs = [make_message("tell me about epistemology")]
+        decision = engine.decide(msgs, unsurfaced_memory_count=3)
+        assert decision.should_interject is True
+        assert decision.reason == "information_gap"
+        assert decision.confidence == 0.65
+        assert decision.use_provoker is False
+
+    def test_information_gap_exact_threshold(self, engine):
+        """unsurfaced_memory_count == 2 triggers (boundary)."""
+        msgs = [make_message("let's discuss")]
+        decision = engine.decide(msgs, unsurfaced_memory_count=2)
+        assert decision.should_interject is True
+        assert decision.reason == "information_gap"
+
+    def test_information_gap_below_threshold(self, engine):
+        """unsurfaced_memory_count < 2 does not trigger."""
+        msgs = [make_message("I agree")]
+        decision = engine.decide(msgs, unsurfaced_memory_count=1)
+        assert decision.reason != "information_gap"
+
+    def test_information_gap_zero(self, engine):
+        """unsurfaced_memory_count == 0 does not trigger."""
+        msgs = [make_message("ok")]
+        decision = engine.decide(msgs, unsurfaced_memory_count=0)
+        assert decision.reason != "information_gap"
+
+    def test_information_gap_none_skipped(self, engine):
+        """When unsurfaced_memory_count is None, check is skipped."""
+        msgs = [make_message("msg")]
+        decision = engine.decide(msgs, unsurfaced_memory_count=None)
+        assert decision.reason != "information_gap"
+
+    def test_information_gap_no_provoker(self, engine):
+        """Information gap uses primary mode, not provoker."""
+        msgs = [make_message("topic")]
+        decision = engine.decide(msgs, unsurfaced_memory_count=5)
+        assert decision.use_provoker is False
+
+
 # ── Semantic novelty spike trigger ──
 
 
@@ -307,6 +352,124 @@ class TestStagnation:
         assert decision.reason == "stagnation_detected"
 
 
+# ── Speaker balance redirect trigger ──
+
+
+class TestSpeakerBalance:
+    def test_balance_redirect_triggers(self, engine):
+        """One speaker with 70%+ of messages triggers balance_redirect."""
+        msgs = [make_message("I agree")]
+        balance = {str(USER_A_ID): 8, str(USER_B_ID): 2}
+        decision = engine.decide(msgs, speaker_balance=balance)
+        assert decision.should_interject is True
+        assert decision.reason == "balance_redirect"
+        assert decision.confidence == 0.55
+        assert decision.use_provoker is False
+
+    def test_balance_redirect_exact_threshold(self, engine):
+        """Exactly 70% triggers (7 out of 10)."""
+        msgs = [make_message("msg")]
+        balance = {str(USER_A_ID): 7, str(USER_B_ID): 3}
+        decision = engine.decide(msgs, speaker_balance=balance)
+        assert decision.should_interject is True
+        assert decision.reason == "balance_redirect"
+
+    def test_balance_redirect_below_threshold(self, engine):
+        """Below 70% does not trigger."""
+        msgs = [make_message("msg")]
+        balance = {str(USER_A_ID): 6, str(USER_B_ID): 4}
+        decision = engine.decide(msgs, speaker_balance=balance)
+        assert decision.reason != "balance_redirect"
+
+    def test_balance_single_speaker_no_trigger(self, engine):
+        """Only 1 human present should NOT trigger balance redirect."""
+        msgs = [make_message("msg")]
+        balance = {str(USER_A_ID): 10}
+        decision = engine.decide(msgs, speaker_balance=balance)
+        assert decision.reason != "balance_redirect"
+
+    def test_balance_none_skipped(self, engine):
+        """When speaker_balance is None, check is skipped."""
+        msgs = [make_message("msg")]
+        decision = engine.decide(msgs, speaker_balance=None)
+        assert decision.reason != "balance_redirect"
+
+    def test_balance_empty_dict_no_trigger(self, engine):
+        """Empty speaker_balance dict does not trigger."""
+        msgs = [make_message("msg")]
+        decision = engine.decide(msgs, speaker_balance={})
+        assert decision.reason != "balance_redirect"
+
+
+# ── Silence logging (considered_reasons) ──
+
+
+class TestSilenceLogging:
+    def test_no_trigger_populates_considered_reasons(self, engine):
+        """When no trigger fires, considered_reasons lists all evaluated heuristics."""
+        msgs = [
+            make_message("I think so too", sequence=1),
+            make_message(
+                "agreed",
+                speaker_type=SpeakerType.LLM_PRIMARY,
+                sequence=2,
+            ),
+            make_message("Let me elaborate on that point", sequence=3),
+        ]
+        decision = engine.decide(msgs)
+        assert decision.should_interject is False
+        assert decision.reason == "no_trigger"
+        assert len(decision.considered_reasons) > 0
+        assert "turn_threshold" in decision.considered_reasons
+        assert "question_detection" in decision.considered_reasons
+        assert "information_gap" in decision.considered_reasons
+        assert "semantic_novelty" in decision.considered_reasons
+        assert "stagnation" in decision.considered_reasons
+        assert "speaker_balance" in decision.considered_reasons
+
+    def test_considered_reasons_empty_on_first_trigger(self, engine):
+        """When mention fires immediately, no heuristics were skipped."""
+        msgs = [make_message("hey")]
+        decision = engine.decide(msgs, mentioned=True)
+        assert decision.considered_reasons == []
+
+    def test_considered_reasons_partial_on_mid_trigger(self, engine):
+        """When question fires, only heuristics before it are in considered."""
+        msgs = [make_message("what is truth?")]
+        decision = engine.decide(msgs)
+        assert decision.reason == "question_detected"
+        # Turn threshold was evaluated but didn't fire
+        assert "turn_threshold" in decision.considered_reasons
+        # Heuristics after question (info gap, novelty, etc.) were NOT evaluated
+        assert "information_gap" not in decision.considered_reasons
+
+    def test_considered_reasons_is_list(self, engine):
+        """considered_reasons is always a list."""
+        msgs = [make_message("test")]
+        decision = engine.decide(msgs)
+        assert isinstance(decision.considered_reasons, list)
+
+    def test_silence_with_all_new_params_none(self, engine):
+        """Backward compat: all new params as None still returns proper silence."""
+        msgs = [
+            make_message("I agree", sequence=1),
+            make_message(
+                "ok",
+                speaker_type=SpeakerType.LLM_PRIMARY,
+                sequence=2,
+            ),
+            make_message("sure", sequence=3),
+        ]
+        decision = engine.decide(
+            msgs,
+            unsurfaced_memory_count=None,
+            speaker_balance=None,
+        )
+        assert decision.should_interject is False
+        assert "information_gap" in decision.considered_reasons
+        assert "speaker_balance" in decision.considered_reasons
+
+
 # ── No trigger / fallthrough ──
 
 
@@ -380,6 +543,45 @@ class TestEdgeCases:
         decision = engine.decide(msgs, semantic_novelty=0.9)
         assert decision.reason == "question_detected"
 
+    def test_priority_order_question_over_info_gap(self, engine):
+        """Question fires before information gap."""
+        msgs = [
+            make_message(
+                "llm msg",
+                speaker_type=SpeakerType.LLM_PRIMARY,
+                sequence=1,
+            ),
+            make_message("what do you think?", sequence=2),
+        ]
+        decision = engine.decide(msgs, unsurfaced_memory_count=5)
+        assert decision.reason == "question_detected"
+
+    def test_priority_order_info_gap_over_novelty(self, engine):
+        """Information gap fires before semantic novelty."""
+        msgs = [
+            make_message(
+                "llm msg",
+                speaker_type=SpeakerType.LLM_PRIMARY,
+                sequence=1,
+            ),
+            make_message("I think this is fine", sequence=2),
+        ]
+        decision = engine.decide(
+            msgs, unsurfaced_memory_count=3, semantic_novelty=0.9
+        )
+        assert decision.reason == "information_gap"
+
+    def test_priority_order_stagnation_over_balance(self):
+        """Stagnation fires before speaker balance."""
+        engine = InterjectionEngine(turn_threshold=100, semantic_novelty_threshold=0.99)
+        msgs = [
+            make_message("ok", sequence=i, message_type=MessageType.TEXT)
+            for i in range(6)
+        ]
+        balance = {str(USER_A_ID): 8, str(USER_B_ID): 2}
+        decision = engine.decide(msgs, speaker_balance=balance)
+        assert decision.reason == "stagnation_detected"
+
     def test_decision_is_dataclass(self, engine):
         """InterjectionDecision should be a proper dataclass."""
         msgs = [make_message("test")]
@@ -389,3 +591,46 @@ class TestEdgeCases:
         assert hasattr(decision, "reason")
         assert hasattr(decision, "confidence")
         assert hasattr(decision, "use_provoker")
+        assert hasattr(decision, "considered_reasons")
+
+
+# ── Backward compatibility ──
+
+
+class TestBackwardCompatibility:
+    def test_old_call_signature_works(self, engine):
+        """Calling decide() without new params still works."""
+        msgs = [make_message("hello")]
+        decision = engine.decide(msgs)
+        assert isinstance(decision, InterjectionDecision)
+
+    def test_old_call_with_mentioned_works(self, engine):
+        """Old-style call with mentioned=True still works."""
+        msgs = [make_message("hey")]
+        decision = engine.decide(msgs, mentioned=True)
+        assert decision.should_interject is True
+        assert decision.reason == "explicit_mention"
+
+    def test_old_call_with_novelty_works(self, engine):
+        """Old-style call with semantic_novelty still works."""
+        msgs = [make_message("novel")]
+        decision = engine.decide(msgs, semantic_novelty=0.85)
+        assert decision.should_interject is True
+        assert "semantic_novelty_spike" in decision.reason
+
+    def test_decision_has_considered_reasons_default(self, engine):
+        """Even old-style decisions have considered_reasons field (defaulting to list)."""
+        msgs = [make_message("hey")]
+        decision = engine.decide(msgs, mentioned=True)
+        assert hasattr(decision, "considered_reasons")
+        assert isinstance(decision.considered_reasons, list)
+
+    def test_protocol_decision_compatible(self):
+        """InterjectionDecision created outside decide() (e.g. orchestrator protocol mode) still works."""
+        decision = InterjectionDecision(
+            should_interject=True,
+            reason="protocol_active",
+            confidence=1.0,
+            use_provoker=False,
+        )
+        assert decision.considered_reasons == []

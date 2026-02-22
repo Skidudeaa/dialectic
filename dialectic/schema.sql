@@ -508,3 +508,27 @@ CREATE TABLE IF NOT EXISTS commitment_confidence (
 );
 
 CREATE INDEX IF NOT EXISTS idx_commitment_confidence ON commitment_confidence(commitment_id);
+
+-- ============================================================
+-- MULTI-MODEL ROOMS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS room_personas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,                  -- e.g., "Aristotle", "Skeptic", "Synthesizer"
+    provider TEXT NOT NULL DEFAULT 'anthropic',
+    model TEXT NOT NULL DEFAULT 'claude-sonnet-4-20250514',
+    identity_prompt TEXT NOT NULL,       -- System prompt for this persona
+    personality JSONB DEFAULT '{}',      -- Additional config (temperature, etc.)
+    trigger_strategy TEXT DEFAULT 'on_mention',  -- 'on_mention' | 'after_primary' | 'on_disagreement' | 'periodic'
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    display_order INT DEFAULT 0,
+    UNIQUE (room_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_room_personas_room ON room_personas(room_id);
+
+-- Link messages to personas for attribution
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS persona_id UUID REFERENCES room_personas(id);

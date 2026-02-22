@@ -50,6 +50,20 @@ Or: `make run` and `make frontend`
 - **API docs**: http://localhost:8002/docs
 - **Health**: http://localhost:8002/health
 
+## Docker (One-Command Launch)
+
+```bash
+cd dialectic
+export ANTHROPIC_API_KEY="sk-ant-..."
+docker compose up --build
+```
+
+- **Frontend**: http://localhost:3000
+- **API**: http://localhost:8002
+- **API docs**: http://localhost:8002/docs
+
+Optional: `export OPENAI_API_KEY="sk-..."` for LLM fallback + embeddings.
+
 ---
 
 ## What Dialectic Can Do

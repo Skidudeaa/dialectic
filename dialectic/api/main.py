@@ -28,6 +28,7 @@ from analytics.graph_routes import router as graph_router, set_graph_db_pool
 from replay.routes import router as replay_router, set_replay_db_pool
 from analytics.knowledge_graph import KnowledgeGraphEngine
 from stakes.routes import router as stakes_router, set_stakes_db_pool
+from api.personas import router as personas_router, set_personas_db_pool
 from collections import defaultdict
 import time
 
@@ -128,7 +129,7 @@ def _validate_environment():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: setup and teardown."""
-    global db_pool
+    global db_pool, connection_manager
 
     _validate_environment()
 
@@ -177,6 +178,9 @@ async def lifespan(app: FastAPI):
         # Set db_pool for stakes module
         set_stakes_db_pool(db_pool)
 
+        # Set db_pool for personas module
+        set_personas_db_pool(db_pool)
+
         async with db_pool.acquire() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
@@ -190,7 +194,28 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Database connection failed: {e}")
         logger.warning("Running in demo mode without database")
 
+    # Initialize connection manager: Redis pub/sub if REDIS_URL is set, else in-memory
+    redis_url = os.environ.get("REDIS_URL")
+    if redis_url:
+        try:
+            from transport.redis_manager import RedisConnectionManager
+            redis_mgr = RedisConnectionManager(redis_url)
+            await redis_mgr.initialize()
+            connection_manager = redis_mgr
+            logger.info(f"Redis pub/sub connected: {redis_url}")
+        except Exception as e:
+            logger.warning(f"Redis connection failed ({e}), falling back to in-memory")
+            connection_manager = ConnectionManager()
+    else:
+        connection_manager = ConnectionManager()
+        logger.info("Using in-memory connection manager (single-server mode)")
+
     yield
+
+    # Shutdown connection manager (Redis cleanup if applicable)
+    if hasattr(connection_manager, 'shutdown'):
+        await connection_manager.shutdown()
+        logger.info("Redis connection manager shut down")
 
     if db_pool:
         await db_pool.close()
@@ -246,7 +271,10 @@ app.include_router(replay_router)
 # Include stakes router
 app.include_router(stakes_router)
 
-connection_manager = ConnectionManager()
+# Include personas router
+app.include_router(personas_router)
+
+connection_manager: ConnectionManager = ConnectionManager()
 
 
 # ============================================================
@@ -1581,6 +1609,18 @@ async def health():
     else:
         status["status"] = "degraded"
         status["checks"]["database"] = "no pool"
+
+    # Redis health check
+    from transport.redis_manager import RedisConnectionManager
+    if isinstance(connection_manager, RedisConnectionManager):
+        try:
+            await connection_manager._redis.ping()
+            status["checks"]["redis"] = "connected"
+        except Exception as e:
+            status["status"] = "degraded"
+            status["checks"]["redis"] = f"error: {e}"
+    else:
+        status["checks"]["redis"] = "not configured (in-memory mode)"
 
     status_code = 200 if status["status"] == "ok" else 503
     from fastapi.responses import JSONResponse

@@ -34,6 +34,9 @@ class OutboundMessage:
     payload: dict
     target_user_id: Optional[UUID] = None
 
+    def to_dict(self) -> dict:
+        return {"type": self.type, "payload": self.payload}
+
 
 class ConnectionManager:
     """
@@ -251,3 +254,5 @@ class MessageTypes:
     COMMITMENT_CREATED = "commitment_created"
     COMMITMENT_RESOLVED = "commitment_resolved"
     COMMITMENT_SURFACED = "commitment_surfaced"
+    # Multi-model personas (outbound)
+    PERSONA_RESPONSE = "persona_response"
