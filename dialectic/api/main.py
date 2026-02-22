@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 import asyncpg
 import logging
 import os
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -253,6 +253,9 @@ connection_manager = ConnectionManager()
 # AUTH
 # ============================================================
 
+from api.token_utils import extract_room_token
+
+
 async def verify_room_token(
     room_id: UUID,
     token: str,
@@ -495,7 +498,7 @@ async def create_user(
 async def join_room(
     room_id: UUID,
     request: JoinRoomRequest,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """Join a room."""
@@ -533,7 +536,7 @@ async def join_room(
 @app.get("/rooms/{room_id}/threads")
 async def list_threads(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """List all threads in a room."""
@@ -560,7 +563,7 @@ async def list_threads(
 @app.get("/rooms/{room_id}/genealogy", response_model=List[ThreadNodeResponse])
 async def get_thread_genealogy(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     max_depth: int = Query(20, ge=1, le=50, description="Maximum tree depth"),
     db=Depends(get_db),
 ):
@@ -639,7 +642,7 @@ async def get_thread_genealogy(
 @app.get("/rooms/{room_id}/settings", response_model=RoomSettingsResponse)
 async def get_room_settings(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """
@@ -661,7 +664,7 @@ async def get_room_settings(
 async def update_room_settings(
     room_id: UUID,
     request: UpdateRoomSettingsRequest,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     user_id: UUID = Query(...),
     db=Depends(get_db),
 ):
@@ -739,7 +742,7 @@ async def update_room_settings(
 @app.get("/threads/{thread_id}/messages", response_model=PaginatedMessagesResponse)
 async def get_messages(
     thread_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     include_ancestry: bool = True,
     limit: int = Query(50, ge=1, le=200, description="Max messages to return"),
     before_sequence: Optional[int] = Query(None, description="Return messages before this sequence"),
@@ -894,7 +897,7 @@ async def get_messages(
 async def send_message(
     thread_id: UUID,
     request: SendMessageRequest,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     user_id: UUID = Query(...),
     db=Depends(get_db),
 ):
@@ -957,7 +960,7 @@ async def send_message(
 async def fork_thread_endpoint(
     thread_id: UUID,
     request: ForkThreadRequest,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     user_id: UUID = Query(...),
     db=Depends(get_db),
 ):
@@ -993,7 +996,7 @@ async def fork_thread_endpoint(
 @app.get("/rooms/{room_id}/memories")
 async def list_memories(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     include_invalidated: bool = False,
     db=Depends(get_db),
 ):
@@ -1018,7 +1021,7 @@ async def list_memories(
 async def add_memory(
     room_id: UUID,
     request: AddMemoryRequest,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     user_id: UUID = Query(...),
     db=Depends(get_db),
 ):
@@ -1050,7 +1053,7 @@ async def add_memory(
 async def edit_memory(
     memory_id: UUID,
     request: EditMemoryRequest,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     user_id: UUID = Query(...),
     db=Depends(get_db),
 ):
@@ -1084,7 +1087,7 @@ async def edit_memory(
 @app.delete("/memories/{memory_id}")
 async def invalidate_memory(
     memory_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     user_id: UUID = Query(...),
     reason: Optional[str] = None,
     db=Depends(get_db),
@@ -1111,7 +1114,7 @@ async def invalidate_memory(
 async def search_memories(
     room_id: UUID,
     query: str,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     limit: int = 10,
     db=Depends(get_db),
 ):
@@ -1154,7 +1157,7 @@ class UpdateIdentityRequest(BaseModel):
 @app.get("/rooms/{room_id}/identity", response_model=LLMIdentityResponse)
 async def get_llm_identity(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """
@@ -1176,7 +1179,7 @@ async def get_llm_identity(
 async def get_user_model(
     room_id: UUID,
     user_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """
@@ -1200,7 +1203,7 @@ async def get_user_model(
 async def update_llm_identity(
     room_id: UUID,
     request: UpdateIdentityRequest,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     user_id: UUID = Query(...),
     db=Depends(get_db),
 ):
@@ -1241,7 +1244,7 @@ async def search_messages(
     date_to: Optional[datetime] = Query(None, description="Filter to date"),
     speaker_type: Optional[str] = Query(None, description="Filter by speaker type"),
     limit: int = Query(50, ge=1, le=200, description="Max results"),
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     user_id: UUID = Query(...),
     db=Depends(get_db),
 ):
@@ -1318,7 +1321,7 @@ async def get_message_context(
     thread_id: UUID,
     message_id: UUID = Query(..., description="Target message ID"),
     context: int = Query(25, ge=1, le=100, description="Messages before/after"),
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """
@@ -1667,7 +1670,7 @@ class PresenceUserResponse(BaseModel):
 @app.get("/rooms/{room_id}/presence", response_model=List[PresenceUserResponse])
 async def get_room_presence(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """
@@ -1735,7 +1738,7 @@ class BriefingResponse(BaseModel):
 async def get_morning_briefing(
     room_id: UUID,
     user_id: UUID = Query(...),
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """
@@ -1863,7 +1866,7 @@ async def get_morning_briefing(
 @app.get("/rooms/{room_id}/events")
 async def get_events(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     limit: int = 100,
     after_sequence: Optional[int] = None,
     event_types: Optional[str] = None,

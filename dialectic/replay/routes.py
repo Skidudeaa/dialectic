@@ -8,6 +8,7 @@ from uuid import UUID
 
 import asyncpg
 from fastapi import APIRouter, HTTPException, Query, Depends
+from api.token_utils import extract_room_token
 from fastapi.responses import StreamingResponse
 
 from replay.engine import EventReplayEngine
@@ -50,7 +51,7 @@ async def _verify_room_token(room_id: UUID, token: str, db: asyncpg.Connection):
 async def get_state_at(
     room_id: UUID,
     at_sequence: int = Query(..., description="Event sequence to materialize state at"),
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(_get_db),
 ):
     """
@@ -74,7 +75,7 @@ async def get_state_at(
 @router.get("/rooms/{room_id}/stream")
 async def replay_stream(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     start: Optional[int] = Query(None, description="Start sequence (inclusive)"),
     end: Optional[int] = Query(None, description="End sequence (inclusive)"),
     speed: float = Query(1.0, ge=0.1, le=20.0, description="Playback speed multiplier"),
@@ -124,7 +125,7 @@ async def get_diff(
     room_id: UUID,
     from_seq: int = Query(..., description="Start sequence"),
     to_seq: int = Query(..., description="End sequence"),
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(_get_db),
 ):
     """
@@ -148,7 +149,7 @@ async def get_diff(
 @router.get("/messages/{message_id}/llm-context")
 async def get_llm_decision(
     message_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(_get_db),
 ):
     """
@@ -184,7 +185,7 @@ async def get_llm_decision(
 @router.get("/rooms/{room_id}/timeline")
 async def get_timeline(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     buckets: int = Query(50, ge=10, le=200, description="Number of time buckets"),
     db=Depends(_get_db),
 ):

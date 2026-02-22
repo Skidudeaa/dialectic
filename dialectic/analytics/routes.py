@@ -10,6 +10,7 @@ from uuid import UUID
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from api.token_utils import extract_room_token
 
 from analytics.analyzer import ConversationAnalyzer, ThreadAnalytics, RoomAnalytics
 from analytics.dna import ConversationDNA
@@ -85,7 +86,7 @@ async def _verify_thread_access(
 @router.get("/threads/{thread_id}", response_model=ThreadAnalytics)
 async def get_thread_analytics(
     thread_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """
@@ -103,7 +104,7 @@ async def get_thread_analytics(
 @router.get("/rooms/{room_id}", response_model=RoomAnalytics)
 async def get_room_analytics(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """
@@ -121,7 +122,7 @@ async def get_room_analytics(
 @router.get("/threads/{thread_id}/dna")
 async def get_thread_dna(
     thread_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """
@@ -152,7 +153,7 @@ async def get_thread_dna(
 @router.get("/rooms/{room_id}/dna")
 async def get_room_dna(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """

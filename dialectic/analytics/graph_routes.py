@@ -11,6 +11,7 @@ from uuid import UUID
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from api.token_utils import extract_room_token
 
 from analytics.knowledge_graph import (
     KnowledgeGraphEngine,
@@ -92,7 +93,7 @@ async def _get_db():
 async def concept_map(
     query: str = Query(..., min_length=1, description="Semantic search query"),
     user_id: UUID = Query(..., description="User requesting the map"),
-    token: str = Query(..., description="Room token for authentication"),
+    token: str = Depends(extract_room_token),
     limit: int = Query(20, ge=1, le=100, description="Max seed nodes"),
     db=Depends(_get_db),
 ):
@@ -112,7 +113,7 @@ async def concept_map(
 @router.get("/memories/{memory_id}/provenance", response_model=IdeaProvenance)
 async def memory_provenance(
     memory_id: UUID,
-    token: str = Query(..., description="Room token for authentication"),
+    token: str = Depends(extract_room_token),
     db=Depends(_get_db),
 ):
     """
@@ -141,7 +142,7 @@ async def memory_provenance(
 @router.get("/rooms/{room_id}/contributions", response_model=ContributionGraph)
 async def room_contributions(
     room_id: UUID,
-    token: str = Query(..., description="Room token for authentication"),
+    token: str = Depends(extract_room_token),
     db=Depends(_get_db),
 ):
     """
@@ -157,7 +158,7 @@ async def room_contributions(
 @router.get("/memories/{memory_id}/connections", response_model=list[GraphNode])
 async def memory_connections(
     memory_id: UUID,
-    token: str = Query(..., description="Room token for authentication"),
+    token: str = Depends(extract_room_token),
     max_depth: int = Query(2, ge=1, le=5, description="Max traversal depth"),
     db=Depends(_get_db),
 ):

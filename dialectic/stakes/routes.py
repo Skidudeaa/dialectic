@@ -6,6 +6,7 @@ from uuid import UUID
 import logging
 
 from fastapi import APIRouter, HTTPException, Depends, Query
+from api.token_utils import extract_room_token
 from pydantic import BaseModel, Field
 
 from .manager import CommitmentManager
@@ -77,7 +78,7 @@ class ResolveRequest(BaseModel):
 async def create_commitment(
     room_id: UUID,
     request: CreateCommitmentRequest,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     user_id: UUID = Query(...),
     db=Depends(get_db),
 ):
@@ -113,7 +114,7 @@ async def create_commitment(
 @router.get("/rooms/{room_id}/commitments")
 async def list_commitments(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     status: Optional[str] = None,
     db=Depends(get_db),
 ):
@@ -133,7 +134,7 @@ async def list_commitments(
 @router.get("/commitments/{commitment_id}")
 async def get_commitment(
     commitment_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """Get a commitment with full confidence history."""
@@ -152,7 +153,7 @@ async def get_commitment(
 async def record_confidence(
     commitment_id: UUID,
     request: RecordConfidenceRequest,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     user_id: UUID = Query(...),
     db=Depends(get_db),
 ):
@@ -190,7 +191,7 @@ async def record_confidence(
 async def resolve_commitment(
     commitment_id: UUID,
     request: ResolveRequest,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     user_id: UUID = Query(...),
     db=Depends(get_db),
 ):
@@ -226,7 +227,7 @@ async def resolve_commitment(
 @router.get("/rooms/{room_id}/calibration")
 async def get_calibration(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     user_id: Optional[UUID] = None,
     db=Depends(get_db),
 ):
@@ -246,7 +247,7 @@ async def get_calibration(
 @router.get("/rooms/{room_id}/commitments/expiring")
 async def get_expiring(
     room_id: UUID,
-    token: str = Query(...),
+    token: str = Depends(extract_room_token),
     days: int = Query(7, ge=1, le=90),
     db=Depends(get_db),
 ):
