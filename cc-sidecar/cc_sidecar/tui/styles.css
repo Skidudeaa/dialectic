@@ -1,0 +1,188 @@
+/*
+ * cc-sidecar TUI stylesheet
+ *
+ * ARCHITECTURE: Four-pane vertical layout — session bar, agent list,
+ * alert feed, event timeline. Color-coded state badges.
+ */
+
+Screen {
+    layout: vertical;
+    background: $surface;
+}
+
+/* ============================================================
+ * Session Bar — top strip with model/cwd/context/cost
+ * ============================================================ */
+
+SessionBar {
+    height: 3;
+    dock: top;
+    layout: horizontal;
+    padding: 0 1;
+    background: $primary-background;
+    color: $text;
+    border-bottom: solid $primary;
+}
+
+SessionBar .model-label {
+    width: auto;
+    min-width: 16;
+    color: $accent;
+    text-style: bold;
+    padding: 1 1;
+}
+
+SessionBar .cwd-label {
+    width: auto;
+    min-width: 20;
+    padding: 1 1;
+    color: $text-muted;
+}
+
+SessionBar .context-bar {
+    width: auto;
+    min-width: 20;
+    padding: 1 1;
+}
+
+SessionBar .cost-label {
+    width: auto;
+    min-width: 10;
+    padding: 1 1;
+    color: $warning;
+}
+
+SessionBar .compact-label {
+    width: auto;
+    min-width: 6;
+    padding: 1 1;
+    color: $text-muted;
+}
+
+SessionBar .agent-count-label {
+    width: auto;
+    min-width: 10;
+    padding: 1 1;
+    color: $accent;
+}
+
+/* ============================================================
+ * Agent List — table of agent states
+ * ============================================================ */
+
+AgentList {
+    height: 1fr;
+    min-height: 6;
+    max-height: 14;
+    border-bottom: solid $primary;
+}
+
+AgentList DataTable {
+    height: 1fr;
+}
+
+AgentList .section-title {
+    dock: top;
+    height: 1;
+    padding: 0 1;
+    text-style: bold;
+    color: $accent;
+    background: $surface-darken-1;
+}
+
+/* ============================================================
+ * Alert Feed — scrolling alert log
+ * ============================================================ */
+
+AlertFeed {
+    height: auto;
+    min-height: 4;
+    max-height: 8;
+    border-bottom: solid $primary;
+}
+
+AlertFeed .section-title {
+    dock: top;
+    height: 1;
+    padding: 0 1;
+    text-style: bold;
+    color: $warning;
+    background: $surface-darken-1;
+}
+
+AlertFeed RichLog {
+    height: 1fr;
+    min-height: 3;
+    max-height: 7;
+    scrollbar-size: 1 1;
+}
+
+/* ============================================================
+ * Event Timeline — filterable event stream
+ * ============================================================ */
+
+EventTimeline {
+    height: 2fr;
+    min-height: 8;
+}
+
+EventTimeline .section-title {
+    dock: top;
+    height: 1;
+    padding: 0 1;
+    text-style: bold;
+    color: $text;
+    background: $surface-darken-1;
+}
+
+EventTimeline DataTable {
+    height: 1fr;
+}
+
+/* ============================================================
+ * State colors
+ * ============================================================ */
+
+.state-idle {
+    color: $text-muted;
+}
+
+.state-running-tool {
+    color: $success;
+    text-style: bold;
+}
+
+.state-awaiting-perm {
+    color: $warning;
+    text-style: bold;
+}
+
+.state-blocked {
+    color: $error;
+    text-style: bold;
+}
+
+.state-retrying {
+    color: $warning;
+}
+
+.state-compacting {
+    color: $accent;
+}
+
+.state-finished {
+    color: $text-disabled;
+}
+
+.state-orphaned {
+    color: $error;
+    text-style: bold blink;
+}
+
+/* ============================================================
+ * Footer
+ * ============================================================ */
+
+Footer {
+    dock: bottom;
+}
