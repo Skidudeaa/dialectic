@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cc-sidecar</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+    --fg: #c9d1d9; --fg-dim: #8b949e; --fg-bright: #f0f6fc;
+    --accent: #58a6ff; --green: #3fb950; --yellow: #d29922;
+    --red: #f85149; --purple: #bc8cff; --cyan: #39d2c0;
+    --border: #30363d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; background: var(--bg); color: var(--fg); font-size: 13px; line-height: 1.5; }
+
+  .header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 8px 16px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 10; }
+  .header h1 { font-size: 14px; color: var(--accent); font-weight: 600; }
+  .header .status { font-size: 12px; padding: 2px 8px; border-radius: 12px; }
+  .status-connected { background: #0d2818; color: var(--green); }
+  .status-disconnected { background: #2d1117; color: var(--red); }
+
+  .session-bar { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; gap: 24px; flex-wrap: wrap; align-items: center; }
+  .session-bar .item { display: flex; align-items: center; gap: 6px; }
+  .session-bar .label { color: var(--fg-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .session-bar .value { color: var(--fg-bright); font-weight: 600; }
+  .session-bar .model { color: var(--cyan); }
+  .session-bar .cost { color: var(--yellow); }
+
+  .ctx-bar { width: 100px; height: 8px; background: var(--bg3); border-radius: 4px; overflow: hidden; display: inline-block; vertical-align: middle; }
+  .ctx-fill { height: 100%; border-radius: 4px; transition: width 0.3s, background 0.3s; }
+  .ctx-green { background: var(--green); }
+  .ctx-yellow { background: var(--yellow); }
+  .ctx-red { background: var(--red); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--bg); min-height: 200px; max-height: 400px; overflow-y: auto; }
+  .panel-title { position: sticky; top: 0; background: var(--bg3); padding: 6px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--fg-dim); border-bottom: 1px solid var(--border); z-index: 1; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; padding: 4px 8px; color: var(--fg-dim); font-weight: 500; font-size: 11px; border-bottom: 1px solid var(--border); position: sticky; top: 28px; background: var(--bg); z-index: 1; }
+  td { padding: 4px 8px; border-bottom: 1px solid var(--bg3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px; }
+  tr:hover td { background: var(--bg2); }
+
+  .state { padding: 1px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+  .state-idle { color: var(--fg-dim); }
+  .state-running_tool { color: var(--green); }
+  .state-awaiting_perm { color: var(--yellow); }
+  .state-blocked { color: var(--red); }
+  .state-retrying { color: var(--yellow); }
+  .state-finished { color: var(--fg-dim); opacity: 0.6; }
+  .state-orphaned { color: var(--red); animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: 0.3; } }
+
+  .badge { font-size: 10px; padding: 1px 4px; border-radius: 2px; font-weight: 500; }
+  .badge-obs { background: #0d2d4a; color: var(--accent); }
+  .badge-inf { background: #2d2200; color: var(--yellow); }
+  .badge-life { background: var(--bg3); color: var(--fg-dim); }
+
+  .alert-item { padding: 4px 12px; border-bottom: 1px solid var(--bg3); font-size: 12px; }
+  .alert-time { color: var(--fg-dim); margin-right: 8px; }
+  .alert-warn { color: var(--yellow); }
+  .alert-error { color: var(--red); }
+  .alert-info { color: var(--cyan); }
+
+  .event-row td:nth-child(2) { font-weight: 500; }
+  .ev-PreToolUse { color: var(--green); }
+  .ev-PostToolUse { color: #2ea043; }
+  .ev-PostToolUseFailure { color: var(--red); }
+  .ev-SessionStart { color: var(--cyan); font-weight: 600; }
+  .ev-SessionEnd { color: var(--fg-dim); }
+  .ev-SubagentStart { color: var(--purple); }
+  .ev-SubagentStop { color: #8b6fc0; }
+  .ev-PreCompact { color: var(--yellow); }
+  .ev-PostCompact { color: #9e7c1f; }
+  .ev-PermissionRequest { color: var(--yellow); font-weight: 600; }
+  .ev-UserPromptSubmit { color: var(--fg-bright); font-weight: 600; }
+
+  .empty { color: var(--fg-dim); text-align: center; padding: 24px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>cc-sidecar</h1>
+  <span id="conn-status" class="status status-disconnected">disconnected</span>
+  <span style="color: var(--fg-dim); font-size: 11px;" id="conn-detail"></span>
+</div>
+
+<div class="session-bar" id="session-bar">
+  <div class="item"><span class="label">Model</span><span class="value model" id="sb-model">--</span></div>
+  <div class="item"><span class="label">CWD</span><span class="value" id="sb-cwd">--</span></div>
+  <div class="item">
+    <span class="label">Context</span>
+    <div class="ctx-bar"><div class="ctx-fill ctx-green" id="sb-ctx-fill" style="width:0%"></div></div>
+    <span class="value" id="sb-ctx-pct">--%</span>
+  </div>
+  <div class="item"><span class="label">Cost</span><span class="value cost" id="sb-cost">$0.00</span></div>
+  <div class="item"><span class="label">Compactions</span><span class="value" id="sb-compact">0</span></div>
+  <div class="item"><span class="label">Agents</span><span class="value" id="sb-agents">0</span></div>
+</div>
+
+<div class="grid">
+  <div class="panel" id="agents-panel">
+    <div class="panel-title">Agents</div>
+    <table><thead><tr><th>ID</th><th>State</th><th>Tool</th><th>Resource</th><th>Src</th></tr></thead>
+    <tbody id="agents-body"></tbody></table>
+    <div class="empty" id="agents-empty">No agents tracked</div>
+  </div>
+
+  <div class="panel" id="alerts-panel">
+    <div class="panel-title">Alerts</div>
+    <div id="alerts-body"></div>
+    <div class="empty" id="alerts-empty">No alerts</div>
+  </div>
+
+  <div class="panel" style="grid-column: 1 / -1; max-height: 500px;">
+    <div class="panel-title">Timeline</div>
+    <table><thead><tr><th>Time</th><th>Event</th><th>Tool</th><th>Resource</th><th>Agent</th></tr></thead>
+    <tbody id="timeline-body"></tbody></table>
+    <div class="empty" id="timeline-empty">No events</div>
+  </div>
+</div>
+
+<script>
+// WHY: Single-file dashboard with no build step. Connects to the daemon's
+// WebSocket on the same host. Auth token fetched via /api/state fallback.
+
+const WS_PORT = location.port || 7420;
+const WS_HOST = location.hostname;
+let ws = null;
+let reconnectDelay = 1000;
+
+function formatTime(ms) {
+  if (!ms) return '--:--:--';
+  const d = new Date(ms);
+  return d.toLocaleTimeString('en-US', { hour12: false });
+}
+
+function shortPk(pk) {
+  if (!pk) return '?';
+  if (pk.startsWith('main:')) return 'main';
+  if (pk.startsWith('sub:')) {
+    const parts = pk.split(':');
+    return parts.length >= 3 ? parts[2].substring(0, 12) : pk;
+  }
+  return pk.substring(0, 16);
+}
+
+function shortPath(p) {
+  if (!p) return '--';
+  const parts = p.split('/');
+  return parts.length > 3 ? parts.slice(-3).join('/') : p;
+}
+
+function updateSessionBar(session) {
+  if (!session) return;
+  const el = (id) => document.getElementById(id);
+  if (session.model) el('sb-model').textContent = session.model;
+  if (session.cwd) el('sb-cwd').textContent = shortPath(session.cwd);
+
+  const pct = session.context_used_pct || 0;
+  el('sb-ctx-pct').textContent = pct.toFixed(0) + '%';
+  const fill = el('sb-ctx-fill');
+  fill.style.width = pct + '%';
+  fill.className = 'ctx-fill ' + (pct >= 90 ? 'ctx-red' : pct >= 70 ? 'ctx-yellow' : 'ctx-green');
+
+  el('sb-cost').textContent = '$' + (session.total_cost_usd || 0).toFixed(2);
+  el('sb-compact').textContent = session.compaction_count || 0;
+}
+
+function updateAgents(agents) {
+  const body = document.getElementById('agents-body');
+  const empty = document.getElementById('agents-empty');
+  body.innerHTML = '';
+
+  if (!agents || agents.length === 0) { empty.style.display = ''; return; }
+  empty.style.display = 'none';
+
+  let activeCount = 0;
+  agents.forEach(a => {
+    if (a.state !== 'finished' && a.state !== 'orphaned') activeCount++;
+    const tr = document.createElement('tr');
+    const stateClass = 'state state-' + a.state;
+    const srcBadge = a.state_source === 'inferred' ? 'badge-inf' : 'badge-obs';
+    const srcLabel = a.state_source === 'inferred' ? 'inf' : 'obs';
+    const visBadge = a.visibility_mode === 'lifecycle_only' ? ' <span class="badge badge-life">life</span>' : '';
+
+    tr.innerHTML = `
+      <td>${shortPk(a.agent_pk)}</td>
+      <td><span class="${stateClass}">${a.state.replace('_', ' ')}${a.is_compacting ? ' ⟳' : ''}</span></td>
+      <td>${a.last_tool_name || '--'}</td>
+      <td title="${a.last_resource || ''}">${(a.last_resource || '--').substring(0, 45)}</td>
+      <td><span class="badge ${srcBadge}">${srcLabel}</span>${visBadge}</td>
+    `;
+    body.appendChild(tr);
+  });
+
+  document.getElementById('sb-agents').textContent = activeCount;
+}
+
+function addAlert(alert) {
+  const container = document.getElementById('alerts-body');
+  const empty = document.getElementById('alerts-empty');
+  empty.style.display = 'none';
+
+  const div = document.createElement('div');
+  div.className = 'alert-item';
+  const sevClass = 'alert-' + (alert.severity || 'info');
+  div.innerHTML = `<span class="alert-time">${formatTime(alert.created_at_ms)}</span><span class="${sevClass}">${(alert.severity || 'INFO').toUpperCase()}</span> ${alert.message || ''}`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function addTimelineEvent(ev) {
+  const body = document.getElementById('timeline-body');
+  const empty = document.getElementById('timeline-empty');
+  empty.style.display = 'none';
+
+  const tr = document.createElement('tr');
+  tr.className = 'event-row';
+  const evClass = 'ev-' + (ev.event_name || '');
+
+  tr.innerHTML = `
+    <td>${formatTime(ev.received_at_ms)}</td>
+    <td class="${evClass}">${ev.event_name || '?'}</td>
+    <td>${ev.tool_name || '--'}</td>
+    <td title="${ev.resource_summary || ''}">${(ev.resource_summary || '--').substring(0, 40)}</td>
+    <td>${ev.agent_id ? ev.agent_id.substring(0, 10) : 'main'}</td>
+  `;
+  body.appendChild(tr);
+
+  // Auto-scroll and cap at 500 rows
+  const panel = body.closest('.panel');
+  panel.scrollTop = panel.scrollHeight;
+  while (body.children.length > 500) body.removeChild(body.firstChild);
+}
+
+function handleMessage(data) {
+  if (data.type === 'full_snapshot') {
+    // Clear existing
+    document.getElementById('agents-body').innerHTML = '';
+    document.getElementById('alerts-body').innerHTML = '';
+    document.getElementById('timeline-body').innerHTML = '';
+
+    // Sessions
+    const sessions = data.sessions || [];
+    const active = sessions.find(s => !s.ended_at_ms) || sessions[0];
+    updateSessionBar(active);
+
+    // Agents
+    updateAgents(data.agents || []);
+
+    // Alerts
+    (data.alerts || []).sort((a, b) => (a.created_at_ms || 0) - (b.created_at_ms || 0)).forEach(addAlert);
+
+    // Events
+    (data.recent_events || []).forEach(addTimelineEvent);
+
+  } else if (data.type === 'event') {
+    const ev = data.event || data;
+    addTimelineEvent(ev);
+    if (data.agents) updateAgents(data.agents);
+    if (data.session) updateSessionBar(data.session);
+  } else if (data.alert) {
+    addAlert(data.alert);
+  }
+}
+
+function connect() {
+  const statusEl = document.getElementById('conn-status');
+  const detailEl = document.getElementById('conn-detail');
+
+  // Read token from cookie or try without
+  const wsUrl = `ws://${WS_HOST}:${WS_PORT}/ws?token=` + (window._authToken || '');
+
+  try {
+    ws = new WebSocket(wsUrl);
+  } catch (e) {
+    statusEl.textContent = 'error';
+    statusEl.className = 'status status-disconnected';
+    setTimeout(connect, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+    return;
+  }
+
+  ws.onopen = () => {
+    statusEl.textContent = 'connected';
+    statusEl.className = 'status status-connected';
+    detailEl.textContent = `ws://${WS_HOST}:${WS_PORT}`;
+    reconnectDelay = 1000;
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      handleMessage(JSON.parse(event.data));
+    } catch (e) {
+      console.error('Parse error:', e);
+    }
+  };
+
+  ws.onclose = () => {
+    statusEl.textContent = 'disconnected';
+    statusEl.className = 'status status-disconnected';
+    detailEl.textContent = `reconnecting in ${reconnectDelay/1000}s...`;
+    setTimeout(connect, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+  };
+
+  ws.onerror = () => {
+    ws.close();
+  };
+}
+
+// Bootstrap: fetch token via HTTP API, then connect WS
+async function init() {
+  // Try to get auth token from the HTTP API
+  try {
+    const resp = await fetch('/api/state');
+    if (resp.ok) {
+      const data = await resp.json();
+      handleMessage({ type: 'full_snapshot', ...data });
+    }
+  } catch (e) {
+    // HTTP API not available — will try WS directly
+  }
+
+  // For WS auth, try to read token from URL hash
+  const hash = location.hash.substring(1);
+  if (hash) window._authToken = hash;
+
+  connect();
+}
+
+init();
+</script>
+</body>
+</html>

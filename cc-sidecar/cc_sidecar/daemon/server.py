@@ -51,8 +51,15 @@ class SidecarDaemon:
     (database connection, reducer registry, WebSocket clients).
     """
 
-    def __init__(self, ws_port: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        ws_port: Optional[int] = None,
+        ws_host: Optional[str] = None,
+        http_port: Optional[int] = None,
+    ) -> None:
         self.ws_port = ws_port or int(os.environ.get("CC_SIDECAR_WS_PORT", WS_DEFAULT_PORT))
+        self.ws_host = ws_host or os.environ.get("CC_SIDECAR_WS_HOST", "127.0.0.1")
+        self.http_port = http_port or int(os.environ.get("CC_SIDECAR_HTTP_PORT", "0"))  # 0 = disabled
         self.registry = ReducerRegistry()
         self.db: Optional[Any] = None
         self.pipeline: Optional[IngestPipeline] = None
@@ -132,10 +139,13 @@ class SidecarDaemon:
         self._running = True
 
         # Start services concurrently
-        await asyncio.gather(
+        services = [
             self._run_socket_server(),
             self._run_ws_server(),
-        )
+        ]
+        if self.http_port:
+            services.append(self._run_http_server())
+        await asyncio.gather(*services)
 
     async def stop(self) -> None:
         """Graceful shutdown."""
@@ -260,10 +270,90 @@ class SidecarDaemon:
                 self._ws_clients.discard(websocket)
                 logger.info("WebSocket client disconnected (%d remaining)", len(self._ws_clients))
 
-        async with serve(handler, "127.0.0.1", self.ws_port):
-            logger.info("WebSocket server listening on ws://127.0.0.1:%d", self.ws_port)
+        async with serve(handler, self.ws_host, self.ws_port):
+            logger.info("WebSocket server listening on ws://%s:%d", self.ws_host, self.ws_port)
             while self._running:
                 await asyncio.sleep(1)
+
+    # ── HTTP server (web dashboard) ──
+
+    async def _run_http_server(self) -> None:
+        """
+        Serve the web dashboard over HTTP.
+
+        WHY: Provides browser-accessible UI for remote access (e.g., from
+        a DigitalOcean droplet). Serves a single HTML page that connects
+        to the WebSocket on the same host.
+        """
+        from http.server import BaseHTTPRequestHandler
+        from http import HTTPStatus
+
+        daemon_ref = self
+
+        class Handler(asyncio.Protocol):
+            """Minimal async HTTP handler."""
+            pass
+
+        # Use aiohttp-free approach: raw asyncio HTTP server
+        async def handle_http(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            try:
+                request_line = await asyncio.wait_for(reader.readline(), timeout=5)
+                if not request_line:
+                    writer.close()
+                    return
+
+                # Read headers (consume them)
+                while True:
+                    line = await reader.readline()
+                    if line in (b"\r\n", b"\n", b""):
+                        break
+
+                path = request_line.decode().split(" ")[1] if b" " in request_line else "/"
+
+                if path == "/api/state":
+                    # JSON API endpoint
+                    snapshot = await daemon_ref._build_full_snapshot()
+                    body = json.dumps(snapshot).encode()
+                    content_type = "application/json"
+                elif path == "/api/health":
+                    body = json.dumps({"status": "ok", "pid": os.getpid()}).encode()
+                    content_type = "application/json"
+                else:
+                    # Serve the dashboard HTML
+                    dashboard_path = Path(__file__).parent / "dashboard.html"
+                    if dashboard_path.exists():
+                        body = dashboard_path.read_bytes()
+                    else:
+                        body = b"<h1>cc-sidecar</h1><p>dashboard.html not found</p>"
+                    content_type = "text/html; charset=utf-8"
+
+                response = (
+                    f"HTTP/1.1 200 OK\r\n"
+                    f"Content-Type: {content_type}\r\n"
+                    f"Content-Length: {len(body)}\r\n"
+                    f"Access-Control-Allow-Origin: *\r\n"
+                    f"Connection: close\r\n"
+                    f"\r\n"
+                ).encode() + body
+
+                writer.write(response)
+                await writer.drain()
+            except Exception as e:
+                logger.debug("HTTP handler error: %s", e)
+            finally:
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except Exception:
+                    pass
+
+        server = await asyncio.start_server(
+            handle_http, "0.0.0.0", self.http_port,
+        )
+        logger.info("HTTP dashboard listening on http://0.0.0.0:%d", self.http_port)
+
+        async with server:
+            await server.serve_forever()
 
     async def _build_full_snapshot(self) -> dict[str, Any]:
         """Build a complete state snapshot for new WebSocket clients."""
@@ -371,13 +461,25 @@ class SidecarDaemon:
 
 def main() -> None:
     """Entry point for cc-sidecard."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="cc-sidecar daemon")
+    parser.add_argument("--ws-port", type=int, default=None, help="WebSocket port")
+    parser.add_argument("--ws-host", default=None, help="WebSocket bind host")
+    parser.add_argument("--http-port", type=int, default=None, help="HTTP dashboard port (0=disabled)")
+    args = parser.parse_args()
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
 
-    daemon = SidecarDaemon()
+    daemon = SidecarDaemon(
+        ws_port=args.ws_port,
+        ws_host=args.ws_host,
+        http_port=args.http_port,
+    )
     shutdown_event = asyncio.Event()
 
     async def run_daemon() -> None:
