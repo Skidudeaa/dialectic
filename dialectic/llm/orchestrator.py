@@ -22,6 +22,7 @@ from .prompts import PromptBuilder, AssembledPrompt
 from .context import assemble_context
 from .cross_session_context import CrossSessionContextBuilder, CrossSessionContext
 from .self_memory import LLMSelfMemory
+from .self_model import SelfModel
 from .identity import LLMIdentityManager
 from memory.cross_session import CrossSessionMemoryManager
 from memory.manager import MemoryManager
@@ -61,6 +62,7 @@ class LLMOrchestrator:
         self._cross_session_builder = CrossSessionContextBuilder(
             CrossSessionMemoryManager(db)
         )
+        self._self_model = SelfModel(db)
 
     async def _get_cross_session_context(
         self, messages: list[Message], room_id: UUID,
@@ -212,6 +214,24 @@ class LLMOrchestrator:
 
         if not decision.should_interject:
             logger.debug(f"No interjection: {decision.reason}")
+            # WHY: Log silence decisions so the LLM accumulates awareness
+            # of when and why it chose not to speak.
+            triggered_msg = next(
+                (m for m in reversed(messages) if m.speaker_type == SpeakerType.HUMAN),
+                None,
+            )
+            await self._self_model.log_decision(
+                room_id=room.id,
+                thread_id=thread.id,
+                triggered_by_message_id=triggered_msg.id if triggered_msg else None,
+                decision=decision,
+                human_turn_count=getattr(decision, '_human_turns', None),
+                semantic_novelty=semantic_novelty,
+                unsurfaced_memory_count=unsurfaced_memory_count if 'unsurfaced_memory_count' in dir() else None,
+                speaker_balance=speaker_balance if 'speaker_balance' in dir() else None,
+                message_count=len(messages),
+                mode="silence",
+            )
             return OrchestrationResult(
                 triggered=False,
                 decision=decision,
@@ -238,6 +258,15 @@ class LLMOrchestrator:
             thread.room_id, users
         )
 
+        # Fetch self-awareness context (the LLM's own participation state)
+        self_awareness_section = None
+        try:
+            snapshot = await self._self_model.get_participation_snapshot(room.id)
+            if snapshot:
+                self_awareness_section = self._self_model.render_self_awareness(snapshot)
+        except Exception as e:
+            logger.debug("Self-awareness context unavailable: %s", e)
+
         prompt = self.prompt_builder.build(
             room=room,
             users=users,
@@ -248,6 +277,7 @@ class LLMOrchestrator:
             protocol=protocol,
             evolved_identity=evolved_identity,
             user_models=user_models,
+            self_awareness=self_awareness_section,
         )
 
         router = self._get_router(room)
@@ -290,6 +320,33 @@ class LLMOrchestrator:
 
         # Fire-and-forget: extract LLM self-memories in background
         self._schedule_self_memory_extraction(response_message, thread.room_id, messages)
+
+        # WHY: Log the interjection decision so the LLM accumulates
+        # awareness of when and why it chose to speak.
+        triggered_msg = next(
+            (m for m in reversed(messages) if m.speaker_type == SpeakerType.HUMAN),
+            None,
+        )
+        mode = "provoker" if decision.use_provoker else ("protocol" if protocol else "primary")
+        decision_id = await self._self_model.log_decision(
+            room_id=room.id,
+            thread_id=thread.id,
+            triggered_by_message_id=triggered_msg.id if triggered_msg else None,
+            decision=decision,
+            semantic_novelty=semantic_novelty,
+            speaker_balance=speaker_balance if 'speaker_balance' in dir() else None,
+            message_count=len(messages),
+            response_message_id=response_message.id,
+            mode=mode,
+        )
+
+        # Schedule effectiveness measurement (~30s later)
+        if decision_id:
+            self._schedule_effectiveness_measurement(
+                room_id=room.id,
+                llm_message_id=response_message.id,
+                decision_id=decision_id,
+            )
 
         return OrchestrationResult(
             triggered=True,
@@ -510,6 +567,30 @@ class LLMOrchestrator:
         asyncio.create_task(
             self_memory.extract_and_store(message, room_id, messages[-10:])
         )
+
+    def _schedule_effectiveness_measurement(
+        self,
+        *,
+        room_id: UUID,
+        llm_message_id: UUID,
+        decision_id: int,
+    ) -> None:
+        """
+        Schedule background effectiveness measurement ~30s after LLM speaks.
+
+        WHY: Gives humans time to respond before measuring engagement.
+        TRADEOFF: 30s delay means the measurement is always slightly stale,
+        but immediate measurement would find zero responses.
+        """
+        async def _delayed_measure() -> None:
+            await asyncio.sleep(30)
+            await self._self_model.measure_effectiveness(
+                room_id=room_id,
+                llm_message_id=llm_message_id,
+                decision_id=decision_id,
+            )
+
+        asyncio.create_task(_delayed_measure())
 
     async def _persist_response(
         self,

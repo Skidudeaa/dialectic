@@ -81,6 +81,7 @@ You speak with authority on procedure, not on content."""
         protocol: Optional[ProtocolState] = None,
         evolved_identity: Optional[str] = None,
         user_models: Optional[dict[UUID, str]] = None,
+        self_awareness: Optional[str] = None,
     ) -> AssembledPrompt:
         """
         Assemble full prompt from components.
@@ -134,6 +135,13 @@ You speak with authority on procedure, not on content."""
             user_model_section = self._build_user_models_section(user_models, users)
             if user_model_section:
                 system_parts.append(f"\n\n## Your Understanding of the Participants\n{user_model_section}")
+
+        # Self-awareness: the LLM's own participation state
+        # WHY: Injected before room context so the LLM knows its own state
+        # before processing the conversation. Suppressed in provoker mode
+        # (short disruptions don't need self-reflection).
+        if self_awareness and not is_provoker:
+            system_parts.append(f"\n\n{self_awareness}")
 
         if protocol_section:
             system_parts.append(f"\n\n{protocol_section}")
