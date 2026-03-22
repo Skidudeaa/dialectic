@@ -128,10 +128,17 @@
 // WHY: Single-file dashboard with no build step. Connects to the daemon's
 // WebSocket on the same host. Auth token fetched via /api/state fallback.
 
-const WS_PORT = location.port || 7420;
+// WHY: Server injects these values into the HTML so the dashboard
+// auto-configures regardless of which port it's served from.
+// Fallback to URL hash for manual config: http://host:port/#token@wsport
+const _cfg = (window.__CC_SIDECAR_CONFIG || {});
+const WS_PORT = _cfg.ws_port || 7420;
 const WS_HOST = location.hostname;
 let ws = null;
 let reconnectDelay = 1000;
+
+// Set auth token from server config or URL hash
+if (_cfg.auth_token) window._authToken = _cfg.auth_token;
 
 function formatTime(ms) {
   if (!ms) return '--:--:--';
@@ -314,9 +321,17 @@ function connect() {
   };
 }
 
-// Bootstrap: fetch token via HTTP API, then connect WS
+// Bootstrap: load initial state via HTTP API, then connect WS for live updates
 async function init() {
-  // Try to get auth token from the HTTP API
+  // URL hash override: #token or #token@wsport
+  const hash = location.hash.substring(1);
+  if (hash) {
+    const parts = hash.split('@');
+    if (!window._authToken) window._authToken = parts[0];
+    if (parts[1]) window.__CC_SIDECAR_CONFIG = { ..._cfg, ws_port: parseInt(parts[1]) };
+  }
+
+  // Fetch initial state via HTTP API (same-origin, no auth needed)
   try {
     const resp = await fetch('/api/state');
     if (resp.ok) {
@@ -324,12 +339,8 @@ async function init() {
       handleMessage({ type: 'full_snapshot', ...data });
     }
   } catch (e) {
-    // HTTP API not available — will try WS directly
+    console.log('HTTP API unavailable, relying on WebSocket');
   }
-
-  // For WS auth, try to read token from URL hash
-  const hash = location.hash.substring(1);
-  if (hash) window._authToken = hash;
 
   connect();
 }

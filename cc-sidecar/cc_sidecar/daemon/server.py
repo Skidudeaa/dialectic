@@ -318,11 +318,24 @@ class SidecarDaemon:
                 elif path == "/api/health":
                     body = json.dumps({"status": "ok", "pid": os.getpid()}).encode()
                     content_type = "application/json"
+                elif path.startswith("/api/"):
+                    body = json.dumps({"error": "not found"}).encode()
+                    content_type = "application/json"
                 else:
-                    # Serve the dashboard HTML
+                    # Serve the dashboard HTML with injected config
                     dashboard_path = Path(__file__).parent / "dashboard.html"
                     if dashboard_path.exists():
-                        body = dashboard_path.read_bytes()
+                        html = dashboard_path.read_text()
+                        # WHY: Inject WS port and auth token so the
+                        # dashboard auto-configures without URL hash.
+                        config_script = (
+                            f'<script>window.__CC_SIDECAR_CONFIG = '
+                            f'{{"ws_port": {daemon_ref.ws_port}, '
+                            f'"auth_token": "{daemon_ref._auth_token}"}};'
+                            f'</script>'
+                        )
+                        html = html.replace("</head>", f"{config_script}\n</head>", 1)
+                        body = html.encode()
                     else:
                         body = b"<h1>cc-sidecar</h1><p>dashboard.html not found</p>"
                     content_type = "text/html; charset=utf-8"
