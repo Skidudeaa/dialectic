@@ -24,6 +24,9 @@ cc-sidecar-install = "cc_sidecar.install.cli:main"
 [tool.setuptools.packages.find]
 include = ["cc_sidecar*"]
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

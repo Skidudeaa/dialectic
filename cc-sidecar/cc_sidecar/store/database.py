@@ -60,24 +60,43 @@ async def apply_schema(db: aiosqlite.Connection) -> None:
     All CREATE statements use IF NOT EXISTS, so this is safe to call
     on every daemon startup.
     """
+    import re
+
     schema_sql = _SCHEMA_PATH.read_text()
 
-    # WHY: Split on semicolons and execute individually because
-    # aiosqlite.executescript commits implicitly and we want
-    # explicit transaction control.
-    statements = [s.strip() for s in schema_sql.split(";") if s.strip()]
-    for stmt in statements:
-        # Skip PRAGMA statements that were already set in get_connection
-        if stmt.upper().startswith("PRAGMA"):
-            continue
-        try:
-            await db.execute(stmt)
-        except sqlite3.OperationalError as e:
-            # Log but don't crash on benign errors (e.g., index already exists)
-            if "already exists" not in str(e):
-                logger.warning("Schema statement failed: %s — %s", stmt[:80], e)
+    # WHY: Strip SQL comments before splitting on semicolons.
+    # Multi-line comments can contain text that looks like SQL
+    # when split naively on ';'.
+    cleaned = re.sub(r"--[^\n]*", "", schema_sql)  # Strip line comments
+    cleaned = re.sub(r"/\*.*?\*/", "", cleaned, flags=re.DOTALL)  # Strip block comments
 
-    await db.commit()
+    # WHY: executescript is the correct way to apply DDL batches in SQLite.
+    # It handles multi-statement SQL natively and commits implicitly.
+    # We strip PRAGMA statements because they were already set in get_connection
+    # and some (like journal_mode) conflict with executescript's implicit commit.
+    lines = []
+    for line in cleaned.splitlines():
+        stripped = line.strip().upper()
+        if stripped.startswith("PRAGMA"):
+            continue
+        lines.append(line)
+
+    ddl = "\n".join(lines)
+
+    try:
+        await db.executescript(ddl)
+    except sqlite3.OperationalError as e:
+        logger.warning("Schema application error: %s", e)
+        # Fallback: try individual statements
+        statements = [s.strip() for s in ddl.split(";") if s.strip()]
+        for stmt in statements:
+            try:
+                await db.execute(stmt)
+            except sqlite3.OperationalError as e2:
+                if "already exists" not in str(e2):
+                    logger.warning("Statement failed: %s — %s", stmt[:80], e2)
+        await db.commit()
+
     logger.info("Schema applied successfully")
 
 

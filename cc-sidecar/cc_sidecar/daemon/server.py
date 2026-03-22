@@ -78,6 +78,22 @@ class SidecarDaemon:
         os.chmod(AUTH_TOKEN_FILE, FILE_MODE)
         logger.info("Auth token written to %s", AUTH_TOKEN_FILE)
 
+        # Check for existing daemon
+        if PID_FILE.exists():
+            try:
+                old_pid = int(PID_FILE.read_text().strip())
+                os.kill(old_pid, 0)  # Check if process exists
+                logger.error(
+                    "Another daemon is already running (pid=%d). "
+                    "Kill it first or remove %s",
+                    old_pid, PID_FILE,
+                )
+                raise RuntimeError(f"Daemon already running (pid={old_pid})")
+            except (ProcessLookupError, ValueError):
+                # Stale PID file — previous daemon crashed
+                logger.info("Removing stale PID file (pid=%s)", PID_FILE.read_text().strip())
+                PID_FILE.unlink(missing_ok=True)
+
         # Write PID file
         PID_FILE.write_text(str(os.getpid()))
         os.chmod(PID_FILE, FILE_MODE)
@@ -362,24 +378,41 @@ def main() -> None:
     )
 
     daemon = SidecarDaemon()
+    shutdown_event = asyncio.Event()
 
-    # Handle signals for graceful shutdown
-    loop = asyncio.new_event_loop()
+    async def run_daemon() -> None:
+        """Run daemon until shutdown signal."""
+        # WHY: We use an Event instead of loop.stop() so that the
+        # shutdown coroutine can complete before the loop exits.
+        loop = asyncio.get_event_loop()
 
-    def handle_signal(sig: int) -> None:
-        logger.info("Received signal %d", sig)
-        loop.create_task(daemon.stop())
-        loop.stop()
+        def handle_signal(sig: int) -> None:
+            logger.info("Received signal %d", sig)
+            shutdown_event.set()
 
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, handle_signal, sig)
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, handle_signal, sig)
+
+        # Start daemon services as background tasks
+        start_task = asyncio.create_task(daemon.start())
+
+        # Wait for shutdown signal
+        await shutdown_event.wait()
+
+        # Cancel the start task (which runs serve_forever)
+        start_task.cancel()
+        try:
+            await start_task
+        except (asyncio.CancelledError, RuntimeError):
+            pass
+
+        # Graceful cleanup
+        await daemon.stop()
 
     try:
-        loop.run_until_complete(daemon.start())
+        asyncio.run(run_daemon())
     except KeyboardInterrupt:
-        loop.run_until_complete(daemon.stop())
-    finally:
-        loop.close()
+        pass
 
 
 if __name__ == "__main__":
