@@ -1,0 +1,86 @@
+{
+  "v": 1,
+  "timestamp": "2026-03-30T22:25:29Z",
+  "title": "Trump Tariff Escalation Thesis — March 2026",
+  "nodeStates": {
+    "tariff-shock": "fired",
+    "section122-expiry": "gated",
+    "input-costs": "fired",
+    "supply-chain": "fired",
+    "auto-sector": "fired",
+    "tech-supply": "fired",
+    "ag-retaliation": "fired",
+    "usd-cny": "approaching",
+    "retail-prices": "fired",
+    "mfg-pmi": "fired",
+    "consumer-confidence": "fired",
+    "earnings-compression": "fired",
+    "recession-risk": "fired",
+    "fed-response": "monitoring",
+    "negotiation": "stable"
+  },
+  "confluenceScores": {
+    "consumer-confidence": 1.95,
+    "earnings-compression": 2.05,
+    "recession-risk": 1.25
+  },
+  "cascadePhase": {
+    "number": 3,
+    "key": "amplification",
+    "status": "STARTING"
+  },
+  "countdowns": [
+    {
+      "nodeId": "section122-expiry",
+      "label": "Section 122 Expiration",
+      "deadline": "2026-07-24",
+      "daysRemaining": 116
+    }
+  ],
+  "marketSnapshot": {
+    "spx": 6370,
+    "corePce": 2.7,
+    "umichSent": 53.3,
+    "ismPmi": 52.4,
+    "usdCny": 6.916,
+    "fedRate": 3.625,
+    "tenYr": 4.35,
+    "effectiveTariff": 13.7,
+    "goldSpot": 4492,
+    "vix": 30.97
+  },
+  "scenarioImpacts": {
+    "deal-by-july": {
+      "probability": 0.35,
+      "netImpact": -0.3
+    },
+    "section122-extended": {
+      "probability": 0.25,
+      "netImpact": 0.0
+    },
+    "escalation": {
+      "probability": 0.15,
+      "netImpact": 0.0
+    },
+    "stagflation": {
+      "probability": 0.15,
+      "netImpact": 0.0
+    },
+    "muddle-through": {
+      "probability": 0.1,
+      "netImpact": 0.2
+    }
+  },
+  "portfolioSummary": {
+    "monthlyBudget": 6000,
+    "topPositions": [
+      "SGOV $800/mo",
+      "XLI $600/mo",
+      "TLT $600/mo",
+      "XLY $500/mo",
+      "IWM $500/mo",
+      "GLD $500/mo"
+    ],
+    "sgovAvailable": 800
+  }
+}

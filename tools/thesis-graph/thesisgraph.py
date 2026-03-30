@@ -638,6 +638,77 @@ def update_config_file(config_path: str, cfg: dict) -> None:
     print(f"  Config updated: {config_path}")
 
 
+def fetch_polymarket(cfg: dict) -> dict:
+    """Fetch live probabilities from Polymarket for nodes with polymarket feeds.
+
+    WHY separate from fetch_prices: Polymarket provides prediction market
+    probabilities (0-1 event likelihood), not asset prices. These update
+    node 'probability' fields, not 'current' price fields. Different data
+    type, different API, different update semantics.
+
+    Scans all nodes for feeds with source="polymarket", batches the slugs,
+    calls the polymarket module, and writes probabilities back into the cfg.
+    """
+    # WHY dynamic import: the polymarket module lives in tools/data-fetch/.
+    # We resolve the path relative to this script so it works regardless
+    # of the working directory.
+    polymarket_dir = os.path.join(os.path.dirname(__file__), "..", "data-fetch")
+    polymarket_dir = os.path.abspath(polymarket_dir)
+
+    if not os.path.isfile(os.path.join(polymarket_dir, "polymarket.py")):
+        print("  polymarket: module not found, skipping", file=sys.stderr)
+        return cfg
+
+    # WHY sys.path insert: stdlib-only constraint means no pip install.
+    # We add the module directory to sys.path so we can import it directly.
+    if polymarket_dir not in sys.path:
+        sys.path.insert(0, polymarket_dir)
+
+    try:
+        import polymarket as pm
+    except ImportError as e:
+        print(f"  polymarket: import failed: {e}", file=sys.stderr)
+        return cfg
+
+    # Collect all polymarket slugs from node feeds
+    slug_to_nodes: dict = {}  # slug -> list of node IDs that use this slug
+    for node in cfg.get("nodes", []):
+        for feed in node.get("feeds", []):
+            if feed.get("source") == "polymarket" and "market" in feed:
+                slug = feed["market"]
+                if slug not in slug_to_nodes:
+                    slug_to_nodes[slug] = []
+                slug_to_nodes[slug].append(node["id"])
+
+    if not slug_to_nodes:
+        print("  polymarket: no polymarket feeds found in nodes", file=sys.stderr)
+        return cfg
+
+    slugs = list(slug_to_nodes.keys())
+    print(f"  polymarket: fetching {len(slugs)} market(s)...", file=sys.stderr)
+
+    # Fetch all probabilities in one batch
+    results = pm.fetch_markets(slugs)
+
+    # Write probabilities back into matching nodes
+    node_map = {n["id"]: n for n in cfg["nodes"]}
+    count = 0
+    for slug, prob in results.items():
+        if prob is None:
+            print(f"  polymarket: {slug} -> no data", file=sys.stderr)
+            continue
+        for nid in slug_to_nodes.get(slug, []):
+            if nid in node_map:
+                old_prob = node_map[nid].get("probability")
+                node_map[nid]["probability"] = round(prob, 4)
+                old_str = f"{old_prob:.1%}" if old_prob is not None else "none"
+                print(f"  polymarket: {nid}: {old_str} -> {prob:.1%}", file=sys.stderr)
+                count += 1
+
+    print(f"  polymarket: updated {count}/{len(slugs)} node(s)", file=sys.stderr)
+    return cfg
+
+
 # =========================================================================
 # DATA TRANSFORM
 # =========================================================================
@@ -2178,6 +2249,11 @@ Examples:
     if args.fetch or args.update_config:
         print("\nFetching live prices...", file=log)
         cfg = fetch_prices(cfg)
+        # WHY polymarket runs alongside yahoo: different data sources feed
+        # different node fields (prices vs. probabilities). Both need to
+        # run when --fetch is used so the graph has complete live data.
+        print("\nFetching Polymarket probabilities...", file=log)
+        cfg = fetch_polymarket(cfg)
         if args.update_config:
             update_config_file(args.config, cfg)
 
