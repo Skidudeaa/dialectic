@@ -145,7 +145,7 @@ graph TB
     U7 --> U8[Unit 8: Frontend Panel]
 ```
 
-- [ ] **Unit 1: Add `--export-state` to thesisgraph.py**
+- [x] **Unit 1: Add `--export-state` to thesisgraph.py**
 
 **Goal:** Enable tradingDesk to export evaluated graph state as structured JSON.
 
@@ -185,7 +185,7 @@ graph TB
 
 ---
 
-- [ ] **Unit 2: Build diff-snapshots.py**
+- [x] **Unit 2: Build diff-snapshots.py**
 
 **Goal:** Compare two snapshot JSONs and output a structured delta showing what changed.
 
