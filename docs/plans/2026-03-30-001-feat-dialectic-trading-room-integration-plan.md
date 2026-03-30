@@ -224,7 +224,7 @@ graph TB
 
 ---
 
-- [ ] **Unit 3: Dialectic schema migration + model updates**
+- [x] **Unit 3: Dialectic schema migration + model updates**
 
 **Goal:** Add `trading_config` JSONB column to the rooms table and extend Python models with new types.
 
@@ -261,7 +261,7 @@ graph TB
 
 ---
 
-- [ ] **Unit 4: Trading snapshot REST endpoint**
+- [x] **Unit 4: Trading snapshot REST endpoint**
 
 **Goal:** Accept thesis graph snapshots from the bridge script, store them, and broadcast to connected clients.
 
@@ -306,7 +306,7 @@ graph TB
 
 ---
 
-- [ ] **Unit 5: Prompt injection — thesis state in LLM context**
+- [x] **Unit 5: Prompt injection — thesis state in LLM context**
 
 **Goal:** The LLM sees the trading thesis state in its system prompt when discussing in a trading room.
 
@@ -358,7 +358,7 @@ graph TB
 
 ---
 
-- [ ] **Unit 6: TradingCuratorEngine**
+- [x] **Unit 6: TradingCuratorEngine**
 
 **Goal:** Generate contextualized alerts when a snapshot arrives and a trader is offline.
 
@@ -400,7 +400,7 @@ graph TB
 
 ---
 
-- [ ] **Unit 7: push-to-dialectic.py bridge script**
+- [x] **Unit 7: push-to-dialectic.py bridge script**
 
 **Goal:** One-command pipeline from tradingDesk export to Dialectic snapshot endpoint.
 
