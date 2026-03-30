@@ -1,0 +1,183 @@
+{
+  "title": "The Active Commodity Book",
+  "subtitle": "Track positions. Follow triggers. Deploy on data, not narrative.",
+  "monthlyBudget": 8000,
+  "asOf": "2026-03-29",
+  "claim": "The corrected commodity book stays overweight producers, fertilizer, and gold — do not front-run a services boom that the operating data still do not support.",
+
+  "categories": {
+    "producers":     { "color": "#E69A4C", "label": "Producers" },
+    "fertilizer":    { "color": "#8AAC6B", "label": "Fertilizer" },
+    "gold":          { "color": "#DAA520", "label": "Gold" },
+    "defense":       { "color": "#6E8FAD", "label": "Defense" },
+    "international": { "color": "#4CC4B4", "label": "International" }
+  },
+
+  "instruments": [
+    { "id": "XOP",  "monthly": 1400, "role": "High-beta U.S. E&P",               "category": "producers",     "ref": 188.18, "targetLow": 210,  "targetHigh": 225, "stop": 171 },
+    { "id": "XLE",  "monthly": 1200, "role": "Large-cap energy cash flow",        "category": "producers",     "ref": 61.52,  "targetLow": 68,   "targetHigh": 72,  "stop": 56 },
+    { "id": "SGOV", "monthly": 1200, "role": "Tactical reserve / deployment ammo","category": "defense",       "ref": 100.65, "targetLow": null,  "targetHigh": null, "stop": null, "isReserve": true },
+    { "id": "GLD",  "monthly": 1000, "role": "Gold hedge",                        "category": "gold",          "ref": 414.70, "targetLow": 445,  "targetHigh": 460, "stop": 395 },
+    { "id": "IXC",  "monthly": 800,  "role": "Global energy",                     "category": "producers",     "ref": 58.26,  "targetLow": 64,   "targetHigh": 68,  "stop": 53 },
+    { "id": "CF",   "monthly": 800,  "role": "Nitrogen / fertilizer torque",      "category": "fertilizer",    "ref": 136.45, "targetLow": 150,  "targetHigh": 160, "stop": 124 },
+    { "id": "NTR",  "monthly": 600,  "role": "Potash / nitrogen / phosphate",     "category": "fertilizer",    "ref": 75.65,  "targetLow": 82,   "targetHigh": 88,  "stop": 69 },
+    { "id": "VXUS", "monthly": 600,  "role": "Small ex-U.S. sleeve",              "category": "international", "ref": 74.69,  "targetLow": 78,   "targetHigh": 81,  "stop": 71 },
+    { "id": "STIP", "monthly": 400,  "role": "Near-term inflation hedge",         "category": "defense",       "ref": 103.12, "targetLow": null,  "targetHigh": null, "stop": null }
+  ],
+
+  "triggers": [
+    {
+      "id": "brent-per", "name": "Brent Persistence",
+      "metricKey": "brent", "operator": ">", "threshold": 115, "closesRequired": 3,
+      "action": "Deploy $400 SGOV → XOP",
+      "detail": "One-third of SGOV first. Never the whole reserve at once.",
+      "context": "Brent > $115 for 3 closes = shock → persistence."
+    },
+    {
+      "id": "supply", "name": "Supply Loss / Kharg",
+      "binaryKey": "supplyLoss",
+      "action": "Deploy $400 → XLE + CF",
+      "detail": "Split evenly. Second and final standard SGOV deployment.",
+      "context": "> 13 mbpd loss or Kharg escalation = structural disruption."
+    },
+    {
+      "id": "curve", "name": "Curve Durability",
+      "metricKey": "curveSpread", "operator": ">", "threshold": 20, "isConstraint": true,
+      "action": "Keep services CAPPED",
+      "detail": "Front > 20% over 6m deferred = prompt tightness, not capex recovery.",
+      "context": "Backwardation above 20% means services need sustained flat curves."
+    },
+    {
+      "id": "rigs", "name": "Rig Confirmation",
+      "binaryKey": "rigsFlat",
+      "action": "Open OIH or HAL/SLB",
+      "detail": "Rigs flat/up 2 weeks. Baker Hughes Fridays. Do not force this.",
+      "context": "Services valid only when rigs stop falling."
+    },
+    {
+      "id": "fert", "name": "Fertilizer Stress",
+      "metricKey": "nolaFert", "operator": ">", "threshold": 700,
+      "action": "Add CF + NTR",
+      "detail": "NOLA > $700/mt or +10% w/w. First-class indicator.",
+      "context": "Hormuz handles ~30% of traded fertilizers. Already up 30-40%."
+    },
+    {
+      "id": "gold", "name": "Gold Regime",
+      "metricKey": "goldSpot", "operator": ">", "threshold": 4600,
+      "altMetric": { "key": "gld", "threshold": 425 },
+      "action": "Add GLD or GDX",
+      "detail": "GLD > $425 or spot > $4,600. Hedge, not hero.",
+      "context": "Gold driven by rates + dollar + liquidity, not just war."
+    },
+    {
+      "id": "diesel", "name": "Diesel Stress",
+      "metricKey": "usDiesel", "operator": ">", "threshold": 5.50, "closesRequired": 10,
+      "action": "Trim VXUS, add XLE/CF",
+      "detail": "Diesel > $5.50 for 2 weeks. Transport cost transmission.",
+      "context": "$5.38 now. Trucking already under pressure."
+    },
+    {
+      "id": "ship", "name": "Shipping Stress",
+      "binaryKey": "shipWorse",
+      "action": "Open STNG or FRO",
+      "detail": "Worsening reroutes/stranding. Tactical, not core.",
+      "context": "Freight costs slowing West African crude flows. Vessels stranded."
+    },
+    {
+      "id": "de-esc", "name": "De-escalation",
+      "metricKey": "brent", "operator": "<", "threshold": 95, "closesRequired": 5,
+      "isReversal": true,
+      "action": "REVERSE: Cut XOP/CF/tankers",
+      "detail": "Cut XOP 1/3, CF/NTR 1/4, close tankers. Rebuild VXUS + SGOV first.",
+      "context": "Brent < $95 for 5 closes + restored Hormuz traffic = unwind."
+    }
+  ],
+
+  "overlays": [
+    {
+      "id": "oil-esc", "name": "Oil Escalation",
+      "triggerIds": ["brent-per"], "condition": "Brent > $115 for 3 closes",
+      "instruments": [
+        { "id": "OXY",  "ref": 65.32,  "targetLow": 72,  "targetHigh": 76,  "stop": 60,  "note": "After Brent > $115 for 3 closes" },
+        { "id": "FANG", "ref": 201.84, "targetLow": 220, "targetHigh": 230, "stop": 188, "note": "After XOP weekly close > 195" }
+      ]
+    },
+    {
+      "id": "svc", "name": "Services / Rebuild",
+      "triggerIds": ["rigs"], "condition": "Rig count flat/up 2 weeks",
+      "instruments": [
+        { "id": "OIH", "ref": 416.20, "targetLow": 460, "targetHigh": 500, "stop": 378, "note": "ETF over single names" },
+        { "id": "HAL", "ref": 40.42,  "targetLow": 45,  "targetHigh": 48,  "stop": 37 },
+        { "id": "SLB", "ref": 53.50,  "targetLow": 60,  "targetHigh": 64,  "stop": 49 },
+        { "id": "RIG", "ref": 6.93,   "targetLow": 8.25, "targetHigh": 9.00, "stop": 6.10, "note": "Max 1-2%. Loss-making." }
+      ]
+    },
+    {
+      "id": "ship", "name": "Shipping Stress",
+      "triggerIds": ["ship"], "condition": "Worsening reroutes / stranding",
+      "instruments": [
+        { "id": "STNG", "ref": 75.71, "targetLow": 82, "targetHigh": 88, "stop": 69.50 },
+        { "id": "FRO",  "ref": 33.65, "targetLow": 37, "targetHigh": 40, "stop": 30.50 }
+      ]
+    },
+    {
+      "id": "gold-b", "name": "Gold Breakout",
+      "triggerIds": ["gold"], "condition": "GLD > $425 or spot > $4,600",
+      "instruments": [
+        { "id": "GDX", "ref": 85.79, "targetLow": 95, "targetHigh": 102, "stop": 79, "note": "More beta than GLD." }
+      ]
+    }
+  ],
+
+  "rules": [
+    "<strong>Review 3x/week:</strong> Monday close, Wednesday close, Friday close. Friday = Baker Hughes rig data.",
+    "<strong>Never deploy > 1/3 SGOV</strong> on one signal. Budget: $1,200/month.",
+    "<strong>No single stock > 10%</strong> of total book. No overlay > 2.5% except OIH at 5%.",
+    "<strong>No naked calls.</strong> 90-120 DTE spreads only. 2% premium cap.",
+    "<strong>De-escalation protocol:</strong> Brent < $95 for 5 closes + restored traffic → cut XOP 1/3, CF/NTR 1/4, close tankers, rebuild VXUS + SGOV.",
+    "<strong>Don't force services.</strong> Rigs falling = no OIH/HAL/SLB, even if oil is high."
+  ],
+
+  "marketFields": [
+    { "key": "brent",       "label": "BRENT $/bbl",     "value": 112.57, "step": 0.01 },
+    { "key": "wti",         "label": "WTI $/bbl",       "value": 99.64,  "step": 0.01 },
+    { "key": "goldSpot",    "label": "GOLD $/oz",       "value": 4492,   "step": 1 },
+    { "key": "usRigs",      "label": "U.S. RIGS",       "value": 543,    "step": 1 },
+    { "key": "nolaFert",    "label": "NOLA FERT $/mt",  "value": 683,    "step": 1 },
+    { "key": "usDiesel",    "label": "DIESEL $/gal",    "value": 5.38,   "step": 0.01 },
+    { "key": "curveSpread", "label": "CURVE %",         "value": 15,     "step": 0.1 }
+  ],
+
+  "fetchSymbols": {
+    "commodities": { "BZ=F": "brent", "CL=F": "wti", "GC=F": "goldSpot" },
+    "instruments": ["XOP", "XLE", "IXC", "GLD", "VXUS", "STIP", "SGOV", "CF", "NTR", "OXY", "FANG", "HAL", "SLB", "RIG", "STNG", "FRO", "GDX", "OIH", "BWET"],
+    "curveCalc": {
+      "front": "BZK26.NYM",
+      "deferred": "BZU26.NYM",
+      "targetKey": "curveSpread",
+      "_note": "Auto-calculates (front-deferred)/deferred*100 as the curve spread %"
+    },
+    "fedFunds": {
+      "symbols": ["ZQ=F", "ZQM26.CBT", "ZQU26.CBT", "ZQZ26.CBT"],
+      "_note": "Fed funds futures. Price = 100 - implied rate. ZQ=F=front month."
+    }
+  },
+
+  "situationUpdate": {
+    "date": "March 29, 2026",
+    "sections": [
+      { "label": "Hormuz", "text": "Strait effectively closed since Feb 28. Supply disruption: 10+ mbpd. Iran allowing selective transit for China, Russia, India, Iraq, Pakistan (Mar 26) and humanitarian/fertilizer shipments (Mar 27). U.S. military campaign to reopen since Mar 19. Trump paused energy infrastructure strikes through Apr 6. Analysts warn strait must reopen by mid-April." },
+      { "label": "Rigs", "text": "Baker Hughes total 543 (Mar 27), down 9 from 552. Second consecutive weekly decline. Gulf offshore at 11 rigs, down 8 YoY. SLB and HAL both guiding U.S. land activity lower for 2026." },
+      { "label": "Fertilizer", "text": "NOLA urea $677-690+/st. Nitrogen up 28-50%+ since conflict. CF Industries named #1 S&P 500 performer for March (UBS target raised to $140). Nutrien received Jefferies Buy upgrade ($96 target). Urea FOB US Gulf futures up 50%+ per CME Group." },
+      { "label": "Diesel", "text": "National average $5.375/gal (EIA, Mar 24). Up 44.6% from February ($3.72). West Coast above $6/gal." },
+      { "label": "Fed", "text": "Held at 3.5-3.75% (Mar 18, 11-1 vote). PCE forecast raised to 2.7%. Dot plot: 1 cut in 2026. Powell cited \"substantial rise in oil prices\" lifting inflation expectations." }
+    ]
+  },
+
+  "provenance": {
+    "sources": "Reuters, Baker Hughes (rig count Mar 27), IEA (decline-rate study), Dallas Fed (Hormuz model Mar 20), Goldman Sachs (oil scenarios), CNBC, Federal Reserve (FOMC Mar 18), EIA (diesel Mar 24), CME Group (urea futures), DTN (fertilizer surveys), company filings (CF Industries, Nutrien, SLB, Halliburton, Transocean/Valaris). Live fetch: allorigins.win proxy to Yahoo Finance v7 spark API.",
+    "methodology": "Targets are 3-6 month tactical ranges. Stops are weekly-closing (not intraday). Gap rule: if price drifts >2% from reference, targets/stops shift proportionally.",
+    "limitations": "Dallas Fed model excludes gas/fertilizer disruptions. Trigger thresholds are heuristic. Monthly rebalancing assumed. Iran's selective transit policy (Mar 26) may moderate supply disruption estimates — framework does not yet model partial reopening.",
+    "disclaimer": "Research framework, not financial advice. All instruments carry risk of loss."
+  }
+}
