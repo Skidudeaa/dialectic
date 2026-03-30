@@ -15,11 +15,11 @@ from pydantic import BaseModel
 
 from models import (
     Room, User, Thread, Message, Memory, Event, EventType,
-    SpeakerType, MessageType, MemoryScope
+    SpeakerType, MessageType, MemoryScope, TradingSnapshotRequest
 )
 from memory.manager import MemoryManager
 from llm.orchestrator import LLMOrchestrator
-from transport.websocket import ConnectionManager, InboundMessage
+from transport.websocket import ConnectionManager, InboundMessage, OutboundMessage, MessageTypes
 from transport.handlers import MessageHandler
 from api.auth.routes import router as auth_router, set_db_pool as set_auth_db_pool
 from api.notifications.routes import router as notifications_router, set_notifications_db_pool
@@ -455,6 +455,10 @@ class RoomSettingsResponse(BaseModel):
     interjection_turn_threshold: int
     semantic_novelty_threshold: float
     auto_interjection_enabled: bool
+
+
+from api.trading import TradingSnapshotResponse, format_thesis_summary
+from llm.trading_curator import TradingCuratorEngine
 
 
 # ============================================================
@@ -1158,6 +1162,114 @@ async def search_memories(
         "content": m.content,
         "score": m.score,
     } for m in matches]
+
+
+# ============================================================
+# TRADING SNAPSHOT ENDPOINT
+# ============================================================
+
+
+@app.post("/rooms/{room_id}/trading/snapshot", response_model=TradingSnapshotResponse)
+async def receive_trading_snapshot(
+    room_id: UUID,
+    request: TradingSnapshotRequest,
+    token: str = Depends(extract_room_token),
+    db=Depends(get_db),
+):
+    """
+    Accept a thesis graph snapshot from the trading desk bridge.
+
+    ARCHITECTURE: Stores raw JSON in rooms.trading_config, formatted summary
+    as a room-scoped memory (upsert by stable key), logs event, broadcasts.
+    WHY: Bridges Trading Desk cascade/confluence state into Dialectic rooms.
+    TRADEOFF: Full snapshot per push (larger payload) vs deltas (complex diffing).
+    """
+    await verify_room_token(room_id, token, db)
+
+    now = datetime.now(timezone.utc)
+    snapshot_data = request.model_dump()
+
+    # Store raw snapshot in rooms.trading_config
+    await db.execute(
+        "UPDATE rooms SET trading_config = $2 WHERE id = $1",
+        room_id, json.dumps(snapshot_data, default=str)
+    )
+
+    # Format human-readable summary for memory
+    summary = format_thesis_summary(request)
+
+    # Upsert memory: check for existing key, update if found, create if not
+    memory_manager = MemoryManager(db)
+    memory_key = "thesis_state_current"
+
+    existing = await db.fetchrow(
+        "SELECT id FROM memories WHERE room_id = $1 AND key = $2 AND status = 'active'",
+        room_id, memory_key
+    )
+
+    if existing:
+        memory = await memory_manager.edit_memory(
+            memory_id=existing['id'],
+            new_content=summary,
+            edit_reason="Trading snapshot updated",
+        )
+        memory_id = memory.id
+    else:
+        memory = await memory_manager.add_memory(
+            room_id=room_id,
+            key=memory_key,
+            content=summary,
+            scope=MemoryScope.ROOM,
+        )
+        memory_id = memory.id
+
+    # Log TRADING_SNAPSHOT_RECEIVED event
+    node_count = len(request.nodeStates)
+    phase_key = None
+    if request.cascadePhase:
+        phase_key = request.cascadePhase.get("key")
+
+    await db.execute(
+        """INSERT INTO events (id, timestamp, event_type, room_id, payload)
+           VALUES ($1, $2, $3, $4, $5)""",
+        uuid4(), now, EventType.TRADING_SNAPSHOT_RECEIVED.value,
+        room_id,
+        {
+            "timestamp": request.timestamp,
+            "node_count": node_count,
+            "phase": phase_key,
+            "memory_id": str(memory_id),
+        }
+    )
+
+    # Broadcast to connected WebSocket clients
+    await connection_manager.broadcast(room_id, OutboundMessage(
+        type=MessageTypes.TRADING_UPDATE,
+        payload=snapshot_data,
+    ))
+
+    # Trigger Trading Curator for offline users
+    try:
+        curator = TradingCuratorEngine(db, memory_manager, None)
+        # Find the default thread for this room
+        thread_row = await db.fetchrow(
+            "SELECT id FROM threads WHERE room_id = $1 ORDER BY created_at ASC LIMIT 1",
+            room_id
+        )
+        if thread_row:
+            alert = await curator.generate_alert(room_id, thread_row["id"], snapshot_data)
+            if alert:
+                await connection_manager.broadcast(room_id, OutboundMessage(
+                    type=MessageTypes.TRADING_UPDATE,
+                    payload={"message": alert.model_dump(mode="json")},
+                ))
+    except Exception as e:
+        logger.warning(f"Trading curator alert failed (non-critical): {e}")
+
+    return TradingSnapshotResponse(
+        stored_at=now.isoformat(),
+        memory_id=memory_id,
+    )
 
 
 # ============================================================

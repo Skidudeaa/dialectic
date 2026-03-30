@@ -466,6 +466,11 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS protocol_phase INT;
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS enable_typing_analysis BOOLEAN DEFAULT false;
 
 -- ============================================================
+-- TRADING ROOM INTEGRATION
+-- ============================================================
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS trading_config JSONB DEFAULT NULL;
+
+-- ============================================================
 -- STAKES / COMMITMENTS
 -- ============================================================
 

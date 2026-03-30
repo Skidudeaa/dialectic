@@ -232,6 +232,9 @@ class EventReplayEngine:
                                 "commitment_resolved"):
                 pass  # Commitments tracked in separate table, not in snapshot state
 
+            elif event_type == "trading_snapshot_received":
+                pass  # Trading snapshots are room-level metadata, not replay-mutable state
+
         # Set final timestamp
         if events:
             snapshot.at_timestamp = events[-1]["timestamp"]
@@ -490,5 +493,7 @@ def _event_summary(event_type: str, payload: dict) -> str:
         return "Protocol concluded"
     elif event_type == "user_joined":
         return "User joined room"
+    elif event_type == "trading_snapshot_received":
+        return "Trading snapshot updated"
     else:
         return event_type

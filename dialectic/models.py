@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ============================================================
@@ -61,6 +61,8 @@ class EventType(str, Enum):
     COMMITMENT_CREATED = "commitment_created"
     COMMITMENT_CONFIDENCE_UPDATED = "commitment_confidence_updated"
     COMMITMENT_RESOLVED = "commitment_resolved"
+    # Trading integration events
+    TRADING_SNAPSHOT_RECEIVED = "trading_snapshot_received"
 
 
 class CommitmentStatus(str, Enum):
@@ -113,6 +115,7 @@ class Room(BaseModel):
     auto_interjection_enabled: bool = True
     interjection_turn_threshold: int = 4
     semantic_novelty_threshold: float = 0.7
+    trading_config: Optional[dict] = None
 
 
 class User(BaseModel):
@@ -389,3 +392,44 @@ class RoomPersona(BaseModel):
     trigger_strategy: str = "on_mention"
     is_active: bool = True
     display_order: int = 0
+
+
+# ============================================================
+# TRADING INTEGRATION MODELS
+# ============================================================
+
+class TradingSnapshotRequest(BaseModel):
+    """
+    ARCHITECTURE: Inbound snapshot from Trading Desk capturing decision-graph state.
+    WHY: Bridges the Trading Desk's cascade/confluence engine into Dialectic rooms.
+    TRADEOFF: Stores full node state per snapshot vs deltas — simpler, larger payload.
+    """
+    v: int
+    timestamp: str
+    title: Optional[str] = None
+    nodeStates: dict[str, str]
+    confluenceScores: Optional[dict[str, float]] = None
+    cascadePhase: Optional[dict] = None
+    countdowns: Optional[list[dict]] = None
+    marketSnapshot: Optional[dict[str, float]] = None
+    scenarioImpacts: Optional[dict] = None
+    portfolioSummary: Optional[dict] = None
+
+    @model_validator(mode="after")
+    def sanitize_and_validate(self) -> "TradingSnapshotRequest":
+        """Strip newlines from nodeStates keys/values; enforce field length limits."""
+        # Sanitize nodeStates: strip newlines from keys and values
+        cleaned: dict[str, str] = {}
+        for k, v in self.nodeStates.items():
+            clean_key = k.replace("\n", " ").replace("\r", " ").strip()
+            clean_val = v.replace("\n", " ").replace("\r", " ").strip()
+            if len(clean_key) > 50:
+                raise ValueError(f"Node ID exceeds 50 characters: {clean_key[:60]}...")
+            cleaned[clean_key] = clean_val
+        self.nodeStates = cleaned
+
+        # Validate title length
+        if self.title is not None and len(self.title) > 200:
+            raise ValueError(f"Title exceeds 200 characters ({len(self.title)})")
+
+        return self
