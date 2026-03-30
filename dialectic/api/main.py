@@ -455,6 +455,7 @@ class RoomSettingsResponse(BaseModel):
     interjection_turn_threshold: int
     semantic_novelty_threshold: float
     auto_interjection_enabled: bool
+    trading_config: Optional[dict] = None
 
 
 from api.trading import TradingSnapshotResponse, format_thesis_summary
@@ -685,10 +686,20 @@ async def get_room_settings(
     """
     room = await verify_room_token(room_id, token, db)
 
+    # Parse trading_config from JSON string if stored as text in DB
+    trading_config = room.trading_config
+    if isinstance(trading_config, str):
+        import json as _json
+        try:
+            trading_config = _json.loads(trading_config)
+        except (ValueError, TypeError):
+            trading_config = None
+
     return RoomSettingsResponse(
         interjection_turn_threshold=room.interjection_turn_threshold,
         semantic_novelty_threshold=room.semantic_novelty_threshold,
         auto_interjection_enabled=room.auto_interjection_enabled,
+        trading_config=trading_config,
     )
 
 

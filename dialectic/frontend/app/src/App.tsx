@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import './styles/global.css'
 import { useAppStore } from './stores/appStore.ts'
+import { api } from './lib/api.ts'
 import { AuthScreen } from './components/auth/AuthScreen.tsx'
 import { RoomSelector } from './components/auth/RoomSelector.tsx'
 import { useDialecticSocket } from './hooks/useDialecticSocket.ts'
@@ -11,6 +13,7 @@ import { MessageList } from './components/chat/MessageList'
 import { MessageInput } from './components/chat/MessageInput'
 import { ParticipantsBar } from './components/chat/ParticipantsBar'
 import { TypingIndicator } from './components/chat/TypingIndicator'
+import type { TradingSnapshot } from './types/index.ts'
 
 function ChatLayout() {
   const user = useAppStore((s) => s.user);
@@ -26,7 +29,22 @@ function ChatLayout() {
   const leaveRoom = useAppStore((s) => s.leaveRoom);
   const logout = useAppStore((s) => s.logout);
 
+  const setTradingConfig = useAppStore((s) => s.setTradingConfig);
+
   const { isConnected, sendMessage } = useDialecticSocket();
+
+  // Fetch trading config on room load
+  useEffect(() => {
+    if (!currentRoom || !roomToken) return;
+    api.setToken(roomToken);
+    api.getTradingConfig(currentRoom.id).then((config) => {
+      if (config && typeof config === 'object' && 'v' in config) {
+        setTradingConfig(config as unknown as TradingSnapshot);
+      }
+    }).catch(() => {
+      // Trading config is optional — silently ignore fetch failures
+    });
+  }, [currentRoom?.id, roomToken, setTradingConfig]);
 
   const participants = [
     { id: 'claude', name: 'Claude', isOnline: true, isClaude: true },

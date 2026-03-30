@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useAppStore } from '../stores/appStore.ts'
-import type { Message, ProtocolState, Commitment } from '../types/index.ts'
+import type { Message, ProtocolState, Commitment, TradingSnapshot } from '../types/index.ts'
 
 const MAX_RECONNECT_ATTEMPTS = 10;
 const BASE_RECONNECT_DELAY = 1000;
@@ -33,6 +33,7 @@ export function useDialecticSocket() {
   const updateProtocolPhase = useAppStore((s) => s.updateProtocolPhase);
   const addCommitment = useAppStore((s) => s.addCommitment);
   const setSurfacedCommitments = useAppStore((s) => s.setSurfacedCommitments);
+  const setTradingConfig = useAppStore((s) => s.setTradingConfig);
 
   const handleMessage = useCallback((event: MessageEvent) => {
     let data: ServerMessage;
@@ -109,6 +110,13 @@ export function useDialecticSocket() {
         // Memory updates handled by periodic refresh or explicit fetch
         break;
 
+      case 'trading_update':
+        // Trading snapshot pushed from tradingDesk bridge
+        if (payload && payload.v) {
+          setTradingConfig(payload as unknown as TradingSnapshot);
+        }
+        break;
+
       case 'error':
         console.error('[WS] Server error:', payload.message ?? payload);
         break;
@@ -123,7 +131,7 @@ export function useDialecticSocket() {
           console.log('[WS] Unhandled message type:', type, payload);
         }
     }
-  }, [addMessage, setTypingUser, setLLMState, updateStreamingContent, setProtocol, updateProtocolPhase, addCommitment, setSurfacedCommitments]);
+  }, [addMessage, setTypingUser, setLLMState, updateStreamingContent, setProtocol, updateProtocolPhase, addCommitment, setSurfacedCommitments, setTradingConfig]);
 
   const connect = useCallback(() => {
     if (!currentRoom || !roomToken || !user) return;

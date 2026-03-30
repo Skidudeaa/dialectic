@@ -10,6 +10,7 @@ import type {
   ConversationDNA,
   ProtocolState,
   Commitment,
+  TradingSnapshot,
 } from '../types/index.ts'
 
 interface AppState {
@@ -46,6 +47,9 @@ interface AppState {
   activeCommitments: Commitment[];
   surfacedCommitments: Commitment[];
 
+  // Trading
+  tradingConfig: TradingSnapshot | null;
+
   // Actions
   setUser: (user: User, accessToken: string, refreshToken?: string) => void;
   setRoom: (room: Room, token: string) => void;
@@ -64,6 +68,7 @@ interface AppState {
   addCommitment: (commitment: Commitment) => void;
   setSurfacedCommitments: (commitments: Commitment[]) => void;
   setActiveCommitments: (commitments: Commitment[]) => void;
+  setTradingConfig: (config: TradingSnapshot | null) => void;
   logout: () => void;
   leaveRoom: () => void;
 }
@@ -83,6 +88,7 @@ const initialRoomState = {
   roomDNA: null,
   activeCommitments: [],
   surfacedCommitments: [],
+  tradingConfig: null,
   roomToken: null,
 }
 
@@ -123,6 +129,7 @@ export const useAppStore = create<AppState>()(
           roomDNA: null,
           activeCommitments: [],
           surfacedCommitments: [],
+          tradingConfig: null,
         }),
 
       setThread: (thread) => set({ currentThread: thread }),
@@ -183,6 +190,8 @@ export const useAppStore = create<AppState>()(
 
       setActiveCommitments: (commitments) =>
         set({ activeCommitments: commitments }),
+
+      setTradingConfig: (config) => set({ tradingConfig: config }),
 
       logout: () =>
         set({

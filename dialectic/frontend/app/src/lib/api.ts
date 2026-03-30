@@ -37,6 +37,12 @@ class DialecticAPI {
   async getSettings(roomId: string) { return this.fetch(`/rooms/${roomId}/settings`); }
   async getRooms(userId: string) { return this.fetch(`/users/me/rooms?user_id=${userId}`); }
 
+  // Trading
+  async getTradingConfig(roomId: string) {
+    const settings = await this.fetch<Record<string, unknown>>(`/rooms/${roomId}/settings`);
+    return (settings.trading_config as Record<string, unknown> | null) ?? null;
+  }
+
   // Analytics
   async getThreadDNA(threadId: string) { return this.fetch(`/analytics/threads/${threadId}/dna`); }
   async getRoomDNA(roomId: string) { return this.fetch(`/analytics/rooms/${roomId}/dna`); }

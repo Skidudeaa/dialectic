@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import type { Memory, Thread } from '../../types'
+import { useAppStore } from '../../stores/appStore.ts'
 import { MemoryPanel } from './MemoryPanel'
 import { ThreadPanel } from './ThreadPanel'
 import { UsersPanel } from './UsersPanel'
 import { SharePanel } from './SharePanel'
+import { TradingPanel } from '../trading/TradingPanel'
 import './RightPanel.css'
 
-type TabId = 'users' | 'memory' | 'threads' | 'share'
+type TabId = 'users' | 'memory' | 'threads' | 'share' | 'trading'
 
 interface RightPanelProps {
   memories: Memory[]
@@ -19,7 +21,7 @@ interface RightPanelProps {
   users: { id: string; name: string; status: string }[]
 }
 
-const TABS: { id: TabId; label: string }[] = [
+const BASE_TABS: { id: TabId; label: string }[] = [
   { id: 'users', label: 'Users' },
   { id: 'memory', label: 'Memory' },
   { id: 'threads', label: 'Threads' },
@@ -28,11 +30,19 @@ const TABS: { id: TabId; label: string }[] = [
 
 export function RightPanel({ memories, threads, activeThreadId, onThreadSelect, onForkThread, onAddMemory, roomToken, users }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>('memory')
+  const tradingConfig = useAppStore((s) => s.tradingConfig)
+
+  const tabs = useMemo(() => {
+    if (tradingConfig) {
+      return [...BASE_TABS, { id: 'trading' as TabId, label: 'Trading' }]
+    }
+    return BASE_TABS
+  }, [tradingConfig])
 
   return (
     <>
       <div className="sidebar-tabs">
-        {TABS.map(tab => (
+        {tabs.map(tab => (
           <button
             key={tab.id}
             className={`sidebar-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
@@ -47,6 +57,7 @@ export function RightPanel({ memories, threads, activeThreadId, onThreadSelect, 
         {activeTab === 'memory' && <MemoryPanel memories={memories} onAddMemory={onAddMemory} />}
         {activeTab === 'threads' && <ThreadPanel threads={threads} activeThreadId={activeThreadId} onThreadSelect={onThreadSelect} onForkThread={onForkThread} />}
         {activeTab === 'share' && <SharePanel roomToken={roomToken} />}
+        {activeTab === 'trading' && <TradingPanel />}
       </div>
     </>
   )

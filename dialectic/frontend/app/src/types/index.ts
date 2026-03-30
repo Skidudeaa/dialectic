@@ -94,6 +94,25 @@ export interface UserRoom {
   last_message_preview: string | null;
 }
 
+export interface TradingSnapshot {
+  v: number;
+  timestamp: string;
+  title?: string;
+  nodeStates: Record<string, string>;
+  confluenceScores?: Record<string, number>;
+  cascadePhase?: { number: number; key: string; status: string };
+  countdowns?: { nodeId: string; daysRemaining: number; deadline: string; label?: string }[];
+  marketSnapshot?: Record<string, number>;
+  scenarioImpacts?: Record<string, { probability: number; netImpact: number }>;
+  portfolioSummary?: {
+    monthlyBudget?: number;
+    topPositions?: string[];
+    sgovAvailable?: number;
+    sgov_available?: number;
+    allocated?: number;
+  };
+}
+
 // WebSocket message types
 export type InboundMessageType =
   | 'send_message' | 'typing_start' | 'typing_stop' | 'typing_content'
@@ -107,4 +126,5 @@ export type OutboundMessageType =
   | 'thread_forked' | 'memory_updated' | 'annotation_created'
   | 'protocol_started' | 'protocol_phase_advanced' | 'protocol_concluded' | 'protocol_aborted'
   | 'commitment_created' | 'commitment_resolved' | 'commitment_surfaced'
+  | 'trading_update'
   | 'pong' | 'error';
