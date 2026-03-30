@@ -25,7 +25,7 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -403,6 +403,133 @@ def eval_scenario(cfg: dict, scenario: dict) -> tuple[dict, dict]:
             }
 
     return new_states, impact
+
+
+# =========================================================================
+# STATE EXPORT
+# =========================================================================
+
+def export_state(cfg: dict, states: dict, confluence: dict,
+                 phase_num: int, phase_key: str,
+                 scenarios_result: list[tuple[dict, dict, dict]],
+                 today: date | None = None) -> dict:
+    """Build the snapshot JSON for cross-system integration.
+
+    Returns a dict matching the snapshot shape defined in INTEGRATION.md.
+    The `today` parameter is injectable for testing (defaults to date.today()).
+    """
+    if today is None:
+        today = date.today()
+
+    meta = cfg.get("meta", {})
+    nodes = cfg.get("nodes", [])
+    node_map = {n["id"]: n for n in nodes}
+
+    # --- nodeStates: direct from propagation output ---
+    node_states = dict(states)
+
+    # --- confluenceScores: direct from score_confluence output ---
+    confluence_scores = dict(confluence)
+
+    # --- cascadePhase: from phase info + config status ---
+    phases = cfg.get("cascadePhases", {})
+    phase_status = "UNKNOWN"
+    if phase_key in phases:
+        phase_status = phases[phase_key].get("status", "UNKNOWN")
+    cascade_phase = {
+        "number": phase_num,
+        "key": phase_key,
+        "status": phase_status,
+    }
+
+    # --- countdowns: find all deadline nodes, compute daysRemaining ---
+    countdowns = []
+    for node in nodes:
+        if node.get("type") != "deadline":
+            continue
+        deadline_str = node.get("deadline")
+        if not deadline_str:
+            continue
+        try:
+            dl = date.fromisoformat(deadline_str)
+            days_remaining = max(0, (dl - today).days)
+            countdowns.append({
+                "nodeId": node["id"],
+                "label": node.get("label", node["id"]),
+                "deadline": deadline_str,
+                "daysRemaining": days_remaining,
+            })
+        except (ValueError, TypeError):
+            continue
+
+    # --- marketSnapshot: from marketFields config ---
+    # WHY: marketFields have their own `value` which may differ from the
+    # associated node's `current` (e.g. goldSpot=4492 vs dxy-stress.current=100.18).
+    # The marketField value is the market price; nodeId is just a graph association.
+    market_snapshot = {}
+    for mf in cfg.get("marketFields", []):
+        key = mf.get("key")
+        if not key:
+            continue
+        value = mf.get("value")
+        if value is not None:
+            market_snapshot[key] = value
+
+    # --- scenarioImpacts: from eval_scenario results ---
+    scenario_impacts = {}
+    for scenario, new_states, impact in scenarios_result:
+        sid = scenario.get("id", "unknown")
+        probability = scenario.get("probability", 0)
+        # Compute net impact as probability-weighted sum of pctImpacts
+        total_pct = sum(v.get("pctImpact", 0) for v in impact.values())
+        net_impact = round(probability * total_pct, 1) if impact else 0
+        scenario_impacts[sid] = {
+            "probability": probability,
+            "netImpact": net_impact,
+        }
+
+    # --- portfolioSummary: from instruments config ---
+    instruments = cfg.get("instruments", {})
+    monthly_budget = meta.get("monthlyBudget", 0)
+    positions = []
+    sgov_available = 0
+
+    for nid, insts in instruments.items():
+        if not isinstance(insts, list):
+            continue
+        for inst in insts:
+            iid = inst.get("id", "?")
+            monthly = inst.get("monthly", 0)
+            if inst.get("isReserve") and iid.upper() == "SGOV":
+                sgov_available = monthly
+            if monthly > 0:
+                positions.append((iid, monthly))
+
+    # Sort by monthly allocation descending, take top positions
+    positions.sort(key=lambda x: -x[1])
+    top_positions = [f"{iid} ${monthly}/mo" for iid, monthly in positions[:6]]
+
+    portfolio_summary = {
+        "monthlyBudget": monthly_budget,
+        "topPositions": top_positions,
+        "sgovAvailable": sgov_available,
+    }
+
+    # --- Assemble snapshot ---
+    snapshot = {
+        "v": 1,
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "title": meta.get("title", "Untitled Thesis"),
+        "nodeStates": node_states,
+        "confluenceScores": confluence_scores,
+        "cascadePhase": cascade_phase,
+        "countdowns": countdowns,
+        "marketSnapshot": market_snapshot,
+        "scenarioImpacts": scenario_impacts,
+        "portfolioSummary": portfolio_summary,
+    }
+
+    return snapshot
 
 
 # =========================================================================
@@ -1944,8 +2071,13 @@ const CONFLUENCE=__CONFLUENCE_JS__;
 # CLI
 # =========================================================================
 
-def print_summary(cfg: dict) -> None:
-    """Print a config summary table."""
+def print_summary(cfg: dict, file=None) -> None:
+    """Print a config summary table.
+
+    When file is specified, all output goes there (e.g. sys.stderr for
+    --export-state mode, so stdout stays clean for JSON piping).
+    """
+    out = file or sys.stdout
     meta = cfg.get("meta", {})
     nodes = cfg.get("nodes", [])
     edges = cfg.get("edges", [])
@@ -1956,13 +2088,13 @@ def print_summary(cfg: dict) -> None:
     total_insts = sum(len(v) for v in instruments.values() if isinstance(v, list))
     phase_num, phase_key = get_current_phase(cfg)
 
-    print(f"\n  Title:       {meta.get('title', '?')}")
-    print(f"  As Of:       {meta.get('asOf', '?')}")
-    print(f"  Nodes:       {len(nodes)} ({', '.join(sorted(set(n.get('type', '?') for n in nodes)))})")
-    print(f"  Edges:       {len(edges)}")
-    print(f"  Instruments: {total_insts} across {len(instruments)} node groups")
-    print(f"  Scenarios:   {len(scenarios)}")
-    print(f"  Phase:       {phase_num} ({phase_key})")
+    print(f"\n  Title:       {meta.get('title', '?')}", file=out)
+    print(f"  As Of:       {meta.get('asOf', '?')}", file=out)
+    print(f"  Nodes:       {len(nodes)} ({', '.join(sorted(set(n.get('type', '?') for n in nodes)))})", file=out)
+    print(f"  Edges:       {len(edges)}", file=out)
+    print(f"  Instruments: {total_insts} across {len(instruments)} node groups", file=out)
+    print(f"  Scenarios:   {len(scenarios)}", file=out)
+    print(f"  Phase:       {phase_num} ({phase_key})", file=out)
 
     # Propagation summary
     try:
@@ -1970,19 +2102,19 @@ def print_summary(cfg: dict) -> None:
         fired = [nid for nid, s in states.items() if s == "fired"]
         approaching = [nid for nid, s in states.items() if s == "approaching"]
         if fired:
-            print(f"\n  FIRED:       {', '.join(fired)}")
+            print(f"\n  FIRED:       {', '.join(fired)}", file=out)
         if approaching:
-            print(f"  APPROACHING: {', '.join(approaching)}")
+            print(f"  APPROACHING: {', '.join(approaching)}", file=out)
     except Exception as e:
-        print(f"  Propagation error: {e}")
+        print(f"  Propagation error: {e}", file=out)
 
     # Confluence
     try:
         scores = score_confluence(cfg, states)
         if scores:
-            print(f"\n  Confluence:")
+            print(f"\n  Confluence:", file=out)
             for nid, score in sorted(scores.items(), key=lambda x: -x[1]):
-                print(f"    {nid:20s}  {score:.2f}")
+                print(f"    {nid:20s}  {score:.2f}", file=out)
     except Exception:
         pass
 
@@ -1998,6 +2130,8 @@ Examples:
   %(prog)s config.json -o graph.html --fetch     Generate with live prices
   %(prog)s config.json --fetch --update-config   Write live prices into JSON
   %(prog)s config.json -o graph.html --fetch --validate --publish --force
+  %(prog)s config.json --export-state snap.json  Export state as JSON
+  %(prog)s config.json --export-state -          Export state to stdout (pipe)
         """,
     )
     parser.add_argument("config", help="JSON config path")
@@ -2013,10 +2147,17 @@ Examples:
     parser.add_argument("--slug", help="URL slug for published article")
     parser.add_argument("--category", default="ANALYSIS", help="Article category")
     parser.add_argument("--api-url", default="http://127.0.0.1:8100", help="Reading Room API URL")
+    parser.add_argument("--export-state", metavar="FILE",
+                        help="Export evaluated graph state as JSON (use - for stdout)")
     args = parser.parse_args()
 
+    # When --export-state is active, all status output goes to stderr
+    # so stdout stays clean for JSON piping
+    exporting = args.export_state is not None
+    log = sys.stderr if exporting else sys.stdout
+
     # Load
-    print(f"Loading: {args.config}")
+    print(f"Loading: {args.config}", file=log)
     cfg = load_config(args.config)
 
     # Validate
@@ -2028,52 +2169,84 @@ Examples:
             print(f"  ERROR: {e}", file=sys.stderr)
         print(f"\n  {len(errors)} error(s). Fix and retry.", file=sys.stderr)
         sys.exit(1)
-    print(f"  Valid ({len(warnings)} warning(s))")
+    print(f"  Valid ({len(warnings)} warning(s))", file=log)
 
     # Summary
-    print_summary(cfg)
+    print_summary(cfg, file=log)
 
     # Fetch
     if args.fetch or args.update_config:
-        print("\nFetching live prices...")
+        print("\nFetching live prices...", file=log)
         cfg = fetch_prices(cfg)
         if args.update_config:
             update_config_file(args.config, cfg)
 
+    # Export state (runs at same point as --dry-run: after propagation, before HTML)
+    if exporting:
+        states = propagate(cfg)
+        confluence = score_confluence(cfg, states)
+        phase_num, phase_key = get_current_phase(cfg)
+
+        # Evaluate all scenarios
+        scenarios_result = []
+        for scenario in cfg.get("scenarios", []):
+            new_states, impact = eval_scenario(cfg, scenario)
+            scenarios_result.append((scenario, new_states, impact))
+
+        snapshot = export_state(cfg, states, confluence, phase_num, phase_key,
+                                scenarios_result)
+        snapshot_json = json.dumps(snapshot, indent=2, ensure_ascii=False)
+
+        export_target = args.export_state
+        if export_target == "-":
+            # Write to stdout (clean — all other output went to stderr)
+            sys.stdout.write(snapshot_json + "\n")
+        else:
+            export_path = os.path.abspath(export_target)
+            os.makedirs(os.path.dirname(export_path), exist_ok=True)
+            Path(export_path).write_text(snapshot_json)
+            print(f"\n  Exported: {export_path} ({len(snapshot_json):,} bytes)", file=log)
+
+        # If -o was not explicitly provided on the command line, stop here
+        # (similar to --dry-run). If -o was provided, continue to generate HTML.
+        if "--output" not in sys.argv and "-o" not in sys.argv:
+            print(f"\n  --export-state: JSON exported.", file=log)
+            return
+
     # Dry run exits here
     if args.dry_run:
-        print("\n  --dry-run: no HTML generated.")
+        print("\n  --dry-run: no HTML generated.", file=log)
         return
 
     # Overwrite check
     output = os.path.abspath(args.output)
     if os.path.isfile(output) and not args.force:
-        print(f"\n  Output exists: {output}")
-        print(f"  Use --force to overwrite.")
+        print(f"\n  Output exists: {output}", file=log)
+        print(f"  Use --force to overwrite.", file=log)
         sys.exit(1)
 
     # Generate
-    print(f"\nGenerating HTML...")
+    print(f"\nGenerating HTML...", file=log)
     html = generate_html(cfg)
     Path(output).write_text(html)
-    print(f"  Written: {output} ({len(html):,} bytes)")
+    print(f"  Written: {output} ({len(html):,} bytes)", file=log)
 
     # Validate
     if args.validate:
-        print("\nValidating...")
+        print("\nValidating...", file=log)
         run_validate(output)
 
     # Screenshot
     if args.screenshot:
-        print("\nScreenshotting...")
+        print("\nScreenshotting...", file=log)
         run_screenshot(output, str(Path(output).parent))
 
     # Publish
     if args.publish:
-        print("\nPublishing...")
+        print("\nPublishing...", file=log)
         run_publish(output, cfg, args)
 
-    print("\nDone.")
+    print("\nDone.", file=log)
 
 
 if __name__ == "__main__":
