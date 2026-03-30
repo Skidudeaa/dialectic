@@ -1,7 +1,7 @@
 ---
 title: "feat: Dialectic Trading Room Integration (Path B)"
 type: feat
-status: active
+status: completed
 date: 2026-03-30
 origin: INTEGRATION.md
 deepened: 2026-03-30
@@ -442,7 +442,7 @@ graph TB
 
 ---
 
-- [ ] **Unit 8: Trading Panel in Dialectic frontend**
+- [x] **Unit 8: Trading Panel in Dialectic frontend**
 
 **Goal:** Show trading thesis state summary in the Dialectic right sidebar.
 
