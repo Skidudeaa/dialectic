@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Desk — Collaborative AI Trading</title>
+<meta property="og:title" content="Trading Desk — Collaborative AI Trading">
+<meta property="og:description" content="A causal reasoning engine for macro trading. Map your thesis as a graph. The AI holds it while you trade.">
+<meta name="description" content="Causal reasoning engine for macro trading. Models transmission chains as directed graphs, propagates signals, and feeds everything into Dialectic for AI-augmented collaborative decisions.">
+<!-- ARGUMENT
+Claim: Trading Desk is a collaborative AI trading desk — a causal reasoning engine that maps macro
+transmission chains as directed graphs, propagates signals, and feeds everything into Dialectic so
+the LLM becomes a fully-informed third participant in your trading discussions.
+Evidence: Working system with 2 active theses (31 nodes, 32 edges), live data from Yahoo Finance +
+Polymarket, 5-tab interactive dashboards, snapshot export, delta detection, and Dialectic integration
+with LLM context injection and async curator alerts. $14K/mo budget across two theses. 118 tests.
+So what: Every macro trader thinks in causal chains. Nobody has a tool that maps them, enforces them,
+and brings the AI into the conversation with full context. Now we do.
+Decision rule: Use this system for collaborative macro positioning with full AI context.
+-->
+<!-- DESIGN BRIEF
+Archetype: Architecture Flow (D)
+Entity colors: thesis=#FF6B35, data=#4CC4B4, dashboard=#E69A4C, dialectic=#A78BFA, alerts=#C44C4C
+Ambient hue: 30 (warm dark roast)
+Focal entity: Dialectic (#A78BFA)
+Flags: bento
+Annotations: 1.bottleneck 2.critical-path(breakout) 3.failure-mode
+Dynamics: fortissimo(cascade) → piano → mezzo-forte(pipeline) → forte(dialectic) → mezzo-piano(discipline)
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg0:#120C06;--bg1:#160E08;
+  --s0:rgba(255,255,255,0.04);--s1:rgba(255,255,255,0.06);--s2:rgba(255,255,255,0.09);
+  --b0:rgba(255,255,255,0.050);--b1:rgba(255,255,255,0.085);
+  --r-sm:6px;--r-md:14px;--r-lg:18px;
+  --sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-6:24px;--sp-8:32px;
+  --rhythm-beat:24px;--rhythm-breath:48px;--rhythm-rest:80px;--rhythm-accent:120px;--rhythm-coda:64px;
+  --ambient-hue:30;--ambient-sat:40%;--ambient-lum:8%;--ambient-opacity:0.12;
+  --focal-entity-color:#A78BFA;
+  --e-out:cubic-bezier(0.22,1,0.36,1);--dur-fast:0.2s;--dur-med:0.35s;
+  --t1:#FFF7EE;--t2:rgba(255,247,238,0.72);--t3:rgba(255,247,238,0.50);--t4:rgba(255,247,238,0.38);
+  --font-display:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+  --font-mono:'Fira Code','SF Mono',monospace;
+  --c-fire:#FF6B35;--c-data:#4CC4B4;--c-dash:#E69A4C;--c-dial:#A78BFA;--c-alert:#C44C4C;
+  --c-fire-dim:rgba(255,107,53,0.12);--c-data-dim:rgba(76,196,180,0.12);
+  --c-dash-dim:rgba(230,154,76,0.12);--c-dial-dim:rgba(167,139,250,0.12);--c-alert-dim:rgba(196,76,76,0.12);
+  --transition-duration:0.35s;
+}
+html{font-size:16px;scroll-behavior:smooth}
+body{
+  font-family:var(--font-display);color:var(--t1);line-height:1.6;
+  background:var(--bg0);
+  background-image:radial-gradient(ellipse at 50% 0%,hsla(var(--ambient-hue),var(--ambient-sat),var(--ambient-lum),var(--ambient-opacity)) 0%,transparent 70%);
+  min-height:100vh;-webkit-font-smoothing:antialiased;
+}
+
+/* Sentiment strip */
+.sentinel{position:fixed;top:0;left:0;right:0;height:3px;background:var(--focal-entity-color);z-index:100}
+
+/* Layout */
+.container{max-width:1100px;margin:0 auto;padding:0 var(--sp-6)}
+.full-bleed{width:100vw;position:relative;left:50%;right:50%;margin-left:-50vw;margin-right:-50vw}
+
+/* Typography */
+h1{font-size:clamp(2.5rem,6vw,4rem);font-weight:900;letter-spacing:-0.03em;line-height:1.05}
+h2{font-size:clamp(1.25rem,3vw,1.75rem);font-weight:700;letter-spacing:-0.02em;line-height:1.2}
+h3{font-size:1.125rem;font-weight:600;line-height:1.3}
+.mono{font-family:var(--font-mono);font-size:0.875em}
+.t2{color:var(--t2)}.t3{color:var(--t3)}.t4{color:var(--t4)}
+
+/* Act 1: Hero */
+.hero{padding:calc(var(--rhythm-accent) + 3px) 0 var(--rhythm-rest);text-align:center}
+.hero-label{
+  display:inline-block;font-size:0.6875rem;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;
+  color:var(--c-fire);border:1px solid rgba(255,107,53,0.3);border-radius:var(--r-sm);
+  padding:var(--sp-2) var(--sp-4);margin-bottom:var(--sp-6);
+}
+.hero-title{margin-bottom:var(--sp-4)}
+.hero-title span{
+  background:linear-gradient(135deg,var(--c-fire),var(--c-dash));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-sub{font-size:clamp(1rem,2vw,1.25rem);color:var(--t2);max-width:680px;margin:0 auto var(--rhythm-breath)}
+.hero-stats{display:flex;justify-content:center;gap:clamp(24px,5vw,64px);flex-wrap:wrap;margin-bottom:var(--sp-6)}
+.hero-stat .num{font-family:var(--font-mono);font-size:clamp(1.75rem,4vw,2.5rem);font-weight:800;color:var(--t1);display:block}
+.hero-stat .label{font-size:0.75rem;color:var(--t3);text-transform:uppercase;letter-spacing:0.1em}
+.hero-meta{font-size:0.75rem;color:var(--t4)}
+
+/* Section spacing */
+section[data-act="2"]{padding-bottom:var(--rhythm-rest)}
+.section-head{margin-bottom:var(--rhythm-breath)}
+.section-head h2{margin-bottom:var(--sp-2)}
+.section-head p{color:var(--t3);max-width:600px}
+
+/* Annotation callout */
+.callout{
+  border-left:3px solid var(--c-fire);padding:var(--sp-4) var(--sp-6);
+  background:var(--s0);border-radius:0 var(--r-sm) var(--r-sm) 0;
+  margin-bottom:var(--rhythm-breath);font-size:0.9375rem;color:var(--t2);
+  max-width:700px;
+}
+.callout .type{font-size:0.6875rem;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:var(--c-fire);margin-bottom:var(--sp-2);display:block}
+
+/* Cascade SVG */
+.cascade-wrap{
+  background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-lg);
+  padding:var(--sp-6);overflow-x:auto;margin-bottom:var(--sp-6);
+}
+.cascade-svg{width:100%;height:auto;min-width:700px}
+.cascade-legend{display:flex;gap:var(--sp-6);flex-wrap:wrap;padding:var(--sp-4) 0 0;font-size:0.75rem;color:var(--t3)}
+.legend-item{display:flex;align-items:center;gap:var(--sp-2)}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* Breathing room */
+.breath{
+  text-align:center;padding:var(--rhythm-accent) 0;
+  font-size:1.0625rem;color:var(--t3);font-style:italic;
+}
+.breath .divider{
+  width:60px;height:1px;background:var(--b1);margin:0 auto var(--sp-6);
+}
+
+/* Pipeline grid */
+.pipeline{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:var(--rhythm-beat);
+  margin-bottom:var(--rhythm-rest);
+}
+.stage{
+  background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-md);
+  padding:var(--sp-6);position:relative;transition:border-color var(--dur-fast) var(--e-out),background var(--dur-fast) var(--e-out);
+}
+.stage:hover{background:var(--s1);border-color:var(--b1)}
+.stage-num{
+  font-family:var(--font-mono);font-size:0.6875rem;font-weight:600;
+  width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  margin-bottom:var(--sp-3);
+}
+.stage h3{margin-bottom:var(--sp-2)}
+.stage .metric{
+  font-family:var(--font-mono);font-size:0.8125rem;color:var(--t3);margin-bottom:var(--sp-3);
+}
+.stage p{font-size:0.875rem;color:var(--t2);line-height:1.5}
+.stage-arrow{
+  display:none;position:absolute;right:-16px;top:50%;transform:translateY(-50%);
+  color:var(--t4);font-size:1.25rem;
+}
+
+/* Breakout */
+.breakout{
+  width:100vw;position:relative;left:50%;right:50%;margin-left:-50vw;margin-right:-50vw;
+  background:linear-gradient(180deg,rgba(167,139,250,0.06) 0%,transparent 100%);
+  border-top:1px solid rgba(167,139,250,0.15);border-bottom:1px solid rgba(167,139,250,0.15);
+  padding:var(--rhythm-accent) 0;margin-bottom:var(--rhythm-rest);
+}
+.breakout-inner{max-width:900px;margin:0 auto;padding:0 var(--sp-6)}
+.breakout h2{text-align:center;margin-bottom:var(--sp-3)}
+.breakout h2 span{color:var(--c-dial)}
+.breakout-sub{text-align:center;color:var(--t3);margin-bottom:var(--rhythm-breath);font-size:0.9375rem}
+
+/* Chat mockup */
+.chat{display:flex;flex-direction:column;gap:var(--sp-4);max-width:720px;margin:0 auto}
+.chat-msg{
+  border-radius:var(--r-md);padding:var(--sp-4) var(--sp-6);
+  max-width:88%;font-size:0.9375rem;line-height:1.6;
+}
+.chat-msg .sender{font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--sp-2);display:block}
+.chat-dan{
+  background:var(--s1);border:1px solid var(--b1);align-self:flex-start;
+}
+.chat-dan .sender{color:var(--c-dash)}
+.chat-ai{
+  background:var(--c-dial-dim);border:1px solid rgba(167,139,250,0.2);align-self:flex-end;
+}
+.chat-ai .sender{color:var(--c-dial)}
+.chat-ai .detail{font-family:var(--font-mono);font-size:0.8125rem;color:var(--t2);display:block;margin-top:var(--sp-2)}
+.chat-curator{
+  background:var(--c-alert-dim);border:1px solid rgba(196,76,76,0.2);
+  align-self:center;max-width:100%;text-align:center;
+}
+.chat-curator .sender{color:var(--c-alert)}
+.chat-curator .time{font-family:var(--font-mono);font-size:0.6875rem;color:var(--t4);margin-left:var(--sp-2)}
+
+/* Bento capabilities grid */
+.bento{display:grid;grid-template-columns:repeat(6,1fr);gap:var(--rhythm-beat);margin-bottom:var(--rhythm-rest)}
+.bento-card{
+  background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-md);padding:var(--sp-6);
+  transition:border-color var(--dur-fast) var(--e-out),background var(--dur-fast) var(--e-out);
+}
+.bento-card:hover{background:var(--s1);border-color:var(--b1)}
+.bento-card--featured{grid-column:span 6}
+.bento-card--wide{grid-column:span 4}
+.bento-card--half{grid-column:span 3}
+.bento-card--narrow{grid-column:span 2}
+.bento-card .icon{font-size:1.5rem;margin-bottom:var(--sp-3);display:block}
+.bento-card h3{margin-bottom:var(--sp-2)}
+.bento-card .detail{font-size:0.875rem;color:var(--t2);line-height:1.5}
+.bento-card .example{
+  font-family:var(--font-mono);font-size:0.8125rem;color:var(--t3);
+  margin-top:var(--sp-3);padding-top:var(--sp-3);border-top:1px solid var(--b0);
+}
+
+/* Act 3: Close */
+.close{text-align:center;padding:var(--rhythm-rest) 0 var(--rhythm-breath)}
+.close-statement{
+  font-size:clamp(1rem,2.5vw,1.375rem);color:var(--t2);max-width:780px;
+  margin:0 auto var(--rhythm-breath);line-height:1.7;
+}
+.close-punch{
+  font-size:clamp(1.5rem,4vw,2.5rem);font-weight:800;
+  background:linear-gradient(135deg,var(--c-fire),var(--c-dial));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:var(--rhythm-breath);
+}
+.tech-specs{
+  display:flex;justify-content:center;gap:var(--sp-8);flex-wrap:wrap;
+  font-family:var(--font-mono);font-size:0.8125rem;color:var(--t3);
+  margin-bottom:var(--rhythm-coda);
+}
+.tech-spec{text-align:center}
+.tech-spec strong{color:var(--t2);display:block;font-size:1rem}
+
+/* Provenance */
+.provenance{
+  border-top:1px solid var(--b0);padding:var(--rhythm-coda) 0 var(--rhythm-rest);
+  font-size:0.75rem;color:var(--t4);text-align:center;
+}
+.provenance p{margin-bottom:var(--sp-2);max-width:700px;margin-left:auto;margin-right:auto}
+
+/* Reveals */
+.reveal{opacity:0;transform:translateY(16px);transition:opacity var(--transition-duration) var(--e-out),transform var(--transition-duration) var(--e-out)}
+.reveal-entering{opacity:0.4;transform:translateY(8px)}
+.reveal.visible{opacity:1;transform:translateY(0)}
+.reveal-left{transform:translateX(-20px)}
+.reveal-left.visible{transform:translateX(0)}
+.reveal-right{transform:translateX(20px)}
+.reveal-right.visible{transform:translateX(0)}
+.reveal-stagger>*:nth-child(1){transition-delay:0ms}
+.reveal-stagger>*:nth-child(2){transition-delay:60ms}
+.reveal-stagger>*:nth-child(3){transition-delay:120ms}
+.reveal-stagger>*:nth-child(4){transition-delay:180ms}
+.reveal-stagger>*:nth-child(5){transition-delay:240ms}
+.reveal-stagger>*:nth-child(n+6){transition-delay:300ms}
+
+/* A11y */
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+button:focus-visible,.bento-card:focus-visible{outline:2px solid var(--c-dial);outline-offset:2px}
+
+/* Print */
+@media print{
+  .no-print,.sentinel{display:none!important}
+  body{background:#fff!important;color:#000!important}
+  .hero-title span,.close-punch{-webkit-text-fill-color:#000!important;color:#000!important}
+  .cascade-wrap,.stage,.bento-card,.chat-msg{border-color:#ccc!important;background:#f9f9f9!important}
+  .breakout{background:none!important;border-color:#ccc!important}
+  .callout{border-left-color:#333!important;background:#f5f5f5!important}
+  .t2,.t3,.t4,p{color:#333!important}
+  .reveal{opacity:1!important;transform:none!important}
+}
+
+/* Responsive */
+@media(max-width:768px){
+  .pipeline{grid-template-columns:1fr}
+  .bento{grid-template-columns:1fr}
+  .bento-card--featured,.bento-card--wide,.bento-card--half,.bento-card--narrow{grid-column:span 1}
+  .hero-stats{flex-direction:column;gap:var(--sp-6)}
+  .tech-specs{flex-direction:column;gap:var(--sp-4)}
+  .chat-msg{max-width:100%}
+  .container{padding:0 var(--sp-4)}
+  .cascade-wrap{padding:var(--sp-4);margin-left:calc(-1 * var(--sp-4));margin-right:calc(-1 * var(--sp-4));border-radius:0}
+  --rhythm-beat:16px;--rhythm-breath:32px;--rhythm-rest:56px;--rhythm-accent:80px;
+}
+@media(min-width:769px){
+  .stage-arrow{display:block}
+  .pipeline{position:relative}
+}
+@media(min-width:769px) and (max-width:1024px){
+  .pipeline{grid-template-columns:repeat(2,1fr)}
+  .bento{grid-template-columns:repeat(2,1fr)}
+  .bento-card--featured{grid-column:span 2}
+  .bento-card--wide,.bento-card--half{grid-column:span 1}
+}
+</style>
+</head>
+<body>
+
+<div class="sentinel" aria-hidden="true"></div>
+
+<!-- ═══════════════════════ ACT 1: HERO ═══════════════════════ -->
+<section data-act="1" class="hero">
+  <div class="container">
+    <div class="hero-label">Architecture Flow</div>
+    <h1 class="hero-title"><span>Trading Desk</span></h1>
+    <p class="hero-sub">A causal reasoning engine for macro trading. Model your thesis as a directed graph. Propagate the signals. Let the AI hold the graph while you trade.</p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <span class="num" style="color:var(--c-fire)">31</span>
+        <span class="label">Causal Nodes</span>
+      </div>
+      <div class="hero-stat">
+        <span class="num" style="color:var(--c-data)">32</span>
+        <span class="label">Transmission Edges</span>
+      </div>
+      <div class="hero-stat">
+        <span class="num" style="color:var(--c-dial)">$14K</span>
+        <span class="label">Monthly Budget</span>
+      </div>
+    </div>
+    <p class="hero-meta mono">2 Active Theses &middot; 5 Cascade Phases &middot; 4 Scenarios &middot; 118 Tests &middot; As of 2026-03-30</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════ ACT 2: EVIDENCE ═══════════════════════ -->
+
+<!-- ——— Fortissimo: The Cascade ——— -->
+<section data-act="2" class="container">
+  <div class="section-head reveal">
+    <h2>How Shocks Propagate</h2>
+    <p class="t3">The Iran/Hormuz thesis as a directed acyclic graph. Three independent transmission chains converge on EM sovereign stress.</p>
+  </div>
+
+  <div class="callout reveal">
+    <span class="type">Bottleneck</span>
+    Every macro trader thinks in transmission chains. Nobody has a tool that actually maps them, tracks where you are in the cascade, enforces the logic, and tells you what to do with your portfolio at each node.
+  </div>
+
+  <div class="cascade-wrap reveal">
+    <svg class="cascade-svg" viewBox="0 0 960 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cascade-title cascade-desc">
+      <title id="cascade-title">Iran/Hormuz Thesis — Causal Transmission Graph</title>
+      <desc id="cascade-desc">Directed acyclic graph showing how a Hormuz closure propagates through oil, fertilizer, and dollar channels to converge on EM sovereign stress. 12 nodes, 3 transmission paths.</desc>
+      <defs>
+        <marker id="arr" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="8" markerHeight="6" orient="auto">
+          <path d="M0 0 L10 4 L0 8z" fill="rgba(255,247,238,0.25)"/>
+        </marker>
+        <marker id="arr-fire" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="8" markerHeight="6" orient="auto">
+          <path d="M0 0 L10 4 L0 8z" fill="rgba(255,107,53,0.5)"/>
+        </marker>
+        <marker id="arr-dial" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="8" markerHeight="6" orient="auto">
+          <path d="M0 0 L10 4 L0 8z" fill="rgba(167,139,250,0.5)"/>
+        </marker>
+        <filter id="glow-fire" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur"/>
+          <feFlood flood-color="#FF6B35" flood-opacity="0.3" result="color"/>
+          <feComposite in="color" in2="blur" operator="in" result="glow"/>
+          <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="glow-dial" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="5" result="blur"/>
+          <feFlood flood-color="#A78BFA" flood-opacity="0.35" result="color"/>
+          <feComposite in="color" in2="blur" operator="in" result="glow"/>
+          <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="glow-alert" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur"/>
+          <feFlood flood-color="#C44C4C" flood-opacity="0.3" result="color"/>
+          <feComposite in="color" in2="blur" operator="in" result="glow"/>
+          <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <!-- ── Phase track labels ── -->
+      <text x="958" y="18" text-anchor="end" fill="rgba(255,247,238,0.2)" font-size="9" font-family="Inter,sans-serif" font-weight="600" letter-spacing="0.1em">OIL &rarr; FREIGHT &rarr; EMPLOYMENT</text>
+      <text x="958" y="148" text-anchor="end" fill="rgba(255,247,238,0.2)" font-size="9" font-family="Inter,sans-serif" font-weight="600" letter-spacing="0.1em">FERTILIZER &rarr; FOOD &rarr; EM</text>
+      <text x="958" y="278" text-anchor="end" fill="rgba(255,247,238,0.2)" font-size="9" font-family="Inter,sans-serif" font-weight="600" letter-spacing="0.1em">DOLLAR &rarr; CURRENCY &rarr; EM</text>
+
+      <!-- ══ EDGES ══ -->
+      <!-- Hormuz fan-out -->
+      <path d="M115,165 C140,165 150,55 175,55" stroke="rgba(255,107,53,0.4)" stroke-width="2" fill="none" marker-end="url(#arr-fire)"/>
+      <path d="M115,165 L175,165" stroke="rgba(255,107,53,0.4)" stroke-width="2" fill="none" marker-end="url(#arr-fire)"/>
+      <path d="M115,165 C140,165 150,290 175,290" stroke="rgba(255,107,53,0.3)" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+      <!-- Path 1: Oil chain -->
+      <line x1="265" y1="55" x2="305" y2="55" stroke="rgba(255,107,53,0.35)" stroke-width="1.5" marker-end="url(#arr-fire)"/>
+      <line x1="390" y1="55" x2="430" y2="55" stroke="rgba(255,107,53,0.3)" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="520" y1="55" x2="555" y2="55" stroke="rgba(255,247,238,0.15)" stroke-width="1" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+      <line x1="680" y1="55" x2="725" y2="55" stroke="rgba(255,247,238,0.10)" stroke-width="1" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+
+      <!-- Path 2: Food chain -->
+      <line x1="275" y1="165" x2="315" y2="165" stroke="rgba(230,154,76,0.35)" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="415" y1="165" x2="460" y2="165" stroke="rgba(255,247,238,0.15)" stroke-width="1" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+      <line x1="535" y1="165" x2="610" y2="165" stroke="rgba(255,247,238,0.15)" stroke-width="1" stroke-dasharray="6 4" marker-end="url(#arr-dial)"/>
+
+      <!-- Path 3: Dollar chain -->
+      <line x1="260" y1="290" x2="300" y2="290" stroke="rgba(230,154,76,0.25)" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+
+      <!-- Confluence arrows to EM Stress -->
+      <path d="M385,290 C500,290 580,200 610,185" stroke="rgba(167,139,250,0.3)" stroke-width="1.5" stroke-dasharray="4 3" fill="none" marker-end="url(#arr-dial)"/>
+      <path d="M640,73 C640,100 660,130 665,145" stroke="rgba(167,139,250,0.3)" stroke-width="1.5" stroke-dasharray="4 3" fill="none" marker-end="url(#arr-dial)"/>
+
+      <!-- ══ NODES ══ -->
+      <!-- HORMUZ — fired -->
+      <g filter="url(#glow-fire)">
+        <rect x="15" y="140" width="100" height="50" rx="8" fill="rgba(255,107,53,0.18)" stroke="#FF6B35" stroke-width="2"/>
+        <text x="65" y="161" text-anchor="middle" fill="#FFF7EE" font-family="Inter,sans-serif" font-size="11" font-weight="700">HORMUZ</text>
+        <text x="65" y="180" text-anchor="middle" fill="#FF6B35" font-family="'Fira Code',monospace" font-size="9" font-weight="500">FIRED</text>
+      </g>
+
+      <!-- Path 1 nodes -->
+      <g filter="url(#glow-fire)">
+        <rect x="175" y="33" width="90" height="44" rx="6" fill="rgba(255,107,53,0.12)" stroke="#FF6B35" stroke-width="1.5"/>
+        <text x="220" y="51" text-anchor="middle" fill="#FFF7EE" font-family="Inter,sans-serif" font-size="10" font-weight="600">BRENT</text>
+        <text x="220" y="68" text-anchor="middle" fill="#FF6B35" font-family="'Fira Code',monospace" font-size="9">$112.57</text>
+      </g>
+      <g filter="url(#glow-fire)">
+        <rect x="305" y="33" width="85" height="44" rx="6" fill="rgba(255,107,53,0.12)" stroke="#FF6B35" stroke-width="1.5"/>
+        <text x="347" y="51" text-anchor="middle" fill="#FFF7EE" font-family="Inter,sans-serif" font-size="10" font-weight="600">DIESEL</text>
+        <text x="347" y="68" text-anchor="middle" fill="#FF6B35" font-family="'Fira Code',monospace" font-size="9">$5.38</text>
+      </g>
+      <g>
+        <rect x="430" y="33" width="90" height="44" rx="6" fill="rgba(255,107,53,0.08)" stroke="#E69A4C" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text x="475" y="51" text-anchor="middle" fill="#FFF7EE" font-family="Inter,sans-serif" font-size="10" font-weight="600">FREIGHT</text>
+        <text x="475" y="68" text-anchor="middle" fill="#E69A4C" font-family="'Fira Code',monospace" font-size="9">FIRED</text>
+      </g>
+      <g>
+        <rect x="555" y="33" width="125" height="44" rx="6" fill="rgba(255,255,255,0.03)" stroke="rgba(255,247,238,0.20)" stroke-width="1" stroke-dasharray="6 4"/>
+        <text x="617" y="51" text-anchor="middle" fill="rgba(255,247,238,0.5)" font-family="Inter,sans-serif" font-size="10" font-weight="600">EMPLOYMENT</text>
+        <text x="617" y="68" text-anchor="middle" fill="rgba(255,247,238,0.3)" font-family="'Fira Code',monospace" font-size="9">3mo lag</text>
+      </g>
+      <g>
+        <rect x="725" y="33" width="115" height="44" rx="6" fill="rgba(255,255,255,0.02)" stroke="rgba(255,247,238,0.12)" stroke-width="0.75"/>
+        <text x="782" y="51" text-anchor="middle" fill="rgba(255,247,238,0.35)" font-family="Inter,sans-serif" font-size="10" font-weight="600">DEMAND DEST.</text>
+        <text x="782" y="68" text-anchor="middle" fill="rgba(255,247,238,0.2)" font-family="'Fira Code',monospace" font-size="9">not yet</text>
+      </g>
+
+      <!-- Path 2 nodes -->
+      <g>
+        <rect x="175" y="140" width="100" height="50" rx="6" fill="rgba(230,154,76,0.08)" stroke="#E69A4C" stroke-width="1.5" stroke-dasharray="4 3"/>
+        <text x="225" y="161" text-anchor="middle" fill="#FFF7EE" font-family="Inter,sans-serif" font-size="10" font-weight="600">FERTILIZER</text>
+        <text x="225" y="180" text-anchor="middle" fill="#E69A4C" font-family="'Fira Code',monospace" font-size="9">$683/mt</text>
+      </g>
+      <g filter="url(#glow-alert)">
+        <rect x="315" y="140" width="100" height="50" rx="6" fill="rgba(196,76,76,0.12)" stroke="#C44C4C" stroke-width="2"/>
+        <text x="365" y="158" text-anchor="middle" fill="#FFF7EE" font-family="Inter,sans-serif" font-size="10" font-weight="600">PLANTING</text>
+        <text x="365" y="175" text-anchor="middle" fill="#C44C4C" font-family="'Fira Code',monospace" font-size="10" font-weight="700">17 DAYS</text>
+        <text x="365" y="186" text-anchor="middle" fill="rgba(196,76,76,0.6)" font-family="'Fira Code',monospace" font-size="7">IRREVERSIBLE</text>
+      </g>
+      <g>
+        <rect x="460" y="143" width="75" height="44" rx="6" fill="rgba(255,255,255,0.02)" stroke="rgba(255,247,238,0.12)" stroke-width="0.75"/>
+        <text x="497" y="161" text-anchor="middle" fill="rgba(255,247,238,0.35)" font-family="Inter,sans-serif" font-size="10" font-weight="600">FOOD</text>
+        <text x="497" y="178" text-anchor="middle" fill="rgba(255,247,238,0.2)" font-family="'Fira Code',monospace" font-size="9">6-12mo</text>
+      </g>
+      <!-- EM STRESS — confluence node -->
+      <g filter="url(#glow-dial)">
+        <rect x="610" y="132" width="120" height="66" rx="10" fill="rgba(167,139,250,0.15)" stroke="#A78BFA" stroke-width="2.5"/>
+        <text x="670" y="157" text-anchor="middle" fill="#FFF7EE" font-family="Inter,sans-serif" font-size="11" font-weight="700">EM STRESS</text>
+        <text x="670" y="174" text-anchor="middle" fill="#A78BFA" font-family="'Fira Code',monospace" font-size="9" font-weight="500">CONFLUENCE</text>
+        <text x="670" y="190" text-anchor="middle" fill="rgba(167,139,250,0.6)" font-family="'Fira Code',monospace" font-size="8">3 paths converge</text>
+      </g>
+
+      <!-- Path 3 nodes -->
+      <g>
+        <rect x="175" y="268" width="85" height="44" rx="6" fill="rgba(230,154,76,0.06)" stroke="#E69A4C" stroke-width="1" stroke-dasharray="4 3"/>
+        <text x="217" y="286" text-anchor="middle" fill="rgba(255,247,238,0.55)" font-family="Inter,sans-serif" font-size="10" font-weight="600">DOLLAR</text>
+        <text x="217" y="303" text-anchor="middle" fill="rgba(230,154,76,0.6)" font-family="'Fira Code',monospace" font-size="9">DXY 100</text>
+      </g>
+      <g>
+        <rect x="300" y="268" width="85" height="44" rx="6" fill="rgba(230,154,76,0.06)" stroke="#E69A4C" stroke-width="1" stroke-dasharray="4 3"/>
+        <text x="342" y="286" text-anchor="middle" fill="rgba(255,247,238,0.55)" font-family="Inter,sans-serif" font-size="10" font-weight="600">EM FX</text>
+        <text x="342" y="303" text-anchor="middle" fill="rgba(255,247,238,0.3)" font-family="'Fira Code',monospace" font-size="9">approaching</text>
+      </g>
+
+      <!-- ── Lag labels ── -->
+      <text x="145" y="100" fill="rgba(255,247,238,0.22)" font-family="'Fira Code',monospace" font-size="7.5" transform="rotate(-38,145,100)">immediate</text>
+      <text x="145" y="160" fill="rgba(255,247,238,0.22)" font-family="'Fira Code',monospace" font-size="7.5">1 week</text>
+      <text x="140" y="235" fill="rgba(255,247,238,0.22)" font-family="'Fira Code',monospace" font-size="7.5" transform="rotate(38,140,235)">1-2 wk</text>
+      <text x="282" y="48" fill="rgba(255,247,238,0.18)" font-family="'Fira Code',monospace" font-size="7">1-2 wk</text>
+      <text x="402" y="48" fill="rgba(255,247,238,0.18)" font-family="'Fira Code',monospace" font-size="7">2-4 wk</text>
+      <text x="530" y="48" fill="rgba(255,247,238,0.18)" font-family="'Fira Code',monospace" font-size="7">1-3 mo</text>
+      <text x="288" y="158" fill="rgba(255,247,238,0.18)" font-family="'Fira Code',monospace" font-size="7">Apr 15</text>
+      <text x="435" y="158" fill="rgba(255,247,238,0.18)" font-family="'Fira Code',monospace" font-size="7">3-6 mo</text>
+      <text x="272" y="283" fill="rgba(255,247,238,0.18)" font-family="'Fira Code',monospace" font-size="7">2-4 wk</text>
+    </svg>
+
+    <div class="cascade-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#FF6B35"></div> Fired</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#E69A4C;opacity:0.6"></div> Approaching</div>
+      <div class="legend-item"><div class="legend-dot" style="border:1.5px dashed rgba(255,247,238,0.3);background:transparent"></div> Monitoring</div>
+      <div class="legend-item"><div class="legend-dot" style="border:1px solid rgba(255,247,238,0.12);background:transparent"></div> Not Yet</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#A78BFA"></div> Confluence</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#C44C4C"></div> Deadline</div>
+    </div>
+  </div>
+</section>
+
+<!-- ——— Pianissimo: Breathing Room ——— -->
+<div class="breath">
+  <div class="divider"></div>
+  The thesis graph is the model. The pipeline below is the tool.
+</div>
+
+<!-- ——— Mezzo-forte: The Pipeline ——— -->
+<section data-act="2" class="container">
+  <div class="section-head reveal">
+    <h2>From Thesis to Collaborative AI</h2>
+    <p class="t3">Six stages. One command. JSON in, AI-augmented trading decisions out.</p>
+  </div>
+
+  <div class="pipeline reveal-stagger">
+    <div class="stage reveal">
+      <div class="stage-num" style="background:var(--c-fire-dim);color:var(--c-fire)">1</div>
+      <h3>Model</h3>
+      <div class="metric">16 nodes &middot; 14 edges</div>
+      <p>Define your thesis as a causal graph. Nodes are observable states with thresholds. Edges are transmission mechanisms with lags and strengths. One JSON file per thesis.</p>
+      <span class="stage-arrow" aria-hidden="true">&rarr;</span>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-num" style="background:var(--c-data-dim);color:var(--c-data)">2</div>
+      <h3>Fetch</h3>
+      <div class="metric">Yahoo + Polymarket</div>
+      <p>Live prices from Yahoo Finance. Prediction market probabilities from Polymarket. Hormuz closure: <span class="mono" style="color:var(--c-data)">68.5%</span>. Brent: <span class="mono" style="color:var(--c-data)">$112.57</span>. All mapped onto graph nodes.</p>
+      <span class="stage-arrow" aria-hidden="true">&rarr;</span>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-num" style="background:var(--c-fire-dim);color:var(--c-fire)">3</div>
+      <h3>Propagate</h3>
+      <div class="metric">Topological sort</div>
+      <p>Kahn's algorithm evaluates every node against thresholds, propagates upstream signals downstream, and scores confluence where multiple independent paths converge.</p>
+      <span class="stage-arrow" aria-hidden="true">&rarr;</span>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-num" style="background:var(--c-dash-dim);color:var(--c-dash)">4</div>
+      <h3>Dashboard</h3>
+      <div class="metric">5 tabs &middot; ~750 KB</div>
+      <p>Graph, cascade tracker, scenarios, portfolio, journal. Self-contained HTML. Works offline. Change inputs and watch signals re-propagate in real time in the browser.</p>
+      <span class="stage-arrow" aria-hidden="true">&rarr;</span>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-num" style="background:var(--c-dash-dim);color:var(--c-dash)">5</div>
+      <h3>Snapshot</h3>
+      <div class="metric">Delta detection</div>
+      <p>Export evaluated graph state as structured JSON. Diff against the previous snapshot. Only surface what actually changed &mdash; node fires, confluence shifts, countdown ticks. No noise.</p>
+      <span class="stage-arrow" aria-hidden="true">&rarr;</span>
+    </div>
+    <div class="stage reveal" style="border-color:rgba(167,139,250,0.2)">
+      <div class="stage-num" style="background:var(--c-dial-dim);color:var(--c-dial)">6</div>
+      <h3 style="color:var(--c-dial)">Dialectic</h3>
+      <div class="metric">LLM context injection</div>
+      <p>Thesis state pushed into your Dialectic room. The LLM sees positions, triggers, cascade phase, scenarios. Trading Curator alerts when triggers fire while you're offline.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ——— Forte: The Multiplier (breakout) ——— -->
+<div class="breakout reveal">
+  <div class="breakout-inner">
+    <h2>The <span>Multiplier</span></h2>
+    <p class="breakout-sub">The LLM becomes a fully-informed third participant in your trading discussions.</p>
+
+    <div class="chat">
+      <div class="chat-msg chat-dan reveal-left">
+        <span class="sender">Dan</span>
+        Should we add to CF?
+      </div>
+      <div class="chat-msg chat-ai reveal-right">
+        <span class="sender">Trading Desk AI</span>
+        Fertilizer stress at 97.6% of threshold. 17 days to planting deadline. Kharg scenario shows CF +30%, but probability-weighted move is lower &mdash; reopen-apr1 (10%) has CF at -8%.
+        <span class="detail">R:R at entry: 1.3:1 to low target. Monthly allocation: $800. Position at fert-shortage node.</span>
+      </div>
+      <div class="chat-msg chat-dan reveal-left">
+        <span class="sender">Dan</span>
+        I think services are coming back. Should we look at OIH?
+      </div>
+      <div class="chat-msg chat-ai reveal-right">
+        <span class="sender">Trading Desk AI</span>
+        The framework says no. Services node is <strong>gated</strong> by rig-confirm (rig count falling, gulf offshore down 39% YoY) and <strong>constrained</strong> by curve shape (15%, threshold 20%). Both conditions unmet.
+        <span class="detail">This was the single biggest error in your original Hormuz exchange. The system now prevents it structurally.</span>
+      </div>
+      <div class="chat-msg chat-curator reveal">
+        <span class="sender">Trading Curator<span class="time">2:14 AM</span></span>
+        Brent persistence trigger approaching &mdash; $115 for 3 closes. Dan, if this holds through Wednesday, the framework says deploy $400 SGOV &rarr; XOP.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ——— Mezzo-piano: Built-In Discipline ——— -->
+<section data-act="2" class="container">
+  <div class="section-head reveal">
+    <h2>Built-In Discipline</h2>
+    <p class="t3">The system doesn't just show you the thesis. It enforces it.</p>
+  </div>
+
+  <div class="callout reveal" style="border-left-color:var(--c-alert)">
+    <span class="type" style="color:var(--c-alert)">Failure Mode</span>
+    Gates prevent you from front-running trades the framework says aren't ready. The services trade (OIH/HAL/SLB) requires rig count confirmation AND curve spread below 20%. The dashboard enforces this structurally &mdash; not willpower, architecture.
+  </div>
+
+  <div class="bento reveal-stagger">
+    <div class="bento-card bento-card--half reveal">
+      <h3>Gates &amp; Constraints</h3>
+      <p class="detail">Three structural barriers: <strong>gates</strong> (conditions before a node can fire), <strong>constraints</strong> (blocks even if gate opens), and <strong>deadlines</strong> (irreversible date-gated nodes). The planting deadline counts down: miss it, and 93M acres of corn don't get planted.</p>
+      <div class="example">services.gatedBy = [rig-confirm]<br>services.constrainedBy = [curve &lt; 20%]</div>
+    </div>
+    <div class="bento-card bento-card--half reveal">
+      <h3>Confluence Scoring</h3>
+      <p class="detail">When multiple independent causal paths converge on the same node, the system scores convergence strength. EM sovereign stress gets hit by food, currency, and employment &mdash; three independent chains arriving at the same destination. That's not correlation. It's causal convergence.</p>
+      <div class="example">em-stress.confluence = 1.30<br>fan-in: food + em-fx + employment</div>
+    </div>
+    <div class="bento-card bento-card--half reveal">
+      <h3>Scenario Analysis</h3>
+      <p class="detail">Four scenarios with probability weights. Each overrides specific graph nodes and shows per-instrument portfolio impact. You trade the probability-weighted distribution, not any single outcome.</p>
+      <div class="example">closed-may: 45% &rarr; net +12.8%<br>kharg-strike: 15% &rarr; net +22.4%<br>selective: 30% &rarr; net +4.1%<br>reopen-apr1: 10% &rarr; net -5.2%</div>
+    </div>
+    <div class="bento-card bento-card--half reveal">
+      <h3>Historical Analogs</h3>
+      <p class="detail">Calibrated against 2008 and 1979. The 2008 template gives the lag structure: peak-to-employment is 3 months, peak-to-collapse is 5 months. We're 4 weeks into the current crisis. Employment impact expected late June 2026.</p>
+      <div class="example">2008: $90 &rarr; $147 &rarr; $32<br>1979: 2.5x price, deep recession<br>Current: 4 weeks in, Phase 2 starting</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ ACT 3: CLOSE ═══════════════════════ -->
+<section data-act="3" class="close container">
+  <p class="close-statement reveal">Every macro trader thinks in causal chains. Nobody has a tool that maps them, propagates them, enforces their implications against a portfolio, tracks where you are in the cascade, integrates live data and prediction market probabilities, and feeds all of that into a collaborative AI discussion where the LLM actually knows what you own, what you're watching, and what the framework says to do next.</p>
+
+  <div class="close-punch reveal">Now we do.</div>
+
+  <div class="tech-specs reveal">
+    <div class="tech-spec"><strong>0</strong> external deps</div>
+    <div class="tech-spec"><strong>118</strong> tests</div>
+    <div class="tech-spec"><strong>750 KB</strong> single-file HTML</div>
+    <div class="tech-spec"><strong>Python 3.10+</strong> stdlib only</div>
+    <div class="tech-spec"><strong>2</strong> active theses</div>
+  </div>
+</section>
+
+<footer class="provenance container">
+  <p><strong>Trading Desk</strong> &middot; Causal reasoning engine for macro trading</p>
+  <p>Data sources: Yahoo Finance v7 spark API, Polymarket Gamma API, manual indicators from Reuters, Baker Hughes, IEA, Dallas Fed, Goldman Sachs, EIA, USDA, BLS, CME Group</p>
+  <p>Methodology: Directed acyclic graph with expert-specified transmission mechanisms, lags, and strengths. Thresholds are heuristic (calibrated against 2008 and 1979 analogs). Edge strengths are subjective conditional probabilities. Cascade phases use checklist-based signpost tracking.</p>
+  <p>Limitations: Trigger thresholds are heuristic, not statistically derived. Edge strengths are expert estimates, not empirically calibrated. Monthly rebalancing assumed. Polymarket probabilities may not reflect informed views on niche scenarios.</p>
+  <p style="margin-top:var(--sp-4);color:rgba(255,247,238,0.25)">Research framework for structured expert judgment, not financial advice. All instruments carry risk of loss. The math enforces consistency &mdash; it does not generate predictions. &middot; As of 2026-03-30</p>
+</footer>
+
+<!-- Accessible data table -->
+<table class="sr-only">
+  <caption>Trading Desk System Overview — Pipeline Stages and Key Metrics</caption>
+  <thead>
+    <tr><th>Stage</th><th>Function</th><th>Key Metric</th><th>Output</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1. Model</td><td>Define thesis as causal graph</td><td>16 nodes, 14 edges (Hormuz)</td><td>JSON config</td></tr>
+    <tr><td>2. Fetch</td><td>Pull live prices + probabilities</td><td>Yahoo Finance + Polymarket</td><td>Market data</td></tr>
+    <tr><td>3. Propagate</td><td>Topological sort, fire nodes, score confluence</td><td>Kahn's algorithm</td><td>Evaluated graph</td></tr>
+    <tr><td>4. Dashboard</td><td>Generate interactive HTML</td><td>5 tabs, ~750 KB</td><td>Self-contained HTML</td></tr>
+    <tr><td>5. Snapshot</td><td>Export state, diff against previous</td><td>Delta detection</td><td>Structured JSON</td></tr>
+    <tr><td>6. Dialectic</td><td>Push to trading room, LLM context</td><td>Real-time injection</td><td>AI-informed discussion</td></tr>
+  </tbody>
+</table>
+<table class="sr-only">
+  <caption>Cascade Node States — Iran/Hormuz Thesis</caption>
+  <thead>
+    <tr><th>Node</th><th>State</th><th>Value</th><th>Path</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Hormuz</td><td>Fired</td><td>Active since Feb 28</td><td>Root</td></tr>
+    <tr><td>Brent</td><td>Fired</td><td>$112.57</td><td>Oil</td></tr>
+    <tr><td>Diesel</td><td>Fired</td><td>$5.38</td><td>Oil</td></tr>
+    <tr><td>Freight</td><td>Fired</td><td>Margins destroyed</td><td>Oil</td></tr>
+    <tr><td>Employment</td><td>Monitoring</td><td>3-month lag</td><td>Oil</td></tr>
+    <tr><td>Demand Destruction</td><td>Not Yet</td><td>—</td><td>Oil</td></tr>
+    <tr><td>Fertilizer</td><td>Approaching</td><td>$683/mt</td><td>Food</td></tr>
+    <tr><td>Planting</td><td>Deadline</td><td>17 days (Apr 15)</td><td>Food</td></tr>
+    <tr><td>Food</td><td>Not Yet</td><td>6-12 month lag</td><td>Food</td></tr>
+    <tr><td>EM Stress</td><td>Confluence</td><td>Score: 1.30</td><td>Convergence</td></tr>
+    <tr><td>Dollar</td><td>Approaching</td><td>DXY 100.18</td><td>Currency</td></tr>
+    <tr><td>EM FX</td><td>Approaching</td><td>—</td><td>Currency</td></tr>
+  </tbody>
+</table>
+
+<script>
+// WHY: Reduced motion must be checked before any animation runs.
+// Users with vestibular disorders need instant state, not transitions.
+if(window.matchMedia('(prefers-reduced-motion:reduce)').matches){
+  document.documentElement.style.setProperty('--transition-duration','0ms');
+  document.querySelectorAll('.reveal').forEach(function(el){
+    el.classList.add('visible');
+    el.classList.remove('reveal-entering');
+  });
+}else{
+  // WHY: Three-threshold observer creates a gradual "arriving into focus" entrance
+  // rather than a binary pop-in. 5% = semi-visible, 30% = fully visible.
+  var observer=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.intersectionRatio>=0.3){
+        e.target.classList.remove('reveal-entering');
+        e.target.classList.add('visible');
+      }else if(e.intersectionRatio>=0.05&&!e.target.classList.contains('visible')){
+        e.target.classList.add('reveal-entering');
+      }
+    });
+  },{threshold:[0,0.05,0.3],rootMargin:'0px 0px -20px 0px'});
+  document.querySelectorAll('.reveal').forEach(function(el){observer.observe(el)});
+}
+</script>
+</body>
+</html>
