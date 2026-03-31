@@ -171,7 +171,8 @@ tradingDesk/
 │   └── commodity-book/
 │       └── bookgen.py             # legacy commodity book generator
 ├── research/                        # distilled research findings
-└── docs/plans/                      # implementation plans
+├── docs/plans/                      # implementation plans
+└── docs/solutions/                  # documented solutions to past problems (bugs, security, patterns), organized by category with YAML frontmatter (module, tags, problem_type)
 ```
 
 ## Active Theses

@@ -622,12 +622,12 @@ class TestErrorCases:
         assert "DIALECTIC_ROOM_TOKEN" in result.stderr
 
     def test_push_server_500(self, mock_server, tmp_path):
-        """push-to-dialectic.py exits 1 on server 500 response."""
+        """push-to-dialectic.py retries on 500 and succeeds on second attempt."""
         _, port = mock_server
         snap = make_snapshot()
         snap_path = write_temp_snapshot(tmp_path, "snap.json", snap)
 
-        # Force the mock to return 500 on the next POST
+        # Force the mock to return 500 on the next POST — retry will succeed
         force_next_status(500)
 
         env = os.environ.copy()
@@ -640,10 +640,12 @@ class TestErrorCases:
                 "--room-id", "error-room",
                 "--dialectic-url", f"http://127.0.0.1:{port}",
             ],
-            capture_output=True, text=True, timeout=10, env=env,
+            capture_output=True, text=True, timeout=30, env=env,
         )
-        assert result.returncode == 1
-        assert "500" in result.stderr
+        # WHY: push-to-dialectic now retries 5xx errors. force_next_status(500)
+        # only affects one request, so the retry gets a 200 and succeeds.
+        assert result.returncode == 0
+        assert "500" in result.stderr  # first attempt logged the 500
 
     def test_push_connection_refused(self, tmp_path):
         """push-to-dialectic.py exits 2 when the server is unreachable."""
@@ -857,6 +859,102 @@ class TestMockServerBehavior:
         with pytest.raises(HTTPError) as exc_info:
             urlopen(req, timeout=5)
         assert exc_info.value.code == 400
+
+
+# =========================================================================
+# PIPELINE INTEGRATION TESTS — validates critical fixes C1 and C2
+# =========================================================================
+
+class TestCriticalFixes:
+    """Integration tests for the critical review findings."""
+
+    def test_export_state_stdout_is_valid_json(self, tmp_path):
+        """--export-state - must produce valid JSON on stdout (C2 fix).
+
+        WHY: fetch_prices previously printed status to stdout, corrupting the
+        JSON output when piped. This test catches regression.
+        """
+        out_path = str(tmp_path / "snapshot.json")
+        result = subprocess.run(
+            [sys.executable, THESISGRAPH, GRAPH_CONFIG, "--export-state", out_path],
+            capture_output=True, text=True, timeout=15,
+        )
+        assert result.returncode == 0, f"thesisgraph failed: {result.stderr}"
+
+        snapshot_text = Path(out_path).read_text()
+        snapshot = json.loads(snapshot_text)  # must not raise
+        assert "v" in snapshot
+        assert "nodeStates" in snapshot
+
+    def test_export_state_stdout_pipe_is_clean(self):
+        """--export-state - to stdout must be parseable JSON with no interleaved text."""
+        result = subprocess.run(
+            [sys.executable, THESISGRAPH, GRAPH_CONFIG, "--export-state", "-"],
+            capture_output=True, text=True, timeout=15,
+        )
+        assert result.returncode == 0, f"thesisgraph failed: {result.stderr}"
+        # stdout must be valid JSON — no price status lines interleaved
+        snapshot = json.loads(result.stdout)
+        assert snapshot["v"] == 1
+
+    def test_closes_required_nodes_not_fired_at_generation(self):
+        """Nodes with closesRequired must not be 'fired' at generation time (C1 fix).
+
+        WHY: Python eval_node_state previously ignored closesRequired, returning
+        'fired' immediately. At generation time with no close log, nodes with
+        closesRequired should be 'approaching' at most (never 'fired').
+        """
+        result = subprocess.run(
+            [sys.executable, THESISGRAPH, GRAPH_CONFIG, "--export-state", "-"],
+            capture_output=True, text=True, timeout=15,
+        )
+        assert result.returncode == 0
+        snapshot = json.loads(result.stdout)
+
+        # Load config to find nodes with closesRequired thresholds
+        config = json.loads(Path(GRAPH_CONFIG).read_text())
+        closes_required_nodes = set()
+        for node in config.get("nodes", []):
+            for th in node.get("thresholds", []):
+                if th.get("closesRequired") and th["closesRequired"] > 0:
+                    closes_required_nodes.add(node["id"])
+            if node.get("closesRequired") and node["closesRequired"] > 0:
+                closes_required_nodes.add(node["id"])
+
+        node_states = snapshot.get("nodeStates", {})
+        for nid in closes_required_nodes:
+            state = node_states.get(nid)
+            assert state != "fired", (
+                f"Node '{nid}' has closesRequired but is 'fired' at generation time. "
+                f"Should be 'approaching' or 'stable'."
+            )
+
+    def test_scenario_impacts_are_numeric(self):
+        """eval_scenario impact values must be numeric, not None or missing."""
+        result = subprocess.run(
+            [sys.executable, THESISGRAPH, GRAPH_CONFIG, "--export-state", "-"],
+            capture_output=True, text=True, timeout=15,
+        )
+        assert result.returncode == 0
+        snapshot = json.loads(result.stdout)
+
+        for sid, impact in snapshot.get("scenarioImpacts", {}).items():
+            assert "probability" in impact, f"Scenario '{sid}' missing probability"
+            assert "netImpact" in impact, f"Scenario '{sid}' missing netImpact"
+            assert isinstance(impact["netImpact"], (int, float)), (
+                f"Scenario '{sid}' netImpact is {type(impact['netImpact'])}, not numeric"
+            )
+
+    def test_snapshot_keys_complete(self):
+        """Exported snapshot must contain all required keys per INTEGRATION.md."""
+        result = subprocess.run(
+            [sys.executable, THESISGRAPH, GRAPH_CONFIG, "--export-state", "-"],
+            capture_output=True, text=True, timeout=15,
+        )
+        assert result.returncode == 0
+        snapshot = json.loads(result.stdout)
+        missing = SNAPSHOT_KEYS - set(snapshot.keys())
+        assert not missing, f"Snapshot missing keys: {missing}"
 
 
 if __name__ == "__main__":
