@@ -6,7 +6,8 @@
     "version": "1.0.0",
     "type": "thesis-graph",
     "monthlyBudget": 6000,
-    "dialecticRoomId": ""
+    "dialecticRoomId": "8adcabb7-817a-4802-87c6-3bfd42e6a9eb",
+    "dialecticRoomToken": "28ef002d81504116b4ff0a4a618e24ef"
   },
 
   "nodes": [

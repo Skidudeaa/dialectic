@@ -45,6 +45,7 @@ Environment variables:
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -149,18 +150,24 @@ def run_diff(prev: Path, latest: Path) -> int:
     return result.returncode
 
 
-def run_push(latest: Path, room_id: str) -> int:
+def run_push(latest: Path, room_id: str, room_token: str) -> int:
     """
     Run push-to-dialectic.py. Returns 0 (success), 1 (HTTP error),
     2 (config/connection error).
 
     WHY: Stdout is captured to suppress the verbose push response JSON.
     Stderr passes through so auth/network errors are visible immediately.
+    Per-book token is injected into the subprocess environment as
+    DIALECTIC_ROOM_TOKEN so push-to-dialectic.py picks it up without
+    changing its CLI interface. Shell-level DIALECTIC_ROOM_TOKEN is
+    overridden when a book-level token is present.
     """
+    env = {**os.environ, "DIALECTIC_ROOM_TOKEN": room_token}
     result = subprocess.run(
         [sys.executable, PUSH_SCRIPT, "--snapshot", str(latest),
          "--room-id", room_id],
         stdout=subprocess.PIPE,
+        env=env,
         check=False,
     )
     return result.returncode
@@ -205,6 +212,11 @@ def run_book(
     # WHY: treat falsy values ("", None) as absent — Unit 1 inserts "" as a
     # placeholder until the real room UUID is available from Dialectic admin.
     room_id: str = meta.get("dialecticRoomId") or ""
+    # Per-book token takes precedence over DIALECTIC_ROOM_TOKEN env var.
+    # WHY: Each Dialectic room has its own token; storing it alongside the
+    # room ID in the book JSON avoids per-book env var proliferation.
+    # Falls back to the env var so single-room setups need no JSON change.
+    room_token: str = meta.get("dialecticRoomToken") or os.environ.get("DIALECTIC_ROOM_TOKEN", "")
 
     latest: Path = snapshots_dir / f"{book_id}-latest.json"
     prev: Path = snapshots_dir / f"{book_id}-prev.json"
@@ -267,7 +279,7 @@ def run_book(
         result["changed"] = "yes"
 
     # Step 6: push
-    push_rc = run_push(latest, room_id)
+    push_rc = run_push(latest, room_id, room_token)
     if push_rc != 0:
         print(
             f"[error] {book_id}: push failed (exit {push_rc})",
