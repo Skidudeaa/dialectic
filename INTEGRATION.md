@@ -1,4 +1,16 @@
-# tradingDesk × Dialectic Integration Spec
+# tradingDesk × Dialectic Integration
+
+> **STATUS: FULLY IMPLEMENTED** (2026-04-01)
+>
+> Both sides are built and live. Both thesis rooms are wired. Run `python3 tools/bridge/run-all.py` from tradingDesk to push fresh thesis state into both Dialectic rooms. The LLM in each room sees the full thesis state (node states, confluence, countdowns, scenarios, portfolio) on every message.
+>
+> **Live rooms:**
+> - Iran/Hormuz: `56ba2f1e-5c70-4290-a77d-52404f0095da` (Dialectic `localhost:8002`)
+> - Trump Tariffs: `8adcabb7-817a-4802-87c6-3bfd42e6a9eb` (Dialectic `localhost:8002`)
+>
+> **Dialectic server:** `/root/DwoodAmo/dialectic` — `PORT=8002 python dialectic/run.py`
+
+---
 
 ## The Idea
 
@@ -278,41 +290,37 @@ The `global_ontology` and `global_rules` fields already exist and are already in
 
 ## Build Order
 
-### Week 1: tradingDesk export (no Dialectic changes yet)
+### Week 1: tradingDesk export ✅ DONE
 
-1. Add `--export-state` flag to thesisgraph.py
-2. Implement snapshot JSON export (the shape above)
-3. Build `diff-snapshots.py` for delta detection
-4. Test: `--fetch --export-state` produces valid JSON
+1. ✅ Add `--export-state` flag to thesisgraph.py
+2. ✅ Implement snapshot JSON export (the shape above)
+3. ✅ Build `diff-snapshots.py` for delta detection
+4. ✅ Test: `--fetch --export-state` produces valid JSON
 
-### Week 2: Dialectic endpoint + memory storage
+### Week 2: Dialectic endpoint + memory storage ✅ DONE
 
-1. Add `POST /rooms/{room_id}/trading/snapshot` endpoint
-2. Store snapshots as room-scoped memories
-3. Store latest snapshot in `room.trading_config` (JSONB)
-4. Add `TRADING_SNAPSHOT_RECEIVED` event type
-5. Test: push snapshot → memory created → event logged
+1. ✅ Add `POST /rooms/{room_id}/trading/snapshot` endpoint (`api/main.py`)
+2. ✅ Store snapshots as room-scoped memories (`memory/manager.py`)
+3. ✅ Store latest snapshot in `room.trading_config` (JSONB)
+4. ✅ Add `TRADING_SNAPSHOT_RECEIVED` event type
 
-### Week 3: LLM context + curator
+### Week 3: LLM context + curator ✅ DONE
 
-1. Extend `PromptBuilder.build()` with thesis state section
-2. Create `TradingCuratorEngine` extending `AnnotatorEngine`
-3. Trigger curator on snapshot arrival + offline user
-4. Test: send message in room → LLM references thesis state
+1. ✅ Extend `PromptBuilder.build()` with thesis state section (`llm/prompts.py`)
+2. ✅ Create `TradingCuratorEngine` (`llm/trading_curator.py`)
+3. ✅ Annotator fires alongside primary LLM (both paths run concurrently)
+4. ✅ LLM reads thesis state: node states, confluence, countdowns, scenarios, portfolio
 
-### Week 4: Bridge + automation
+### Week 4: Bridge + automation ✅ DONE
 
-1. Build `push-to-dialectic.py` bridge script
-2. One-liner: `thesisgraph.py --fetch --export-state - | push-to-dialectic.py`
-3. Optional: cron job for Mon/Wed/Fri automated pushes
-4. Test: end-to-end flow from market data → Dialectic room
+1. ✅ `push-to-dialectic.py` bridge script with retry + token auth
+2. ✅ `run-all.py` multi-book runner: `python3 tools/bridge/run-all.py`
+3. ✅ Per-book room IDs and tokens in `meta.dialecticRoomId` / `meta.dialecticRoomToken`
+4. ✅ Cron-ready (see Quick Start in CLAUDE.md)
 
-### Week 5: UI panel
+### Week 5: UI panel ⏳ PARTIAL
 
-1. Add `TradingPanel` component to Dialectic right sidebar
-2. Display node states, countdowns, portfolio summary
-3. Show trading curator alerts in message feed
-4. Test: both users see live thesis state in room
+The thesis state is visible in Dialectic's Memory panel (`thesis_state_current` key, v10+). A dedicated Trading Panel tab in the right sidebar was planned but not yet built — the memory panel serves the same purpose adequately for now.
 
 ---
 

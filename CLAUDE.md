@@ -147,9 +147,29 @@ Exports evaluated graph state as structured JSON for Dialectic integration. Shap
 
 Compares two snapshot JSONs. Outputs: state transitions, confluence shifts, countdown changes, market price moves, added/removed nodes. Exit 0 = changes found, 1 = no changes, 2 = error.
 
+### Multi-Book Runner (`tools/bridge/run-all.py`)
+
+Orchestrates the full pipeline for all active thesis-graph books in one command:
+fetch → export snapshot → diff against previous → conditional push to Dialectic.
+
+- Discovers `books/*.json` sorted alphabetically, skips non-thesis-graph configs
+- Per-book snapshot rotation: `snapshots/{book-id}-latest.json` / `{book-id}-prev.json`
+- Reads `meta.dialecticRoomId` + `meta.dialecticRoomToken` from each book JSON
+- Continue-on-failure: one book's error doesn't abort others; exits non-zero if any failed
+- `--dry-run` prints planned run without executing
+
 ### Dialectic Integration (`tools/bridge/push-to-dialectic.py`)
 
-POSTs snapshots to Dialectic trading rooms. Token from `DIALECTIC_ROOM_TOKEN` env var. See `INTEGRATION.md` for the full spec.
+POSTs snapshots to Dialectic trading rooms. Token from `DIALECTIC_ROOM_TOKEN` env var or `meta.dialecticRoomToken` in book JSON (per-book token takes precedence). See `INTEGRATION.md` for the full spec.
+
+**Live rooms (as of 2026-04-01):**
+
+| Book | Dialectic Room | Status |
+|---|---|---|
+| `iran-hormuz-graph.json` | `56ba2f1e-5c70-4290-a77d-52404f0095da` | Live — thesis state current |
+| `trump-tariffs-graph.json` | `8adcabb7-817a-4802-87c6-3bfd42e6a9eb` | Live — thesis state current |
+
+Dialectic server: `/root/DwoodAmo/dialectic` — run with `PORT=8002 python dialectic/run.py`
 
 ### E2E Validation (`tools/validation/`)
 
@@ -177,18 +197,20 @@ tradingDesk/
 ├── tools/
 │   ├── thesis-graph/
 │   │   ├── thesisgraph.py          # core engine (~2200 lines)
-│   │   ├── test_export.py          # export + propagation tests (22)
+│   │   ├── test_export.py          # export + propagation tests (76)
 │   │   └── lib/                    # Cytoscape.js + dagre (inlined in HTML)
 │   ├── data-fetch/
 │   │   ├── polymarket.py           # Polymarket Gamma API fetcher
 │   │   └── test_polymarket.py      # Polymarket tests (41)
 │   ├── bridge/
+│   │   ├── run-all.py              # multi-book pipeline runner
 │   │   ├── push-to-dialectic.py    # push snapshots to Dialectic rooms
 │   │   ├── diff-snapshots.py       # snapshot delta detection
+│   │   ├── test_run_all.py        # runner tests (20)
 │   │   ├── test_push.py           # bridge tests (26)
 │   │   └── test_diff.py           # diff tests (21)
 │   ├── validation/
-│   │   ├── e2e_test.py            # full pipeline E2E tests (34)
+│   │   ├── e2e_test.py            # full pipeline E2E tests (39)
 │   │   └── mock_dialectic.py      # mock Dialectic server
 │   └── commodity-book/
 │       └── bookgen.py             # legacy commodity book generator
@@ -199,10 +221,10 @@ tradingDesk/
 
 ## Active Theses
 
-| Config | Thesis | Nodes | Edges | Monthly |
-|---|---|---|---|---|
-| `iran-hormuz-graph.json` | Iran/Hormuz oil shock transmission | 16 | 14 | $8,000/mo |
-| `trump-tariffs-graph.json` | Trump tariff escalation | 15 | 18 | $6,000/mo |
+| Config | Thesis | Nodes | Edges | Monthly | Dialectic Room |
+|---|---|---|---|---|---|
+| `iran-hormuz-graph.json` | Iran/Hormuz oil shock transmission | 16 | 14 | $8,000/mo | `56ba2f1e` |
+| `trump-tariffs-graph.json` | Trump tariff escalation | 15 | 18 | $6,000/mo | `8adcabb7` |
 
 ## Project Conventions
 

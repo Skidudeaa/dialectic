@@ -1,7 +1,7 @@
 ---
 title: "feat: Add multi-book runner (run-all.py)"
 type: feat
-status: active
+status: completed
 date: 2026-03-31
 deepened: 2026-03-31
 origin: docs/brainstorms/2026-03-31-multi-book-runner-requirements.md

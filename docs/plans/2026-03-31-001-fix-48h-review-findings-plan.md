@@ -1,7 +1,7 @@
 ---
 title: "fix: Resolve critical, high, and medium findings from 48-hour commit review"
 type: fix
-status: active
+status: completed
 date: 2026-03-31
 deepened: 2026-03-31
 ---
@@ -119,7 +119,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 
 ### Phase 1: Critical Fixes
 
-- [ ] **Unit 1: Fix stdout contamination in fetch_prices (C2)**
+- [x] **Unit 1: Fix stdout contamination in fetch_prices (C2)**
 
 **Goal:** Ensure `--fetch --export-state -` produces valid JSON on stdout.
 
@@ -147,7 +147,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 
 ---
 
-- [ ] **Unit 2: Port closesRequired gating to Python eval_node_state (C1)**
+- [x] **Unit 2: Port closesRequired gating to Python eval_node_state (C1)**
 
 **Goal:** Python price and reversal node evaluation respects `closesRequired` field, returning `"approaching"` instead of `"fired"` when the field is present, since Python has no close log.
 
@@ -184,7 +184,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 
 ---
 
-- [ ] **Unit 3: Add XSS escaping to HTML generation (C3)**
+- [x] **Unit 3: Add XSS escaping to HTML generation (C3)**
 
 **Goal:** Prevent stored XSS via JSON config values in generated HTML. Covers both server-side template substitution and client-side innerHTML injection.
 
@@ -223,7 +223,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 
 ### Phase 2: Reliability Hardening
 
-- [ ] **Unit 4: Atomic config file write (H1)**
+- [x] **Unit 4: Atomic config file write (H1)**
 
 **Goal:** Prevent config file corruption if the process is killed mid-write.
 
@@ -254,7 +254,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 
 ---
 
-- [ ] **Unit 5: Add retry with backoff to Dialectic push (H2)**
+- [x] **Unit 5: Add retry with backoff to Dialectic push (H2)**
 
 **Goal:** Transient Dialectic server errors don't kill the pipeline.
 
@@ -291,7 +291,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 
 ---
 
-- [ ] **Unit 6: Guard against KeyError in Yahoo Finance result parsing (H3)**
+- [x] **Unit 6: Guard against KeyError in Yahoo Finance result parsing (H3)**
 
 **Goal:** A single malformed item in the Yahoo Finance response doesn't crash the entire price update.
 
@@ -321,7 +321,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 
 ---
 
-- [ ] **Unit 7: Align mock server snapshot schema (H4)**
+- [x] **Unit 7: Align mock server snapshot schema (H4)**
 
 **Goal:** Mock Dialectic server validates the same schema as the E2E tests and export function.
 
@@ -352,7 +352,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 
 ### Phase 3: Test Coverage
 
-- [ ] **Unit 8: Unit tests for eval_node_state (H5)**
+- [x] **Unit 8: Unit tests for eval_node_state (H5)**
 
 **Goal:** Direct unit tests for all 8 node type branches in `eval_node_state`, isolated from the full propagation pipeline.
 
@@ -384,7 +384,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 
 ---
 
-- [ ] **Unit 9: Pipeline integration tests for critical fixes**
+- [x] **Unit 9: Pipeline integration tests for critical fixes**
 
 **Goal:** Integration-level tests that validate C1 and C2 fixes through the actual pipeline.
 
@@ -412,7 +412,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 
 ### Phase 4: Cleanup
 
-- [ ] **Unit 10: Migrate test_push.py from unittest to pytest (H6)**
+- [x] **Unit 10: Migrate test_push.py from unittest to pytest (H6)**
 
 **Goal:** Consistent test framework across all 5 test files.
 
@@ -444,7 +444,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 
 ---
 
-- [ ] **Unit 11: Pass base_states to eval_scenario (M1)**
+- [x] **Unit 11: Pass base_states to eval_scenario (M1)**
 
 **Goal:** Eliminate redundant `propagate(cfg)` calls — from 6-7× to 1× per invocation.
 
@@ -474,7 +474,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 
 ---
 
-- [ ] **Unit 12: Remove allorigins.win proxy from Python-side Yahoo fetch (M5)**
+- [x] **Unit 12: Remove allorigins.win proxy from Python-side Yahoo fetch (M5)**
 
 **Goal:** Python-side price fetch calls Yahoo Finance directly, eliminating the third-party proxy from the generation-time pipeline.
 
