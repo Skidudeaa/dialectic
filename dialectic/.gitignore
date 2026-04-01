@@ -1,0 +1,19 @@
+# Environment — contains secrets, never commit
+.env
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environments
+venv/
+.venv/
+
+# Test artifacts
+test-screenshots/
+.pytest_cache/
+
+# Planning / AI tooling
+.claude/
+.planning/

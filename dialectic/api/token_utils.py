@@ -16,16 +16,23 @@ def extract_room_token(
 ) -> str:
     """
     Extract room token from query param OR Authorization header.
-    Prefers Authorization header (more secure — not logged by proxies).
-    Falls back to query param for backward compatibility.
+
+    WHY: Explicit query param takes precedence over the Authorization header.
+    When a JWT-authenticated frontend also sends a room token, both are present
+    simultaneously. The query param carries the room token; the Authorization
+    header carries the user JWT. Preferring the query param avoids the JWT being
+    misinterpreted as a room token, which caused 401s for authenticated users.
+
+    Authorization header is still accepted as a fallback for clients that send
+    the room token there directly (e.g. push-to-dialectic.py bridge script).
     """
+    if token:
+        return token
+
     if authorization:
         if authorization.startswith("Bearer "):
             return authorization[7:]
         return authorization
-
-    if token:
-        return token
 
     raise HTTPException(
         status_code=401,

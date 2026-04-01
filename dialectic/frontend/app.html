@@ -1934,6 +1934,9 @@ window.switchRoom = async function(roomId) {
     const room = S.rooms.find(r => r.id === roomId);
     if (!room) return;
     S.roomId = roomId;
+    // WHY: room.token is now returned by /users/me/rooms so JWT-authenticated
+    // users get the room token they need for subsequent room API calls.
+    if (room.token) S.roomToken = room.token;
     saveSession();
     renderRoomList();
     $('#roomTitleDisplay').textContent = room.name || 'Room';
@@ -1964,7 +1967,8 @@ async function enterApp() {
     $('#selfAvatar').textContent = S.userName ? S.userName[0].toUpperCase() : '?';
 
     if (S.roomId) {
-        $('#roomTitleDisplay').textContent = 'Room';
+        const activeRoom = S.rooms.find(r => r.id === S.roomId);
+        $('#roomTitleDisplay').textContent = activeRoom?.name || 'Room';
         updateShareLink();
         await Promise.all([loadThreads(), loadMemories(), loadPresence()]);
         connectWebSocket();
@@ -2174,6 +2178,8 @@ function flushQueue() {
 function handleServerMessage(msg) {
     switch (msg.type) {
         case 'message_created': handleMessageCreated(msg.payload); break;
+        case 'annotation_created': handleMessageCreated(msg.payload); break;
+        case 'trading_update': break; // thesis snapshot updates — no UI action needed yet
         case 'llm_thinking': showTyping(true, 'Claude is thinking...'); break;
         case 'llm_streaming': handleLLMStreaming(msg.payload); break;
         case 'llm_done': handleLLMDone(msg.payload); break;
@@ -2209,6 +2215,7 @@ function trackEnergy() {
 // =================================================================
 function getParticipantClass(msg) {
     if (msg.speaker_type === 'llm_primary') return 'msg-claude';
+    if (msg.speaker_type === 'llm_annotator') return 'msg-claude';
     if (msg.speaker_type === 'llm_provoker') return 'msg-provoker';
     if (msg.speaker_type === 'system') return 'msg-system';
 
@@ -2237,6 +2244,7 @@ function getAvatarHtml(msg) {
 function getAuthorName(msg) {
     if (msg.speaker_type === 'llm_provoker') return 'Claude (Provoker)';
     if (msg.speaker_type === 'llm_primary') return 'Claude';
+    if (msg.speaker_type === 'llm_annotator') return 'Claude';
     if (msg.speaker_type === 'system') return 'System';
     if (msg.user_id === S.userId) return S.userName || 'You';
     return msg.user_name || 'Unknown';

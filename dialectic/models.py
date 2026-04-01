@@ -1,10 +1,11 @@
 # models.py — Core data model + event sourcing foundation
 
+import json as _json
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional, Union
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ============================================================
@@ -117,6 +118,24 @@ class Room(BaseModel):
     semantic_novelty_threshold: float = 0.7
     trading_config: Optional[dict] = None
 
+    @field_validator("trading_config", mode="before")
+    @classmethod
+    def parse_trading_config(cls, v: Any) -> Optional[dict]:
+        """
+        WHY: asyncpg returns JSONB columns as strings when the type codec is not
+        registered on the specific connection used for Room(**dict(room_row)).
+        This normalises both forms so Room(**dict(db_row)) always yields a dict.
+        """
+        if v is None:
+            return None
+        if isinstance(v, str):
+            try:
+                parsed = _json.loads(v)
+                return parsed if isinstance(parsed, dict) else None
+            except (_json.JSONDecodeError, ValueError):
+                return None
+        return v
+
 
 class User(BaseModel):
     id: UUID = Field(default_factory=uuid4)
@@ -178,6 +197,29 @@ class Memory(BaseModel):
     invalidated_at: Optional[datetime] = None
     invalidation_reason: Optional[str] = None
     embedding: Optional[list[float]] = None
+
+    @field_validator("embedding", mode="before")
+    @classmethod
+    def parse_pgvector_embedding(cls, v: Any) -> Optional[list[float]]:
+        """
+        WHY: asyncpg returns pgvector columns as a string '[0.1, 0.2, ...]'
+        rather than a list[float]. This validator normalises both forms so
+        Memory(**dict(db_row)) works regardless of whether the value came from
+        the DB or was constructed in Python.
+        """
+        if v is None:
+            return None
+        if isinstance(v, str):
+            try:
+                parsed = _json.loads(v)
+                if isinstance(parsed, list):
+                    return [float(x) for x in parsed]
+            except (_json.JSONDecodeError, ValueError):
+                pass
+            return None
+        if isinstance(v, (list, tuple)):
+            return [float(x) for x in v]
+        return v
 
 
 class Event(BaseModel):

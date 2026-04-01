@@ -378,7 +378,7 @@ class MemoryResponse(BaseModel):
     content: str
     scope: str
     version: int
-    created_by_user_id: UUID
+    created_by_user_id: Optional[UUID]  # None for LLM/system-authored memories
     status: str
 
 
@@ -1201,9 +1201,12 @@ async def receive_trading_snapshot(
     snapshot_data = request.model_dump()
 
     # Store raw snapshot in rooms.trading_config
+    # WHY: Pass dict directly — the pool's JSONB codec (registered in lifespan
+    # with UUID/datetime support) serializes it correctly. Avoids double-encoding
+    # that json.dumps() + ::jsonb cast would produce.
     await db.execute(
         "UPDATE rooms SET trading_config = $2 WHERE id = $1",
-        room_id, json.dumps(snapshot_data, default=str)
+        room_id, snapshot_data
     )
 
     # Format human-readable summary for memory
@@ -1758,6 +1761,7 @@ class UserRoomResponse(BaseModel):
     """Room with unread count for user's room list."""
     id: UUID
     name: Optional[str]
+    token: str  # WHY: frontend needs the room token to make authenticated API calls
     unread_count: int
     last_message_at: Optional[datetime]
     last_message_preview: Optional[str]
@@ -1779,6 +1783,7 @@ async def get_user_rooms(
         SELECT
             r.id,
             r.name,
+            r.token,
             (
                 SELECT COUNT(*) FROM messages m
                 JOIN threads t ON m.thread_id = t.id
@@ -1816,6 +1821,7 @@ async def get_user_rooms(
     return [UserRoomResponse(
         id=row['id'],
         name=row['name'],
+        token=row['token'],
         unread_count=row['unread_count'] or 0,
         last_message_at=row['last_message_at'],
         last_message_preview=row['last_message_preview'],

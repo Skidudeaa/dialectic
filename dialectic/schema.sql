@@ -29,8 +29,8 @@ CREATE TABLE rooms (
     global_rules TEXT,
     primary_provider TEXT NOT NULL DEFAULT 'anthropic',
     fallback_provider TEXT NOT NULL DEFAULT 'openai',
-    primary_model TEXT NOT NULL DEFAULT 'claude-sonnet-4-20250514',
-    provoker_model TEXT NOT NULL DEFAULT 'claude-haiku-4-20250514',
+    primary_model TEXT NOT NULL DEFAULT 'claude-sonnet-4-6',
+    provoker_model TEXT NOT NULL DEFAULT 'claude-haiku-4-5-20251001',
     auto_interjection_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     interjection_turn_threshold INT NOT NULL DEFAULT 4,
     semantic_novelty_threshold FLOAT NOT NULL DEFAULT 0.7
@@ -523,7 +523,7 @@ CREATE TABLE IF NOT EXISTS room_personas (
     room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
     name TEXT NOT NULL,                  -- e.g., "Aristotle", "Skeptic", "Synthesizer"
     provider TEXT NOT NULL DEFAULT 'anthropic',
-    model TEXT NOT NULL DEFAULT 'claude-sonnet-4-20250514',
+    model TEXT NOT NULL DEFAULT 'claude-sonnet-4-6',
     identity_prompt TEXT NOT NULL,       -- System prompt for this persona
     personality JSONB DEFAULT '{}',      -- Additional config (temperature, etc.)
     trigger_strategy TEXT DEFAULT 'on_mention',  -- 'on_mention' | 'after_primary' | 'on_disagreement' | 'periodic'

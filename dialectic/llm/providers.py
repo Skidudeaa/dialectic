@@ -57,9 +57,14 @@ class AnthropicProvider(LLMProvider):
     name = ProviderName.ANTHROPIC
 
     MODELS = {
-        "claude-sonnet-4-20250514": "claude-sonnet-4-20250514",
-        "claude-haiku-4-20250514": "claude-haiku-4-20250514",
-        "claude-opus-4-5-20251101": "claude-opus-4-5-20251101",
+        # Current Claude 4.x model IDs
+        "claude-sonnet-4-6": "claude-sonnet-4-6",
+        "claude-haiku-4-5-20251001": "claude-haiku-4-5-20251001",
+        "claude-opus-4-6": "claude-opus-4-6",
+        # Legacy aliases kept so existing room rows continue to resolve
+        "claude-sonnet-4-20250514": "claude-sonnet-4-6",
+        "claude-haiku-4-20250514": "claude-haiku-4-5-20251001",
+        "claude-opus-4-5-20251101": "claude-opus-4-6",
     }
 
     def __init__(self):
