@@ -30,6 +30,27 @@ python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json --export-
 # Dry run (validate + propagate, no output)
 python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json --dry-run
 
+# === Pipeline Runner ===
+
+# Run all active thesis books in one command (fetch → export → diff → push)
+# Room IDs must be set in meta.dialecticRoomId of each book JSON.
+# DIALECTIC_ROOM_TOKEN must be in the environment for push steps.
+# NOTE: push-to-dialectic.py defaults to localhost:8002 (mock server).
+#       For production, invoke push-to-dialectic.py directly with --dialectic-url.
+python3 tools/bridge/run-all.py
+
+# Preview what would run — no network calls, no file writes
+python3 tools/bridge/run-all.py --dry-run
+
+# Use a custom books directory (useful for testing)
+python3 tools/bridge/run-all.py --books path/to/custom/books/
+
+# Cron (Mon/Wed/Fri at 08:00) — ensure DIALECTIC_ROOM_TOKEN is in the environment:
+#   0 8 * * 1,3,5 cd /path/to/tradingDesk && \
+#       DIALECTIC_ROOM_TOKEN=<token> python3 tools/bridge/run-all.py \
+#       >> logs/run-all.log 2>&1
+# Exit codes: 0 = all OK, 1 = one or more books failed, 2 = config error
+
 # === Polymarket Fetcher ===
 
 # Standalone probability check
@@ -56,15 +77,16 @@ python3 tools/commodity-book/bookgen.py books/iran-hormuz-2026.json -o output/ir
 
 # === Tests ===
 
-# Full suite (118 tests)
-python3 -m pytest tools/thesis-graph/test_export.py tools/bridge/test_diff.py tools/bridge/test_push.py tools/data-fetch/test_polymarket.py tools/validation/e2e_test.py -q
+# Full suite (223 tests)
+python3 -m pytest tools/thesis-graph/test_export.py tools/bridge/test_diff.py tools/bridge/test_push.py tools/bridge/test_run_all.py tools/data-fetch/test_polymarket.py tools/validation/e2e_test.py -q
 
 # By component
-python3 -m pytest tools/thesis-graph/test_export.py -q       # 22 — export/propagation
+python3 -m pytest tools/thesis-graph/test_export.py -q       # 76 — export/propagation
 python3 -m pytest tools/bridge/test_diff.py -q               # 21 — snapshot diff
 python3 -m pytest tools/bridge/test_push.py -q               # 26 — bridge script
+python3 -m pytest tools/bridge/test_run_all.py -q            # 20 — multi-book runner
 python3 -m pytest tools/data-fetch/test_polymarket.py -q     # 41 — Polymarket fetcher
-python3 -m pytest tools/validation/e2e_test.py -q            # 34 — E2E pipeline
+python3 -m pytest tools/validation/e2e_test.py -q            # 39 — E2E pipeline
 ```
 
 ## Architecture
@@ -189,4 +211,4 @@ tradingDesk/
 - HTML dashboards are generated, not hand-built
 - All outputs are self-contained single-file HTML
 - Tests use pytest, run with `python3 -m pytest`
-- 118 tests across 5 test files
+- 223 tests across 6 test files
