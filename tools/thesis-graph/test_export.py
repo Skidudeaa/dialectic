@@ -14,6 +14,7 @@ import pytest
 # Add parent dir to path so we can import the module
 sys.path.insert(0, os.path.dirname(__file__))
 from thesisgraph import (
+    eval_node_state,
     export_state,
     load_config,
     propagate,
@@ -346,6 +347,318 @@ class TestCLIExportState:
             assert os.path.isfile(deep_path)
             with open(deep_path) as f:
                 json.load(f)  # Must be valid JSON
+
+
+# =========================================================================
+# Unit tests for eval_node_state()
+# =========================================================================
+
+class TestEvalNodeState:
+    """Direct unit tests for eval_node_state across all 8 node types."""
+
+    # --- Event nodes ---
+
+    def test_event_active_fires(self):
+        node = {"id": "e1", "type": "event", "state": "active"}
+        assert eval_node_state(node, {}, []) == "fired"
+
+    def test_event_fired_state_fires(self):
+        node = {"id": "e1", "type": "event", "state": "fired"}
+        assert eval_node_state(node, {}, []) == "fired"
+
+    def test_event_partial_approaching(self):
+        node = {"id": "e1", "type": "event", "state": "partial"}
+        assert eval_node_state(node, {}, []) == "approaching"
+
+    def test_event_resolved_stable(self):
+        node = {"id": "e1", "type": "event", "state": "resolved"}
+        assert eval_node_state(node, {}, []) == "stable"
+
+    def test_event_no_state_monitoring(self):
+        node = {"id": "e1", "type": "event"}
+        assert eval_node_state(node, {}, []) == "monitoring"
+
+    def test_event_unknown_state_monitoring(self):
+        node = {"id": "e1", "type": "event", "state": "dormant"}
+        assert eval_node_state(node, {}, []) == "monitoring"
+
+    # --- Price nodes ---
+
+    def test_price_above_threshold_fires(self):
+        node = {"id": "p1", "type": "price", "current": 120,
+                "thresholds": [{"level": 100}]}
+        assert eval_node_state(node, {}, []) == "fired"
+
+    def test_price_exactly_at_threshold_fires(self):
+        node = {"id": "p1", "type": "price", "current": 100,
+                "thresholds": [{"level": 100}]}
+        assert eval_node_state(node, {}, []) == "fired"
+
+    def test_price_closes_required_positive_approaching(self):
+        """closesRequired > 0 gates firing -- returns approaching instead."""
+        node = {"id": "p1", "type": "price", "current": 120,
+                "thresholds": [{"level": 100, "closesRequired": 3}]}
+        assert eval_node_state(node, {}, []) == "approaching"
+
+    def test_price_closes_required_zero_fires(self):
+        """closesRequired: 0 is no gating -- should fire normally."""
+        node = {"id": "p1", "type": "price", "current": 120,
+                "thresholds": [{"level": 100, "closesRequired": 0}]}
+        assert eval_node_state(node, {}, []) == "fired"
+
+    def test_price_closes_required_absent_fires(self):
+        """No closesRequired key at all -- should fire normally."""
+        node = {"id": "p1", "type": "price", "current": 120,
+                "thresholds": [{"level": 100}]}
+        assert eval_node_state(node, {}, []) == "fired"
+
+    def test_price_within_5pct_of_lowest_approaching(self):
+        """Current within 5% of the lowest threshold => approaching."""
+        node = {"id": "p1", "type": "price", "current": 96,
+                "thresholds": [{"level": 100}]}
+        # 96/100 = 0.96 >= 0.95 => approaching
+        assert eval_node_state(node, {}, []) == "approaching"
+
+    def test_price_well_below_stable(self):
+        node = {"id": "p1", "type": "price", "current": 50,
+                "thresholds": [{"level": 100}]}
+        assert eval_node_state(node, {}, []) == "stable"
+
+    def test_price_no_current_monitoring(self):
+        node = {"id": "p1", "type": "price",
+                "thresholds": [{"level": 100}]}
+        assert eval_node_state(node, {}, []) == "monitoring"
+
+    def test_price_no_thresholds_monitoring(self):
+        node = {"id": "p1", "type": "price", "current": 120,
+                "thresholds": []}
+        assert eval_node_state(node, {}, []) == "monitoring"
+
+    def test_price_multiple_thresholds_highest_match(self):
+        """With multiple thresholds, fires at the highest breached level."""
+        node = {"id": "p1", "type": "price", "current": 115,
+                "thresholds": [{"level": 100}, {"level": 110}, {"level": 130}]}
+        # Sorted descending: 130, 110, 100. current < 130, >= 110 => fired at 110
+        assert eval_node_state(node, {}, []) == "fired"
+
+    def test_price_multiple_thresholds_highest_has_closes_required(self):
+        """Highest breached threshold has closesRequired -- approaching."""
+        node = {"id": "p1", "type": "price", "current": 115,
+                "thresholds": [{"level": 100}, {"level": 110, "closesRequired": 5}]}
+        assert eval_node_state(node, {}, []) == "approaching"
+
+    # --- Indicator nodes ---
+
+    def test_indicator_all_upstream_fired(self):
+        edges = [{"from": "a", "to": "ind1", "strength": 0.5},
+                 {"from": "b", "to": "ind1", "strength": 0.5}]
+        states = {"a": "fired", "b": "fired"}
+        node = {"id": "ind1", "type": "indicator"}
+        assert eval_node_state(node, states, edges) == "fired"
+
+    def test_indicator_half_fired_fires(self):
+        """50% fired threshold met => fired."""
+        edges = [{"from": "a", "to": "ind1", "strength": 0.5},
+                 {"from": "b", "to": "ind1", "strength": 0.5}]
+        states = {"a": "fired", "b": "stable"}
+        node = {"id": "ind1", "type": "indicator"}
+        assert eval_node_state(node, states, edges) == "fired"
+
+    def test_indicator_minority_fired_approaching(self):
+        """Less than 50% fired => approaching."""
+        edges = [{"from": "a", "to": "ind1", "strength": 0.5},
+                 {"from": "b", "to": "ind1", "strength": 0.5},
+                 {"from": "c", "to": "ind1", "strength": 0.5}]
+        states = {"a": "fired", "b": "stable", "c": "stable"}
+        node = {"id": "ind1", "type": "indicator"}
+        # 1 fired / 3 incoming = 0.33 < 0.5 => approaching
+        assert eval_node_state(node, states, edges) == "approaching"
+
+    def test_indicator_upstream_approaching_only(self):
+        edges = [{"from": "a", "to": "ind1", "strength": 0.5}]
+        states = {"a": "approaching"}
+        node = {"id": "ind1", "type": "indicator"}
+        assert eval_node_state(node, states, edges) == "approaching"
+
+    def test_indicator_all_upstream_stable(self):
+        edges = [{"from": "a", "to": "ind1", "strength": 0.5},
+                 {"from": "b", "to": "ind1", "strength": 0.5}]
+        states = {"a": "stable", "b": "stable"}
+        node = {"id": "ind1", "type": "indicator"}
+        assert eval_node_state(node, states, edges) == "stable"
+
+    def test_indicator_no_incoming_edges_monitoring(self):
+        node = {"id": "ind1", "type": "indicator"}
+        assert eval_node_state(node, {}, []) == "monitoring"
+
+    def test_indicator_ignores_outgoing_edges(self):
+        """Only incoming edges count for indicator evaluation."""
+        edges = [{"from": "ind1", "to": "downstream", "strength": 0.5}]
+        states = {"downstream": "fired"}
+        node = {"id": "ind1", "type": "indicator"}
+        assert eval_node_state(node, states, edges) == "monitoring"
+
+    # --- Deadline nodes ---
+
+    def test_deadline_past_fires(self):
+        yesterday = str(date.today().replace(day=date.today().day) +
+                        __import__("datetime").timedelta(days=-1))
+        node = {"id": "d1", "type": "deadline", "deadline": yesterday}
+        assert eval_node_state(node, {}, []) == "fired"
+
+    def test_deadline_within_7_days_approaching(self):
+        in_5_days = str(date.today() + __import__("datetime").timedelta(days=5))
+        node = {"id": "d1", "type": "deadline", "deadline": in_5_days}
+        assert eval_node_state(node, {}, []) == "approaching"
+
+    def test_deadline_within_14_days_upstream_approaching(self):
+        """8-14 days out with upstream approaching => approaching."""
+        in_10_days = str(date.today() + __import__("datetime").timedelta(days=10))
+        node = {"id": "d1", "type": "deadline", "deadline": in_10_days,
+                "conditions": ["upstream1.fired"]}
+        states = {"upstream1": "approaching"}
+        assert eval_node_state(node, states, []) == "approaching"
+
+    def test_deadline_within_14_days_no_upstream_gated(self):
+        """8-14 days out with no upstream signal => gated."""
+        in_10_days = str(date.today() + __import__("datetime").timedelta(days=10))
+        node = {"id": "d1", "type": "deadline", "deadline": in_10_days,
+                "conditions": ["upstream1.fired"]}
+        states = {"upstream1": "stable"}
+        assert eval_node_state(node, states, []) == "gated"
+
+    def test_deadline_far_future_gated(self):
+        in_60_days = str(date.today() + __import__("datetime").timedelta(days=60))
+        node = {"id": "d1", "type": "deadline", "deadline": in_60_days}
+        assert eval_node_state(node, {}, []) == "gated"
+
+    def test_deadline_no_date_gated(self):
+        node = {"id": "d1", "type": "deadline"}
+        assert eval_node_state(node, {}, []) == "gated"
+
+    # --- Gate nodes ---
+
+    def test_gate_always_monitoring(self):
+        node = {"id": "g1", "type": "gate", "condition": "manual-check"}
+        assert eval_node_state(node, {}, []) == "monitoring"
+
+    def test_gate_with_current_still_monitoring(self):
+        node = {"id": "g1", "type": "gate", "condition": "manual-check", "current": True}
+        assert eval_node_state(node, {}, []) == "monitoring"
+
+    def test_gate_empty_monitoring(self):
+        node = {"id": "g1", "type": "gate"}
+        assert eval_node_state(node, {}, []) == "monitoring"
+
+    # --- Constraint nodes ---
+
+    def test_constraint_above_threshold_constrained(self):
+        node = {"id": "c1", "type": "constraint", "current": 110, "threshold": 100}
+        assert eval_node_state(node, {}, []) == "constrained"
+
+    def test_constraint_at_threshold_stable(self):
+        """current == threshold => not > threshold => stable."""
+        node = {"id": "c1", "type": "constraint", "current": 100, "threshold": 100}
+        assert eval_node_state(node, {}, []) == "stable"
+
+    def test_constraint_below_threshold_stable(self):
+        node = {"id": "c1", "type": "constraint", "current": 80, "threshold": 100}
+        assert eval_node_state(node, {}, []) == "stable"
+
+    def test_constraint_no_current_stable(self):
+        node = {"id": "c1", "type": "constraint", "threshold": 100}
+        assert eval_node_state(node, {}, []) == "stable"
+
+    def test_constraint_no_threshold_stable(self):
+        node = {"id": "c1", "type": "constraint", "current": 110}
+        assert eval_node_state(node, {}, []) == "stable"
+
+    # --- Conditional nodes ---
+
+    def test_conditional_gate_not_fired_gated(self):
+        node = {"id": "cond1", "type": "conditional", "gatedBy": ["g1"]}
+        states = {"g1": "monitoring"}
+        assert eval_node_state(node, states, []) == "gated"
+
+    def test_conditional_gate_fired_approaching(self):
+        node = {"id": "cond1", "type": "conditional", "gatedBy": ["g1"]}
+        states = {"g1": "fired"}
+        assert eval_node_state(node, states, []) == "approaching"
+
+    def test_conditional_constrained_by_active_constraint(self):
+        node = {"id": "cond1", "type": "conditional",
+                "gatedBy": ["g1"], "constrainedBy": ["c1"]}
+        states = {"g1": "fired", "c1": "constrained"}
+        assert eval_node_state(node, states, []) == "constrained"
+
+    def test_conditional_constraint_checked_before_gate(self):
+        """Constraint takes priority over gate check."""
+        node = {"id": "cond1", "type": "conditional",
+                "gatedBy": ["g1"], "constrainedBy": ["c1"]}
+        states = {"g1": "monitoring", "c1": "constrained"}
+        assert eval_node_state(node, states, []) == "constrained"
+
+    def test_conditional_constraint_not_active_checks_gate(self):
+        node = {"id": "cond1", "type": "conditional",
+                "gatedBy": ["g1"], "constrainedBy": ["c1"]}
+        states = {"g1": "monitoring", "c1": "stable"}
+        assert eval_node_state(node, states, []) == "gated"
+
+    def test_conditional_no_gates_no_constraints_approaching(self):
+        """Empty gatedBy + constrainedBy => all gates vacuously open => approaching."""
+        node = {"id": "cond1", "type": "conditional"}
+        assert eval_node_state(node, {}, []) == "approaching"
+
+    def test_conditional_multiple_gates_all_must_fire(self):
+        node = {"id": "cond1", "type": "conditional", "gatedBy": ["g1", "g2"]}
+        states = {"g1": "fired", "g2": "monitoring"}
+        assert eval_node_state(node, states, []) == "gated"
+
+    # --- Reversal nodes ---
+
+    def test_reversal_below_threshold_fires(self):
+        node = {"id": "r1", "type": "reversal", "current": 80, "threshold": 100}
+        assert eval_node_state(node, {}, []) == "fired"
+
+    def test_reversal_at_threshold_fires(self):
+        node = {"id": "r1", "type": "reversal", "current": 100, "threshold": 100}
+        assert eval_node_state(node, {}, []) == "fired"
+
+    def test_reversal_closes_required_positive_approaching(self):
+        """closesRequired > 0 gates firing -- returns approaching."""
+        node = {"id": "r1", "type": "reversal", "current": 80,
+                "threshold": 100, "closesRequired": 5}
+        assert eval_node_state(node, {}, []) == "approaching"
+
+    def test_reversal_closes_required_zero_fires(self):
+        """closesRequired: 0 is no gating -- should fire."""
+        node = {"id": "r1", "type": "reversal", "current": 80,
+                "threshold": 100, "closesRequired": 0}
+        assert eval_node_state(node, {}, []) == "fired"
+
+    def test_reversal_closes_required_absent_fires(self):
+        """No closesRequired key -- should fire."""
+        node = {"id": "r1", "type": "reversal", "current": 80, "threshold": 100}
+        assert eval_node_state(node, {}, []) == "fired"
+
+    def test_reversal_near_threshold_approaching(self):
+        """Within 12% above threshold => approaching."""
+        node = {"id": "r1", "type": "reversal", "current": 108, "threshold": 100}
+        # 108/100 = 1.08 < 1.12 => approaching
+        assert eval_node_state(node, {}, []) == "approaching"
+
+    def test_reversal_far_above_stable(self):
+        node = {"id": "r1", "type": "reversal", "current": 200, "threshold": 100}
+        # 200/100 = 2.0 >= 1.12 => stable
+        assert eval_node_state(node, {}, []) == "stable"
+
+    def test_reversal_no_data_stable(self):
+        node = {"id": "r1", "type": "reversal"}
+        assert eval_node_state(node, {}, []) == "stable"
+
+    def test_reversal_no_threshold_stable(self):
+        node = {"id": "r1", "type": "reversal", "current": 80}
+        assert eval_node_state(node, {}, []) == "stable"
 
 
 if __name__ == "__main__":

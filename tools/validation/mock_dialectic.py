@@ -27,7 +27,7 @@ from typing import Optional
 # WHY: Snapshot schema requires these top-level keys per INTEGRATION.md.
 # Used for validation — a 400 is returned if any are missing.
 REQUIRED_SNAPSHOT_KEYS = {
-    "v", "timestamp", "nodeStates", "confluenceScores",
+    "v", "timestamp", "title", "nodeStates", "confluenceScores",
     "cascadePhase", "countdowns", "marketSnapshot",
     "scenarioImpacts", "portfolioSummary",
 }

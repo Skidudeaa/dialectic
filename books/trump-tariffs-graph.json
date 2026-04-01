@@ -5,7 +5,8 @@
     "claim": "Tariff shock transmits through input costs → retail prices → consumer confidence → employment (Layer 2) and retaliation → agriculture → rural economy (Layer 3). The Section 122 expiration on July 24 is the pivot date. Trade the policy uncertainty, not the tariffs themselves.",
     "version": "1.0.0",
     "type": "thesis-graph",
-    "monthlyBudget": 6000
+    "monthlyBudget": 6000,
+    "dialecticRoomId": ""
   },
 
   "nodes": [

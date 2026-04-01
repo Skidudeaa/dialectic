@@ -19,6 +19,7 @@ probability X and portfolio impact Y.
 """
 
 import argparse
+import html as html_mod
 import json
 import os
 import re
@@ -193,6 +194,13 @@ def eval_node_state(node: dict, upstream_states: dict, edges: list) -> str:
         for th in sorted_th:
             lvl = th.get("level", 0)
             if current >= lvl:
+                # WHY: closesRequired gates firing on N daily closes above the level.
+                # Python runs at generation time without the browser's close log, so
+                # we return "approaching" — the browser JS will promote to "fired"
+                # once sufficient closes are recorded.
+                closes_req = th.get("closesRequired")
+                if closes_req and closes_req > 0:
+                    return "approaching"
                 return "fired"
         # Check approaching (within 5% of lowest threshold)
         lowest = min(t.get("level", 0) for t in thresholds)
@@ -274,6 +282,10 @@ def eval_node_state(node: dict, upstream_states: dict, edges: list) -> str:
         threshold = node.get("threshold")
         if current is not None and threshold is not None:
             if current <= threshold:
+                # WHY: Same closesRequired gating as price nodes — see comment above.
+                closes_req = node.get("closesRequired")
+                if closes_req and closes_req > 0:
+                    return "approaching"
                 return "fired"
             ratio = current / threshold if threshold else 999
             if ratio < 1.12:
@@ -342,7 +354,7 @@ def get_current_phase(cfg: dict) -> tuple[int, str]:
     return current, current_key
 
 
-def eval_scenario(cfg: dict, scenario: dict) -> tuple[dict, dict]:
+def eval_scenario(cfg: dict, scenario: dict, base_states: dict = None) -> tuple[dict, dict]:
     """Apply scenario overrides, re-propagate, compute portfolio impact.
     Returns (new_states, portfolio_impact).
     """
@@ -367,7 +379,8 @@ def eval_scenario(cfg: dict, scenario: dict) -> tuple[dict, dict]:
     # Compute portfolio impact using instrument betas
     instruments = cfg.get("instruments", {})
     impact = {}
-    base_states = propagate(cfg)
+    if base_states is None:
+        base_states = propagate(cfg)
 
     for nid, insts in instruments.items():
         if not isinstance(insts, list):
@@ -570,17 +583,19 @@ def fetch_prices(cfg: dict, retries: int = 2) -> dict:
     batch_size = 8
     all_results = []
 
+    # WHY: Python is not subject to CORS — call Yahoo Finance directly instead of
+    # routing through allorigins.win proxy. Eliminates third-party exposure of
+    # symbol lists and removes the double-decode (proxy envelope -> Yahoo JSON).
+    # The browser-side JS fetch still uses the proxy (CORS constraint).
     for i in range(0, len(all_syms), batch_size):
         batch = all_syms[i:i + batch_size]
         yahoo_url = f"{yahoo_base}?symbols={','.join(batch)}&range=1d&interval=1d"
-        proxy_url = f"https://api.allorigins.win/get?url={urllib.parse.quote(yahoo_url, safe='')}"
 
         for attempt in range(1, retries + 1):
             try:
-                req = Request(proxy_url, headers={"User-Agent": "Mozilla/5.0"})
+                req = Request(yahoo_url, headers={"User-Agent": "Mozilla/5.0"})
                 with urlopen(req, timeout=20) as resp:
-                    envelope = json.loads(resp.read())
-                    batch_data = json.loads(envelope["contents"])
+                    batch_data = json.loads(resp.read())
                     all_results.extend(batch_data.get("spark", {}).get("result", []))
                 break
             except (URLError, TimeoutError, OSError) as e:
@@ -601,7 +616,9 @@ def fetch_prices(cfg: dict, retries: int = 2) -> dict:
     count = 0
     node_map = {n["id"]: n for n in cfg["nodes"]}
     for item in all_results:
-        sym = item["symbol"]
+        sym = item.get("symbol")
+        if not sym:
+            continue
         meta = item.get("response", [{}])[0].get("meta", {})
         price = meta.get("regularMarketPrice")
         if price is None:
@@ -613,7 +630,7 @@ def fetch_prices(cfg: dict, retries: int = 2) -> dict:
             if nid in node_map and "current" in node_map[nid]:
                 old = node_map[nid]["current"]
                 node_map[nid]["current"] = round(price, 2)
-                print(f"  {nid}: ${old} -> ${round(price, 2)}")
+                print(f"  {nid}: ${old} -> ${round(price, 2)}", file=sys.stderr)
                 count += 1
 
         # Update instrument ref prices
@@ -626,16 +643,32 @@ def fetch_prices(cfg: dict, retries: int = 2) -> dict:
                     inst["ref"] = round(price, 2)
                     count += 1
 
-    print(f"  Fetched {count}/{len(all_syms)} prices")
+    print(f"  Fetched {count}/{len(all_syms)} prices", file=sys.stderr)
     return cfg
 
 
 def update_config_file(config_path: str, cfg: dict) -> None:
-    """Write fetched prices back into the JSON config file."""
-    with open(config_path, "w") as f:
-        json.dump(cfg, f, indent=2, ensure_ascii=False)
-        f.write("\n")
-    print(f"  Config updated: {config_path}")
+    """Write fetched prices back into the JSON config file.
+
+    WHY: Atomic write via tmp+rename prevents config corruption if the process
+    is killed or disk fills up mid-write. os.replace() is atomic on POSIX.
+    """
+    tmp_path = config_path + ".tmp"
+    try:
+        with open(tmp_path, "w") as f:
+            json.dump(cfg, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, config_path)
+        print(f"  Config updated: {config_path}", file=sys.stderr)
+    except Exception:
+        # Clean up the partial temp file on failure
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def fetch_polymarket(cfg: dict) -> dict:
@@ -993,10 +1026,13 @@ def generate_html(cfg: dict) -> str:
     confluence_js = json.dumps(confluence, separators=(",", ":"))
 
     html = get_template()
+    # WHY: quote=True escapes " and ' — needed because __CLAIM__ appears in
+    # a content="..." attribute. Prevents stored XSS via crafted config values.
+    esc = lambda s: html_mod.escape(s, quote=True)
     replacements = {
-        "__TITLE__": title,
-        "__AS_OF__": as_of,
-        "__CLAIM__": claim,
+        "__TITLE__": esc(title),
+        "__AS_OF__": esc(as_of),
+        "__CLAIM__": esc(claim),
         "__PHASE_NUM__": str(phase_num),
         "__PHASE_KEY__": phase_key,
         "__CYTOSCAPE_JS__": cyto_js,
@@ -1216,6 +1252,12 @@ select.pf-inp{appearance:none;padding-right:20px;background-image:url("data:imag
 # =========================================================================
 
 JS_LOGIC = r"""
+/* ── XSS Escaping ─────────────────────────────────────────────── */
+// WHY: Config-sourced strings (node labels, context, journal text) are injected
+// into innerHTML. Without escaping, a crafted config or imported state file can
+// execute arbitrary JS in the viewer's browser.
+function esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
 /* ── State ─────────────────────────────────────────────────────── */
 let B;
 const NODE_MAP={};NODES.forEach(n=>{NODE_MAP[n.id]=n});
@@ -1471,7 +1513,7 @@ function renderNodeDetail(nid){
   const col=STATE_COLORS[st]||'#777';
   const conf=scoreConfluence(states);
 
-  let h=`<div class="nd-title">${node.label} <span class="nd-type">${node.type}</span><span class="nd-state" style="background:${col}22;color:${col};border:1px solid ${col}44">${st.toUpperCase()}</span></div>`;
+  let h=`<div class="nd-title">${esc(node.label)} <span class="nd-type">${esc(node.type)}</span><span class="nd-state" style="background:${col}22;color:${col};border:1px solid ${col}44">${st.toUpperCase()}</span></div>`;
 
   // Probability
   if(node.probability!=null){h+=`<div style="font-family:var(--font-mono);font-size:13px;margin-top:4px">Probability: <strong>${(node.probability*100).toFixed(1)}%</strong></div>`}
@@ -1487,7 +1529,7 @@ function renderNodeDetail(nid){
       const cur=B.market[nid]!=null?B.market[nid]:node.current;
       const pct=cur!=null&&th.level?(cur/th.level*100).toFixed(1):'--';
       const above=cur!=null&&cur>=th.level;
-      h+=`<div class="nd-threshold"><span>${th.label||''}: ${th.level}</span><span style="color:${above?'var(--c-fired)':'var(--t4)'}${th.closesRequired?' ':''}${th.closesRequired?'('+th.closesRequired+' closes)':''}">${pct}%</span></div>`;
+      h+=`<div class="nd-threshold"><span>${esc(th.label)||''}: ${th.level}</span><span style="color:${above?'var(--c-fired)':'var(--t4)'}${th.closesRequired?' ':''}${th.closesRequired?'('+th.closesRequired+' closes)':''}">${pct}%</span></div>`;
     });
     h+=`</div>`;
   }
@@ -1496,13 +1538,13 @@ function renderNodeDetail(nid){
   if(node.deadline){
     const dlDate=new Date(node.deadline+'T23:59:59');const now=new Date();
     const days=Math.ceil((dlDate-now)/(1000*60*60*24));
-    h+=`<div class="nd-section"><h4>Deadline</h4><div style="font-family:var(--font-mono);font-size:18px;font-weight:800;color:${days<=7?'var(--c-fired)':days<=14?'var(--c-warn)':'var(--t2)'}">${days>0?days+' days':days===0?'TODAY':'PASSED ('+Math.abs(days)+'d ago)'}</div><div style="font-size:12px;color:var(--t4)">${node.deadline}${node.irreversible?' — IRREVERSIBLE':''}</div></div>`;
+    h+=`<div class="nd-section"><h4>Deadline</h4><div style="font-family:var(--font-mono);font-size:18px;font-weight:800;color:${days<=7?'var(--c-fired)':days<=14?'var(--c-warn)':'var(--t2)'}">${days>0?days+' days':days===0?'TODAY':'PASSED ('+Math.abs(days)+'d ago)'}</div><div style="font-size:12px;color:var(--t4)">${esc(node.deadline)}${node.irreversible?' — IRREVERSIBLE':''}</div></div>`;
   }
 
   // Feeds
   if(node.feeds&&node.feeds.length){
     h+=`<div class="nd-section"><h4>Data Feeds</h4>`;
-    node.feeds.forEach(f=>{h+=`<div class="nd-feed">${f.source}${f.symbol?' — '+f.symbol:''}${f.series?' — '+f.series:''}${f.label?' ('+f.label+')':''}</div>`});
+    node.feeds.forEach(f=>{h+=`<div class="nd-feed">${esc(f.source)}${f.symbol?' — '+esc(f.symbol):''}${f.series?' — '+esc(f.series):''}${f.label?' ('+esc(f.label)+')':''}</div>`});
     h+=`</div>`;
   }
 
@@ -1511,7 +1553,7 @@ function renderNodeDetail(nid){
     h+=`<div class="nd-section"><h4>Indicators</h4>`;
     node.indicators.forEach(ind=>{
       const dotCol=ind.status==='red'?'var(--c-fired)':ind.status==='amber'?'var(--c-warn)':'var(--c-stable)';
-      h+=`<div class="nd-indicator"><span class="dot" style="background:${dotCol}"></span><span>${ind.label}: <strong>${ind.value||'--'}</strong></span></div>`;
+      h+=`<div class="nd-indicator"><span class="dot" style="background:${dotCol}"></span><span>${esc(ind.label)}: <strong>${esc(ind.value)||'--'}</strong></span></div>`;
     });
     h+=`</div>`;
   }
@@ -1532,11 +1574,11 @@ function renderNodeDetail(nid){
   }
 
   // Context
-  if(node.context){h+=`<div class="nd-section"><h4>Context</h4><div class="nd-context">${node.context}</div></div>`}
+  if(node.context){h+=`<div class="nd-section"><h4>Context</h4><div class="nd-context">${esc(node.context)}</div></div>`}
   // Historical lag
-  if(node.historicalLag){h+=`<div style="font-family:var(--font-mono);font-size:11px;color:var(--t4);margin-top:var(--sp-2)">Historical: ${node.historicalLag}</div>`}
+  if(node.historicalLag){h+=`<div style="font-family:var(--font-mono);font-size:11px;color:var(--t4);margin-top:var(--sp-2)">Historical: ${esc(node.historicalLag)}</div>`}
   // Action
-  if(node.action){h+=`<div class="nd-section"><h4>Action</h4><div style="font-size:13px;font-weight:600;color:var(--c-warn)">${node.action}</div></div>`}
+  if(node.action){h+=`<div class="nd-section"><h4>Action</h4><div style="font-size:13px;font-weight:600;color:var(--c-warn)">${esc(node.action)}</div></div>`}
 
   document.getElementById('node-detail').innerHTML=h;
 }
@@ -1553,9 +1595,9 @@ function renderCascade(){
       const dlDate=new Date(n.deadline+'T23:59:59');const now=new Date();
       const days=Math.ceil((dlDate-now)/(1000*60*60*24));
       if(days>0){
-        h+=`<div class="countdown-box"><div class="countdown-num">${days}</div><div class="countdown-lbl">DAYS UNTIL ${n.label.toUpperCase()}</div><div style="font-size:12px;color:var(--t3);margin-top:4px">${n.deadline}${n.irreversible?' — irreversible once passed':''}</div></div>`;
+        h+=`<div class="countdown-box"><div class="countdown-num">${days}</div><div class="countdown-lbl">DAYS UNTIL ${esc(n.label).toUpperCase()}</div><div style="font-size:12px;color:var(--t3);margin-top:4px">${esc(n.deadline)}${n.irreversible?' — irreversible once passed':''}</div></div>`;
       }else if(days<=0){
-        h+=`<div class="countdown-box" style="background:rgba(224,85,85,.08);border-color:rgba(224,85,85,.2)"><div class="countdown-num" style="color:var(--c-fired)">${days===0?'TODAY':'PASSED'}</div><div class="countdown-lbl">${n.label.toUpperCase()}</div></div>`;
+        h+=`<div class="countdown-box" style="background:rgba(224,85,85,.08);border-color:rgba(224,85,85,.2)"><div class="countdown-num" style="color:var(--c-fired)">${days===0?'TODAY':'PASSED'}</div><div class="countdown-lbl">${esc(n.label).toUpperCase()}</div></div>`;
       }
     }
   });
@@ -1572,7 +1614,7 @@ function renderCascade(){
 
     h+=`<div class="cascade-phase ${cls}"><span class="cp-num">${i+1}</span>`;
     if(isHere)h+=`<div class="cp-here">&#9654; WE ARE HERE</div>`;
-    h+=`<div class="cp-title">${phase.label||phaseLabels[key]} <span class="cp-status" style="background:${statusCol}22;color:${statusCol}">${status}</span></div>`;
+    h+=`<div class="cp-title">${esc(phase.label)||phaseLabels[key]} <span class="cp-status" style="background:${statusCol}22;color:${statusCol}">${esc(status)}</span></div>`;
 
     // Signposts
     if(phase.signposts&&phase.signposts.length){
@@ -1581,8 +1623,8 @@ function renderCascade(){
         const spSt=(sp.status||'').toLowerCase();
         const icon=spSt==='fired'?'&#10003;':spSt==='approaching'?'&#9202;':spSt==='partial'?'&#9679;':'&#9675;';
         const iconCol=spSt==='fired'?'color:var(--c-up)':spSt==='approaching'?'color:var(--c-warn)':'color:var(--t4)';
-        h+=`<li class="cp-sp"><span class="cp-sp-icon" style="${iconCol}">${icon}</span><span class="cp-sp-text">${sp.text}</span>`;
-        if(sp.value)h+=`<span class="cp-sp-val">${sp.value}</span>`;
+        h+=`<li class="cp-sp"><span class="cp-sp-icon" style="${iconCol}">${icon}</span><span class="cp-sp-text">${esc(sp.text)}</span>`;
+        if(sp.value)h+=`<span class="cp-sp-val">${esc(sp.value)}</span>`;
         h+=`</li>`;
       });
       h+=`</ul>`;
@@ -1599,13 +1641,13 @@ function renderCascade(){
   if(ANALOGS.length){
     h+=`<div class="sec-label" style="margin-top:var(--sp-8)">Historical Analogs</div>`;
     ANALOGS.forEach(a=>{
-      h+=`<div style="background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-md);padding:var(--sp-4);margin-bottom:var(--sp-3)"><div style="font-weight:700;font-size:14px">${a.name} <span style="font-family:var(--font-mono);font-size:11px;color:var(--t4)">${a.similarity||''}</span></div>`;
+      h+=`<div style="background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-md);padding:var(--sp-4);margin-bottom:var(--sp-3)"><div style="font-weight:700;font-size:14px">${esc(a.name)} <span style="font-family:var(--font-mono);font-size:11px;color:var(--t4)">${esc(a.similarity)||''}</span></div>`;
       if(a.keyLags){
         Object.entries(a.keyLags).forEach(([k,v])=>{
-          h+=`<div style="font-family:var(--font-mono);font-size:12px;color:var(--t3);padding:1px 0">${k}: ${v}</div>`;
+          h+=`<div style="font-family:var(--font-mono);font-size:12px;color:var(--t3);padding:1px 0">${esc(k)}: ${esc(v)}</div>`;
         });
       }
-      if(a.notes)h+=`<div style="font-size:13px;color:var(--t3);margin-top:4px">${a.notes}</div>`;
+      if(a.notes)h+=`<div style="font-size:13px;color:var(--t3);margin-top:4px">${esc(a.notes)}</div>`;
       h+=`</div>`;
     });
   }
@@ -1667,7 +1709,7 @@ function renderScenarios(){
   let h='<div class="sc-pills">';
   SCENARIOS.forEach(s=>{
     const act=s.id===sel?'active':'';
-    h+=`<button class="sc-pill ${act}" data-sc="${s.id}">${s.name}<span class="sc-prob">${s.probability!=null?Math.round(s.probability*100)+'%':''}</span></button>`;
+    h+=`<button class="sc-pill ${act}" data-sc="${esc(s.id)}">${esc(s.name)}<span class="sc-prob">${s.probability!=null?Math.round(s.probability*100)+'%':''}</span></button>`;
   });
   h+='</div>';
 
@@ -1701,8 +1743,8 @@ function renderScenarios(){
   const{states:scStates,impact}=evalScenario(scenario);
 
   // Scenario detail panel
-  h+=`<div class="sc-detail"><div class="sc-name">${scenario.name} <span style="font-family:var(--font-mono);font-size:12px;color:var(--t4)">${scenario.probability!=null?Math.round(scenario.probability*100)+'%':''}</span></div>`;
-  if(scenario.notes)h+=`<div class="sc-notes">${scenario.notes}</div>`;
+  h+=`<div class="sc-detail"><div class="sc-name">${esc(scenario.name)} <span style="font-family:var(--font-mono);font-size:12px;color:var(--t4)">${scenario.probability!=null?Math.round(scenario.probability*100)+'%':''}</span></div>`;
+  if(scenario.notes)h+=`<div class="sc-notes">${esc(scenario.notes)}</div>`;
 
   // Overrides table
   const overrides=scenario.overrides||{};
@@ -1712,7 +1754,7 @@ function renderScenarios(){
       const node=NODE_MAP[nid];
       const label=node?node.label:nid;
       const valStr=typeof val==='string'?val:'$'+fmt(val);
-      h+=`<div class="sc-override-row"><span class="sc-override-node">${label}</span><span class="sc-override-val">${valStr}</span></div>`;
+      h+=`<div class="sc-override-row"><span class="sc-override-node">${esc(label)}</span><span class="sc-override-val">${esc(valStr)}</span></div>`;
     });
     h+=`</div>`;
   }
@@ -1724,7 +1766,7 @@ function renderScenarios(){
     const base=baseStates[n.id]||'monitoring';
     const sc=scStates[n.id]||'monitoring';
     if(base!==sc){
-      h+=`<div style="font-family:var(--font-mono);font-size:12px;padding:2px 0"><span style="color:var(--t2)">${n.label}</span> <span style="color:${STATE_COLORS[base]}">${base}</span> → <span style="color:${STATE_COLORS[sc]}">${sc}</span></div>`;
+      h+=`<div style="font-family:var(--font-mono);font-size:12px;padding:2px 0"><span style="color:var(--t2)">${esc(n.label)}</span> <span style="color:${STATE_COLORS[base]}">${base}</span> → <span style="color:${STATE_COLORS[sc]}">${sc}</span></div>`;
     }
   });
   h+=`</div>`;
@@ -1766,7 +1808,7 @@ function renderPortfolio(){
     const stCol=STATE_COLORS[st]||'#777';
     const label=node?node.label:(nid==='reserve'?'Reserve':'Unknown');
 
-    h+=`<div class="port-group"><div class="port-group-title">${label} <span class="port-group-badge" style="background:${stCol}22;color:${stCol};border:1px solid ${stCol}44">${st.toUpperCase()}</span></div><div class="port-grid">`;
+    h+=`<div class="port-group"><div class="port-group-title">${esc(label)} <span class="port-group-badge" style="background:${stCol}22;color:${stCol};border:1px solid ${stCol}44">${st.toUpperCase()}</span></div><div class="port-grid">`;
 
     insts.forEach(inst=>{
       const c=B.prices[inst.id]||inst.ref;
@@ -1821,7 +1863,7 @@ function renderJournal(){
   if(!entries.length){document.getElementById('j-list').innerHTML='<div class="j-empty">No entries yet.</div>';return}
   let eh='';
   entries.forEach(e=>{
-    eh+=`<div class="j-entry"><span class="j-date">${fDate(e.date)}</span><span class="j-type ${e.type}">${e.type}</span><span>${e.text}${e.node?'<span class="j-node-tag">'+e.node+'</span>':''}</span></div>`;
+    eh+=`<div class="j-entry"><span class="j-date">${fDate(e.date)}</span><span class="j-type ${esc(e.type)}">${esc(e.type)}</span><span>${esc(e.text)}${e.node?'<span class="j-node-tag">'+esc(e.node)+'</span>':''}</span></div>`;
   });
   document.getElementById('j-list').innerHTML=eh;
 }
@@ -1834,7 +1876,7 @@ function renderMarketBar(){
       const hasFeed=n.feeds&&n.feeds.some(f=>f.source==='yahoo'||f.source==='eia'||f.source==='fred');
       if(hasFeed||n.type==='price'||n.type==='constraint'||n.type==='reversal'){
         const val=B.market[n.id]!=null?B.market[n.id]:n.current;
-        h+=`<div class="mkt-item"><label class="mkt-lbl" for="mkt-${n.id}">${n.label}</label><input class="mkt-inp" type="number" step="0.01" id="mkt-${n.id}" data-nid="${n.id}" value="${val}"></div>`;
+        h+=`<div class="mkt-item"><label class="mkt-lbl" for="mkt-${esc(n.id)}">${esc(n.label)}</label><input class="mkt-inp" type="number" step="0.01" id="mkt-${esc(n.id)}" data-nid="${esc(n.id)}" value="${val}"></div>`;
       }
     }
   });
@@ -2266,7 +2308,7 @@ Examples:
         # Evaluate all scenarios
         scenarios_result = []
         for scenario in cfg.get("scenarios", []):
-            new_states, impact = eval_scenario(cfg, scenario)
+            new_states, impact = eval_scenario(cfg, scenario, base_states=states)
             scenarios_result.append((scenario, new_states, impact))
 
         snapshot = export_state(cfg, states, confluence, phase_num, phase_key,

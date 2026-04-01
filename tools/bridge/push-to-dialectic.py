@@ -31,6 +31,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -113,48 +114,74 @@ def load_snapshot(source: str) -> bytes:
 # HTTP POST
 # =========================================================================
 
-def push_snapshot(dialectic_url: str, room_id: str, token: str, payload: bytes) -> None:
+def push_snapshot(dialectic_url: str, room_id: str, token: str, payload: bytes,
+                  max_attempts: int = 3) -> None:
     """
     POST the snapshot JSON to the Dialectic trading snapshot endpoint.
+    Retries on transient failures (5xx, connection errors) with exponential backoff.
     Prints response on success, error details on failure.
     Sets exit code via sys.exit().
+
+    WHY: The push is the final pipeline step — a transient Dialectic blip should
+    not silently drop a snapshot. 4xx errors are not retried (client error).
     """
     url = f"{dialectic_url.rstrip('/')}/rooms/{room_id}/trading/snapshot"
 
-    req = Request(
-        url,
-        data=payload,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
-            "User-Agent": "tradingDesk-bridge/1.0",
-        },
-        method="POST",
-    )
+    for attempt in range(1, max_attempts + 1):
+        req = Request(
+            url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}",
+                "User-Agent": "tradingDesk-bridge/1.0",
+            },
+            method="POST",
+        )
 
-    try:
-        with urlopen(req, timeout=30) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            # Pretty-print if valid JSON, otherwise print raw
-            try:
-                parsed = json.loads(body)
-                print(json.dumps(parsed, indent=2, ensure_ascii=False))
-            except json.JSONDecodeError:
-                print(body)
-            sys.exit(0)
-    except HTTPError as e:
-        body = ""
         try:
-            body = e.read().decode("utf-8", errors="replace")
-        except Exception:
-            pass
-        print(f"HTTP {e.code}: {e.reason}", file=sys.stderr)
-        if body:
-            print(body, file=sys.stderr)
-        sys.exit(1)
-    except (URLError, TimeoutError, OSError) as e:
-        print(f"Connection error: {e}", file=sys.stderr)
-        sys.exit(2)
+            with urlopen(req, timeout=30) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                try:
+                    parsed = json.loads(body)
+                    print(json.dumps(parsed, indent=2, ensure_ascii=False))
+                except json.JSONDecodeError:
+                    print(body)
+                sys.exit(0)
+        except HTTPError as e:
+            body = ""
+            try:
+                body = e.read().decode("utf-8", errors="replace")
+            except Exception:
+                pass
+            if e.code < 500:
+                # 4xx — client error, not retryable
+                print(f"HTTP {e.code}: {e.reason}", file=sys.stderr)
+                if body:
+                    print(body, file=sys.stderr)
+                sys.exit(1)
+            # 5xx — server error, retryable
+            if attempt < max_attempts:
+                wait = 2 ** (attempt - 1)  # 1s, 2s
+                print(f"HTTP {e.code} (attempt {attempt}/{max_attempts}), "
+                      f"retrying in {wait}s...", file=sys.stderr)
+                time.sleep(wait)
+                continue
+            print(f"HTTP {e.code}: {e.reason} (failed after {max_attempts} attempts)",
+                  file=sys.stderr)
+            if body:
+                print(body, file=sys.stderr)
+            sys.exit(1)
+        except (URLError, TimeoutError, OSError) as e:
+            if attempt < max_attempts:
+                wait = 2 ** (attempt - 1)
+                print(f"Connection error (attempt {attempt}/{max_attempts}): {e}, "
+                      f"retrying in {wait}s...", file=sys.stderr)
+                time.sleep(wait)
+                continue
+            print(f"Connection error: {e} (failed after {max_attempts} attempts)",
+                  file=sys.stderr)
+            sys.exit(2)
 
 
 # =========================================================================

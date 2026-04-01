@@ -18,6 +18,7 @@ one command with a declarative JSON config as the single source of truth.
 """
 
 import argparse
+import html as html_mod
 import json
 import os
 import re
@@ -526,9 +527,10 @@ def build_situation_html(cfg: dict) -> str:
     if not su:
         return ""
     date = su.get("date", "")
-    lines = [f"<h3>Situation Update ({date})</h3>"]
+    esc = lambda s: html_mod.escape(s, quote=True)
+    lines = [f"<h3>Situation Update ({esc(date)})</h3>"]
     for sec in su.get("sections", []):
-        lines.append(f'<p><strong>{sec["label"]}:</strong> {sec["text"]}</p>')
+        lines.append(f'<p><strong>{esc(sec["label"])}:</strong> {esc(sec["text"])}</p>')
     return "\n  ".join(lines)
 
 
@@ -536,12 +538,13 @@ def build_provenance_html(cfg: dict) -> str:
     """Generate provenance footer content."""
     p = cfg.get("provenance", {})
     parts = []
+    esc = lambda s: html_mod.escape(s, quote=True)
     for key, label in [("sources", "Sources"), ("methodology", "Methodology"),
                         ("limitations", "Limitations")]:
         if key in p:
-            parts.append(f"<h3>{label}</h3>\n  <p>{p[key]}</p>")
+            parts.append(f"<h3>{label}</h3>\n  <p>{esc(p[key])}</p>")
     if "disclaimer" in p:
-        parts.append(f'<p class="disc">{p["disclaimer"]}</p>')
+        parts.append(f'<p class="disc">{esc(p["disclaimer"])}</p>')
     return "\n  ".join(parts)
 
 
@@ -567,12 +570,14 @@ def generate_html(cfg: dict) -> str:
     # WHY: Using .replace() with unique markers instead of f-strings because
     # the template contains hundreds of literal curly braces (CSS + JS).
     html = get_template()
+    # WHY: Escape user-sourced text before HTML substitution to prevent stored XSS.
+    esc = lambda s: html_mod.escape(s, quote=True)
     replacements = {
-        "__TITLE__": title,
-        "__SUBTITLE__": subtitle,
+        "__TITLE__": esc(title),
+        "__SUBTITLE__": esc(subtitle),
         "__BUDGET__": str(budget),
         "__BUDGET_FMT__": f"{budget:,}",
-        "__CLAIM__": claim,
+        "__CLAIM__": esc(claim),
         "__CATS_CSS__": cats_css,
         "__CATS_JS__": cats_js,
         "__INSTS_JS__": insts_js,

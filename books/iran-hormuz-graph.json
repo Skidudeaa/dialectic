@@ -5,7 +5,8 @@
     "claim": "Oil shock transmits through diesel→freight→employment (Layer 2) and fertilizer→food→EM (Layer 3). Services lag. Don't front-run.",
     "version": "1.0.0",
     "type": "thesis-graph",
-    "monthlyBudget": 8000
+    "monthlyBudget": 8000,
+    "dialecticRoomId": ""
   },
 
   "nodes": [
