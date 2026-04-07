@@ -1,0 +1,79 @@
+{
+  "v": 1,
+  "timestamp": "2026-04-06T03:48:55Z",
+  "title": "Iran/Hormuz Thesis — March 2026",
+  "nodeStates": {
+    "hormuz": "fired",
+    "curve": "stable",
+    "rig-confirm": "monitoring",
+    "services": "gated",
+    "brent": "approaching",
+    "fert-shortage": "approaching",
+    "dxy-stress": "fired",
+    "diesel": "fired",
+    "planting-miss": "approaching",
+    "em-currency": "fired",
+    "freight": "fired",
+    "food-spike": "approaching",
+    "employment": "fired",
+    "em-stress": "fired",
+    "demand-destruction": "fired",
+    "de-escalation": "stable"
+  },
+  "confluenceScores": {
+    "em-stress": 1.67
+  },
+  "cascadePhase": {
+    "number": 3,
+    "key": "amplification",
+    "status": "APPROACHING"
+  },
+  "countdowns": [
+    {
+      "nodeId": "planting-miss",
+      "label": "Planting Cycle Miss",
+      "deadline": "2026-04-15",
+      "daysRemaining": 10
+    }
+  ],
+  "marketSnapshot": {
+    "brent": 112.57,
+    "wti": 99.64,
+    "goldSpot": 4492,
+    "usRigs": 543,
+    "nolaFert": 683,
+    "usDiesel": 5.38,
+    "curveSpread": 15,
+    "dxy": 100.18
+  },
+  "scenarioImpacts": {
+    "reopen-apr1": {
+      "probability": 0.1,
+      "netImpact": 0.1
+    },
+    "closed-may": {
+      "probability": 0.45,
+      "netImpact": 8.6
+    },
+    "kharg-strike": {
+      "probability": 0.15,
+      "netImpact": 4.9
+    },
+    "selective-reopen": {
+      "probability": 0.3,
+      "netImpact": 6.8
+    }
+  },
+  "portfolioSummary": {
+    "monthlyBudget": 8000,
+    "topPositions": [
+      "XOP $1400/mo",
+      "XLE $1200/mo",
+      "SGOV $1200/mo",
+      "GLD $1000/mo",
+      "IXC $800/mo",
+      "CF $800/mo"
+    ],
+    "sgovAvailable": 1200
+  }
+}

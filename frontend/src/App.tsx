@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { isAuthenticated } from "./lib/api";
+import { ToastProvider } from "./components/Toast";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 
@@ -12,14 +13,16 @@ export default function App() {
     setAuthed(false);
   }, []);
 
-  if (!authed) {
-    return <Login onLogin={onLogin} />;
-  }
-
   return (
-    <Routes>
-      <Route path="/*" element={<Dashboard onLogout={onLogout} />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <ToastProvider>
+      {!authed ? (
+        <Login onLogin={onLogin} />
+      ) : (
+        <Routes>
+          <Route path="/*" element={<Dashboard onLogout={onLogout} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      )}
+    </ToastProvider>
   );
 }

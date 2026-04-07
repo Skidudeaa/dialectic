@@ -328,10 +328,93 @@ def score_confluence(cfg: dict, states: dict) -> dict:
         for e in incoming:
             src_state = states.get(e["from"], "stable")
             signal = 1.0 if src_state == "fired" else (0.5 if src_state == "approaching" else 0.0)
-            score += signal * e.get("strength", 0.5)
+            # WHY: amplification models crack-spread magnification, supply-chain
+            # concentration, or leverage effects that make the downstream signal
+            # stronger (>1.0) or weaker (<1.0) than the raw strength implies.
+            # Default 1.0 preserves existing behavior for edges without the field.
+            score += signal * e.get("strength", 0.5) * e.get("amplification", 1.0)
         scores[nid] = round(score, 2)
 
     return scores
+
+
+def parse_lag_days(lag_str: str, ref_date: date | None = None) -> int:
+    """Parse an edge lag string into a midpoint day count.
+
+    WHY: Edge lag declarations like "1-2 weeks" are currently decorative —
+    propagate() ignores them. This parser makes them machine-readable so
+    propagate_at_horizon() can filter edges by temporal reachability.
+
+    Handles: "immediate", "N week(s)", "N-M weeks", "N month(s)", "N-M months",
+    "date-gated <date_str>". Returns midpoint of the range in days.
+    """
+    if ref_date is None:
+        ref_date = date.today()
+
+    if not lag_str or lag_str.lower() == "immediate":
+        return 1
+
+    # Date-gated: "date-gated Apr 15" or "date-gated 2026-04-15"
+    if lag_str.lower().startswith("date-gated"):
+        date_part = lag_str[len("date-gated"):].strip()
+        # Try ISO format first
+        try:
+            target = date.fromisoformat(date_part)
+            return max(0, (target - ref_date).days)
+        except ValueError:
+            pass
+        # Try "Apr 15" / "Apr 15 2026" style
+        import calendar
+        months = {v.lower(): k for k, v in enumerate(calendar.month_abbr) if k}
+        months.update({v.lower(): k for k, v in enumerate(calendar.month_name) if k})
+        parts = date_part.split()
+        if len(parts) >= 2 and parts[0].lower().rstrip(",") in months:
+            month = months[parts[0].lower().rstrip(",")]
+            day_num = int(parts[1].rstrip(","))
+            year = int(parts[2]) if len(parts) >= 3 else ref_date.year
+            target = date(year, month, day_num)
+            if target < ref_date and len(parts) < 3:
+                target = date(year + 1, month, day_num)
+            return max(0, (target - ref_date).days)
+        return 30  # fallback
+
+    # Range: "1-2 weeks", "2-4 months", "1 week", "3 months"
+    m = re.match(r"(\d+)(?:\s*-\s*(\d+))?\s*(day|week|month)s?", lag_str.strip(), re.IGNORECASE)
+    if m:
+        low = int(m.group(1))
+        high = int(m.group(2)) if m.group(2) else low
+        unit = m.group(3).lower()
+        multiplier = {"day": 1, "week": 7, "month": 30}[unit]
+        return int((low + high) / 2 * multiplier)
+
+    return 30  # conservative fallback for unparseable strings
+
+
+def propagate_at_horizon(cfg: dict, horizon_days: int,
+                         ref_date: date | None = None) -> dict:
+    """Run propagation filtered by temporal reachability.
+
+    WHY: The standard propagate() treats all edges as instantaneous — lag
+    declarations are decorative. This function removes edges whose lag exceeds
+    the horizon, then runs the existing propagate() + score_confluence() on
+    the time-filtered graph. The result answers: "given current upstream states,
+    what fires by T+horizon_days?"
+
+    Returns {"states": {nodeId: state}, "confluence": {nodeId: score}}.
+    """
+    import copy
+    hcfg = copy.deepcopy(cfg)
+    # WHY: Remove edges whose lag exceeds the horizon. This changes the graph
+    # topology so that indicator nodes only see the edges that have had time to
+    # transmit. A node with 3 incoming paths but 2 with 3-month lags will only
+    # see 1 path at T+7d — correctly reflecting temporal reachability.
+    hcfg["edges"] = [
+        e for e in hcfg["edges"]
+        if parse_lag_days(e.get("lag", "immediate"), ref_date) <= horizon_days
+    ]
+    states = propagate(hcfg)
+    confluence = score_confluence(hcfg, states)
+    return {"states": states, "confluence": confluence}
 
 
 def get_current_phase(cfg: dict) -> tuple[int, str]:
@@ -528,9 +611,21 @@ def export_state(cfg: dict, states: dict, confluence: dict,
         "sgovAvailable": sgov_available,
     }
 
+    # --- horizonTrace: time-aware forward propagation ---
+    # WHY: Shows WHEN each downstream node fires given current upstream states.
+    # The standard propagation treats all edges as instantaneous; horizon trace
+    # adds the temporal dimension by filtering edges by lag reachability.
+    horizon_trace = {}
+    for h in (7, 28, 90):
+        result = propagate_at_horizon(cfg, h, ref_date=today)
+        horizon_trace[f"T+{h}d"] = {
+            "states": result["states"],
+            "confluence": result["confluence"],
+        }
+
     # --- Assemble snapshot ---
     snapshot = {
-        "v": 1,
+        "v": 2,
         "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "title": meta.get("title", "Untitled Thesis"),
         "nodeStates": node_states,
@@ -540,6 +635,7 @@ def export_state(cfg: dict, states: dict, confluence: dict,
         "marketSnapshot": market_snapshot,
         "scenarioImpacts": scenario_impacts,
         "portfolioSummary": portfolio_summary,
+        "horizonTrace": horizon_trace,
     }
 
     return snapshot

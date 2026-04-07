@@ -290,6 +290,35 @@ def run_book(
         return result
 
     result["pushed"] = "OK"
+
+    # Step 7: evaluate open trades against the fresh snapshot (lifecycle monitor)
+    # WHY: After push, the snapshot is the latest pipeline output. Evaluate all
+    # open trades' predicate gates against it. This is the CAPTURE layer of the
+    # REPAIR → TAG → CAPTURE architecture.
+    open_trades_path: Path = ROOT / "outcomes" / "open_trades.json"
+    if open_trades_path.exists():
+        try:
+            # WHY: Dynamic import avoids adding a hard dependency at module level.
+            # Tests can monkeypatch or skip this path by not providing open_trades.json.
+            lifecycle_mod = ROOT / "tools" / "outcomes" / "lifecycle_monitor.py"
+            if lifecycle_mod.exists():
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("lifecycle_monitor", str(lifecycle_mod))
+                lm = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(lm)
+                trade_results = lm.step7_evaluate_open_trades(
+                    snapshot_path=latest,
+                    open_trades_path=open_trades_path,
+                    book_id=book_id,
+                    book_path=book_path,
+                    ledger_dir=str(ROOT / "outcomes" / "trades"),
+                )
+                result["trades"] = json.dumps(trade_results)
+        except Exception as exc:
+            # WHY: Step 7 failures should not abort the pipeline. Log and continue.
+            print(f"[warn] {book_id}: lifecycle monitor failed — {exc}", file=sys.stderr)
+            result["trades"] = "ERR"
+
     return result
 
 

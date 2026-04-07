@@ -1,0 +1,1 @@
+{"meta": {"title": "Test Book"}, "nodes": [{"id": "a", "type": "event", "state": "fired"}, {"id": "b", "type": "price", "current": 100}], "edges": [{"from": "a", "to": "b", "strength": 0.9, "amplification": 1.3, "lag": "2-4 weeks"}]}

@@ -30,7 +30,7 @@ SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "thesisgraph.py")
 REQUIRED_KEYS = {
     "v", "timestamp", "title", "nodeStates", "confluenceScores",
     "cascadePhase", "countdowns", "marketSnapshot", "scenarioImpacts",
-    "portfolioSummary",
+    "portfolioSummary", "horizonTrace",
 }
 
 
@@ -78,14 +78,14 @@ class TestExportStateFunction:
         result = json.dumps(snapshot, indent=2, ensure_ascii=False)
         # Must round-trip
         parsed = json.loads(result)
-        assert parsed["v"] == 1
+        assert parsed["v"] == 2
         assert isinstance(parsed["nodeStates"], dict)
 
     def test_version_is_1(self, cfg, evaluated):
         states, confluence, phase_num, phase_key, scenarios_result = evaluated
         snapshot = export_state(cfg, states, confluence, phase_num, phase_key,
                                 scenarios_result)
-        assert snapshot["v"] == 1
+        assert snapshot["v"] == 2
 
     def test_timestamp_is_utc_iso(self, cfg, evaluated):
         states, confluence, phase_num, phase_key, scenarios_result = evaluated
@@ -201,7 +201,7 @@ class TestExportStateEdgeCases:
         snapshot = export_state(minimal_cfg, states, confluence, phase_num, phase_key, [])
 
         assert REQUIRED_KEYS == set(snapshot.keys())
-        assert snapshot["v"] == 1
+        assert snapshot["v"] == 2
         # No fired nodes
         fired = [nid for nid, s in snapshot["nodeStates"].items() if s == "fired"]
         assert len(fired) == 0
@@ -313,7 +313,7 @@ class TestCLIExportState:
             # JSON should be valid
             with open(json_path) as f:
                 snapshot = json.load(f)
-            assert snapshot["v"] == 1
+            assert snapshot["v"] == 2
             # HTML should be non-trivial
             assert os.path.getsize(html_path) > 10000
 

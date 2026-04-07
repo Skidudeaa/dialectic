@@ -24,7 +24,19 @@ interface Props {
 
 type RightPanel = "thesis" | "predictions" | "journal" | "crossbook" | "brief" | null;
 
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [query]);
+  return matches;
+}
+
 export default function Dashboard({ onLogout }: Props) {
+  const isNarrow = useMediaQuery("(max-width: 1024px)");
   const [rooms, setRooms] = useState<Room[]>([]);
   const [books, setBooks] = useState<ThesisBook[]>([]);
   const [activeRoom, setActiveRoom] = useState<Room | null>(null);
@@ -76,6 +88,13 @@ export default function Dashboard({ onLogout }: Props) {
     onLogout();
   }
 
+  // Auto-collapse panels on narrow screens
+  useEffect(() => {
+    if (isNarrow) {
+      setSidebarOpen(false);
+    }
+  }, [isNarrow]);
+
   function togglePanel(p: RightPanel) {
     setRightPanel((prev) => (prev === p ? null : p));
   }
@@ -111,7 +130,7 @@ export default function Dashboard({ onLogout }: Props) {
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT sidebar */}
         {sidebarOpen && (
-          <aside className="w-60 bg-surface border-r border-border flex flex-col shrink-0">
+          <aside className={`bg-surface border-r border-border flex flex-col shrink-0 ${isNarrow ? "absolute left-0 top-10 bottom-0 z-30 w-60 shadow-xl" : "w-60"}`}>
             {/* Rooms */}
             <div className="p-2 border-b border-border">
               <div className="flex items-center justify-between mb-1">
@@ -184,7 +203,7 @@ export default function Dashboard({ onLogout }: Props) {
 
         {/* RIGHT panel */}
         {rightPanel && (
-          <aside className="w-80 bg-surface border-l border-border overflow-y-auto shrink-0">
+          <aside className={`bg-surface border-l border-border overflow-y-auto shrink-0 ${isNarrow ? "absolute right-0 top-10 bottom-0 z-30 w-72 shadow-xl" : "w-80"}`}>
             <div className="p-3">
               {rightPanel === "thesis" && <ThesisViewer bookId={linkedBookId} books={books} />}
               {rightPanel === "brief" && <MorningBrief />}

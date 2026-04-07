@@ -43,7 +43,7 @@ from mock_dialectic import (
 SNAPSHOT_KEYS = {
     "v", "timestamp", "title", "nodeStates", "confluenceScores",
     "cascadePhase", "countdowns", "marketSnapshot", "scenarioImpacts",
-    "portfolioSummary",
+    "portfolioSummary", "horizonTrace",
 }
 
 
@@ -187,7 +187,7 @@ class TestSnapshotGeneration:
             capture_output=True, text=True, timeout=30,
         )
         snapshot = json.loads(result.stdout)
-        assert snapshot["v"] == 1
+        assert snapshot["v"] == 2
 
     def test_snapshot_node_states_non_empty(self):
         """The iran-hormuz config has 16 nodes; nodeStates must reflect that."""
@@ -413,7 +413,9 @@ class TestPushToMock:
         received = get_received_snapshots()
         assert len(received) == 1
         assert received[0].room_id == "test-room-uuid"
-        assert received[0].payload["v"] == 1
+        # WHY: make_snapshot() produces a hand-crafted test payload; its version
+        # matches whatever the fixture declares, not the engine's current version.
+        assert received[0].payload["v"] in (1, 2)
         assert received[0].payload["nodeStates"]["hormuz"] == "fired"
 
     def test_push_correct_auth_header(self, mock_server, tmp_path):
@@ -895,7 +897,7 @@ class TestCriticalFixes:
         assert result.returncode == 0, f"thesisgraph failed: {result.stderr}"
         # stdout must be valid JSON — no price status lines interleaved
         snapshot = json.loads(result.stdout)
-        assert snapshot["v"] == 1
+        assert snapshot["v"] == 2
 
     def test_closes_required_nodes_not_fired_at_generation(self):
         """Nodes with closesRequired must not be 'fired' at generation time (C1 fix).

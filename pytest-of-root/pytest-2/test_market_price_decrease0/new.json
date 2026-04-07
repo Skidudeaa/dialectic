@@ -1,0 +1,47 @@
+{
+  "v": 1,
+  "timestamp": "2026-03-30T14:00:00Z",
+  "title": "Test Snapshot",
+  "nodeStates": {
+    "hormuz": "fired",
+    "brent": "approaching",
+    "diesel": "fired",
+    "fert-shortage": "approaching"
+  },
+  "confluenceScores": {
+    "em-stress": 1.3
+  },
+  "cascadePhase": {
+    "number": 2,
+    "key": "transmission",
+    "status": "STARTING"
+  },
+  "countdowns": [
+    {
+      "nodeId": "planting-miss",
+      "label": "Planting Cycle Miss",
+      "deadline": "2026-04-15",
+      "daysRemaining": 17
+    }
+  ],
+  "marketSnapshot": {
+    "brent": 112.57,
+    "diesel": 4.9,
+    "nolaFert": 683,
+    "dxy": 100.18
+  },
+  "scenarioImpacts": {
+    "closed-may": {
+      "probability": 0.45,
+      "netImpact": 12.8
+    }
+  },
+  "portfolioSummary": {
+    "monthlyBudget": 8000,
+    "topPositions": [
+      "XOP $1400/mo",
+      "XLE $1200/mo"
+    ],
+    "sgovAvailable": 1200
+  }
+}
