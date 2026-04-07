@@ -18,6 +18,25 @@ import thesisgraph  # type: ignore[import-untyped]
 import polymarket as polymarket_mod  # type: ignore[import-untyped]
 
 
+def _iter_instruments(cfg: dict):
+    """Yield (ticker, label) pairs from book instruments.
+
+    WHY: instruments is dict[nodeId, list[dict]] where each inner dict has
+    'id' (ticker) and 'role' (label). Not a flat list.
+    """
+    instruments = cfg.get("instruments", {})
+    if isinstance(instruments, dict):
+        for node_id, inst_list in instruments.items():
+            if isinstance(inst_list, list):
+                for inst in inst_list:
+                    if isinstance(inst, dict):
+                        yield inst.get("id", ""), inst.get("role", inst.get("id", ""))
+    elif isinstance(instruments, list):
+        for inst in instruments:
+            if isinstance(inst, dict):
+                yield inst.get("id", ""), inst.get("role", inst.get("id", ""))
+
+
 def _collect_symbols_from_books() -> tuple[Set[str], List[str]]:
     """Scan all book configs for Yahoo Finance symbols and Polymarket slugs."""
     yahoo_symbols: Set[str] = set()
@@ -29,13 +48,10 @@ def _collect_symbols_from_books() -> tuple[Set[str], List[str]]:
         except Exception:
             continue
 
-        # Instruments have ticker fields
-        for inst in cfg.get("instruments", []):
-            ticker = inst.get("ticker", "")
+        for ticker, _ in _iter_instruments(cfg):
             if ticker:
                 yahoo_symbols.add(ticker)
 
-        # Feeds with source: "polymarket" have slug fields
         for node in cfg.get("nodes", []):
             for feed in node.get("feeds", []):
                 if feed.get("source") == "polymarket":
@@ -53,8 +69,6 @@ def fetch_quotes() -> List[Dict[str, Any]]:
         return []
 
     results: List[Dict[str, Any]] = []
-    # WHY: Use the first book's config structure to drive fetch_prices,
-    # then supplement with any missing symbols from other books.
     for path in sorted(BOOKS_DIR.glob("*-graph.json")):
         try:
             cfg = thesisgraph.load_config(str(path))
@@ -93,13 +107,12 @@ def get_watchlist() -> List[Dict[str, Any]]:
         except Exception:
             continue
 
-        for inst in cfg.get("instruments", []):
-            ticker = inst.get("ticker", "")
+        for ticker, label in _iter_instruments(cfg):
             if ticker and ticker not in seen:
                 seen.add(ticker)
                 items.append({
                     "symbol": ticker,
-                    "label": inst.get("label", ticker),
+                    "label": label,
                     "last_price": None,
                     "change_pct": None,
                     "source": "yahoo",

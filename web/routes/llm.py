@@ -173,7 +173,24 @@ async def chat(req: LLMChatRequest, user: User = Depends(get_current_user)) -> d
             break
 
     model_label = model.split("/")[-1] if "/" in model else model
-    full_response = await _stream_llm(model, req.prompt, req.room_id, user.username, model_label)
+    try:
+        full_response = await _stream_llm(model, req.prompt, req.room_id, user.username, model_label)
+    except (HTTPException, Exception) as e:
+        # WHY: Surface LLM errors as system messages in the room, not HTTP crashes.
+        error_msg = e.detail if hasattr(e, "detail") else str(e)
+        if isinstance(error_msg, bytes):
+            error_msg = error_msg.decode(errors="replace")
+        # Truncate long OpenRouter error blobs
+        if len(str(error_msg)) > 200:
+            error_msg = str(error_msg)[:200] + "..."
+        if req.room_id:
+            msg = state.save_message(
+                room_id=req.room_id, user="system",
+                content=f"LLM error: {error_msg}", msg_type="system",
+            )
+            await manager.broadcast(req.room_id, "message", msg, user="system")
+            await manager.broadcast(req.room_id, "llm_done", {"model": model_label, "full_response": ""}, user="assistant")
+        return {"model": model_label, "response": "", "error": error_msg}
 
     # Persist LLM response as a message in the room
     if req.room_id:
@@ -207,5 +224,11 @@ async def compare(req: LLMCompareRequest, user: User = Depends(get_current_user)
                     model=model_label,
                 )
         except Exception as e:
-            results[model_label] = f"Error: {e}"
+            error_msg = e.detail if hasattr(e, "detail") else str(e)
+            results[model_label] = f"Error: {error_msg}"
+            if req.room_id:
+                state.save_message(
+                    room_id=req.room_id, user="system",
+                    content=f"LLM error ({model_label}): {error_msg}", msg_type="system",
+                )
     return {"results": results}
