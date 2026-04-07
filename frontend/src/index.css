@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+@theme {
+  --color-void: #0a0a0a;
+  --color-surface: #111111;
+  --color-elevated: #1a1a1a;
+  --color-border: #2a2a2a;
+  --color-amber: #d4a843;
+  --color-amber-dim: #a07c2e;
+  --color-teal: #2dd4bf;
+  --color-teal-dim: #1a9e8f;
+  --color-danger: #ef4444;
+  --color-text-primary: #e5e5e5;
+  --color-text-muted: #a3a3a3;
+  --color-text-dim: #6b6b6b;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-void text-text-primary font-sans antialiased;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-text-dim;
+  }
+}
+
+@utility btn {
+  @apply px-3 py-1.5 rounded text-sm font-medium transition-colors cursor-pointer;
+}
+@utility btn-primary {
+  @apply px-3 py-1.5 rounded text-sm font-medium transition-colors cursor-pointer bg-amber text-void hover:bg-amber-dim;
+}
+@utility btn-secondary {
+  @apply px-3 py-1.5 rounded text-sm font-medium transition-colors cursor-pointer bg-elevated text-text-primary border border-border hover:border-text-dim;
+}
+@utility btn-danger {
+  @apply px-3 py-1.5 rounded text-sm font-medium transition-colors cursor-pointer bg-danger/20 text-danger border border-danger/30 hover:bg-danger/30;
+}
+@utility input {
+  @apply bg-elevated border border-border rounded px-3 py-1.5 text-sm text-text-primary placeholder-text-dim focus:outline-none focus:border-amber/50 transition-colors;
+}
+@utility card {
+  @apply bg-surface border border-border rounded p-3;
+}
+@utility badge {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono font-medium;
+}
+@utility badge-fired {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono font-medium bg-danger/20 text-danger;
+}
+@utility badge-approaching {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono font-medium bg-amber/20 text-amber;
+}
+@utility badge-stable {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono font-medium bg-teal/20 text-teal;
+}
+@utility badge-monitoring {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono font-medium bg-elevated text-text-muted;
+}
+@utility badge-high {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono font-medium bg-danger/20 text-danger;
+}
+@utility badge-medium {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono font-medium bg-amber/20 text-amber;
+}
+@utility badge-low {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono font-medium bg-teal/20 text-teal;
+}
