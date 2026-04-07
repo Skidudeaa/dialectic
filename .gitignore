@@ -2,3 +2,13 @@ __pycache__/
 *.pyc
 .env
 .DS_Store
+.planning/
+.claude/
+.mcp.json
+.playwright-mcp/
+pytest-of-root/
+venv/
+web/data/
+frontend/node_modules/
+frontend/dist/
+*.png
