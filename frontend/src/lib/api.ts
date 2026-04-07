@@ -113,7 +113,19 @@ export class RoomSocket {
 
   send(content: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ content }));
+      this.ws.send(JSON.stringify({ type: "message", content }));
+    }
+  }
+
+  sendTyping(typing: boolean): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "typing", typing }));
+    }
+  }
+
+  sendViewing(viewing: string): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "viewing", viewing }));
     }
   }
 

@@ -34,6 +34,12 @@ export default function ThesisViewer({ bookId, books }: Props) {
     setLoading(true);
     apiFetch<ThesisState>(`/api/thesis/${selectedBook}/state`)
       .then(setState).catch(() => setState(null)).finally(() => setLoading(false));
+    // WHY: Auto-refresh every 5 minutes to catch state changes from pipeline runs.
+    const interval = setInterval(() => {
+      apiFetch<ThesisState>(`/api/thesis/${selectedBook}/state`)
+        .then(setState).catch(() => {});
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, [selectedBook]);
 
   const phase = state?.cascadePhase;

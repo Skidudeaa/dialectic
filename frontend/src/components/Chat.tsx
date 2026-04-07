@@ -33,7 +33,11 @@ export default function Chat({ room }: Props) {
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
+  const [onlineUsers, setOnlineUsers] = useState<Array<{ username: string; viewing: string }>>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<RoomSocket | null>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const me = getUsername();
 
   useEffect(() => {
@@ -44,6 +48,7 @@ export default function Chat({ room }: Props) {
 
   useEffect(() => {
     const sock = new RoomSocket(room.id);
+    socketRef.current = sock;
     const unsub = sock.subscribe((msg: WSMessage) => {
       if (msg.type === "message") {
         const m = msg.payload as unknown as Message;
@@ -57,9 +62,19 @@ export default function Chat({ room }: Props) {
       } else if (msg.type === "llm_done") {
         const { model } = msg.payload as { model: string };
         setStreaming((prev) => { const n = { ...prev }; delete n[model]; return n; });
+      } else if (msg.type === "typing") {
+        const { username, typing } = msg.payload as { username: string; typing: boolean };
+        setTypingUsers((prev) => {
+          const next = new Set(prev);
+          if (typing) next.add(username); else next.delete(username);
+          return next;
+        });
+      } else if (msg.type === "presence") {
+        const { users } = msg.payload as { users: Array<{ username: string; viewing: string }> };
+        setOnlineUsers(users);
       }
     });
-    return () => { unsub(); sock.close(); };
+    return () => { unsub(); sock.close(); socketRef.current = null; };
   }, [room.id]);
 
   useEffect(() => {
@@ -102,17 +117,40 @@ export default function Chat({ room }: Props) {
     setSending(false);
   }, [input, room.id, sending]);
 
+  const handleInputChange = useCallback((value: string) => {
+    setInput(value);
+    // Send typing indicator
+    socketRef.current?.sendTyping(true);
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(() => {
+      socketRef.current?.sendTyping(false);
+    }, 2000);
+  }, []);
+
+  const typingList = Array.from(typingUsers).filter((u) => u !== me);
+
   return (
     <div className="flex flex-col h-full">
-      {/* Room header */}
-      <div className="px-3 py-1.5 border-b border-border bg-surface shrink-0 flex items-center justify-between">
+      {/* Room header with presence */}
+      <div className="px-3 py-1 border-b border-border bg-surface shrink-0 flex items-center justify-between">
         <div>
-          <h2 className="text-xs font-medium">{room.name}</h2>
-          {room.linked_book_id && (
-            <span className="text-[10px] text-teal font-mono">{room.linked_book_id}</span>
-          )}
+          <div className="flex items-center gap-2">
+            <h2 className="text-xs font-medium">{room.name}</h2>
+            {room.linked_book_id && (
+              <span className="text-[10px] text-teal font-mono">{room.linked_book_id}</span>
+            )}
+          </div>
+          {/* Online users */}
+          <div className="flex items-center gap-1.5 mt-0.5">
+            {onlineUsers.map((u) => (
+              <span key={u.username} className="flex items-center gap-0.5 text-[10px] font-mono text-text-dim">
+                <span className="w-1.5 h-1.5 rounded-full bg-green inline-block" />
+                {u.username}
+                {u.viewing && <span className="text-text-dim opacity-60">({u.viewing})</span>}
+              </span>
+            ))}
+          </div>
         </div>
-        {room.topic && <span className="text-[10px] text-text-dim">{room.topic}</span>}
       </div>
 
       {/* Messages */}
@@ -138,14 +176,19 @@ export default function Chat({ room }: Props) {
         ))}
       </div>
 
-      {/* Input */}
-      <div className="px-3 py-2 border-t border-border bg-surface shrink-0">
+      {/* Typing indicator + Input */}
+      <div className="px-3 py-1.5 border-t border-border bg-surface shrink-0">
+        {typingList.length > 0 && (
+          <p className="text-[10px] text-text-dim font-mono mb-0.5 animate-pulse">
+            {typingList.join(", ")} typing...
+          </p>
+        )}
         <div className="flex gap-1.5">
           <input
             className="input flex-1"
             placeholder="Message... (@claude, @gpt, @compare for AI)"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
             }}
