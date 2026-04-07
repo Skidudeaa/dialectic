@@ -22,14 +22,14 @@ export default function MorningBrief() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs text-text-dim font-medium uppercase tracking-wider">Morning Brief</h3>
-        <button onClick={loadBrief} className="text-text-dim hover:text-amber p-1" disabled={loading}>
-          <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] text-text-dim font-medium uppercase tracking-widest">Morning Brief</span>
+        <button onClick={loadBrief} className="text-text-dim hover:text-amber p-0.5" disabled={loading}>
+          <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
         </button>
       </div>
-      <pre className="text-xs font-mono text-text-primary whitespace-pre-wrap bg-elevated rounded p-3 overflow-y-auto max-h-[calc(100vh-160px)]">
-        {loading ? "Loading..." : brief}
+      <pre className="text-[11px] font-mono text-text-primary whitespace-pre-wrap bg-elevated rounded p-2 overflow-y-auto max-h-[calc(100vh-120px)] leading-tight">
+        {loading ? "loading..." : brief}
       </pre>
     </div>
   );

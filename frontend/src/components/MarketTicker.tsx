@@ -20,28 +20,26 @@ export default function MarketTicker() {
   }
 
   if (items.length === 0) {
-    return <p className="text-text-dim text-xs">Loading watchlist...</p>;
+    return <span className="text-[10px] text-text-dim font-mono">loading...</span>;
   }
 
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-0">
       {items.map((item) => (
-        <div key={item.symbol} className="flex items-center justify-between py-0.5 px-1 rounded hover:bg-elevated/50">
-          <div className="min-w-0">
-            <span className="text-xs font-mono block truncate">{item.symbol}</span>
-            {item.label !== item.symbol && (
-              <span className="text-xs text-text-dim truncate block">{item.label}</span>
-            )}
+        <div key={item.symbol} className="flex items-center justify-between py-px px-0.5 hover:bg-elevated/50 rounded-sm">
+          <div className="min-w-0 mr-1">
+            <span className="text-[11px] font-mono font-medium text-amber block leading-tight">{item.symbol}</span>
+            <span className="text-[9px] text-text-dim truncate block leading-tight">{item.label}</span>
           </div>
-          <div className="text-right shrink-0 ml-2">
+          <div className="text-right shrink-0">
             {item.last_price !== null ? (
-              <span className="text-xs font-mono text-text-primary">
+              <span className="text-[11px] font-mono text-text-primary">
                 {item.source === "polymarket"
                   ? `${(item.last_price * 100).toFixed(0)}%`
                   : item.last_price.toFixed(2)}
               </span>
             ) : (
-              <span className="text-xs text-text-dim">--</span>
+              <span className="text-[10px] font-mono text-text-dim">--</span>
             )}
           </div>
         </div>

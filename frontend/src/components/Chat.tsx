@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
-import { Send, Bot, User as UserIcon } from "lucide-react";
+import { Send, Bot, Loader } from "lucide-react";
 import { apiFetch, getUsername, RoomSocket } from "../lib/api";
 import type { Room, Message, ThesisBook, WSMessage } from "../lib/types";
 
@@ -9,26 +9,41 @@ interface Props {
   books: ThesisBook[];
 }
 
+const MODEL_COLORS: Record<string, string> = {
+  "claude-sonnet-4-20250514": "bg-amber/20 text-amber border-amber/30",
+  "gpt-4o": "bg-green/20 text-green border-green/30",
+  "llama-3.1-405b-instruct": "bg-purple/20 text-purple border-purple/30",
+  "gemini-2.0-flash-001": "bg-blue/20 text-blue border-blue/30",
+};
+
+function modelBadgeClass(model: string | null): string {
+  if (!model) return "bg-teal/20 text-teal border-teal/30";
+  for (const [key, cls] of Object.entries(MODEL_COLORS)) {
+    if (model.includes(key) || key.includes(model)) return cls;
+  }
+  if (model.toLowerCase().includes("claude")) return "bg-amber/20 text-amber border-amber/30";
+  if (model.toLowerCase().includes("gpt")) return "bg-green/20 text-green border-green/30";
+  if (model.toLowerCase().includes("llama")) return "bg-purple/20 text-purple border-purple/30";
+  if (model.toLowerCase().includes("gemini")) return "bg-blue/20 text-blue border-blue/30";
+  return "bg-teal/20 text-teal border-teal/30";
+}
+
 export default function Chat({ room }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<Record<string, string>>({});
+  const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const socketRef = useRef<RoomSocket | null>(null);
   const me = getUsername();
 
-  // Load history
   useEffect(() => {
     apiFetch<Message[]>(`/api/rooms/${room.id}/messages?limit=100`)
       .then(setMessages)
       .catch(() => {});
   }, [room.id]);
 
-  // WebSocket
   useEffect(() => {
     const sock = new RoomSocket(room.id);
-    socketRef.current = sock;
-
     const unsub = sock.subscribe((msg: WSMessage) => {
       if (msg.type === "message") {
         const m = msg.payload as unknown as Message;
@@ -38,50 +53,35 @@ export default function Chat({ room }: Props) {
         });
       } else if (msg.type === "llm_chunk") {
         const { token, model } = msg.payload as { token: string; model: string };
-        setStreaming((prev) => ({
-          ...prev,
-          [model]: (prev[model] || "") + token,
-        }));
+        setStreaming((prev) => ({ ...prev, [model]: (prev[model] || "") + token }));
       } else if (msg.type === "llm_done") {
         const { model } = msg.payload as { model: string };
-        setStreaming((prev) => {
-          const next = { ...prev };
-          delete next[model];
-          return next;
-        });
+        setStreaming((prev) => { const n = { ...prev }; delete n[model]; return n; });
       }
     });
-
-    return () => {
-      unsub();
-      sock.close();
-    };
+    return () => { unsub(); sock.close(); };
   }, [room.id]);
 
-  // Auto-scroll
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, streaming]);
 
   const send = useCallback(async () => {
     const text = input.trim();
-    if (!text) return;
+    if (!text || sending) return;
     setInput("");
+    setSending(true);
 
-    // Check for @model mentions
     const mentionMatch = text.match(/^@(claude|gpt|llama|gemini|compare)\s+/i);
     if (mentionMatch) {
       const cmd = mentionMatch[1].toLowerCase();
       const prompt = text.slice(mentionMatch[0].length);
+      await apiFetch(`/api/rooms/${room.id}/messages`, {
+        method: "POST", body: JSON.stringify({ content: text }),
+      });
       if (cmd === "compare") {
-        // Save user message first
-        await apiFetch(`/api/rooms/${room.id}/messages`, {
-          method: "POST",
-          body: JSON.stringify({ content: text }),
-        });
         apiFetch("/api/llm/compare", {
-          method: "POST",
-          body: JSON.stringify({ prompt, room_id: room.id }),
+          method: "POST", body: JSON.stringify({ prompt, room_id: room.id }),
         }).catch(() => {});
       } else {
         const modelMap: Record<string, string> = {
@@ -90,52 +90,48 @@ export default function Chat({ room }: Props) {
           llama: "meta-llama/llama-3.1-405b-instruct",
           gemini: "google/gemini-2.0-flash-001",
         };
-        await apiFetch(`/api/rooms/${room.id}/messages`, {
-          method: "POST",
-          body: JSON.stringify({ content: text }),
-        });
         apiFetch("/api/llm/chat", {
-          method: "POST",
-          body: JSON.stringify({ prompt, model: modelMap[cmd], room_id: room.id }),
+          method: "POST", body: JSON.stringify({ prompt, model: modelMap[cmd], room_id: room.id }),
         }).catch(() => {});
       }
     } else {
-      // Normal message
       await apiFetch(`/api/rooms/${room.id}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ content: text }),
+        method: "POST", body: JSON.stringify({ content: text }),
       });
     }
-  }, [input, room.id]);
+    setSending(false);
+  }, [input, room.id, sending]);
 
   return (
     <div className="flex flex-col h-full">
       {/* Room header */}
-      <div className="px-4 py-2 border-b border-border bg-surface/50 shrink-0">
-        <h2 className="text-sm font-medium">{room.name}</h2>
-        {room.topic && <p className="text-xs text-text-dim">{room.topic}</p>}
-        {room.linked_book_id && (
-          <p className="text-xs text-teal font-mono">{room.linked_book_id}</p>
-        )}
+      <div className="px-3 py-1.5 border-b border-border bg-surface shrink-0 flex items-center justify-between">
+        <div>
+          <h2 className="text-xs font-medium">{room.name}</h2>
+          {room.linked_book_id && (
+            <span className="text-[10px] text-teal font-mono">{room.linked_book_id}</span>
+          )}
+        </div>
+        {room.topic && <span className="text-[10px] text-text-dim">{room.topic}</span>}
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5">
         {messages.map((msg) => (
           <MessageBubble key={msg.id} msg={msg} isMe={msg.user === me} />
         ))}
-        {/* Streaming indicators */}
         {Object.entries(streaming).map(([model, text]) => (
-          <div key={model} className="flex gap-2">
+          <div key={model} className="flex gap-2 max-w-[85%]">
             <div className="shrink-0 mt-0.5">
-              <div className="w-6 h-6 rounded bg-teal/20 flex items-center justify-center">
-                <Bot size={14} className="text-teal" />
+              <div className={`w-5 h-5 rounded flex items-center justify-center ${modelBadgeClass(model)}`}>
+                <Bot size={11} />
               </div>
             </div>
             <div className="min-w-0">
-              <span className="text-xs font-mono text-teal">{model}</span>
-              <div className="text-sm text-text-primary prose prose-invert prose-sm max-w-none">
-                <ReactMarkdown>{text + " ..."}</ReactMarkdown>
+              <span className={`inline-block text-[10px] font-mono px-1 py-0.5 rounded border mb-0.5 ${modelBadgeClass(model)}`}>{model}</span>
+              <div className="text-xs prose prose-invert prose-xs max-w-none [&_p]:my-0.5">
+                <ReactMarkdown>{text}</ReactMarkdown>
+                <span className="inline-block w-1.5 h-3 bg-amber animate-pulse ml-0.5" />
               </div>
             </div>
           </div>
@@ -143,25 +139,22 @@ export default function Chat({ room }: Props) {
       </div>
 
       {/* Input */}
-      <div className="px-4 py-3 border-t border-border bg-surface/50 shrink-0">
-        <div className="flex gap-2">
+      <div className="px-3 py-2 border-t border-border bg-surface shrink-0">
+        <div className="flex gap-1.5">
           <input
             className="input flex-1"
             placeholder="Message... (@claude, @gpt, @compare for AI)"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
             }}
           />
-          <button onClick={send} className="btn-primary px-3" disabled={!input.trim()}>
-            <Send size={14} />
+          <button onClick={send} className="btn-primary px-2" disabled={!input.trim() || sending}>
+            {sending ? <Loader size={12} className="animate-spin" /> : <Send size={12} />}
           </button>
         </div>
-        <p className="text-xs text-text-dim mt-1">@claude @gpt @llama @gemini @compare</p>
+        <p className="text-[10px] text-text-dim mt-0.5 font-mono">@claude @gpt @llama @gemini @compare</p>
       </div>
     </div>
   );
@@ -173,38 +166,57 @@ function MessageBubble({ msg, isMe }: { msg: Message; isMe: boolean }) {
 
   if (isSystem) {
     return (
-      <div className="text-center text-xs text-text-dim py-1">
-        {msg.content}
+      <div className="text-center py-0.5">
+        <span className="text-[10px] text-text-dim font-mono bg-elevated px-2 py-0.5 rounded">
+          {msg.content}
+        </span>
       </div>
     );
   }
 
-  return (
-    <div className={`flex gap-2 ${isMe ? "" : ""}`}>
-      <div className="shrink-0 mt-0.5">
-        <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-mono ${
-          isLLM ? "bg-teal/20 text-teal" : "bg-elevated text-text-muted"
-        }`}>
-          {isLLM ? <Bot size={14} /> : <UserIcon size={14} />}
+  if (isLLM) {
+    return (
+      <div className="flex gap-2 max-w-[85%]">
+        <div className="shrink-0 mt-0.5">
+          <div className={`w-5 h-5 rounded flex items-center justify-center ${modelBadgeClass(msg.model)}`}>
+            <Bot size={11} />
+          </div>
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className={`inline-block text-[10px] font-mono px-1 py-0.5 rounded border ${modelBadgeClass(msg.model)}`}>
+              {msg.model || "ai"}
+            </span>
+            <span className="text-[10px] text-text-dim font-mono">
+              {new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+          <div className="text-xs prose prose-invert prose-xs max-w-none [&_p]:my-0.5 [&_pre]:bg-elevated [&_pre]:rounded [&_pre]:p-1.5 [&_pre]:text-[11px] [&_code]:text-teal [&_code]:text-[11px]">
+            <ReactMarkdown>{msg.content}</ReactMarkdown>
+          </div>
         </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className={`text-xs font-medium ${isLLM ? "text-teal" : "text-amber"}`}>
-            {msg.user}
-          </span>
-          {msg.model && <span className="text-xs font-mono text-text-dim">{msg.model}</span>}
-          <span className="text-xs text-text-dim">
+    );
+  }
+
+  // User message
+  return (
+    <div className={`flex gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+      <div className="shrink-0 mt-0.5">
+        <div className="w-5 h-5 rounded bg-elevated flex items-center justify-center text-[10px] font-mono text-text-muted">
+          {msg.user[0]?.toUpperCase()}
+        </div>
+      </div>
+      <div className={`min-w-0 max-w-[75%] ${isMe ? "text-right" : ""}`}>
+        <div className={`flex items-center gap-1.5 mb-0.5 ${isMe ? "justify-end" : ""}`}>
+          <span className="text-[10px] font-medium text-amber">{msg.user}</span>
+          <span className="text-[10px] text-text-dim font-mono">
             {new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </span>
         </div>
-        {isLLM ? (
-          <div className="text-sm prose prose-invert prose-sm max-w-none [&_p]:my-1 [&_pre]:bg-elevated [&_pre]:rounded [&_pre]:p-2 [&_code]:text-teal">
-            <ReactMarkdown>{msg.content}</ReactMarkdown>
-          </div>
-        ) : (
-          <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-        )}
+        <div className={`inline-block px-2 py-1 rounded text-xs ${isMe ? "bg-elevated text-text-primary" : "bg-surface border border-border text-text-primary"}`}>
+          {msg.content}
+        </div>
       </div>
     </div>
   );
