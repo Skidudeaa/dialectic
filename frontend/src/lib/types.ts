@@ -125,7 +125,7 @@ export interface TradeInfo {
 }
 
 export interface WSMessage {
-  type: "message" | "llm_chunk" | "llm_done" | "system" | "state_update" | "error";
+  type: "message" | "llm_chunk" | "llm_done" | "system" | "state_update" | "error" | "typing" | "presence";
   payload: Record<string, unknown>;
   ts: string;
   user: string;

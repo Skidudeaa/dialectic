@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
-import { Send, Bot, Loader, Pin, Download, ChevronDown, ChevronRight } from "lucide-react";
+import { Send, Bot, Loader, Pin, Download, ChevronDown } from "lucide-react";
 import { apiFetch, getUsername, RoomSocket } from "../lib/api";
 import type { Room, Message, ThesisBook, WSMessage } from "../lib/types";
 

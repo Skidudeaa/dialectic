@@ -95,9 +95,44 @@ export default function Dashboard({ onLogout }: Props) {
     }
   }, [isNarrow]);
 
+  const [cmdPalette, setCmdPalette] = useState(false);
+  const [cmdQuery, setCmdQuery] = useState("");
+
   function togglePanel(p: RightPanel) {
     setRightPanel((prev) => (prev === p ? null : p));
   }
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      // Cmd/Ctrl+K — command palette
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setCmdPalette((prev) => !prev);
+        setCmdQuery("");
+      }
+      // Escape — close panels/palette
+      if (e.key === "Escape") {
+        if (cmdPalette) { setCmdPalette(false); return; }
+        if (rightPanel) { setRightPanel(null); return; }
+        if (sidebarOpen && isNarrow) { setSidebarOpen(false); }
+      }
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [cmdPalette, rightPanel, sidebarOpen, isNarrow]);
+
+  // Command palette items
+  const cmdItems = [
+    ...rooms.map((r) => ({ label: r.name, type: "room" as const, action: () => { setActiveRoom(r); setCmdPalette(false); } })),
+    { label: "Thesis panel", type: "panel" as const, action: () => { togglePanel("thesis"); setCmdPalette(false); } },
+    { label: "Morning brief", type: "panel" as const, action: () => { togglePanel("brief"); setCmdPalette(false); } },
+    { label: "Cross-book scan", type: "panel" as const, action: () => { togglePanel("crossbook"); setCmdPalette(false); } },
+    { label: "Predictions", type: "panel" as const, action: () => { togglePanel("predictions"); setCmdPalette(false); } },
+    { label: "Trade journal", type: "panel" as const, action: () => { togglePanel("journal"); setCmdPalette(false); } },
+    { label: "New room", type: "action" as const, action: () => { setShowNewRoom(true); setSidebarOpen(true); setCmdPalette(false); } },
+    { label: "Logout", type: "action" as const, action: () => { handleLogout(); setCmdPalette(false); } },
+  ].filter((item) => !cmdQuery || item.label.toLowerCase().includes(cmdQuery.toLowerCase()));
 
   const linkedBookId = activeRoom?.linked_book_id || books[0]?.id || null;
 
@@ -164,7 +199,7 @@ export default function Dashboard({ onLogout }: Props) {
               {rooms.map((room) => (
                 <button
                   key={room.id}
-                  onClick={() => setActiveRoom(room)}
+                  onClick={() => { setActiveRoom(room); if (isNarrow) setSidebarOpen(false); }}
                   className={`w-full text-left px-1.5 py-0.5 rounded text-xs flex items-center gap-1 ${
                     activeRoom?.id === room.id
                       ? "bg-elevated text-amber"
@@ -195,8 +230,21 @@ export default function Dashboard({ onLogout }: Props) {
           ) : (
             <div className="flex-1 flex items-center justify-center text-text-dim">
               <div className="text-center">
-                <MessageSquare size={24} className="mx-auto mb-1 opacity-30" />
-                <p className="text-xs font-mono">Select or create a room</p>
+                <MessageSquare size={24} className="mx-auto mb-2 opacity-20" />
+                <p className="text-xs font-mono mb-1">
+                  {rooms.length === 0 ? "Create your first room to start" : "Select a room from the sidebar"}
+                </p>
+                <p className="text-[10px] font-mono text-text-dim">
+                  <kbd className="px-1 py-0.5 bg-elevated rounded text-[9px] border border-border">Ctrl+K</kbd> command palette
+                </p>
+                {rooms.length === 0 && (
+                  <button
+                    onClick={() => { setSidebarOpen(true); setShowNewRoom(true); }}
+                    className="btn-primary mt-3 text-xs"
+                  >
+                    + New Room
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -215,6 +263,40 @@ export default function Dashboard({ onLogout }: Props) {
           </aside>
         )}
       </div>
+
+      {/* Command palette (Cmd/Ctrl+K) */}
+      {cmdPalette && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-24" onClick={() => setCmdPalette(false)}>
+          <div className="absolute inset-0 bg-void/60" />
+          <div className="relative bg-surface border border-border rounded w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <input
+              className="w-full bg-transparent border-b border-border px-3 py-2 text-xs font-mono text-text-primary focus:outline-none placeholder-text-dim"
+              placeholder="Search rooms, panels, actions..."
+              value={cmdQuery}
+              onChange={(e) => setCmdQuery(e.target.value)}
+              autoFocus
+            />
+            <div className="max-h-64 overflow-y-auto py-1">
+              {cmdItems.map((item, i) => (
+                <button
+                  key={i}
+                  onClick={item.action}
+                  className="w-full text-left px-3 py-1 text-xs hover:bg-elevated flex items-center justify-between"
+                >
+                  <span className="font-mono">{item.label}</span>
+                  <span className="text-[9px] text-text-dim uppercase">{item.type}</span>
+                </button>
+              ))}
+              {cmdItems.length === 0 && (
+                <p className="text-[10px] text-text-dim px-3 py-2 font-mono">No matches</p>
+              )}
+            </div>
+            <div className="border-t border-border px-3 py-1 text-[9px] text-text-dim font-mono">
+              Esc close | Enter select | Ctrl+K toggle
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

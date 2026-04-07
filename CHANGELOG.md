@@ -1,5 +1,42 @@
 # CHANGELOG
 
+## 2026-04-07 — Web Layer (v0.2.0)
+
+### Phase 6: Bug Fixes
+- Fixed Vite proxy pointing to wrong port (8000 → 8005)
+- Fixed `/api/market/watchlist` crash — instruments is dict[nodeId, list], not flat list
+- Fixed LLM error messages not appearing in chat (broadcast via WebSocket)
+
+### Phase 7: Design Hardening
+- Dense terminal aesthetic: 13px base, 1.4 line-height, all spacing tightened
+- Model-colored chat badges: Claude=amber, GPT=green, Llama=purple, Gemini=blue
+- Uppercase 10px monospace badges with tracking-wide for node states
+- Confluence bars color-coded by severity threshold
+- Table-style journal layout with columns
+- 32px header, compact sidebar labels
+
+### Phase 8: Real-Time
+- Presence indicators: green dots showing online users per room
+- Typing indicators: "X is typing..." with pulse animation
+- Prediction broadcasts: create/resolve events sent to all rooms
+- ThesisViewer auto-refreshes every 5 minutes
+- User activity status tracking
+
+### Phase 9: Power Features
+- Chat commands: /brief, /thesis, /diff, /predict, /watchlist
+- Message pinning with collapsible section and pin count badge
+- Chat export to markdown file download
+- PIN/EXPORT REST endpoints
+
+### Phase 10: Polish
+- Command palette (Ctrl+K): search rooms, panels, actions
+- Keyboard shortcuts: Escape closes panels/palette
+- Empty states: "Create your first room" CTA with keyboard hint
+- iPad responsive: sidebar auto-closes on room select at narrow widths
+- State persistence verified across backend restart
+
+---
+
 ## 2026-04-07 — Web Layer (v0.1.0)
 
 ### Phase 1+2: Backend Foundation + API Routes
