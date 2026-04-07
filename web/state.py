@@ -169,6 +169,57 @@ def save_message(room_id: str, user: str, content: str, msg_type: str = "user",
     return msg
 
 
+# ── Pin persistence ──────────────────────────────────────────────────────
+
+def _pins_path(room_id: str) -> Path:
+    return DATA_DIR / "rooms" / room_id / "pins.json"
+
+
+def list_pins(room_id: str) -> List[dict]:
+    """Return pinned message IDs and content for a room."""
+    return read_json(_pins_path(room_id), default=[])
+
+
+def add_pin(room_id: str, message: dict) -> List[dict]:
+    """Pin a message. Stores the full message object."""
+    pins = list_pins(room_id)
+    if any(p["id"] == message["id"] for p in pins):
+        return pins
+    pins.append(message)
+    write_json(_pins_path(room_id), pins)
+    return pins
+
+
+def remove_pin(room_id: str, message_id: str) -> List[dict]:
+    """Unpin a message."""
+    pins = [p for p in list_pins(room_id) if p["id"] != message_id]
+    write_json(_pins_path(room_id), pins)
+    return pins
+
+
+def export_room_markdown(room_id: str) -> str:
+    """Export room chat history as markdown."""
+    from datetime import datetime
+    room = get_room(room_id)
+    name = room["name"] if room else room_id
+    messages = read_jsonl(_messages_path(room_id))
+    lines = [f"# {name}", f"Exported: {_now_iso()}", ""]
+    for msg in messages:
+        ts = msg.get("ts", "")[:19].replace("T", " ")
+        user = msg.get("user", "?")
+        content = msg.get("content", "")
+        mtype = msg.get("msg_type", "user")
+        model = msg.get("model", "")
+        if mtype == "system":
+            lines.append(f"*[{ts}] {content}*")
+        elif mtype == "llm":
+            lines.append(f"**{model or 'AI'}** ({ts}):\n{content}")
+        else:
+            lines.append(f"**{user}** ({ts}): {content}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 # ── Journal persistence ──────────────────────────────────────────────────
 
 JOURNAL_FILE = DATA_DIR / "journal.jsonl"

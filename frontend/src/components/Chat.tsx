@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
-import { Send, Bot, Loader } from "lucide-react";
+import { Send, Bot, Loader, Pin, Download, ChevronDown, ChevronRight } from "lucide-react";
 import { apiFetch, getUsername, RoomSocket } from "../lib/api";
 import type { Room, Message, ThesisBook, WSMessage } from "../lib/types";
 
@@ -35,15 +35,16 @@ export default function Chat({ room }: Props) {
   const [sending, setSending] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [onlineUsers, setOnlineUsers] = useState<Array<{ username: string; viewing: string }>>([]);
+  const [pins, setPins] = useState<Message[]>([]);
+  const [pinsOpen, setPinsOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<RoomSocket | null>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const me = getUsername();
 
   useEffect(() => {
-    apiFetch<Message[]>(`/api/rooms/${room.id}/messages?limit=100`)
-      .then(setMessages)
-      .catch(() => {});
+    apiFetch<Message[]>(`/api/rooms/${room.id}/messages?limit=100`).then(setMessages).catch(() => {});
+    apiFetch<Message[]>(`/api/rooms/${room.id}/pins`).then(setPins).catch(() => {});
   }, [room.id]);
 
   useEffect(() => {
@@ -81,41 +82,138 @@ export default function Chat({ room }: Props) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, streaming]);
 
+  const postSystem = useCallback(async (content: string) => {
+    await apiFetch(`/api/rooms/${room.id}/messages`, {
+      method: "POST", body: JSON.stringify({ content, msg_type: "system" }),
+    });
+  }, [room.id]);
+
+  const pinMessage = useCallback(async (msg: Message) => {
+    const updated = await apiFetch<Message[]>(`/api/rooms/${room.id}/pins`, {
+      method: "POST", body: JSON.stringify(msg),
+    });
+    setPins(updated);
+  }, [room.id]);
+
+  const unpinMessage = useCallback(async (messageId: string) => {
+    const updated = await apiFetch<Message[]>(`/api/rooms/${room.id}/pins/${messageId}`, {
+      method: "DELETE",
+    });
+    setPins(updated);
+  }, [room.id]);
+
+  const exportChat = useCallback(async () => {
+    const data = await apiFetch<{ markdown: string }>(`/api/rooms/${room.id}/export`);
+    const blob = new Blob([data.markdown], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${room.name}-${new Date().toISOString().slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [room.id, room.name]);
+
+  const handleSlashCommand = useCallback(async (text: string): Promise<boolean> => {
+    const cmd = text.split(/\s+/)[0].toLowerCase();
+    const args = text.slice(cmd.length).trim();
+
+    if (cmd === "/brief") {
+      const data = await apiFetch<{ brief: string }>("/api/outcomes/brief");
+      await postSystem(data.brief);
+      return true;
+    }
+    if (cmd === "/thesis") {
+      const bookId = args || room.linked_book_id || "iran-hormuz-graph";
+      const state = await apiFetch<Record<string, unknown>>(`/api/thesis/${bookId}/state`);
+      const ns = state.nodeStates as Record<string, string>;
+      const cs = state.confluenceScores as Record<string, number>;
+      const phase = state.cascadePhase as Record<string, unknown>;
+      const fired = Object.entries(ns).filter(([, v]) => v === "fired").map(([k]) => k);
+      const approaching = Object.entries(ns).filter(([, v]) => v === "approaching").map(([k]) => k);
+      const topConf = Object.entries(cs).sort(([, a], [, b]) => b - a).slice(0, 5);
+      const lines = [
+        `THESIS: ${state.title || bookId}`,
+        `Phase ${phase.number} (${phase.key}) — ${phase.status}`,
+        `Fired: ${fired.join(", ") || "none"}`,
+        `Approaching: ${approaching.join(", ") || "none"}`,
+        `Confluence: ${topConf.map(([k, v]) => `${k}=${v}`).join(", ")}`,
+      ];
+      await postSystem(lines.join("\n"));
+      return true;
+    }
+    if (cmd === "/diff") {
+      const bookId = args || room.linked_book_id || "iran-hormuz-graph";
+      await apiFetch(`/api/thesis/${bookId}/fetch-prices`, { method: "POST" });
+      return true;
+    }
+    if (cmd === "/predict") {
+      const match = args.match(/^"([^"]+)"\s+(\d+)%$/);
+      if (match) {
+        const deadline = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+        await apiFetch("/api/predictions", {
+          method: "POST",
+          body: JSON.stringify({ statement: match[1], confidence: parseInt(match[2]) / 100, deadline }),
+        });
+        await postSystem(`Prediction created: "${match[1]}" at ${match[2]}%`);
+      } else {
+        await postSystem('Usage: /predict "statement" 75%');
+      }
+      return true;
+    }
+    if (cmd === "/watchlist") {
+      const items = await apiFetch<Array<{ symbol: string; label: string; last_price: number | null }>>("/api/market/watchlist");
+      const lines = items.map((i) => `${i.symbol.padEnd(6)} ${i.last_price !== null ? i.last_price.toFixed(2) : "--"} ${i.label}`);
+      await postSystem("WATCHLIST\n" + lines.join("\n"));
+      return true;
+    }
+    return false;
+  }, [room.id, room.linked_book_id, postSystem]);
+
   const send = useCallback(async () => {
     const text = input.trim();
     if (!text || sending) return;
     setInput("");
     setSending(true);
 
-    const mentionMatch = text.match(/^@(claude|gpt|llama|gemini|compare)\s+/i);
-    if (mentionMatch) {
-      const cmd = mentionMatch[1].toLowerCase();
-      const prompt = text.slice(mentionMatch[0].length);
-      await apiFetch(`/api/rooms/${room.id}/messages`, {
-        method: "POST", body: JSON.stringify({ content: text }),
-      });
-      if (cmd === "compare") {
-        apiFetch("/api/llm/compare", {
-          method: "POST", body: JSON.stringify({ prompt, room_id: room.id }),
-        }).catch(() => {});
-      } else {
-        const modelMap: Record<string, string> = {
-          claude: "anthropic/claude-sonnet-4-20250514",
-          gpt: "openai/gpt-4o",
-          llama: "meta-llama/llama-3.1-405b-instruct",
-          gemini: "google/gemini-2.0-flash-001",
-        };
-        apiFetch("/api/llm/chat", {
-          method: "POST", body: JSON.stringify({ prompt, model: modelMap[cmd], room_id: room.id }),
-        }).catch(() => {});
+    try {
+      // Slash commands
+      if (text.startsWith("/")) {
+        const handled = await handleSlashCommand(text);
+        if (handled) { setSending(false); return; }
       }
-    } else {
-      await apiFetch(`/api/rooms/${room.id}/messages`, {
-        method: "POST", body: JSON.stringify({ content: text }),
-      });
-    }
+
+      // @model mentions
+      const mentionMatch = text.match(/^@(claude|gpt|llama|gemini|compare)\s+/i);
+      if (mentionMatch) {
+        const cmd = mentionMatch[1].toLowerCase();
+        const prompt = text.slice(mentionMatch[0].length);
+        await apiFetch(`/api/rooms/${room.id}/messages`, {
+          method: "POST", body: JSON.stringify({ content: text }),
+        });
+        if (cmd === "compare") {
+          apiFetch("/api/llm/compare", {
+            method: "POST", body: JSON.stringify({ prompt, room_id: room.id }),
+          }).catch(() => {});
+        } else {
+          const modelMap: Record<string, string> = {
+            claude: "anthropic/claude-sonnet-4-20250514",
+            gpt: "openai/gpt-4o",
+            llama: "meta-llama/llama-3.1-405b-instruct",
+            gemini: "google/gemini-2.0-flash-001",
+          };
+          apiFetch("/api/llm/chat", {
+            method: "POST", body: JSON.stringify({ prompt, model: modelMap[cmd], room_id: room.id }),
+          }).catch(() => {});
+        }
+      } else {
+        // Normal message
+        await apiFetch(`/api/rooms/${room.id}/messages`, {
+          method: "POST", body: JSON.stringify({ content: text }),
+        });
+      }
+    } catch { /* ignore */ }
     setSending(false);
-  }, [input, room.id, sending]);
+  }, [input, room.id, sending, handleSlashCommand]);
 
   const handleInputChange = useCallback((value: string) => {
     setInput(value);
@@ -131,7 +229,7 @@ export default function Chat({ room }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Room header with presence */}
+      {/* Room header with presence + actions */}
       <div className="px-3 py-1 border-b border-border bg-surface shrink-0 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -140,23 +238,52 @@ export default function Chat({ room }: Props) {
               <span className="text-[10px] text-teal font-mono">{room.linked_book_id}</span>
             )}
           </div>
-          {/* Online users */}
           <div className="flex items-center gap-1.5 mt-0.5">
             {onlineUsers.map((u) => (
               <span key={u.username} className="flex items-center gap-0.5 text-[10px] font-mono text-text-dim">
                 <span className="w-1.5 h-1.5 rounded-full bg-green inline-block" />
                 {u.username}
-                {u.viewing && <span className="text-text-dim opacity-60">({u.viewing})</span>}
               </span>
             ))}
           </div>
         </div>
+        <div className="flex items-center gap-1">
+          {pins.length > 0 && (
+            <button onClick={() => setPinsOpen(!pinsOpen)} className="flex items-center gap-0.5 text-[10px] font-mono text-amber hover:text-amber-dim p-0.5">
+              <Pin size={10} /> {pins.length}
+            </button>
+          )}
+          <button onClick={exportChat} className="text-text-dim hover:text-text-primary p-0.5" title="Export chat">
+            <Download size={11} />
+          </button>
+        </div>
       </div>
+
+      {/* Pinned messages */}
+      {pinsOpen && pins.length > 0 && (
+        <div className="border-b border-amber/20 bg-amber/5 px-3 py-1.5 max-h-32 overflow-y-auto">
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-[10px] text-amber font-mono uppercase tracking-widest">Pinned</span>
+            <button onClick={() => setPinsOpen(false)} className="text-text-dim hover:text-text-primary"><ChevronDown size={10} /></button>
+          </div>
+          {pins.map((p) => (
+            <div key={p.id} className="flex items-start justify-between py-0.5 group">
+              <div className="min-w-0 mr-1">
+                <span className="text-[10px] text-amber font-mono">{p.user}</span>
+                <p className="text-[11px] text-text-primary truncate">{p.content.slice(0, 120)}</p>
+              </div>
+              <button onClick={() => unpinMessage(p.id)} className="text-text-dim hover:text-danger opacity-0 group-hover:opacity-100 shrink-0" title="Unpin">
+                <Pin size={9} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-1.5">
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} msg={msg} isMe={msg.user === me} />
+          <MessageBubble key={msg.id} msg={msg} isMe={msg.user === me} onPin={() => pinMessage(msg)} />
         ))}
         {Object.entries(streaming).map(([model, text]) => (
           <div key={model} className="flex gap-2 max-w-[85%]">
@@ -197,13 +324,13 @@ export default function Chat({ room }: Props) {
             {sending ? <Loader size={12} className="animate-spin" /> : <Send size={12} />}
           </button>
         </div>
-        <p className="text-[10px] text-text-dim mt-0.5 font-mono">@claude @gpt @llama @gemini @compare</p>
+        <p className="text-[10px] text-text-dim mt-0.5 font-mono">@claude @gpt @compare | /brief /thesis /diff /predict /watchlist</p>
       </div>
     </div>
   );
 }
 
-function MessageBubble({ msg, isMe }: { msg: Message; isMe: boolean }) {
+function MessageBubble({ msg, isMe, onPin }: { msg: Message; isMe: boolean; onPin?: () => void }) {
   const isLLM = msg.msg_type === "llm";
   const isSystem = msg.msg_type === "system";
 
@@ -219,13 +346,13 @@ function MessageBubble({ msg, isMe }: { msg: Message; isMe: boolean }) {
 
   if (isLLM) {
     return (
-      <div className="flex gap-2 max-w-[85%]">
+      <div className="flex gap-2 max-w-[85%] group">
         <div className="shrink-0 mt-0.5">
           <div className={`w-5 h-5 rounded flex items-center justify-center ${modelBadgeClass(msg.model)}`}>
             <Bot size={11} />
           </div>
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className={`inline-block text-[10px] font-mono px-1 py-0.5 rounded border ${modelBadgeClass(msg.model)}`}>
               {msg.model || "ai"}
@@ -233,6 +360,11 @@ function MessageBubble({ msg, isMe }: { msg: Message; isMe: boolean }) {
             <span className="text-[10px] text-text-dim font-mono">
               {new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </span>
+            {onPin && (
+              <button onClick={onPin} className="opacity-0 group-hover:opacity-100 text-text-dim hover:text-amber transition-opacity" title="Pin">
+                <Pin size={9} />
+              </button>
+            )}
           </div>
           <div className="text-xs prose prose-invert prose-xs max-w-none [&_p]:my-0.5 [&_pre]:bg-elevated [&_pre]:rounded [&_pre]:p-1.5 [&_pre]:text-[11px] [&_code]:text-teal [&_code]:text-[11px]">
             <ReactMarkdown>{msg.content}</ReactMarkdown>
@@ -244,7 +376,7 @@ function MessageBubble({ msg, isMe }: { msg: Message; isMe: boolean }) {
 
   // User message
   return (
-    <div className={`flex gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+    <div className={`flex gap-2 group ${isMe ? "flex-row-reverse" : ""}`}>
       <div className="shrink-0 mt-0.5">
         <div className="w-5 h-5 rounded bg-elevated flex items-center justify-center text-[10px] font-mono text-text-muted">
           {msg.user[0]?.toUpperCase()}
@@ -256,6 +388,11 @@ function MessageBubble({ msg, isMe }: { msg: Message; isMe: boolean }) {
           <span className="text-[10px] text-text-dim font-mono">
             {new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </span>
+          {onPin && (
+            <button onClick={onPin} className="opacity-0 group-hover:opacity-100 text-text-dim hover:text-amber transition-opacity" title="Pin">
+              <Pin size={9} />
+            </button>
+          )}
         </div>
         <div className={`inline-block px-2 py-1 rounded text-xs ${isMe ? "bg-elevated text-text-primary" : "bg-surface border border-border text-text-primary"}`}>
           {msg.content}

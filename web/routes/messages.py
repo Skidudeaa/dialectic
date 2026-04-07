@@ -47,6 +47,28 @@ async def create_message(
     return msg
 
 
+@router.get("/api/rooms/{room_id}/pins")
+async def list_pins(room_id: str, _user: User = Depends(get_current_user)) -> list:
+    return state.list_pins(room_id)
+
+
+@router.post("/api/rooms/{room_id}/pins")
+async def add_pin(room_id: str, req: dict, _user: User = Depends(get_current_user)) -> list:
+    """Pin a message by passing its full message object."""
+    return state.add_pin(room_id, req)
+
+
+@router.delete("/api/rooms/{room_id}/pins/{message_id}")
+async def remove_pin(room_id: str, message_id: str, _user: User = Depends(get_current_user)) -> list:
+    return state.remove_pin(room_id, message_id)
+
+
+@router.get("/api/rooms/{room_id}/export")
+async def export_chat(room_id: str, _user: User = Depends(get_current_user)) -> dict:
+    """Export room chat as markdown."""
+    return {"markdown": state.export_room_markdown(room_id)}
+
+
 @router.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str) -> None:
     """WebSocket connection for real-time room messages.
