@@ -365,6 +365,91 @@ class TestRoutes:
         assert "exportable" in resp.json()["markdown"]
 
 
+# ── Agent API Tests ──────────────────────────────────────────────────────
+
+class TestAgentAPI:
+    """Tests for agent-friendly endpoints — full CRUD, protocol docs, single-resource GET."""
+
+    def test_room_update(self, auth_headers):
+        resp = client.post("/api/rooms", json={"name": "orig"}, headers=auth_headers)
+        room_id = resp.json()["id"]
+        resp = client.patch(f"/api/rooms/{room_id}", json={"name": "renamed", "topic": "new topic"}, headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["name"] == "renamed"
+        assert resp.json()["topic"] == "new topic"
+
+    def test_room_update_not_found(self, auth_headers):
+        resp = client.patch("/api/rooms/nonexistent", json={"name": "x"}, headers=auth_headers)
+        assert resp.status_code == 404
+
+    def test_room_update_empty_body(self, auth_headers):
+        resp = client.post("/api/rooms", json={"name": "test"}, headers=auth_headers)
+        room_id = resp.json()["id"]
+        resp = client.patch(f"/api/rooms/{room_id}", json={}, headers=auth_headers)
+        assert resp.status_code == 422
+
+    def test_room_delete(self, auth_headers):
+        resp = client.post("/api/rooms", json={"name": "deletable"}, headers=auth_headers)
+        room_id = resp.json()["id"]
+        # Add a message so the room has data
+        client.post(f"/api/rooms/{room_id}/messages", json={"content": "bye"}, headers=auth_headers)
+        resp = client.delete(f"/api/rooms/{room_id}", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["deleted"] is True
+        # Verify room is gone
+        resp = client.get(f"/api/rooms/{room_id}", headers=auth_headers)
+        assert resp.status_code == 404
+
+    def test_room_delete_not_found(self, auth_headers):
+        resp = client.delete("/api/rooms/nonexistent", headers=auth_headers)
+        assert resp.status_code == 404
+
+    def test_journal_update(self, auth_headers):
+        resp = client.post("/api/journal", json={
+            "thesis": "oil", "instrument": "CL", "direction": "long", "entry_price": 80.0,
+        }, headers=auth_headers)
+        entry_id = resp.json()["id"]
+        resp = client.patch(f"/api/journal/{entry_id}", json={
+            "exit_price": 95.0, "pnl": 15.0, "notes": "closed at target",
+        }, headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["exit_price"] == 95.0
+        assert resp.json()["pnl"] == 15.0
+        assert "updated_at" in resp.json()
+
+    def test_journal_update_not_found(self, auth_headers):
+        resp = client.patch("/api/journal/nonexistent", json={"pnl": 10}, headers=auth_headers)
+        assert resp.status_code == 404
+
+    def test_prediction_single_get(self, auth_headers):
+        resp = client.post("/api/predictions", json={
+            "statement": "findme", "confidence": 0.9, "deadline": "2026-12-31",
+        }, headers=auth_headers)
+        pred_id = resp.json()["id"]
+        resp = client.get(f"/api/predictions/{pred_id}", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["statement"] == "findme"
+
+    def test_prediction_single_get_not_found(self, auth_headers):
+        resp = client.get("/api/predictions/nonexistent", headers=auth_headers)
+        assert resp.status_code == 404
+
+    def test_ws_protocol_docs(self):
+        resp = client.get("/api/ws/protocol")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "url_pattern" in data
+        assert "auth" in data
+        assert data["auth"]["query_param"] == "token"
+        assert "send_types" in data
+        assert "receive_types" in data
+
+    def test_health_includes_llm_available(self):
+        resp = client.get("/api/health")
+        assert resp.status_code == 200
+        assert "llm_available" in resp.json()
+
+
 # ── Concurrent State Tests ───────────────────────────────────────────────
 
 class TestConcurrency:

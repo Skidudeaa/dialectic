@@ -80,15 +80,28 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str) -> None:
     username = ""
 
     try:
-        # First message must be auth token
-        auth_msg = await websocket.receive_text()
-        try:
-            payload = decode_token(auth_msg)
-            username = payload["sub"]
-        except Exception:
-            await websocket.send_text('{"type":"error","payload":{"detail":"Invalid token"}}')
-            await websocket.close(code=4001)
-            return
+        # WHY: Accept token via query param (?token=...) or as first WS message.
+        # Query param is the standard pattern for agent/programmatic WS clients.
+        # First-message auth is kept for backward compatibility with the browser client.
+        from fastapi import Query as WSQuery
+        token_param = websocket.query_params.get("token")
+        if token_param:
+            try:
+                payload = decode_token(token_param)
+                username = payload["sub"]
+            except Exception:
+                await websocket.send_text('{"type":"error","payload":{"detail":"Invalid token"}}')
+                await websocket.close(code=4001)
+                return
+        else:
+            auth_msg = await websocket.receive_text()
+            try:
+                payload = decode_token(auth_msg)
+                username = payload["sub"]
+            except Exception:
+                await websocket.send_text('{"type":"error","payload":{"detail":"Invalid token"}}')
+                await websocket.close(code=4001)
+                return
 
         # WHY: Validate room exists before registering — prevents path traversal
         # and phantom room creation via WebSocket.

@@ -15,6 +15,14 @@ async def list_predictions() -> list:
     return state.list_predictions()
 
 
+@router.get("/{prediction_id}")
+async def get_prediction(prediction_id: str) -> dict:
+    for p in state.list_predictions():
+        if p.get("id") == prediction_id:
+            return p
+    raise HTTPException(status_code=404, detail="Prediction not found")
+
+
 @router.post("")
 async def create_prediction(req: PredictionCreate, user: User = Depends(get_current_user)) -> dict:
     prediction = state.save_prediction(user.username, req.model_dump())

@@ -38,6 +38,12 @@ class RoomCreate(BaseModel):
     linked_book_id: Optional[str] = None
 
 
+class RoomUpdate(BaseModel):
+    name: Optional[str] = None
+    topic: Optional[str] = None
+    linked_book_id: Optional[str] = None
+
+
 class Room(BaseModel):
     id: str
     name: str
@@ -125,6 +131,14 @@ class JournalEntryCreate(BaseModel):
     tags: List[str] = Field(default_factory=list)
     linked_book_id: Optional[str] = None
     notes: str = ""
+
+
+class JournalEntryUpdate(BaseModel):
+    """Update fields for closing a trade — exit price, P&L, notes."""
+    exit_price: Optional[float] = None
+    pnl: Optional[float] = None
+    notes: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 
 class JournalEntry(BaseModel):

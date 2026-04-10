@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import { Send, Bot, Loader, Pin, Download, ChevronDown } from "lucide-react";
 import { apiFetch, getUsername, RoomSocket } from "../lib/api";
@@ -38,7 +38,13 @@ const safeLink = ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLA
 export default function Chat({ room }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [streaming, setStreaming] = useState<Record<string, string>>({});
+  // WHY: Streaming tokens accumulate in a ref (no re-render per token).
+  // A RAF loop flushes the ref to display state at ~60fps max, eliminating
+  // the per-token re-render + ReactMarkdown parse that caused jank.
+  const [streamDisplay, setStreamDisplay] = useState<Record<string, string>>({});
+  const streamRef = useRef<Record<string, string>>({});
+  const streamDirtyRef = useRef(false);
+  const rafRef = useRef<number>(0);
   const [sending, setSending] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [onlineUsers, setOnlineUsers] = useState<Array<{ username: string; viewing: string }>>([]);
@@ -48,6 +54,19 @@ export default function Chat({ room }: Props) {
   const socketRef = useRef<RoomSocket | null>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const me = getUsername();
+
+  // RAF flush loop — syncs accumulated tokens to display state
+  useEffect(() => {
+    function flush() {
+      if (streamDirtyRef.current) {
+        streamDirtyRef.current = false;
+        setStreamDisplay({ ...streamRef.current });
+      }
+      rafRef.current = requestAnimationFrame(flush);
+    }
+    rafRef.current = requestAnimationFrame(flush);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []);
 
   useEffect(() => {
     apiFetch<Message[]>(`/api/rooms/${room.id}/messages?limit=100`).then(setMessages).catch(() => {});
@@ -65,11 +84,15 @@ export default function Chat({ room }: Props) {
           return [...prev, m];
         });
       } else if (msg.type === "llm_chunk") {
+        // WHY: Accumulate in ref, not state. RAF loop flushes to display.
+        // This eliminates O(tokens) re-renders — display updates at screen refresh rate.
         const { token, model } = msg.payload as { token: string; model: string };
-        setStreaming((prev) => ({ ...prev, [model]: (prev[model] || "") + token }));
+        streamRef.current[model] = (streamRef.current[model] || "") + token;
+        streamDirtyRef.current = true;
       } else if (msg.type === "llm_done") {
         const { model } = msg.payload as { model: string };
-        setStreaming((prev) => { const n = { ...prev }; delete n[model]; return n; });
+        delete streamRef.current[model];
+        streamDirtyRef.current = true;
       } else if (msg.type === "typing") {
         const { username, typing } = msg.payload as { username: string; typing: boolean };
         setTypingUsers((prev) => {
@@ -92,7 +115,7 @@ export default function Chat({ room }: Props) {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, streaming]);
+  }, [messages, streamDisplay]);
 
   const postSystem = useCallback(async (content: string) => {
     await apiFetch(`/api/rooms/${room.id}/messages`, {
@@ -301,21 +324,8 @@ export default function Chat({ room }: Props) {
         {messages.map((msg) => (
           <MessageBubble key={msg.id} msg={msg} isMe={msg.user === me} onPin={() => pinMessage(msg)} />
         ))}
-        {Object.entries(streaming).map(([model, text]) => (
-          <div key={model} className="flex gap-2 max-w-[85%]">
-            <div className="shrink-0 mt-0.5">
-              <div className={`w-5 h-5 rounded flex items-center justify-center ${modelBadgeClass(model)}`}>
-                <Bot size={11} />
-              </div>
-            </div>
-            <div className="min-w-0">
-              <span className={`inline-block text-[10px] font-mono px-1 py-0.5 rounded border mb-0.5 ${modelBadgeClass(model)}`}>{model}</span>
-              <div className="text-xs prose prose-invert prose-xs max-w-none [&_p]:my-0.5">
-                <ReactMarkdown components={{ a: safeLink }}>{text}</ReactMarkdown>
-                <span className="inline-block w-1.5 h-3 bg-amber animate-pulse ml-0.5" />
-              </div>
-            </div>
-          </div>
+        {Object.entries(streamDisplay).map(([model, text]) => (
+          <StreamingBubble key={model} model={model} text={text} />
         ))}
       </div>
 
@@ -336,8 +346,10 @@ export default function Chat({ room }: Props) {
               if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
             }}
           />
-          <button onClick={send} className="btn-primary px-2" disabled={!input.trim() || sending}>
-            {sending ? <Loader size={12} className="animate-spin" /> : <Send size={12} />}
+          <button onClick={send} className="btn-primary px-2" disabled={!input.trim() || sending || Object.keys(streamDisplay).length > 0}>
+            {sending || Object.keys(streamDisplay).length > 0
+              ? <Loader size={12} className="animate-spin" />
+              : <Send size={12} />}
           </button>
         </div>
         <p className="text-[10px] text-text-dim mt-0.5 font-mono">@claude @gpt @compare | /brief /thesis /diff /predict /watchlist</p>
@@ -417,3 +429,32 @@ function MessageBubble({ msg, isMe, onPin }: { msg: Message; isMe: boolean; onPi
     </div>
   );
 }
+
+/**
+ * WHY: Streaming text renders as plain <pre> — no markdown parsing per frame.
+ * ReactMarkdown is expensive (parse + render tree diff on every update).
+ * Plain text at 60fps feels instant. The final llm_done message renders with
+ * full ReactMarkdown via MessageBubble.
+ *
+ * TRADEOFF: Users see raw markdown syntax while streaming (**, ##, etc.)
+ * but get full rendering on completion. This matches terminal UX expectations
+ * for a trading desk tool — speed > prettiness during generation.
+ */
+const StreamingBubble = memo(function StreamingBubble({ model, text }: { model: string; text: string }) {
+  return (
+    <div className="flex gap-2 max-w-[85%]">
+      <div className="shrink-0 mt-0.5">
+        <div className={`w-5 h-5 rounded flex items-center justify-center ${modelBadgeClass(model)}`}>
+          <Bot size={11} />
+        </div>
+      </div>
+      <div className="min-w-0 flex-1">
+        <span className={`inline-block text-[10px] font-mono px-1 py-0.5 rounded border mb-0.5 ${modelBadgeClass(model)}`}>{model}</span>
+        <pre className="text-xs font-mono text-text-primary whitespace-pre-wrap break-words leading-relaxed [&]:my-0">
+          {text}
+          <span className="inline-block w-1.5 h-3 bg-amber animate-pulse ml-0.5 align-middle" />
+        </pre>
+      </div>
+    </div>
+  );
+});

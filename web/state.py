@@ -155,6 +155,18 @@ def update_room(room_id: str, updates: dict) -> Optional[dict]:
     return None
 
 
+def delete_room(room_id: str) -> None:
+    """Delete a room and its message/pin data."""
+    _validate_id(room_id, "room_id")
+    rooms = [r for r in list_rooms() if r["id"] != room_id]
+    write_json(ROOMS_FILE, rooms)
+    # Clean up room data directory
+    room_dir = DATA_DIR / "rooms" / room_id
+    if room_dir.exists():
+        import shutil
+        shutil.rmtree(room_dir)
+
+
 # ── Message persistence ──────────────────────────────────────────────────
 
 def _messages_path(room_id: str) -> Path:
@@ -259,6 +271,33 @@ def save_journal_entry(user: str, entry: dict) -> dict:
     }
     append_jsonl(JOURNAL_FILE, record)
     return record
+
+
+def update_journal_entry(entry_id: str, updates: dict) -> Optional[dict]:
+    """Update a journal entry. Rewrites JSONL atomically."""
+    entries = list_journal_entries()
+    target = None
+    for entry in entries:
+        if entry.get("id") == entry_id:
+            entry.update(updates)
+            entry["updated_at"] = _now_iso()
+            target = entry
+    if target is None:
+        return None
+    _ensure_dir(JOURNAL_FILE.parent)
+    tmp = JOURNAL_FILE.with_suffix(".tmp")
+    with open(JOURNAL_FILE, "r") as rf:
+        fcntl.flock(rf, fcntl.LOCK_EX)
+        try:
+            with open(tmp, "w") as wf:
+                for entry in entries:
+                    wf.write(json.dumps(entry, separators=(",", ":")) + "\n")
+                wf.flush()
+                os.fsync(wf.fileno())
+            os.replace(str(tmp), str(JOURNAL_FILE))
+        finally:
+            fcntl.flock(rf, fcntl.LOCK_UN)
+    return target
 
 
 # ── Prediction persistence ───────────────────────────────────────────────

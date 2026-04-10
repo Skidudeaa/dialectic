@@ -40,3 +40,31 @@ async def health() -> HealthResponse:
         last_snapshots=last_snapshots,
         llm_available=llm_available,
     )
+
+
+@router.get("/api/ws/protocol")
+async def ws_protocol() -> dict:
+    """Machine-readable WebSocket protocol documentation for agent clients."""
+    return {
+        "url_pattern": "/ws/{room_id}",
+        "auth": {
+            "method": "query_param_or_first_message",
+            "query_param": "token",
+            "first_message": "raw JWT string",
+            "description": "Pass JWT via ?token= query param (recommended for agents) or send raw token as first WS text frame",
+        },
+        "send_types": {
+            "message": {"type": "message", "content": "string"},
+            "typing": {"type": "typing", "typing": True},
+            "viewing": {"type": "viewing", "viewing": "thesis-id"},
+        },
+        "receive_types": {
+            "message": "New chat message",
+            "llm_chunk": "Streaming LLM token",
+            "llm_done": "LLM response complete",
+            "system": "System notification",
+            "presence": "User presence update",
+            "typing": "User typing indicator",
+            "error": "Error notification",
+        },
+    }
