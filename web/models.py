@@ -231,7 +231,7 @@ class CrossBookResult(BaseModel):
 
 class LLMChatRequest(BaseModel):
     prompt: str
-    model: str = "anthropic/claude-sonnet-4-20250514"
+    model: str = "anthropic/claude-sonnet-4.6"
     room_id: Optional[str] = None
 
 
@@ -239,8 +239,8 @@ class LLMCompareRequest(BaseModel):
     prompt: str
     models: List[str] = Field(
         default_factory=lambda: [
-            "anthropic/claude-sonnet-4-20250514",
-            "openai/gpt-4o",
+            "anthropic/claude-sonnet-4.6",
+            "openai/gpt-5.3-chat",
         ],
         max_length=4,
     )

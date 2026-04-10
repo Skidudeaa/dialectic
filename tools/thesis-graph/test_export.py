@@ -152,9 +152,15 @@ class TestExportStateFunction:
                                 scenarios_result)
         ms = snapshot["marketSnapshot"]
         assert "brent" in ms
-        assert ms["brent"] == 112.57
+        # WHY: Value comes from marketFields[].value, which may be updated by
+        # live price fetches. Assert it matches the config's own marketField.
+        brent_mf = next((mf for mf in cfg.get("marketFields", []) if mf.get("key") == "brent"), None)
+        assert brent_mf is not None
+        assert ms["brent"] == brent_mf["value"]
         # Gold spot should be from marketFields value, not dxy-stress node current
-        assert ms["goldSpot"] == 4492
+        gold_mf = next((mf for mf in cfg.get("marketFields", []) if mf.get("key") == "goldSpot"), None)
+        assert gold_mf is not None
+        assert ms["goldSpot"] == gold_mf["value"]
 
     def test_scenario_impacts_all_scenarios(self, cfg, evaluated):
         states, confluence, phase_num, phase_key, scenarios_result = evaluated

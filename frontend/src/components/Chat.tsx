@@ -9,10 +9,10 @@ interface Props {
 }
 
 const MODEL_COLORS: Record<string, string> = {
-  "claude-sonnet-4-20250514": "bg-amber/20 text-amber border-amber/30",
-  "gpt-4o": "bg-green/20 text-green border-green/30",
-  "llama-3.1-405b-instruct": "bg-purple/20 text-purple border-purple/30",
-  "gemini-2.0-flash-001": "bg-blue/20 text-blue border-blue/30",
+  "claude-sonnet-4.6": "bg-amber/20 text-amber border-amber/30",
+  "gpt-5.3-chat": "bg-green/20 text-green border-green/30",
+  "deepseek-r1": "bg-purple/20 text-purple border-purple/30",
+  "gemini-3.1-pro-preview": "bg-blue/20 text-blue border-blue/30",
 };
 
 function modelBadgeClass(model: string | null): string {
@@ -22,7 +22,7 @@ function modelBadgeClass(model: string | null): string {
   }
   if (model.toLowerCase().includes("claude")) return "bg-amber/20 text-amber border-amber/30";
   if (model.toLowerCase().includes("gpt")) return "bg-green/20 text-green border-green/30";
-  if (model.toLowerCase().includes("llama")) return "bg-purple/20 text-purple border-purple/30";
+  if (model.toLowerCase().includes("deepseek")) return "bg-purple/20 text-purple border-purple/30";
   if (model.toLowerCase().includes("gemini")) return "bg-blue/20 text-blue border-blue/30";
   return "bg-teal/20 text-teal border-teal/30";
 }
@@ -218,7 +218,7 @@ export default function Chat({ room }: Props) {
       }
 
       // @model mentions
-      const mentionMatch = text.match(/^@(claude|gpt|llama|gemini|compare)\s+/i);
+      const mentionMatch = text.match(/^@(claude|gpt|deepseek|gemini|compare)\s+/i);
       if (mentionMatch) {
         const cmd = mentionMatch[1].toLowerCase();
         const prompt = text.slice(mentionMatch[0].length);
@@ -233,10 +233,10 @@ export default function Chat({ room }: Props) {
           });
         } else {
           const modelMap: Record<string, string> = {
-            claude: "anthropic/claude-sonnet-4-20250514",
-            gpt: "openai/gpt-4o",
-            llama: "meta-llama/llama-3.1-405b-instruct",
-            gemini: "google/gemini-2.0-flash-001",
+            claude: "anthropic/claude-sonnet-4.6",
+            gpt: "openai/gpt-5.3-chat",
+            deepseek: "deepseek/deepseek-r1",
+            gemini: "google/gemini-3.1-pro-preview",
           };
           apiFetch("/api/llm/chat", {
             method: "POST", body: JSON.stringify({ prompt, model: modelMap[cmd], room_id: room.id }),
@@ -339,7 +339,7 @@ export default function Chat({ room }: Props) {
         <div className="flex gap-1.5">
           <input
             className="input flex-1"
-            placeholder="Message... (@claude, @gpt, @compare for AI)"
+            placeholder="Message... (@claude, @gpt, @deepseek, @gemini, @compare)"
             value={input}
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={(e) => {
@@ -352,7 +352,7 @@ export default function Chat({ room }: Props) {
               : <Send size={12} />}
           </button>
         </div>
-        <p className="text-[10px] text-text-dim mt-0.5 font-mono">@claude @gpt @compare | /brief /thesis /diff /predict /watchlist</p>
+        <p className="text-[10px] text-text-dim mt-0.5 font-mono">@claude @gpt @deepseek @gemini @compare | /brief /thesis /diff /predict /watchlist</p>
       </div>
     </div>
   );

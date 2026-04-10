@@ -9,7 +9,6 @@
     "dialecticRoomId": "8adcabb7-817a-4802-87c6-3bfd42e6a9eb",
     "dialecticRoomToken": "28ef002d81504116b4ff0a4a618e24ef"
   },
-
   "nodes": [
     {
       "id": "tariff-shock",
@@ -17,14 +16,44 @@
       "type": "event",
       "phase": 1,
       "state": "active",
-      "feeds": [{"source": "polymarket", "market": "us-tariff-rate-china-march-31"}],
+      "feeds": [
+        {
+          "source": "polymarket",
+          "market": "us-tariff-rate-china-march-31"
+        }
+      ],
       "probability": 0.85,
       "indicators": [
-        {"label": "Effective tariff rate", "feed": "manual", "value": "13.7% avg", "status": "red"},
-        {"label": "Section 122 global tariff", "feed": "manual", "value": "10-15%", "status": "red"},
-        {"label": "China effective rate", "feed": "manual", "value": "~34%", "status": "red"},
-        {"label": "Steel/aluminum rate", "feed": "manual", "value": "41.1%", "status": "red"},
-        {"label": "SCOTUS IEEPA ruling", "feed": "manual", "value": "Struck down Feb 20", "status": "amber"}
+        {
+          "label": "Effective tariff rate",
+          "feed": "manual",
+          "value": "13.7% avg",
+          "status": "red"
+        },
+        {
+          "label": "Section 122 global tariff",
+          "feed": "manual",
+          "value": "10-15%",
+          "status": "red"
+        },
+        {
+          "label": "China effective rate",
+          "feed": "manual",
+          "value": "~34%",
+          "status": "red"
+        },
+        {
+          "label": "Steel/aluminum rate",
+          "feed": "manual",
+          "value": "41.1%",
+          "status": "red"
+        },
+        {
+          "label": "SCOTUS IEEPA ruling",
+          "feed": "manual",
+          "value": "Struck down Feb 20",
+          "status": "amber"
+        }
       ],
       "context": "Supreme Court struck down IEEPA tariffs 6-3 on Feb 20. Trump pivoted same day to Section 122 (10% global, 150-day limit). Bessent says 15% coming. China at 34% via Section 301. Autos 25% (15% for Japan/EU via deals). Semiconductors 25% on advanced chips. Effective avg rate 13.7% — highest since Smoot-Hawley."
     },
@@ -34,20 +63,51 @@
       "type": "price",
       "phase": 1,
       "feeds": [
-        {"source": "yahoo", "symbol": "XLI", "label": "Industrials ETF"},
-        {"source": "fred", "series": "PPIACO", "label": "PPI All Commodities"}
+        {
+          "source": "yahoo",
+          "symbol": "XLI",
+          "label": "Industrials ETF"
+        },
+        {
+          "source": "fred",
+          "series": "PPIACO",
+          "label": "PPI All Commodities"
+        }
       ],
-      "current": 5.8,
+      "current": 172.19,
       "thresholds": [
-        {"level": 4.0, "label": "margin pressure begins"},
-        {"level": 6.0, "label": "pass-through to consumers"},
-        {"level": 8.0, "label": "demand destruction threshold"}
+        {
+          "level": 4.0,
+          "label": "margin pressure begins"
+        },
+        {
+          "level": 6.0,
+          "label": "pass-through to consumers"
+        },
+        {
+          "level": 8.0,
+          "label": "demand destruction threshold"
+        }
       ],
       "regimes": {
-        "normal": {"max": 3.99, "color": "#6E8FAD"},
-        "elevated": {"min": 4.0, "max": 5.99, "color": "#E69A4C"},
-        "stress": {"min": 6.0, "max": 7.99, "color": "#E05555"},
-        "critical": {"min": 8.0, "color": "#D32F2F"}
+        "normal": {
+          "max": 3.99,
+          "color": "#6E8FAD"
+        },
+        "elevated": {
+          "min": 4.0,
+          "max": 5.99,
+          "color": "#E69A4C"
+        },
+        "stress": {
+          "min": 6.0,
+          "max": 7.99,
+          "color": "#E05555"
+        },
+        "critical": {
+          "min": 8.0,
+          "color": "#D32F2F"
+        }
       },
       "context": "PPI goods inflation at 5.8% annualized. Tariffs add 70+ bps to core inflation per Goldman. Firms with weak pricing power face margin compression. Import costs for steel up 41%, autos up 25%."
     },
@@ -57,14 +117,42 @@
       "type": "indicator",
       "phase": 1,
       "feeds": [
-        {"source": "yahoo", "symbol": "XLI", "label": "Industrials"},
-        {"source": "yahoo", "symbol": "IYT", "label": "Transport"}
+        {
+          "source": "yahoo",
+          "symbol": "XLI",
+          "label": "Industrials"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "IYT",
+          "label": "Transport"
+        }
       ],
       "indicators": [
-        {"label": "Semiconductor lead times", "feed": "manual", "value": "extending", "status": "amber"},
-        {"label": "China de-risking", "feed": "manual", "value": "accelerating", "status": "red"},
-        {"label": "Nearshoring activity", "feed": "manual", "value": "Mexico/India up", "status": "amber"},
-        {"label": "Container rerouting", "feed": "manual", "value": "China → ASEAN shift", "status": "amber"}
+        {
+          "label": "Semiconductor lead times",
+          "feed": "manual",
+          "value": "extending",
+          "status": "amber"
+        },
+        {
+          "label": "China de-risking",
+          "feed": "manual",
+          "value": "accelerating",
+          "status": "red"
+        },
+        {
+          "label": "Nearshoring activity",
+          "feed": "manual",
+          "value": "Mexico/India up",
+          "status": "amber"
+        },
+        {
+          "label": "Container rerouting",
+          "feed": "manual",
+          "value": "China → ASEAN shift",
+          "status": "amber"
+        }
       ],
       "context": "Companies restructuring supply chains around tariff walls. Semiconductor advanced chips face 25% tariff. China shifting soybean purchases from US to Brazil permanently. Value chain fragmentation increasing costs across all sectors."
     },
@@ -74,14 +162,41 @@
       "type": "indicator",
       "phase": 2,
       "feeds": [
-        {"source": "yahoo", "symbol": "CARZ", "label": "Auto ETF"},
-        {"source": "yahoo", "symbol": "GM", "label": "GM"},
-        {"source": "yahoo", "symbol": "F", "label": "Ford"}
+        {
+          "source": "yahoo",
+          "symbol": "CARZ",
+          "label": "Auto ETF"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "GM",
+          "label": "GM"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "F",
+          "label": "Ford"
+        }
       ],
       "indicators": [
-        {"label": "Auto tariff rate", "feed": "manual", "value": "25% (15% Japan/EU)", "status": "red"},
-        {"label": "Average new car price impact", "feed": "manual", "value": "+$2,500-4,000", "status": "red"},
-        {"label": "Parts tariff", "feed": "manual", "value": "25% effective May 2025", "status": "red"}
+        {
+          "label": "Auto tariff rate",
+          "feed": "manual",
+          "value": "25% (15% Japan/EU)",
+          "status": "red"
+        },
+        {
+          "label": "Average new car price impact",
+          "feed": "manual",
+          "value": "+$2,500-4,000",
+          "status": "red"
+        },
+        {
+          "label": "Parts tariff",
+          "feed": "manual",
+          "value": "25% effective May 2025",
+          "status": "red"
+        }
       ],
       "context": "25% Section 232 auto tariff since April 2025 (reduced to 15% for Japan/EU via deals). Average new vehicle price impact $2,500-4,000. Automakers absorbing partial costs via margin compression. Detroit Three all guiding lower for 2026."
     },
@@ -91,13 +206,36 @@
       "type": "indicator",
       "phase": 2,
       "feeds": [
-        {"source": "yahoo", "symbol": "SMH", "label": "Semiconductor ETF"},
-        {"source": "yahoo", "symbol": "SOXX", "label": "SOXX"}
+        {
+          "source": "yahoo",
+          "symbol": "SMH",
+          "label": "Semiconductor ETF"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "SOXX",
+          "label": "SOXX"
+        }
       ],
       "indicators": [
-        {"label": "Advanced chip tariff", "feed": "manual", "value": "25% (H200, MI325X)", "status": "red"},
-        {"label": "China chip tariff", "feed": "manual", "value": "deferred to 2027", "status": "amber"},
-        {"label": "Export controls", "feed": "manual", "value": "tightening", "status": "amber"}
+        {
+          "label": "Advanced chip tariff",
+          "feed": "manual",
+          "value": "25% (H200, MI325X)",
+          "status": "red"
+        },
+        {
+          "label": "China chip tariff",
+          "feed": "manual",
+          "value": "deferred to 2027",
+          "status": "amber"
+        },
+        {
+          "label": "Export controls",
+          "feed": "manual",
+          "value": "tightening",
+          "status": "amber"
+        }
       ],
       "context": "Jan 2026: 25% Section 232 tariff on advanced semiconductor imports (Nvidia H200, AMD MI325X). Broader China chip tariffs deferred to 2027 under Trump-Xi truce. Export licensing requirements tightened. US-China tech decoupling accelerating."
     },
@@ -107,14 +245,31 @@
       "type": "price",
       "phase": 2,
       "feeds": [
-        {"source": "fred", "series": "CPIAUCSL", "label": "CPI"},
-        {"source": "fred", "series": "PCEPILFE", "label": "Core PCE"}
+        {
+          "source": "fred",
+          "series": "CPIAUCSL",
+          "label": "CPI"
+        },
+        {
+          "source": "fred",
+          "series": "PCEPILFE",
+          "label": "Core PCE"
+        }
       ],
       "current": 2.7,
       "thresholds": [
-        {"level": 2.5, "label": "Fed comfort zone exceeded"},
-        {"level": 3.0, "label": "inflation expectations unanchor"},
-        {"level": 3.5, "label": "stagflation risk"}
+        {
+          "level": 2.5,
+          "label": "Fed comfort zone exceeded"
+        },
+        {
+          "level": 3.0,
+          "label": "inflation expectations unanchor"
+        },
+        {
+          "level": 3.5,
+          "label": "stagflation risk"
+        }
       ],
       "context": "Core PCE at 2.7% (Fed March projection, revised up). Tariffs added 1.3pp to core goods inflation. Year-ahead inflation expectations jumped to 3.8% in March (UMich). Feb CPI showed receding goods costs but rising services. The pass-through is happening — $1,500/household average tax increase."
     },
@@ -124,14 +279,42 @@
       "type": "indicator",
       "phase": 2,
       "feeds": [
-        {"source": "yahoo", "symbol": "ZS=F", "label": "Soybeans"},
-        {"source": "yahoo", "symbol": "DBA", "label": "Ag ETF"}
+        {
+          "source": "yahoo",
+          "symbol": "ZS=F",
+          "label": "Soybeans"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "DBA",
+          "label": "Ag ETF"
+        }
       ],
       "indicators": [
-        {"label": "China soybean source shift", "feed": "manual", "value": "80% Brazil/Argentina (was 60%)", "status": "red"},
-        {"label": "China retaliatory tariff", "feed": "manual", "value": "10% (was 125%, reduced)", "status": "amber"},
-        {"label": "Farm income decline", "feed": "manual", "value": "significant", "status": "red"},
-        {"label": "Market permanence risk", "feed": "manual", "value": "high — Brazil capturing share", "status": "red"}
+        {
+          "label": "China soybean source shift",
+          "feed": "manual",
+          "value": "80% Brazil/Argentina (was 60%)",
+          "status": "red"
+        },
+        {
+          "label": "China retaliatory tariff",
+          "feed": "manual",
+          "value": "10% (was 125%, reduced)",
+          "status": "amber"
+        },
+        {
+          "label": "Farm income decline",
+          "feed": "manual",
+          "value": "significant",
+          "status": "red"
+        },
+        {
+          "label": "Market permanence risk",
+          "feed": "manual",
+          "value": "high — Brazil capturing share",
+          "status": "red"
+        }
       ],
       "context": "China retaliated with tariffs up to 125% on US goods in 2025, now at 10% under 90-day truce. But the damage is structural: China shifted 80% of soybean imports to Brazil/Argentina (from 60% pre-trade-war). US farmers permanently losing key markets. 2026 growing season planning disrupted by tariff uncertainty."
     },
@@ -140,18 +323,47 @@
       "label": "USD/CNY Stress",
       "type": "price",
       "phase": 2,
-      "feeds": [{"source": "yahoo", "symbol": "USDCNY=X", "label": "USD/CNY"}],
-      "current": 6.916,
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "USDCNY=X",
+          "label": "USD/CNY"
+        }
+      ],
+      "current": 6.83,
       "thresholds": [
-        {"level": 7.00, "label": "psychological resistance"},
-        {"level": 7.20, "label": "managed deval signal"},
-        {"level": 7.35, "label": "competitive deval risk"}
+        {
+          "level": 7.0,
+          "label": "psychological resistance"
+        },
+        {
+          "level": 7.2,
+          "label": "managed deval signal"
+        },
+        {
+          "level": 7.35,
+          "label": "competitive deval risk"
+        }
       ],
       "regimes": {
-        "stable": {"max": 6.99, "color": "#6E8FAD"},
-        "pressure": {"min": 7.00, "max": 7.19, "color": "#E69A4C"},
-        "stress": {"min": 7.20, "max": 7.34, "color": "#E05555"},
-        "crisis": {"min": 7.35, "color": "#D32F2F"}
+        "stable": {
+          "max": 6.99,
+          "color": "#6E8FAD"
+        },
+        "pressure": {
+          "min": 7.0,
+          "max": 7.19,
+          "color": "#E69A4C"
+        },
+        "stress": {
+          "min": 7.2,
+          "max": 7.34,
+          "color": "#E05555"
+        },
+        "crisis": {
+          "min": 7.35,
+          "color": "#D32F2F"
+        }
       },
       "context": "USD/CNY at 6.916 — yuan has actually strengthened 4.8% over 12 months. China using currency stability as a policy tool, not weaponizing it. But if tariffs escalate further or truce breaks, PBOC may allow managed depreciation to offset tariff impact. 7.00 is the key level."
     },
@@ -161,16 +373,48 @@
       "type": "indicator",
       "phase": 3,
       "feeds": [
-        {"source": "yahoo", "symbol": "XLY", "label": "Consumer Disc."},
-        {"source": "fred", "series": "UMCSENT", "label": "UMich Sentiment"}
+        {
+          "source": "yahoo",
+          "symbol": "XLY",
+          "label": "Consumer Disc."
+        },
+        {
+          "source": "fred",
+          "series": "UMCSENT",
+          "label": "UMich Sentiment"
+        }
       ],
       "indicators": [
-        {"label": "UMich sentiment", "feed": "manual", "value": "53.3 (2026 low)", "status": "red"},
-        {"label": "Inflation expectations 1Y", "feed": "manual", "value": "3.8% (from 3.4%)", "status": "red"},
-        {"label": "Americans expecting difficulty", "feed": "manual", "value": "70%", "status": "red"},
-        {"label": "Conf Board index", "feed": "manual", "value": "declining 3 straight months", "status": "red"}
+        {
+          "label": "UMich sentiment",
+          "feed": "manual",
+          "value": "53.3 (2026 low)",
+          "status": "red"
+        },
+        {
+          "label": "Inflation expectations 1Y",
+          "feed": "manual",
+          "value": "3.8% (from 3.4%)",
+          "status": "red"
+        },
+        {
+          "label": "Americans expecting difficulty",
+          "feed": "manual",
+          "value": "70%",
+          "status": "red"
+        },
+        {
+          "label": "Conf Board index",
+          "feed": "manual",
+          "value": "declining 3 straight months",
+          "status": "red"
+        }
       ],
-      "confluence": ["retail-prices", "auto-sector", "ag-retaliation"],
+      "confluence": [
+        "retail-prices",
+        "auto-sector",
+        "ag-retaliation"
+      ],
       "context": "UMich consumer sentiment at 53.3 — lowest of 2026, lowest annual avg in 70+ year survey history. Year-ahead inflation expectations surged to 3.8%. 70% of Americans predicting economic difficulty in 2026. Triple hit: tariff price increases + oil shock + geopolitical anxiety."
     },
     {
@@ -179,13 +423,36 @@
       "type": "indicator",
       "phase": 2,
       "feeds": [
-        {"source": "yahoo", "symbol": "XLI", "label": "Industrials"},
-        {"source": "fred", "series": "NAPM", "label": "ISM Mfg PMI"}
+        {
+          "source": "yahoo",
+          "symbol": "XLI",
+          "label": "Industrials"
+        },
+        {
+          "source": "fred",
+          "series": "NAPM",
+          "label": "ISM Mfg PMI"
+        }
       ],
       "indicators": [
-        {"label": "ISM Mfg PMI", "feed": "manual", "value": "52.4 (Feb)", "status": "amber"},
-        {"label": "Expansion streak", "feed": "manual", "value": "2nd straight month (3rd in 40mo)", "status": "amber"},
-        {"label": "Services PMI", "feed": "manual", "value": "below 50 briefly in Feb flash", "status": "amber"}
+        {
+          "label": "ISM Mfg PMI",
+          "feed": "manual",
+          "value": "52.4 (Feb)",
+          "status": "amber"
+        },
+        {
+          "label": "Expansion streak",
+          "feed": "manual",
+          "value": "2nd straight month (3rd in 40mo)",
+          "status": "amber"
+        },
+        {
+          "label": "Services PMI",
+          "feed": "manual",
+          "value": "below 50 briefly in Feb flash",
+          "status": "amber"
+        }
       ],
       "context": "ISM Manufacturing PMI at 52.4 in Feb — second straight expansion, but only 3rd in 40 months. Manufacturing briefly recovering from tariff-induced restocking, but the bounce is fragile. Services PMI flash dipped below 50 in Feb for first time in 2 years. March data due April 1."
     },
@@ -195,7 +462,9 @@
       "type": "deadline",
       "phase": 3,
       "deadline": "2026-07-24",
-      "conditions": ["tariff-shock.active"],
+      "conditions": [
+        "tariff-shock.active"
+      ],
       "logic": "any",
       "irreversible": false,
       "countdown": true,
@@ -207,15 +476,42 @@
       "type": "indicator",
       "phase": 3,
       "feeds": [
-        {"source": "yahoo", "symbol": "SPY", "label": "S&P 500"},
-        {"source": "yahoo", "symbol": "IWM", "label": "Russell 2000"}
+        {
+          "source": "yahoo",
+          "symbol": "SPY",
+          "label": "S&P 500"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "IWM",
+          "label": "Russell 2000"
+        }
       ],
       "indicators": [
-        {"label": "S&P 500 from ATH", "feed": "manual", "value": "-6.4% (6370 vs 6800)", "status": "amber"},
-        {"label": "Analyst revisions", "feed": "manual", "value": "downward for export-reliant", "status": "amber"},
-        {"label": "Margin pressure", "feed": "manual", "value": "weak pricing power firms hit", "status": "red"}
+        {
+          "label": "S&P 500 from ATH",
+          "feed": "manual",
+          "value": "-6.4% (6370 vs 6800)",
+          "status": "amber"
+        },
+        {
+          "label": "Analyst revisions",
+          "feed": "manual",
+          "value": "downward for export-reliant",
+          "status": "amber"
+        },
+        {
+          "label": "Margin pressure",
+          "feed": "manual",
+          "value": "weak pricing power firms hit",
+          "status": "red"
+        }
       ],
-      "confluence": ["input-costs", "consumer-confidence", "mfg-pmi"],
+      "confluence": [
+        "input-costs",
+        "consumer-confidence",
+        "mfg-pmi"
+      ],
       "context": "S&P 500 at 6,370, pulled back 6.4% from 6,800 highs. Tariff uncertainty widening dispersion — firms with weak pricing power face margin compression, aggressive passthrough risks slower sales. Q1 earnings season (April) will reveal tariff damage. Small caps (IWM) initially outperformed on domestic-revenue thesis but re-rating."
     },
     {
@@ -225,14 +521,42 @@
       "phase": 4,
       "state": "monitoring",
       "feeds": [
-        {"source": "yahoo", "symbol": "ZQ=F", "label": "Fed Funds Futures"},
-        {"source": "fred", "series": "FEDFUNDS", "label": "Fed Funds Rate"}
+        {
+          "source": "yahoo",
+          "symbol": "ZQ=F",
+          "label": "Fed Funds Futures"
+        },
+        {
+          "source": "fred",
+          "series": "FEDFUNDS",
+          "label": "Fed Funds Rate"
+        }
       ],
       "indicators": [
-        {"label": "Fed funds rate", "feed": "manual", "value": "3.50-3.75%", "status": "amber"},
-        {"label": "Dot plot 2026 cuts", "feed": "manual", "value": "1 cut expected", "status": "amber"},
-        {"label": "Powell on tariffs", "feed": "manual", "value": "'one-time price effects'", "status": "amber"},
-        {"label": "Next FOMC", "feed": "manual", "value": "May 6-7, 2026", "status": "monitoring"}
+        {
+          "label": "Fed funds rate",
+          "feed": "manual",
+          "value": "3.50-3.75%",
+          "status": "amber"
+        },
+        {
+          "label": "Dot plot 2026 cuts",
+          "feed": "manual",
+          "value": "1 cut expected",
+          "status": "amber"
+        },
+        {
+          "label": "Powell on tariffs",
+          "feed": "manual",
+          "value": "'one-time price effects'",
+          "status": "amber"
+        },
+        {
+          "label": "Next FOMC",
+          "feed": "manual",
+          "value": "May 6-7, 2026",
+          "status": "monitoring"
+        }
       ],
       "context": "Fed held at 3.50-3.75% in March (11-1 vote). Dot plot shows 1 cut in 2026, 1 in 2027. Powell framing tariffs as 'one-time price effects' — but oil shock complicates. Goldman pushed expected cuts to Sept/Dec. Fed trapped: inflation above target but growth slowing = stagflation risk. Next decision May 6-7."
     },
@@ -242,17 +566,38 @@
       "type": "reversal",
       "phase": 4,
       "feeds": [
-        {"source": "polymarket", "market": "trump-visit-china-by-june-30"},
-        {"source": "yahoo", "symbol": "SPY"}
+        {
+          "source": "polymarket",
+          "market": "trump-visit-china-by-june-30"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "SPY"
+        }
       ],
       "threshold": 6500,
       "closesRequired": 3,
       "additionalCondition": "Announced tariff reduction or bilateral deal",
       "action": "Unwind hedges (SH, TLT overweight), add XLY/IWM, reduce DBA/GLD",
       "indicators": [
-        {"label": "Trump-China visit", "feed": "polymarket", "value": "71% by June 30", "status": "approaching"},
-        {"label": "Section 122 Congressional vote", "feed": "manual", "value": "not yet scheduled", "status": "monitoring"},
-        {"label": "Tariff refund ruling", "feed": "polymarket", "value": "38% court-ordered", "status": "monitoring"}
+        {
+          "label": "Trump-China visit",
+          "feed": "polymarket",
+          "value": "71% by June 30",
+          "status": "approaching"
+        },
+        {
+          "label": "Section 122 Congressional vote",
+          "feed": "manual",
+          "value": "not yet scheduled",
+          "status": "monitoring"
+        },
+        {
+          "label": "Tariff refund ruling",
+          "feed": "polymarket",
+          "value": "38% court-ordered",
+          "status": "monitoring"
+        }
       ],
       "context": "Polymarket: 71% Trump visits China by June 30. Section 122 expires July 24 unless Congress extends. ~20 bilateral deals already negotiated. IEEPA refund question ($200B+) still pending. De-escalation is the base case but timing uncertain."
     },
@@ -262,27 +607,58 @@
       "type": "indicator",
       "phase": 4,
       "feeds": [
-        {"source": "polymarket", "market": "us-recession-by-end-of-2026"},
-        {"source": "yahoo", "symbol": "TLT", "label": "Long Bond"}
+        {
+          "source": "polymarket",
+          "market": "us-recession-by-end-of-2026"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "TLT",
+          "label": "Long Bond"
+        }
       ],
       "indicators": [
-        {"label": "Polymarket recession prob", "feed": "polymarket", "value": "38%", "status": "amber"},
-        {"label": "Goldman recession prob", "feed": "manual", "value": "25%", "status": "amber"},
-        {"label": "GDP growth forecast", "feed": "manual", "value": "1.5% (Bloomberg consensus)", "status": "amber"},
-        {"label": "JPMorgan view", "feed": "manual", "value": "'no recession but weak growth'", "status": "amber"}
+        {
+          "label": "Polymarket recession prob",
+          "feed": "polymarket",
+          "value": "38%",
+          "status": "amber"
+        },
+        {
+          "label": "Goldman recession prob",
+          "feed": "manual",
+          "value": "25%",
+          "status": "amber"
+        },
+        {
+          "label": "GDP growth forecast",
+          "feed": "manual",
+          "value": "1.5% (Bloomberg consensus)",
+          "status": "amber"
+        },
+        {
+          "label": "JPMorgan view",
+          "feed": "manual",
+          "value": "'no recession but weak growth'",
+          "status": "amber"
+        }
       ],
-      "confluence": ["consumer-confidence", "earnings-compression", "fed-response"],
-      "context": "Polymarket: 38% recession by end-2026. Goldman: 25% (raised from baseline after Feb jobs + oil). JPM: 'no recession but material headwinds.' Bloomberg consensus: 1.5% GDP growth. The tariff tax ($1,500/household) + oil shock + geopolitical uncertainty create a triple drag. Stagflation — inflation above target with slowing growth — is the central risk."
+      "confluence": [
+        "consumer-confidence",
+        "earnings-compression",
+        "fed-response"
+      ],
+      "context": "Polymarket: 38% recession by end-2026. Goldman: 25% (raised from baseline after Feb jobs + oil). JPM: 'no recession but material headwinds.' Bloomberg consensus: 1.5% GDP growth. The tariff tax ($1,500/household) + oil shock + geopolitical uncertainty create a triple drag. Stagflation — inflation above target with slowing growth — is the central risk.",
+      "probability": 0.245
     }
   ],
-
   "edges": [
     {
       "from": "tariff-shock",
       "to": "input-costs",
       "mechanism": "Direct import cost increase: 10-41% across product categories",
       "lag": "immediate to 1 month",
-      "strength": 0.90
+      "strength": 0.9
     },
     {
       "from": "tariff-shock",
@@ -303,14 +679,14 @@
       "to": "tech-supply",
       "mechanism": "25% tariff on advanced semiconductors, export controls",
       "lag": "1-3 months",
-      "strength": 0.70
+      "strength": 0.7
     },
     {
       "from": "tariff-shock",
       "to": "ag-retaliation",
       "mechanism": "Chinese retaliatory tariffs on US agriculture",
       "lag": "1-4 weeks (tit-for-tat)",
-      "strength": 0.80
+      "strength": 0.8
     },
     {
       "from": "tariff-shock",
@@ -339,21 +715,21 @@
       "to": "consumer-confidence",
       "mechanism": "Inflation erodes purchasing power and sentiment",
       "lag": "1-2 months",
-      "strength": 0.80
+      "strength": 0.8
     },
     {
       "from": "ag-retaliation",
       "to": "consumer-confidence",
       "mechanism": "Farm income decline hits rural economy and sentiment",
       "lag": "3-6 months",
-      "strength": 0.50
+      "strength": 0.5
     },
     {
       "from": "input-costs",
       "to": "mfg-pmi",
       "mechanism": "Higher input costs compress manufacturer margins and activity",
       "lag": "1-3 months",
-      "strength": 0.70
+      "strength": 0.7
     },
     {
       "from": "input-costs",
@@ -367,14 +743,14 @@
       "to": "earnings-compression",
       "mechanism": "Consumers pull back spending → revenue declines",
       "lag": "1-2 quarters",
-      "strength": 0.70
+      "strength": 0.7
     },
     {
       "from": "mfg-pmi",
       "to": "earnings-compression",
       "mechanism": "Manufacturing contraction feeds into industrial earnings",
       "lag": "1 month",
-      "strength": 0.60
+      "strength": 0.6
     },
     {
       "from": "earnings-compression",
@@ -388,14 +764,14 @@
       "to": "recession-risk",
       "mechanism": "Consumer spending = 70% of GDP; sustained pullback = contraction",
       "lag": "2-3 months",
-      "strength": 0.60
+      "strength": 0.6
     },
     {
       "from": "recession-risk",
       "to": "fed-response",
       "mechanism": "Recession risk forces Fed hand on rate cuts despite inflation",
       "lag": "1-3 months",
-      "strength": 0.70
+      "strength": 0.7
     },
     {
       "from": "fed-response",
@@ -405,153 +781,468 @@
       "strength": 0.45
     }
   ],
-
   "instruments": {
     "tariff-shock": [
-      {"id": "SH", "monthly": 400, "role": "S&P 500 hedge (inverse)", "beta": -1.0, "ref": 14.12, "targetLow": 15.00, "targetHigh": 16.50, "stop": 13.00}
+      {
+        "id": "SH",
+        "monthly": 400,
+        "role": "S&P 500 hedge (inverse)",
+        "beta": -1.0,
+        "ref": 36.29,
+        "targetLow": 15.0,
+        "targetHigh": 16.5,
+        "stop": 13.0
+      }
     ],
     "input-costs": [
-      {"id": "XLI", "monthly": 600, "role": "industrials — tariff beneficiary if domestic", "beta": 0.6, "ref": 156.98, "targetLow": 165, "targetHigh": 175, "stop": 145}
+      {
+        "id": "XLI",
+        "monthly": 600,
+        "role": "industrials — tariff beneficiary if domestic",
+        "beta": 0.6,
+        "ref": 172.19,
+        "targetLow": 165,
+        "targetHigh": 175,
+        "stop": 145
+      }
     ],
     "auto-sector": [
-      {"id": "F", "monthly": 300, "role": "domestic auto — potential tariff beneficiary", "beta": 0.5, "ref": 10.85, "targetLow": 12.50, "targetHigh": 14.00, "stop": 9.50},
-      {"id": "GM", "monthly": 300, "role": "domestic auto — tariff wall moat", "beta": 0.5, "ref": 52.40, "targetLow": 58, "targetHigh": 63, "stop": 47}
+      {
+        "id": "F",
+        "monthly": 300,
+        "role": "domestic auto — potential tariff beneficiary",
+        "beta": 0.5,
+        "ref": 12.24,
+        "targetLow": 12.5,
+        "targetHigh": 14.0,
+        "stop": 9.5
+      },
+      {
+        "id": "GM",
+        "monthly": 300,
+        "role": "domestic auto — tariff wall moat",
+        "beta": 0.5,
+        "ref": 76.73,
+        "targetLow": 58,
+        "targetHigh": 63,
+        "stop": 47
+      }
     ],
     "ag-retaliation": [
-      {"id": "DBA", "monthly": 400, "role": "agriculture commodity basket", "beta": 0.4, "ref": 27.85, "targetLow": 30, "targetHigh": 32, "stop": 25.50}
+      {
+        "id": "DBA",
+        "monthly": 400,
+        "role": "agriculture commodity basket",
+        "beta": 0.4,
+        "ref": 26.87,
+        "targetLow": 30,
+        "targetHigh": 32,
+        "stop": 25.5
+      }
     ],
     "consumer-confidence": [
-      {"id": "XLY", "monthly": 500, "role": "consumer discretionary — short if confidence collapses", "beta": -0.6, "ref": 110.86, "targetLow": 100, "targetHigh": 95, "stop": 118}
+      {
+        "id": "XLY",
+        "monthly": 500,
+        "role": "consumer discretionary — short if confidence collapses",
+        "beta": -0.6,
+        "ref": 112.74,
+        "targetLow": 100,
+        "targetHigh": 95,
+        "stop": 118
+      }
     ],
     "earnings-compression": [
-      {"id": "IWM", "monthly": 500, "role": "small cap domestic revenue thesis", "beta": 0.5, "ref": 225.50, "targetLow": 240, "targetHigh": 255, "stop": 210}
+      {
+        "id": "IWM",
+        "monthly": 500,
+        "role": "small cap domestic revenue thesis",
+        "beta": 0.5,
+        "ref": 261.96,
+        "targetLow": 240,
+        "targetHigh": 255,
+        "stop": 210
+      }
     ],
     "recession-risk": [
-      {"id": "TLT", "monthly": 600, "role": "long duration — flight to safety on recession", "beta": -0.7, "ref": 86.11, "targetLow": 92, "targetHigh": 98, "stop": 82},
-      {"id": "GLD", "monthly": 500, "role": "gold — stagflation hedge", "beta": -0.4, "ref": 414.70, "targetLow": 445, "targetHigh": 460, "stop": 395}
+      {
+        "id": "TLT",
+        "monthly": 600,
+        "role": "long duration — flight to safety on recession",
+        "beta": -0.7,
+        "ref": 86.7,
+        "targetLow": 92,
+        "targetHigh": 98,
+        "stop": 82
+      },
+      {
+        "id": "GLD",
+        "monthly": 500,
+        "role": "gold — stagflation hedge",
+        "beta": -0.4,
+        "ref": 437.91,
+        "targetLow": 445,
+        "targetHigh": 460,
+        "stop": 395
+      }
     ],
     "reserve": [
-      {"id": "SGOV", "monthly": 800, "role": "deployment ammo", "isReserve": true, "ref": 100.65},
-      {"id": "TIPS", "monthly": 400, "role": "inflation-linked treasury hedge", "ref": 108.50}
+      {
+        "id": "SGOV",
+        "monthly": 800,
+        "role": "deployment ammo",
+        "isReserve": true,
+        "ref": 100.46
+      },
+      {
+        "id": "TIPS",
+        "monthly": 400,
+        "role": "inflation-linked treasury hedge",
+        "ref": 0.0
+      }
     ],
     "overlays": {
       "escalation-hedge": {
         "condition": "Section 122 extended by Congress OR new tariff authority invoked",
-        "gatedBy": ["section122-expiry"],
+        "gatedBy": [
+          "section122-expiry"
+        ],
         "instruments": [
-          {"id": "SH", "ref": 14.12, "targetLow": 16.00, "targetHigh": 18.00, "stop": 12.50, "note": "Double down on S&P hedge if tariffs permanent."},
-          {"id": "UUP", "ref": 28.30, "targetLow": 30, "targetHigh": 31.50, "stop": 27, "note": "Dollar strength on trade surplus compression."}
+          {
+            "id": "SH",
+            "ref": 14.12,
+            "targetLow": 16.0,
+            "targetHigh": 18.0,
+            "stop": 12.5,
+            "note": "Double down on S&P hedge if tariffs permanent."
+          },
+          {
+            "id": "UUP",
+            "ref": 28.3,
+            "targetLow": 30,
+            "targetHigh": 31.5,
+            "stop": 27,
+            "note": "Dollar strength on trade surplus compression."
+          }
         ]
       },
       "deal-rally": {
         "condition": "Bilateral deal announced with China OR Section 122 lapses",
-        "gatedBy": ["negotiation"],
+        "gatedBy": [
+          "negotiation"
+        ],
         "instruments": [
-          {"id": "KWEB", "ref": 31.50, "targetLow": 38, "targetHigh": 42, "stop": 28, "note": "China internet — direct beneficiary of de-escalation."},
-          {"id": "FXI", "ref": 30.20, "targetLow": 35, "targetHigh": 38, "stop": 27, "note": "China large cap — trade deal play."},
-          {"id": "XLY", "ref": 110.86, "targetLow": 120, "targetHigh": 128, "stop": 105, "note": "Flip from short to long on deal."}
+          {
+            "id": "KWEB",
+            "ref": 31.5,
+            "targetLow": 38,
+            "targetHigh": 42,
+            "stop": 28,
+            "note": "China internet — direct beneficiary of de-escalation."
+          },
+          {
+            "id": "FXI",
+            "ref": 30.2,
+            "targetLow": 35,
+            "targetHigh": 38,
+            "stop": 27,
+            "note": "China large cap — trade deal play."
+          },
+          {
+            "id": "XLY",
+            "ref": 110.86,
+            "targetLow": 120,
+            "targetHigh": 128,
+            "stop": 105,
+            "note": "Flip from short to long on deal."
+          }
         ]
       },
       "farm-crisis": {
         "condition": "US ag exports decline >20% YoY AND no new subsidy program",
-        "gatedBy": ["ag-retaliation"],
+        "gatedBy": [
+          "ag-retaliation"
+        ],
         "instruments": [
-          {"id": "MOO", "ref": 72.50, "targetLow": 65, "targetHigh": 60, "stop": 78, "note": "Short ag equities if permanent market loss."},
-          {"id": "DBA", "ref": 27.85, "targetLow": 30, "targetHigh": 33, "stop": 25, "note": "Long ag commodities on supply disruption."}
+          {
+            "id": "MOO",
+            "ref": 72.5,
+            "targetLow": 65,
+            "targetHigh": 60,
+            "stop": 78,
+            "note": "Short ag equities if permanent market loss."
+          },
+          {
+            "id": "DBA",
+            "ref": 27.85,
+            "targetLow": 30,
+            "targetHigh": 33,
+            "stop": 25,
+            "note": "Long ag commodities on supply disruption."
+          }
         ]
       },
       "stagflation": {
         "condition": "Core PCE > 3.0% AND GDP growth < 1.0%",
-        "gatedBy": ["recession-risk"],
+        "gatedBy": [
+          "recession-risk"
+        ],
         "instruments": [
-          {"id": "GLD", "ref": 414.70, "targetLow": 460, "targetHigh": 490, "stop": 395, "note": "Gold is the stagflation asset."},
-          {"id": "GDX", "ref": 85.79, "targetLow": 95, "targetHigh": 105, "stop": 79, "note": "Gold miners — leveraged gold."},
-          {"id": "TIPS", "ref": 108.50, "targetLow": 115, "targetHigh": 120, "stop": 104, "note": "TIPS outperform nominals in stagflation."}
+          {
+            "id": "GLD",
+            "ref": 414.7,
+            "targetLow": 460,
+            "targetHigh": 490,
+            "stop": 395,
+            "note": "Gold is the stagflation asset."
+          },
+          {
+            "id": "GDX",
+            "ref": 85.79,
+            "targetLow": 95,
+            "targetHigh": 105,
+            "stop": 79,
+            "note": "Gold miners — leveraged gold."
+          },
+          {
+            "id": "TIPS",
+            "ref": 108.5,
+            "targetLow": 115,
+            "targetHigh": 120,
+            "stop": 104,
+            "note": "TIPS outperform nominals in stagflation."
+          }
         ]
       }
     }
   },
-
   "scenarios": [
     {
       "id": "deal-by-july",
       "name": "Trade deal before Section 122 expiry",
       "probability": 0.35,
-      "overrides": {"tariff-shock": "resolved", "negotiation": "fired", "usd-cny": 6.80},
+      "overrides": {
+        "tariff-shock": "resolved",
+        "negotiation": "fired",
+        "usd-cny": 6.8
+      },
       "notes": "Trump visits China (71% by June per Polymarket), strikes bilateral deal. Section 122 lapses on July 24. Effective tariffs drop to 5-8% (Section 301 baseline). Market relief rally. Consumer confidence recovers.",
       "portfolioImpact": {
-        "SH": {"direction": "down", "estimate": "-15%", "action": "close"},
-        "XLI": {"direction": "up", "estimate": "+12%", "action": "hold"},
-        "XLY": {"direction": "up", "estimate": "+10%", "action": "flip to long"},
-        "IWM": {"direction": "up", "estimate": "+15%", "action": "add"},
-        "TLT": {"direction": "down", "estimate": "-5%", "action": "trim 1/2"},
-        "GLD": {"direction": "flat", "estimate": "-3%", "action": "hold (oil hedge remains)"},
-        "DBA": {"direction": "down", "estimate": "-8%", "action": "trim"}
+        "SH": {
+          "direction": "down",
+          "estimate": "-15%",
+          "action": "close"
+        },
+        "XLI": {
+          "direction": "up",
+          "estimate": "+12%",
+          "action": "hold"
+        },
+        "XLY": {
+          "direction": "up",
+          "estimate": "+10%",
+          "action": "flip to long"
+        },
+        "IWM": {
+          "direction": "up",
+          "estimate": "+15%",
+          "action": "add"
+        },
+        "TLT": {
+          "direction": "down",
+          "estimate": "-5%",
+          "action": "trim 1/2"
+        },
+        "GLD": {
+          "direction": "flat",
+          "estimate": "-3%",
+          "action": "hold (oil hedge remains)"
+        },
+        "DBA": {
+          "direction": "down",
+          "estimate": "-8%",
+          "action": "trim"
+        }
       }
     },
     {
       "id": "section122-extended",
       "name": "Congress extends Section 122 tariffs",
       "probability": 0.25,
-      "overrides": {"tariff-shock": "active", "section122-expiry": "fired", "retail-prices": 3.2},
+      "overrides": {
+        "tariff-shock": "active",
+        "section122-expiry": "fired",
+        "retail-prices": 3.2
+      },
       "notes": "Congress votes to extend tariffs past July 24. Effective rate stays at 13-15%. Uncertainty becomes permanence. Corporate investment freezes. Earnings revisions accelerate downward.",
       "portfolioImpact": {
-        "SH": {"direction": "up", "estimate": "+10%", "action": "hold"},
-        "XLI": {"direction": "flat", "estimate": "+3%", "action": "hold (domestic bias)"},
-        "XLY": {"direction": "down", "estimate": "-8%", "action": "maintain short"},
-        "TLT": {"direction": "up", "estimate": "+8%", "action": "add"},
-        "GLD": {"direction": "up", "estimate": "+8%", "action": "add GDX overlay"},
-        "IWM": {"direction": "up", "estimate": "+5%", "action": "hold (domestic revenue)"}
+        "SH": {
+          "direction": "up",
+          "estimate": "+10%",
+          "action": "hold"
+        },
+        "XLI": {
+          "direction": "flat",
+          "estimate": "+3%",
+          "action": "hold (domestic bias)"
+        },
+        "XLY": {
+          "direction": "down",
+          "estimate": "-8%",
+          "action": "maintain short"
+        },
+        "TLT": {
+          "direction": "up",
+          "estimate": "+8%",
+          "action": "add"
+        },
+        "GLD": {
+          "direction": "up",
+          "estimate": "+8%",
+          "action": "add GDX overlay"
+        },
+        "IWM": {
+          "direction": "up",
+          "estimate": "+5%",
+          "action": "hold (domestic revenue)"
+        }
       }
     },
     {
       "id": "escalation",
       "name": "Tariff escalation — new authority or higher rates",
       "probability": 0.15,
-      "overrides": {"tariff-shock": "active", "input-costs": 8.5, "usd-cny": 7.25, "consumer-confidence": "fired"},
+      "overrides": {
+        "tariff-shock": "active",
+        "input-costs": 8.5,
+        "usd-cny": 7.25,
+        "consumer-confidence": "fired"
+      },
       "notes": "Trump finds new legal authority after Section 122 expires, or Congress grants broad tariff powers. Rates increase to 20-25% global, 50%+ on China. Full trade war. Yuan breaks 7.20. Recession probability spikes.",
       "portfolioImpact": {
-        "SH": {"direction": "up", "estimate": "+25%", "action": "full hedge allocation"},
-        "TLT": {"direction": "up", "estimate": "+15%", "action": "add aggressively"},
-        "GLD": {"direction": "up", "estimate": "+15%", "action": "add GDX, deploy SGOV"},
-        "XLY": {"direction": "down", "estimate": "-18%", "action": "maintain short"},
-        "IWM": {"direction": "down", "estimate": "-12%", "action": "trim"},
-        "F": {"direction": "up", "estimate": "+10%", "action": "hold (tariff wall moat)"},
-        "GM": {"direction": "up", "estimate": "+8%", "action": "hold"}
+        "SH": {
+          "direction": "up",
+          "estimate": "+25%",
+          "action": "full hedge allocation"
+        },
+        "TLT": {
+          "direction": "up",
+          "estimate": "+15%",
+          "action": "add aggressively"
+        },
+        "GLD": {
+          "direction": "up",
+          "estimate": "+15%",
+          "action": "add GDX, deploy SGOV"
+        },
+        "XLY": {
+          "direction": "down",
+          "estimate": "-18%",
+          "action": "maintain short"
+        },
+        "IWM": {
+          "direction": "down",
+          "estimate": "-12%",
+          "action": "trim"
+        },
+        "F": {
+          "direction": "up",
+          "estimate": "+10%",
+          "action": "hold (tariff wall moat)"
+        },
+        "GM": {
+          "direction": "up",
+          "estimate": "+8%",
+          "action": "hold"
+        }
       }
     },
     {
       "id": "stagflation",
       "name": "Stagflation materializes",
       "probability": 0.15,
-      "overrides": {"retail-prices": 3.5, "recession-risk": "fired", "fed-response": "active"},
+      "overrides": {
+        "retail-prices": 3.5,
+        "recession-risk": "fired",
+        "fed-response": "active"
+      },
       "notes": "Worst case: tariff inflation + oil shock + slowing growth = stagflation. Core PCE above 3%, GDP below 1%. Fed trapped — cutting fuels inflation, holding kills growth. 1970s analog.",
       "portfolioImpact": {
-        "GLD": {"direction": "up", "estimate": "+20%", "action": "max allocation, add GDX"},
-        "TLT": {"direction": "up", "estimate": "+12%", "action": "add (rates cut despite inflation)"},
-        "SH": {"direction": "up", "estimate": "+20%", "action": "hold"},
-        "XLY": {"direction": "down", "estimate": "-20%", "action": "hold short"},
-        "XLI": {"direction": "down", "estimate": "-10%", "action": "trim"},
-        "TIPS": {"direction": "up", "estimate": "+8%", "action": "add aggressively"}
+        "GLD": {
+          "direction": "up",
+          "estimate": "+20%",
+          "action": "max allocation, add GDX"
+        },
+        "TLT": {
+          "direction": "up",
+          "estimate": "+12%",
+          "action": "add (rates cut despite inflation)"
+        },
+        "SH": {
+          "direction": "up",
+          "estimate": "+20%",
+          "action": "hold"
+        },
+        "XLY": {
+          "direction": "down",
+          "estimate": "-20%",
+          "action": "hold short"
+        },
+        "XLI": {
+          "direction": "down",
+          "estimate": "-10%",
+          "action": "trim"
+        },
+        "TIPS": {
+          "direction": "up",
+          "estimate": "+8%",
+          "action": "add aggressively"
+        }
       }
     },
     {
       "id": "muddle-through",
       "name": "Muddle through — tariffs fade, economy absorbs",
-      "probability": 0.10,
-      "overrides": {"tariff-shock": "partial", "mfg-pmi": "approaching", "retail-prices": 2.8},
+      "probability": 0.1,
+      "overrides": {
+        "tariff-shock": "partial",
+        "mfg-pmi": "approaching",
+        "retail-prices": 2.8
+      },
       "notes": "Tariffs stay but don't escalate. Economy absorbs the shock. Growth slows to 1.5% but avoids recession. Inflation drifts down as one-time effects pass through. Markets chop sideways.",
       "portfolioImpact": {
-        "SH": {"direction": "down", "estimate": "-8%", "action": "trim 1/2"},
-        "XLI": {"direction": "up", "estimate": "+6%", "action": "hold"},
-        "IWM": {"direction": "up", "estimate": "+8%", "action": "hold"},
-        "TLT": {"direction": "flat", "estimate": "+2%", "action": "hold"},
-        "GLD": {"direction": "flat", "estimate": "+3%", "action": "hold"},
-        "SGOV": {"direction": "flat", "action": "rebuild"}
+        "SH": {
+          "direction": "down",
+          "estimate": "-8%",
+          "action": "trim 1/2"
+        },
+        "XLI": {
+          "direction": "up",
+          "estimate": "+6%",
+          "action": "hold"
+        },
+        "IWM": {
+          "direction": "up",
+          "estimate": "+8%",
+          "action": "hold"
+        },
+        "TLT": {
+          "direction": "flat",
+          "estimate": "+2%",
+          "action": "hold"
+        },
+        "GLD": {
+          "direction": "flat",
+          "estimate": "+3%",
+          "action": "hold"
+        },
+        "SGOV": {
+          "direction": "flat",
+          "action": "rebuild"
+        }
       }
     }
   ],
-
   "analogs": [
     {
       "id": "smoot-hawley",
@@ -630,41 +1321,105 @@
       "notes": "Closest legal analog: Nixon used a 10% import surcharge as leverage, removed it in 4 months via Smithsonian Agreement. Trump's Section 122 has the same 150-day limit and similar leverage logic."
     }
   ],
-
   "cascadePhases": {
     "shock": {
       "label": "Phase 1: Tariff Shock",
       "status": "COMPLETE",
       "signposts": [
-        {"text": "SCOTUS strikes down IEEPA tariffs", "status": "fired", "value": "Feb 20, 2026 (6-3)"},
-        {"text": "Section 122 global tariff imposed", "status": "fired", "value": "10% effective Feb 24"},
-        {"text": "Effective tariff rate above 10%", "status": "fired", "value": "13.7%"},
-        {"text": "Semiconductor tariff announced", "status": "fired", "value": "25% on advanced chips (Jan 2026)"},
-        {"text": "Auto tariff in effect", "status": "fired", "value": "25% (15% Japan/EU)"}
+        {
+          "text": "SCOTUS strikes down IEEPA tariffs",
+          "status": "fired",
+          "value": "Feb 20, 2026 (6-3)"
+        },
+        {
+          "text": "Section 122 global tariff imposed",
+          "status": "fired",
+          "value": "10% effective Feb 24"
+        },
+        {
+          "text": "Effective tariff rate above 10%",
+          "status": "fired",
+          "value": "13.7%"
+        },
+        {
+          "text": "Semiconductor tariff announced",
+          "status": "fired",
+          "value": "25% on advanced chips (Jan 2026)"
+        },
+        {
+          "text": "Auto tariff in effect",
+          "status": "fired",
+          "value": "25% (15% Japan/EU)"
+        }
       ]
     },
     "transmission": {
       "label": "Phase 2: Cost Transmission",
       "status": "ACTIVE",
       "signposts": [
-        {"text": "Core goods inflation attributable to tariffs", "status": "fired", "value": "+1.3pp (Goldman)"},
-        {"text": "Corporate guidance mentioning tariff impact", "status": "fired", "value": "widespread in Q4 2025 earnings"},
-        {"text": "Consumer price pass-through visible", "status": "approaching", "value": "CPI goods stabilizing but services rising"},
-        {"text": "Manufacturing PMI responding", "status": "fired", "value": "52.4 (restocking bounce)"},
-        {"text": "Chinese retaliation reshaping trade flows", "status": "fired", "value": "soybean shift to Brazil 80%"},
-        {"text": "USD/CNY under pressure", "status": "monitoring", "value": "6.916 (stable for now)"}
+        {
+          "text": "Core goods inflation attributable to tariffs",
+          "status": "fired",
+          "value": "+1.3pp (Goldman)"
+        },
+        {
+          "text": "Corporate guidance mentioning tariff impact",
+          "status": "fired",
+          "value": "widespread in Q4 2025 earnings"
+        },
+        {
+          "text": "Consumer price pass-through visible",
+          "status": "approaching",
+          "value": "CPI goods stabilizing but services rising"
+        },
+        {
+          "text": "Manufacturing PMI responding",
+          "status": "fired",
+          "value": "52.4 (restocking bounce)"
+        },
+        {
+          "text": "Chinese retaliation reshaping trade flows",
+          "status": "fired",
+          "value": "soybean shift to Brazil 80%"
+        },
+        {
+          "text": "USD/CNY under pressure",
+          "status": "monitoring",
+          "value": "6.916 (stable for now)"
+        }
       ]
     },
     "amplification": {
       "label": "Phase 3: Demand Destruction",
       "status": "STARTING",
       "signposts": [
-        {"text": "Consumer confidence at multi-year lows", "status": "fired", "value": "UMich 53.3 — 2026 low"},
-        {"text": "Inflation expectations unanchoring", "status": "approaching", "value": "1Y: 3.8% (from 3.4%)"},
-        {"text": "S&P 500 correction from ATH", "status": "fired", "value": "-6.4% from 6,800"},
-        {"text": "Analyst earnings revisions negative", "status": "approaching"},
-        {"text": "Small business optimism declining", "status": "monitoring"},
-        {"text": "Hiring freezes in tariff-exposed sectors", "status": "monitoring"}
+        {
+          "text": "Consumer confidence at multi-year lows",
+          "status": "fired",
+          "value": "UMich 53.3 — 2026 low"
+        },
+        {
+          "text": "Inflation expectations unanchoring",
+          "status": "approaching",
+          "value": "1Y: 3.8% (from 3.4%)"
+        },
+        {
+          "text": "S&P 500 correction from ATH",
+          "status": "fired",
+          "value": "-6.4% from 6,800"
+        },
+        {
+          "text": "Analyst earnings revisions negative",
+          "status": "approaching"
+        },
+        {
+          "text": "Small business optimism declining",
+          "status": "monitoring"
+        },
+        {
+          "text": "Hiring freezes in tariff-exposed sectors",
+          "status": "monitoring"
+        }
       ],
       "estimatedTiming": "Q2-Q3 2026 — Q1 earnings season (April) is the key reveal"
     },
@@ -672,39 +1427,130 @@
       "label": "Phase 4: Policy Response",
       "status": "WATCHING",
       "signposts": [
-        {"text": "Fed cuts rates despite elevated inflation", "status": "not yet"},
-        {"text": "Farm bailout or subsidy program announced", "status": "not yet"},
-        {"text": "Section 122 expiration triggers policy pivot", "status": "monitoring", "value": "July 24 deadline"},
-        {"text": "Bilateral trade deals accelerate", "status": "approaching", "value": "~20 deals negotiated"},
-        {"text": "Trump-Xi summit / state visit", "status": "approaching", "value": "71% by June 30 (Polymarket)"}
+        {
+          "text": "Fed cuts rates despite elevated inflation",
+          "status": "not yet"
+        },
+        {
+          "text": "Farm bailout or subsidy program announced",
+          "status": "not yet"
+        },
+        {
+          "text": "Section 122 expiration triggers policy pivot",
+          "status": "monitoring",
+          "value": "July 24 deadline"
+        },
+        {
+          "text": "Bilateral trade deals accelerate",
+          "status": "approaching",
+          "value": "~20 deals negotiated"
+        },
+        {
+          "text": "Trump-Xi summit / state visit",
+          "status": "approaching",
+          "value": "71% by June 30 (Polymarket)"
+        }
       ]
     },
     "resolution": {
       "label": "Phase 5: New Equilibrium",
       "status": "NOT YET",
       "signposts": [
-        {"text": "Tariff rate settles at sustainable level", "status": "not yet"},
-        {"text": "Supply chains stabilize in new configuration", "status": "not yet"},
-        {"text": "Consumer confidence recovers", "status": "not yet"},
-        {"text": "Manufacturing PMI sustained above 52", "status": "monitoring"},
-        {"text": "Trade deficit narrows (stated policy goal)", "status": "not yet"}
+        {
+          "text": "Tariff rate settles at sustainable level",
+          "status": "not yet"
+        },
+        {
+          "text": "Supply chains stabilize in new configuration",
+          "status": "not yet"
+        },
+        {
+          "text": "Consumer confidence recovers",
+          "status": "not yet"
+        },
+        {
+          "text": "Manufacturing PMI sustained above 52",
+          "status": "monitoring"
+        },
+        {
+          "text": "Trade deficit narrows (stated policy goal)",
+          "status": "not yet"
+        }
       ]
     }
   },
-
   "marketFields": [
-    {"key": "spx", "label": "S&P 500", "value": 6370, "step": 1, "nodeId": "earnings-compression"},
-    {"key": "corePce", "label": "CORE PCE %", "value": 2.7, "step": 0.1, "nodeId": "retail-prices"},
-    {"key": "umichSent", "label": "UMICH SENT", "value": 53.3, "step": 0.1, "nodeId": "consumer-confidence"},
-    {"key": "ismPmi", "label": "ISM MFG PMI", "value": 52.4, "step": 0.1, "nodeId": "mfg-pmi"},
-    {"key": "usdCny", "label": "USD/CNY", "value": 6.916, "step": 0.001, "nodeId": "usd-cny"},
-    {"key": "fedRate", "label": "FED RATE %", "value": 3.625, "step": 0.25, "nodeId": "fed-response"},
-    {"key": "tenYr", "label": "10Y YIELD %", "value": 4.35, "step": 0.01, "nodeId": "recession-risk"},
-    {"key": "effectiveTariff", "label": "EFF TARIFF %", "value": 13.7, "step": 0.1, "nodeId": "tariff-shock"},
-    {"key": "goldSpot", "label": "GOLD $/oz", "value": 4492, "step": 1, "nodeId": "recession-risk"},
-    {"key": "vix", "label": "VIX", "value": 30.97, "step": 0.01, "nodeId": "earnings-compression"}
+    {
+      "key": "spx",
+      "label": "S&P 500",
+      "value": 6370,
+      "step": 1,
+      "nodeId": "earnings-compression"
+    },
+    {
+      "key": "corePce",
+      "label": "CORE PCE %",
+      "value": 2.7,
+      "step": 0.1,
+      "nodeId": "retail-prices"
+    },
+    {
+      "key": "umichSent",
+      "label": "UMICH SENT",
+      "value": 53.3,
+      "step": 0.1,
+      "nodeId": "consumer-confidence"
+    },
+    {
+      "key": "ismPmi",
+      "label": "ISM MFG PMI",
+      "value": 52.4,
+      "step": 0.1,
+      "nodeId": "mfg-pmi"
+    },
+    {
+      "key": "usdCny",
+      "label": "USD/CNY",
+      "value": 6.83,
+      "step": 0.001,
+      "nodeId": "usd-cny"
+    },
+    {
+      "key": "fedRate",
+      "label": "FED RATE %",
+      "value": 3.625,
+      "step": 0.25,
+      "nodeId": "fed-response"
+    },
+    {
+      "key": "tenYr",
+      "label": "10Y YIELD %",
+      "value": 4.35,
+      "step": 0.01,
+      "nodeId": "recession-risk"
+    },
+    {
+      "key": "effectiveTariff",
+      "label": "EFF TARIFF %",
+      "value": 13.7,
+      "step": 0.1,
+      "nodeId": "tariff-shock"
+    },
+    {
+      "key": "goldSpot",
+      "label": "GOLD $/oz",
+      "value": 4492,
+      "step": 1,
+      "nodeId": "recession-risk"
+    },
+    {
+      "key": "vix",
+      "label": "VIX",
+      "value": 30.97,
+      "step": 0.01,
+      "nodeId": "earnings-compression"
+    }
   ],
-
   "fetchSymbols": {
     "commodities": {
       "GC=F": "goldSpot",
@@ -716,20 +1562,40 @@
       "DX-Y.NYB": "dxy"
     },
     "instruments": [
-      "SPY", "SH", "XLI", "XLY", "IWM", "TLT", "GLD", "SGOV", "TIPS",
-      "F", "GM", "DBA", "SMH", "SOXX",
-      "KWEB", "FXI", "UUP", "MOO", "GDX"
+      "SPY",
+      "SH",
+      "XLI",
+      "XLY",
+      "IWM",
+      "TLT",
+      "GLD",
+      "SGOV",
+      "TIPS",
+      "F",
+      "GM",
+      "DBA",
+      "SMH",
+      "SOXX",
+      "KWEB",
+      "FXI",
+      "UUP",
+      "MOO",
+      "GDX"
     ],
     "indices": {
       "^VIX": "vix",
       "^GSPC": "spx"
     },
     "fedFunds": {
-      "symbols": ["ZQ=F", "ZQM26.CBT", "ZQU26.CBT", "ZQZ26.CBT"],
+      "symbols": [
+        "ZQ=F",
+        "ZQM26.CBT",
+        "ZQU26.CBT",
+        "ZQZ26.CBT"
+      ],
       "_note": "Fed funds futures. Price = 100 - implied rate."
     }
   },
-
   "rules": [
     "<strong>Review 2x/week:</strong> Tuesday close, Friday close. Friday = end-of-week macro data.",
     "<strong>Never deploy > 1/3 SGOV</strong> on one signal. Budget: $800/month reserve.",
@@ -743,7 +1609,6 @@
     "<strong>Analog calibration:</strong> Use 2018 trade war lags as planning baseline. PMI contraction within 6 months, market bottom at 9 months, deal at 21 months.",
     "<strong>Stagflation hedge:</strong> If core PCE > 3.0% AND GDP < 1.0%, activate stagflation overlay immediately. GLD + GDX + TIPS."
   ],
-
   "provenance": {
     "sources": [
       "Tax Foundation (tariff tracker: effective rates, product-specific rates)",

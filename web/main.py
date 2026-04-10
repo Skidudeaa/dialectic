@@ -14,6 +14,8 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 # WHY: tools/ modules use relative imports and expect their parent on sys.path.
 # This is the sanctioned approach per project conventions — no restructuring.
@@ -75,3 +77,18 @@ app.include_router(messages.router)
 app.include_router(llm.router)
 app.include_router(journal.router)
 app.include_router(predictions.router)
+
+# ── Static frontend serving ─────────────────────────────────────────────
+# WHY: Serve the production build directly from FastAPI so there's no need
+# for a separate Vite dev server or nginx in front. Single process = simple.
+_DIST = _ROOT / "frontend" / "dist"
+if _DIST.exists():
+    app.mount("/assets", StaticFiles(directory=str(_DIST / "assets")), name="static")
+
+    @app.get("/{path:path}")
+    async def serve_spa(path: str):
+        """Serve the SPA — try the exact file, fall back to index.html for client routing."""
+        file = _DIST / path
+        if file.exists() and file.is_file():
+            return FileResponse(str(file))
+        return FileResponse(str(_DIST / "index.html"))

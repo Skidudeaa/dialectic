@@ -29,10 +29,10 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # WHY: Model aliases for @mention routing in chat.
 MODEL_ALIASES = {
-    "claude": "anthropic/claude-sonnet-4-20250514",
-    "gpt": "openai/gpt-4o",
-    "llama": "meta-llama/llama-3.1-405b-instruct",
-    "gemini": "google/gemini-2.0-flash-001",
+    "claude": "anthropic/claude-sonnet-4.6",
+    "gpt": "openai/gpt-5.3-chat",
+    "deepseek": "deepseek/deepseek-r1",
+    "gemini": "google/gemini-3.1-pro-preview",
 }
 
 
@@ -202,15 +202,19 @@ async def chat(req: LLMChatRequest, user: User = Depends(get_current_user)) -> d
             await manager.broadcast(req.room_id, "llm_done", {"model": model_label, "full_response": ""}, user="assistant")
         return {"model": model_label, "response": "", "error": error_msg}
 
-    # Persist LLM response as a message in the room
+    # Persist LLM response as a message in the room and broadcast it
+    # WHY: llm_done clears the streaming bubble on the frontend. The persisted
+    # message must arrive via WS so it appears in the chat history immediately.
+    # Without this broadcast the response vanishes after streaming completes.
     if req.room_id:
-        state.save_message(
+        msg = state.save_message(
             room_id=req.room_id,
             user="assistant",
             content=full_response,
             msg_type="llm",
             model=model_label,
         )
+        await manager.broadcast(req.room_id, "message", msg, user="assistant")
 
     return {"model": model_label, "response": full_response}
 
@@ -223,18 +227,20 @@ async def compare(req: LLMCompareRequest, user: User = Depends(get_current_user)
         try:
             full_response = await _stream_llm(model, req.prompt, req.room_id, user.username, model_label)
             if req.room_id:
-                state.save_message(
+                msg = state.save_message(
                     room_id=req.room_id, user="assistant",
                     content=full_response, msg_type="llm", model=model_label,
                 )
+                await manager.broadcast(req.room_id, "message", msg, user="assistant")
             return model_label, full_response
         except Exception as e:
             error_msg = e.detail if hasattr(e, "detail") else str(e)
             if req.room_id:
-                state.save_message(
+                msg = state.save_message(
                     room_id=req.room_id, user="system",
                     content=f"LLM error ({model_label}): {error_msg}", msg_type="system",
                 )
+                await manager.broadcast(req.room_id, "message", msg, user="system")
             return model_label, f"Error: {error_msg}"
 
     # WHY: Run all model streams concurrently so users see interleaved tokens

@@ -129,12 +129,48 @@ def run_horizon(book_id: str, horizon_days: int) -> Dict[str, Any]:
 
 
 def fetch_prices_for_book(book_id: str) -> Dict[str, Any]:
-    """Trigger live price fetch for a book. Returns price data."""
-    cfg = _load_cfg(book_id)
-    prices = thesisgraph.fetch_prices(cfg)
-    poly_prices = thesisgraph.fetch_polymarket(cfg)
+    """Trigger live price fetch, persist to config, return price data.
+
+    WHY: fetch_prices() and fetch_polymarket() mutate cfg in memory —
+    updating node.current and node.probability with live values. We must
+    also sync marketFields[].value (which export_state reads for the
+    snapshot's marketSnapshot) and save the config back to disk so that
+    the next get_state() / propagate() call uses live data, not stale
+    hand-entered values. This is the ROOT CAUSE fix for stale snapshots.
+    """
+    _validate_book_id(book_id)
+    config_path = BOOKS_DIR / f"{book_id}.json"
+    cfg = thesisgraph.load_config(str(config_path))
+
+    # Fetch live prices — mutates cfg.nodes[].current and cfg.instruments[].ref
+    thesisgraph.fetch_prices(cfg)
+    # Fetch live probabilities — mutates cfg.nodes[].probability
+    thesisgraph.fetch_polymarket(cfg)
+
+    # WHY: Sync marketFields[].value from node current prices so export_state
+    # builds marketSnapshot from live data, not the stale config values.
+    node_map = {n["id"]: n for n in cfg.get("nodes", [])}
+    for mf in cfg.get("marketFields", []):
+        node_id = mf.get("nodeId")
+        if node_id and node_id in node_map:
+            node = node_map[node_id]
+            if "current" in node:
+                mf["value"] = node["current"]
+
+    # Save the updated config back to disk so propagation uses live data
+    thesisgraph.update_config_file(str(config_path), cfg)
+
     invalidate_cache(book_id)
-    return {"yahoo": prices, "polymarket": poly_prices}
+
+    # Build a clean summary of what was fetched
+    prices_summary: Dict[str, Any] = {}
+    for node in cfg.get("nodes", []):
+        if "current" in node:
+            prices_summary[node["id"]] = node["current"]
+        if "probability" in node:
+            prices_summary[node["id"] + "_prob"] = node["probability"]
+
+    return prices_summary
 
 
 def export_snapshot(book_id: str) -> Dict[str, Any]:
