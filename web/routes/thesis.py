@@ -1,5 +1,6 @@
 """Thesis graph routes — state, scenarios, horizon, price fetch + snapshot diff."""
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -27,24 +28,24 @@ async def list_books() -> list:
 @router.get("/{book_id}/state")
 async def get_state(book_id: str) -> dict:
     try:
-        return thesis_adapter.get_state(book_id)
-    except FileNotFoundError as e:
+        return await asyncio.to_thread(thesis_adapter.get_state, book_id)
+    except (FileNotFoundError, ValueError) as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/{book_id}/scenarios")
 async def get_scenarios(book_id: str) -> list:
     try:
-        return thesis_adapter.get_scenarios(book_id)
-    except FileNotFoundError as e:
+        return await asyncio.to_thread(thesis_adapter.get_scenarios, book_id)
+    except (FileNotFoundError, ValueError) as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post("/{book_id}/horizon")
 async def run_horizon(book_id: str, req: HorizonRequest) -> dict:
     try:
-        return thesis_adapter.run_horizon(book_id, req.horizon_days)
-    except FileNotFoundError as e:
+        return await asyncio.to_thread(thesis_adapter.run_horizon, book_id, req.horizon_days)
+    except (FileNotFoundError, ValueError) as e:
         raise HTTPException(status_code=404, detail=str(e))
 
 
@@ -52,7 +53,7 @@ async def run_horizon(book_id: str, req: HorizonRequest) -> dict:
 async def fetch_prices(book_id: str, user: User = Depends(get_current_user)) -> dict:
     """Fetch live prices, re-export snapshot, compute diff, broadcast changes."""
     try:
-        prices = thesis_adapter.fetch_prices_for_book(book_id)
+        prices = await asyncio.to_thread(thesis_adapter.fetch_prices_for_book, book_id)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -67,11 +68,13 @@ async def fetch_prices(book_id: str, user: User = Depends(get_current_user)) -> 
         # Rotate: current latest → prev
         old_snapshot = None
         if latest_path.exists():
-            old_snapshot = json.loads(latest_path.read_text())
-            prev_path.write_text(latest_path.read_text())
+            # WHY: Read file once to avoid TOCTOU between the two read_text() calls.
+            raw = latest_path.read_text()
+            old_snapshot = json.loads(raw)
+            prev_path.write_text(raw)
 
         # Export fresh snapshot
-        new_state = thesis_adapter.export_snapshot(book_id)
+        new_state = await asyncio.to_thread(thesis_adapter.export_snapshot, book_id)
 
         # Compute diff if we have a previous
         diff_summary = None

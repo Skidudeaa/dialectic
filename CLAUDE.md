@@ -87,6 +87,31 @@ python3 -m pytest tools/bridge/test_push.py -q               # 26 — bridge scr
 python3 -m pytest tools/bridge/test_run_all.py -q            # 20 — multi-book runner
 python3 -m pytest tools/data-fetch/test_polymarket.py -q     # 41 — Polymarket fetcher
 python3 -m pytest tools/validation/e2e_test.py -q            # 39 — E2E pipeline
+
+# === Web UI ===
+
+# Install web layer dependencies (Python + Node.js)
+pip install -r requirements.txt
+cd frontend && npm install && cd ..
+
+# Start backend (FastAPI + uvicorn)
+uvicorn web.main:app --reload --port 8000
+
+# Start frontend dev server (Vite)
+cd frontend && npm run dev
+
+# Or use Makefile shortcuts
+make install    # install all deps
+make dev        # start backend
+make frontend   # start frontend
+
+# Docker (production)
+docker compose up --build
+
+# Required env vars (see .env.example):
+#   JWT_SECRET         — MUST override for production
+#   DEV_USER_PASSWORD  — password for amo/dan accounts
+#   OPENROUTER_API_KEY — enables @claude/@gpt/@compare in chat
 ```
 
 ## Architecture
@@ -180,6 +205,41 @@ Dialectic server: `/root/DwoodAmo/dialectic` — run with `PORT=8002 python dial
 
 Legacy flat trigger model — 9 instruments, 9 triggers, 4 overlays. Superseded by the thesis graph engine for new work.
 
+### Web UI Backend (`web/`)
+
+FastAPI application wrapping the CLI tools as REST endpoints + WebSocket for real-time chat. Two-analyst workspace with JWT auth (hardcoded dev users: amo, dan).
+
+Key modules:
+- `web/main.py` — App entry, CORS, route registration
+- `web/auth.py` — JWT auth with scrypt password hashing, startup warning on default secret
+- `web/state.py` — File-based persistence (JSON/JSONL with fcntl locks, atomic writes via temp+rename)
+- `web/ws.py` — WebSocket connection manager with concurrent broadcast, 5-second send timeout
+- `web/adapters/` — Thin wrappers around CLI tools (thesis, market, outcomes) with path validation
+- `web/routes/` — REST + WebSocket endpoints for rooms, messages, thesis, market, predictions, journal, LLM, outcomes, health
+
+Security features:
+- Path traversal prevention on book_id and room_id (regex validation)
+- Typed Pydantic models for all inputs (no raw dict endpoints)
+- MessageCreate.msg_type restricted to Literal["user"] — server-only for "system"/"llm"
+- LLM compare model list capped at 4
+
+Performance:
+- All blocking I/O wrapped in asyncio.to_thread()
+- Thesis state cached with 60-second TTL (invalidated on price fetch)
+- LLM compare runs models concurrently via asyncio.gather()
+- WebSocket broadcasts fan out concurrently with per-send timeout
+
+### Web UI Frontend (`frontend/`)
+
+React + Vite + Tailwind SPA. Dense terminal aesthetic with 5 panels:
+1. **Chat** — real-time messaging with @claude/@gpt/@compare LLM mentions, slash commands (/brief, /thesis, /diff, /predict, /watchlist), message pinning, chat export
+2. **Thesis Viewer** — cascade phase tracker, node states, confluence scores, countdowns, scenarios
+3. **Prediction Tracker** — create/resolve predictions with accuracy tracking
+4. **Trade Journal** — log entries with direction, entry/exit prices, P&L
+5. **Market Ticker** — live watchlist from book instruments
+
+Features: Command palette (Ctrl+K), keyboard shortcuts, auto-reconnecting WebSocket with exponential backoff, auth persistence in localStorage, toast notifications for errors, XSS-safe markdown rendering.
+
 ## File Structure
 
 ```
@@ -214,6 +274,33 @@ tradingDesk/
 │   │   └── mock_dialectic.py      # mock Dialectic server
 │   └── commodity-book/
 │       └── bookgen.py             # legacy commodity book generator
+├── web/                             # FastAPI backend
+│   ├── main.py                      # app entry + route registration
+│   ├── auth.py                      # JWT auth (scrypt, dev users)
+│   ├── state.py                     # file-based persistence (atomic writes)
+│   ├── ws.py                        # WebSocket connection manager
+│   ├── models.py                    # Pydantic request/response models
+│   ├── test_web.py                  # web layer tests
+│   ├── adapters/                    # CLI tool wrappers
+│   │   ├── thesis.py               # thesisgraph adapter (cached)
+│   │   ├── market.py               # Yahoo Finance + Polymarket
+│   │   └── outcomes.py             # lifecycle, brief, cross-book
+│   ├── routes/                      # REST + WebSocket endpoints
+│   │   ├── auth.py, health.py      # auth + health check
+│   │   ├── thesis.py, market.py    # data endpoints
+│   │   ├── messages.py             # chat + WebSocket
+│   │   ├── llm.py                  # OpenRouter LLM proxy
+│   │   ├── predictions.py          # prediction tracker
+│   │   ├── journal.py              # trade journal
+│   │   ├── rooms.py, outcomes.py   # rooms + outcomes
+│   │   └── ...
+│   └── data/                        # runtime state (gitignored)
+├── frontend/                        # React + Vite + Tailwind SPA
+│   ├── src/
+│   │   ├── pages/                   # Dashboard, Login
+│   │   ├── components/              # Chat, ThesisViewer, PredictionTracker, etc.
+│   │   └── lib/                     # api.ts (auth, WebSocket), types.ts
+│   └── ...
 ├── research/                        # distilled research findings
 ├── docs/plans/                      # implementation plans
 └── docs/solutions/                  # documented solutions to past problems (bugs, security, patterns), organized by category with YAML frontmatter (module, tags, problem_type)
@@ -228,9 +315,11 @@ tradingDesk/
 
 ## Project Conventions
 
-- Zero external Python dependencies (stdlib only)
+- CLI tools (`tools/`): zero external Python dependencies (stdlib only)
+- Web layer (`web/`): minimal external deps listed in requirements.txt (FastAPI, uvicorn, python-jose, httpx)
 - One JSON config per thesis
 - HTML dashboards are generated, not hand-built
 - All outputs are self-contained single-file HTML
 - Tests use pytest, run with `python3 -m pytest`
-- 223 tests across 6 test files
+- CLI tools: 223 tests across 6 test files
+- Web layer: web/test_web.py (auth, state, routes, validation, concurrency)

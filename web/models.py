@@ -7,7 +7,7 @@ hand-waving.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -51,8 +51,19 @@ class Room(BaseModel):
 
 class MessageCreate(BaseModel):
     content: str
-    msg_type: str = "user"  # "user" | "llm" | "system"
+    msg_type: Literal["user"] = "user"
     model: Optional[str] = None
+
+
+class PinRequest(BaseModel):
+    """Typed pin request — prevents arbitrary dict injection."""
+    id: str
+    room_id: str
+    user: str
+    content: str
+    msg_type: str
+    model: Optional[str] = None
+    ts: str
 
 
 class Message(BaseModel):
@@ -99,7 +110,7 @@ class Prediction(BaseModel):
 
 
 class PredictionResolve(BaseModel):
-    resolution: str  # "correct" | "incorrect"
+    resolution: Literal["correct", "incorrect"]
 
 
 # ── Trade Journal ─────────────────────────────────────────────────────────
@@ -158,7 +169,7 @@ class ScenarioResult(BaseModel):
 
 
 class HorizonRequest(BaseModel):
-    horizon_days: int
+    horizon_days: int = Field(ge=1, le=730)
 
 
 # ── Market ────────────────────────────────────────────────────────────────
@@ -212,10 +223,13 @@ class LLMChatRequest(BaseModel):
 
 class LLMCompareRequest(BaseModel):
     prompt: str
-    models: List[str] = Field(default_factory=lambda: [
-        "anthropic/claude-sonnet-4-20250514",
-        "openai/gpt-4o",
-    ])
+    models: List[str] = Field(
+        default_factory=lambda: [
+            "anthropic/claude-sonnet-4-20250514",
+            "openai/gpt-4o",
+        ],
+        max_length=4,
+    )
     room_id: Optional[str] = None
 
 
@@ -227,3 +241,4 @@ class HealthResponse(BaseModel):
     ws_connections: int
     books_loaded: List[str]
     last_snapshots: Dict[str, str]
+    llm_available: bool = False

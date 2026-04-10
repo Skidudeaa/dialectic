@@ -2,11 +2,10 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import { Send, Bot, Loader, Pin, Download, ChevronDown } from "lucide-react";
 import { apiFetch, getUsername, RoomSocket } from "../lib/api";
-import type { Room, Message, ThesisBook, WSMessage } from "../lib/types";
+import type { Room, Message, WSMessage } from "../lib/types";
 
 interface Props {
   room: Room;
-  books: ThesisBook[];
 }
 
 const MODEL_COLORS: Record<string, string> = {
@@ -27,6 +26,14 @@ function modelBadgeClass(model: string | null): string {
   if (model.toLowerCase().includes("gemini")) return "bg-blue/20 text-blue border-blue/30";
   return "bg-teal/20 text-teal border-teal/30";
 }
+
+// WHY: Prevent javascript: URL XSS in LLM-generated markdown links.
+const safeLink = ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { children?: React.ReactNode }) => {
+  if (href && (href.startsWith("http://") || href.startsWith("https://"))) {
+    return <a {...props} href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
+  }
+  return <span>{children}</span>;
+};
 
 export default function Chat({ room }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -75,7 +82,12 @@ export default function Chat({ room }: Props) {
         setOnlineUsers(users);
       }
     });
-    return () => { unsub(); sock.close(); socketRef.current = null; };
+    return () => {
+      unsub();
+      sock.close();
+      socketRef.current = null;
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    };
   }, [room.id]);
 
   useEffect(() => {
@@ -193,7 +205,9 @@ export default function Chat({ room }: Props) {
         if (cmd === "compare") {
           apiFetch("/api/llm/compare", {
             method: "POST", body: JSON.stringify({ prompt, room_id: room.id }),
-          }).catch(() => {});
+          }).catch((err) => {
+            console.error("LLM compare failed:", err);
+          });
         } else {
           const modelMap: Record<string, string> = {
             claude: "anthropic/claude-sonnet-4-20250514",
@@ -203,7 +217,9 @@ export default function Chat({ room }: Props) {
           };
           apiFetch("/api/llm/chat", {
             method: "POST", body: JSON.stringify({ prompt, model: modelMap[cmd], room_id: room.id }),
-          }).catch(() => {});
+          }).catch((err) => {
+            console.error("LLM chat failed:", err);
+          });
         }
       } else {
         // Normal message
@@ -295,7 +311,7 @@ export default function Chat({ room }: Props) {
             <div className="min-w-0">
               <span className={`inline-block text-[10px] font-mono px-1 py-0.5 rounded border mb-0.5 ${modelBadgeClass(model)}`}>{model}</span>
               <div className="text-xs prose prose-invert prose-xs max-w-none [&_p]:my-0.5">
-                <ReactMarkdown>{text}</ReactMarkdown>
+                <ReactMarkdown components={{ a: safeLink }}>{text}</ReactMarkdown>
                 <span className="inline-block w-1.5 h-3 bg-amber animate-pulse ml-0.5" />
               </div>
             </div>
@@ -367,7 +383,7 @@ function MessageBubble({ msg, isMe, onPin }: { msg: Message; isMe: boolean; onPi
             )}
           </div>
           <div className="text-xs prose prose-invert prose-xs max-w-none [&_p]:my-0.5 [&_pre]:bg-elevated [&_pre]:rounded [&_pre]:p-1.5 [&_pre]:text-[11px] [&_code]:text-teal [&_code]:text-[11px]">
-            <ReactMarkdown>{msg.content}</ReactMarkdown>
+            <ReactMarkdown components={{ a: safeLink }}>{msg.content}</ReactMarkdown>
           </div>
         </div>
       </div>

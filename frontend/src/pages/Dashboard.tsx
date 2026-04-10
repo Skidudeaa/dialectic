@@ -17,6 +17,7 @@ import MorningBrief from "../components/MorningBrief";
 import PredictionTracker from "../components/PredictionTracker";
 import TradeJournal from "../components/TradeJournal";
 import CrossBookPanel from "../components/CrossBookPanel";
+import { useToast } from "../components/Toast";
 
 interface Props {
   onLogout: () => void;
@@ -37,6 +38,7 @@ function useMediaQuery(query: string): boolean {
 
 export default function Dashboard({ onLogout }: Props) {
   const isNarrow = useMediaQuery("(max-width: 1024px)");
+  const { toast } = useToast();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [books, setBooks] = useState<ThesisBook[]>([]);
   const [activeRoom, setActiveRoom] = useState<Room | null>(null);
@@ -50,14 +52,18 @@ export default function Dashboard({ onLogout }: Props) {
     try {
       const data = await apiFetch<Room[]>("/api/rooms");
       setRooms(data);
-    } catch { /* ignore */ }
+    } catch {
+      toast("Failed to load rooms", "error");
+    }
   }, []);
 
   const loadBooks = useCallback(async () => {
     try {
       const data = await apiFetch<ThesisBook[]>("/api/thesis/books");
       setBooks(data);
-    } catch { /* ignore */ }
+    } catch {
+      toast("Failed to load books", "error");
+    }
   }, []);
 
   useEffect(() => {
@@ -80,7 +86,9 @@ export default function Dashboard({ onLogout }: Props) {
       setShowNewRoom(false);
       setNewRoomName("");
       setNewRoomBook("");
-    } catch { /* ignore */ }
+    } catch {
+      toast("Failed to create room", "error");
+    }
   }
 
   function handleLogout() {
@@ -226,7 +234,7 @@ export default function Dashboard({ onLogout }: Props) {
         {/* CENTER — chat */}
         <main className="flex-1 flex flex-col min-w-0">
           {activeRoom ? (
-            <Chat room={activeRoom} books={books} />
+            <Chat room={activeRoom} />
           ) : (
             <div className="flex-1 flex items-center justify-center text-text-dim">
               <div className="text-center">

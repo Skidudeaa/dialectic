@@ -30,9 +30,13 @@ async def health() -> HealthResponse:
             from datetime import datetime, timezone
             last_snapshots[bid] = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
 
+    import os
+    llm_available = bool(os.environ.get("OPENROUTER_API_KEY", ""))
+
     return HealthResponse(
         uptime_seconds=round(get_uptime(), 1),
         ws_connections=manager.total_connections,
         books_loaded=books,
         last_snapshots=last_snapshots,
+        llm_available=llm_available,
     )

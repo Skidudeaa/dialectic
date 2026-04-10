@@ -16,11 +16,11 @@ async def list_rooms() -> list:
 
 @router.post("")
 async def create_room(req: RoomCreate, user: User = Depends(get_current_user)) -> dict:
-    room = state.create_room(name=req.name, topic=req.topic, linked_book_id=req.linked_book_id)
-    # Auto-add creator as participant
-    state.update_room(room["id"], {"participants": [user.username]})
-    room["participants"] = [user.username]
-    return room
+    return state.create_room(
+        name=req.name, topic=req.topic,
+        linked_book_id=req.linked_book_id,
+        participants=[user.username],
+    )
 
 
 @router.get("/{room_id}")

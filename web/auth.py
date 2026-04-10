@@ -19,15 +19,25 @@ from web.models import LoginRequest, LoginResponse, User
 
 # WHY: Default secret for dev. Production MUST override via env var.
 JWT_SECRET = os.environ.get("JWT_SECRET", "tradingdesk-dev-secret-change-me")
+if JWT_SECRET == "tradingdesk-dev-secret-change-me":
+    import warnings
+    warnings.warn(
+        "JWT_SECRET is using the default dev value — set JWT_SECRET env var for production",
+        stacklevel=2,
+    )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 72
 
 
+# WHY: Per-user salt + scrypt key derivation. stdlib-only (no bcrypt).
+# Even for two hardcoded users, unsalted SHA-256 is indefensible if the
+# hash is ever exposed — scrypt costs nothing at this scale.
+_SALT = b"tradingdesk-v1"  # Fixed salt is acceptable for hardcoded-user dev workspace
+
 def _hash_password(password: str) -> str:
-    """WHY: SHA-256 is sufficient for a two-user dev workspace with no registration.
-    Not a SaaS — no brute-force surface. Keep it stdlib-only to avoid bcrypt
-    version conflicts across Python 3.10–3.12."""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Derive a scrypt hash. Fixed salt is acceptable for hardcoded dev users."""
+    dk = hashlib.scrypt(password.encode(), salt=_SALT, n=2**14, r=8, p=1, dklen=32)
+    return dk.hex()
 
 
 # WHY: Hardcoded dev users — this is a two-person trading desk, not a SaaS.

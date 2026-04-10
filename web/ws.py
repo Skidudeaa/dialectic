@@ -34,16 +34,14 @@ class ConnectionManager:
         self._lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket, room_id: str, username: str) -> None:
-        """Accept connection and register in room."""
-        await websocket.accept()
+        """Register connection in room. Caller must have already accepted the WebSocket."""
         async with self._lock:
             if room_id not in self._rooms:
                 self._rooms[room_id] = set()
             self._rooms[room_id].add((websocket, username))
             self._user_activity[username] = {"room": room_id, "viewing": ""}
         log.info("WS connected: %s in room %s", username, room_id)
-        # Broadcast presence update
-        await self.broadcast(room_id, "presence", self._build_presence(room_id), user="system")
+        await self.broadcast(room_id, "presence", await self.get_presence(room_id), user="system")
 
     async def disconnect(self, websocket: WebSocket, room_id: str, username: str) -> None:
         """Remove connection from room registry."""
@@ -56,7 +54,10 @@ class ConnectionManager:
             if username in self._user_activity:
                 del self._user_activity[username]
         log.info("WS disconnected: %s from room %s", username, room_id)
-        await self.broadcast(room_id, "presence", self._build_presence(room_id), user="system")
+        try:
+            await self.broadcast(room_id, "presence", await self.get_presence(room_id), user="system")
+        except Exception as e:
+            log.warning("Post-disconnect presence broadcast failed: %s", e)
 
     async def broadcast(self, room_id: str, msg_type: str, payload: dict,
                         user: str = "system", exclude: Optional[WebSocket] = None) -> None:
@@ -70,14 +71,21 @@ class ConnectionManager:
         text = json.dumps(message)
         async with self._lock:
             connections = list(self._rooms.get(room_id, set()))
-        dead: List[tuple] = []
-        for ws, uname in connections:
-            if ws is exclude:
-                continue
+        targets = [(ws, uname) for ws, uname in connections if ws is not exclude]
+        if not targets:
+            return
+
+        # WHY: Fan out sends concurrently so a slow client doesn't block delivery
+        # to others. 5-second timeout per send prevents indefinite stalls.
+        async def _send(ws: WebSocket, uname: str) -> Optional[tuple]:
             try:
-                await ws.send_text(text)
+                await asyncio.wait_for(ws.send_text(text), timeout=5.0)
+                return None
             except Exception:
-                dead.append((ws, uname))
+                return (ws, uname)
+
+        results = await asyncio.gather(*[_send(ws, u) for ws, u in targets])
+        dead = [r for r in results if r is not None]
         if dead:
             async with self._lock:
                 room = self._rooms.get(room_id)
@@ -119,6 +127,11 @@ class ConnectionManager:
                 "viewing": activity.get("viewing", ""),
             })
         return {"room_id": room_id, "users": users}
+
+    async def get_presence(self, room_id: str) -> dict:
+        """Build and return presence payload under lock — safe for external callers."""
+        async with self._lock:
+            return self._build_presence(room_id)
 
     def get_room_users(self, room_id: str) -> List[str]:
         """List usernames connected to a room."""

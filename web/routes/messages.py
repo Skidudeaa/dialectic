@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 
 from web.auth import get_current_user, decode_token
-from web.models import User, MessageCreate
+from web.models import User, MessageCreate, PinRequest
 from web import state
 from web.ws import manager
 
@@ -53,9 +53,9 @@ async def list_pins(room_id: str, _user: User = Depends(get_current_user)) -> li
 
 
 @router.post("/api/rooms/{room_id}/pins")
-async def add_pin(room_id: str, req: dict, _user: User = Depends(get_current_user)) -> list:
-    """Pin a message by passing its full message object."""
-    return state.add_pin(room_id, req)
+async def add_pin(room_id: str, req: PinRequest, _user: User = Depends(get_current_user)) -> list:
+    """Pin a message by passing its typed message object."""
+    return state.add_pin(room_id, req.model_dump())
 
 
 @router.delete("/api/rooms/{room_id}/pins/{message_id}")
@@ -90,17 +90,19 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str) -> None:
             await websocket.close(code=4001)
             return
 
-        # Register in manager with presence tracking
-        async with manager._lock:
-            if room_id not in manager._rooms:
-                manager._rooms[room_id] = set()
-            manager._rooms[room_id].add((websocket, username))
-            manager._user_activity[username] = {"room": room_id, "viewing": ""}
+        # WHY: Validate room exists before registering — prevents path traversal
+        # and phantom room creation via WebSocket.
+        if state.get_room(room_id) is None:
+            await websocket.send_text('{"type":"error","payload":{"detail":"Room not found"}}')
+            await websocket.close(code=4004)
+            return
+
+        # Register via ConnectionManager public API
+        await manager.connect(websocket, room_id, username)
         log.info("WS authenticated: %s in room %s", username, room_id)
 
-        # Send welcome + initial presence
+        # Send welcome
         await manager.send_to(websocket, "system", {"detail": f"Connected as {username}"}, user="system")
-        await manager.broadcast(room_id, "presence", manager._build_presence(room_id), user="system")
 
         # Message loop
         while True:
@@ -113,18 +115,16 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str) -> None:
             msg_type = parsed.get("type", "message")
 
             if msg_type == "typing":
-                # WHY: Broadcast typing indicator to other users in the room.
                 await manager.broadcast(
                     room_id, "typing",
                     {"username": username, "typing": parsed.get("typing", True)},
                     user=username, exclude=websocket,
                 )
             elif msg_type == "viewing":
-                # WHY: User is viewing a specific thesis — update activity status.
                 viewing = parsed.get("viewing", "")
                 manager.set_user_viewing(username, viewing)
                 await manager.broadcast(
-                    room_id, "presence", manager._build_presence(room_id), user="system",
+                    room_id, "presence", await manager.get_presence(room_id), user="system",
                 )
             else:
                 content = parsed.get("content", data)
@@ -136,16 +136,5 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str) -> None:
     except Exception as e:
         log.warning("WS error in room %s: %s", room_id, e)
     finally:
-        async with manager._lock:
-            room = manager._rooms.get(room_id)
-            if room:
-                room.discard((websocket, username))
-                if not room:
-                    del manager._rooms[room_id]
-            if username in manager._user_activity:
-                del manager._user_activity[username]
-        # Broadcast updated presence after disconnect
-        try:
-            await manager.broadcast(room_id, "presence", manager._build_presence(room_id), user="system")
-        except Exception:
-            pass
+        if username:
+            await manager.disconnect(websocket, room_id, username)

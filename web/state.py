@@ -13,6 +13,9 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import logging
+
+log = logging.getLogger(__name__)
 
 # WHY: State directory lives alongside the web package, not in the project root,
 # to keep generated web state separate from thesis configs and snapshots.
@@ -32,6 +35,13 @@ def _gen_id() -> str:
     return str(uuid.uuid4())
 
 
+def _validate_id(value: str, label: str = "ID") -> None:
+    """Reject IDs that could traverse the filesystem."""
+    import re
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", value):
+        raise ValueError(f"Invalid {label}: {value}")
+
+
 # ── JSON (single-object) read/write ──────────────────────────────────────
 
 def read_json(path: Path, default: Any = None) -> Any:
@@ -47,15 +57,19 @@ def read_json(path: Path, default: Any = None) -> Any:
 
 
 def write_json(path: Path, data: Any) -> None:
-    """Write a JSON file with exclusive lock."""
+    """Write a JSON file atomically — write to temp, fsync, then rename."""
     _ensure_dir(path.parent)
-    with open(path, "w") as f:
+    tmp = path.with_suffix(".tmp")
+    with open(tmp, "w") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         try:
             json.dump(data, f, indent=2)
             f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
         finally:
             fcntl.flock(f, fcntl.LOCK_UN)
+    os.replace(str(tmp), str(path))
 
 
 # ── JSONL (append-log) read/write ────────────────────────────────────────
@@ -74,6 +88,7 @@ def read_jsonl(path: Path) -> List[dict]:
                     try:
                         lines.append(json.loads(line))
                     except json.JSONDecodeError:
+                        log.warning("Skipping malformed JSONL line in %s: %r", path, line)
                         continue
         finally:
             fcntl.flock(f, fcntl.LOCK_UN)
@@ -103,13 +118,15 @@ def list_rooms() -> List[dict]:
 
 def get_room(room_id: str) -> Optional[dict]:
     """Return a single room by ID."""
+    _validate_id(room_id, "room_id")
     for room in list_rooms():
         if room["id"] == room_id:
             return room
     return None
 
 
-def create_room(name: str, topic: str = "", linked_book_id: Optional[str] = None) -> dict:
+def create_room(name: str, topic: str = "", linked_book_id: Optional[str] = None,
+                participants: Optional[List[str]] = None) -> dict:
     """Create and persist a new room."""
     rooms = list_rooms()
     room = {
@@ -117,7 +134,7 @@ def create_room(name: str, topic: str = "", linked_book_id: Optional[str] = None
         "name": name,
         "topic": topic,
         "linked_book_id": linked_book_id,
-        "participants": [],
+        "participants": participants or [],
         "created_at": _now_iso(),
     }
     rooms.append(room)
@@ -127,6 +144,7 @@ def create_room(name: str, topic: str = "", linked_book_id: Optional[str] = None
 
 def update_room(room_id: str, updates: dict) -> Optional[dict]:
     """Update room fields. Returns updated room or None if not found."""
+    _validate_id(room_id, "room_id")
     rooms = list_rooms()
     for i, room in enumerate(rooms):
         if room["id"] == room_id:
@@ -140,6 +158,7 @@ def update_room(room_id: str, updates: dict) -> Optional[dict]:
 # ── Message persistence ──────────────────────────────────────────────────
 
 def _messages_path(room_id: str) -> Path:
+    _validate_id(room_id, "room_id")
     return DATA_DIR / "rooms" / room_id / "messages.jsonl"
 
 
@@ -172,6 +191,7 @@ def save_message(room_id: str, user: str, content: str, msg_type: str = "user",
 # ── Pin persistence ──────────────────────────────────────────────────────
 
 def _pins_path(room_id: str) -> Path:
+    _validate_id(room_id, "room_id")
     return DATA_DIR / "rooms" / room_id / "pins.json"
 
 
@@ -199,7 +219,6 @@ def remove_pin(room_id: str, message_id: str) -> List[dict]:
 
 def export_room_markdown(room_id: str) -> str:
     """Export room chat history as markdown."""
-    from datetime import datetime
     room = get_room(room_id)
     name = room["name"] if room else room_id
     messages = read_jsonl(_messages_path(room_id))
@@ -267,23 +286,38 @@ def save_prediction(user: str, prediction: dict) -> dict:
 
 
 def resolve_prediction(prediction_id: str, resolution: str) -> Optional[dict]:
-    """Resolve a prediction. Rewrites the JSONL file with the updated record."""
-    predictions = list_predictions()
-    target = None
-    for p in predictions:
-        if p["id"] == prediction_id:
-            p["resolution"] = resolution
-            p["resolved_at"] = _now_iso()
-            target = p
-    if target is None:
-        return None
-    # WHY: JSONL rewrite — predictions list is small (dozens, not thousands).
+    """Resolve a prediction. Atomic read-modify-write under exclusive lock."""
     _ensure_dir(PREDICTIONS_FILE.parent)
-    with open(PREDICTIONS_FILE, "w") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
+    if not PREDICTIONS_FILE.exists():
+        return None
+    tmp = PREDICTIONS_FILE.with_suffix(".tmp")
+    target = None
+    # WHY: Single exclusive lock covers both read and write to prevent
+    # concurrent appends from being lost between the two operations.
+    with open(PREDICTIONS_FILE, "r") as rf:
+        fcntl.flock(rf, fcntl.LOCK_EX)
         try:
+            predictions = []
+            for line in rf:
+                line = line.strip()
+                if line:
+                    try:
+                        predictions.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        log.warning("Skipping malformed prediction line: %r", line)
             for p in predictions:
-                f.write(json.dumps(p, separators=(",", ":")) + "\n")
+                if p.get("id") == prediction_id:
+                    p["resolution"] = resolution
+                    p["resolved_at"] = _now_iso()
+                    target = p
+            if target is None:
+                return None
+            with open(tmp, "w") as wf:
+                for p in predictions:
+                    wf.write(json.dumps(p, separators=(",", ":")) + "\n")
+                wf.flush()
+                os.fsync(wf.fileno())
+            os.replace(str(tmp), str(PREDICTIONS_FILE))
         finally:
-            fcntl.flock(f, fcntl.LOCK_UN)
+            fcntl.flock(rf, fcntl.LOCK_UN)
     return target

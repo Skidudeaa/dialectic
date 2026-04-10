@@ -6,6 +6,7 @@ OpenRouter provides a single API for Claude, GPT-4o, Llama, Gemini.
 Responses stream token-by-token via WebSocket for real-time display.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -175,14 +176,23 @@ async def chat(req: LLMChatRequest, user: User = Depends(get_current_user)) -> d
     model_label = model.split("/")[-1] if "/" in model else model
     try:
         full_response = await _stream_llm(model, req.prompt, req.room_id, user.username, model_label)
-    except (HTTPException, Exception) as e:
-        # WHY: Surface LLM errors as system messages in the room, not HTTP crashes.
+    except HTTPException as e:
         error_msg = e.detail if hasattr(e, "detail") else str(e)
         if isinstance(error_msg, bytes):
             error_msg = error_msg.decode(errors="replace")
-        # Truncate long OpenRouter error blobs
         if len(str(error_msg)) > 200:
             error_msg = str(error_msg)[:200] + "..."
+        if req.room_id:
+            msg = state.save_message(
+                room_id=req.room_id, user="system",
+                content=f"LLM error: {error_msg}", msg_type="system",
+            )
+            await manager.broadcast(req.room_id, "message", msg, user="system")
+            await manager.broadcast(req.room_id, "llm_done", {"model": model_label, "full_response": ""}, user="assistant")
+        return {"model": model_label, "response": "", "error": error_msg}
+    except Exception as e:
+        log.exception("Unexpected error in LLM chat for model %s", model_label)
+        error_msg = str(e)[:200]
         if req.room_id:
             msg = state.save_message(
                 room_id=req.room_id, user="system",
@@ -207,28 +217,27 @@ async def chat(req: LLMChatRequest, user: User = Depends(get_current_user)) -> d
 
 @router.post("/compare")
 async def compare(req: LLMCompareRequest, user: User = Depends(get_current_user)) -> dict:
-    """Send same prompt to multiple models, stream all responses."""
-    results: dict[str, str] = {}
-    for model in req.models:
+    """Send same prompt to multiple models, stream all responses concurrently."""
+    async def _run_model(model: str) -> tuple[str, str]:
         model_label = model.split("/")[-1] if "/" in model else model
         try:
             full_response = await _stream_llm(model, req.prompt, req.room_id, user.username, model_label)
-            results[model_label] = full_response
-            # Persist each LLM response
             if req.room_id:
                 state.save_message(
-                    room_id=req.room_id,
-                    user="assistant",
-                    content=full_response,
-                    msg_type="llm",
-                    model=model_label,
+                    room_id=req.room_id, user="assistant",
+                    content=full_response, msg_type="llm", model=model_label,
                 )
+            return model_label, full_response
         except Exception as e:
             error_msg = e.detail if hasattr(e, "detail") else str(e)
-            results[model_label] = f"Error: {error_msg}"
             if req.room_id:
                 state.save_message(
                     room_id=req.room_id, user="system",
                     content=f"LLM error ({model_label}): {error_msg}", msg_type="system",
                 )
-    return {"results": results}
+            return model_label, f"Error: {error_msg}"
+
+    # WHY: Run all model streams concurrently so users see interleaved tokens
+    # from all models simultaneously. Wall-clock time = max(latency) not sum.
+    pairs = await asyncio.gather(*[_run_model(m) for m in req.models])
+    return {"results": dict(pairs)}

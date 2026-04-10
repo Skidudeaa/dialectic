@@ -59,7 +59,7 @@ export default function ThesisViewer({ bookId, books }: Props) {
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-text-dim font-medium uppercase tracking-widest">Thesis</span>
-        <button onClick={() => { if (selectedBook) { setLoading(true); apiFetch(`/api/thesis/${selectedBook}/state`).then(setState as any).catch(() => {}).finally(() => setLoading(false)); }}} className="text-text-dim hover:text-amber p-0.5" disabled={loading}>
+        <button onClick={() => { if (selectedBook) { setLoading(true); apiFetch(`/api/thesis/${selectedBook}/state`).then((data) => setState(data as ThesisState)).catch(() => {}).finally(() => setLoading(false)); }}} className="text-text-dim hover:text-amber p-0.5" disabled={loading}>
           <RefreshCw size={11} className={loading ? "animate-spin" : ""} />
         </button>
       </div>

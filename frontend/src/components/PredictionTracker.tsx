@@ -13,7 +13,9 @@ export default function PredictionTracker() {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    try { setPredictions(await apiFetch<Prediction[]>("/api/predictions")); } catch {}
+    try { setPredictions(await apiFetch<Prediction[]>("/api/predictions")); } catch {
+      console.error("Failed to load predictions");
+    }
   }
 
   async function create(e: FormEvent) {

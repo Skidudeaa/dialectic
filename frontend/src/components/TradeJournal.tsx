@@ -11,7 +11,9 @@ export default function TradeJournal() {
   useEffect(() => { load(); }, []);
 
   async function load() {
-    try { setEntries(await apiFetch<JournalEntry[]>("/api/journal")); } catch {}
+    try { setEntries(await apiFetch<JournalEntry[]>("/api/journal")); } catch {
+      console.error("Failed to load journal");
+    }
   }
 
   async function create(e: FormEvent) {

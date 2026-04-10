@@ -2,9 +2,22 @@
 
 import type { LoginResponse, WSMessage } from "./types";
 
-let _token: string | null = null;
-let _username: string | null = null;
-let _displayName: string | null = null;
+const STORAGE_KEY = "td_auth";
+
+function _loadAuth(): { token: string; username: string; displayName: string } | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+const _stored = _loadAuth();
+let _token: string | null = _stored?.token ?? null;
+let _username: string | null = _stored?.username ?? null;
+let _displayName: string | null = _stored?.displayName ?? null;
 
 export function getToken(): string | null { return _token; }
 export function getUsername(): string | null { return _username; }
@@ -15,12 +28,18 @@ export function setAuth(resp: LoginResponse): void {
   _token = resp.access_token;
   _username = resp.username;
   _displayName = resp.display_name;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    token: resp.access_token,
+    username: resp.username,
+    displayName: resp.display_name,
+  }));
 }
 
 export function clearAuth(): void {
   _token = null;
   _username = null;
   _displayName = null;
+  localStorage.removeItem(STORAGE_KEY);
 }
 
 export async function apiFetch<T = unknown>(
@@ -70,6 +89,8 @@ export class RoomSocket {
   private roomId: string;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
+  private reconnectAttempt = 0;
+  private static MAX_RECONNECT = 10;
 
   constructor(roomId: string) {
     this.roomId = roomId;
@@ -82,7 +103,7 @@ export class RoomSocket {
     this.ws = new WebSocket(`${proto}//${window.location.host}/ws/${this.roomId}`);
 
     this.ws.onopen = () => {
-      // Send token as first message for auth
+      this.reconnectAttempt = 0;
       this.ws?.send(_token!);
     };
 
@@ -96,8 +117,11 @@ export class RoomSocket {
     };
 
     this.ws.onclose = () => {
-      if (!this.closed) {
-        this.reconnectTimer = setTimeout(() => this.connect(), 2000);
+      if (!this.closed && this.reconnectAttempt < RoomSocket.MAX_RECONNECT) {
+        const delay = Math.min(1000 * 2 ** this.reconnectAttempt, 30000);
+        const jitter = delay * (0.5 + Math.random() * 0.5);
+        this.reconnectAttempt++;
+        this.reconnectTimer = setTimeout(() => this.connect(), jitter);
       }
     };
 

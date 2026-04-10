@@ -9,11 +9,27 @@ original functions.
 
 import json
 import logging
+import os
+import re
+import time
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 log = logging.getLogger(__name__)
+
+# WHY: Thesis state only changes when the pipeline runs (Mon/Wed/Fri at 08:00)
+# or when prices are fetched. A 60-second TTL eliminates redundant graph
+# evaluations from auto-refresh and LLM context builds.
+_state_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_CACHE_TTL = 60.0  # seconds
+
+
+def _validate_book_id(book_id: str) -> None:
+    """Reject book IDs that could traverse the filesystem."""
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", book_id):
+        raise ValueError(f"Invalid book ID: {book_id}")
+
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
 BOOKS_DIR = _ROOT / "books"
@@ -46,6 +62,7 @@ def list_books() -> List[Dict[str, Any]]:
 
 def _load_cfg(book_id: str) -> dict:
     """Load and validate a book config by ID."""
+    _validate_book_id(book_id)
     path = BOOKS_DIR / f"{book_id}.json"
     if not path.exists():
         raise FileNotFoundError(f"Book not found: {book_id}")
@@ -53,23 +70,38 @@ def _load_cfg(book_id: str) -> dict:
 
 
 def get_state(book_id: str) -> Dict[str, Any]:
-    """Run propagate + score_confluence + export_state, return evaluated state."""
+    """Run propagate + score_confluence + export_state, return evaluated state.
+
+    WHY: Results are cached for 60 seconds. The thesis graph only changes when
+    the pipeline runs or prices are fetched — sub-minute staleness is acceptable.
+    """
+    _validate_book_id(book_id)
+    now = time.monotonic()
+    cached = _state_cache.get(book_id)
+    if cached and (now - cached[0]) < _CACHE_TTL:
+        return cached[1]
+
     cfg = _load_cfg(book_id)
     states = thesisgraph.propagate(cfg)
     confluence = thesisgraph.score_confluence(cfg, states)
     phase_num, phase_key = thesisgraph.get_current_phase(cfg)
 
-    # Evaluate all scenarios
     scenarios_result: List[Tuple[dict, dict, dict]] = []
     for scenario in cfg.get("scenarios", []):
         overrides, impacts = thesisgraph.eval_scenario(cfg, scenario, states)
         scenarios_result.append((scenario, overrides, impacts))
 
-    state = thesisgraph.export_state(
+    result = thesisgraph.export_state(
         cfg, states, confluence, phase_num, phase_key,
         scenarios_result, today=date.today(),
     )
-    return state
+    _state_cache[book_id] = (now, result)
+    return result
+
+
+def invalidate_cache(book_id: str) -> None:
+    """Clear cached state for a book — call after price fetch or config change."""
+    _state_cache.pop(book_id, None)
 
 
 def get_scenarios(book_id: str) -> List[Dict[str, Any]]:
@@ -101,14 +133,20 @@ def fetch_prices_for_book(book_id: str) -> Dict[str, Any]:
     cfg = _load_cfg(book_id)
     prices = thesisgraph.fetch_prices(cfg)
     poly_prices = thesisgraph.fetch_polymarket(cfg)
+    invalidate_cache(book_id)
     return {"yahoo": prices, "polymarket": poly_prices}
 
 
 def export_snapshot(book_id: str) -> Dict[str, Any]:
-    """Generate and save a snapshot to snapshots/ directory."""
-    state = get_state(book_id)
+    """Generate and save a snapshot to snapshots/ directory atomically."""
+    # WHY: Rename 'state' to 'snapshot' to avoid shadowing the web.state module name.
+    snapshot = get_state(book_id)
     snapshot_path = SNAPSHOTS_DIR / f"{book_id}-latest.json"
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
-    with open(snapshot_path, "w") as f:
-        json.dump(state, f, indent=2)
-    return state
+    tmp = snapshot_path.with_suffix(".tmp")
+    with open(tmp, "w") as f:
+        json.dump(snapshot, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(str(tmp), str(snapshot_path))
+    return snapshot

@@ -22,7 +22,6 @@ sys.path.insert(0, str(_ROOT / "tools" / "thesis-graph"))
 sys.path.insert(0, str(_ROOT / "tools" / "data-fetch"))
 sys.path.insert(0, str(_ROOT / "tools" / "outcomes"))
 sys.path.insert(0, str(_ROOT / "tools" / "bridge"))
-sys.path.insert(0, str(_ROOT / "tools" / "validation"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
