@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-04-10T04:33:19Z",
+  "timestamp": "2026-04-10T04:41:51Z",
   "title": "Iran/Hormuz Thesis \u2014 March 2026",
   "nodeStates": {
     "hormuz": "fired",
@@ -37,14 +37,14 @@
     }
   ],
   "marketSnapshot": {
-    "brent": 96.28,
+    "brent": 96.3,
     "wti": 99.64,
-    "goldSpot": 98.86,
+    "goldSpot": 4492,
     "usRigs": 543,
     "nolaFert": 683,
     "usDiesel": 5.38,
     "curveSpread": 15,
-    "dxy": 98.86
+    "dxy": 98.87
   },
   "scenarioImpacts": {
     "reopen-apr1": {

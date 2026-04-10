@@ -62,7 +62,7 @@
           "symbol": "BZ=F"
         }
       ],
-      "current": 96.28,
+      "current": 96.3,
       "thresholds": [
         {
           "level": 115,
@@ -284,7 +284,7 @@
           "label": "Trade-Weighted USD"
         }
       ],
-      "current": 98.86,
+      "current": 98.87,
       "thresholds": [
         {
           "level": 102,
@@ -1083,7 +1083,7 @@
     {
       "key": "brent",
       "label": "BRENT $/bbl",
-      "value": 96.28,
+      "value": 96.3,
       "step": 0.01,
       "nodeId": "brent"
     },
@@ -1097,7 +1097,7 @@
     {
       "key": "goldSpot",
       "label": "GOLD $/oz",
-      "value": 98.86,
+      "value": 4492,
       "step": 1,
       "nodeId": "dxy-stress"
     },
@@ -1132,7 +1132,7 @@
     {
       "key": "dxy",
       "label": "DXY INDEX",
-      "value": 98.86,
+      "value": 98.87,
       "step": 0.01,
       "nodeId": "dxy-stress"
     }

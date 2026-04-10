@@ -147,13 +147,37 @@ def fetch_prices_for_book(book_id: str) -> Dict[str, Any]:
     # Fetch live probabilities — mutates cfg.nodes[].probability
     thesisgraph.fetch_polymarket(cfg)
 
-    # WHY: Sync marketFields[].value from node current prices so export_state
-    # builds marketSnapshot from live data, not the stale config values.
+    # WHY: Sync marketFields[].value from live-fetched prices. Two strategies:
+    # 1. If the marketField key matches a Yahoo symbol we just fetched, use that
+    # 2. If the marketField's nodeId has a single yahoo feed whose symbol maps
+    #    to the same concept, use the node's updated current value
+    # We do NOT blindly copy node.current into marketField.value because some
+    # marketFields (e.g. goldSpot) are mapped to nodes that track a different
+    # instrument (e.g. dxy-stress tracks DXY, not gold).
     node_map = {n["id"]: n for n in cfg.get("nodes", [])}
+    # Build a map of yahoo symbols to their fetched prices from node.current
+    sym_to_price: Dict[str, float] = {}
+    for node in cfg.get("nodes", []):
+        for feed in node.get("feeds", []):
+            if feed.get("source") == "yahoo" and "symbol" in feed:
+                if "current" in node:
+                    sym_to_price[feed["symbol"]] = node["current"]
+
     for mf in cfg.get("marketFields", []):
         node_id = mf.get("nodeId")
-        if node_id and node_id in node_map:
-            node = node_map[node_id]
+        mf_key = mf.get("key", "")
+        if not node_id or node_id not in node_map:
+            continue
+        node = node_map[node_id]
+        # Only sync if this node's primary feed matches the marketField's concept.
+        # Check: does the node have exactly one yahoo feed, and does the node ID
+        # match the marketField key? This prevents goldSpot from getting DXY's value.
+        yahoo_feeds = [f for f in node.get("feeds", []) if f.get("source") == "yahoo"]
+        if node_id == mf_key and "current" in node:
+            # Direct match: node "brent" → marketField "brent"
+            mf["value"] = node["current"]
+        elif len(yahoo_feeds) == 1 and node_id == mf_key:
+            # Single-feed node matching the key
             if "current" in node:
                 mf["value"] = node["current"]
 
