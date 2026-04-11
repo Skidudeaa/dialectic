@@ -1,5 +1,41 @@
 # CHANGELOG
 
+## 2026-04-11 — Deployment tracking + end-user manual
+
+Operational polish round — the feature work is stable, now codifying the
+deployment story and giving Amo/Dan a manual to read.
+
+### Tracked in the repo
+- `deploy/tradingdesk.service` — the systemd unit that was installed live on
+  the DO droplet earlier today. Previously this file only existed at
+  `/etc/systemd/system/tradingdesk.service`, untracked.
+- `deploy/README.md` — first-install walkthrough, day-to-day ops
+  (`systemctl restart/status/stop`, `journalctl -u tradingdesk`), secret
+  rotation procedure (with side-effects callouts for each env var), unit
+  file setting reference, and future hardening notes.
+- `docs/USER-MANUAL.md` — end-user guide for the two-analyst workspace.
+  Task-oriented: login, dashboard layout with ASCII diagram, creating a
+  room, talking to the AIs (@claude/@gpt/@gemini/@compare), slash commands
+  (/brief, /thesis, /diff, /predict, /watchlist), reading the thesis
+  viewer (cascade phase, nodes, RSI/ATR badges, confluence, countdowns,
+  scenarios), fetching fresh prices, trade journal + predictions,
+  TradingView integration (four op types, canonical bindings, wiring a
+  Pine alert, manual testing with sign-tv-alert.py), keyboard shortcuts,
+  and a troubleshooting section for each common failure mode.
+
+### Docs drift fixed
+- CLAUDE.md now references both companion docs at the top ("Key companion
+  docs for different audiences") so a new reader can find the right guide
+  without having to discover it.
+- File Structure block in CLAUDE.md updated with the new `deploy/` and
+  `docs/runbooks/` directories + `docs/USER-MANUAL.md`.
+
+No code or test changes. Full suite still 505 green. systemd service
+restarted as a smoke test against the committed unit file — verified
+health, binding CRUD, and signed webhook roundtrip.
+
+---
+
 ## 2026-04-11 — TradingView Integration (v0.3.0)
 
 Full TradingView integration shipped across three phases. Pine Script alerts now

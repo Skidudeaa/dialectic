@@ -4,6 +4,11 @@
 
 Trading Desk — a causal reasoning engine for macro trading. Models the world as a directed graph of transmission chains (oil shock → diesel → freight → employment → demand destruction), propagates data and probabilities through the graph, and generates interactive HTML dashboards for collaborative decision-making.
 
+**Key companion docs (for different audiences):**
+- End-user guide: [`docs/USER-MANUAL.md`](docs/USER-MANUAL.md) — how to use the dashboard (login, chat, thesis viewer, TradingView alerts, troubleshooting). Aimed at Amo + Dan.
+- Deployment guide: [`deploy/README.md`](deploy/README.md) — install the systemd unit, rotate secrets, day-to-day ops on the DO droplet.
+- Pine Script runbook: [`docs/runbooks/tradingview-pine-setup.md`](docs/runbooks/tradingview-pine-setup.md) — how to wire a TradingView alert into a webhook binding.
+
 ## Quick Start
 
 ```bash
@@ -358,8 +363,14 @@ tradingDesk/
 │   │   └── lib/                     # api.ts (auth, WebSocket), types.ts
 │   └── ...
 ├── research/                        # distilled research findings
-├── docs/plans/                      # implementation plans
-└── docs/solutions/                  # documented solutions to past problems (bugs, security, patterns), organized by category with YAML frontmatter (module, tags, problem_type)
+├── deploy/                          # production systemd unit + deployment README
+│   ├── tradingdesk.service         # canonical unit file (install to /etc/systemd/system/)
+│   └── README.md                    # first-install + rotation + troubleshooting runbook
+├── docs/
+│   ├── USER-MANUAL.md              # end-user guide (login → chat → thesis → TV alerts)
+│   ├── plans/                       # implementation plans
+│   ├── runbooks/                    # operator runbooks (Pine setup, etc.)
+│   └── solutions/                   # documented solutions to past problems, YAML-frontmattered by module/tags/problem_type
 ```
 
 ## Active Theses
