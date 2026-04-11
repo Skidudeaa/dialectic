@@ -146,6 +146,17 @@ def fetch_prices_for_book(book_id: str) -> Dict[str, Any]:
     thesisgraph.fetch_prices(cfg)
     # Fetch live probabilities — mutates cfg.nodes[].probability
     thesisgraph.fetch_polymarket(cfg)
+    # WHY: the CLI --fetch path runs derived indicators here too (see
+    # thesisgraph.main()). The web fetch-prices endpoint must match that
+    # behaviour or the dashboard's tvIndicators badges stay empty forever
+    # despite Phase 1 shipping the derivation code. Wrapped in try/except
+    # because derivation is a best-effort overlay — a failure here should
+    # not poison the primary price update.
+    try:
+        thesisgraph.fetch_ohlcv_for_derived(cfg)
+        thesisgraph.compute_derived_indicators(cfg)
+    except Exception as e:
+        log.warning("derived_indicators failed for %s: %s", book_id, e)
 
     # WHY: Sync marketFields[].value from live-fetched prices. Two strategies:
     # 1. If the marketField key matches a Yahoo symbol we just fetched, use that
