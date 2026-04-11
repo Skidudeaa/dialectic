@@ -72,21 +72,20 @@ python3 tools/validation/mock_dialectic.py --port 8002
 
 # === Tests ===
 
-# Full suite (333 tests: 223 CLI + 60 outcomes + 50 web)
-python3 -m pytest tools/thesis-graph/test_export.py tools/bridge/ tools/data-fetch/test_polymarket.py tools/validation/e2e_test.py tools/outcomes/ web/test_web.py -q
-
-# CLI tools only (223)
-python3 -m pytest tools/thesis-graph/test_export.py tools/bridge/test_diff.py tools/bridge/test_push.py tools/bridge/test_run_all.py tools/data-fetch/test_polymarket.py tools/validation/e2e_test.py -q
+# Full suite (505 tests)
+python3 -m pytest tools/thesis-graph/test_export.py tools/bridge/ tools/data-fetch/ tools/validation/e2e_test.py tools/outcomes/ web/ -q
 
 # By component
-python3 -m pytest tools/thesis-graph/test_export.py -q       # 76 — export/propagation
-python3 -m pytest tools/bridge/test_diff.py -q               # 21 — snapshot diff
-python3 -m pytest tools/bridge/test_push.py -q               # 26 — bridge script
-python3 -m pytest tools/bridge/test_run_all.py -q            # 20 — multi-book runner
-python3 -m pytest tools/data-fetch/test_polymarket.py -q     # 41 — Polymarket fetcher
-python3 -m pytest tools/validation/e2e_test.py -q            # 39 — E2E pipeline
-python3 -m pytest tools/outcomes/ -q                         # 60 — trade lifecycle + cross-book + morning brief
-python3 -m pytest web/test_web.py -q                         # 50 — web layer (auth, state, routes, concurrency)
+python3 -m pytest tools/thesis-graph/test_export.py -q          # 83 — export/propagation + TV Phase 1
+python3 -m pytest tools/bridge/test_diff.py -q                  # 28 — snapshot diff + tvIndicatorShifts
+python3 -m pytest tools/bridge/test_push.py -q                  # 26 — bridge script
+python3 -m pytest tools/bridge/test_run_all.py -q               # 20 — multi-book runner
+python3 -m pytest tools/data-fetch/test_polymarket.py -q        # 41 — Polymarket fetcher
+python3 -m pytest tools/data-fetch/test_derived_indicators.py -q # 58 — Wilder RSI/ATR/SMA + overlay tripwire
+python3 -m pytest tools/validation/e2e_test.py -q               # 39 — E2E pipeline
+python3 -m pytest tools/outcomes/ -q                            # 60 — trade lifecycle + cross-book + morning brief
+python3 -m pytest web/test_web.py -q                            # 50 — web layer (auth, state, routes, concurrency)
+python3 -m pytest web/test_tradingview.py -q                    # 100 — TV webhook auth, apply, CRUD, rate limit
 
 # === Web UI ===
 
@@ -200,6 +199,42 @@ Dialectic server: `/root/DwoodAmo/dialectic` — run with `PORT=8002 python dial
 
 - `mock_dialectic.py` — mock Dialectic HTTP server with schema validation, error injection, standalone + importable
 - `e2e_test.py` — full pipeline tests: snapshot → diff → push → verify round trip
+
+### TradingView Integration (`web/routes/tradingview.py` + `tools/data-fetch/derived_indicators.py`)
+
+The TradingView integration is split across the engine and the webapp:
+
+**Engine side** (`tools/data-fetch/derived_indicators.py` + `tools/thesis-graph/thesisgraph.py`):
+- Stdlib Wilder RSI/ATR/SMA computed from Yahoo v8 chart OHLCV for nodes with `derivedIndicators` specs
+- `compute_derived_indicators()` writes non-causal `tvIndicators` overlays to the snapshot (top-level `tvIndicators` key in v:2 schema)
+- Auto-bumps `closesObserved` counters on price nodes whose thresholds have `closesRequired` set — feeds the existing eval_node_state gate
+- **Schema-enforced `overlay: true` tripwire** on every `derivedIndicators` entry: derived values can never flow into `eval_node_state` or `score_confluence`. This is architectural, not a convention.
+
+**Webapp side** (`web/tv_webhook.py` + `web/adapters/tradingview.py` + `web/routes/tradingview.py`):
+- `POST /api/tradingview/webhook` — HMAC-SHA256 signed Pine Script alerts, ±300s timestamp window, 600s nonce replay store, 60/min per-IP rate limit, 8 KiB body cap
+- Four pre-declared mutation ops: `incrementClosesObserved` / `setNodeState` / `setProbability` / `setCurrent`, each with strict node-type gates
+- `GET /api/tradingview/status /events /indicators/{book_id}` (JWT-gated)
+- `GET/POST/DELETE /api/thesis/{book_id}/tv-bindings(/{binding_id})` — binding CRUD (JWT-gated)
+- WebSocket broadcast to rooms with matching `linked_book_id` on every successful alert
+- Audit log at `web/data/tradingview-events.jsonl` — every webhook attempt (success, auth fail, rate limit) persisted
+
+**Frontend** (`frontend/src/components/TradingViewPanel.tsx` + `TVIndicatorBadge.tsx`):
+- Dedicated right-panel tab: webhook URL with copy, binding list with fire count + delete, create-binding modal, recent alerts feed
+- Inline RSI/ATR badges on ThesisViewer node rows
+
+**Canonical bindings** (seeded in both books, viewable via the dashboard):
+
+| Binding | Book | Op | Node | Trade rationale |
+|---|---|---|---|---|
+| `brent-persistence-close-above-115` | iran-hormuz-graph | incrementClosesObserved | brent | XOP long: 3 closes >= $115 promote brent to fired |
+| `hormuz-reopen-announced` | iran-hormuz-graph | setNodeState → resolved | hormuz | Kill-switch: manual fire when news confirms reopening |
+| `fert-close-above-700` | iran-hormuz-graph | setCurrent | fert-shortage | CF long: Pine fires on NOLA urea close >= $700 |
+| `spy-below-200dma-first-touch` | trump-tariffs-graph | setProbability | tariff-shock | SPY short: technical confirmation of recession thesis |
+
+**Operator tooling:**
+- `docs/runbooks/tradingview-pine-setup.md` — full Pine Script setup guide, relay architecture, secret rotation, troubleshooting
+- `tools/bridge/sign-tv-alert.py` — stdlib CLI that produces signed curl commands (reads `TV_WEBHOOK_SECRET`)
+- Required env vars: `TV_WEBHOOK_SECRET`, `TV_WEBHOOK_RATE_LIMIT_PER_MIN` (default 60), `TV_WEBHOOK_NONCE_TTL_SECONDS` (default 600)
 
 ### Outcomes / Trade Lifecycle (`tools/outcomes/`)
 
@@ -342,5 +377,5 @@ tradingDesk/
 - HTML dashboards are generated, not hand-built
 - All outputs are self-contained single-file HTML
 - Tests use pytest, run with `python3 -m pytest`
-- Total: 333 tests — 223 CLI (thesis-graph, bridge, data-fetch, validation) + 60 outcomes (lifecycle_monitor, cross_book, morning_brief) + 50 web (auth, state, routes, concurrency)
+- Total: 505 tests across the full pipeline — engine (thesis-graph + derived_indicators), bridge (diff + push + run-all + e2e), data-fetch (polymarket + derived_indicators), outcomes (lifecycle + cross-book + morning brief), web (auth + state + routes + TradingView)
 - `_archive/` holds superseded code; do not delete without explicit review. Currently contains `empty-placeholders/` (tools/polymarket, tools/signals — never populated) and `orphan-snapshots/` (pre-graph-version snapshots).

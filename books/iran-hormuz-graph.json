@@ -49,7 +49,19 @@
           "status": "amber"
         }
       ],
-      "context": "Strait effectively closed since Feb 28. Iran allowing selective transit for China, Russia, India, Iraq, Pakistan (Mar 26) and humanitarian/fertilizer shipments (Mar 27). U.S. military campaign to reopen since Mar 19. Trump paused energy infrastructure strikes through Apr 6."
+      "context": "Strait effectively closed since Feb 28. Iran allowing selective transit for China, Russia, India, Iraq, Pakistan (Mar 26) and humanitarian/fertilizer shipments (Mar 27). U.S. military campaign to reopen since Mar 19. Trump paused energy infrastructure strikes through Apr 6.",
+      "tvAlertBindings": [
+        {
+          "bindingId": "hormuz-reopen-announced",
+          "nodeId": "hormuz",
+          "op": "setNodeState",
+          "targetState": "resolved",
+          "expectedPineAlertName": "hormuz_reopen_manual",
+          "description": "Manual Pine alert the operator fires when credible news confirms a Hormuz reopening. Sets the hormuz event node state to 'resolved' and collapses all downstream amplification — this is the kill-switch trade exit.",
+          "fireCount": 0,
+          "lastFiredAt": null
+        }
+      ]
     },
     {
       "id": "brent",
@@ -117,6 +129,19 @@
           "period": 50,
           "symbol": "BZ=F",
           "overlay": true
+        }
+      ],
+      "tvAlertBindings": [
+        {
+          "bindingId": "brent-persistence-close-above-115",
+          "nodeId": "brent",
+          "op": "incrementClosesObserved",
+          "thresholdLevel": 115,
+          "expectedSymbol": "BZ=F",
+          "expectedPineAlertName": "brent_persistence_close_115",
+          "description": "Pine alert fires on each daily close >= $115 on the brent chart. Increments the closesObserved counter that drives the closesRequired=3 persistence gate — 3 consecutive closes promote brent from approaching to fired.",
+          "fireCount": 0,
+          "lastFiredAt": null
         }
       ]
     },
@@ -245,7 +270,19 @@
           "label": "retail already here (Mar 25 USDA)"
         }
       ],
-      "context": "Hormuz handles ~30% of traded fertilizer. Urea up 28-50%. CF is #1 S&P performer in March. NOLA urea $677-690+/st. Retail hit $822.50/t."
+      "context": "Hormuz handles ~30% of traded fertilizer. Urea up 28-50%. CF is #1 S&P performer in March. NOLA urea $677-690+/st. Retail hit $822.50/t.",
+      "tvAlertBindings": [
+        {
+          "bindingId": "fert-close-above-700",
+          "nodeId": "fert-shortage",
+          "op": "setCurrent",
+          "thresholdLevel": 700,
+          "expectedPineAlertName": "fert_close_above_700",
+          "description": "Pine alert on NOLA urea close >= $700/ton (proxied via CF price as visible chart symbol). Webhook body must carry 'value' with the actual close. Once current crosses 700 the fert-shortage node fires on next propagate() — feeds the planting-miss deadline edge.",
+          "fireCount": 0,
+          "lastFiredAt": null
+        }
+      ]
     },
     {
       "id": "planting-miss",

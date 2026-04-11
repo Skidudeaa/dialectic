@@ -55,7 +55,19 @@
           "status": "amber"
         }
       ],
-      "context": "Supreme Court struck down IEEPA tariffs 6-3 on Feb 20. Trump pivoted same day to Section 122 (10% global, 150-day limit). Bessent says 15% coming. China at 34% via Section 301. Autos 25% (15% for Japan/EU via deals). Semiconductors 25% on advanced chips. Effective avg rate 13.7% — highest since Smoot-Hawley."
+      "context": "Supreme Court struck down IEEPA tariffs 6-3 on Feb 20. Trump pivoted same day to Section 122 (10% global, 150-day limit). Bessent says 15% coming. China at 34% via Section 301. Autos 25% (15% for Japan/EU via deals). Semiconductors 25% on advanced chips. Effective avg rate 13.7% — highest since Smoot-Hawley.",
+      "tvAlertBindings": [
+        {
+          "bindingId": "spy-below-200dma-first-touch",
+          "nodeId": "tariff-shock",
+          "op": "setProbability",
+          "expectedSymbol": "SPY",
+          "expectedPineAlertName": "spy_below_200dma_first_touch",
+          "description": "Pine alert on SPY close below the 200-day SMA for the first time in 60 days. Webhook body must carry 'value' with the new probability (typically 0.95 for tariff escalation confirmation). Technical market confirmation of the macro thesis.",
+          "fireCount": 0,
+          "lastFiredAt": null
+        }
+      ]
     },
     {
       "id": "input-costs",

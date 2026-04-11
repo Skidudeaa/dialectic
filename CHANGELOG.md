@@ -1,5 +1,79 @@
 # CHANGELOG
 
+## 2026-04-11 — TradingView Integration (v0.3.0)
+
+Full TradingView integration shipped across three phases. Pine Script alerts now
+flow into the webapp as HMAC-signed webhook POSTs, mutate book state through a
+four-op contract, broadcast to linked chat rooms in real time, and surface in a
+dedicated dashboard panel.
+
+### Phase 1 — Engine enrichment (commit a3bfc21)
+- New `tools/data-fetch/derived_indicators.py` (stdlib Wilder RSI/ATR/SMA,
+  schema-enforced `overlay: true` tripwire, 58 tests)
+- `tools/thesis-graph/thesisgraph.py`: `fetch_ohlcv_for_derived()` (Yahoo v8
+  chart per-symbol), `compute_derived_indicators()`, closesObserved auto-bump
+  feeding the existing closesRequired gate in `eval_node_state`, v:2 snapshot
+  gains top-level `tvIndicators` overlay key
+- `tools/bridge/diff-snapshots.py`: `tvIndicatorShifts` category with material
+  thresholds (RSI ≥8 pts, ATR ≥15%, SMA ≥8%)
+- Both books seeded with `derivedIndicators` specs on brent, dxy-stress,
+  food-spike, demand-destruction (iran-hormuz) and input-costs, usd-cny,
+  auto-sector (trump-tariffs)
+
+### Phase 2 — Webapp integration (commit 40a3d16)
+- `web/tv_webhook.py` — pure HMAC/timestamp/nonce verification, thread-safe
+  NonceStore with TTL
+- `web/adapters/tradingview.py` — binding resolution, four-op enforcement,
+  atomic book mutation, per-book asyncio locks, thesis cache invalidation
+- `web/routes/tradingview.py` — `POST /api/tradingview/webhook` (HMAC-gated,
+  no JWT), `GET /status /events /indicators`, `GET/POST/DELETE
+  /api/thesis/{book_id}/tv-bindings` (JWT-gated), per-IP token-bucket rate
+  limiter (60/min default, 429 on excess), 8 KiB body cap
+- `web/ws.py` gains `broadcast_to_book_rooms()` — fans out to rooms with
+  matching `linked_book_id`
+- `web/state.py` gains `tradingview-events.jsonl` audit log namespace
+- `frontend/src/components/TradingViewPanel.tsx` — webhook status card,
+  binding CRUD, recent alert feed
+- `frontend/src/components/TVIndicatorBadge.tsx` — inline RSI/ATR badges on
+  ThesisViewer node rows
+- 100 new tests in `web/test_tradingview.py` across auth / apply / CRUD /
+  management / rate limiting
+- `vite.config.ts`: `defineConfig` imported from `vitest/config` (pre-existing
+  TS error blocking `npm run build`, fixed in passing)
+
+### Phase 3 — Seed bindings + operator runbook (this commit)
+- Four canonical bindings seeded across both books:
+  - `brent-persistence-close-above-115` (iran-hormuz, incrementClosesObserved)
+  - `hormuz-reopen-announced` (iran-hormuz, setNodeState → resolved)
+  - `fert-close-above-700` (iran-hormuz, setCurrent)
+  - `spy-below-200dma-first-touch` (trump-tariffs, setProbability)
+- `docs/runbooks/tradingview-pine-setup.md` — full operator guide covering
+  Pine Script's webhook limitations, relay architecture with a 40-line example,
+  per-binding Pine snippets, secret rotation procedure, troubleshooting matrix
+- `tools/bridge/sign-tv-alert.py` — stdlib CLI that reads `TV_WEBHOOK_SECRET`
+  and produces curl-ready signed headers. Supports `--format curl|headers|json`
+  and piping a body via stdin.
+
+### Test counts
+- Phase 1: 333 → 405 (+72)
+- Phase 2: 405 → 505 (+100)
+- Phase 3: 505 (data + docs only, no new tests)
+
+### Live verification (2026-04-11)
+- End-to-end round trip: `sign-tv-alert.py` → HTTP POST → HMAC verify →
+  adapter apply_op → atomic book write → cache invalidate → audit log →
+  broadcast. Response: `200 {"status":"ok","bookId":"iran-hormuz-graph","nodeId":"brent","op":"incrementClosesObserved","newValue":1}`
+- Binding `fireCount` stamped, `lastFiredAt` ISO timestamp recorded
+- `web/data/tradingview-events.jsonl` appended with the success event
+
+### Environment
+- New required env var: `TV_WEBHOOK_SECRET` (generate with
+  `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`)
+- Optional: `TV_WEBHOOK_RATE_LIMIT_PER_MIN` (default 60),
+  `TV_WEBHOOK_NONCE_TTL_SECONDS` (default 600)
+
+---
+
 ## 2026-04-10 — Post-v0.2.0 Hardening
 
 ### Fixes
