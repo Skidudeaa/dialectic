@@ -154,12 +154,112 @@ def diff_markets(old: dict, new: dict) -> dict:
     return changes
 
 
+# WHY these thresholds: we want to surface material TV-indicator moves as
+# informational context for the operator, not every tick of noise. 8 RSI
+# points is a full zone transition (e.g. 62 → 70 crosses into overbought);
+# 15% ATR delta is large enough to indicate a regime shift in realized vol;
+# 8% SMA delta corresponds to a decisive trend change. Non-material drift
+# stays out of the diff so the push stream remains signal-heavy.
+_RSI_DIFF_THRESHOLD = 8.0
+_ATR_PCT_THRESHOLD = 15.0
+_SMA_PCT_THRESHOLD = 8.0
+
+# Tags on tvIndicators that are metadata, not numeric values to diff.
+_TV_METADATA_KEYS = {"source", "computedAt"}
+
+
+def _pct_change(old_val: float, new_val: float) -> float | None:
+    """Percent change from old to new. Returns None when old is zero."""
+    if old_val == 0:
+        return None
+    return round((new_val - old_val) / abs(old_val) * 100, 2)
+
+
+def _is_material_shift(field: str, old_val: float, new_val: float) -> bool:
+    """Decide whether a single indicator value change is worth surfacing."""
+    if field.startswith("rsi"):
+        return abs(new_val - old_val) >= _RSI_DIFF_THRESHOLD
+    if field.startswith("atr"):
+        pct = _pct_change(old_val, new_val)
+        return pct is not None and abs(pct) >= _ATR_PCT_THRESHOLD
+    if field.startswith("sma"):
+        pct = _pct_change(old_val, new_val)
+        return pct is not None and abs(pct) >= _SMA_PCT_THRESHOLD
+    # Unknown field — surface any change, let the operator decide
+    return old_val != new_val
+
+
+def diff_tv_indicators(old: dict, new: dict) -> dict:
+    """Compare tvIndicators dicts. Returns {nodeId: [{field, from, to, delta, pctChange}]}.
+
+    tvIndicators are NON-CAUSAL snapshot overlays (local RSI/ATR/SMA from
+    Yahoo OHLCV). Shifts above material thresholds are reported so the
+    operator sees regime transitions; smaller drift is suppressed to keep
+    the delta payload signal-heavy. This function never changes the
+    hasChanges decision in a way that would trigger a Dialectic push on
+    pure-overlay movement — see build_delta for the has_changes gate.
+    """
+    old_tv = old.get("tvIndicators", {}) or {}
+    new_tv = new.get("tvIndicators", {}) or {}
+    if not isinstance(old_tv, dict) or not isinstance(new_tv, dict):
+        return {}
+
+    shifts: dict = {}
+    for node_id in sorted(old_tv.keys() | new_tv.keys()):
+        old_entry = old_tv.get(node_id) or {}
+        new_entry = new_tv.get(node_id) or {}
+        if not isinstance(old_entry, dict) or not isinstance(new_entry, dict):
+            continue
+
+        node_shifts = []
+        fields = (set(old_entry.keys()) | set(new_entry.keys())) - _TV_METADATA_KEYS
+        for field in sorted(fields):
+            old_val = old_entry.get(field)
+            new_val = new_entry.get(field)
+            if not isinstance(old_val, (int, float)):
+                if isinstance(new_val, (int, float)):
+                    # Field appeared this run
+                    node_shifts.append({
+                        "field": field,
+                        "from": None,
+                        "to": new_val,
+                        "delta": None,
+                        "pctChange": None,
+                    })
+                continue
+            if not isinstance(new_val, (int, float)):
+                # Field disappeared this run
+                node_shifts.append({
+                    "field": field,
+                    "from": old_val,
+                    "to": None,
+                    "delta": None,
+                    "pctChange": None,
+                })
+                continue
+            if not _is_material_shift(field, float(old_val), float(new_val)):
+                continue
+            node_shifts.append({
+                "field": field,
+                "from": old_val,
+                "to": new_val,
+                "delta": round(float(new_val) - float(old_val), 4),
+                "pctChange": _pct_change(float(old_val), float(new_val)),
+            })
+
+        if node_shifts:
+            shifts[node_id] = node_shifts
+
+    return shifts
+
+
 def build_delta(old: dict, new: dict) -> dict:
     """Build the full structured delta between two snapshots."""
     state_changes, new_nodes, removed_nodes = diff_node_states(old, new)
     confluence_changes = diff_confluence(old, new)
     countdown_changes = diff_countdowns(old, new)
     market_changes = diff_markets(old, new)
+    tv_indicator_shifts = diff_tv_indicators(old, new)
 
     has_changes = bool(
         state_changes
@@ -168,6 +268,7 @@ def build_delta(old: dict, new: dict) -> dict:
         or market_changes
         or new_nodes
         or removed_nodes
+        or tv_indicator_shifts
     )
 
     return {
@@ -178,6 +279,7 @@ def build_delta(old: dict, new: dict) -> dict:
         "marketChanges": market_changes,
         "newNodes": new_nodes,
         "removedNodes": removed_nodes,
+        "tvIndicatorShifts": tv_indicator_shifts,
     }
 
 

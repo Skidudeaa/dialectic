@@ -450,3 +450,156 @@ class TestEdgeCases:
 
         assert code == 0
         assert delta["marketChanges"]["weird"]["pctChange"] is None
+
+
+# =========================================================================
+# Phase 1 TradingView integration: tvIndicatorShifts
+# =========================================================================
+
+class TestTVIndicatorShifts:
+    """Seven tests covering the new tvIndicatorShifts diff category.
+
+    Thresholds (see diff-snapshots.py):
+      - RSI: absolute shift >= 8 points is material
+      - ATR: percent shift >= 15% is material
+      - SMA: percent shift >= 8% is material
+    """
+
+    def _with_tv(self, tv: dict, **overrides) -> dict:
+        snap = make_snapshot(**overrides)
+        snap["tvIndicators"] = tv
+        return snap
+
+    def test_material_rsi_shift_surfaced(self, tmp_path):
+        old = self._with_tv({
+            "brent": {"rsi14": 55.0, "source": "derived_from_yahoo",
+                      "computedAt": "2026-04-10T00:00:00Z"},
+        })
+        new = self._with_tv({
+            "brent": {"rsi14": 68.0, "source": "derived_from_yahoo",
+                      "computedAt": "2026-04-11T00:00:00Z"},
+        })
+        delta, code = run_diff(
+            write_snapshot(tmp_path, "o.json", old),
+            write_snapshot(tmp_path, "n.json", new),
+        )
+        # 13 RSI points is well above the 8-point threshold
+        assert code == 0
+        assert "brent" in delta["tvIndicatorShifts"]
+        shifts = delta["tvIndicatorShifts"]["brent"]
+        assert any(s["field"] == "rsi14" and s["delta"] == 13.0 for s in shifts)
+
+    def test_trivial_rsi_drift_suppressed(self, tmp_path):
+        """RSI drift below 8 points is noise, not a signal."""
+        old = self._with_tv({
+            "brent": {"rsi14": 55.0, "source": "derived_from_yahoo",
+                      "computedAt": "2026-04-10T00:00:00Z"},
+        })
+        new = self._with_tv({
+            "brent": {"rsi14": 59.5, "source": "derived_from_yahoo",
+                      "computedAt": "2026-04-11T00:00:00Z"},
+        })
+        delta, code = run_diff(
+            write_snapshot(tmp_path, "o.json", old),
+            write_snapshot(tmp_path, "n.json", new),
+        )
+        # 4.5 points is below the 8-point material threshold.
+        # This snapshot has NO other changes, so the diff reports no changes
+        # (exit code 1) and the tvIndicatorShifts dict is empty.
+        assert code == 1
+        assert delta["tvIndicatorShifts"] == {}
+
+    def test_atr_material_percent_shift(self, tmp_path):
+        """ATR shift >=15% (regime transition) surfaces."""
+        old = self._with_tv({
+            "brent": {"atr14": 2.0, "source": "derived_from_yahoo",
+                      "computedAt": "2026-04-10T00:00:00Z"},
+        })
+        new = self._with_tv({
+            "brent": {"atr14": 2.5, "source": "derived_from_yahoo",
+                      "computedAt": "2026-04-11T00:00:00Z"},
+        })
+        delta, code = run_diff(
+            write_snapshot(tmp_path, "o.json", old),
+            write_snapshot(tmp_path, "n.json", new),
+        )
+        # 2.0 -> 2.5 = 25% increase, above 15%
+        assert code == 0
+        assert "brent" in delta["tvIndicatorShifts"]
+        shifts = delta["tvIndicatorShifts"]["brent"]
+        atr_shift = next(s for s in shifts if s["field"] == "atr14")
+        assert atr_shift["pctChange"] == 25.0
+
+    def test_metadata_only_change_ignored(self, tmp_path):
+        """Changing source/computedAt alone is not a shift."""
+        old = self._with_tv({
+            "brent": {"rsi14": 60.0, "source": "derived_from_yahoo",
+                      "computedAt": "2026-04-10T00:00:00Z"},
+        })
+        new = self._with_tv({
+            "brent": {"rsi14": 60.0, "source": "derived_from_yahoo",
+                      "computedAt": "2026-04-11T12:34:56Z"},
+        })
+        delta, code = run_diff(
+            write_snapshot(tmp_path, "o.json", old),
+            write_snapshot(tmp_path, "n.json", new),
+        )
+        # Only computedAt changed — metadata keys are excluded from the diff
+        assert delta["tvIndicatorShifts"] == {}
+
+    def test_new_tv_entry_field_surfaces(self, tmp_path):
+        """When a node first gains tvIndicators, every field is listed with
+        from=None (field appeared this run)."""
+        old = self._with_tv({})
+        new = self._with_tv({
+            "brent": {"rsi14": 65.0, "atr14": 3.2,
+                      "source": "derived_from_yahoo",
+                      "computedAt": "2026-04-11T00:00:00Z"},
+        })
+        delta, code = run_diff(
+            write_snapshot(tmp_path, "o.json", old),
+            write_snapshot(tmp_path, "n.json", new),
+        )
+        assert code == 0
+        assert "brent" in delta["tvIndicatorShifts"]
+        fields = {s["field"] for s in delta["tvIndicatorShifts"]["brent"]}
+        assert "rsi14" in fields
+        assert "atr14" in fields
+        # All surfaced entries should have from=None
+        for s in delta["tvIndicatorShifts"]["brent"]:
+            assert s["from"] is None
+
+    def test_removed_tv_entry_field_surfaces(self, tmp_path):
+        """When a node loses a tvIndicator field, it's reported with to=None."""
+        old = self._with_tv({
+            "brent": {"rsi14": 65.0, "source": "derived_from_yahoo",
+                      "computedAt": "2026-04-10T00:00:00Z"},
+        })
+        new = self._with_tv({
+            "brent": {"source": "derived_from_yahoo",
+                      "computedAt": "2026-04-11T00:00:00Z"},
+        })
+        delta, code = run_diff(
+            write_snapshot(tmp_path, "o.json", old),
+            write_snapshot(tmp_path, "n.json", new),
+        )
+        assert code == 0
+        shifts = delta["tvIndicatorShifts"]["brent"]
+        rsi = next(s for s in shifts if s["field"] == "rsi14")
+        assert rsi["from"] == 65.0
+        assert rsi["to"] is None
+
+    def test_missing_tv_indicators_block_tolerated(self, tmp_path):
+        """v:1 snapshots without tvIndicators at all don't crash the diff."""
+        old = make_snapshot()  # no tvIndicators key
+        new = make_snapshot()  # also no tvIndicators key
+        # Force a non-tv change so hasChanges logic has something to react to
+        new["marketSnapshot"]["brent"] = 120.0
+        delta, code = run_diff(
+            write_snapshot(tmp_path, "o.json", old),
+            write_snapshot(tmp_path, "n.json", new),
+        )
+        # Exit code 0 because of the market change; tvIndicatorShifts key
+        # exists but is empty (backward-compat path).
+        assert code == 0
+        assert delta["tvIndicatorShifts"] == {}

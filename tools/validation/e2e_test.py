@@ -43,7 +43,7 @@ from mock_dialectic import (
 SNAPSHOT_KEYS = {
     "v", "timestamp", "title", "nodeStates", "confluenceScores",
     "cascadePhase", "countdowns", "marketSnapshot", "scenarioImpacts",
-    "portfolioSummary", "horizonTrace",
+    "portfolioSummary", "horizonTrace", "tvIndicators",
 }
 
 
@@ -370,6 +370,7 @@ class TestSnapshotDiff:
         expected_keys = {
             "hasChanges", "stateChanges", "confluenceChanges",
             "countdownChanges", "marketChanges", "newNodes", "removedNodes",
+            "tvIndicatorShifts",
         }
         assert expected_keys == set(delta.keys()), (
             f"Missing: {expected_keys - set(delta.keys())}, "

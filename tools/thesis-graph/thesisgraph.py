@@ -195,11 +195,16 @@ def eval_node_state(node: dict, upstream_states: dict, edges: list) -> str:
             lvl = th.get("level", 0)
             if current >= lvl:
                 # WHY: closesRequired gates firing on N daily closes above the level.
-                # Python runs at generation time without the browser's close log, so
-                # we return "approaching" — the browser JS will promote to "fired"
-                # once sufficient closes are recorded.
+                # The node-level `closesObserved` counter is populated by the
+                # derived-indicators pass (local Yahoo close series) or by Pine Script
+                # webhooks. When it reaches closesRequired we promote in Python too;
+                # otherwise we stay "approaching" and the browser JS can promote
+                # later if the user enters additional closes interactively.
                 closes_req = th.get("closesRequired")
                 if closes_req and closes_req > 0:
+                    closes_obs = int(node.get("closesObserved", 0) or 0)
+                    if closes_obs >= closes_req:
+                        return "fired"
                     return "approaching"
                 return "fired"
         # Check approaching (within 5% of lowest threshold)
@@ -285,6 +290,9 @@ def eval_node_state(node: dict, upstream_states: dict, edges: list) -> str:
                 # WHY: Same closesRequired gating as price nodes — see comment above.
                 closes_req = node.get("closesRequired")
                 if closes_req and closes_req > 0:
+                    closes_obs = int(node.get("closesObserved", 0) or 0)
+                    if closes_obs >= closes_req:
+                        return "fired"
                     return "approaching"
                 return "fired"
             ratio = current / threshold if threshold else 999
@@ -623,6 +631,17 @@ def export_state(cfg: dict, states: dict, confluence: dict,
             "confluence": result["confluence"],
         }
 
+    # --- tvIndicators: non-causal snapshot overlay ---
+    # WHY top-level: Dialectic consumers and diff-snapshots scan top-level
+    # keys; embedding under marketSnapshot would mix derived overlays with
+    # raw prices. Always emitted (possibly empty) so v:2 snapshot shape is
+    # stable regardless of whether any node has derivedIndicators.
+    tv_indicators: dict = {}
+    for node in nodes:
+        tv = node.get("tvIndicators")
+        if isinstance(tv, dict) and tv:
+            tv_indicators[node["id"]] = dict(tv)
+
     # --- Assemble snapshot ---
     snapshot = {
         "v": 2,
@@ -636,6 +655,7 @@ def export_state(cfg: dict, states: dict, confluence: dict,
         "scenarioImpacts": scenario_impacts,
         "portfolioSummary": portfolio_summary,
         "horizonTrace": horizon_trace,
+        "tvIndicators": tv_indicators,
     }
 
     return snapshot
@@ -839,6 +859,192 @@ def fetch_polymarket(cfg: dict) -> dict:
 
 
 # =========================================================================
+# DERIVED INDICATORS (local RSI / ATR / SMA, non-causal overlays)
+# =========================================================================
+
+_YAHOO_CHART_BASE = "https://query1.finance.yahoo.com/v8/finance/chart/"
+
+
+def fetch_ohlcv_for_derived(cfg: dict, retries: int = 2) -> dict:
+    """Fetch 3 months of OHLCV for symbols referenced by derivedIndicators.
+
+    WHY a separate fetch from fetch_prices(): fetch_prices() uses the v7
+    spark batch endpoint, which returns only the current price (no close
+    history). The v8 chart endpoint returns full OHLCV series but is
+    per-symbol, not batched. We only pay the extra round-trips for symbols
+    that actually need history for indicator computation — typically
+    4–8 symbols per book, not the full watchlist.
+
+    Mutates cfg in-place by adding a transient "_ohlcv" key:
+        cfg["_ohlcv"][symbol] = {"closes":[...], "highs":[...], "lows":[...]}
+
+    The leading-underscore name marks it transient. compute_derived_indicators()
+    strips it before returning, so it never leaks into book JSONs that
+    get written back by update_config_file().
+    """
+    import urllib.parse
+
+    wanted: set[str] = set()
+    for node in cfg.get("nodes", []):
+        for spec in node.get("derivedIndicators", []) or []:
+            if isinstance(spec, dict) and spec.get("symbol"):
+                wanted.add(str(spec["symbol"]))
+
+    if not wanted:
+        return cfg
+
+    cfg.setdefault("_ohlcv", {})
+    fetched = 0
+    for symbol in sorted(wanted):
+        encoded = urllib.parse.quote(symbol, safe="=^.-")
+        url = f"{_YAHOO_CHART_BASE}{encoded}?range=3mo&interval=1d"
+        succeeded = False
+        for attempt in range(1, retries + 1):
+            try:
+                req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urlopen(req, timeout=20) as resp:
+                    data = json.loads(resp.read())
+                chart = data.get("chart", {})
+                results = chart.get("result") or []
+                if not results:
+                    err = chart.get("error") or "no result"
+                    print(f"  ohlcv {symbol}: empty result ({err})", file=sys.stderr)
+                    succeeded = True
+                    break
+                quote = results[0].get("indicators", {}).get("quote", [{}])[0]
+                closes_raw = quote.get("close") or []
+                highs_raw = quote.get("high") or []
+                lows_raw = quote.get("low") or []
+                closes = [round(float(c), 4) for c in closes_raw if c is not None]
+                highs = [round(float(h), 4) for h in highs_raw if h is not None]
+                lows = [round(float(l), 4) for l in lows_raw if l is not None]
+                if closes:
+                    cfg["_ohlcv"][symbol] = {
+                        "closes": closes,
+                        "highs": highs,
+                        "lows": lows,
+                    }
+                    fetched += 1
+                    print(f"  ohlcv {symbol}: {len(closes)} closes", file=sys.stderr)
+                succeeded = True
+                break
+            except (URLError, HTTPError, TimeoutError, OSError) as e:
+                if attempt < retries:
+                    time.sleep(2)
+                else:
+                    print(f"  ohlcv {symbol}: failed ({e})", file=sys.stderr)
+            except (json.JSONDecodeError, KeyError, IndexError, ValueError) as e:
+                print(f"  ohlcv {symbol}: parse error ({e})", file=sys.stderr)
+                break
+        if succeeded:
+            time.sleep(0.4)
+
+    print(f"  ohlcv: fetched {fetched}/{len(wanted)} symbol(s)", file=sys.stderr)
+    return cfg
+
+
+def compute_derived_indicators(cfg: dict) -> dict:
+    """Populate each node's tvIndicators from its derivedIndicators specs.
+
+    Call order: runs AFTER fetch_ohlcv_for_derived() (which populates the
+    transient cfg["_ohlcv"] stash) and BEFORE propagate() (so the
+    closesObserved counter bump is visible to eval_node_state's
+    closesRequired gate).
+
+    Mutates cfg in-place:
+        - Writes node["tvIndicators"] = {"rsi14": ..., "atr14": ...,
+          "source": "derived_from_yahoo", "computedAt": ISO8601}.
+        - Bumps node["closesObserved"] for price nodes whose threshold has
+          closesRequired set, using the contiguous tail-run of closes
+          above the threshold level.
+        - Strips cfg["_ohlcv"] at the end (transient only).
+
+    Does NOT touch node["current"], node["state"], node["probability"], or
+    any other propagation-read field. The lone exception is closesObserved,
+    which was designed to be exactly this kind of auto-incrementing counter
+    — see eval_node_state's closesRequired gate comment.
+    """
+    di_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "data-fetch")
+    )
+    if di_dir not in sys.path:
+        sys.path.insert(0, di_dir)
+
+    try:
+        import derived_indicators as di
+    except ImportError as e:
+        print(f"  derived_indicators: import failed: {e}", file=sys.stderr)
+        cfg.pop("_ohlcv", None)
+        return cfg
+
+    ohlcv = cfg.get("_ohlcv") or {}
+    if not ohlcv:
+        print("  derived_indicators: no OHLCV available, skipping", file=sys.stderr)
+        cfg.pop("_ohlcv", None)
+        return cfg
+
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    updated_nodes = 0
+    counter_bumps = 0
+
+    for node in cfg.get("nodes", []):
+        specs = node.get("derivedIndicators") or []
+        if not specs:
+            continue
+
+        try:
+            tv = di.compute_node_indicators(node, ohlcv)
+        except ValueError as e:
+            print(f"  derived_indicators: {e}", file=sys.stderr)
+            continue
+
+        if tv:
+            tv["source"] = "derived_from_yahoo"
+            tv["computedAt"] = now_iso
+            node["tvIndicators"] = tv
+            updated_nodes += 1
+
+        # closesObserved integration — the ONE authorized write into an
+        # engine-read field. The closesRequired gate at eval_node_state
+        # was designed to consume this counter; we're feeding it the data
+        # it was waiting for, not adding new state logic.
+        if node.get("type") != "price":
+            continue
+        for spec in specs:
+            if not isinstance(spec, dict):
+                continue
+            symbol = spec.get("symbol")
+            series = ohlcv.get(symbol) or {}
+            closes = series.get("closes") or []
+            if not closes:
+                continue
+            for th in node.get("thresholds", []) or []:
+                if not th.get("closesRequired"):
+                    continue
+                level = th.get("level")
+                if level is None:
+                    continue
+                count = di.consecutive_closes_above(closes, float(level))
+                prior = int(node.get("closesObserved", 0) or 0)
+                if count > prior:
+                    node["closesObserved"] = count
+                    print(
+                        f"  {node['id']}: closesObserved {prior}->{count} "
+                        f"(>= {level})",
+                        file=sys.stderr,
+                    )
+                    counter_bumps += 1
+
+    print(
+        f"  derived_indicators: updated {updated_nodes} node(s), "
+        f"bumped {counter_bumps} counter(s)",
+        file=sys.stderr,
+    )
+    cfg.pop("_ohlcv", None)
+    return cfg
+
+
+# =========================================================================
 # DATA TRANSFORM
 # =========================================================================
 
@@ -896,6 +1102,10 @@ def build_nodes_js(cfg: dict) -> str:
             d["condition"] = n["condition"]
         if "closesRequired" in n:
             d["closesRequired"] = n["closesRequired"]
+        if "closesObserved" in n:
+            d["closesObserved"] = n["closesObserved"]
+        if "tvIndicators" in n:
+            d["tvIndicators"] = n["tvIndicators"]
         if "additionalCondition" in n:
             d["additionalCondition"] = n["additionalCondition"]
         if "action" in n:
@@ -2392,6 +2602,16 @@ Examples:
         # run when --fetch is used so the graph has complete live data.
         print("\nFetching Polymarket probabilities...", file=log)
         cfg = fetch_polymarket(cfg)
+        # WHY derived indicators AFTER polymarket, BEFORE update_config:
+        # (a) they may bump closesObserved which the propagation engine
+        # reads, so they need to be applied before any propagate() call;
+        # (b) they mutate nodes, so update_config must see the results to
+        # persist them; (c) they live on the same cfg dict as everything
+        # else for the rest of the pipeline.
+        print("\nFetching OHLCV for derived indicators...", file=log)
+        cfg = fetch_ohlcv_for_derived(cfg)
+        print("\nComputing derived indicators...", file=log)
+        cfg = compute_derived_indicators(cfg)
         if args.update_config:
             update_config_file(args.config, cfg)
 

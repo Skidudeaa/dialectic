@@ -98,7 +98,27 @@
           "color": "#D32F2F"
         }
       },
-      "context": "Brent up 53% from pre-crisis. Goldman scenarios: base $130, bear $155. Dallas Fed Hormuz model projects $115-135 sustained."
+      "context": "Brent up 53% from pre-crisis. Goldman scenarios: base $130, bear $155. Dallas Fed Hormuz model projects $115-135 sustained.",
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "BZ=F",
+          "overlay": true
+        },
+        {
+          "kind": "atr",
+          "period": 14,
+          "symbol": "BZ=F",
+          "overlay": true
+        },
+        {
+          "kind": "sma",
+          "period": 50,
+          "symbol": "BZ=F",
+          "overlay": true
+        }
+      ]
     },
     {
       "id": "diesel",
@@ -265,7 +285,15 @@
         }
       ],
       "lag": "6-12 months from fertilizer spike",
-      "context": "Downstream of planting miss. Yield loss 10-30% on corn. Food CPI acceleration begins Q4 2026."
+      "context": "Downstream of planting miss. Yield loss 10-30% on corn. Food CPI acceleration begins Q4 2026.",
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "ZW=F",
+          "overlay": true
+        }
+      ]
     },
     {
       "id": "dxy-stress",
@@ -291,7 +319,15 @@
           "label": "squeeze intensifies"
         }
       ],
-      "context": "DXY strengthening from oil-import dollar demand, not US strength. Classic petrodollar squeeze."
+      "context": "DXY strengthening from oil-import dollar demand, not US strength. Classic petrodollar squeeze.",
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "DX-Y.NYB",
+          "overlay": true
+        }
+      ]
     },
     {
       "id": "em-currency",
@@ -370,7 +406,15 @@
           "label": "VIX"
         }
       ],
-      "context": "2008 template: oil collapsed from $147→$32 in 5 months as demand was destroyed. The cure for high prices is high prices."
+      "context": "2008 template: oil collapsed from $147→$32 in 5 months as demand was destroyed. The cure for high prices is high prices.",
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "CL=F",
+          "overlay": true
+        }
+      ]
     },
     {
       "id": "curve",

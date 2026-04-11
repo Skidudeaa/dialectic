@@ -109,7 +109,27 @@
           "color": "#D32F2F"
         }
       },
-      "context": "PPI goods inflation at 5.8% annualized. Tariffs add 70+ bps to core inflation per Goldman. Firms with weak pricing power face margin compression. Import costs for steel up 41%, autos up 25%."
+      "context": "PPI goods inflation at 5.8% annualized. Tariffs add 70+ bps to core inflation per Goldman. Firms with weak pricing power face margin compression. Import costs for steel up 41%, autos up 25%.",
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "XLI",
+          "overlay": true
+        },
+        {
+          "kind": "atr",
+          "period": 14,
+          "symbol": "XLI",
+          "overlay": true
+        },
+        {
+          "kind": "sma",
+          "period": 50,
+          "symbol": "XLI",
+          "overlay": true
+        }
+      ]
     },
     {
       "id": "supply-chain",
@@ -198,7 +218,15 @@
           "status": "red"
         }
       ],
-      "context": "25% Section 232 auto tariff since April 2025 (reduced to 15% for Japan/EU via deals). Average new vehicle price impact $2,500-4,000. Automakers absorbing partial costs via margin compression. Detroit Three all guiding lower for 2026."
+      "context": "25% Section 232 auto tariff since April 2025 (reduced to 15% for Japan/EU via deals). Average new vehicle price impact $2,500-4,000. Automakers absorbing partial costs via margin compression. Detroit Three all guiding lower for 2026.",
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "CARZ",
+          "overlay": true
+        }
+      ]
     },
     {
       "id": "tech-supply",
@@ -365,7 +393,15 @@
           "color": "#D32F2F"
         }
       },
-      "context": "USD/CNY at 6.916 — yuan has actually strengthened 4.8% over 12 months. China using currency stability as a policy tool, not weaponizing it. But if tariffs escalate further or truce breaks, PBOC may allow managed depreciation to offset tariff impact. 7.00 is the key level."
+      "context": "USD/CNY at 6.916 — yuan has actually strengthened 4.8% over 12 months. China using currency stability as a policy tool, not weaponizing it. But if tariffs escalate further or truce breaks, PBOC may allow managed depreciation to offset tariff impact. 7.00 is the key level.",
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "USDCNY=X",
+          "overlay": true
+        }
+      ]
     },
     {
       "id": "consumer-confidence",

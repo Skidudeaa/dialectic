@@ -14,6 +14,7 @@ import pytest
 # Add parent dir to path so we can import the module
 sys.path.insert(0, os.path.dirname(__file__))
 from thesisgraph import (
+    compute_derived_indicators,
     eval_node_state,
     export_state,
     load_config,
@@ -30,7 +31,7 @@ SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "thesisgraph.py")
 REQUIRED_KEYS = {
     "v", "timestamp", "title", "nodeStates", "confluenceScores",
     "cascadePhase", "countdowns", "marketSnapshot", "scenarioImpacts",
-    "portfolioSummary", "horizonTrace",
+    "portfolioSummary", "horizonTrace", "tvIndicators",
 }
 
 
@@ -665,6 +666,115 @@ class TestEvalNodeState:
     def test_reversal_no_threshold_stable(self):
         node = {"id": "r1", "type": "reversal", "current": 80}
         assert eval_node_state(node, {}, []) == "stable"
+
+
+# =========================================================================
+# Phase 1 TradingView integration: derived indicators + closesObserved
+# =========================================================================
+
+class TestDerivedIndicatorsFlow:
+    """Seven tests covering the Phase 1 engine enrichment:
+    tvIndicators top-level key, compute_derived_indicators mutation, and the
+    closesObserved -> eval_node_state promotion path.
+    """
+
+    def _make_cfg_with_derived(self, level: int = 115,
+                               closes_required: int = 3) -> dict:
+        """Build a minimal cfg with one price node and pre-populated OHLCV."""
+        return {
+            "meta": {"title": "Unit Test Book"},
+            "nodes": [
+                {
+                    "id": "brent",
+                    "label": "Brent",
+                    "type": "price",
+                    "current": 116.0,
+                    "thresholds": [
+                        {"level": level, "label": "persistence",
+                         "closesRequired": closes_required}
+                    ],
+                    "derivedIndicators": [
+                        {"kind": "rsi", "period": 14, "symbol": "BZ=F",
+                         "overlay": True},
+                    ],
+                },
+            ],
+            "edges": [],
+            # Pre-populated OHLCV stash — bypasses fetch_ohlcv_for_derived.
+            "_ohlcv": {
+                "BZ=F": {
+                    # 30 closes, final 4 above 115 consecutively
+                    "closes": [100 + i * 0.5 for i in range(26)] + [115.5, 116, 117, 118],
+                    "highs": [],
+                    "lows": [],
+                },
+            },
+        }
+
+    def test_tv_indicators_top_level_key_present(self, cfg, evaluated):
+        states, confluence, phase_num, phase_key, scenarios_result = evaluated
+        snapshot = export_state(cfg, states, confluence, phase_num, phase_key,
+                                scenarios_result)
+        assert "tvIndicators" in snapshot
+        assert isinstance(snapshot["tvIndicators"], dict)
+
+    def test_tv_indicators_empty_when_no_derived_specs(self, cfg, evaluated):
+        """Shipping books do not yet have derivedIndicators — tvIndicators
+        should be an empty dict, NOT missing."""
+        states, confluence, phase_num, phase_key, scenarios_result = evaluated
+        snapshot = export_state(cfg, states, confluence, phase_num, phase_key,
+                                scenarios_result)
+        assert snapshot["tvIndicators"] == {}
+
+    def test_compute_derived_populates_tv_indicators(self):
+        cfg = self._make_cfg_with_derived()
+        compute_derived_indicators(cfg)
+        brent = cfg["nodes"][0]
+        assert "tvIndicators" in brent
+        assert "rsi14" in brent["tvIndicators"]
+        assert brent["tvIndicators"]["source"] == "derived_from_yahoo"
+        assert "computedAt" in brent["tvIndicators"]
+
+    def test_compute_derived_strips_transient_ohlcv(self):
+        cfg = self._make_cfg_with_derived()
+        compute_derived_indicators(cfg)
+        # Transient stash must be gone — it never leaks to disk via
+        # update_config_file(), which is what prevents book-JSON bloat.
+        assert "_ohlcv" not in cfg
+
+    def test_compute_derived_bumps_closes_observed(self):
+        cfg = self._make_cfg_with_derived(level=115, closes_required=3)
+        brent = cfg["nodes"][0]
+        assert brent.get("closesObserved", 0) == 0
+        compute_derived_indicators(cfg)
+        # The fixture ends in 4 consecutive closes >= 115 → counter = 4
+        assert brent.get("closesObserved") == 4
+
+    def test_closes_observed_meets_required_promotes_to_fired(self):
+        """eval_node_state must promote to fired when the counter is satisfied."""
+        node = {
+            "id": "brent",
+            "type": "price",
+            "current": 116.0,
+            "thresholds": [
+                {"level": 115, "label": "persistence", "closesRequired": 3}
+            ],
+            "closesObserved": 3,  # exactly matches
+        }
+        assert eval_node_state(node, {}, []) == "fired"
+
+    def test_closes_observed_below_required_stays_approaching(self):
+        """Without enough observed closes, the gate holds at approaching."""
+        node = {
+            "id": "brent",
+            "type": "price",
+            "current": 116.0,
+            "thresholds": [
+                {"level": 115, "label": "persistence", "closesRequired": 3}
+            ],
+            "closesObserved": 2,  # one short
+        }
+        assert eval_node_state(node, {}, []) == "approaching"
 
 
 if __name__ == "__main__":
