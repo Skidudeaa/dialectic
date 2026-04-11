@@ -70,14 +70,12 @@ python3 tools/bridge/diff-snapshots.py snapshots/old.json snapshots/new.json && 
 # Start mock Dialectic server for testing
 python3 tools/validation/mock_dialectic.py --port 8002
 
-# === Commodity Book (legacy flat trigger model) ===
-
-# Generate commodity book dashboard
-python3 tools/commodity-book/bookgen.py books/iran-hormuz-2026.json -o output/iran-hormuz.html
-
 # === Tests ===
 
-# Full suite (223 tests)
+# Full suite (333 tests: 223 CLI + 60 outcomes + 50 web)
+python3 -m pytest tools/thesis-graph/test_export.py tools/bridge/ tools/data-fetch/test_polymarket.py tools/validation/e2e_test.py tools/outcomes/ web/test_web.py -q
+
+# CLI tools only (223)
 python3 -m pytest tools/thesis-graph/test_export.py tools/bridge/test_diff.py tools/bridge/test_push.py tools/bridge/test_run_all.py tools/data-fetch/test_polymarket.py tools/validation/e2e_test.py -q
 
 # By component
@@ -87,6 +85,8 @@ python3 -m pytest tools/bridge/test_push.py -q               # 26 — bridge scr
 python3 -m pytest tools/bridge/test_run_all.py -q            # 20 — multi-book runner
 python3 -m pytest tools/data-fetch/test_polymarket.py -q     # 41 — Polymarket fetcher
 python3 -m pytest tools/validation/e2e_test.py -q            # 39 — E2E pipeline
+python3 -m pytest tools/outcomes/ -q                         # 60 — trade lifecycle + cross-book + morning brief
+python3 -m pytest web/test_web.py -q                         # 50 — web layer (auth, state, routes, concurrency)
 
 # === Web UI ===
 
@@ -201,9 +201,22 @@ Dialectic server: `/root/DwoodAmo/dialectic` — run with `PORT=8002 python dial
 - `mock_dialectic.py` — mock Dialectic HTTP server with schema validation, error injection, standalone + importable
 - `e2e_test.py` — full pipeline tests: snapshot → diff → push → verify round trip
 
-### Commodity Book Generator (`tools/commodity-book/bookgen.py`)
+### Outcomes / Trade Lifecycle (`tools/outcomes/`)
 
-Legacy flat trigger model — 9 instruments, 9 triggers, 4 overlays. Superseded by the thesis graph engine for new work.
+Synthesis layer that sits on top of the thesis graph: REPAIR (amplification + lag propagation) → TAG (provenance attribution) → CAPTURE (predicate lifecycle). Wired into `run-all.py` as Step 7 and exposed to the web UI via `web/adapters/outcomes.py`.
+
+Modules (stdlib only, 60 tests):
+- `lifecycle_monitor.py` (705 lines) — Predicate engine: threshold / countdown / conditional / reversal types. Evaluates canonical trades (XOP_GATE, CF_GATE, SPY_SHORT_GATE) against live snapshots. Multi-failure attribution + cross-trade aggregation (`LedgerAnalyzer`). Empirical adjustment from historical outcomes.
+- `cross_book.py` — Scans multiple thesis snapshots for shared market data, simultaneous cascade phase alignment, correlated confluence moves, cross-book recession signal.
+- `morning_brief.py` — Generates structured plain-text brief (snapshot state + cross-book flags + ledger summary) for operator consumption. Surfaced via `/api/outcomes/brief`.
+- `log_entry.py` — CLI to seed ENTRY events into the JSONL trade ledger (`outcomes/trades/TRD-*.jsonl`).
+- `e2e_integration.py` — Integration harness validating the full REPAIR → TAG → CAPTURE pipeline against real snapshots.
+
+Active trades (see `outcomes/open_trades.json`): TRD-XOP-HORMUZ, TRD-CF-PLANTING, TRD-SH-RECESSION.
+
+### Project Origin (`_archive/legacy-commodity-book/`)
+
+Trading Desk started as `bookgen.py` — a flat trigger-model HTML dashboard generator (9 instruments, 9 triggers, 4 overlays, no causal structure). Using it in anger surfaced the limitations that drove the thesis-graph engine: no propagation, no scenarios, no phase tracking, no confluence scoring. See `research/bookgen-lessons.md` for the full migration rationale. The tool + its last config + generated artifacts are preserved in `_archive/legacy-commodity-book/` as the project's origin breadcrumb.
 
 ### Web UI Backend (`web/`)
 
@@ -250,8 +263,7 @@ tradingDesk/
 ├── INTEGRATION.md                   # Dialectic integration spec
 ├── books/                           # thesis configs (one JSON per thesis)
 │   ├── iran-hormuz-graph.json       # oil shock DAG — 16 nodes, 14 edges
-│   ├── trump-tariffs-graph.json     # tariff escalation DAG — 15 nodes, 18 edges
-│   └── iran-hormuz-2026.json       # legacy commodity book config
+│   └── trump-tariffs-graph.json     # tariff escalation DAG — 15 nodes, 18 edges
 ├── output/                          # generated HTML dashboards
 ├── snapshots/                       # exported graph state JSONs
 ├── tools/
@@ -272,8 +284,17 @@ tradingDesk/
 │   ├── validation/
 │   │   ├── e2e_test.py            # full pipeline E2E tests (39)
 │   │   └── mock_dialectic.py      # mock Dialectic server
-│   └── commodity-book/
-│       └── bookgen.py             # legacy commodity book generator
+│   └── outcomes/                   # trade lifecycle synthesis layer (60 tests)
+│       ├── lifecycle_monitor.py   # predicate engine, canonical trades, ledger analysis
+│       ├── cross_book.py          # cross-thesis signal correlation
+│       ├── morning_brief.py       # operator brief generator
+│       ├── log_entry.py           # JSONL trade ledger CLI
+│       └── e2e_integration.py     # REPAIR→TAG→CAPTURE integration harness
+├── outcomes/                        # trade state (open_trades.json + trades/*.jsonl ledger)
+├── _archive/                        # superseded code and orphan artifacts
+│   ├── legacy-commodity-book/      # project origin (bookgen.py + last config + HTML + screenshots)
+│   ├── empty-placeholders/          # tools/polymarket, tools/signals (never populated)
+│   └── orphan-snapshots/            # pre-graph-version snapshot files
 ├── web/                             # FastAPI backend
 │   ├── main.py                      # app entry + route registration
 │   ├── auth.py                      # JWT auth (scrypt, dev users)
@@ -321,5 +342,5 @@ tradingDesk/
 - HTML dashboards are generated, not hand-built
 - All outputs are self-contained single-file HTML
 - Tests use pytest, run with `python3 -m pytest`
-- CLI tools: 223 tests across 6 test files
-- Web layer: web/test_web.py (auth, state, routes, validation, concurrency)
+- Total: 333 tests — 223 CLI (thesis-graph, bridge, data-fetch, validation) + 60 outcomes (lifecycle_monitor, cross_book, morning_brief) + 50 web (auth, state, routes, concurrency)
+- `_archive/` holds superseded code; do not delete without explicit review. Currently contains `empty-placeholders/` (tools/polymarket, tools/signals — never populated) and `orphan-snapshots/` (pre-graph-version snapshots).

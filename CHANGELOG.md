@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## 2026-04-10 — Post-v0.2.0 Hardening
+
+### Fixes
+- `marketField` sync only updates matching node→key pairs (prevented cross-contamination of unrelated nodes when price inputs changed)
+- Live price flow: restored missing wiring between fetch-prices and thesis state refresh
+- LLM model IDs: corrected OpenRouter model identifiers for @claude, @gpt, @gemini routing
+- Streaming persistence: streamed LLM responses now persist correctly to the message log
+- Static serving: SPA bundle served correctly from FastAPI
+
+### Features
+- Streaming UX for LLM responses (token-by-token display)
+- Agent API endpoints exposed (room update/delete, journal update, predictions single-get)
+- Frontend test suite added (api.test.ts)
+
+### Security / Reliability
+- Security hardening pass on web layer
+- Reliability + performance improvements
+- Test coverage expanded (web/test_web.py now 50 tests, full suite 333)
+
+### Consolidation
+- Archived empty placeholder dirs `tools/polymarket/` and `tools/signals/` to `_archive/empty-placeholders/`
+- Archived orphan snapshots `test.json` and `trump-tariffs-latest.json` to `_archive/orphan-snapshots/`
+- Archived `tools/commodity-book/bookgen.py` (legacy flat-trigger generator, 974 lines, superseded by thesis-graph) to `_archive/legacy-commodity-book/` with breadcrumb README. Preserved as project origin — see `research/bookgen-lessons.md` for the migration rationale
+- Archived legacy `books/iran-hormuz-2026.json`, `output/iran-hormuz.html`, `active-commodity-book.html`, and 9 positional screenshots with the bookgen archive
+- Updated CLAUDE.md to document `tools/outcomes/` (previously missing), correct test count (223 → 333), and replace the Commodity Book section with a Project Origin breadcrumb
+- Added `docs/plans/2026-04-10-001-feat-tradingview-webapp-integration-plan.md` — re-architected Alpha v2 TradingView plan as a webapp-integrated feature (single FastAPI process, WebSocket alert broadcast, frontend UI for binding management)
+
+---
+
 ## 2026-04-07 — Web Layer (v0.2.0)
 
 ### Phase 6: Bug Fixes
@@ -73,4 +102,4 @@
 - Makefile: dev, build, test, docker-up, docker-down, install
 - .env.example with all env vars documented
 - DECISIONS.md documenting all design choices
-- All 223 existing tests pass throughout
+- All 223 CLI tests pass throughout (outcomes suite + web suite added subsequently; see 2026-04-10 entry)
