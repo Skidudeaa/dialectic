@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-04-10T04:41:51Z",
+  "timestamp": "2026-04-11T18:44:19Z",
   "title": "Iran/Hormuz Thesis \u2014 March 2026",
   "nodeStates": {
     "hormuz": "fired",
@@ -33,11 +33,11 @@
       "nodeId": "planting-miss",
       "label": "Planting Cycle Miss",
       "deadline": "2026-04-15",
-      "daysRemaining": 6
+      "daysRemaining": 4
     }
   ],
   "marketSnapshot": {
-    "brent": 96.3,
+    "brent": 95.2,
     "wti": 99.64,
     "goldSpot": 4492,
     "usRigs": 543,
@@ -141,6 +141,30 @@
       "confluence": {
         "em-stress": 1.3
       }
+    }
+  },
+  "tvIndicators": {
+    "brent": {
+      "rsi14": 46.93,
+      "atr14": 8.81,
+      "sma50": 87.33,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-04-11T18:44:19Z"
+    },
+    "food-spike": {
+      "rsi14": 42.07,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-04-11T18:44:19Z"
+    },
+    "dxy-stress": {
+      "rsi14": 42.88,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-04-11T18:44:19Z"
+    },
+    "demand-destruction": {
+      "rsi14": 52.33,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-04-11T18:44:19Z"
     }
   }
 }

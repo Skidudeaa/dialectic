@@ -1,13 +1,13 @@
 {
   "v": 2,
-  "timestamp": "2026-04-10T04:30:05Z",
+  "timestamp": "2026-04-10T04:41:51Z",
   "title": "Iran/Hormuz Thesis \u2014 March 2026",
   "nodeStates": {
     "hormuz": "fired",
     "curve": "stable",
     "rig-confirm": "monitoring",
     "services": "gated",
-    "brent": "approaching",
+    "brent": "stable",
     "fert-shortage": "approaching",
     "dxy-stress": "fired",
     "diesel": "fired",
@@ -37,31 +37,31 @@
     }
   ],
   "marketSnapshot": {
-    "brent": 112.57,
+    "brent": 96.3,
     "wti": 99.64,
     "goldSpot": 4492,
     "usRigs": 543,
     "nolaFert": 683,
     "usDiesel": 5.38,
     "curveSpread": 15,
-    "dxy": 100.18
+    "dxy": 98.87
   },
   "scenarioImpacts": {
     "reopen-apr1": {
       "probability": 0.1,
-      "netImpact": 0.1
+      "netImpact": 1.4
     },
     "closed-may": {
       "probability": 0.45,
-      "netImpact": 8.6
+      "netImpact": 14.4
     },
     "kharg-strike": {
       "probability": 0.15,
-      "netImpact": 4.9
+      "netImpact": 6.8
     },
     "selective-reopen": {
       "probability": 0.3,
-      "netImpact": 6.8
+      "netImpact": 10.7
     }
   },
   "portfolioSummary": {
@@ -92,7 +92,7 @@
         "rig-confirm": "monitoring",
         "services": "gated",
         "de-escalation": "stable",
-        "brent": "approaching",
+        "brent": "stable",
         "fert-shortage": "approaching",
         "planting-miss": "approaching"
       },
@@ -109,7 +109,7 @@
         "rig-confirm": "monitoring",
         "services": "gated",
         "de-escalation": "stable",
-        "brent": "approaching",
+        "brent": "stable",
         "fert-shortage": "approaching",
         "dxy-stress": "fired",
         "diesel": "fired",
@@ -126,7 +126,7 @@
         "curve": "stable",
         "rig-confirm": "monitoring",
         "services": "gated",
-        "brent": "approaching",
+        "brent": "stable",
         "fert-shortage": "approaching",
         "dxy-stress": "fired",
         "diesel": "fired",

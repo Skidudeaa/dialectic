@@ -718,12 +718,30 @@ class TestDerivedIndicatorsFlow:
         assert "tvIndicators" in snapshot
         assert isinstance(snapshot["tvIndicators"], dict)
 
-    def test_tv_indicators_empty_when_no_derived_specs(self, cfg, evaluated):
-        """Shipping books do not yet have derivedIndicators — tvIndicators
-        should be an empty dict, NOT missing."""
-        states, confluence, phase_num, phase_key, scenarios_result = evaluated
-        snapshot = export_state(cfg, states, confluence, phase_num, phase_key,
-                                scenarios_result)
+    def test_tv_indicators_empty_when_no_derived_specs(self):
+        """A book with zero derivedIndicators specs still gets a top-level
+        tvIndicators key — it's just an empty dict, NOT a missing field.
+
+        WHY a synthetic cfg: the shipping iran-hormuz-graph has derivedIndicators
+        on four nodes and those readings are persisted to disk on every fetch
+        (see compute_derived_indicators → update_config_file in the main flow).
+        Using the live cfg here would make this test flap based on when the
+        last fetch ran.
+        """
+        synthetic = {
+            "meta": {"title": "Synthetic"},
+            "nodes": [
+                {"id": "a", "label": "A", "type": "price", "current": 100,
+                 "thresholds": [{"level": 110}]},
+                {"id": "b", "label": "B", "type": "indicator"},
+            ],
+            "edges": [],
+        }
+        states = propagate(synthetic)
+        confluence = score_confluence(synthetic, states)
+        phase_num, phase_key = get_current_phase(synthetic)
+        snapshot = export_state(synthetic, states, confluence, phase_num,
+                                phase_key, [])
         assert snapshot["tvIndicators"] == {}
 
     def test_compute_derived_populates_tv_indicators(self):

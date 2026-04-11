@@ -74,7 +74,7 @@
           "symbol": "BZ=F"
         }
       ],
-      "current": 96.3,
+      "current": 95.2,
       "thresholds": [
         {
           "level": 115,
@@ -143,7 +143,14 @@
           "fireCount": 0,
           "lastFiredAt": null
         }
-      ]
+      ],
+      "tvIndicators": {
+        "rsi14": 46.93,
+        "atr14": 8.81,
+        "sma50": 87.33,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-11T18:44:19Z"
+      }
     },
     {
       "id": "diesel",
@@ -330,7 +337,12 @@
           "symbol": "ZW=F",
           "overlay": true
         }
-      ]
+      ],
+      "tvIndicators": {
+        "rsi14": 42.07,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-11T18:44:19Z"
+      }
     },
     {
       "id": "dxy-stress",
@@ -349,7 +361,7 @@
           "label": "Trade-Weighted USD"
         }
       ],
-      "current": 98.87,
+      "current": 98.7,
       "thresholds": [
         {
           "level": 102,
@@ -364,7 +376,12 @@
           "symbol": "DX-Y.NYB",
           "overlay": true
         }
-      ]
+      ],
+      "tvIndicators": {
+        "rsi14": 42.88,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-11T18:44:19Z"
+      }
     },
     {
       "id": "em-currency",
@@ -451,7 +468,12 @@
           "symbol": "CL=F",
           "overlay": true
         }
-      ]
+      ],
+      "tvIndicators": {
+        "rsi14": 52.33,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-11T18:44:19Z"
+      }
     },
     {
       "id": "curve",
@@ -627,7 +649,7 @@
         "monthly": 1400,
         "role": "high-beta E&P",
         "beta": 0.7,
-        "ref": 167.76,
+        "ref": 168.46,
         "targetLow": 210,
         "targetHigh": 225,
         "stop": 171
@@ -637,7 +659,7 @@
         "monthly": 1200,
         "role": "large-cap energy",
         "beta": 0.5,
-        "ref": 57.33,
+        "ref": 56.94,
         "targetLow": 68,
         "targetHigh": 72,
         "stop": 56
@@ -647,7 +669,7 @@
         "monthly": 800,
         "role": "global energy",
         "beta": 0.4,
-        "ref": 54.9,
+        "ref": 54.78,
         "targetLow": 64,
         "targetHigh": 68,
         "stop": 53
@@ -659,7 +681,7 @@
         "monthly": 800,
         "role": "nitrogen/fertilizer torque",
         "beta": 0.6,
-        "ref": 119.38,
+        "ref": 121.32,
         "targetLow": 150,
         "targetHigh": 160,
         "stop": 124
@@ -669,7 +691,7 @@
         "monthly": 600,
         "role": "potash/nitrogen/phosphate",
         "beta": 0.5,
-        "ref": 72.78,
+        "ref": 73.75,
         "targetLow": 82,
         "targetHigh": 88,
         "stop": 69
@@ -681,7 +703,7 @@
         "monthly": 1000,
         "role": "gold hedge (anti-dollar)",
         "beta": -0.5,
-        "ref": 437.91,
+        "ref": 437.13,
         "targetLow": 445,
         "targetHigh": 460,
         "stop": 395
@@ -693,7 +715,7 @@
         "monthly": 600,
         "role": "small ex-US (vulnerable)",
         "beta": -0.3,
-        "ref": 81.07,
+        "ref": 81.27,
         "targetLow": 78,
         "targetHigh": 81,
         "stop": 71
@@ -705,13 +727,13 @@
         "monthly": 1200,
         "role": "deployment ammo",
         "isReserve": true,
-        "ref": 100.46
+        "ref": 100.5
       },
       {
         "id": "STIP",
         "monthly": 400,
         "role": "near-term inflation hedge",
-        "ref": 103.43
+        "ref": 103.45
       }
     ],
     "services": [
@@ -719,7 +741,7 @@
         "id": "OIH",
         "overlay": true,
         "condition": "rig-confirm AND NOT curve-constraint",
-        "ref": 411.04,
+        "ref": 409.78,
         "targetLow": 460,
         "targetHigh": 500,
         "stop": 378
@@ -1164,7 +1186,7 @@
     {
       "key": "brent",
       "label": "BRENT $/bbl",
-      "value": 96.3,
+      "value": 95.2,
       "step": 0.01,
       "nodeId": "brent"
     },

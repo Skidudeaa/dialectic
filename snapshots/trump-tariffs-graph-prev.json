@@ -1,7 +1,7 @@
 {
-  "v": 1,
-  "timestamp": "2026-04-01T06:49:25Z",
-  "title": "Trump Tariff Escalation Thesis — March 2026",
+  "v": 2,
+  "timestamp": "2026-04-10T04:33:39Z",
+  "title": "Trump Tariff Escalation Thesis \u2014 March 2026",
   "nodeStates": {
     "tariff-shock": "fired",
     "section122-expiry": "gated",
@@ -34,7 +34,7 @@
       "nodeId": "section122-expiry",
       "label": "Section 122 Expiration",
       "deadline": "2026-07-24",
-      "daysRemaining": 114
+      "daysRemaining": 106
     }
   ],
   "marketSnapshot": {
@@ -42,7 +42,7 @@
     "corePce": 2.7,
     "umichSent": 53.3,
     "ismPmi": 52.4,
-    "usdCny": 6.916,
+    "usdCny": 6.83,
     "fedRate": 3.625,
     "tenYr": 4.35,
     "effectiveTariff": 13.7,
@@ -82,5 +82,71 @@
       "GLD $500/mo"
     ],
     "sgovAvailable": 800
+  },
+  "horizonTrace": {
+    "T+7d": {
+      "states": {
+        "tariff-shock": "fired",
+        "input-costs": "fired",
+        "supply-chain": "monitoring",
+        "tech-supply": "monitoring",
+        "retail-prices": "fired",
+        "ag-retaliation": "monitoring",
+        "usd-cny": "approaching",
+        "consumer-confidence": "monitoring",
+        "mfg-pmi": "monitoring",
+        "section122-expiry": "gated",
+        "earnings-compression": "monitoring",
+        "fed-response": "monitoring",
+        "negotiation": "stable",
+        "recession-risk": "monitoring",
+        "auto-sector": "fired"
+      },
+      "confluence": {}
+    },
+    "T+28d": {
+      "states": {
+        "tariff-shock": "fired",
+        "input-costs": "fired",
+        "supply-chain": "monitoring",
+        "tech-supply": "monitoring",
+        "retail-prices": "fired",
+        "usd-cny": "approaching",
+        "consumer-confidence": "monitoring",
+        "mfg-pmi": "monitoring",
+        "section122-expiry": "gated",
+        "earnings-compression": "monitoring",
+        "fed-response": "monitoring",
+        "negotiation": "stable",
+        "recession-risk": "monitoring",
+        "auto-sector": "fired",
+        "ag-retaliation": "fired"
+      },
+      "confluence": {}
+    },
+    "T+90d": {
+      "states": {
+        "tariff-shock": "fired",
+        "supply-chain": "monitoring",
+        "retail-prices": "fired",
+        "section122-expiry": "gated",
+        "input-costs": "fired",
+        "auto-sector": "fired",
+        "tech-supply": "fired",
+        "ag-retaliation": "fired",
+        "usd-cny": "approaching",
+        "mfg-pmi": "fired",
+        "consumer-confidence": "fired",
+        "earnings-compression": "fired",
+        "recession-risk": "fired",
+        "fed-response": "monitoring",
+        "negotiation": "stable"
+      },
+      "confluence": {
+        "consumer-confidence": 1.45,
+        "earnings-compression": 2.05,
+        "recession-risk": 1.25
+      }
+    }
   }
 }
