@@ -98,6 +98,42 @@ class ConnectionManager:
         for room_id in list(self._rooms.keys()):
             await self.broadcast(room_id, msg_type, payload, user=user)
 
+    async def broadcast_to_book_rooms(self, book_id: str, msg_type: str,
+                                      payload: dict, user: str = "system") -> int:
+        """Fan out a message to every connected room whose linked_book_id matches.
+
+        WHY scoped to linked rooms: TradingView alerts are book-specific
+        (e.g. a brent alert only affects iran-hormuz watchers). Broadcasting
+        to unrelated rooms would add noise. Falls back to zero broadcasts
+        when no rooms match — caller can choose to send a global broadcast
+        separately if that's the desired UX.
+
+        Returns the number of rooms actually broadcast to (useful for the
+        route's ack payload + audit log).
+        """
+        # Imported here (not at module top) to avoid a circular import —
+        # web.state is imported by routes which import web.ws.
+        from web import state as _state
+        try:
+            rooms = _state.list_rooms()
+        except Exception:  # pragma: no cover — file IO failure shouldn't block the webhook
+            log.warning("broadcast_to_book_rooms: failed to list rooms")
+            return 0
+
+        target_room_ids = [
+            r["id"] for r in rooms
+            if r.get("linked_book_id") == book_id
+        ]
+        sent = 0
+        for rid in target_room_ids:
+            # Only broadcast to rooms that have at least one live WS
+            async with self._lock:
+                has_connections = rid in self._rooms and bool(self._rooms[rid])
+            if has_connections:
+                await self.broadcast(rid, msg_type, payload, user=user)
+                sent += 1
+        return sent
+
     async def send_to(self, websocket: WebSocket, msg_type: str, payload: dict,
                       user: str = "system") -> None:
         """Send a typed message to a single connection."""

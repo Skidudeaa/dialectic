@@ -7,6 +7,7 @@ import {
   LogOut,
   Plus,
   ChevronLeft,
+  Activity,
 } from "lucide-react";
 import { apiFetch, getDisplayName, clearAuth } from "../lib/api";
 import type { Room, ThesisBook } from "../lib/types";
@@ -17,13 +18,14 @@ import MorningBrief from "../components/MorningBrief";
 import PredictionTracker from "../components/PredictionTracker";
 import TradeJournal from "../components/TradeJournal";
 import CrossBookPanel from "../components/CrossBookPanel";
+import TradingViewPanel from "../components/TradingViewPanel";
 import { useToast } from "../components/Toast";
 
 interface Props {
   onLogout: () => void;
 }
 
-type RightPanel = "thesis" | "predictions" | "journal" | "crossbook" | "brief" | null;
+type RightPanel = "thesis" | "predictions" | "journal" | "crossbook" | "brief" | "tradingview" | null;
 
 function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
@@ -138,6 +140,7 @@ export default function Dashboard({ onLogout }: Props) {
     { label: "Cross-book scan", type: "panel" as const, action: () => { togglePanel("crossbook"); setCmdPalette(false); } },
     { label: "Predictions", type: "panel" as const, action: () => { togglePanel("predictions"); setCmdPalette(false); } },
     { label: "Trade journal", type: "panel" as const, action: () => { togglePanel("journal"); setCmdPalette(false); } },
+    { label: "TradingView", type: "panel" as const, action: () => { togglePanel("tradingview"); setCmdPalette(false); } },
     { label: "New room", type: "action" as const, action: () => { setShowNewRoom(true); setSidebarOpen(true); setCmdPalette(false); } },
     { label: "Logout", type: "action" as const, action: () => { handleLogout(); setCmdPalette(false); } },
   ].filter((item) => !cmdQuery || item.label.toLowerCase().includes(cmdQuery.toLowerCase()));
@@ -165,6 +168,7 @@ export default function Dashboard({ onLogout }: Props) {
           <button onClick={() => togglePanel("crossbook")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "crossbook" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Cross-Book"><Scan size={13} /></button>
           <button onClick={() => togglePanel("predictions")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "predictions" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Predictions">P</button>
           <button onClick={() => togglePanel("journal")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "journal" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Journal">J</button>
+          <button onClick={() => togglePanel("tradingview")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "tradingview" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="TradingView"><Activity size={13} /></button>
           <div className="w-px h-4 bg-border mx-1" />
           <span className="text-text-dim text-[10px] font-mono">{getDisplayName()}</span>
           <button onClick={handleLogout} className="p-1 text-text-dim hover:text-danger" title="Logout"><LogOut size={11} /></button>
@@ -267,6 +271,7 @@ export default function Dashboard({ onLogout }: Props) {
               {rightPanel === "crossbook" && <CrossBookPanel />}
               {rightPanel === "predictions" && <PredictionTracker />}
               {rightPanel === "journal" && <TradeJournal />}
+              {rightPanel === "tradingview" && <TradingViewPanel bookId={linkedBookId} books={books} />}
             </div>
           </aside>
         )}

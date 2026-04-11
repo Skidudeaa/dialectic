@@ -324,6 +324,57 @@ def save_prediction(user: str, prediction: dict) -> dict:
     return record
 
 
+# ── TradingView event log ────────────────────────────────────────────────
+
+TV_EVENTS_FILE = DATA_DIR / "tradingview-events.jsonl"
+
+
+def save_tv_event(
+    *,
+    result: str,
+    book_id: Optional[str] = None,
+    binding_id: Optional[str] = None,
+    node_id: Optional[str] = None,
+    op: Optional[str] = None,
+    new_value: Any = None,
+    detail: Optional[str] = None,
+    source_ip: Optional[str] = None,
+) -> dict:
+    """Append a single TradingView webhook event to the audit log.
+
+    WHY jsonl: matches the project-wide append-log convention (predictions,
+    journal, messages). Every webhook call — success, auth failure, rate
+    limit — lands here, so an operator can reconstruct the full sequence
+    from a single file. `result` is the VerifyResult enum value or "ok".
+    """
+    record = {
+        "ts": _now_iso(),
+        "result": result,
+        "bookId": book_id,
+        "bindingId": binding_id,
+        "nodeId": node_id,
+        "op": op,
+        "newValue": new_value,
+        "detail": detail,
+        "sourceIP": source_ip,
+    }
+    append_jsonl(TV_EVENTS_FILE, record)
+    return record
+
+
+def list_tv_events(*, limit: int = 50,
+                   book_id: Optional[str] = None) -> List[dict]:
+    """Return the most recent TradingView events, newest first.
+
+    Optional book_id filter narrows the feed to a single thesis.
+    """
+    events = read_jsonl(TV_EVENTS_FILE)
+    if book_id:
+        events = [e for e in events if e.get("bookId") == book_id]
+    # Newest first — file is append-only so tail is newest
+    return list(reversed(events[-limit:]))
+
+
 def resolve_prediction(prediction_id: str, resolution: str) -> Optional[dict]:
     """Resolve a prediction. Atomic read-modify-write under exclusive lock."""
     _ensure_dir(PREDICTIONS_FILE.parent)

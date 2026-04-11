@@ -247,6 +247,105 @@ class LLMCompareRequest(BaseModel):
     room_id: Optional[str] = None
 
 
+# ── TradingView integration ───────────────────────────────────────────────
+
+# Allowed mutation ops on the webhook — four values only. Any incoming
+# op outside this set returns 422. See docs/plans/...tradingview...plan.md §5.
+TVOp = Literal[
+    "incrementClosesObserved",
+    "setNodeState",
+    "setProbability",
+    "setCurrent",
+]
+
+# Target states permitted on setNodeState — matches eval_node_state's
+# event-node branch. Disallowed targets return 422.
+TVNodeState = Literal["active", "resolved", "partial", "monitoring", "fired"]
+
+
+class TVBinding(BaseModel):
+    """A Pine alert → node mutation binding, stored on node.tvAlertBindings."""
+    bindingId: str
+    nodeId: str
+    op: TVOp
+    # op-specific optional fields
+    thresholdLevel: Optional[float] = None
+    targetState: Optional[TVNodeState] = None
+    expectedSymbol: Optional[str] = None
+    expectedPineAlertName: Optional[str] = None
+    description: str = ""
+    # Audit — last fire timestamp and count (populated on successful mutation)
+    lastFiredAt: Optional[str] = None
+    fireCount: int = 0
+
+
+class TVBindingCreate(BaseModel):
+    """POST body for creating a new binding. JWT-gated."""
+    bindingId: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$", max_length=64)
+    nodeId: str = Field(pattern=r"^[a-zA-Z0-9_-]+$", max_length=64)
+    op: TVOp
+    thresholdLevel: Optional[float] = None
+    targetState: Optional[TVNodeState] = None
+    expectedSymbol: Optional[str] = Field(default=None, max_length=32)
+    expectedPineAlertName: Optional[str] = Field(default=None, max_length=128)
+    description: str = Field(default="", max_length=500)
+
+
+class TVWebhookAlert(BaseModel):
+    """Pine Script → webhook body. Intentionally minimal: only the binding
+    reference + an optional numeric value. No free-form field writes."""
+    book: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$", max_length=64)
+    bindingId: str = Field(pattern=r"^[a-z0-9][a-z0-9-]*$", max_length=64)
+    value: Optional[float] = None
+    pineAlertName: Optional[str] = Field(default=None, max_length=128)
+    chartSymbol: Optional[str] = Field(default=None, max_length=32)
+
+
+class TVWebhookAck(BaseModel):
+    """Webhook success response. Echoes applied mutation for operator logs."""
+    status: Literal["ok"] = "ok"
+    bookId: str
+    nodeId: str
+    op: TVOp
+    newValue: Any  # int for incrementClosesObserved, str for state, float for price/prob
+
+
+class TVIndicatorReading(BaseModel):
+    """A single node's tvIndicators dict, flattened for the API surface."""
+    nodeId: str
+    rsi14: Optional[float] = None
+    atr14: Optional[float] = None
+    sma50: Optional[float] = None
+    source: Optional[str] = None
+    computedAt: Optional[str] = None
+    # Additional kind/period combinations land here
+    extra: Dict[str, float] = Field(default_factory=dict)
+
+
+class TVAlertEvent(BaseModel):
+    """A single audit entry from web/data/tradingview-events.jsonl."""
+    ts: str
+    bookId: str
+    nodeId: Optional[str] = None
+    bindingId: Optional[str] = None
+    op: Optional[TVOp] = None
+    newValue: Any = None
+    result: str  # "ok" | "bad_signature" | "bad_timestamp" | etc.
+    detail: Optional[str] = None
+    sourceIP: Optional[str] = None
+
+
+class TVStatus(BaseModel):
+    """GET /api/tradingview/status — operator-facing configuration snapshot."""
+    secretConfigured: bool
+    rateLimitPerMin: int
+    nonceTtlSeconds: int
+    clockSkewSeconds: int
+    activeNonces: int
+    webhookUrl: str
+    recentEventCount: int
+
+
 # ── Health ────────────────────────────────────────────────────────────────
 
 class HealthResponse(BaseModel):

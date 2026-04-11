@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { RefreshCw } from "lucide-react";
-import { apiFetch } from "../lib/api";
-import type { ThesisBook, ThesisState } from "../lib/types";
+import { apiFetch, getTVIndicators } from "../lib/api";
+import type { ThesisBook, ThesisState, TVIndicatorReading } from "../lib/types";
+import TVIndicatorBadge from "./TVIndicatorBadge";
 
 interface Props {
   bookId: string | null;
@@ -26,6 +27,7 @@ export default function ThesisViewer({ bookId, books }: Props) {
   const [selectedBook, setSelectedBook] = useState(bookId || "");
   const [state, setState] = useState<ThesisState | null>(null);
   const [loading, setLoading] = useState(false);
+  const [tvIndicators, setTVIndicators] = useState<Record<string, TVIndicatorReading>>({});
 
   useEffect(() => { if (bookId && !selectedBook) setSelectedBook(bookId); }, [bookId, selectedBook]);
 
@@ -34,10 +36,14 @@ export default function ThesisViewer({ bookId, books }: Props) {
     setLoading(true);
     apiFetch<ThesisState>(`/api/thesis/${selectedBook}/state`)
       .then(setState).catch(() => setState(null)).finally(() => setLoading(false));
+    // Fetch non-causal tvIndicators alongside state — ok to fail silently,
+    // these are display-only badges and the thesis view remains useful without them.
+    getTVIndicators(selectedBook).then(setTVIndicators).catch(() => setTVIndicators({}));
     // WHY: Auto-refresh every 5 minutes to catch state changes from pipeline runs.
     const interval = setInterval(() => {
       apiFetch<ThesisState>(`/api/thesis/${selectedBook}/state`)
         .then(setState).catch(() => {});
+      getTVIndicators(selectedBook).then(setTVIndicators).catch(() => {});
     }, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [selectedBook]);
@@ -96,7 +102,10 @@ export default function ThesisViewer({ bookId, books }: Props) {
             <div className="space-y-px">
               {sortedNodes.map(([id, st]) => (
                 <div key={id} className="flex items-center justify-between py-px hover:bg-elevated/50 px-1 rounded-sm">
-                  <span className="text-[11px] font-mono truncate mr-2">{id}</span>
+                  <span className="text-[11px] font-mono truncate mr-2 flex items-center">
+                    {id}
+                    <TVIndicatorBadge reading={tvIndicators[id]} />
+                  </span>
                   <span className={stateBadgeClass(st)}>{st}</span>
                 </div>
               ))}

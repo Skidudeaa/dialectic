@@ -1,6 +1,14 @@
 // API client: JWT storage, authenticated fetch, WebSocket manager.
 
-import type { LoginResponse, WSMessage } from "./types";
+import type {
+  LoginResponse,
+  TVAlertEvent,
+  TVBinding,
+  TVBindingCreate,
+  TVIndicatorReading,
+  TVStatus,
+  WSMessage,
+} from "./types";
 
 const STORAGE_KEY = "td_auth";
 
@@ -158,4 +166,52 @@ export class RoomSocket {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.ws?.close();
   }
+}
+
+// ── TradingView API ──────────────────────────────────────────────────────
+
+export async function getTVStatus(): Promise<TVStatus> {
+  return apiFetch<TVStatus>("/api/tradingview/status");
+}
+
+export async function listTVEvents(bookId?: string, limit = 50): Promise<TVAlertEvent[]> {
+  const path = bookId
+    ? `/api/tradingview/events/${encodeURIComponent(bookId)}?limit=${limit}`
+    : `/api/tradingview/events?limit=${limit}`;
+  return apiFetch<TVAlertEvent[]>(path);
+}
+
+export async function getTVIndicators(bookId: string): Promise<Record<string, TVIndicatorReading>> {
+  return apiFetch<Record<string, TVIndicatorReading>>(
+    `/api/tradingview/indicators/${encodeURIComponent(bookId)}`,
+  );
+}
+
+export async function listTVBindings(bookId: string): Promise<TVBinding[]> {
+  return apiFetch<TVBinding[]>(
+    `/api/thesis/${encodeURIComponent(bookId)}/tv-bindings`,
+  );
+}
+
+export async function createTVBinding(
+  bookId: string,
+  binding: TVBindingCreate,
+): Promise<TVBinding> {
+  return apiFetch<TVBinding>(
+    `/api/thesis/${encodeURIComponent(bookId)}/tv-bindings`,
+    {
+      method: "POST",
+      body: JSON.stringify(binding),
+    },
+  );
+}
+
+export async function deleteTVBinding(
+  bookId: string,
+  bindingId: string,
+): Promise<{ deleted: boolean; bindingId: string }> {
+  return apiFetch(
+    `/api/thesis/${encodeURIComponent(bookId)}/tv-bindings/${encodeURIComponent(bindingId)}`,
+    { method: "DELETE" },
+  );
 }

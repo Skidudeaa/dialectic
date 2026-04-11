@@ -65,7 +65,7 @@ def get_uptime() -> float:
 # ── Route registration ───────────────────────────────────────────────────
 # WHY: Imports here (not top-level) to ensure sys.path is configured first.
 
-from web.routes import auth, health, thesis, market, outcomes, rooms, messages, llm, journal, predictions  # noqa: E402
+from web.routes import auth, health, thesis, market, outcomes, rooms, messages, llm, journal, predictions, tradingview  # noqa: E402
 
 app.include_router(auth.router)
 app.include_router(health.router)
@@ -77,6 +77,10 @@ app.include_router(messages.router)
 app.include_router(llm.router)
 app.include_router(journal.router)
 app.include_router(predictions.router)
+# WHY three routers: webhook is HMAC-gated (no JWT), management is
+# JWT-gated under /api/tradingview, binding CRUD lives under /api/thesis.
+for tv_router in tradingview.routers:
+    app.include_router(tv_router)
 
 # ── Static frontend serving ─────────────────────────────────────────────
 # WHY: Serve the production build directly from FastAPI so there's no need

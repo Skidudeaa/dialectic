@@ -125,10 +125,95 @@ export interface TradeInfo {
 }
 
 export interface WSMessage {
-  type: "message" | "llm_chunk" | "llm_done" | "system" | "state_update" | "error" | "typing" | "presence";
+  type: "message" | "llm_chunk" | "llm_done" | "system" | "state_update" | "error" | "typing" | "presence" | "tv-alert";
   payload: Record<string, unknown>;
   ts: string;
   user: string;
+}
+
+// ── TradingView integration ─────────────────────────────────────────────
+
+export type TVOp =
+  | "incrementClosesObserved"
+  | "setNodeState"
+  | "setProbability"
+  | "setCurrent";
+
+export type TVNodeState =
+  | "active"
+  | "resolved"
+  | "partial"
+  | "monitoring"
+  | "fired";
+
+export interface TVBinding {
+  bindingId: string;
+  nodeId: string;
+  op: TVOp;
+  thresholdLevel?: number | null;
+  targetState?: TVNodeState | null;
+  expectedSymbol?: string | null;
+  expectedPineAlertName?: string | null;
+  description?: string;
+  fireCount?: number;
+  lastFiredAt?: string | null;
+}
+
+export interface TVBindingCreate {
+  bindingId: string;
+  nodeId: string;
+  op: TVOp;
+  thresholdLevel?: number;
+  targetState?: TVNodeState;
+  expectedSymbol?: string;
+  expectedPineAlertName?: string;
+  description?: string;
+}
+
+export interface TVStatus {
+  secretConfigured: boolean;
+  rateLimitPerMin: number;
+  nonceTtlSeconds: number;
+  clockSkewSeconds: number;
+  activeNonces: number;
+  webhookUrl: string;
+  recentEventCount: number;
+}
+
+export interface TVAlertEvent {
+  ts: string;
+  result: string;
+  bookId?: string | null;
+  bindingId?: string | null;
+  nodeId?: string | null;
+  op?: TVOp | null;
+  newValue?: unknown;
+  detail?: string | null;
+  sourceIP?: string | null;
+}
+
+// tvIndicators dict — the per-node reading from the thesisgraph snapshot.
+export interface TVIndicatorReading {
+  rsi14?: number;
+  atr14?: number;
+  sma50?: number;
+  source?: string;
+  computedAt?: string;
+  // Additional kind/period keys may appear (e.g. rsi7, sma20)
+  [key: string]: string | number | undefined;
+}
+
+// Payload carried by the tv-alert WebSocket message
+export interface TVAlertWSPayload {
+  bookId: string;
+  nodeId: string;
+  bindingId: string;
+  op: TVOp;
+  newValue: unknown;
+  pineAlertName?: string | null;
+  chartSymbol?: string | null;
+  thesisStateChanged: boolean;
+  changedNodes: string[];
 }
 
 export interface HealthResponse {
