@@ -14,8 +14,8 @@ log = logging.getLogger(__name__)
 _ROOT = Path(__file__).resolve().parent.parent.parent
 BOOKS_DIR = _ROOT / "books"
 
-import thesisgraph  # type: ignore[import-untyped]
-import polymarket as polymarket_mod  # type: ignore[import-untyped]
+from tools.thesis_graph import thesisgraph  # type: ignore[import-untyped]
+from tools.data_fetch import polymarket as polymarket_mod  # type: ignore[import-untyped]
 
 
 def _iter_instruments(cfg: dict):

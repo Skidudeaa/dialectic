@@ -35,8 +35,8 @@ _ROOT = Path(__file__).resolve().parent.parent.parent
 BOOKS_DIR = _ROOT / "books"
 SNAPSHOTS_DIR = _ROOT / "snapshots"
 
-# WHY: Import from thesisgraph.py — sys.path is configured in web/main.py.
-import thesisgraph  # type: ignore[import-untyped]
+# WHY: Package import via pip install -e . (pyproject.toml).
+from tools.thesis_graph import thesisgraph  # type: ignore[import-untyped]
 
 
 def list_books() -> List[Dict[str, Any]]:

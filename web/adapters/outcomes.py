@@ -20,9 +20,9 @@ LEDGER_DIR = _ROOT / "outcomes" / "trades"
 OPEN_TRADES_PATH = _ROOT / "outcomes" / "open_trades.json"
 BOOKS_DIR = _ROOT / "books"
 
-import lifecycle_monitor as lm  # type: ignore[import-untyped]
-import morning_brief as mb  # type: ignore[import-untyped]
-import cross_book as cb  # type: ignore[import-untyped]
+from tools.outcomes import lifecycle_monitor as lm  # type: ignore[import-untyped]
+from tools.outcomes import morning_brief as mb  # type: ignore[import-untyped]
+from tools.outcomes import cross_book as cb  # type: ignore[import-untyped]
 
 
 def generate_brief(book_ids: Optional[List[str]] = None) -> str:

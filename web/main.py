@@ -7,7 +7,6 @@ All domain logic lives in tools/ — this layer handles HTTP, auth, and routing.
 """
 
 import logging
-import sys
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -17,14 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-# WHY: tools/ modules use relative imports and expect their parent on sys.path.
-# After v2 packaging (pyproject.toml + pip install -e .), these will become
-# standard imports. Until then, keep sys.path configured.
 _ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_ROOT / "tools" / "thesis_graph"))
-sys.path.insert(0, str(_ROOT / "tools" / "data_fetch"))
-sys.path.insert(0, str(_ROOT / "tools" / "outcomes"))
-sys.path.insert(0, str(_ROOT / "tools" / "bridge"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -64,9 +56,8 @@ def get_uptime() -> float:
 
 
 # ── Route registration ───────────────────────────────────────────────────
-# WHY: Imports here (not top-level) to ensure sys.path is configured first.
 
-from web.routes import auth, health, thesis, market, outcomes, rooms, messages, llm, journal, predictions, tradingview  # noqa: E402
+from web.routes import auth, health, thesis, market, outcomes, rooms, messages, llm, journal, predictions, tradingview
 
 app.include_router(auth.router)
 app.include_router(health.router)

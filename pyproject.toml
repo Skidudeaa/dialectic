@@ -1,0 +1,46 @@
+# WHY: Editable install (`pip install -e .`) makes all tools/ and web/
+# modules importable as standard Python packages. Eliminates the
+# sys.path.insert hacks in web/main.py.
+#
+# TRADEOFF: tools/ modules remain stdlib-only at runtime. The web
+# dependencies listed here are optional (only needed when running
+# the FastAPI server). CLI tools like thesisgraph.py work without
+# installing any of them.
+
+[project]
+name = "tradingdesk"
+version = "0.2.0"
+description = "Causal reasoning engine for macro trading"
+requires-python = ">=3.10"
+
+# WHY: Web layer deps only. tools/ modules are stdlib-only by convention.
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "websockets>=14.0",
+    "python-jose[cryptography]>=3.3.0",
+    "aiofiles>=24.1.0",
+    "python-multipart>=0.0.18",
+    "httpx>=0.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+# WHY: Preserve CLI entry points so existing cron jobs and scripts
+# continue to work after the rename. `thesisgraph` on PATH invokes
+# the same main() as `python tools/thesis_graph/thesisgraph.py`.
+[project.scripts]
+thesisgraph = "tools.thesis_graph.thesisgraph:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["tools*", "web*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tools", "web"]

@@ -11,9 +11,8 @@ from unittest.mock import patch
 
 import pytest
 
-# Add parent dir to path so we can import the module
-sys.path.insert(0, os.path.dirname(__file__))
-from thesisgraph import (
+# WHY: Package import via pip install -e . (pyproject.toml).
+from tools.thesis_graph.thesisgraph import (
     compute_derived_indicators,
     eval_node_state,
     export_state,

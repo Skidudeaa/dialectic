@@ -285,7 +285,7 @@ def _propagate_states(cfg: dict) -> Dict[str, str]:
     up. Importing at module level can race with the main.py initialization
     when tests import this adapter before the app starts.
     """
-    import thesisgraph  # type: ignore[import-untyped]
+    from tools.thesis_graph import thesisgraph  # type: ignore[import-untyped]
     return thesisgraph.propagate(cfg)
 
 

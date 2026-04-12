@@ -7,17 +7,14 @@ Verifies the complete REPAIR -> TAG -> CAPTURE pipeline against real data.
 import sys, json, tempfile, os
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'thesis_graph'))
-
-from lifecycle_monitor import (
+from tools.outcomes.lifecycle_monitor import (
     PredicateLifecycleMonitor, Snapshot,
     XOP_GATE, CF_GATE, SPY_SHORT_GATE,
     evaluate_predicate, compute_provenance_target, detect_inert_fields,
     _serialize_record, _deserialize_record,
     step7_evaluate_open_trades,
 )
-from thesisgraph import propagate, score_confluence, propagate_at_horizon, parse_lag_days
+from tools.thesis_graph.thesisgraph import propagate, score_confluence, propagate_at_horizon, parse_lag_days
 from datetime import date
 
 ROOT = Path(__file__).resolve().parent.parent.parent

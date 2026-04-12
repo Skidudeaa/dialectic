@@ -545,11 +545,7 @@ class TestPropagationRepair:
 
     def test_amplification_wired(self):
         """Import from thesisgraph and verify amplification changes confluence."""
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "thesis_graph"))
-        try:
-            from thesisgraph import score_confluence, propagate
-        except ImportError:
-            pytest.skip("thesisgraph.py not importable from test context")
+        from tools.thesis_graph.thesisgraph import score_confluence, propagate
 
         # Minimal cfg with fan-in >= 2 where edges have amplification
         cfg = {
@@ -572,11 +568,7 @@ class TestPropagationRepair:
 
     def test_amplification_default_preserves_existing(self):
         """Edges without amplification field produce same result as before."""
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "thesis_graph"))
-        try:
-            from thesisgraph import score_confluence
-        except ImportError:
-            pytest.skip("thesisgraph.py not importable from test context")
+        from tools.thesis_graph.thesisgraph import score_confluence
 
         cfg = {
             "nodes": [
@@ -595,11 +587,7 @@ class TestPropagationRepair:
         assert abs(scores["c"] - 1.4) < 0.01
 
     def test_parse_lag_days(self):
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "thesis_graph"))
-        try:
-            from thesisgraph import parse_lag_days
-        except ImportError:
-            pytest.skip("thesisgraph.py not importable from test context")
+        from tools.thesis_graph.thesisgraph import parse_lag_days
 
         ref = date(2026, 4, 5)
         assert parse_lag_days("immediate", ref) == 1
@@ -612,11 +600,7 @@ class TestPropagationRepair:
         assert parse_lag_days("date-gated Apr 15", ref) == 10
 
     def test_propagate_at_horizon(self):
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "thesis_graph"))
-        try:
-            from thesisgraph import propagate_at_horizon, propagate
-        except ImportError:
-            pytest.skip("thesisgraph.py not importable from test context")
+        from tools.thesis_graph.thesisgraph import propagate_at_horizon, propagate
 
         cfg = {
             "nodes": [
