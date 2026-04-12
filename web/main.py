@@ -47,7 +47,22 @@ async def lifespan(app: FastAPI):
     from web.ws import manager
     manager.set_repo(repo)
 
+    # WHY: RuntimeCoordinator owns per-thesis locks, scheduling, and snapshot
+    # commits. It runs the first tick immediately on startup so bootstrap
+    # data is available before the first client connects.
+    from web.runtime.coordinator import RuntimeCoordinator
+    import os
+    tick_interval = float(os.environ.get("COORDINATOR_TICK_INTERVAL", "300"))
+    coordinator = RuntimeCoordinator(
+        repo=repo, ws_manager=manager, tick_interval=tick_interval,
+    )
+    app.state.coordinator = coordinator
+    await coordinator.start()
+    log.info("RuntimeCoordinator started (tick=%.0fs)", tick_interval)
+
     yield
+
+    await coordinator.stop()
     log.info("tradingDesk web shutting down")
 
 

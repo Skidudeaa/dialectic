@@ -52,13 +52,16 @@ class Repository:
     concurrency).
     """
 
+    _instance_counter = 0
+
     def __init__(self, db_path: str | Path = ":memory:"):
         raw = str(db_path)
         if raw == ":memory:":
             # WHY: Shared-cache URI lets multiple connections see the same
             # in-memory database. Each Repository instance gets a unique name
-            # so tests stay isolated.
-            self._db_path = f"file:memdb_{id(self)}?mode=memory&cache=shared"
+            # so tests stay isolated. Monotonic counter avoids id() reuse.
+            Repository._instance_counter += 1
+            self._db_path = f"file:memdb_{Repository._instance_counter}?mode=memory&cache=shared"
             self._is_memory = True
         else:
             self._db_path = raw

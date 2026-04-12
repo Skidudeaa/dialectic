@@ -426,10 +426,17 @@ class TestAgentAPI:
 # ── Concurrent State Tests ───────────────────────────────────────────────
 
 class TestConcurrency:
-    def test_concurrent_prediction_resolve_no_data_loss(self, isolate_state):
-        """Verify resolve_prediction under concurrent creates doesn't lose data."""
-        repo = isolate_state
-        # Create initial predictions
+    def test_concurrent_prediction_resolve_no_data_loss(self, tmp_path):
+        """Verify resolve_prediction under concurrent creates doesn't lose data.
+
+        WHY: Uses a file-backed SQLite DB (not :memory:) so WAL mode is
+        available. WAL mode allows concurrent readers and serialized writers,
+        which is the production configuration.
+        """
+        db_path = tmp_path / "concurrent_test.db"
+        repo = Repository(db_path)
+        repo.initialize()
+
         for i in range(5):
             repo.save_prediction("amo", {
                 "statement": f"pred-{i}", "confidence": 0.5, "deadline": "2026-12-31",
@@ -439,7 +446,6 @@ class TestConcurrency:
         assert len(preds) == 5
         target_id = preds[0]["id"]
 
-        # Concurrent: resolve one while creating new ones
         errors = []
 
         def create_preds():
@@ -466,9 +472,6 @@ class TestConcurrency:
 
         assert not errors, f"Errors during concurrent operations: {errors}"
 
-        # All predictions should exist
         all_preds = repo.list_predictions()
-        # We should have at least 5 (original) + some of the 5 new ones
-        # The resolve should have worked
         resolved = [p for p in all_preds if p.get("resolution") == "correct"]
         assert len(resolved) >= 1
