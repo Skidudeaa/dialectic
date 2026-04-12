@@ -77,7 +77,7 @@ TradingView Pine alert
 
 ### Why this shape
 
-- `compute_derived_indicators()` mirrors `fetch_polymarket()`'s discipline: pure stdlib, importable from `tools/data-fetch/`, called in sequence after `fetch_prices()`.
+- `compute_derived_indicators()` mirrors `fetch_polymarket()`'s discipline: pure stdlib, importable from `tools/data_fetch/`, called in sequence after `fetch_prices()`.
 - `tv-webhook.py` mirrors `mock_dialectic.py`: `BaseHTTPRequestHandler`, `_send_json` helper, module-importable + CLI runnable, tests use the same harness.
 - `tvAlertBindings[]` on each node makes mutations **auditable and pre-declared**. The webhook cannot write arbitrary fields — only the operations explicitly authorized in the book.
 - Atomic writes via tmp+`os.replace` copy the existing `update_config_file()` pattern at `thesisgraph.py:650`.
@@ -91,7 +91,7 @@ TradingView Pine alert
 
 **Bolted on (enrichment only, never affects propagation):**
 - `tvIndicators` dict — read by `export_state()`, displayed in HTML, pushed to Dialectic. Never read by `eval_node_state()` or `score_confluence()`.
-- `tvIndicatorShifts` diff category in `diff-snapshots.py` — informational only.
+- `tvIndicatorShifts` diff category in `diff_snapshots.py` — informational only.
 - `cross-book-flags-{date}.json` — post-run diagnostic, not a snapshot field.
 
 ### Philosophy
@@ -104,8 +104,8 @@ The DAG encodes real-economy causation. TradingView encodes human technical judg
 
 | Path | Est. Lines | Purpose |
 |---|---|---|
-| `tools/data-fetch/derived_indicators.py` | 220 | RSI(14), ATR(14), SMA(N), velocity7d, forecastAtDeadline, divergence4h1d, closesObserved counter — all pure stdlib, importable + CLI |
-| `tools/data-fetch/test_derived_indicators.py` | 320 | 56 tests: Wilder's 1978 RSI reference, ATR/SMA against known series, velocity/forecast edge cases, closesObserved counting, divergence detection, CLI |
+| `tools/data_fetch/derived_indicators.py` | 220 | RSI(14), ATR(14), SMA(N), velocity7d, forecastAtDeadline, divergence4h1d, closesObserved counter — all pure stdlib, importable + CLI |
+| `tools/data_fetch/test_derived_indicators.py` | 320 | 56 tests: Wilder's 1978 RSI reference, ATR/SMA against known series, velocity/forecast edge cases, closesObserved counting, divergence detection, CLI |
 | `tools/bridge/tv-webhook.py` | 260 | HMAC-verified Pine Script receiver with replay protection; pre-declared binding map only; atomic book-JSON mutation |
 | `tools/bridge/test_tv_webhook.py` | 320 | 44 tests: signature verify, timestamp window, nonce replay, binding lookup, path traversal rejection, type coercion, atomic write, concurrency |
 | `tools/bridge/test_tv_webhook_e2e.py` | 120 | 8 round-trip tests: webhook → mutation → propagate → snapshot diff |
@@ -116,10 +116,10 @@ The DAG encodes real-economy causation. TradingView encodes human technical judg
 
 | Path | Lines | Change |
 |---|---|---|
-| `tools/thesis-graph/thesisgraph.py` | +75 | Store OHLCV series in `cfg["_ohlcv"]` during `fetch_prices()` (~10 lines); call `compute_derived_indicators()` after `fetch_polymarket()` in `main()` (~5 lines); add `tvIndicators` top-level to `export_state()` output (~15 lines); add 4h-timeframe fetch in `fetch_prices()` for symbols with `"divergence": true` in derivedIndicators config (~45 lines) |
-| `tools/thesis-graph/test_export.py` | +60 | 10 new tests: v:2 snapshot shape, `tvIndicators` presence, OHLCV capture, closesObserved increment, `compute_derived_indicators()` wiring |
+| `tools/thesis_graph/thesisgraph.py` | +75 | Store OHLCV series in `cfg["_ohlcv"]` during `fetch_prices()` (~10 lines); call `compute_derived_indicators()` after `fetch_polymarket()` in `main()` (~5 lines); add `tvIndicators` top-level to `export_state()` output (~15 lines); add 4h-timeframe fetch in `fetch_prices()` for symbols with `"divergence": true` in derivedIndicators config (~45 lines) |
+| `tools/thesis_graph/test_export.py` | +60 | 10 new tests: v:2 snapshot shape, `tvIndicators` presence, OHLCV capture, closesObserved increment, `compute_derived_indicators()` wiring |
 | `tools/bridge/run-all.py` | +40 | Add post-propagate cross-book scan step; emit cross-book-flags output; document new `TV_WEBHOOK_SECRET` env var |
-| `tools/bridge/diff-snapshots.py` | +35 | New diff category `tvIndicatorShifts` (RSI changes >5 pts, velocity sign flips, divergence flag changes) |
+| `tools/bridge/diff_snapshots.py` | +35 | New diff category `tvIndicatorShifts` (RSI changes >5 pts, velocity sign flips, divergence flag changes) |
 | `tools/bridge/test_diff.py` | +30 | 8 new tests for `tvIndicatorShifts` category |
 | `tools/validation/mock_dialectic.py` | +12 | Tolerate v:2 schema: add `tvIndicators` as optional field in allowlist |
 | `books/iran-hormuz-graph.json` | +40 | Add `derivedIndicators[]` and `tvAlertBindings[]` to brent + fert-shortage + dxy-stress nodes |
@@ -203,7 +203,7 @@ Any op not in this allowlist → webhook rejects with 400. This is the security 
 }
 ```
 
-v:1 snapshots remain valid. `diff-snapshots.py` handles both versions. `mock_dialectic.py` accepts v:2 (added to schema tolerance). Dialectic's existing `/rooms/{room_id}/trading/snapshot` endpoint ingests v:2 without server-side change — `tvIndicators` is additive data and the endpoint does not validate the full snapshot shape.
+v:1 snapshots remain valid. `diff_snapshots.py` handles both versions. `mock_dialectic.py` accepts v:2 (added to schema tolerance). Dialectic's existing `/rooms/{room_id}/trading/snapshot` endpoint ingests v:2 without server-side change — `tvIndicators` is additive data and the endpoint does not validate the full snapshot shape.
 
 ### Pine Script webhook request contract
 
@@ -264,7 +264,7 @@ def compute_derived_indicators(cfg: dict) -> dict:
         print("  derived: no OHLCV captured, skipping", file=sys.stderr)
         return cfg
 
-    di_dir = os.path.join(os.path.dirname(__file__), "..", "data-fetch")
+    di_dir = os.path.join(os.path.dirname(__file__), "..", "data_fetch")
     if di_dir not in sys.path:
         sys.path.insert(0, os.path.abspath(di_dir))
     import derived_indicators as di
@@ -412,8 +412,8 @@ def apply_op(node: dict, binding: dict, payload_value) -> tuple[bool, str]:
 **Goal:** RSI/ATR/SMA/velocity computed from Yahoo OHLCV, populate `snapshot.tvIndicators`, feed `closesObserved` counters. No webhook yet.
 
 **Files touched:**
-- CREATE `tools/data-fetch/derived_indicators.py` (~220 LoC)
-- CREATE `tools/data-fetch/test_derived_indicators.py` (~320 LoC, 56 tests)
+- CREATE `tools/data_fetch/derived_indicators.py` (~220 LoC)
+- CREATE `tools/data_fetch/test_derived_indicators.py` (~320 LoC, 56 tests)
 - MODIFY `thesisgraph.py`: `_ohlcv` capture in `fetch_prices()`, `compute_derived_indicators()` call in `main()`, `tvIndicators` in `export_state()`, v:2 bump
 - MODIFY `test_export.py`: 10 new tests
 - MODIFY `mock_dialectic.py`: accept v:2
@@ -449,7 +449,7 @@ def apply_op(node: dict, binding: dict, payload_value) -> tuple[bool, str]:
 **Files touched:**
 - MODIFY `derived_indicators.py`: add `velocity(series, window)`, `forecast_at_deadline(series, days)`, `divergence(hi_tf, lo_tf)` pure functions
 - MODIFY `thesisgraph.py` `fetch_prices()`: conditional 4h fetch for symbols with `"divergence": true` in derivedIndicators config (additive, guarded by node declarations)
-- MODIFY `diff-snapshots.py`: new `tvIndicatorShifts` diff category
+- MODIFY `diff_snapshots.py`: new `tvIndicatorShifts` diff category
 - MODIFY `test_diff.py`: 8 new tests
 - CREATE `tools/bridge/cross_book.py` (~90 LoC)
 - CREATE `tools/bridge/test_cross_book.py` (~100 LoC, 16 tests)
@@ -512,7 +512,7 @@ Every new file is stdlib-only: `urllib.request`, `json`, `hmac`, `hashlib`, `tim
 
 ## The First Three Trades
 
-These are the canonical trades for the operator. Every entry predicate references a value the engine emits today, verified by `python3 tools/thesis-graph/thesisgraph.py books/*.json --export-state -`. Bravo-derived sizing modulators (velocity, divergence, cross-book, deadline-forecast) determine HOW MUCH to deploy, never WHETHER to enter.
+These are the canonical trades for the operator. Every entry predicate references a value the engine emits today, verified by `python3 tools/thesis_graph/thesisgraph.py books/*.json --export-state -`. Bravo-derived sizing modulators (velocity, divergence, cross-book, deadline-forecast) determine HOW MUCH to deploy, never WHETHER to enter.
 
 ```
 TRADE 1: XOP (long) — $3,000 (37.5% of Iran/Hormuz monthly budget)
@@ -596,7 +596,7 @@ TRADE 3: SPY short (via SH or ATM put spreads) — $1,500 (25% of Trump-tariffs 
 **Aggregate sizing:** $6,500 initial deployment against $14,000 combined monthly budget (46%). Balance in SGOV reserve. No single position exceeds 40% of its book's budget. All three trades are **verifiable right now** by running:
 
 ```bash
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json --export-state - 2>/dev/null | jq '.nodeStates["em-stress"], .confluenceScores["em-stress"], .countdowns[] | select(.nodeId=="planting-miss") | .daysRemaining'
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json --export-state - 2>/dev/null | jq '.nodeStates["em-stress"], .confluenceScores["em-stress"], .countdowns[] | select(.nodeId=="planting-miss") | .daysRemaining'
 ```
 
 Each trigger predicate evaluates against live engine output; operator can `jq` the snapshot and know instantly whether the trade is actionable.

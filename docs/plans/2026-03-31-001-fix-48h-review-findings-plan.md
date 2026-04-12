@@ -128,7 +128,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 **Dependencies:** None
 
 **Files:**
-- Modify: `tools/thesis-graph/thesisgraph.py` — `fetch_prices` function (~line 616, 629, 638)
+- Modify: `tools/thesis_graph/thesisgraph.py` — `fetch_prices` function (~line 616, 629, 638)
 
 **Approach:**
 - Change `print(...)` to `print(..., file=sys.stderr)` on lines 616 and 629 (inside `fetch_prices()`) and line 638 (inside `update_config_file()`)
@@ -156,7 +156,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 **Dependencies:** None
 
 **Files:**
-- Modify: `tools/thesis-graph/thesisgraph.py` — `eval_node_state` function, price branch (~line 193-196) and reversal branch (~line 272-277)
+- Modify: `tools/thesis_graph/thesisgraph.py` — `eval_node_state` function, price branch (~line 193-196) and reversal branch (~line 272-277)
 
 **Approach:**
 - **Price nodes (line 193-196):** After `current >= lvl` check, inspect `th.get("closesRequired")`. If present and > 0, return `"approaching"` instead of `"fired"`. Without a close log, Python cannot confirm the required number of closes.
@@ -193,7 +193,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 **Dependencies:** None
 
 **Files:**
-- Modify: `tools/thesis-graph/thesisgraph.py` — `generate_html` function (~line 996-999) and `JS_LOGIC` string constant
+- Modify: `tools/thesis_graph/thesisgraph.py` — `generate_html` function (~line 996-999) and `JS_LOGIC` string constant
 - Modify: `tools/commodity-book/bookgen.py` — `build_situation_html`, `build_provenance_html`, and template substitution
 
 **Approach:**
@@ -232,7 +232,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 **Dependencies:** None
 
 **Files:**
-- Modify: `tools/thesis-graph/thesisgraph.py` — `update_config_file` function (~line 633-638)
+- Modify: `tools/thesis_graph/thesisgraph.py` — `update_config_file` function (~line 633-638)
 
 **Approach:**
 - Write to `config_path + ".tmp"` instead of directly to `config_path`
@@ -263,7 +263,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 **Dependencies:** None
 
 **Files:**
-- Modify: `tools/bridge/push-to-dialectic.py` — `push_snapshot` function (~line 116-144)
+- Modify: `tools/bridge/push_to_dialectic.py` — `push_snapshot` function (~line 116-144)
 - Modify: `tools/bridge/test_push.py` — add retry tests
 
 **Approach:**
@@ -300,7 +300,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 **Dependencies:** Unit 12 (allorigins.win removal). Units 6 and 12 both modify `fetch_prices` in the same region (lines 575-610). Unit 12 removes the `envelope["contents"]` layer, so the `.get("contents")` guard proposed here becomes unnecessary after Unit 12 lands. Execute Unit 12 first, then scope this unit to the remaining `item["symbol"]` guard only.
 
 **Files:**
-- Modify: `tools/thesis-graph/thesisgraph.py` — `fetch_prices` result processing loop (~line 603-628)
+- Modify: `tools/thesis_graph/thesisgraph.py` — `fetch_prices` result processing loop (~line 603-628)
 
 **Approach:**
 - Change `item["symbol"]` (line 604) to `item.get("symbol")`
@@ -361,7 +361,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 **Dependencies:** Unit 2 (closesRequired changes must be in place first)
 
 **Files:**
-- Modify: `tools/thesis-graph/test_export.py` — add new test class/section for eval_node_state
+- Modify: `tools/thesis_graph/test_export.py` — add new test class/section for eval_node_state
 
 **Approach:**
 - Import `eval_node_state` directly (it takes a node dict, edges list, and states dict)
@@ -393,7 +393,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 **Dependencies:** Units 1, 2
 
 **Files:**
-- Modify: `tools/thesis-graph/test_export.py` or `tools/validation/e2e_test.py` — add integration test cases
+- Modify: `tools/thesis_graph/test_export.py` or `tools/validation/e2e_test.py` — add integration test cases
 
 **Approach:**
 - Add a test that runs `thesisgraph.py --fetch --export-state -` as a subprocess and verifies stdout is valid JSON (catches C2 regression)
@@ -453,7 +453,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 **Dependencies:** None
 
 **Files:**
-- Modify: `tools/thesis-graph/thesisgraph.py` — `eval_scenario` signature (~line 345) and caller in `main()` (~line 2268)
+- Modify: `tools/thesis_graph/thesisgraph.py` — `eval_scenario` signature (~line 345) and caller in `main()` (~line 2268)
 
 **Approach:**
 - Add `base_states=None` parameter to `eval_scenario`
@@ -483,7 +483,7 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 **Dependencies:** None
 
 **Files:**
-- Modify: `tools/thesis-graph/thesisgraph.py` — `fetch_prices` function (~line 575-583)
+- Modify: `tools/thesis_graph/thesisgraph.py` — `fetch_prices` function (~line 575-583)
 
 **Approach:**
 - Replace the proxy URL construction (`https://api.allorigins.win/get?url=...`) with a direct call to the Yahoo Finance spark API (`https://query1.finance.yahoo.com/v7/finance/spark?...`)
@@ -535,5 +535,5 @@ Units within each phase are independent unless noted. Cross-phase dependencies a
 - Python eval_node_state: `thesisgraph.py:167-283`
 - Python fetch_prices: `thesisgraph.py:539-630`
 - Python fetch_polymarket (stderr pattern): `thesisgraph.py:641-710`
-- Push to Dialectic: `tools/bridge/push-to-dialectic.py:116-144`
+- Push to Dialectic: `tools/bridge/push_to_dialectic.py:116-144`
 - Mock server: `tools/validation/mock_dialectic.py:29-33`

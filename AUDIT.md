@@ -91,8 +91,8 @@ tradingDesk/
 │   └── trump-tariffs-graph-prev.json
 ├── tools/
 │   ├── bridge/
-│   │   ├── diff-snapshots.py
-│   │   ├── push-to-dialectic.py
+│   │   ├── diff_snapshots.py
+│   │   ├── push_to_dialectic.py
 │   │   ├── run-all.py
 │   │   ├── test_diff.py
 │   │   ├── test_push.py
@@ -100,7 +100,7 @@ tradingDesk/
 │   ├── commodity-book/
 │   │   ├── bookgen.py
 │   │   └── iran-hormuz-2026.json
-│   ├── data-fetch/
+│   ├── data_fetch/
 │   │   ├── .gitkeep
 │   │   ├── polymarket.py
 │   │   └── test_polymarket.py
@@ -116,7 +116,7 @@ tradingDesk/
 │   │   └── .gitkeep
 │   ├── signals/
 │   │   └── .gitkeep
-│   ├── thesis-graph/
+│   ├── thesis_graph/
 │   │   ├── lib/
 │   │   │   ├── cytoscape-dagre.js
 │   │   │   ├── cytoscape.min.js
@@ -133,7 +133,7 @@ tradingDesk/
 
 ## 2. Python Files — Imports, Classes, Functions
 
-### tools/thesis-graph/thesisgraph.py (~2300 lines)
+### tools/thesis_graph/thesisgraph.py (~2300 lines)
 
 **Imports:**
 ```python
@@ -197,7 +197,7 @@ def main()
 
 ---
 
-### tools/bridge/diff-snapshots.py
+### tools/bridge/diff_snapshots.py
 
 **Imports:**
 ```python
@@ -220,7 +220,7 @@ def main()
 
 ---
 
-### tools/bridge/push-to-dialectic.py
+### tools/bridge/push_to_dialectic.py
 
 **Imports:**
 ```python
@@ -263,9 +263,9 @@ from typing import Optional
 **Module-level constants:**
 ```python
 ROOT: Path = Path(__file__).resolve().parent.parent.parent
-THESISGRAPH: str = str(ROOT / "tools" / "thesis-graph" / "thesisgraph.py")
-DIFF_SNAPSHOTS: str = str(ROOT / "tools" / "bridge" / "diff-snapshots.py")
-PUSH_SCRIPT: str = str(ROOT / "tools" / "bridge" / "push-to-dialectic.py")
+THESISGRAPH: str = str(ROOT / "tools" / "thesis_graph" / "thesisgraph.py")
+DIFF_SNAPSHOTS: str = str(ROOT / "tools" / "bridge" / "diff_snapshots.py")
+PUSH_SCRIPT: str = str(ROOT / "tools" / "bridge" / "push_to_dialectic.py")
 ```
 
 **Functions:**
@@ -282,7 +282,7 @@ def main() -> None
 
 ---
 
-### tools/data-fetch/polymarket.py
+### tools/data_fetch/polymarket.py
 
 **Imports:**
 ```python
@@ -671,7 +671,7 @@ def check(label, condition, detail="")
 
 ---
 
-### tools/thesis-graph/test_export.py (76 tests)
+### tools/thesis_graph/test_export.py (76 tests)
 
 **Imports:**
 ```python
@@ -775,7 +775,7 @@ class TestSnapshotRotation (2 tests)
 
 ---
 
-### tools/data-fetch/test_polymarket.py (41 tests)
+### tools/data_fetch/test_polymarket.py (41 tests)
 
 **Imports:**
 ```python
@@ -879,15 +879,15 @@ class TestSnapshotV2 (1 test)
 
 ## 3. JS/TS Files
 
-### tools/thesis-graph/lib/cytoscape.min.js
+### tools/thesis_graph/lib/cytoscape.min.js
 - Minified Cytoscape.js library (graph visualization)
 - No exports — inlined into generated HTML
 
-### tools/thesis-graph/lib/cytoscape-dagre.js
+### tools/thesis_graph/lib/cytoscape-dagre.js
 - Cytoscape.js Dagre layout plugin
 - No exports — inlined into generated HTML
 
-### tools/thesis-graph/lib/dagre.min.js
+### tools/thesis_graph/lib/dagre.min.js
 - Minified Dagre layout algorithm
 - No exports — inlined into generated HTML
 
@@ -919,10 +919,10 @@ Packages present in venv (from pip freeze):
 
 | Variable | File | Usage |
 |---|---|---|
-| `DIALECTIC_ROOM_TOKEN` | `tools/bridge/push-to-dialectic.py:46` | Room auth token for Dialectic API. Read via `os.environ.get("DIALECTIC_ROOM_TOKEN", "").strip()`. Required for push operations. |
+| `DIALECTIC_ROOM_TOKEN` | `tools/bridge/push_to_dialectic.py:46` | Room auth token for Dialectic API. Read via `os.environ.get("DIALECTIC_ROOM_TOKEN", "").strip()`. Required for push operations. |
 | `DIALECTIC_ROOM_TOKEN` | `tools/bridge/run-all.py:165` | Injected into subprocess env: `env = {**os.environ, "DIALECTIC_ROOM_TOKEN": room_token}` |
 | `DIALECTIC_ROOM_TOKEN` | `tools/bridge/run-all.py:219` | Fallback: `meta.get("dialecticRoomToken") or os.environ.get("DIALECTIC_ROOM_TOKEN", "")` |
-| `os.environ.copy()` | `tools/thesis-graph/thesisgraph.py:1067` | Passed to subprocess for screenshot/publish pipeline |
+| `os.environ.copy()` | `tools/thesis_graph/thesisgraph.py:1067` | Passed to subprocess for screenshot/publish pipeline |
 | `os.environ.copy()` | `tools/commodity-book/bookgen.py:664` | Passed to subprocess for screenshot/publish pipeline |
 | `os.environ.copy()` | `tools/validation/e2e_test.py` (multiple) | Used in subprocess calls for E2E tests |
 
@@ -954,7 +954,7 @@ No schema definitions, migration files, or ORM models exist. All data is stored 
 
 | Method | Path | Script |
 |---|---|---|
-| POST | `{dialectic_url}/rooms/{room_id}/trading/snapshot` | `tools/bridge/push-to-dialectic.py` |
+| POST | `{dialectic_url}/rooms/{room_id}/trading/snapshot` | `tools/bridge/push_to_dialectic.py` |
 
 ### External APIs consumed:
 
@@ -1067,17 +1067,17 @@ __pycache__/
 
 | Command | Script | Description |
 |---|---|---|
-| `python3 tools/thesis-graph/thesisgraph.py <config.json> -o <output.html>` | thesisgraph.py | Generate interactive DAG dashboard |
-| `python3 tools/thesis-graph/thesisgraph.py <config.json> --fetch` | thesisgraph.py | Fetch live Yahoo Finance + Polymarket prices |
-| `python3 tools/thesis-graph/thesisgraph.py <config.json> --export-state <file.json>` | thesisgraph.py | Export evaluated graph state as JSON |
-| `python3 tools/thesis-graph/thesisgraph.py <config.json> --dry-run` | thesisgraph.py | Validate + propagate, no output |
+| `python3 tools/thesis_graph/thesisgraph.py <config.json> -o <output.html>` | thesisgraph.py | Generate interactive DAG dashboard |
+| `python3 tools/thesis_graph/thesisgraph.py <config.json> --fetch` | thesisgraph.py | Fetch live Yahoo Finance + Polymarket prices |
+| `python3 tools/thesis_graph/thesisgraph.py <config.json> --export-state <file.json>` | thesisgraph.py | Export evaluated graph state as JSON |
+| `python3 tools/thesis_graph/thesisgraph.py <config.json> --dry-run` | thesisgraph.py | Validate + propagate, no output |
 | `python3 tools/commodity-book/bookgen.py <config.json> -o <output.html>` | bookgen.py | Generate legacy commodity book dashboard |
 | `python3 tools/bridge/run-all.py` | run-all.py | Run full pipeline for all thesis books |
 | `python3 tools/bridge/run-all.py --dry-run` | run-all.py | Preview pipeline without executing |
 | `python3 tools/bridge/run-all.py --books <dir>` | run-all.py | Custom books directory |
-| `python3 tools/bridge/diff-snapshots.py <old.json> <new.json>` | diff-snapshots.py | Structured delta between snapshots |
-| `python3 tools/bridge/push-to-dialectic.py --snapshot <file> --room-id <uuid>` | push-to-dialectic.py | Push snapshot to Dialectic room |
-| `python3 tools/data-fetch/polymarket.py <slug> [--json]` | polymarket.py | Fetch Polymarket prediction probabilities |
+| `python3 tools/bridge/diff_snapshots.py <old.json> <new.json>` | diff_snapshots.py | Structured delta between snapshots |
+| `python3 tools/bridge/push_to_dialectic.py --snapshot <file> --room-id <uuid>` | push_to_dialectic.py | Push snapshot to Dialectic room |
+| `python3 tools/data_fetch/polymarket.py <slug> [--json]` | polymarket.py | Fetch Polymarket prediction probabilities |
 | `python3 tools/validation/mock_dialectic.py [--port 8002]` | mock_dialectic.py | Start mock Dialectic server |
 | `python3 tools/outcomes/log_entry.py --trade <xop\|cf\|spy-short>` | log_entry.py | Seed ENTRY event into trade ledger |
 | `python3 tools/outcomes/log_entry.py --list` | log_entry.py | List available trades |
@@ -1090,7 +1090,7 @@ __pycache__/
 ### Test runner:
 
 ```bash
-python3 -m pytest tools/thesis-graph/test_export.py tools/bridge/test_diff.py tools/bridge/test_push.py tools/bridge/test_run_all.py tools/data-fetch/test_polymarket.py tools/validation/e2e_test.py -q
+python3 -m pytest tools/thesis_graph/test_export.py tools/bridge/test_diff.py tools/bridge/test_push.py tools/bridge/test_run_all.py tools/data_fetch/test_polymarket.py tools/validation/e2e_test.py -q
 ```
 
 ---

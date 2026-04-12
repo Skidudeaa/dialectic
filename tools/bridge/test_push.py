@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # We import specific functions rather than `main()` to avoid argparse sys.exit
 # during import. The module's top-level code is guarded by __name__ == "__main__".
 import importlib
-push_mod = importlib.import_module("push-to-dialectic")
+push_mod = importlib.import_module("push_to_dialectic")
 
 get_room_token = push_mod.get_room_token
 check_transport_security = push_mod.check_transport_security

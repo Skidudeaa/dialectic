@@ -8,15 +8,15 @@ Zero external Python dependencies. One JSON config per thesis. Single-file HTML 
 
 ```bash
 # Iran/Hormuz thesis
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json \
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json \
   -o output/iran-hormuz-graph.html
 
 # Trump tariff escalation thesis
-python3 tools/thesis-graph/thesisgraph.py books/trump-tariffs-graph.json \
+python3 tools/thesis_graph/thesisgraph.py books/trump-tariffs-graph.json \
   -o output/trump-tariffs-graph.html
 
 # With live prices (Yahoo Finance + Polymarket probabilities)
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json \
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json \
   -o output/iran-hormuz-graph.html --fetch
 
 # Open in any browser — no server needed
@@ -37,18 +37,18 @@ The generated HTML has 5 tabs:
 
 ```bash
 # Validate config (no output generated)
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json --dry-run
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json --dry-run
 
 # Export evaluated graph state as JSON
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json \
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json \
   --export-state snapshots/latest.json
 
 # Fetch + export + generate in one command
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json \
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json \
   --fetch --export-state snapshots/latest.json -o output/graph.html
 
 # Pipe snapshot to stdout for scripting
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json \
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json \
   --export-state - 2>/dev/null
 ```
 
@@ -64,13 +64,13 @@ Pulls from two sources:
 
 ```bash
 # Standalone Polymarket check
-python3 tools/data-fetch/polymarket.py us-iran-april-30 --json
+python3 tools/data_fetch/polymarket.py us-iran-april-30 --json
 ```
 
 ## Snapshot Diff
 
 ```bash
-python3 tools/bridge/diff-snapshots.py snapshots/yesterday.json snapshots/today.json
+python3 tools/bridge/diff_snapshots.py snapshots/yesterday.json snapshots/today.json
 ```
 
 Outputs: state transitions, confluence shifts, countdown changes, market price moves. Exit 0 = changes found, 1 = identical, 2 = error.
@@ -84,19 +84,19 @@ Push thesis state into Dialectic trading rooms. The LLM sees your positions, tri
 export DIALECTIC_ROOM_TOKEN=<your-token>
 
 # Push a snapshot
-python3 tools/bridge/push-to-dialectic.py \
+python3 tools/bridge/push_to_dialectic.py \
   --snapshot snapshots/latest.json \
   --room-id <uuid> \
   --dialectic-url http://localhost:8002
 
 # One-liner: fetch → evaluate → push
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json \
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json \
   --fetch --export-state - 2>/dev/null | \
-  python3 tools/bridge/push-to-dialectic.py --snapshot - --room-id <uuid>
+  python3 tools/bridge/push_to_dialectic.py --snapshot - --room-id <uuid>
 
 # Diff-gated push (only push if something changed)
-python3 tools/bridge/diff-snapshots.py snapshots/old.json snapshots/new.json && \
-  python3 tools/bridge/push-to-dialectic.py --snapshot snapshots/new.json --room-id <uuid>
+python3 tools/bridge/diff_snapshots.py snapshots/old.json snapshots/new.json && \
+  python3 tools/bridge/push_to_dialectic.py --snapshot snapshots/new.json --room-id <uuid>
 ```
 
 ### Mock Dialectic Server (for testing)
@@ -107,7 +107,7 @@ python3 tools/validation/mock_dialectic.py --port 8002
 
 # In another terminal: push a snapshot to the mock
 export DIALECTIC_ROOM_TOKEN=test-token
-python3 tools/bridge/push-to-dialectic.py \
+python3 tools/bridge/push_to_dialectic.py \
   --snapshot snapshots/latest.json --room-id test-room
 
 # Check what the mock received
@@ -144,16 +144,16 @@ Validate with `--dry-run`, generate with `-o`, export state with `--export-state
 
 ```bash
 # Full suite (118 tests)
-python3 -m pytest tools/thesis-graph/test_export.py \
+python3 -m pytest tools/thesis_graph/test_export.py \
   tools/bridge/test_diff.py tools/bridge/test_push.py \
-  tools/data-fetch/test_polymarket.py \
+  tools/data_fetch/test_polymarket.py \
   tools/validation/e2e_test.py -q
 
 # By component
-python3 -m pytest tools/thesis-graph/test_export.py -q       # 22 — export/propagation
+python3 -m pytest tools/thesis_graph/test_export.py -q       # 22 — export/propagation
 python3 -m pytest tools/bridge/test_diff.py -q               # 21 — snapshot diff
 python3 -m pytest tools/bridge/test_push.py -q               # 26 — bridge script
-python3 -m pytest tools/data-fetch/test_polymarket.py -q     # 41 — Polymarket fetcher
+python3 -m pytest tools/data_fetch/test_polymarket.py -q     # 41 — Polymarket fetcher
 python3 -m pytest tools/validation/e2e_test.py -q            # 34 — E2E pipeline
 ```
 
@@ -168,16 +168,16 @@ tradingDesk/
 ├── output/                          # Generated HTML dashboards
 ├── snapshots/                       # Exported graph state JSONs
 ├── tools/
-│   ├── thesis-graph/
+│   ├── thesis_graph/
 │   │   ├── thesisgraph.py          # Core engine — config → propagation → HTML
 │   │   ├── test_export.py          # Export + propagation tests
 │   │   └── lib/                    # Cytoscape.js + dagre (inlined in HTML)
-│   ├── data-fetch/
+│   ├── data_fetch/
 │   │   ├── polymarket.py           # Polymarket Gamma API fetcher
 │   │   └── test_polymarket.py      # Polymarket tests
 │   ├── bridge/
-│   │   ├── push-to-dialectic.py    # Push snapshots to Dialectic rooms
-│   │   ├── diff-snapshots.py       # Snapshot delta detection
+│   │   ├── push_to_dialectic.py    # Push snapshots to Dialectic rooms
+│   │   ├── diff_snapshots.py       # Snapshot delta detection
 │   │   ├── test_push.py           # Bridge tests
 │   │   └── test_diff.py           # Diff tests
 │   ├── validation/

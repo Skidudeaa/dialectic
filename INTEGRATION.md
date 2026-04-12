@@ -72,11 +72,11 @@ python3 thesisgraph.py books/iran-hormuz-graph.json --fetch --export-state snaps
 python3 thesisgraph.py books/iran-hormuz-graph.json --fetch --export-state snapshots/latest.json -o output/iran-hormuz-graph.html
 ```
 
-### `push-to-dialectic.py` — bridge script
+### `push_to_dialectic.py` — bridge script
 
 ```bash
 # Push latest snapshot to a Dialectic trading room
-python3 tools/bridge/push-to-dialectic.py \
+python3 tools/bridge/push_to_dialectic.py \
   --snapshot snapshots/latest.json \
   --room-id <uuid> \
   --dialectic-url http://localhost:8000 \
@@ -88,7 +88,7 @@ Or combined:
 # One-liner: fetch prices → evaluate graph → push to Dialectic
 python3 thesisgraph.py books/iran-hormuz-graph.json \
   --fetch --export-state - | \
-  python3 tools/bridge/push-to-dialectic.py \
+  python3 tools/bridge/push_to_dialectic.py \
   --snapshot - --room-id <uuid>
 ```
 
@@ -151,7 +151,7 @@ python3 thesisgraph.py books/iran-hormuz-graph.json \
 
 ```bash
 # Compare two snapshots, output only what changed
-python3 tools/bridge/diff-snapshots.py snapshots/2026-03-29.json snapshots/2026-03-30.json
+python3 tools/bridge/diff_snapshots.py snapshots/2026-03-29.json snapshots/2026-03-30.json
 ```
 
 Output:
@@ -294,7 +294,7 @@ The `global_ontology` and `global_rules` fields already exist and are already in
 
 1. ✅ Add `--export-state` flag to thesisgraph.py
 2. ✅ Implement snapshot JSON export (the shape above)
-3. ✅ Build `diff-snapshots.py` for delta detection
+3. ✅ Build `diff_snapshots.py` for delta detection
 4. ✅ Test: `--fetch --export-state` produces valid JSON
 
 ### Week 2: Dialectic endpoint + memory storage ✅ DONE
@@ -313,7 +313,7 @@ The `global_ontology` and `global_rules` fields already exist and are already in
 
 ### Week 4: Bridge + automation ✅ DONE
 
-1. ✅ `push-to-dialectic.py` bridge script with retry + token auth
+1. ✅ `push_to_dialectic.py` bridge script with retry + token auth
 2. ✅ `run-all.py` multi-book runner: `python3 tools/bridge/run-all.py`
 3. ✅ Per-book room IDs and tokens in `meta.dialecticRoomId` / `meta.dialecticRoomToken`
 4. ✅ Cron-ready (see Quick Start in CLAUDE.md)

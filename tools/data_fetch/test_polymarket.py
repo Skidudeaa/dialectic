@@ -2,7 +2,7 @@
 """
 Tests for Polymarket prediction market fetcher.
 
-Runs with: python3 -m pytest tools/data-fetch/test_polymarket.py -q
+Runs with: python3 -m pytest tools/data_fetch/test_polymarket.py -q
 
 WHY mock HTTP: these tests must work offline and deterministically.
 All HTTP calls are mocked at the _make_request boundary so we test

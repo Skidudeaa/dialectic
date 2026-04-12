@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = str(Path(__file__).parent / "diff-snapshots.py")
+SCRIPT = str(Path(__file__).parent / "diff_snapshots.py")
 
 
 # =========================================================================

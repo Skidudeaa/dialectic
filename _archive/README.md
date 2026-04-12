@@ -10,8 +10,8 @@ This directory is explicitly excluded from the test suite, documentation, and to
 
 Directories that existed under `tools/` but were never populated (only `.gitkeep` files). Moved here 2026-04-10 during consolidation pass.
 
-- **`polymarket/`** — Empty placeholder. The canonical Polymarket fetcher is `tools/data-fetch/polymarket.py` (362 lines, 41 tests). This empty directory was likely an early refactor idea that never happened.
-- **`signals/`** — Empty placeholder. Not referenced anywhere in the codebase. Possibly intended for a signals pipeline that was later absorbed into `tools/thesis-graph/thesisgraph.py` propagation logic or `tools/outcomes/lifecycle_monitor.py` predicates.
+- **`polymarket/`** — Empty placeholder. The canonical Polymarket fetcher is `tools/data_fetch/polymarket.py` (362 lines, 41 tests). This empty directory was likely an early refactor idea that never happened.
+- **`signals/`** — Empty placeholder. Not referenced anywhere in the codebase. Possibly intended for a signals pipeline that was later absorbed into `tools/thesis_graph/thesisgraph.py` propagation logic or `tools/outcomes/lifecycle_monitor.py` predicates.
 
 ### `orphan-snapshots/`
 

@@ -31,7 +31,7 @@ Using `bookgen.py` in anger surfaced the limitations that made the thesis-graph 
 - **No confluence scoring.** When three independent signals converge on "recession risk," flat triggers just show three fired triggers instead of strengthening the convergent signal.
 - **Scripting-only.** One-shot HTML generation with no live backend, no collaboration layer, no programmatic interface.
 
-All five of those are solved by `tools/thesis-graph/thesisgraph.py` (2,467 lines, 76 tests) and the wider web layer.
+All five of those are solved by `tools/thesis_graph/thesisgraph.py` (2,467 lines, 76 tests) and the wider web layer.
 
 ## What survived the migration
 

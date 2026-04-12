@@ -41,8 +41,8 @@ Running the pipeline for two theses currently requires two separate commands wit
 
 ### Relevant Code and Patterns
 
-- `tools/bridge/push-to-dialectic.py` — canonical script structure: docstring with exit codes, `build_parser()` separated from `main()`, `get_room_token()`, `load_snapshot()`, stdout=JSON/stderr=human-readable, `sys.exit()` for all exits
-- `tools/bridge/diff-snapshots.py` — exit codes 0=changes, 1=no-changes, 2=error; positional args `old new`; all errors to stderr, delta JSON to stdout
+- `tools/bridge/push_to_dialectic.py` — canonical script structure: docstring with exit codes, `build_parser()` separated from `main()`, `get_room_token()`, `load_snapshot()`, stdout=JSON/stderr=human-readable, `sys.exit()` for all exits
+- `tools/bridge/diff_snapshots.py` — exit codes 0=changes, 1=no-changes, 2=error; positional args `old new`; all errors to stderr, delta JSON to stdout
 - `tools/validation/e2e_test.py` — canonical subprocess path resolution: `ROOT = Path(__file__).resolve().parent.parent.parent`; all three script path constants defined at module level; shows how to invoke thesisgraph with `--fetch --export-state`
 - `tools/bridge/test_push.py` — `importlib.import_module("push-to-dialectic")` pattern for hyphenated modules; `build_parser()` testability separation; `HTTPServer` in background thread for push integration tests
 - `tools/bridge/test_diff.py` — `subprocess.run([sys.executable, SCRIPT, ...], capture_output=True)` helper pattern; `tmp_path` fixture for file isolation; test classes by concern (`TestErrorPaths`, `TestEdgeCases`, etc.)
@@ -53,7 +53,7 @@ Running the pipeline for two theses currently requires two separate commands wit
 
 ## Key Technical Decisions
 
-- **`build_parser()` separated from `main()`**: Mirrors `push-to-dialectic.py` convention. Enables direct unit testing of argparse without triggering `sys.exit`.
+- **`build_parser()` separated from `main()`**: Mirrors `push_to_dialectic.py` convention. Enables direct unit testing of argparse without triggering `sys.exit`.
 - **Subprocess stream handling per step**: thesisgraph stderr flows through (progress visible in cron logs); diff stdout is captured (prevents JSON delta from leaking into run-all's stdout, which is reserved for the summary); push stdout is captured (suppresses verbose response JSON noise); all stderr flows through for immediate visibility in cron/terminal.
 - **Failure state via boolean accumulator**: A single `any_failed` bool accumulates per-book failures. `sys.exit(1 if any_failed else 0)` at the end satisfies R11 without complex state management.
 - **Per-book result dict**: Track `{export, changed, pushed, status}` per book for the summary line. Populated as each step completes; "–" for steps that were skipped.
@@ -154,7 +154,7 @@ Test expectation: none — this is a data-only change, verified by observation (
 - Create: `tools/bridge/run-all.py`
 
 **Approach:**
-- Script structure mirrors `push-to-dialectic.py`: module docstring with usage + exit codes, `build_parser()` separated from `main()`, constants at top for script paths, `if __name__ == "__main__": main()`
+- Script structure mirrors `push_to_dialectic.py`: module docstring with usage + exit codes, `build_parser()` separated from `main()`, constants at top for script paths, `if __name__ == "__main__": main()`
 - Path resolution: `ROOT = Path(__file__).resolve().parent.parent.parent` (same as `e2e_test.py`)
 - **Startup validation**: check `snapshots_dir = ROOT / "snapshots"` exists before processing any books; if absent, print error to stderr and `sys.exit(2)` with a clear message
 - Book discovery: `sorted(Path(books_dir).glob("*.json"))` → for each file, `json.load()` wrapped in `try/except (json.JSONDecodeError, OSError)` → log `[error] {book_id}: invalid JSON — skipped`, mark as failed, continue → check `data.get("meta", {}).get("type") == "thesis-graph"` → silently skip non-matching
@@ -170,7 +170,7 @@ Test expectation: none — this is a data-only change, verified by observation (
 - **`--dry-run` behavior**: discover books, then for each book print: `[dry-run] {book_id}: room={room_id or "NONE"} snapshot={latest_path} prev={prev_path}`; do not invoke any subprocess; exit 0
 
 **Patterns to follow:**
-- `tools/bridge/push-to-dialectic.py` — script structure, docstring format, `build_parser()` convention, stderr/stdout split
+- `tools/bridge/push_to_dialectic.py` — script structure, docstring format, `build_parser()` convention, stderr/stdout split
 - `tools/validation/e2e_test.py` — `ROOT`, `THESISGRAPH`, `DIFF_SNAPSHOTS`, `PUSH_SCRIPT` constant definitions
 
 **Test scenarios:** (covered in Unit 3)
@@ -293,7 +293,7 @@ Note: since the scripts are invoked via subprocess, the test approach should eit
 - Add a new `# === Pipeline Runner ===` section in the Quick Start (after the existing Thesis Graph Engine block; `run-all.py` lives in `tools/bridge/`, not the thesis engine)
 - Include the basic invocation: `python3 tools/bridge/run-all.py`
 - Include the `--dry-run` flag example
-- Include the cron template with a note that `DIALECTIC_ROOM_TOKEN` and `--dialectic-url` must be configured for production pushes: `DIALECTIC_ROOM_TOKEN=<token> python3 tools/bridge/run-all.py` (or set the env var in `~/.profile`). Note that `push-to-dialectic.py` defaults to `localhost:8002` — production use requires the Dialectic URL to be set via `DIALECTIC_URL` env var (if implemented) or by running the push script separately with `--dialectic-url`
+- Include the cron template with a note that `DIALECTIC_ROOM_TOKEN` and `--dialectic-url` must be configured for production pushes: `DIALECTIC_ROOM_TOKEN=<token> python3 tools/bridge/run-all.py` (or set the env var in `~/.profile`). Note that `push_to_dialectic.py` defaults to `localhost:8002` — production use requires the Dialectic URL to be set via `DIALECTIC_URL` env var (if implemented) or by running the push script separately with `--dialectic-url`
 - Full cron template: `0 8 * * 1,3,5 cd /path/to/tradingDesk && python3 tools/bridge/run-all.py >> logs/run-all.log 2>&1`
 
 **Test scenarios:**
@@ -306,12 +306,12 @@ Test expectation: none — documentation change; verified by inspection.
 
 ## System-Wide Impact
 
-- **Interaction graph:** `run-all.py` is a new entry point that wraps three existing scripts. It does not modify `thesisgraph.py`, `diff-snapshots.py`, or `push-to-dialectic.py` — no callbacks or middleware are affected. The `books/*.json` schema gets a new `meta.dialecticRoomId` field (additive, backward-compatible with existing scripts that ignore unknown fields).
+- **Interaction graph:** `run-all.py` is a new entry point that wraps three existing scripts. It does not modify `thesisgraph.py`, `diff_snapshots.py`, or `push_to_dialectic.py` — no callbacks or middleware are affected. The `books/*.json` schema gets a new `meta.dialecticRoomId` field (additive, backward-compatible with existing scripts that ignore unknown fields).
 - **Error propagation:** Subprocess failures surface as non-zero `returncode` → set `any_failed = True` → `sys.exit(1)` at end. The failed book's stderr messages (from child scripts) flow through directly.
 - **State lifecycle risks:** The `shutil.copy2(latest, prev)` step runs before the thesisgraph export. If the process is killed between the copy and the export, the prev file will contain the last-known-good state, and the next run will re-copy it correctly. No data loss risk.
 - **API surface parity:** The runner does not expose a new API — it is a CLI-only entry point. No changes to the snapshot JSON schema (R7-R9 use filenames, not schema fields).
-- **Integration coverage:** The test suite (Unit 3) uses stub scripts rather than a mock server, so push integration is covered at the subprocess-exit-code level. Full end-to-end push coverage (against a real mock Dialectic server) is already covered in `tools/validation/e2e_test.py` for the underlying `push-to-dialectic.py` script. Run-all's push path is thin (it calls push with correct args and checks exit code); stubbing is sufficient.
-- **Unchanged invariants:** `thesisgraph.py`, `diff-snapshots.py`, and `push-to-dialectic.py` are not modified. Their CLI contracts and exit codes are unchanged.
+- **Integration coverage:** The test suite (Unit 3) uses stub scripts rather than a mock server, so push integration is covered at the subprocess-exit-code level. Full end-to-end push coverage (against a real mock Dialectic server) is already covered in `tools/validation/e2e_test.py` for the underlying `push_to_dialectic.py` script. Run-all's push path is thin (it calls push with correct args and checks exit code); stubbing is sufficient.
+- **Unchanged invariants:** `thesisgraph.py`, `diff_snapshots.py`, and `push_to_dialectic.py` are not modified. Their CLI contracts and exit codes are unchanged.
 
 ## Risks & Dependencies
 
@@ -320,9 +320,9 @@ Test expectation: none — documentation change; verified by inspection.
 | `books/*.json` files that fail to parse as JSON (malformed) | Wrap `json.load()` in try/except; log `[error] {book_id}: invalid JSON — skipped`; mark as failed |
 | `meta.dialecticRoomId` set to empty string instead of absent | Treat falsy values (`""`, `null`, `None`) as absent in the room-ID check |
 | `snapshots/` directory does not exist | Check existence at startup and exit 2 with a clear message (it is present in the repo but could be missing in a fresh clone before the directory is committed) |
-| Cron environment lacks `DIALECTIC_ROOM_TOKEN` | push-to-dialectic.py exits 2 with a clear message; run-all marks the book failed and exits 1, which cron logs. The cron template in CLAUDE.md should note the env var requirement. |
+| Cron environment lacks `DIALECTIC_ROOM_TOKEN` | push_to_dialectic.py exits 2 with a clear message; run-all marks the book failed and exits 1, which cron logs. The cron template in CLAUDE.md should note the env var requirement. |
 | `thesisgraph.py --fetch` makes network calls (Yahoo Finance, Polymarket) that may time out | No retry in the runner (see scope). Timeouts in thesisgraph appear as non-zero exit → book marked failed. This is the accepted behavior per the requirements doc. |
-| `push-to-dialectic.py` defaults to `localhost:8002` (mock server port) — production pushes silently fail if no URL is configured | Note in CLAUDE.md cron template that production use requires Dialectic URL to be supplied. The runner's scope boundary excludes `--dialectic-url`; the URL must be configured in the environment or the push script invoked separately. |
+| `push_to_dialectic.py` defaults to `localhost:8002` (mock server port) — production pushes silently fail if no URL is configured | Note in CLAUDE.md cron template that production use requires Dialectic URL to be supplied. The runner's scope boundary excludes `--dialectic-url`; the URL must be configured in the environment or the push script invoked separately. |
 
 ## Documentation / Operational Notes
 
@@ -334,6 +334,6 @@ Test expectation: none — documentation change; verified by inspection.
 
 - **Origin document:** [`docs/brainstorms/2026-03-31-multi-book-runner-requirements.md`](docs/brainstorms/2026-03-31-multi-book-runner-requirements.md)
 - **Subprocess pattern:** `tools/validation/e2e_test.py` (ROOT resolution, script constants)
-- **Script structure pattern:** `tools/bridge/push-to-dialectic.py` (build_parser, docstring, exit code docs)
+- **Script structure pattern:** `tools/bridge/push_to_dialectic.py` (build_parser, docstring, exit code docs)
 - **Test pattern:** `tools/bridge/test_push.py` (importlib pattern), `tools/bridge/test_diff.py` (subprocess + tmp_path)
-- **Exit code contracts:** `tools/bridge/diff-snapshots.py` (lines 13-16), `tools/bridge/push-to-dialectic.py` (lines 24-27)
+- **Exit code contracts:** `tools/bridge/diff_snapshots.py` (lines 13-16), `tools/bridge/push_to_dialectic.py` (lines 24-27)

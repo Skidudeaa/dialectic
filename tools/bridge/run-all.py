@@ -62,9 +62,9 @@ from typing import Optional
 # =========================================================================
 
 ROOT: Path = Path(__file__).resolve().parent.parent.parent
-THESISGRAPH: str = str(ROOT / "tools" / "thesis-graph" / "thesisgraph.py")
-DIFF_SNAPSHOTS: str = str(ROOT / "tools" / "bridge" / "diff-snapshots.py")
-PUSH_SCRIPT: str = str(ROOT / "tools" / "bridge" / "push-to-dialectic.py")
+THESISGRAPH: str = str(ROOT / "tools" / "thesis_graph" / "thesisgraph.py")
+DIFF_SNAPSHOTS: str = str(ROOT / "tools" / "bridge" / "diff_snapshots.py")
+PUSH_SCRIPT: str = str(ROOT / "tools" / "bridge" / "push_to_dialectic.py")
 
 
 # =========================================================================

@@ -30,13 +30,13 @@ TradingView Pine alert
 
 The relay is tiny (~40 lines of stdlib Python — see "Minimal relay example" below). Deploy it anywhere with network access to the webapp and the `TV_WEBHOOK_SECRET`. For production, put the relay behind the same reverse proxy that terminates TLS for the webapp.
 
-### Pattern 2: Manual fire via `sign-tv-alert.py` (for less time-sensitive signals)
+### Pattern 2: Manual fire via `sign_tv_alert.py` (for less time-sensitive signals)
 
 Useful for the `hormuz-reopen-announced` kill-switch, where the operator is reading the news anyway. Also the right choice for smoke testing bindings you've just added.
 
 ```bash
 export TV_WEBHOOK_SECRET=<same value as the webapp>
-python3 tools/bridge/sign-tv-alert.py \
+python3 tools/bridge/sign_tv_alert.py \
   --book iran-hormuz-graph \
   --binding hormuz-reopen-announced \
   --url https://tradingdesk.your-host.com/api/tradingview/webhook \
@@ -77,10 +77,10 @@ if close >= 115 and time == time(timeframe.period, "0930-1030:1234567")
 
 **Trade:** Kill-switch for the Iran/Hormuz book. Sets the `hormuz` event node to `resolved`, which collapses downstream amplification via the existing event→indicator edges.
 
-**Fire manually** — this is news-driven, not chart-driven. Use `sign-tv-alert.py`:
+**Fire manually** — this is news-driven, not chart-driven. Use `sign_tv_alert.py`:
 
 ```bash
-python3 tools/bridge/sign-tv-alert.py \
+python3 tools/bridge/sign_tv_alert.py \
   --book iran-hormuz-graph \
   --binding hormuz-reopen-announced \
   --url https://tradingdesk.your-host.com/api/tradingview/webhook \
@@ -199,7 +199,7 @@ Rotate `TV_WEBHOOK_SECRET` when:
 3. Restart the webapp. The in-process nonce store is flushed, but timestamp replay is still bounded by the 300s window.
 4. Update the relay's environment (`TV_WEBHOOK_SECRET`) with the same new value.
 5. Restart the relay.
-6. Smoke test with `sign-tv-alert.py` — expect a `200 {"status":"ok"}` response.
+6. Smoke test with `sign_tv_alert.py` — expect a `200 {"status":"ok"}` response.
 7. Verify the dashboard TradingView panel shows `SECURED` (not `NO SECRET`).
 
 During the rotation window (new secret set, old still valid elsewhere), any alert signed with the old secret returns `401 bad_signature`. A few missed fires are acceptable for a rotation event.
@@ -258,4 +258,4 @@ The log is append-only — rotate manually when it grows past ~10 MB (no automat
 - `web/tv_webhook.py` — HMAC verification source
 - `web/adapters/tradingview.py` — binding resolution + op enforcement
 - `web/routes/tradingview.py` — FastAPI route handlers
-- `tools/bridge/sign-tv-alert.py` — the signing helper referenced throughout this runbook
+- `tools/bridge/sign_tv_alert.py` — the signing helper referenced throughout this runbook

@@ -798,10 +798,10 @@ def fetch_polymarket(cfg: dict) -> dict:
     Scans all nodes for feeds with source="polymarket", batches the slugs,
     calls the polymarket module, and writes probabilities back into the cfg.
     """
-    # WHY dynamic import: the polymarket module lives in tools/data-fetch/.
+    # WHY dynamic import: the polymarket module lives in tools/data_fetch/.
     # We resolve the path relative to this script so it works regardless
     # of the working directory.
-    polymarket_dir = os.path.join(os.path.dirname(__file__), "..", "data-fetch")
+    polymarket_dir = os.path.join(os.path.dirname(__file__), "..", "data_fetch")
     polymarket_dir = os.path.abspath(polymarket_dir)
 
     if not os.path.isfile(os.path.join(polymarket_dir, "polymarket.py")):
@@ -965,7 +965,7 @@ def compute_derived_indicators(cfg: dict) -> dict:
     — see eval_node_state's closesRequired gate comment.
     """
     di_dir = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "data-fetch")
+        os.path.join(os.path.dirname(__file__), "..", "data_fetch")
     )
     if di_dir not in sys.path:
         sys.path.insert(0, di_dir)

@@ -15,33 +15,33 @@ Trading Desk — a causal reasoning engine for macro trading. Models the world a
 # === Thesis Graph Engine ===
 
 # Generate interactive causal DAG dashboard
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json -o output/iran-hormuz-graph.html
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json -o output/iran-hormuz-graph.html
 
 # Second thesis (Trump tariffs)
-python3 tools/thesis-graph/thesisgraph.py books/trump-tariffs-graph.json -o output/trump-tariffs-graph.html
+python3 tools/thesis_graph/thesisgraph.py books/trump-tariffs-graph.json -o output/trump-tariffs-graph.html
 
 # With live prices (Yahoo Finance + Polymarket probabilities)
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json -o output/iran-hormuz-graph.html --fetch
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json -o output/iran-hormuz-graph.html --fetch
 
 # Export evaluated graph state as JSON (for Dialectic integration)
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json --export-state snapshots/latest.json
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json --export-state snapshots/latest.json
 
 # Fetch + export + generate HTML in one command
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json --fetch --export-state snapshots/latest.json -o output/iran-hormuz-graph.html
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json --fetch --export-state snapshots/latest.json -o output/iran-hormuz-graph.html
 
 # Pipe snapshot to stdout for bridge scripts
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json --export-state - 2>/dev/null
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json --export-state - 2>/dev/null
 
 # Dry run (validate + propagate, no output)
-python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json --dry-run
+python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json --dry-run
 
 # === Pipeline Runner ===
 
 # Run all active thesis books in one command (fetch → export → diff → push)
 # Room IDs must be set in meta.dialecticRoomId of each book JSON.
 # DIALECTIC_ROOM_TOKEN must be in the environment for push steps.
-# NOTE: push-to-dialectic.py defaults to localhost:8002 (mock server).
-#       For production, invoke push-to-dialectic.py directly with --dialectic-url.
+# NOTE: push_to_dialectic.py defaults to localhost:8002 (mock server).
+#       For production, invoke push_to_dialectic.py directly with --dialectic-url.
 python3 tools/bridge/run-all.py
 
 # Preview what would run — no network calls, no file writes
@@ -59,16 +59,16 @@ python3 tools/bridge/run-all.py --books path/to/custom/books/
 # === Polymarket Fetcher ===
 
 # Standalone probability check
-python3 tools/data-fetch/polymarket.py us-iran-april-30 --json
+python3 tools/data_fetch/polymarket.py us-iran-april-30 --json
 
 # === Snapshot Diff ===
 
 # Compare two snapshots, output structured delta
-python3 tools/bridge/diff-snapshots.py snapshots/old.json snapshots/new.json
+python3 tools/bridge/diff_snapshots.py snapshots/old.json snapshots/new.json
 
 # Chain: only push if something changed
-python3 tools/bridge/diff-snapshots.py snapshots/old.json snapshots/new.json && \
-  python3 tools/bridge/push-to-dialectic.py --snapshot snapshots/new.json --room-id <uuid>
+python3 tools/bridge/diff_snapshots.py snapshots/old.json snapshots/new.json && \
+  python3 tools/bridge/push_to_dialectic.py --snapshot snapshots/new.json --room-id <uuid>
 
 # === E2E Validation ===
 
@@ -78,15 +78,15 @@ python3 tools/validation/mock_dialectic.py --port 8002
 # === Tests ===
 
 # Full suite (505 tests)
-python3 -m pytest tools/thesis-graph/test_export.py tools/bridge/ tools/data-fetch/ tools/validation/e2e_test.py tools/outcomes/ web/ -q
+python3 -m pytest tools/thesis_graph/test_export.py tools/bridge/ tools/data_fetch/ tools/validation/e2e_test.py tools/outcomes/ web/ -q
 
 # By component
-python3 -m pytest tools/thesis-graph/test_export.py -q          # 83 — export/propagation + TV Phase 1
+python3 -m pytest tools/thesis_graph/test_export.py -q          # 83 — export/propagation + TV Phase 1
 python3 -m pytest tools/bridge/test_diff.py -q                  # 28 — snapshot diff + tvIndicatorShifts
 python3 -m pytest tools/bridge/test_push.py -q                  # 26 — bridge script
 python3 -m pytest tools/bridge/test_run_all.py -q               # 20 — multi-book runner
-python3 -m pytest tools/data-fetch/test_polymarket.py -q        # 41 — Polymarket fetcher
-python3 -m pytest tools/data-fetch/test_derived_indicators.py -q # 58 — Wilder RSI/ATR/SMA + overlay tripwire
+python3 -m pytest tools/data_fetch/test_polymarket.py -q        # 41 — Polymarket fetcher
+python3 -m pytest tools/data_fetch/test_derived_indicators.py -q # 58 — Wilder RSI/ATR/SMA + overlay tripwire
 python3 -m pytest tools/validation/e2e_test.py -q               # 39 — E2E pipeline
 python3 -m pytest tools/outcomes/ -q                            # 60 — trade lifecycle + cross-book + morning brief
 python3 -m pytest web/test_web.py -q                            # 50 — web layer (auth, state, routes, concurrency)
@@ -120,7 +120,7 @@ docker compose up --build
 
 ## Architecture
 
-### Thesis Graph Engine (`tools/thesis-graph/thesisgraph.py`)
+### Thesis Graph Engine (`tools/thesis_graph/thesisgraph.py`)
 
 The core tool. Reads a thesis graph JSON config → evaluates all nodes via topological propagation → generates a self-contained interactive HTML dashboard (~750 KB with inlined Cytoscape.js).
 
@@ -150,7 +150,7 @@ Two data sources, both called when `--fetch` is used:
 - **Yahoo Finance** — ETFs, futures, FX, indices via v7 spark API (allorigins.win CORS proxy, no API key)
 - **Polymarket** — prediction market probabilities via Gamma API (`https://gamma-api.polymarket.com`), mapped onto graph nodes with `"source": "polymarket"` feeds
 
-### Polymarket Fetcher (`tools/data-fetch/polymarket.py`)
+### Polymarket Fetcher (`tools/data_fetch/polymarket.py`)
 
 Standalone module and CLI. Three-pass slug matching (exact → substring → keyword). Parses `outcomePrices` for "Yes" probability. Imported dynamically by thesisgraph.py when `--fetch` runs.
 
@@ -172,7 +172,7 @@ Exports evaluated graph state as structured JSON for Dialectic integration. Shap
 }
 ```
 
-### Delta Detection (`tools/bridge/diff-snapshots.py`)
+### Delta Detection (`tools/bridge/diff_snapshots.py`)
 
 Compares two snapshot JSONs. Outputs: state transitions, confluence shifts, countdown changes, market price moves, added/removed nodes. Exit 0 = changes found, 1 = no changes, 2 = error.
 
@@ -187,7 +187,7 @@ fetch → export snapshot → diff against previous → conditional push to Dial
 - Continue-on-failure: one book's error doesn't abort others; exits non-zero if any failed
 - `--dry-run` prints planned run without executing
 
-### Dialectic Integration (`tools/bridge/push-to-dialectic.py`)
+### Dialectic Integration (`tools/bridge/push_to_dialectic.py`)
 
 POSTs snapshots to Dialectic trading rooms. Token from `DIALECTIC_ROOM_TOKEN` env var or `meta.dialecticRoomToken` in book JSON (per-book token takes precedence). See `INTEGRATION.md` for the full spec.
 
@@ -205,11 +205,11 @@ Dialectic server: `/root/DwoodAmo/dialectic` — run with `PORT=8002 python dial
 - `mock_dialectic.py` — mock Dialectic HTTP server with schema validation, error injection, standalone + importable
 - `e2e_test.py` — full pipeline tests: snapshot → diff → push → verify round trip
 
-### TradingView Integration (`web/routes/tradingview.py` + `tools/data-fetch/derived_indicators.py`)
+### TradingView Integration (`web/routes/tradingview.py` + `tools/data_fetch/derived_indicators.py`)
 
 The TradingView integration is split across the engine and the webapp:
 
-**Engine side** (`tools/data-fetch/derived_indicators.py` + `tools/thesis-graph/thesisgraph.py`):
+**Engine side** (`tools/data_fetch/derived_indicators.py` + `tools/thesis_graph/thesisgraph.py`):
 - Stdlib Wilder RSI/ATR/SMA computed from Yahoo v8 chart OHLCV for nodes with `derivedIndicators` specs
 - `compute_derived_indicators()` writes non-causal `tvIndicators` overlays to the snapshot (top-level `tvIndicators` key in v:2 schema)
 - Auto-bumps `closesObserved` counters on price nodes whose thresholds have `closesRequired` set — feeds the existing eval_node_state gate
@@ -238,7 +238,7 @@ The TradingView integration is split across the engine and the webapp:
 
 **Operator tooling:**
 - `docs/runbooks/tradingview-pine-setup.md` — full Pine Script setup guide, relay architecture, secret rotation, troubleshooting
-- `tools/bridge/sign-tv-alert.py` — stdlib CLI that produces signed curl commands (reads `TV_WEBHOOK_SECRET`)
+- `tools/bridge/sign_tv_alert.py` — stdlib CLI that produces signed curl commands (reads `TV_WEBHOOK_SECRET`)
 - Required env vars: `TV_WEBHOOK_SECRET`, `TV_WEBHOOK_RATE_LIMIT_PER_MIN` (default 60), `TV_WEBHOOK_NONCE_TTL_SECONDS` (default 600)
 
 ### Outcomes / Trade Lifecycle (`tools/outcomes/`)
@@ -307,17 +307,17 @@ tradingDesk/
 ├── output/                          # generated HTML dashboards
 ├── snapshots/                       # exported graph state JSONs
 ├── tools/
-│   ├── thesis-graph/
+│   ├── thesis_graph/
 │   │   ├── thesisgraph.py          # core engine (~2200 lines)
 │   │   ├── test_export.py          # export + propagation tests (76)
 │   │   └── lib/                    # Cytoscape.js + dagre (inlined in HTML)
-│   ├── data-fetch/
+│   ├── data_fetch/
 │   │   ├── polymarket.py           # Polymarket Gamma API fetcher
 │   │   └── test_polymarket.py      # Polymarket tests (41)
 │   ├── bridge/
 │   │   ├── run-all.py              # multi-book pipeline runner
-│   │   ├── push-to-dialectic.py    # push snapshots to Dialectic rooms
-│   │   ├── diff-snapshots.py       # snapshot delta detection
+│   │   ├── push_to_dialectic.py    # push snapshots to Dialectic rooms
+│   │   ├── diff_snapshots.py       # snapshot delta detection
 │   │   ├── test_run_all.py        # runner tests (20)
 │   │   ├── test_push.py           # bridge tests (26)
 │   │   └── test_diff.py           # diff tests (21)

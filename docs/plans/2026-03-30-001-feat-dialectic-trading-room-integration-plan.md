@@ -48,7 +48,7 @@ Amo and Dan discuss commodity trading in Dialectic. The LLM participates as an e
 ### Relevant Code and Patterns
 
 **tradingDesk:**
-- `tools/thesis-graph/thesisgraph.py` (2080 lines) — CLI with `--fetch`, `--dry-run`, `--publish`. Propagation via `propagate()` → `{nodeId: state}`. Confluence via `score_confluence()`. Scenarios via `eval_scenario()`. All functions exist; `--export-state` is a serialization wrapper.
+- `tools/thesis_graph/thesisgraph.py` (2080 lines) — CLI with `--fetch`, `--dry-run`, `--publish`. Propagation via `propagate()` → `{nodeId: state}`. Confluence via `score_confluence()`. Scenarios via `eval_scenario()`. All functions exist; `--export-state` is a serialization wrapper.
 - Existing CLI pattern: `argparse` with `--flag VALUE` for file output, `-` for stdout piping
 
 **Dialectic:**
@@ -70,7 +70,7 @@ Amo and Dan discuss commodity trading in Dialectic. The LLM participates as an e
 ## Key Technical Decisions
 
 - **Schema migration over memory-only**: Add `trading_config JSONB` to the `rooms` table AND add `trading_config: Optional[dict] = None` to the Room Pydantic model. This is critical: Dialectic hydrates rooms via `Room(**dict(row))` — Pydantic v2 rejects extra fields by default, so 4 call sites will crash if the model isn't updated. The 4 sites: `handlers.py:_trigger_llm` (line ~283), `handlers.py:_handle_summon_llm` (line ~908), `handlers.py:_trigger_protocol_response` (line ~1325), `api/main.py:verify_room_token` (line ~294). An alternative pattern exists in the codebase (`enable_typing_analysis` column is NOT in the Room model, read via targeted SELECT), but that defeats the stated benefit of clean PromptBuilder reads. Rationale: Option A (add to model) is the correct path.
-- **Full snapshots at the endpoint, deltas client-side**: The Dialectic endpoint always receives the full snapshot JSON. `diff-snapshots.py` runs on the tradingDesk side to decide whether to push and to format the curator alert context. Rationale: the endpoint needs the full state for `trading_config` and prompt injection. Deltas are a UX concern for alerts, not a transport concern.
+- **Full snapshots at the endpoint, deltas client-side**: The Dialectic endpoint always receives the full snapshot JSON. `diff_snapshots.py` runs on the tradingDesk side to decide whether to push and to format the curator alert context. Rationale: the endpoint needs the full state for `trading_config` and prompt injection. Deltas are a UX concern for alerts, not a transport concern.
 - **Room token auth for the bridge**: Use the existing room token (Bearer header) — no separate API key. The token goes in an environment variable (`DIALECTIC_ROOM_TOKEN`), not a CLI argument. Rationale: two-person family platform; room token is sufficient.
 - **Subclass AnnotatorEngine for TradingCurator**: Create `TradingCuratorEngine` that inherits `should_annotate()` and overrides the identity prompt + trigger logic. Rationale: the presence-checking and message-creation infrastructure is reusable; only the prompt and trigger differ.
 - **Token budget via filtering, not truncation**: Filter to fired/approaching nodes, top-3 scenarios by probability, top-5 positions by monthly allocation. Log warning if section exceeds 800 tokens. Never hard-fail. Rationale: summarization is better than arbitrary truncation for trading data.
@@ -104,7 +104,7 @@ Amo and Dan discuss commodity trading in Dialectic. The LLM participates as an e
 ```mermaid
 sequenceDiagram
     participant TD as tradingDesk CLI
-    participant Bridge as push-to-dialectic.py
+    participant Bridge as push_to_dialectic.py
     participant API as Dialectic API
     participant DB as PostgreSQL
     participant MM as MemoryManager
@@ -136,7 +136,7 @@ sequenceDiagram
 ```mermaid
 graph TB
     U1[Unit 1: --export-state] --> U7[Unit 7: Bridge Script]
-    U2[Unit 2: diff-snapshots.py] --> U7
+    U2[Unit 2: diff_snapshots.py] --> U7
     U3[Unit 3: Schema Migration] --> U4[Unit 4: REST Endpoint]
     U4 --> U5[Unit 5: Prompt Injection]
     U4 --> U6[Unit 6: Trading Curator]
@@ -154,8 +154,8 @@ graph TB
 **Dependencies:** None — this is pure tradingDesk work.
 
 **Files:**
-- Modify: `tools/thesis-graph/thesisgraph.py`
-- Test: `tools/thesis-graph/test_export.py`
+- Modify: `tools/thesis_graph/thesisgraph.py`
+- Test: `tools/thesis_graph/test_export.py`
 
 **Approach:**
 - Add `--export-state` argument to argparse (`metavar="FILE"`, supports `-` for stdout)
@@ -164,7 +164,7 @@ graph TB
 - Build `scenarioImpacts` from `eval_scenario()` results (probability + net impact)
 - Build `portfolioSummary` from instruments config (monthly budget, top positions, SGOV available)
 - When `--export-state` is specified, run the full propagation pipeline (same as `--dry-run`) then serialize and write. If `-o` is also specified, generate both HTML and JSON.
-- Support piping: `--export-state -` writes to stdout for `| push-to-dialectic.py`
+- Support piping: `--export-state -` writes to stdout for `| push_to_dialectic.py`
 
 **Patterns to follow:**
 - Existing `--dry-run` path in `main()` for the propagation-without-HTML pattern
@@ -185,7 +185,7 @@ graph TB
 
 ---
 
-- [x] **Unit 2: Build diff-snapshots.py**
+- [x] **Unit 2: Build diff_snapshots.py**
 
 **Goal:** Compare two snapshot JSONs and output a structured delta showing what changed.
 
@@ -194,7 +194,7 @@ graph TB
 **Dependencies:** Unit 1 (needs snapshot JSON format to exist)
 
 **Files:**
-- Create: `tools/bridge/diff-snapshots.py`
+- Create: `tools/bridge/diff_snapshots.py`
 - Test: `tools/bridge/test_diff.py`
 
 **Approach:**
@@ -219,7 +219,7 @@ graph TB
 - Error path: missing file → clear error message, exit code 2
 
 **Verification:**
-- `diff-snapshots.py snap-a.json snap-b.json` outputs valid delta JSON
+- `diff_snapshots.py snap-a.json snap-b.json` outputs valid delta JSON
 - Exit code reflects whether changes were found
 
 ---
@@ -400,7 +400,7 @@ graph TB
 
 ---
 
-- [x] **Unit 7: push-to-dialectic.py bridge script**
+- [x] **Unit 7: push_to_dialectic.py bridge script**
 
 **Goal:** One-command pipeline from tradingDesk export to Dialectic snapshot endpoint.
 
@@ -409,7 +409,7 @@ graph TB
 **Dependencies:** Unit 1 (--export-state), Unit 4 (Dialectic endpoint)
 
 **Files:**
-- Create: `tools/bridge/push-to-dialectic.py`
+- Create: `tools/bridge/push_to_dialectic.py`
 - Test: `tools/bridge/test_push.py`
 
 **Approach:**
@@ -419,7 +419,7 @@ graph TB
 - POST snapshot JSON to `{dialectic_url}/rooms/{room_id}/trading/snapshot` with `Authorization: Bearer {token}`
 - Print response (stored_at, memory_id) on success
 - Exit code 0 on success, 1 on HTTP error, 2 on connection error
-- Support piping: `thesisgraph.py --fetch --export-state - | push-to-dialectic.py --snapshot - --room-id {id}`
+- Support piping: `thesisgraph.py --fetch --export-state - | push_to_dialectic.py --snapshot - --room-id {id}`
 - Zero external Python dependencies (stdlib `urllib` only, matching tradingDesk convention)
 - If URL is not localhost/127.0.0.1 and not HTTPS, print a warning about transmitting the room token over unencrypted HTTP
 - Document that `DIALECTIC_ROOM_TOKEN` grants full room access (read/write messages, memories, analytics) — treat as a secret
@@ -437,7 +437,7 @@ graph TB
 - Edge case: empty snapshot file → validation error before sending
 
 **Verification:**
-- `thesisgraph.py --fetch --export-state - | push-to-dialectic.py --snapshot - --room-id {id}` succeeds end-to-end
+- `thesisgraph.py --fetch --export-state - | push_to_dialectic.py --snapshot - --room-id {id}` succeeds end-to-end
 - Dialectic room has updated trading_config after push
 
 ---
@@ -482,7 +482,7 @@ graph TB
 - **Error propagation:** Snapshot endpoint failures return HTTP errors to the bridge script. LLM failures in the curator are non-critical (logged, not re-raised). WebSocket broadcast failures are silent (no connected clients = no-op). Memory creation failures should fail the endpoint (500) since the snapshot must be stored.
 - **State lifecycle risks:** `trading_config` on the Room object may be cached if the ORM (asyncpg raw queries + Pydantic model construction) caches Room objects across requests. Mitigate by always reading `trading_config` fresh in PromptBuilder. Memory upsert by stable key prevents duplication. **Mid-generation race**: if a snapshot arrives while the LLM is streaming a response, the in-flight response uses the old trading_config. This is bounded — the next human message fetches fresh. The curator must not fire during an active LLM stream to avoid interleaving complete annotation messages with streaming tokens.
 - **API surface parity:** The WebSocket already handles `MEMORY_ADDED` events. Adding `TRADING_UPDATE` follows the same pattern. The frontend already handles dynamic tab content in the right panel.
-- **Integration coverage:** End-to-end test: `thesisgraph.py --export-state | push-to-dialectic.py` → Dialectic stores snapshot → user sends message → LLM response references thesis state. This crosses 3 processes and 2 repos.
+- **Integration coverage:** End-to-end test: `thesisgraph.py --export-state | push_to_dialectic.py` → Dialectic stores snapshot → user sends message → LLM response references thesis state. This crosses 3 processes and 2 repos.
 - **Unchanged invariants:** All existing Dialectic endpoints, message handling, memory search, and LLM orchestration remain unchanged. The trading integration is purely additive — new endpoint, new prompt section, new curator engine. No existing behavior is modified.
 
 ## Risks & Dependencies
@@ -504,7 +504,7 @@ graph TB
 ## Phased Delivery
 
 ### Phase 1: tradingDesk Export (Units 1-2)
-No Dialectic changes. tradingDesk gains `--export-state` and `diff-snapshots.py`. Can be tested in isolation.
+No Dialectic changes. tradingDesk gains `--export-state` and `diff_snapshots.py`. Can be tested in isolation.
 
 ### Phase 2: Dialectic Backend (Units 3-6)
 Schema migration, REST endpoint, prompt injection, and curator. Testable with `curl` against the endpoint before the bridge script exists.
@@ -515,7 +515,7 @@ End-to-end pipeline and UI panel. Completes the integration.
 ## Sources & References
 
 - **Origin document:** [INTEGRATION.md](../../INTEGRATION.md)
-- tradingDesk engine: `tools/thesis-graph/thesisgraph.py`
+- tradingDesk engine: `tools/thesis_graph/thesisgraph.py`
 - Dialectic API: `/root/DwoodAmo/dialectic/api/main.py`
 - Dialectic PromptBuilder: `/root/DwoodAmo/dialectic/llm/prompts.py`
 - Dialectic AnnotatorEngine: `/root/DwoodAmo/dialectic/llm/annotator.py`

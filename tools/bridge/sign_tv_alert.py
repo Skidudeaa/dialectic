@@ -12,13 +12,13 @@ integrations (a local relay, a cron watcher, a CI smoke test).
 Usage:
     # Read body from stdin
     echo '{"book":"iran-hormuz-graph","bindingId":"brent-persistence-close-above-115"}' | \\
-        python3 tools/bridge/sign-tv-alert.py
+        python3 tools/bridge/sign_tv_alert.py
 
     # Read body from a file
-    python3 tools/bridge/sign-tv-alert.py --body alert.json
+    python3 tools/bridge/sign_tv_alert.py --body alert.json
 
     # Inline body + custom URL
-    python3 tools/bridge/sign-tv-alert.py \\
+    python3 tools/bridge/sign_tv_alert.py \\
         --book iran-hormuz-graph \\
         --binding brent-persistence-close-above-115 \\
         --url https://tradingdesk.internal/api/tradingview/webhook

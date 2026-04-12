@@ -23,9 +23,9 @@ import pytest
 
 # --- Paths to pipeline scripts ---
 ROOT = Path(__file__).resolve().parent.parent.parent
-THESISGRAPH = str(ROOT / "tools" / "thesis-graph" / "thesisgraph.py")
-DIFF_SNAPSHOTS = str(ROOT / "tools" / "bridge" / "diff-snapshots.py")
-PUSH_SCRIPT = str(ROOT / "tools" / "bridge" / "push-to-dialectic.py")
+THESISGRAPH = str(ROOT / "tools" / "thesis_graph" / "thesisgraph.py")
+DIFF_SNAPSHOTS = str(ROOT / "tools" / "bridge" / "diff_snapshots.py")
+PUSH_SCRIPT = str(ROOT / "tools" / "bridge" / "push_to_dialectic.py")
 GRAPH_CONFIG = str(ROOT / "books" / "iran-hormuz-graph.json")
 
 # --- Import mock server from sibling module ---

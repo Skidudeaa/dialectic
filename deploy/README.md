@@ -31,7 +31,7 @@ chmod 600 .env
 #   - DEV_USER_PASSWORD (password for the amo/dan logins)
 #   - TV_WEBHOOK_SECRET (generate same way)
 #   - OPENROUTER_API_KEY (optional, enables @claude/@gpt/@compare in chat)
-#   - DIALECTIC_ROOM_TOKEN (optional, for tools/bridge/push-to-dialectic.py)
+#   - DIALECTIC_ROOM_TOKEN (optional, for tools/bridge/push_to_dialectic.py)
 
 # 5. Install the systemd unit
 cp deploy/tradingdesk.service /etc/systemd/system/

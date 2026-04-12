@@ -498,7 +498,7 @@ Units 11-12. Result: Automated Dialectic push, close log persistence. Production
 
 **Files:**
 - Modify: `server/background.py` — add Dialectic push to the fetch loop
-- Modify: `tools/thesis-graph/thesisgraph.py` — add thesisId to export_state output
+- Modify: `tools/thesis_graph/thesisgraph.py` — add thesisId to export_state output
 - Test: `server/test_background.py`
 
 **Approach:**
@@ -557,7 +557,7 @@ Units 11-12. Result: Automated Dialectic push, close log persistence. Production
 - **Interaction graph:** The background fetch loop is the central coordinator — it touches the engine adapter, SQLite (alerts, close logs), WebSocket manager (broadcast), and Dialectic bridge (push). A failure in any downstream system must not crash the loop.
 - **Error propagation:** Fetch failures → logged, state preserved. DB write failures → logged, broadcast continues. WebSocket broadcast failures → per-connection error handling, other clients unaffected. Dialectic push failures → logged (existing retry logic), does not block the cycle.
 - **State lifecycle:** Config loaded at startup → held in memory. Price updates applied to deepcopy → if successful, atomic swap of the in-memory state. SQLite alerts/journal are append-only. Close logs are deduplicated per node per day.
-- **API surface parity:** The CLI tools (`thesisgraph.py --export-state`, `diff-snapshots.py`, `push-to-dialectic.py`) remain functional. The web server is an additional consumer, not a replacement.
+- **API surface parity:** The CLI tools (`thesisgraph.py --export-state`, `diff_snapshots.py`, `push_to_dialectic.py`) remain functional. The web server is an additional consumer, not a replacement.
 - **Unchanged invariants:** JSON config file format, snapshot schema (except adding thesisId), Dialectic API contract, existing test suite (203 tests).
 
 ## Risks & Dependencies
@@ -580,8 +580,8 @@ Units 11-12. Result: Automated Dialectic push, close log persistence. Production
 ## Sources & References
 
 - **Origin document:** [docs/brainstorms/2026-03-31-trading-desk-web-ui-requirements.md](docs/brainstorms/2026-03-31-trading-desk-web-ui-requirements.md)
-- Engine core: `tools/thesis-graph/thesisgraph.py` — propagation (lines 145-310), export (lines 425-546), fetch (lines 552-742)
+- Engine core: `tools/thesis_graph/thesisgraph.py` — propagation (lines 145-310), export (lines 425-546), fetch (lines 552-742)
 - Existing graph config: `books/iran-hormuz-graph.json` (16 nodes, 14 edges)
 - FastAPI WebSocket docs: ConnectionManager broadcast pattern
 - react-cytoscapejs: dagre via `Cytoscape.use(dagre)`, events via `cy` callback prop
-- Existing test patterns: `tools/thesis-graph/test_export.py`
+- Existing test patterns: `tools/thesis_graph/test_export.py`

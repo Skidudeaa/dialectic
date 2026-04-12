@@ -20,7 +20,7 @@ deployment story and giving Amo/Dan a manual to read.
   viewer (cascade phase, nodes, RSI/ATR badges, confluence, countdowns,
   scenarios), fetching fresh prices, trade journal + predictions,
   TradingView integration (four op types, canonical bindings, wiring a
-  Pine alert, manual testing with sign-tv-alert.py), keyboard shortcuts,
+  Pine alert, manual testing with sign_tv_alert.py), keyboard shortcuts,
   and a troubleshooting section for each common failure mode.
 
 ### Docs drift fixed
@@ -44,13 +44,13 @@ four-op contract, broadcast to linked chat rooms in real time, and surface in a
 dedicated dashboard panel.
 
 ### Phase 1 — Engine enrichment (commit a3bfc21)
-- New `tools/data-fetch/derived_indicators.py` (stdlib Wilder RSI/ATR/SMA,
+- New `tools/data_fetch/derived_indicators.py` (stdlib Wilder RSI/ATR/SMA,
   schema-enforced `overlay: true` tripwire, 58 tests)
-- `tools/thesis-graph/thesisgraph.py`: `fetch_ohlcv_for_derived()` (Yahoo v8
+- `tools/thesis_graph/thesisgraph.py`: `fetch_ohlcv_for_derived()` (Yahoo v8
   chart per-symbol), `compute_derived_indicators()`, closesObserved auto-bump
   feeding the existing closesRequired gate in `eval_node_state`, v:2 snapshot
   gains top-level `tvIndicators` overlay key
-- `tools/bridge/diff-snapshots.py`: `tvIndicatorShifts` category with material
+- `tools/bridge/diff_snapshots.py`: `tvIndicatorShifts` category with material
   thresholds (RSI ≥8 pts, ATR ≥15%, SMA ≥8%)
 - Both books seeded with `derivedIndicators` specs on brent, dxy-stress,
   food-spike, demand-destruction (iran-hormuz) and input-costs, usd-cny,
@@ -86,7 +86,7 @@ dedicated dashboard panel.
 - `docs/runbooks/tradingview-pine-setup.md` — full operator guide covering
   Pine Script's webhook limitations, relay architecture with a 40-line example,
   per-binding Pine snippets, secret rotation procedure, troubleshooting matrix
-- `tools/bridge/sign-tv-alert.py` — stdlib CLI that reads `TV_WEBHOOK_SECRET`
+- `tools/bridge/sign_tv_alert.py` — stdlib CLI that reads `TV_WEBHOOK_SECRET`
   and produces curl-ready signed headers. Supports `--format curl|headers|json`
   and piping a body via stdin.
 
@@ -96,7 +96,7 @@ dedicated dashboard panel.
 - Phase 3: 505 (data + docs only, no new tests)
 
 ### Live verification (2026-04-11)
-- End-to-end round trip: `sign-tv-alert.py` → HTTP POST → HMAC verify →
+- End-to-end round trip: `sign_tv_alert.py` → HTTP POST → HMAC verify →
   adapter apply_op → atomic book write → cache invalidate → audit log →
   broadcast. Response: `200 {"status":"ok","bookId":"iran-hormuz-graph","nodeId":"brent","op":"incrementClosesObserved","newValue":1}`
 - Binding `fireCount` stamped, `lastFiredAt` ISO timestamp recorded

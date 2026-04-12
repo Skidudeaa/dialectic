@@ -18,10 +18,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 # WHY: tools/ modules use relative imports and expect their parent on sys.path.
-# This is the sanctioned approach per project conventions — no restructuring.
+# After v2 packaging (pyproject.toml + pip install -e .), these will become
+# standard imports. Until then, keep sys.path configured.
 _ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_ROOT / "tools" / "thesis-graph"))
-sys.path.insert(0, str(_ROOT / "tools" / "data-fetch"))
+sys.path.insert(0, str(_ROOT / "tools" / "thesis_graph"))
+sys.path.insert(0, str(_ROOT / "tools" / "data_fetch"))
 sys.path.insert(0, str(_ROOT / "tools" / "outcomes"))
 sys.path.insert(0, str(_ROOT / "tools" / "bridge"))
 

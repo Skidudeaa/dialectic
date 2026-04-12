@@ -250,7 +250,7 @@ Full procedure lives in `docs/runbooks/tradingview-pine-setup.md`. Short version
 
 ```bash
 export TV_WEBHOOK_SECRET=<the value in your .env>
-python3 tools/bridge/sign-tv-alert.py \
+python3 tools/bridge/sign_tv_alert.py \
   --book iran-hormuz-graph \
   --binding brent-persistence-close-above-115 \
   --url http://167.99.113.232:8006/api/tradingview/webhook \
@@ -301,7 +301,7 @@ Usually one of:
 1. Open the **TradingView** tab → scroll to **Recent alerts**. Does your attempt show up?
 2. If yes with a red status: read the status (`bad_signature` / `bad_timestamp` / `nonce_replay` / `mutation_rejected` / `rate_limited`). Each is explained in `docs/runbooks/tradingview-pine-setup.md`.
 3. If no status at all: the request never reached the backend. Check your relay logs, DNS, and the webhook URL.
-4. Smoke test with `sign-tv-alert.py` (above) — if that works, the backend is fine and the problem is in your relay or Pine config.
+4. Smoke test with `sign_tv_alert.py` (above) — if that works, the backend is fine and the problem is in your relay or Pine config.
 
 ### "Chat AI isn't responding"
 - Check `/api/health` — `llm_available` should be `true`. If `false`, `OPENROUTER_API_KEY` is unset or invalid.

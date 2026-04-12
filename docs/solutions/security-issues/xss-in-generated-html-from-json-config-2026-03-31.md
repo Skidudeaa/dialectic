@@ -107,4 +107,4 @@ The key distinction: `json.dumps()` output for `NODES`, `SCENARIOS`, etc. are Ja
 - Implementation plan: `docs/plans/2026-03-31-001-fix-48h-review-findings-plan.md` (Unit 3)
 - Precedent: Sextant XML injection solution uses the same defense-in-depth pattern (encode at generation + strip at emission)
 - The Dialectic integration plan documents a similar 3-layer defense for LLM prompt injection
-- Affected files: `tools/thesis-graph/thesisgraph.py`, `tools/commodity-book/bookgen.py`
+- Affected files: `tools/thesis_graph/thesisgraph.py`, `tools/commodity-book/bookgen.py`

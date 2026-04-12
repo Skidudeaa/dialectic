@@ -16,10 +16,10 @@ This plan keeps Alpha's **engine contract** intact (the hard-won epistemic disci
 
 | Component | Alpha v2 home | This plan's home | Why |
 |---|---|---|---|
-| Pure RSI/ATR/SMA math | `tools/data-fetch/derived_indicators.py` | **SAME** | Stdlib, zero deps, shared between CLI `--fetch` path and web adapters. No reason to move. |
-| OHLCV stash + `compute_derived_indicators()` | `tools/thesis-graph/thesisgraph.py` | **SAME** | Engine-level concern; runs during `thesisgraph.py --fetch`, invoked by both `run-all.py` and `web/adapters/thesis.py`. |
+| Pure RSI/ATR/SMA math | `tools/data_fetch/derived_indicators.py` | **SAME** | Stdlib, zero deps, shared between CLI `--fetch` path and web adapters. No reason to move. |
+| OHLCV stash + `compute_derived_indicators()` | `tools/thesis_graph/thesisgraph.py` | **SAME** | Engine-level concern; runs during `thesisgraph.py --fetch`, invoked by both `run-all.py` and `web/adapters/thesis.py`. |
 | `tvIndicators` snapshot field (v:2 schema) | `export_state()` in `thesisgraph.py` | **SAME** | Snapshot is the single source of truth for both CLI push-to-dialectic and web `/api/thesis/{id}/state`. |
-| `tvIndicatorShifts` diff category | `tools/bridge/diff-snapshots.py` | **SAME** | Consumed by `run-all.py` and by `web/adapters/thesis.py` (cache invalidation hook). |
+| `tvIndicatorShifts` diff category | `tools/bridge/diff_snapshots.py` | **SAME** | Consumed by `run-all.py` and by `web/adapters/thesis.py` (cache invalidation hook). |
 | `tvAlertBindings` node schema | Book JSON files | **SAME** | Config-as-data, read by the webhook handler regardless of where the handler lives. |
 | **HMAC verify / timestamp window / nonce store** | `tools/bridge/tv-webhook.py` (BaseHTTPRequestHandler) | **`web/tv_webhook.py`** (pure functions, stdlib only) | Move the verification logic into a testable pure-function module the FastAPI route imports. |
 | **Pine alert HTTP endpoint** | `tools/bridge/tv-webhook.py` (port 8787) | **`web/routes/tradingview.py`** (FastAPI route `POST /api/tradingview/webhook`) | Single process, single port, same TLS termination as the rest of the API. |
@@ -71,8 +71,8 @@ Every arrow above already exists in the codebase except for the three bolded box
 
 | Path | Est. lines | Purpose |
 |---|---|---|
-| `tools/data-fetch/derived_indicators.py` | 180 | Pure stdlib RSI(14)/ATR(14)/SMA(N) + closes-above-threshold counter. From Alpha v2, unchanged. |
-| `tools/data-fetch/test_derived_indicators.py` | 260 | 48 tests — Wilder 1978 reference sequence, edge cases. From Alpha v2. |
+| `tools/data_fetch/derived_indicators.py` | 180 | Pure stdlib RSI(14)/ATR(14)/SMA(N) + closes-above-threshold counter. From Alpha v2, unchanged. |
+| `tools/data_fetch/test_derived_indicators.py` | 260 | 48 tests — Wilder 1978 reference sequence, edge cases. From Alpha v2. |
 | `web/tv_webhook.py` | 120 | Pure HMAC verify, timestamp window check, nonce store (in-process dict + TTL). Stdlib only. Importable by the route AND directly unit-testable. |
 | `web/adapters/tradingview.py` | 200 | Adapter: load book, resolve binding, enforce op/type contract, atomic write, cache invalidation, event log append, broadcast trigger. |
 | `web/routes/tradingview.py` | 180 | FastAPI routes: POST webhook (unauthenticated, HMAC-gated), GET/POST/DELETE bindings (JWT-gated), GET recent alerts, GET webhook status. |
@@ -84,9 +84,9 @@ Every arrow above already exists in the codebase except for the three bolded box
 
 | Path | Lines Δ | Change |
 |---|---|---|
-| `tools/thesis-graph/thesisgraph.py` | +55 | `fetch_prices()` stashes OHLCV into `cfg["_ohlcv"]`. New `compute_derived_indicators(cfg)` (~35 lines). Wired into `main()` after `fetch_polymarket`. `export_state()` bumps to `"v": 2` with top-level `tvIndicators`. |
-| `tools/thesis-graph/test_export.py` | +40 | 7 new tests: v:2 shape, backward-compat (nodes without `derivedIndicators`), tvIndicators flow, closesObserved auto-increment. |
-| `tools/bridge/diff-snapshots.py` | +45 | New `tvIndicatorShifts` category (RSI deltas > 8 points, ATR deltas > 15%). v:1↔v:2 tolerant — falls back to empty set when field absent. |
+| `tools/thesis_graph/thesisgraph.py` | +55 | `fetch_prices()` stashes OHLCV into `cfg["_ohlcv"]`. New `compute_derived_indicators(cfg)` (~35 lines). Wired into `main()` after `fetch_polymarket`. `export_state()` bumps to `"v": 2` with top-level `tvIndicators`. |
+| `tools/thesis_graph/test_export.py` | +40 | 7 new tests: v:2 shape, backward-compat (nodes without `derivedIndicators`), tvIndicators flow, closesObserved auto-increment. |
+| `tools/bridge/diff_snapshots.py` | +45 | New `tvIndicatorShifts` category (RSI deltas > 8 points, ATR deltas > 15%). v:1↔v:2 tolerant — falls back to empty set when field absent. |
 | `tools/bridge/test_diff.py` | +24 | 7 new tests for tvIndicatorShifts. |
 | `web/models.py` | +60 | New Pydantic models: `TVBinding`, `TVWebhookAlert`, `TVIndicatorReading`, `TVBindingCreateRequest`, `TVWebhookAck`, `TVAlertEvent`. |
 | `web/main.py` | +2 | Register `tradingview` router. |
@@ -261,15 +261,15 @@ Validation mirrors the server-side enforcement — the form disables invalid op/
 
 **Goal:** `tvIndicators` populated in snapshot from local RSI/ATR; `closesObserved` auto-increments; tests green.
 
-- [x] CREATE `tools/data-fetch/derived_indicators.py` (Alpha v2 verbatim)
-- [x] CREATE `tools/data-fetch/test_derived_indicators.py` (48 tests)
+- [x] CREATE `tools/data_fetch/derived_indicators.py` (Alpha v2 verbatim)
+- [x] CREATE `tools/data_fetch/test_derived_indicators.py` (48 tests)
 - [x] MODIFY `thesisgraph.py` (fetch_prices stash, compute_derived_indicators, export_state v:2)
 - [x] MODIFY `test_export.py` (+7 tests)
-- [x] MODIFY `diff-snapshots.py` (+tvIndicatorShifts)
+- [x] MODIFY `diff_snapshots.py` (+tvIndicatorShifts)
 - [x] MODIFY `test_diff.py` (+7 tests)
 - [x] MODIFY both book JSONs with `derivedIndicators` specs
 
-**Exit:** `python3 tools/thesis-graph/thesisgraph.py books/iran-hormuz-graph.json --fetch --export-state -` produces v:2 snapshot with non-empty `tvIndicators.brent.rsi14`. Full 333 existing tests still green; 62 new tests added. Total: 395.
+**Exit:** `python3 tools/thesis_graph/thesisgraph.py books/iran-hormuz-graph.json --fetch --export-state -` produces v:2 snapshot with non-empty `tvIndicators.brent.rsi14`. Full 333 existing tests still green; 62 new tests added. Total: 395.
 
 ### Phase 2 — Webapp integration (5 days, ~900 LoC)
 

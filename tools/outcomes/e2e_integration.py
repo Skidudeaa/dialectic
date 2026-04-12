@@ -8,7 +8,7 @@ import sys, json, tempfile, os
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'thesis-graph'))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'thesis_graph'))
 
 from lifecycle_monitor import (
     PredicateLifecycleMonitor, Snapshot,
