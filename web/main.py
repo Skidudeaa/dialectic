@@ -57,6 +57,7 @@ async def lifespan(app: FastAPI):
         repo=repo, ws_manager=manager, tick_interval=tick_interval,
     )
     app.state.coordinator = coordinator
+    manager.set_coordinator(coordinator)
     await coordinator.start()
     log.info("RuntimeCoordinator started (tick=%.0fs)", tick_interval)
 
@@ -90,6 +91,7 @@ def get_uptime() -> float:
 # ── Route registration ───────────────────────────────────────────────────
 
 from web.routes import auth, health, thesis, market, outcomes, rooms, messages, llm, journal, predictions, tradingview
+from web.routes.v1 import bootstrap as v1_bootstrap
 
 app.include_router(auth.router)
 app.include_router(health.router)
@@ -105,6 +107,9 @@ app.include_router(predictions.router)
 # JWT-gated under /api/tradingview, binding CRUD lives under /api/thesis.
 for tv_router in tradingview.routers:
     app.include_router(tv_router)
+
+# v1-versioned API routes (additive — existing unversioned routes stay)
+app.include_router(v1_bootstrap.router)
 
 # ── Static frontend serving ─────────────────────────────────────────────
 # WHY: Serve the production build directly from FastAPI so there's no need

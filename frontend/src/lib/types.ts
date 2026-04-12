@@ -125,10 +125,15 @@ export interface TradeInfo {
 }
 
 export interface WSMessage {
-  type: "message" | "llm_chunk" | "llm_done" | "system" | "state_update" | "error" | "typing" | "presence" | "tv-alert";
+  type: "message" | "llm_chunk" | "llm_done" | "system" | "state_update" | "error" | "typing" | "presence" | "tv-alert" | "bootstrap";
   payload: Record<string, unknown>;
   ts: string;
   user: string;
+  // v2 envelope fields (additive — existing fields preserved)
+  v?: number;
+  thesisId?: string;
+  revision?: number;
+  seq?: number;
 }
 
 // ── TradingView integration ─────────────────────────────────────────────

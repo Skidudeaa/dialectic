@@ -35,10 +35,19 @@ class ConnectionManager:
         # WHY: Repository reference for broadcast_to_book_rooms. Set during
         # lifespan init. Avoids circular import of web.state.
         self._repo = None
+        # WHY: Coordinator reference for bootstrap data. Set during lifespan init.
+        self._coordinator = None
+        # WHY: v2 protocol — monotonic seq counter per connection for gap detection.
+        # Client sees seq=47 then seq=49, knows it missed one, re-subscribes.
+        self._seq_counters: Dict[int, int] = {}  # id(websocket) -> seq
 
     def set_repo(self, repo) -> None:
         """Inject Repository reference. Called from lifespan init."""
         self._repo = repo
+
+    def set_coordinator(self, coordinator) -> None:
+        """Inject RuntimeCoordinator reference. Called from lifespan init."""
+        self._coordinator = coordinator
 
     async def connect(self, websocket: WebSocket, room_id: str, username: str) -> None:
         """Register connection in room. Caller must have already accepted the WebSocket."""
@@ -47,7 +56,12 @@ class ConnectionManager:
                 self._rooms[room_id] = set()
             self._rooms[room_id].add((websocket, username))
             self._user_activity[username] = {"room": room_id, "viewing": ""}
+            self._seq_counters[id(websocket)] = 0
         log.info("WS connected: %s in room %s", username, room_id)
+        # WHY: Send bootstrap with thesis state on connect so the client can
+        # render immediately without additional REST calls. On reconnect, the
+        # same bootstrap replaces stale state.
+        await self._send_bootstrap(websocket, room_id)
         await self.broadcast(room_id, "presence", await self.get_presence(room_id), user="system")
 
     async def disconnect(self, websocket: WebSocket, room_id: str, username: str) -> None:
@@ -60,6 +74,7 @@ class ConnectionManager:
                     del self._rooms[room_id]
             if username in self._user_activity:
                 del self._user_activity[username]
+            self._seq_counters.pop(id(websocket), None)
         log.info("WS disconnected: %s from room %s", username, room_id)
         try:
             await self.broadcast(room_id, "presence", await self.get_presence(room_id), user="system")
@@ -67,15 +82,26 @@ class ConnectionManager:
             log.warning("Post-disconnect presence broadcast failed: %s", e)
 
     async def broadcast(self, room_id: str, msg_type: str, payload: dict,
-                        user: str = "system", exclude: Optional[WebSocket] = None) -> None:
-        """Send a typed message to all connections in a room."""
+                        user: str = "system", exclude: Optional[WebSocket] = None,
+                        thesis_id: Optional[str] = None,
+                        revision: Optional[int] = None) -> None:
+        """Send a typed message to all connections in a room.
+
+        WHY v2 envelope: messages include v, thesisId, revision, seq fields.
+        The v1 fields (type, payload, ts, user) are preserved so the existing
+        frontend continues to work — the extra fields are additive.
+        """
         message = {
+            "v": 1,
             "type": msg_type,
             "payload": payload,
             "ts": datetime.now(timezone.utc).isoformat(),
             "user": user,
         }
-        text = json.dumps(message)
+        if thesis_id is not None:
+            message["thesisId"] = thesis_id
+        if revision is not None:
+            message["revision"] = revision
         async with self._lock:
             connections = list(self._rooms.get(room_id, set()))
         targets = [(ws, uname) for ws, uname in connections if ws is not exclude]
@@ -86,6 +112,12 @@ class ConnectionManager:
         # to others. 5-second timeout per send prevents indefinite stalls.
         async def _send(ws: WebSocket, uname: str) -> Optional[tuple]:
             try:
+                # WHY: Per-connection seq for gap detection on reconnect
+                ws_id = id(ws)
+                seq = self._seq_counters.get(ws_id, 0) + 1
+                self._seq_counters[ws_id] = seq
+                msg_with_seq = {**message, "seq": seq}
+                text = json.dumps(msg_with_seq)
                 await asyncio.wait_for(ws.send_text(text), timeout=5.0)
                 return None
             except Exception:
@@ -145,16 +177,66 @@ class ConnectionManager:
     async def send_to(self, websocket: WebSocket, msg_type: str, payload: dict,
                       user: str = "system") -> None:
         """Send a typed message to a single connection."""
+        ws_id = id(websocket)
+        seq = self._seq_counters.get(ws_id, 0) + 1
+        self._seq_counters[ws_id] = seq
         message = {
+            "v": 1,
             "type": msg_type,
             "payload": payload,
             "ts": datetime.now(timezone.utc).isoformat(),
             "user": user,
+            "seq": seq,
         }
         try:
             await websocket.send_text(json.dumps(message))
         except Exception:
             log.warning("Failed to send to individual WS")
+
+    async def _send_bootstrap(self, websocket: WebSocket, room_id: str) -> None:
+        """Send bootstrap message with thesis state on connect.
+
+        WHY: Full state on connect means the client renders immediately without
+        additional REST calls. On reconnect, the same bootstrap replaces stale
+        state — no delta replay needed.
+        """
+        bootstrap_payload: Dict[str, Any] = {
+            "thesisCatalog": [],
+        }
+
+        # Build thesis catalog and find linked thesis snapshot
+        if self._coordinator:
+            for tid in self._coordinator.get_thesis_ids():
+                defn = self._coordinator.definitions.get(tid, {})
+                meta = defn.get("meta", {})
+                bootstrap_payload["thesisCatalog"].append({
+                    "thesisId": tid,
+                    "title": meta.get("title", tid),
+                    "definitionHash": self._coordinator.definition_hashes.get(tid),
+                    "nodeCount": len(defn.get("nodes", [])),
+                    "edgeCount": len(defn.get("edges", [])),
+                })
+
+            # Find linked book for this room
+            if self._repo:
+                room = self._repo.get_room(room_id)
+                linked_book = room.get("linked_book_id") if room else None
+                if linked_book:
+                    snap = self._coordinator.get_latest_snapshot(linked_book)
+                    if snap:
+                        bootstrap_payload["snapshot"] = snap
+                        bootstrap_payload["thesisId"] = linked_book
+                        bootstrap_payload["revision"] = snap.get("revision")
+
+                    # Active overrides for linked thesis
+                    overrides = self._repo.list_active_overrides(linked_book)
+                    bootstrap_payload["activeOverrides"] = overrides
+
+                    # Recent alerts for linked thesis
+                    alerts = self._repo.list_alert_events(thesis_id=linked_book, limit=20)
+                    bootstrap_payload["recentAlerts"] = alerts
+
+        await self.send_to(websocket, "bootstrap", bootstrap_payload, user="system")
 
     def set_user_viewing(self, username: str, viewing: str) -> None:
         """Update what thesis/page a user is viewing (for activity status)."""
