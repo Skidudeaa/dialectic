@@ -21,8 +21,9 @@ os.environ.setdefault("JWT_SECRET", "test-secret-for-ci")
 os.environ.setdefault("DEV_USER_PASSWORD", "testpass")
 
 from web.main import app
-from web import state as state_mod
 from web.auth import create_access_token, decode_token, authenticate_user
+from web.deps import get_repo
+from web.persistence.repository import Repository
 
 
 client = TestClient(app)
@@ -31,18 +32,18 @@ client = TestClient(app)
 # ── Fixtures ─────────────────────────────────────────────────────────────
 
 @pytest.fixture(autouse=True)
-def isolate_state(tmp_path: Path):
-    """Redirect all state file I/O to a temp directory per test."""
-    original = state_mod.DATA_DIR
-    state_mod.DATA_DIR = tmp_path
-    state_mod.ROOMS_FILE = tmp_path / "rooms.json"
-    state_mod.JOURNAL_FILE = tmp_path / "journal.jsonl"
-    state_mod.PREDICTIONS_FILE = tmp_path / "predictions.jsonl"
-    yield
-    state_mod.DATA_DIR = original
-    state_mod.ROOMS_FILE = original / "rooms.json"
-    state_mod.JOURNAL_FILE = original / "journal.jsonl"
-    state_mod.PREDICTIONS_FILE = original / "predictions.jsonl"
+def isolate_state():
+    """Inject fresh in-memory SQLite per test via dependency override."""
+    repo = Repository(":memory:")
+    repo.initialize()
+    app.dependency_overrides[get_repo] = lambda: repo
+    # WHY: Also set on app.state so WebSocket endpoints (which can't use
+    # Depends) and the WS manager's broadcast_to_book_rooms can find it.
+    app.state.repo = repo
+    from web.ws import manager
+    manager.set_repo(repo)
+    yield repo
+    app.dependency_overrides.pop(get_repo, None)
 
 
 @pytest.fixture
@@ -106,107 +107,79 @@ class TestAuth:
 # ── State Tests ──────────────────────────────────────────────────────────
 
 class TestState:
-    def test_read_json_missing_file(self, tmp_path: Path):
-        result = state_mod.read_json(tmp_path / "nonexistent.json", default={"empty": True})
-        assert result == {"empty": True}
+    """Repository-backed state operations (replaces old file-based tests)."""
 
-    def test_write_read_json_roundtrip(self, tmp_path: Path):
-        path = tmp_path / "test.json"
-        data = {"key": "value", "nested": [1, 2, 3]}
-        state_mod.write_json(path, data)
-        result = state_mod.read_json(path)
-        assert result == data
-
-    def test_write_json_atomic_no_partial(self, tmp_path: Path):
-        """Verify temp file is cleaned up after atomic write."""
-        path = tmp_path / "atomic.json"
-        state_mod.write_json(path, {"ok": True})
-        assert path.exists()
-        assert not path.with_suffix(".tmp").exists()
-
-    def test_read_jsonl_empty_file(self, tmp_path: Path):
-        path = tmp_path / "empty.jsonl"
-        path.write_text("")
-        assert state_mod.read_jsonl(path) == []
-
-    def test_read_jsonl_with_corrupt_line(self, tmp_path: Path):
-        path = tmp_path / "mixed.jsonl"
-        path.write_text('{"a":1}\nBAD LINE\n{"b":2}\n')
-        result = state_mod.read_jsonl(path)
-        assert len(result) == 2
-        assert result[0] == {"a": 1}
-        assert result[1] == {"b": 2}
-
-    def test_append_jsonl(self, tmp_path: Path):
-        path = tmp_path / "append.jsonl"
-        state_mod.append_jsonl(path, {"x": 1})
-        state_mod.append_jsonl(path, {"x": 2})
-        result = state_mod.read_jsonl(path)
-        assert len(result) == 2
-
-    def test_room_crud(self):
-        room = state_mod.create_room("test", participants=["amo"])
+    def test_room_crud(self, isolate_state):
+        repo = isolate_state
+        room = repo.create_room("test", participants=["amo"])
         assert room["name"] == "test"
         assert room["participants"] == ["amo"]
 
-        found = state_mod.get_room(room["id"])
+        found = repo.get_room(room["id"])
         assert found is not None
         assert found["name"] == "test"
 
-        rooms = state_mod.list_rooms()
+        rooms = repo.list_rooms()
         assert len(rooms) == 1
 
-    def test_message_roundtrip(self):
-        room = state_mod.create_room("msg-test")
-        msg = state_mod.save_message(room["id"], "amo", "hello")
+    def test_message_roundtrip(self, isolate_state):
+        repo = isolate_state
+        room = repo.create_room("msg-test")
+        msg = repo.save_message(room["id"], "amo", "hello")
         assert msg["content"] == "hello"
         assert msg["user"] == "amo"
 
-        messages = state_mod.list_messages(room["id"])
+        messages = repo.list_messages(room["id"])
         assert len(messages) == 1
         assert messages[0]["id"] == msg["id"]
 
-    def test_prediction_create_resolve(self):
-        pred = state_mod.save_prediction("amo", {"statement": "test", "confidence": 0.8, "deadline": "2026-12-31"})
+    def test_prediction_create_resolve(self, isolate_state):
+        repo = isolate_state
+        pred = repo.save_prediction("amo", {"statement": "test", "confidence": 0.8, "deadline": "2026-12-31"})
         assert pred["resolution"] is None
 
-        resolved = state_mod.resolve_prediction(pred["id"], "correct")
+        resolved = repo.resolve_prediction(pred["id"], "correct")
         assert resolved is not None
         assert resolved["resolution"] == "correct"
         assert resolved["resolved_at"] is not None
 
-    def test_resolve_nonexistent_prediction(self):
-        result = state_mod.resolve_prediction("nonexistent-id", "correct")
+    def test_resolve_nonexistent_prediction(self, isolate_state):
+        repo = isolate_state
+        result = repo.resolve_prediction("nonexistent-id", "correct")
         assert result is None
 
-    def test_pin_crud(self):
-        room = state_mod.create_room("pin-test")
+    def test_pin_crud(self, isolate_state):
+        repo = isolate_state
+        room = repo.create_room("pin-test")
         msg = {"id": "msg-1", "content": "important", "user": "amo", "ts": "2026-01-01"}
-        pins = state_mod.add_pin(room["id"], msg)
+        pins = repo.add_pin(room["id"], msg)
         assert len(pins) == 1
 
         # Dedup: pinning same message again returns same count
-        pins = state_mod.add_pin(room["id"], msg)
+        pins = repo.add_pin(room["id"], msg)
         assert len(pins) == 1
 
-        pins = state_mod.remove_pin(room["id"], "msg-1")
+        pins = repo.remove_pin(room["id"], "msg-1")
         assert len(pins) == 0
 
 
 # ── Path Validation Tests ────────────────────────────────────────────────
 
 class TestPathValidation:
-    def test_room_id_traversal_rejected(self):
+    def test_room_id_traversal_rejected(self, isolate_state):
+        repo = isolate_state
         with pytest.raises(ValueError):
-            state_mod.get_room("../../etc/passwd")
+            repo.get_room("../../etc/passwd")
 
-    def test_room_id_valid(self):
+    def test_room_id_valid(self, isolate_state):
+        repo = isolate_state
         # Should not raise — UUID-style IDs are valid
-        state_mod.get_room("abc-123-def")
+        repo.get_room("abc-123-def")
 
-    def test_messages_path_traversal_rejected(self):
+    def test_messages_room_id_traversal_rejected(self, isolate_state):
+        repo = isolate_state
         with pytest.raises(ValueError):
-            state_mod._messages_path("../../../tmp/evil")
+            repo.list_messages("../../../tmp/evil")
 
     def test_book_id_traversal_rejected(self):
         from web.adapters.thesis import _validate_book_id
@@ -453,15 +426,16 @@ class TestAgentAPI:
 # ── Concurrent State Tests ───────────────────────────────────────────────
 
 class TestConcurrency:
-    def test_concurrent_prediction_resolve_no_data_loss(self):
+    def test_concurrent_prediction_resolve_no_data_loss(self, isolate_state):
         """Verify resolve_prediction under concurrent creates doesn't lose data."""
+        repo = isolate_state
         # Create initial predictions
         for i in range(5):
-            state_mod.save_prediction("amo", {
+            repo.save_prediction("amo", {
                 "statement": f"pred-{i}", "confidence": 0.5, "deadline": "2026-12-31",
             })
 
-        preds = state_mod.list_predictions()
+        preds = repo.list_predictions()
         assert len(preds) == 5
         target_id = preds[0]["id"]
 
@@ -471,7 +445,7 @@ class TestConcurrency:
         def create_preds():
             try:
                 for i in range(5, 10):
-                    state_mod.save_prediction("dan", {
+                    repo.save_prediction("dan", {
                         "statement": f"pred-{i}", "confidence": 0.6, "deadline": "2026-12-31",
                     })
             except Exception as e:
@@ -479,7 +453,7 @@ class TestConcurrency:
 
         def resolve_pred():
             try:
-                state_mod.resolve_prediction(target_id, "correct")
+                repo.resolve_prediction(target_id, "correct")
             except Exception as e:
                 errors.append(e)
 
@@ -493,7 +467,7 @@ class TestConcurrency:
         assert not errors, f"Errors during concurrent operations: {errors}"
 
         # All predictions should exist
-        all_preds = state_mod.list_predictions()
+        all_preds = repo.list_predictions()
         # We should have at least 5 (original) + some of the 5 new ones
         # The resolve should have worked
         resolved = [p for p in all_preds if p.get("resolution") == "correct"]

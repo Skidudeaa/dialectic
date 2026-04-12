@@ -1,5 +1,6 @@
 """Message routes + WebSocket endpoint for real-time chat."""
 
+import asyncio
 import json
 import logging
 from typing import Optional
@@ -7,8 +8,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 
 from web.auth import get_current_user, decode_token
+from web.deps import get_repo
 from web.models import User, MessageCreate, PinRequest
-from web import state
+from web.persistence.repository import Repository
 from web.ws import manager
 
 log = logging.getLogger(__name__)
@@ -22,10 +24,11 @@ async def list_messages(
     limit: int = Query(default=50, le=200),
     before: Optional[str] = Query(default=None),
     _user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
 ) -> list:
-    if state.get_room(room_id) is None:
+    if await asyncio.to_thread(repo.get_room, room_id) is None:
         raise HTTPException(status_code=404, detail="Room not found")
-    return state.list_messages(room_id, limit=limit, before=before)
+    return await asyncio.to_thread(repo.list_messages, room_id, limit, before)
 
 
 @router.post("/api/rooms/{room_id}/messages")
@@ -33,10 +36,12 @@ async def create_message(
     room_id: str,
     req: MessageCreate,
     user: User = Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
 ) -> dict:
-    if state.get_room(room_id) is None:
+    if await asyncio.to_thread(repo.get_room, room_id) is None:
         raise HTTPException(status_code=404, detail="Room not found")
-    msg = state.save_message(
+    msg = await asyncio.to_thread(
+        repo.save_message,
         room_id=room_id,
         user=user.username,
         content=req.content,
@@ -48,25 +53,29 @@ async def create_message(
 
 
 @router.get("/api/rooms/{room_id}/pins")
-async def list_pins(room_id: str, _user: User = Depends(get_current_user)) -> list:
-    return state.list_pins(room_id)
+async def list_pins(room_id: str, _user: User = Depends(get_current_user),
+                    repo: Repository = Depends(get_repo)) -> list:
+    return await asyncio.to_thread(repo.list_pins, room_id)
 
 
 @router.post("/api/rooms/{room_id}/pins")
-async def add_pin(room_id: str, req: PinRequest, _user: User = Depends(get_current_user)) -> list:
+async def add_pin(room_id: str, req: PinRequest, _user: User = Depends(get_current_user),
+                  repo: Repository = Depends(get_repo)) -> list:
     """Pin a message by passing its typed message object."""
-    return state.add_pin(room_id, req.model_dump())
+    return await asyncio.to_thread(repo.add_pin, room_id, req.model_dump())
 
 
 @router.delete("/api/rooms/{room_id}/pins/{message_id}")
-async def remove_pin(room_id: str, message_id: str, _user: User = Depends(get_current_user)) -> list:
-    return state.remove_pin(room_id, message_id)
+async def remove_pin(room_id: str, message_id: str, _user: User = Depends(get_current_user),
+                     repo: Repository = Depends(get_repo)) -> list:
+    return await asyncio.to_thread(repo.remove_pin, room_id, message_id)
 
 
 @router.get("/api/rooms/{room_id}/export")
-async def export_chat(room_id: str, _user: User = Depends(get_current_user)) -> dict:
+async def export_chat(room_id: str, _user: User = Depends(get_current_user),
+                      repo: Repository = Depends(get_repo)) -> dict:
     """Export room chat as markdown."""
-    return {"markdown": state.export_room_markdown(room_id)}
+    return {"markdown": await asyncio.to_thread(repo.export_room_markdown, room_id)}
 
 
 @router.websocket("/ws/{room_id}")
@@ -78,12 +87,11 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str) -> None:
     """
     await websocket.accept()
     username = ""
+    # WHY: Access repo from app state — Depends() doesn't work on WS endpoints.
+    repo: Repository = websocket.app.state.repo
 
     try:
         # WHY: Accept token via query param (?token=...) or as first WS message.
-        # Query param is the standard pattern for agent/programmatic WS clients.
-        # First-message auth is kept for backward compatibility with the browser client.
-        from fastapi import Query as WSQuery
         token_param = websocket.query_params.get("token")
         if token_param:
             try:
@@ -103,21 +111,16 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str) -> None:
                 await websocket.close(code=4001)
                 return
 
-        # WHY: Validate room exists before registering — prevents path traversal
-        # and phantom room creation via WebSocket.
-        if state.get_room(room_id) is None:
+        # WHY: Validate room exists before registering.
+        if await asyncio.to_thread(repo.get_room, room_id) is None:
             await websocket.send_text('{"type":"error","payload":{"detail":"Room not found"}}')
             await websocket.close(code=4004)
             return
 
-        # Register via ConnectionManager public API
         await manager.connect(websocket, room_id, username)
         log.info("WS authenticated: %s in room %s", username, room_id)
-
-        # Send welcome
         await manager.send_to(websocket, "system", {"detail": f"Connected as {username}"}, user="system")
 
-        # Message loop
         while True:
             data = await websocket.receive_text()
             try:
@@ -141,7 +144,9 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str) -> None:
                 )
             else:
                 content = parsed.get("content", data)
-                msg = state.save_message(room_id=room_id, user=username, content=content)
+                msg = await asyncio.to_thread(
+                    repo.save_message, room_id=room_id, user=username, content=content
+                )
                 await manager.broadcast(room_id, "message", msg, user=username)
 
     except WebSocketDisconnect:

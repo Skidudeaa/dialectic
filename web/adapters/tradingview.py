@@ -31,7 +31,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from web.adapters import thesis as thesis_adapter
-from web import state
 
 log = logging.getLogger(__name__)
 
@@ -254,7 +253,8 @@ async def apply_webhook(
 
         # Stamp audit fields on the binding itself for operator visibility.
         match.binding["fireCount"] = int(match.binding.get("fireCount", 0) or 0) + 1
-        match.binding["lastFiredAt"] = state._now_iso()
+        from datetime import datetime, timezone
+        match.binding["lastFiredAt"] = datetime.now(timezone.utc).isoformat()
 
         # Persist the updated book first — a crash before propagate leaves
         # the mutation durable, matching the existing fetch_prices pattern.
@@ -388,6 +388,3 @@ def get_tv_indicators(book_id: str) -> Dict[str, dict]:
     return out
 
 
-def get_event_feed(book_id: Optional[str] = None, limit: int = 50) -> List[dict]:
-    """Return the most recent TradingView webhook events (newest first)."""
-    return state.list_tv_events(limit=limit, book_id=book_id)

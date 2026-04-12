@@ -30,6 +30,23 @@ async def lifespan(app: FastAPI):
     global _start_time
     _start_time = time.time()
     log.info("tradingDesk web starting — root: %s", _ROOT)
+
+    # WHY: Initialize SQLite persistence. Repository is stored on app.state
+    # so routes can access it via request.app.state.repo.
+    from web.persistence.repository import Repository
+    from web.persistence.connection import DEFAULT_DB_PATH
+    repo = Repository(DEFAULT_DB_PATH)
+    applied = repo.initialize()
+    if applied:
+        log.info("Applied %d database migration(s)", applied)
+    app.state.repo = repo
+    log.info("SQLite persistence initialized: %s", DEFAULT_DB_PATH)
+
+    # WHY: Give the WS manager access to the repo so broadcast_to_book_rooms
+    # can query rooms without importing web.state.
+    from web.ws import manager
+    manager.set_repo(repo)
+
     yield
     log.info("tradingDesk web shutting down")
 

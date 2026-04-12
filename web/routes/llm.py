@@ -16,8 +16,9 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 
 from web.auth import get_current_user
+from web.deps import get_repo
 from web.models import User, LLMChatRequest, LLMCompareRequest
-from web import state
+from web.persistence.repository import Repository
 from web.ws import manager
 
 log = logging.getLogger(__name__)
@@ -36,11 +37,11 @@ MODEL_ALIASES = {
 }
 
 
-def _get_room_context(room_id: Optional[str]) -> list[dict]:
+def _get_room_context(room_id: Optional[str], repo: Repository) -> list[dict]:
     """Build conversation history from room messages for LLM context."""
     if not room_id:
         return []
-    messages = state.list_messages(room_id, limit=20)
+    messages = repo.list_messages(room_id, limit=20)
     context: list[dict] = []
     for msg in messages:
         role = "assistant" if msg.get("msg_type") == "llm" else "user"
@@ -50,11 +51,11 @@ def _get_room_context(room_id: Optional[str]) -> list[dict]:
     return context
 
 
-def _get_thesis_context(room_id: Optional[str]) -> Optional[str]:
+def _get_thesis_context(room_id: Optional[str], repo: Repository) -> Optional[str]:
     """If room has a linked book, build thesis state context string."""
     if not room_id:
         return None
-    room = state.get_room(room_id)
+    room = repo.get_room(room_id)
     if not room or not room.get("linked_book_id"):
         return None
     try:
@@ -89,7 +90,7 @@ def _get_thesis_context(room_id: Optional[str]) -> Optional[str]:
 
 async def _stream_llm(
     model: str, prompt: str, room_id: Optional[str],
-    user: str, model_label: str,
+    user: str, model_label: str, repo: Repository,
 ) -> str:
     """Call OpenRouter streaming API, broadcast chunks via WebSocket, return full response."""
     if not OPENROUTER_API_KEY:
@@ -102,12 +103,12 @@ async def _stream_llm(
         "Be concise, data-driven, and opinionated about market structure."
     ]
 
-    thesis_ctx = _get_thesis_context(room_id)
+    thesis_ctx = _get_thesis_context(room_id, repo)
     if thesis_ctx:
         system_parts.append(thesis_ctx)
 
     messages = [{"role": "system", "content": "\n\n".join(system_parts)}]
-    messages.extend(_get_room_context(room_id))
+    messages.extend(_get_room_context(room_id, repo))
     messages.append({"role": "user", "content": prompt})
 
     headers = {
@@ -164,7 +165,8 @@ async def _stream_llm(
 
 
 @router.post("/chat")
-async def chat(req: LLMChatRequest, user: User = Depends(get_current_user)) -> dict:
+async def chat(req: LLMChatRequest, user: User = Depends(get_current_user),
+               repo: Repository = Depends(get_repo)) -> dict:
     """Send prompt to a single LLM, stream response via WebSocket."""
     model = req.model
     # Resolve alias
@@ -175,7 +177,7 @@ async def chat(req: LLMChatRequest, user: User = Depends(get_current_user)) -> d
 
     model_label = model.split("/")[-1] if "/" in model else model
     try:
-        full_response = await _stream_llm(model, req.prompt, req.room_id, user.username, model_label)
+        full_response = await _stream_llm(model, req.prompt, req.room_id, user.username, model_label, repo)
     except HTTPException as e:
         error_msg = e.detail if hasattr(e, "detail") else str(e)
         if isinstance(error_msg, bytes):
@@ -183,7 +185,7 @@ async def chat(req: LLMChatRequest, user: User = Depends(get_current_user)) -> d
         if len(str(error_msg)) > 200:
             error_msg = str(error_msg)[:200] + "..."
         if req.room_id:
-            msg = state.save_message(
+            msg = repo.save_message(
                 room_id=req.room_id, user="system",
                 content=f"LLM error: {error_msg}", msg_type="system",
             )
@@ -194,7 +196,7 @@ async def chat(req: LLMChatRequest, user: User = Depends(get_current_user)) -> d
         log.exception("Unexpected error in LLM chat for model %s", model_label)
         error_msg = str(e)[:200]
         if req.room_id:
-            msg = state.save_message(
+            msg = repo.save_message(
                 room_id=req.room_id, user="system",
                 content=f"LLM error: {error_msg}", msg_type="system",
             )
@@ -207,7 +209,7 @@ async def chat(req: LLMChatRequest, user: User = Depends(get_current_user)) -> d
     # message must arrive via WS so it appears in the chat history immediately.
     # Without this broadcast the response vanishes after streaming completes.
     if req.room_id:
-        msg = state.save_message(
+        msg = repo.save_message(
             room_id=req.room_id,
             user="assistant",
             content=full_response,
@@ -220,14 +222,15 @@ async def chat(req: LLMChatRequest, user: User = Depends(get_current_user)) -> d
 
 
 @router.post("/compare")
-async def compare(req: LLMCompareRequest, user: User = Depends(get_current_user)) -> dict:
+async def compare(req: LLMCompareRequest, user: User = Depends(get_current_user),
+                  repo: Repository = Depends(get_repo)) -> dict:
     """Send same prompt to multiple models, stream all responses concurrently."""
     async def _run_model(model: str) -> tuple[str, str]:
         model_label = model.split("/")[-1] if "/" in model else model
         try:
-            full_response = await _stream_llm(model, req.prompt, req.room_id, user.username, model_label)
+            full_response = await _stream_llm(model, req.prompt, req.room_id, user.username, model_label, repo)
             if req.room_id:
-                msg = state.save_message(
+                msg = repo.save_message(
                     room_id=req.room_id, user="assistant",
                     content=full_response, msg_type="llm", model=model_label,
                 )
@@ -236,7 +239,7 @@ async def compare(req: LLMCompareRequest, user: User = Depends(get_current_user)
         except Exception as e:
             error_msg = e.detail if hasattr(e, "detail") else str(e)
             if req.room_id:
-                msg = state.save_message(
+                msg = repo.save_message(
                     room_id=req.room_id, user="system",
                     content=f"LLM error ({model_label}): {error_msg}", msg_type="system",
                 )

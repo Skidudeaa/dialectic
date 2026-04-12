@@ -33,8 +33,9 @@ from typing import Deque, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from web import state
 from web.auth import get_current_user
+from web.deps import get_repo
+from web.persistence.repository import Repository
 from web.adapters import tradingview as tv_adapter
 from web.adapters.tradingview import MutationError
 from web.models import (
@@ -146,9 +147,10 @@ async def receive_alert(request: Request) -> JSONResponse:
       7. Broadcast to linked rooms via WebSocket
     """
     client_ip = (request.client.host if request.client else "unknown") or "unknown"
+    repo: Repository = request.app.state.repo
 
     if not rate_limiter.allow(client_ip):
-        state.save_tv_event(
+        repo.save_tv_event(
             result="rate_limited",
             detail="per-IP rate limit exceeded",
             source_ip=client_ip,
@@ -160,10 +162,10 @@ async def receive_alert(request: Request) -> JSONResponse:
     # bodies even if the reverse proxy limit is misconfigured.
     body = await request.body()
     if len(body) == 0:
-        state.save_tv_event(result="empty_body", source_ip=client_ip)
+        repo.save_tv_event(result="empty_body", source_ip=client_ip)
         return JSONResponse(status_code=400, content={"error": "empty body"})
     if len(body) > 8192:
-        state.save_tv_event(result="body_too_large", source_ip=client_ip,
+        repo.save_tv_event(result="body_too_large", source_ip=client_ip,
                             detail=f"{len(body)} bytes")
         return JSONResponse(status_code=400, content={"error": "body too large"})
 
@@ -184,7 +186,7 @@ async def receive_alert(request: Request) -> JSONResponse:
             VerifyResult.BAD_NONCE: 400,
             VerifyResult.NONCE_REPLAY: 409,
         }[verdict]
-        state.save_tv_event(
+        repo.save_tv_event(
             result=verdict.value,
             detail=f"HTTP {http_code}",
             source_ip=client_ip,
@@ -195,13 +197,13 @@ async def receive_alert(request: Request) -> JSONResponse:
     try:
         raw = json.loads(body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
-        state.save_tv_event(result="bad_json", source_ip=client_ip)
+        repo.save_tv_event(result="bad_json", source_ip=client_ip)
         return JSONResponse(status_code=400, content={"error": "invalid json"})
 
     try:
         alert = TVWebhookAlert.model_validate(raw)
     except Exception as e:
-        state.save_tv_event(
+        repo.save_tv_event(
             result="bad_body", source_ip=client_ip, detail=str(e)[:300]
         )
         return JSONResponse(status_code=400, content={"error": "invalid body shape"})
@@ -214,32 +216,32 @@ async def receive_alert(request: Request) -> JSONResponse:
             alert_value=alert.value,
         )
     except FileNotFoundError as e:
-        state.save_tv_event(
+        repo.save_tv_event(
             result="book_not_found", book_id=alert.book, source_ip=client_ip,
             detail=str(e),
         )
         return JSONResponse(status_code=404, content={"error": str(e)})
     except LookupError as e:
-        state.save_tv_event(
+        repo.save_tv_event(
             result="binding_not_found", book_id=alert.book,
             binding_id=alert.bindingId, source_ip=client_ip, detail=str(e),
         )
         return JSONResponse(status_code=404, content={"error": str(e)})
     except MutationError as e:
-        state.save_tv_event(
+        repo.save_tv_event(
             result="mutation_rejected", book_id=alert.book,
             binding_id=alert.bindingId, source_ip=client_ip, detail=str(e),
         )
         return JSONResponse(status_code=422, content={"error": str(e)})
     except ValueError as e:
-        state.save_tv_event(
+        repo.save_tv_event(
             result="validation_failed", book_id=alert.book,
             binding_id=alert.bindingId, source_ip=client_ip, detail=str(e),
         )
         return JSONResponse(status_code=400, content={"error": str(e)})
 
     # Audit + success event
-    state.save_tv_event(
+    repo.save_tv_event(
         result="ok",
         book_id=result.book_id,
         binding_id=result.binding_id,
@@ -287,12 +289,12 @@ async def receive_alert(request: Request) -> JSONResponse:
 # ── Status + events (JWT-gated) ───────────────────────────────────────────
 
 @mgmt_router.get("/status")
-async def get_status(request: Request) -> TVStatus:
+async def get_status(request: Request, repo: Repository = Depends(get_repo)) -> TVStatus:
     """Operator-facing config snapshot for the TradingViewPanel."""
     host = request.headers.get("host", "localhost")
     scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
     webhook_url = f"{scheme}://{host}/api/tradingview/webhook"
-    events = state.list_tv_events(limit=1000)
+    events = repo.list_tv_events(limit=1000)
     return TVStatus(
         secretConfigured=_read_secret() is not None,
         rateLimitPerMin=_read_rate_limit(),
@@ -305,21 +307,22 @@ async def get_status(request: Request) -> TVStatus:
 
 
 @mgmt_router.get("/events")
-async def list_events(limit: int = 50) -> List[dict]:
+async def list_events(limit: int = 50, repo: Repository = Depends(get_repo)) -> List[dict]:
     """Return the most recent TradingView events, newest first."""
     capped = max(1, min(500, int(limit)))
-    return state.list_tv_events(limit=capped)
+    return repo.list_tv_events(limit=capped)
 
 
 @mgmt_router.get("/events/{book_id}")
-async def list_events_for_book(book_id: str, limit: int = 50) -> List[dict]:
+async def list_events_for_book(book_id: str, limit: int = 50,
+                               repo: Repository = Depends(get_repo)) -> List[dict]:
     """Return recent TradingView events filtered to a single book."""
     try:
         tv_adapter.validate_book_id(book_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     capped = max(1, min(500, int(limit)))
-    return state.list_tv_events(limit=capped, book_id=book_id)
+    return repo.list_tv_events(limit=capped, book_id=book_id)
 
 
 @mgmt_router.get("/indicators/{book_id}")

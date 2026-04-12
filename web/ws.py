@@ -32,6 +32,13 @@ class ConnectionManager:
         # WHY: Track what each user is currently viewing for activity status.
         self._user_activity: Dict[str, dict] = {}  # username -> {"room": str, "viewing": str}
         self._lock = asyncio.Lock()
+        # WHY: Repository reference for broadcast_to_book_rooms. Set during
+        # lifespan init. Avoids circular import of web.state.
+        self._repo = None
+
+    def set_repo(self, repo) -> None:
+        """Inject Repository reference. Called from lifespan init."""
+        self._repo = repo
 
     async def connect(self, websocket: WebSocket, room_id: str, username: str) -> None:
         """Register connection in room. Caller must have already accepted the WebSocket."""
@@ -111,12 +118,13 @@ class ConnectionManager:
         Returns the number of rooms actually broadcast to (useful for the
         route's ack payload + audit log).
         """
-        # Imported here (not at module top) to avoid a circular import —
-        # web.state is imported by routes which import web.ws.
-        from web import state as _state
+        # WHY: repo passed by caller — no lazy import of web.state needed.
+        if not hasattr(self, '_repo') or self._repo is None:
+            log.warning("broadcast_to_book_rooms: no repo available")
+            return 0
         try:
-            rooms = _state.list_rooms()
-        except Exception:  # pragma: no cover — file IO failure shouldn't block the webhook
+            rooms = self._repo.list_rooms()
+        except Exception:  # pragma: no cover — DB failure shouldn't block the webhook
             log.warning("broadcast_to_book_rooms: failed to list rooms")
             return 0
 

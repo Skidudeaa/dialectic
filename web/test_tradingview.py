@@ -33,8 +33,9 @@ os.environ["TV_WEBHOOK_SECRET"] = "tv-test-secret"
 os.environ["TV_WEBHOOK_RATE_LIMIT_PER_MIN"] = "1000"  # generous for tests
 
 from web.main import app  # noqa: E402
-from web import state as state_mod  # noqa: E402
 from web.adapters import tradingview as tv_adapter  # noqa: E402
+from web.deps import get_repo  # noqa: E402
+from web.persistence.repository import Repository  # noqa: E402
 from web.adapters import thesis as thesis_adapter  # noqa: E402
 from web.auth import create_access_token  # noqa: E402
 from web.routes import tradingview as tv_routes  # noqa: E402
@@ -78,18 +79,16 @@ def reset_modules():
 
 
 @pytest.fixture(autouse=True)
-def isolate_state(tmp_path: Path):
-    """Redirect web/data I/O to a per-test temp directory."""
-    original_data = state_mod.DATA_DIR
-    original_rooms = state_mod.ROOMS_FILE
-    original_tv = state_mod.TV_EVENTS_FILE
-    state_mod.DATA_DIR = tmp_path
-    state_mod.ROOMS_FILE = tmp_path / "rooms.json"
-    state_mod.TV_EVENTS_FILE = tmp_path / "tradingview-events.jsonl"
-    yield
-    state_mod.DATA_DIR = original_data
-    state_mod.ROOMS_FILE = original_rooms
-    state_mod.TV_EVENTS_FILE = original_tv
+def isolate_state():
+    """Inject fresh in-memory SQLite per test via dependency override."""
+    repo = Repository(":memory:")
+    repo.initialize()
+    app.dependency_overrides[get_repo] = lambda: repo
+    app.state.repo = repo
+    from web.ws import manager
+    manager.set_repo(repo)
+    yield repo
+    app.dependency_overrides.pop(get_repo, None)
 
 
 @pytest.fixture
@@ -677,7 +676,8 @@ class TestWebhookApply:
             "book": "test-book",
             "bindingId": "brent-persistence-close-above-115",
         })
-        events = state_mod.list_tv_events()
+        repo = app.state.repo
+        events = repo.list_tv_events()
         assert len(events) >= 1
         latest = events[0]
         assert latest["result"] == "ok"
@@ -700,7 +700,8 @@ class TestWebhookApply:
                 "Content-Type": "application/json",
             },
         )
-        events = state_mod.list_tv_events()
+        repo = app.state.repo
+        events = repo.list_tv_events()
         assert any(e["result"] == "bad_signature" for e in events)
 
     def test_cache_invalidated_after_mutation(self, temp_books):

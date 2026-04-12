@@ -10,8 +10,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from web.auth import get_current_user
 from web.models import User, HorizonRequest
 from web.adapters import thesis as thesis_adapter
+from web.deps import get_repo
+from web.persistence.repository import Repository
 from web.ws import manager
-from web import state
 
 log = logging.getLogger(__name__)
 
@@ -50,7 +51,8 @@ async def run_horizon(book_id: str, req: HorizonRequest) -> dict:
 
 
 @router.post("/{book_id}/fetch-prices")
-async def fetch_prices(book_id: str, user: User = Depends(get_current_user)) -> dict:
+async def fetch_prices(book_id: str, user: User = Depends(get_current_user),
+                       repo: Repository = Depends(get_repo)) -> dict:
     """Fetch live prices, re-export snapshot, compute diff, broadcast changes."""
     try:
         prices = await asyncio.to_thread(thesis_adapter.fetch_prices_for_book, book_id)
@@ -83,10 +85,11 @@ async def fetch_prices(book_id: str, user: User = Depends(get_current_user)) -> 
 
         # Broadcast diff to all rooms linked to this book
         if diff_summary:
-            rooms = state.list_rooms()
+            rooms = await asyncio.to_thread(repo.list_rooms)
             for room in rooms:
                 if room.get("linked_book_id") == book_id:
-                    msg = state.save_message(
+                    msg = await asyncio.to_thread(
+                        repo.save_message,
                         room_id=room["id"],
                         user="system",
                         content=diff_summary,
