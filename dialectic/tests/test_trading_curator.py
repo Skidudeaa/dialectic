@@ -203,6 +203,97 @@ class TestIsDuplicate:
         assert call_args[0][2] == SpeakerType.LLM_ANNOTATOR.value
 
     @pytest.mark.asyncio
+    async def test_dedup_uses_metadata_source_filter(self):
+        """is_duplicate() must filter on metadata->>'source' = 'trading_curator',
+        NOT the old 'content LIKE %Trading%' predicate."""
+        db = make_mock_db()
+        db.fetchval = AsyncMock(return_value=0)
+
+        curator = TradingCuratorEngine(db, make_mock_memory(), None)
+        await curator.is_duplicate(ROOM_ID, THREAD_ID)
+
+        query = db.fetchval.call_args[0][0]
+        assert "metadata" in query
+        assert "trading_curator" in query
+        # Old fragile predicate must be gone
+        assert "LIKE" not in query
+        assert "Trading%" not in query
+
+
+# ============================================================
+# metadata tagging on insert + dedup behavior
+# ============================================================
+
+
+class TestCuratorMetadataTagging:
+    """Verifies the curator writes metadata.source='trading_curator' on insert
+    and that the new dedup filter only catches curator messages, not regular
+    user messages that happen to mention 'Trading'."""
+
+    @pytest.mark.asyncio
+    async def test_dedup_returns_true_for_curator_message_in_window(self):
+        """A prior curator message inside the dedup window is a duplicate."""
+        db = make_mock_db()
+        # Simulates: SQL count of metadata.source='trading_curator' messages
+        db.fetchval = AsyncMock(return_value=1)
+
+        curator = TradingCuratorEngine(db, make_mock_memory(), None)
+        assert await curator.is_duplicate(ROOM_ID, THREAD_ID) is True
+
+    @pytest.mark.asyncio
+    async def test_dedup_returns_false_for_user_message_mentioning_trading(self):
+        """A regular user message containing 'Trading' must NOT be a duplicate.
+
+        Under the old LIKE '%Trading%' predicate this would have falsely
+        matched. With the metadata-source filter, the SQL count returns 0
+        because the user message has no metadata.source tag.
+        """
+        db = make_mock_db()
+        # The metadata-filtered query returns 0 even though a user message
+        # with 'Trading' exists in the thread.
+        db.fetchval = AsyncMock(return_value=0)
+
+        curator = TradingCuratorEngine(db, make_mock_memory(), None)
+        assert await curator.is_duplicate(ROOM_ID, THREAD_ID) is False
+
+    @pytest.mark.asyncio
+    async def test_generate_alert_inserts_metadata_source(self):
+        """generate_alert must include metadata={'source': 'trading_curator', ...}
+        in the INSERT call so future dedup checks find it."""
+        from unittest.mock import patch
+        from llm.trading_curator import TradingCuratorEngine
+
+        db = make_mock_db()
+        # should_alert → 1 offline; is_duplicate → 0 → not duplicate
+        db.fetchval = AsyncMock(side_effect=[1, 0])
+        db.fetchrow = AsyncMock(return_value={"sequence": 7})
+
+        # Mock provider + thread messages
+        fake_response = MagicMock()
+        fake_response.content = "Brent spike confirmed; hormuz approaching."
+
+        fake_provider = MagicMock()
+        fake_provider.complete = AsyncMock(return_value=fake_response)
+
+        with patch("llm.providers.get_provider", return_value=fake_provider), \
+             patch("operations.get_thread_messages", new=AsyncMock(return_value=[])):
+            curator = TradingCuratorEngine(db, make_mock_memory(), None)
+            snapshot = make_snapshot_dict()
+            result = await curator.generate_alert(ROOM_ID, THREAD_ID, snapshot)
+
+        assert result is not None
+        # Inspect the INSERT call: positional args end with the metadata dict
+        insert_call = db.fetchrow.call_args
+        query = insert_call[0][0]
+        assert "metadata" in query
+        # metadata is the last positional argument ($7)
+        metadata_arg = insert_call[0][-1]
+        assert isinstance(metadata_arg, dict)
+        assert metadata_arg["source"] == "trading_curator"
+        assert metadata_arg["snapshot_timestamp"] == snapshot["timestamp"]
+        assert metadata_arg["snapshot_v"] == 1
+
+    @pytest.mark.asyncio
     async def test_custom_window_minutes(self):
         """is_duplicate() respects the window_minutes parameter."""
         db = make_mock_db()

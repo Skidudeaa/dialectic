@@ -3,7 +3,7 @@
 import asyncio
 import json
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, List, Optional
 from uuid import UUID, uuid4
 import asyncpg
@@ -456,6 +456,8 @@ class RoomSettingsResponse(BaseModel):
     semantic_novelty_threshold: float
     auto_interjection_enabled: bool
     trading_config: Optional[dict] = None
+    last_trading_push_at: Optional[datetime] = None
+    trading_push_count: int = 0
 
 
 from api.trading import TradingSnapshotResponse, format_thesis_summary
@@ -700,6 +702,8 @@ async def get_room_settings(
         semantic_novelty_threshold=room.semantic_novelty_threshold,
         auto_interjection_enabled=room.auto_interjection_enabled,
         trading_config=trading_config,
+        last_trading_push_at=room.last_trading_push_at,
+        trading_push_count=room.trading_push_count,
     )
 
 
@@ -770,7 +774,8 @@ async def update_room_settings(
 
     # Return updated settings
     row = await db.fetchrow(
-        """SELECT interjection_turn_threshold, semantic_novelty_threshold, auto_interjection_enabled
+        """SELECT interjection_turn_threshold, semantic_novelty_threshold,
+                  auto_interjection_enabled, last_trading_push_at, trading_push_count
            FROM rooms WHERE id = $1""",
         room_id
     )
@@ -779,6 +784,8 @@ async def update_room_settings(
         interjection_turn_threshold=row['interjection_turn_threshold'],
         semantic_novelty_threshold=row['semantic_novelty_threshold'],
         auto_interjection_enabled=row['auto_interjection_enabled'],
+        last_trading_push_at=row['last_trading_push_at'],
+        trading_push_count=row['trading_push_count'] or 0,
     )
 
 
@@ -1183,7 +1190,7 @@ async def search_memories(
 @app.post("/rooms/{room_id}/trading/snapshot", response_model=TradingSnapshotResponse)
 async def receive_trading_snapshot(
     room_id: UUID,
-    request: TradingSnapshotRequest,
+    raw_request: Request,
     token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
@@ -1194,7 +1201,32 @@ async def receive_trading_snapshot(
     as a room-scoped memory (upsert by stable key), logs event, broadcasts.
     WHY: Bridges Trading Desk cascade/confluence state into Dialectic rooms.
     TRADEOFF: Full snapshot per push (larger payload) vs deltas (complex diffing).
+
+    SCHEMA VERSIONING: The `v` field is pinned to Literal[1]. Any other value
+    fails fast with HTTP 400 — schema drift surfaces loudly, not silently.
     """
+    # Parse body manually so we can return a clean 400 on version drift
+    # before Pydantic raises a generic 422 ValidationError.
+    try:
+        body = await raw_request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Body must be a JSON object")
+
+    body_v = body.get("v")
+    if body_v != 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported snapshot version: got {body_v!r}, expected 1",
+        )
+
+    try:
+        request = TradingSnapshotRequest(**body)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid snapshot: {e}")
+
     await verify_room_token(room_id, token, db)
 
     now = datetime.now(timezone.utc)
@@ -1205,8 +1237,12 @@ async def receive_trading_snapshot(
     # with UUID/datetime support) serializes it correctly. Avoids double-encoding
     # that json.dumps() + ::jsonb cast would produce.
     await db.execute(
-        "UPDATE rooms SET trading_config = $2 WHERE id = $1",
-        room_id, snapshot_data
+        """UPDATE rooms
+           SET trading_config = $2,
+               last_trading_push_at = $3,
+               trading_push_count = trading_push_count + 1
+           WHERE id = $1""",
+        room_id, snapshot_data, now
     )
 
     # Format human-readable summary for memory
@@ -1284,6 +1320,56 @@ async def receive_trading_snapshot(
         stored_at=now.isoformat(),
         memory_id=memory_id,
     )
+
+
+@app.get("/rooms/{room_id}/trading/alerts", response_model=List[Message])
+async def get_trading_alerts(
+    room_id: UUID,
+    since: Optional[str] = Query(
+        None,
+        description="ISO8601 cutoff. Defaults to 24h ago when omitted.",
+    ),
+    limit: int = Query(200, ge=1, le=1000),
+    token: str = Depends(extract_room_token),
+    db=Depends(get_db),
+):
+    """
+    List curator-generated trading alerts in this room since a given timestamp.
+
+    ARCHITECTURE: Server-side filter on metadata->>'source' = 'trading_curator'.
+    WHY: Replaces the bridge client's walk of /threads then /messages with
+         per-message client-side filtering. Moving the filter into Postgres
+         is a meaningful latency win as alerts accumulate.
+    AUTH: Same room-token gate as the snapshot push endpoint.
+    """
+    await verify_room_token(room_id, token, db)
+
+    # Default to 24h ago when no since cursor is supplied.
+    if since is None:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    else:
+        try:
+            cutoff = datetime.fromisoformat(since.replace("Z", "+00:00"))
+            if cutoff.tzinfo is None:
+                cutoff = cutoff.replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid 'since' parameter: {since!r} is not ISO8601",
+            )
+
+    rows = await db.fetch(
+        """SELECT m.* FROM messages m
+           JOIN threads t ON m.thread_id = t.id
+           WHERE t.room_id = $1
+             AND m.created_at > $2
+             AND NOT m.is_deleted
+             AND m.metadata->>'source' = 'trading_curator'
+           ORDER BY m.created_at ASC
+           LIMIT $3""",
+        room_id, cutoff, limit,
+    )
+    return [Message(**dict(row)) for row in rows]
 
 
 # ============================================================
@@ -1721,22 +1807,29 @@ async def websocket_endpoint(
 
 @app.get("/health")
 async def health():
-    """Health check with database connectivity verification."""
+    """
+    Health check with database connectivity verification.
+
+    CONTRACT: 200 + status="ok" means the DB pool is initialised and a
+    SELECT 1 succeeded. 503 + status="degraded" means either no pool exists
+    or SELECT 1 failed. Load balancers should route 503s away.
+    """
     status = {"status": "ok", "checks": {}}
 
-    if db_pool:
+    if db_pool is None:
+        status["status"] = "degraded"
+        status["checks"]["db"] = "down"
+    else:
         try:
             async with db_pool.acquire() as conn:
                 await conn.fetchval("SELECT 1")
-            status["checks"]["database"] = "connected"
+            status["checks"]["db"] = "connected"
         except Exception as e:
             status["status"] = "degraded"
-            status["checks"]["database"] = f"error: {e}"
-    else:
-        status["status"] = "degraded"
-        status["checks"]["database"] = "no pool"
+            status["checks"]["db"] = "down"
+            status["checks"]["db_error"] = str(e)
 
-    # Redis health check
+    # Redis health check (informational — does not gate "ok" status)
     from transport.redis_manager import RedisConnectionManager
     if isinstance(connection_manager, RedisConnectionManager):
         try:

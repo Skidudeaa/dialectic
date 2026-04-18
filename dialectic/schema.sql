@@ -33,7 +33,9 @@ CREATE TABLE rooms (
     provoker_model TEXT NOT NULL DEFAULT 'claude-haiku-4-5-20251001',
     auto_interjection_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     interjection_turn_threshold INT NOT NULL DEFAULT 4,
-    semantic_novelty_threshold FLOAT NOT NULL DEFAULT 0.7
+    semantic_novelty_threshold FLOAT NOT NULL DEFAULT 0.7,
+    last_trading_push_at TIMESTAMPTZ,
+    trading_push_count INTEGER NOT NULL DEFAULT 0
 );
 
 -- Users
@@ -85,10 +87,12 @@ CREATE TABLE messages (
     prompt_hash TEXT,
     token_count INT,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    metadata JSONB,
     UNIQUE (thread_id, sequence)
 );
 
 CREATE INDEX idx_messages_thread ON messages(thread_id, sequence);
+CREATE INDEX idx_messages_metadata_source ON messages ((metadata->>'source'));
 
 -- Memories
 CREATE TABLE memories (

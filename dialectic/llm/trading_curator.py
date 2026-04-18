@@ -74,10 +74,14 @@ class TradingCuratorEngine:
         """
         Check whether a trading curator alert was already generated recently.
 
-        ARCHITECTURE: Deduplication by time window prevents rapid snapshot pushes
-        from spamming the thread with near-identical alerts.
-        WHY: The bridge script may push multiple times in quick succession
-             (e.g., fetch + manual re-push).
+        ARCHITECTURE: Filters on metadata->>'source' = 'trading_curator' rather
+        than fragile content LIKE '%Trading%' matching.
+        WHY: Metadata-tagged dedup is deterministic; the LIKE predicate
+             over-matched any annotator message that happened to mention
+             "Trading" and missed legitimate curator alerts that didn't.
+        TRADEOFF: Requires the messages.metadata column (migration 003) and
+                  curator inserts to set metadata.source — but both are now
+                  guaranteed.
         """
         cutoff = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
         count = await self.db.fetchval(
@@ -85,7 +89,7 @@ class TradingCuratorEngine:
                WHERE thread_id = $1
                AND speaker_type = $2
                AND created_at > $3
-               AND content LIKE '%Trading%'""",
+               AND metadata->>'source' = 'trading_curator'""",
             thread_id,
             SpeakerType.LLM_ANNOTATOR.value,
             cutoff,
@@ -155,20 +159,25 @@ class TradingCuratorEngine:
             alert_id = uuid4()
             now = datetime.now(timezone.utc)
 
+            metadata = {
+                "source": "trading_curator",
+                "snapshot_timestamp": snapshot.get("timestamp"),
+                "snapshot_v": snapshot.get("v"),
+            }
             row = await self.db.fetchrow(
                 """INSERT INTO messages
                    (id, thread_id, sequence, created_at, speaker_type, user_id,
-                    message_type, content)
+                    message_type, content, metadata)
                    VALUES (
                        $1, $2,
                        (SELECT COALESCE(MAX(sequence), 0) + 1
                         FROM messages WHERE thread_id = $2),
-                       $3, $4, NULL, $5, $6
+                       $3, $4, NULL, $5, $6, $7
                    )
                    RETURNING sequence""",
                 alert_id, thread_id, now,
                 SpeakerType.LLM_ANNOTATOR.value, MessageType.TEXT.value,
-                response.content,
+                response.content, metadata,
             )
             alert_sequence = row['sequence']
 

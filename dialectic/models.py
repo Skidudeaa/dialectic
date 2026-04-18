@@ -3,7 +3,7 @@
 import json as _json
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, Literal, Optional, Union
 from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -117,6 +117,8 @@ class Room(BaseModel):
     interjection_turn_threshold: int = 4
     semantic_novelty_threshold: float = 0.7
     trading_config: Optional[dict] = None
+    last_trading_push_at: Optional[datetime] = None
+    trading_push_count: int = 0
 
     @field_validator("trading_config", mode="before")
     @classmethod
@@ -178,6 +180,21 @@ class Message(BaseModel):
     prompt_hash: Optional[str] = None
     token_count: Optional[int] = None
     is_deleted: bool = False
+    metadata: Optional[dict] = None
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def parse_metadata(cls, v: Any) -> Optional[dict]:
+        """asyncpg may return JSONB as str if codec isn't registered."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            try:
+                parsed = _json.loads(v)
+                return parsed if isinstance(parsed, dict) else None
+            except (_json.JSONDecodeError, ValueError):
+                return None
+        return v
 
 
 class Memory(BaseModel):
@@ -446,7 +463,7 @@ class TradingSnapshotRequest(BaseModel):
     WHY: Bridges the Trading Desk's cascade/confluence engine into Dialectic rooms.
     TRADEOFF: Stores full node state per snapshot vs deltas — simpler, larger payload.
     """
-    v: int
+    v: Literal[1]
     timestamp: str
     title: Optional[str] = None
     nodeStates: dict[str, str]

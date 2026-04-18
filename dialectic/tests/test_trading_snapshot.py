@@ -132,6 +132,51 @@ class TestTradingSnapshotValidation:
         assert snap.portfolioSummary is None
         assert snap.title is None
 
+    def test_v2_rejected_at_model_layer(self):
+        """v=2 should fail Pydantic Literal[1] validation outright."""
+        data = make_snapshot(v=2)
+        with pytest.raises(ValidationError) as exc_info:
+            TradingSnapshotRequest(**data)
+        # Pydantic's Literal error mentions the unexpected input
+        assert "v" in str(exc_info.value).lower() or "literal" in str(exc_info.value).lower()
+
+
+class TestSnapshotEndpointVersioning:
+    """Endpoint-level test that v != 1 returns HTTP 400 with the spec message.
+
+    NOTE: Uses a thin TestClient that monkeypatches verify_room_token + db so
+    no live Postgres is required.
+    """
+
+    def test_v2_returns_400_from_endpoint(self):
+        from fastapi.testclient import TestClient
+        import api.main as main_mod
+
+        app = main_mod.app
+
+        # Stub out the auth + db dependencies so we exercise the version check
+        # before any DB call.
+        async def _fake_db():
+            yield object()
+
+        app.dependency_overrides[main_mod.get_db] = _fake_db
+        app.dependency_overrides[main_mod.extract_room_token] = lambda: "dummy-token"
+
+        try:
+            client = TestClient(app)
+            payload = make_snapshot(v=2)
+            response = client.post(
+                "/rooms/00000000-0000-0000-0000-000000000001/trading/snapshot",
+                json=payload,
+                headers={"X-Room-Token": "dummy-token"},
+            )
+            assert response.status_code == 400
+            body = response.json()
+            assert "Unsupported snapshot version" in body["detail"]
+            assert "expected 1" in body["detail"]
+        finally:
+            app.dependency_overrides.clear()
+
 
 # ============================================================
 # format_thesis_summary
