@@ -1,18 +1,21 @@
-import { useState, useCallback } from "react";
-import { Routes, Route, Navigate, useSearchParams } from "react-router-dom";
+import { useState, useCallback, lazy, Suspense } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { isAuthenticated } from "./lib/api";
 import { ToastProvider } from "./components/Toast";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import ThesisBuilder from "./components/builder/ThesisBuilder";
-import BuilderList from "./components/builder/BuilderList";
 
-// /builder dispatches: with ?edit (even if empty for new) → editor;
-// without it → library list page.
-function BuilderRoute() {
-  const [params] = useSearchParams();
-  const hasEdit = params.has("edit") || params.get("import") === "session";
-  return hasEdit ? <ThesisBuilder /> : <BuilderList />;
+// Builder is a separate, large feature (graph canvas + validation + sub-editors).
+// Lazy-load it so the main chunk stays small for users who only chat / view
+// theses and never visit /builder.
+const BuilderRoute = lazy(() => import("./components/builder/BuilderRoute"));
+
+function BuilderFallback() {
+  return (
+    <div className="h-screen flex items-center justify-center bg-void text-text-muted text-xs font-mono">
+      loading builder…
+    </div>
+  );
 }
 
 export default function App() {
@@ -29,7 +32,14 @@ export default function App() {
         <Login onLogin={onLogin} />
       ) : (
         <Routes>
-          <Route path="/builder" element={<BuilderRoute />} />
+          <Route
+            path="/builder"
+            element={
+              <Suspense fallback={<BuilderFallback />}>
+                <BuilderRoute />
+              </Suspense>
+            }
+          />
           <Route path="/*" element={<Dashboard onLogout={onLogout} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
