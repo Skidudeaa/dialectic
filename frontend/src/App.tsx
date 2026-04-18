@@ -4,6 +4,7 @@ import { isAuthenticated } from "./lib/api";
 import { ToastProvider } from "./components/Toast";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import ThesisBuilder from "./components/builder/ThesisBuilder";
 
 export default function App() {
   const [authed, setAuthed] = useState(isAuthenticated());
@@ -19,6 +20,7 @@ export default function App() {
         <Login onLogin={onLogin} />
       ) : (
         <Routes>
+          <Route path="/builder" element={<ThesisBuilder />} />
           <Route path="/*" element={<Dashboard onLogout={onLogout} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

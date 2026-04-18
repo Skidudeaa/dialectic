@@ -228,3 +228,94 @@ export interface HealthResponse {
   books_loaded: string[];
   last_snapshots: Record<string, string>;
 }
+
+
+// ── Thesis Builder Types ────────────────────────────────────────────────
+
+export interface BuilderNode {
+  id: string;
+  label: string;
+  type: "event" | "price" | "indicator" | "gate" | "deadline" | "conditional" | "reversal" | "constraint";
+  phase: number;
+  state: "monitoring" | "active" | "fired" | "approaching" | "stable" | "resolved" | "partial";
+  context: string;
+  x: number;
+  y: number;
+  probability?: number | null;
+  current?: number | null;
+  feeds: BuilderFeed[];
+  thresholds: BuilderThreshold[];
+  indicators: BuilderIndicator[];
+  countdown: boolean;
+  deadline?: string | null;
+  irreversible: boolean;
+  gatedBy: string[];
+  logic?: string | null;
+}
+
+export interface BuilderFeed {
+  source: "yahoo" | "polymarket" | "fred" | "eia" | "bls" | "usda" | "manual";
+  symbol?: string;
+  market?: string;
+  series?: string;
+  label?: string;
+}
+
+export interface BuilderThreshold {
+  level: number;
+  label: string;
+  durationRequired?: string;
+}
+
+export interface BuilderIndicator {
+  label: string;
+  feed: string;
+  value: string;
+  status: "red" | "amber" | "green" | "grey";
+}
+
+export interface BuilderEdge {
+  source: string;
+  target: string;
+  mechanism: string;
+  lag: string;
+  strength: number;
+}
+
+export interface BuilderInstrument {
+  id: string;
+  monthly: number;
+  role: string;
+  beta: number;
+  ref: number;
+  targetLow?: number | null;
+  targetHigh?: number | null;
+  stop?: number | null;
+}
+
+export interface BuilderScenario {
+  id: string;
+  name: string;
+  probability: number;
+  notes: string;
+  overrides: Record<string, unknown>;
+  portfolioImpact: Record<string, unknown>;
+}
+
+export interface BuilderMeta {
+  title: string;
+  claim: string;
+  monthlyBudget: number;
+  asOf: string;
+}
+
+export interface BuilderBook {
+  id?: string;
+  meta: BuilderMeta;
+  nodes: BuilderNode[];
+  edges: BuilderEdge[];
+  instruments: Record<string, BuilderInstrument[]>;
+  scenarios: BuilderScenario[];
+  cascadePhases: Record<string, unknown>;
+  rules: string[];
+}
