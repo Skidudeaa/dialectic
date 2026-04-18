@@ -90,12 +90,14 @@ def get_uptime() -> float:
 
 # ── Route registration ───────────────────────────────────────────────────
 
-from web.routes import auth, health, thesis, market, outcomes, rooms, messages, llm, journal, predictions, tradingview
+from web.routes import auth, health, thesis, market, builder as builder_routes, outcomes, rooms, messages, llm, journal, predictions, tradingview
+from web.routes import bridge
 from web.routes.v1 import bootstrap as v1_bootstrap
 
 app.include_router(auth.router)
 app.include_router(health.router)
 app.include_router(thesis.router)
+app.include_router(builder_routes.router)
 app.include_router(market.router)
 app.include_router(outcomes.router)
 app.include_router(rooms.router)
@@ -107,6 +109,8 @@ app.include_router(predictions.router)
 # JWT-gated under /api/tradingview, binding CRUD lives under /api/thesis.
 for tv_router in tradingview.routers:
     app.include_router(tv_router)
+
+app.include_router(bridge.router)
 
 # v1-versioned API routes (additive — existing unversioned routes stay)
 app.include_router(v1_bootstrap.router)
