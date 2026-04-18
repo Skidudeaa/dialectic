@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+*.egg-info/
 .env
 .DS_Store
 .planning/
@@ -12,3 +13,7 @@ web/data/
 frontend/node_modules/
 frontend/dist/
 *.png
+
+# dialectic outbox spool files (runtime state, not source)
+snapshots/outbox/*
+!snapshots/outbox/.gitkeep

@@ -51,6 +51,8 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 
 # =========================================================================
@@ -65,6 +67,52 @@ ROOT: Path = Path(__file__).resolve().parent.parent.parent
 THESISGRAPH: str = str(ROOT / "tools" / "thesis_graph" / "thesisgraph.py")
 DIFF_SNAPSHOTS: str = str(ROOT / "tools" / "bridge" / "diff_snapshots.py")
 PUSH_SCRIPT: str = str(ROOT / "tools" / "bridge" / "push_to_dialectic.py")
+
+# WHY: Default Dialectic URL matches push_to_dialectic.py's default. Can be
+# overridden with --dialectic-url for production deploys.
+DEFAULT_DIALECTIC_URL: str = os.environ.get(
+    "DIALECTIC_URL", "http://localhost:8002"
+)
+
+
+# =========================================================================
+# HEALTH PROBE
+# WHY: A pre-flight GET /health (~5ms) lets us decide once per run whether
+# pushes are worth attempting. If dialectic is down, we still run the
+# fetch+export+diff+lifecycle steps (those produce local value) and the
+# push step spools to the outbox without burning 3-attempt retries per
+# book. Saves ~30s per book during an outage and produces a single clear
+# log line instead of N noisy stack traces.
+# =========================================================================
+
+def probe_dialectic(dialectic_url: str, timeout: float = 5.0) -> tuple[bool, str]:
+    """
+    GET {dialectic_url}/health. Returns (healthy, detail).
+
+    Considers HTTP 200 with `status: ok` as healthy. Anything else (including
+    503 degraded, connection errors, timeouts) is treated as unhealthy --
+    the run still proceeds but pushes will spool to the outbox instead of
+    burning retries.
+    """
+    url = f"{dialectic_url.rstrip('/')}/health"
+    try:
+        req = Request(url, method="GET", headers={"User-Agent": "tradingDesk-bridge/1.0"})
+        with urlopen(req, timeout=timeout) as resp:
+            if resp.status != 200:
+                return (False, f"HTTP {resp.status}")
+            body = resp.read().decode("utf-8", errors="replace")
+            try:
+                payload = json.loads(body)
+            except json.JSONDecodeError:
+                return (False, f"non-JSON body: {body[:80]}")
+            status = payload.get("status", "unknown")
+            return (status == "ok", f"status={status}")
+    except HTTPError as e:
+        # WHY: Dialectic's /health returns 503 when degraded — still a valid
+        # response, but we shouldn't push to a degraded server.
+        return (False, f"HTTP {e.code} {e.reason}")
+    except (URLError, TimeoutError, OSError) as e:
+        return (False, f"unreachable: {e}")
 
 
 # =========================================================================
@@ -150,7 +198,8 @@ def run_diff(prev: Path, latest: Path) -> int:
     return result.returncode
 
 
-def run_push(latest: Path, room_id: str, room_token: str) -> int:
+def run_push(latest: Path, room_id: str, room_token: str,
+             dialectic_url: Optional[str] = None) -> int:
     """
     Run push-to-dialectic.py. Returns 0 (success), 1 (HTTP error),
     2 (config/connection error).
@@ -163,9 +212,12 @@ def run_push(latest: Path, room_id: str, room_token: str) -> int:
     overridden when a book-level token is present.
     """
     env = {**os.environ, "DIALECTIC_ROOM_TOKEN": room_token}
+    cmd = [sys.executable, PUSH_SCRIPT, "--snapshot", str(latest),
+           "--room-id", room_id]
+    if dialectic_url:
+        cmd.extend(["--dialectic-url", dialectic_url])
     result = subprocess.run(
-        [sys.executable, PUSH_SCRIPT, "--snapshot", str(latest),
-         "--room-id", room_id],
+        cmd,
         stdout=subprocess.PIPE,
         env=env,
         check=False,
@@ -183,6 +235,8 @@ def run_book(
     book_data: dict,
     snapshots_dir: Path,
     dry_run: bool,
+    dialectic_url: Optional[str] = None,
+    dialectic_healthy: bool = True,
 ) -> dict:
     """
     Execute the full pipeline for one book and return a result dict:
@@ -278,18 +332,43 @@ def run_book(
     else:  # diff_rc == 0 — changes found
         result["changed"] = "yes"
 
-    # Step 6: push
-    push_rc = run_push(latest, room_id, room_token)
-    if push_rc != 0:
-        print(
-            f"[error] {book_id}: push failed (exit {push_rc})",
-            file=sys.stderr,
-        )
-        result["pushed"] = "FAIL"
-        result["status"] = "FAIL"
-        return result
+    # Step 6: push (skip-with-spool if dialectic /health failed pre-flight)
+    # WHY: When the health probe says down, jumping straight to spool avoids
+    # ~30s of wasted retries per book and keeps the per-book log line concise.
+    # The next run's outbox replay will deliver the snapshot once dialectic
+    # recovers. Push exit codes still distinguish auth (4xx) from outage (5xx).
+    if not dialectic_healthy:
+        # Inline spool: import the push module and call its outbox helper.
+        # WHY in-process: avoids spinning a subprocess just to write a file.
+        try:
+            import importlib.util
+            push_mod_path = ROOT / "tools" / "bridge" / "push_to_dialectic.py"
+            spec = importlib.util.spec_from_file_location("push_to_dialectic", str(push_mod_path))
+            push_mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(push_mod)
+            payload = latest.read_bytes()
+            push_mod.spool_to_outbox(room_id, payload, reason="dialectic /health failed pre-flight")
+            result["pushed"] = "SPOOLED"
+        except Exception as exc:
+            print(f"[error] {book_id}: spool failed — {exc}", file=sys.stderr)
+            result["pushed"] = "FAIL"
+            result["status"] = "FAIL"
+            return result
+    else:
+        push_rc = run_push(latest, room_id, room_token, dialectic_url=dialectic_url)
+        if push_rc != 0:
+            print(
+                f"[error] {book_id}: push failed (exit {push_rc})",
+                file=sys.stderr,
+            )
+            # WHY: push_to_dialectic.py spools to outbox itself on terminal
+            # failure. Mark as FAIL so the run exits non-zero, but the data
+            # is durably queued for the next invocation.
+            result["pushed"] = "FAIL"
+            result["status"] = "FAIL"
+            return result
 
-    result["pushed"] = "OK"
+        result["pushed"] = "OK"
 
     # Step 7: evaluate open trades against the fresh snapshot (lifecycle monitor)
     # WHY: After push, the snapshot is the latest pipeline output. Evaluate all
@@ -360,6 +439,26 @@ def build_parser() -> argparse.ArgumentParser:
             "Useful for testing with a subset of configs."
         ),
     )
+    parser.add_argument(
+        "--dialectic-url",
+        default=DEFAULT_DIALECTIC_URL,
+        metavar="URL",
+        help=(
+            "Dialectic server URL for the pre-flight /health probe and "
+            "for push-to-dialectic.py (default: $DIALECTIC_URL or "
+            "http://localhost:8002). On health-probe failure, pushes are "
+            "spooled to snapshots/outbox/ for retry on the next run."
+        ),
+    )
+    parser.add_argument(
+        "--skip-health-probe",
+        action="store_true",
+        help=(
+            "Skip the GET /health probe and attempt all pushes. Useful when "
+            "the probe is misleading (e.g. dialectic ahead of a load-balancer "
+            "that doesn't proxy /health). Pushes still spool on failure."
+        ),
+    )
     return parser
 
 
@@ -391,12 +490,29 @@ def main() -> None:
         print("[info] No thesis-graph books found.", file=sys.stderr)
         sys.exit(0)
 
+    # Pre-flight Dialectic /health probe (skipped on dry-run to avoid network).
+    # WHY: Decide once whether pushes are worth attempting. On failure, books
+    # still run (export, diff, lifecycle) — the snapshot just spools to the
+    # outbox instead of getting blasted at a known-down server.
+    dialectic_healthy = True
+    if not args.dry_run and not args.skip_health_probe:
+        ok, detail = probe_dialectic(args.dialectic_url)
+        dialectic_healthy = ok
+        if ok:
+            print(f"[health] dialectic at {args.dialectic_url}: {detail}",
+                  file=sys.stderr)
+        else:
+            print(f"[health] dialectic at {args.dialectic_url} unhealthy ({detail}); "
+                  "pushes will spool to outbox", file=sys.stderr)
+
     any_failed = False
     summary: list[tuple[str, dict]] = []
 
     for book_id, book_path, book_data in books:
         book_result = run_book(
-            book_id, book_path, book_data, snapshots_dir, dry_run=args.dry_run
+            book_id, book_path, book_data, snapshots_dir, dry_run=args.dry_run,
+            dialectic_url=args.dialectic_url,
+            dialectic_healthy=dialectic_healthy,
         )
         summary.append((book_id, book_result))
         if book_result["status"] == "FAIL":
