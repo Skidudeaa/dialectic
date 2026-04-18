@@ -9,6 +9,11 @@ import type {
   TVStatus,
   WSMessage,
 } from "./types";
+import type {
+  OutboxReplayRequest,
+  OutboxReplayResponse,
+  OutboxStatus,
+} from "./outbox";
 
 const STORAGE_KEY = "td_auth";
 
@@ -214,4 +219,19 @@ export async function deleteTVBinding(
     `/api/thesis/${encodeURIComponent(bookId)}/tv-bindings/${encodeURIComponent(bindingId)}`,
     { method: "DELETE" },
   );
+}
+
+// ── Bridge / outbox API ─────────────────────────────────────────────────
+
+export async function fetchOutboxStatus(): Promise<OutboxStatus> {
+  return apiFetch<OutboxStatus>("/api/bridge/outbox");
+}
+
+export async function replayOutbox(
+  body: OutboxReplayRequest = {},
+): Promise<OutboxReplayResponse> {
+  return apiFetch<OutboxReplayResponse>("/api/bridge/outbox/replay", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }

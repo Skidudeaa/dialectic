@@ -26,6 +26,7 @@ import PredictionTracker from "../components/PredictionTracker";
 import TradeJournal from "../components/TradeJournal";
 import CrossBookPanel from "../components/CrossBookPanel";
 import TradingViewPanel from "../components/TradingViewPanel";
+import OutboxBadge from "../components/OutboxBadge";
 import { useToast } from "../components/Toast";
 
 interface Props {
@@ -453,6 +454,8 @@ pass
         </button>
 
         <div className="ml-auto flex items-center gap-px">
+          {/* Outbox queue badge — hidden when nothing is queued */}
+          <OutboxBadge />
           {/* Connection status */}
           <ConnectionDot status={connection} />
 
