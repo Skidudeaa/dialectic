@@ -213,6 +213,35 @@ def _engine_to_builder_format(cfg: dict, book_id: str) -> dict:
     }
 
 
+@router.get("/books")
+async def list_builder_books() -> list:
+    """List all books on disk (not just *-graph.json) so the builder list
+    page can show every book it can open — including ones the editor created
+    that don't follow the canonical -graph.json suffix."""
+    books: list[dict] = []
+    if not BOOKS_DIR.exists():
+        return books
+    for path in sorted(BOOKS_DIR.glob("*.json")):
+        try:
+            with open(path) as f:
+                cfg = json.load(f)
+            meta = cfg.get("meta", {})
+            books.append({
+                "id": path.stem,
+                "filename": path.name,
+                "title": meta.get("title", path.stem),
+                "claim": meta.get("claim", ""),
+                "asOf": meta.get("asOf", ""),
+                "monthlyBudget": meta.get("monthlyBudget", 0),
+                "nodes": len(cfg.get("nodes", [])),
+                "edges": len(cfg.get("edges", [])),
+                "type": meta.get("type", "unknown"),
+            })
+        except (json.JSONDecodeError, OSError) as e:
+            log.warning("Skipping unreadable book %s: %s", path.name, e)
+    return books
+
+
 @router.get("/books/{book_id}")
 async def get_book_for_builder(book_id: str) -> dict:
     """Load a book in builder-friendly format."""

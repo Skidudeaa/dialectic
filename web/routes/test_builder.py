@@ -432,6 +432,54 @@ class TestBuilderAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert "tariff" in data["meta"]["title"].lower() or "trump" in data["meta"]["title"].lower()
+
+
+# ── List endpoint tests ────────────────────────────────────────────────────
+
+class TestBuilderListEndpoint:
+    def test_list_empty(self, auth_headers, tmp_books_dir):
+        resp = client.get("/api/thesis/builder/books", headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_list_after_create(self, auth_headers, tmp_books_dir, sample_book_payload):
+        client.post("/api/thesis/builder/books", json=sample_book_payload, headers=auth_headers)
+        resp = client.get("/api/thesis/builder/books", headers=auth_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["id"] == "test-thesis-unit-test"
+        assert data[0]["title"] == "Test Thesis — Unit Test"
+        assert data[0]["nodes"] == 3
+        assert data[0]["edges"] == 2
+        # meta projection
+        assert data[0]["monthlyBudget"] == 3000
+        assert data[0]["asOf"] == "2026-04-17"
+
+    def test_list_includes_non_graph_suffix(self, auth_headers, tmp_books_dir, sample_book_payload):
+        """Builder may create books like 'test.json' (no -graph suffix);
+        the canonical thesis listing only matches *-graph.json, but the
+        builder list must show every editable book."""
+        client.post("/api/thesis/builder/books", json=sample_book_payload, headers=auth_headers)
+        resp = client.get("/api/thesis/builder/books", headers=auth_headers)
+        # Verify the just-created file (which won't end in -graph.json) appears
+        ids = [b["id"] for b in resp.json()]
+        assert "test-thesis-unit-test" in ids
+
+    def test_list_skips_corrupt_files(self, auth_headers, tmp_books_dir, sample_book_payload):
+        client.post("/api/thesis/builder/books", json=sample_book_payload, headers=auth_headers)
+        # Drop a malformed file alongside
+        (tmp_books_dir / "broken.json").write_text("{ this is not json")
+        resp = client.get("/api/thesis/builder/books", headers=auth_headers)
+        assert resp.status_code == 200
+        ids = [b["id"] for b in resp.json()]
+        assert "test-thesis-unit-test" in ids
+        assert "broken" not in ids
+
+    def test_list_unauthenticated(self, tmp_books_dir):
+        resp = client.get("/api/thesis/builder/books")
+        assert resp.status_code in (401, 403)
+
 class TestBuilderEdgeCases:
     def test_empty_book(self, auth_headers, tmp_books_dir):
         """A book with no nodes or edges should still save."""

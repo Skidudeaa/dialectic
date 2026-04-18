@@ -11,6 +11,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Save, ArrowLeft, Download, Upload, Undo2, Redo2,
   Layers, Target, ShieldCheck, PanelRightClose, PanelRightOpen,
+  Trash2, AlertTriangle,
 } from "lucide-react";
 import { apiFetch } from "../../lib/api";
 import type {
@@ -24,6 +25,7 @@ import EdgeEditor from "./EdgeEditor";
 import InstrumentEditor from "./InstrumentEditor";
 import ScenarioEditor from "./ScenarioEditor";
 import RulesEditor from "./RulesEditor";
+import { validateBook, hasErrors, type ValidationIssue } from "./validation";
 
 // ── Default empty book ───────────────────────────────────────────────
 
@@ -96,6 +98,13 @@ export default function ThesisBuilder() {
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [bottomTab, setBottomTab] = useState<BottomTab>(null);
 
+  // Confirm-before-delete state for the destructive top-toolbar button.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Pre-save validation issues. Populated on save attempt; if any errors,
+  // save is blocked and the issues panel is shown.
+  const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
+  const [showIssues, setShowIssues] = useState(false);
+
   // Undo/redo
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
@@ -129,6 +138,63 @@ export default function ThesisBuilder() {
     setHistoryIdx(prev => prev + 1);
   }, [history, historyIdx]);
 
+  // ── Convert engine-format JSON → builder format (used by Import) ─────
+  // Pulled out so both file-picker import and BuilderList sessionStorage
+  // import share one normalisation path.
+  const adoptRawBook = useCallback((raw: Record<string, unknown>) => {
+    if (!raw || !raw.meta || !raw.nodes) {
+      throw new Error("JSON is missing meta/nodes");
+    }
+    const isEngine = Array.isArray(raw.edges) &&
+      (raw.edges as Record<string, unknown>[]).some(e => "from" in e);
+    if (!isEngine) {
+      setBook(raw as unknown as BuilderBook);
+      return;
+    }
+    const nodes: BuilderNode[] = (raw.nodes as Record<string, unknown>[]).map((n, i) => ({
+      id: n.id as string,
+      label: (n.label as string) || (n.id as string),
+      type: (n.type as BuilderNode["type"]) || "event",
+      phase: (n.phase as number) || 1,
+      state: (n.state as BuilderNode["state"]) || "monitoring",
+      context: (n.context as string) || "",
+      x: (n._builderX as number) ?? ((((n.phase as number) || 1) - 1) * 280 + 100),
+      y: (n._builderY as number) ?? (i * 120 + 60),
+      probability: (n.probability as number | null) ?? null,
+      current: (n.current as number | null) ?? null,
+      feeds: (n.feeds as BuilderNode["feeds"]) || [],
+      thresholds: (n.thresholds as BuilderNode["thresholds"]) || [],
+      indicators: (n.indicators as BuilderNode["indicators"]) || [],
+      countdown: !!n.countdown,
+      deadline: (n.deadline as string | null) ?? null,
+      irreversible: !!n.irreversible,
+      gatedBy: (n.gatedBy as string[]) || [],
+      logic: (n.logic as string | null) ?? null,
+    }));
+    const edges: BuilderEdge[] = ((raw.edges as Record<string, unknown>[]) || []).map(e => ({
+      source: e.from as string,
+      target: e.to as string,
+      mechanism: (e.mechanism as string) || "",
+      lag: (e.lag as string) || "",
+      strength: (e.strength as number) ?? 0.7,
+    }));
+    const meta = raw.meta as Record<string, unknown>;
+    setBook({
+      meta: {
+        title: (meta.title as string) || "",
+        claim: (meta.claim as string) || "",
+        monthlyBudget: (meta.monthlyBudget as number) || 5000,
+        asOf: (meta.asOf as string) || new Date().toISOString().slice(0, 10),
+      },
+      nodes,
+      edges,
+      instruments: (raw.instruments as BuilderBook["instruments"]) || {},
+      scenarios: (raw.scenarios as BuilderBook["scenarios"]) || [],
+      cascadePhases: (raw.cascadePhases as BuilderBook["cascadePhases"]) || {},
+      rules: (raw.rules as string[]) || [],
+    });
+  }, []);
+
   // ── Load existing book ─────────────────────────────────────────────
 
   useEffect(() => {
@@ -142,6 +208,35 @@ export default function ThesisBuilder() {
       })
       .catch(err => setStatus(`Error loading: ${err.message}`));
   }, [editId]);
+
+  // ── Import-from-session (set by BuilderList when user picks a file) ──
+  useEffect(() => {
+    if (searchParams.get("import") !== "session") return;
+    const stashed = sessionStorage.getItem("builder:import");
+    if (!stashed) return;
+    sessionStorage.removeItem("builder:import");
+    try {
+      adoptRawBook(JSON.parse(stashed));
+      setDirty(true);
+      setStatus("Imported — review and Save");
+      // Strip the ?import= flag so a refresh doesn't re-trigger
+      window.history.replaceState(null, "", "/builder");
+    } catch (err) {
+      setStatus(`Import error: ${(err as Error).message}`);
+    }
+  }, [searchParams, adoptRawBook]);
+
+  // ── Beforeunload guard for unsaved changes ─────────────────────────
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Modern browsers ignore the message but require returnValue to be set.
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
 
   // ── Keyboard shortcuts ─────────────────────────────────────────────
 
@@ -248,6 +343,15 @@ export default function ThesisBuilder() {
   // ── Save ───────────────────────────────────────────────────────────
 
   const handleSave = useCallback(async () => {
+    // Pre-save structural validation. Errors block save; warnings don't.
+    const issues = validateBook(book);
+    setValidationIssues(issues);
+    if (hasErrors(issues)) {
+      setShowIssues(true);
+      setStatus(`Save blocked: ${issues.filter(i => i.severity === "error").length} error(s)`);
+      return;
+    }
+    setShowIssues(false);
     setSaving(true);
     setStatus(null);
     try {
@@ -290,67 +394,28 @@ export default function ThesisBuilder() {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       try {
-        const text = await file.text();
-        const raw = JSON.parse(text);
-        // Handle both engine format and builder format
-        if (raw.meta && raw.nodes) {
-          // Try to detect engine format (nodes have "from"/"to" edges)
-          const isEngine = raw.edges?.some((e: Record<string, unknown>) => "from" in e);
-          if (isEngine) {
-            // Convert engine → builder format
-            const nodes: BuilderNode[] = raw.nodes.map((n: Record<string, unknown>, i: number) => ({
-              id: n.id,
-              label: n.label || n.id,
-              type: n.type || "event",
-              phase: n.phase || 1,
-              state: n.state || "monitoring",
-              context: n.context || "",
-              x: (n._builderX as number) ?? ((((n.phase as number) || 1) - 1) * 280 + 100),
-              y: (n._builderY as number) ?? (i * 120 + 60),
-              probability: n.probability ?? null,
-              current: n.current ?? null,
-              feeds: n.feeds || [],
-              thresholds: n.thresholds || [],
-              indicators: n.indicators || [],
-              countdown: !!n.countdown,
-              deadline: n.deadline ?? null,
-              irreversible: !!n.irreversible,
-              gatedBy: n.gatedBy || [],
-              logic: n.logic ?? null,
-            }));
-            const edges: BuilderEdge[] = (raw.edges || []).map((e: Record<string, unknown>) => ({
-              source: e.from,
-              target: e.to,
-              mechanism: e.mechanism || "",
-              lag: e.lag || "",
-              strength: e.strength ?? 0.7,
-            }));
-            setBook({
-              meta: {
-                title: raw.meta.title || "",
-                claim: raw.meta.claim || "",
-                monthlyBudget: raw.meta.monthlyBudget || 5000,
-                asOf: raw.meta.asOf || new Date().toISOString().slice(0, 10),
-              },
-              nodes,
-              edges,
-              instruments: raw.instruments || {},
-              scenarios: raw.scenarios || [],
-              cascadePhases: raw.cascadePhases || {},
-              rules: raw.rules || [],
-            });
-          } else {
-            setBook(raw);
-          }
-          setDirty(true);
-          setStatus("Imported from file");
-        }
+        adoptRawBook(JSON.parse(await file.text()));
+        setDirty(true);
+        setStatus("Imported from file");
       } catch (err) {
         setStatus(`Import error: ${(err as Error).message}`);
       }
     };
     input.click();
-  }, []);
+  }, [adoptRawBook]);
+
+  // ── Delete (editor-side) ───────────────────────────────────────────
+  const handleDelete = useCallback(async () => {
+    if (!bookId) return;
+    try {
+      await apiFetch(`/api/thesis/builder/books/${bookId}`, { method: "DELETE" });
+      setDirty(false);
+      navigate("/builder");
+    } catch (err) {
+      setStatus(`Delete failed: ${(err as Error).message}`);
+      setConfirmDelete(false);
+    }
+  }, [bookId, navigate]);
 
   // ── Derived state ──────────────────────────────────────────────────
 
@@ -414,6 +479,37 @@ export default function ThesisBuilder() {
 
         <div className="w-px h-4 bg-border mx-1" />
 
+        {/* Delete (only for saved books) */}
+        {bookId && (
+          confirmDelete ? (
+            <>
+              <span className="text-[10px] font-mono text-danger">Delete {bookId}?</span>
+              <button
+                onClick={handleDelete}
+                className="px-2 py-0.5 text-[10px] font-mono text-danger bg-danger/20 border border-danger/30 hover:bg-danger/30 rounded"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="px-2 py-0.5 text-[10px] font-mono text-text-dim hover:text-text-primary rounded"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="p-1 text-text-muted hover:text-danger hover:bg-danger/10 rounded"
+              title="Delete this book"
+            >
+              <Trash2 size={14} />
+            </button>
+          )
+        )}
+
+        <div className="w-px h-4 bg-border mx-1" />
+
         {/* Save */}
         <button
           onClick={handleSave}
@@ -423,7 +519,9 @@ export default function ThesisBuilder() {
               ? "bg-amber text-void hover:bg-amber-dim"
               : "bg-elevated text-text-muted"
           }`}
+          title={dirty ? "Unsaved changes (Cmd/Ctrl+S)" : "All changes saved"}
         >
+          {dirty && <span className="text-void leading-none" aria-hidden>●</span>}
           <Save size={13} />
           {saving ? "Saving..." : dirty ? "Save" : "Saved"}
         </button>
@@ -433,6 +531,38 @@ export default function ThesisBuilder() {
           <span className="text-[10px] font-mono text-text-dim ml-2">{status}</span>
         )}
       </div>
+
+      {/* Validation issues panel — shown when save is blocked or warnings exist */}
+      {showIssues && validationIssues.length > 0 && (
+        <div className="shrink-0 border-b border-danger/30 bg-danger/5 px-3 py-2">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-1.5 text-[11px] font-mono text-danger">
+              <AlertTriangle size={12} />
+              {validationIssues.filter(i => i.severity === "error").length} error(s),{" "}
+              {validationIssues.filter(i => i.severity === "warning").length} warning(s)
+            </div>
+            <button
+              onClick={() => setShowIssues(false)}
+              className="text-[10px] font-mono text-text-dim hover:text-text-primary"
+            >
+              Dismiss
+            </button>
+          </div>
+          <ul className="space-y-0.5 max-h-[120px] overflow-y-auto">
+            {validationIssues.map((iss, i) => (
+              <li
+                key={i}
+                className={`text-[11px] font-mono ${
+                  iss.severity === "error" ? "text-danger" : "text-warning"
+                }`}
+              >
+                <span className="opacity-60">[{iss.scope}{iss.ref ? ` ${iss.ref}` : ""}]</span>{" "}
+                {iss.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ── Meta bar ──────────────────────────────────────────────── */}
       <MetaEditor
