@@ -530,7 +530,7 @@ export default function Chat({ room }: Props) {
       }
       return false;
     },
-    [room.id, room.linked_book_id, postSystem],
+    [room.linked_book_id, postSystem],
   );
 
   // ── Send pipeline (with optimistic + retry) ────────────────────────

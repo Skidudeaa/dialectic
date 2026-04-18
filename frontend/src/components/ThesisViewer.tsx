@@ -149,11 +149,13 @@ export default function ThesisViewer({ bookId, books }: Props) {
   const [filter, setFilter] = useState<NodeFilter>("all");
   const [hideStable, setHideStable] = useState(false);
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
-  const [tickNow, setTickNow] = useState(Date.now());
+  const [tickNow, setTickNow] = useState(() => Date.now());
   const prevStatesRef = useRef<Record<string, string>>({});
   const [announce, setAnnounce] = useState<string>("");
 
   useEffect(() => {
+    // Sync prop -> local picker when bookId arrives after mount; not derivable.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (bookId && !selectedBook) setSelectedBook(bookId);
   }, [bookId, selectedBook]);
 
@@ -178,6 +180,8 @@ export default function ThesisViewer({ bookId, books }: Props) {
 
   useEffect(() => {
     if (!selectedBook) return;
+    // Standard fetch-on-effect pattern: set loading flag, kick async, clear on settle.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     fetchState(selectedBook).finally(() => setLoading(false));
     getTVIndicators(selectedBook)

@@ -27,7 +27,7 @@ import TradeJournal from "../components/TradeJournal";
 import CrossBookPanel from "../components/CrossBookPanel";
 import TradingViewPanel from "../components/TradingViewPanel";
 import OutboxBadge from "../components/OutboxBadge";
-import { useToast } from "../components/Toast";
+import { useToast } from "../components/toast";
 
 interface Props {
   onLogout: () => void;

@@ -74,6 +74,9 @@ export default function GraphCanvas({
   const [connectLine, setConnectLine] = useState<{
     x1: number; y1: number; x2: number; y2: number;
   } | null>(null);
+  // Mirrors `dragRef.current?.type === "pan"` for render-time cursor styling.
+  // Refs cannot be read during render, so cursor state needs its own state cell.
+  const [isPanning, setIsPanning] = useState(false);
 
   // Convert screen coords to SVG coords
   const screenToSvg = useCallback((sx: number, sy: number) => {
@@ -131,6 +134,7 @@ export default function GraphCanvas({
       startX: e.clientX, startY: e.clientY,
       origX: pan.x, origY: pan.y,
     };
+    setIsPanning(true);
   }, [nodes, pan, onSelectNode, onSelectEdge]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -170,6 +174,7 @@ export default function GraphCanvas({
       setConnectLine(null);
     }
     dragRef.current = null;
+    setIsPanning(false);
   }, [onConnectNodes]);
 
   // ── Zoom ───────────────────────────────────────────────────────────
@@ -232,7 +237,7 @@ export default function GraphCanvas({
       onMouseUp={handleMouseUp}
       onWheel={handleWheel}
       onDoubleClick={handleDoubleClick}
-      style={{ cursor: dragRef.current?.type === "pan" ? "grabbing" : "grab" }}
+      style={{ cursor: isPanning ? "grabbing" : "grab" }}
     >
       <defs>
         <marker id="arrowhead" markerWidth="10" markerHeight="7"

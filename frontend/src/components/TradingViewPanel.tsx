@@ -42,7 +42,7 @@ import type {
   TVOp,
   TVStatus,
 } from "../lib/types";
-import { useToast } from "./Toast";
+import { useToast } from "./toast";
 
 interface Props {
   bookId: string | null;
@@ -260,7 +260,7 @@ export default function TradingViewPanel({ bookId, books }: Props) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [showForm]);
 
   function copyWebhook() {

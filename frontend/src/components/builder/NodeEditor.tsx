@@ -32,6 +32,79 @@ const FEED_SOURCES = [
 
 const INDICATOR_STATUSES = ["red", "amber", "green", "grey"] as const;
 
+// ── Module-scope presentational components ────────────────────────────
+// Declared outside NodeEditor so React doesn't allocate a fresh component
+// type each render (which would reset state and trip react-hooks/static-components).
+
+function Section({
+  id, label, count, expanded, onToggle,
+}: {
+  id: string;
+  label: string;
+  count?: number;
+  expanded: boolean;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <button
+      onClick={() => onToggle(id)}
+      className="flex items-center gap-1.5 w-full py-1.5 text-[11px] font-mono uppercase tracking-wide text-text-muted hover:text-text-primary"
+    >
+      {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+      {label}
+      {count !== undefined && count > 0 && (
+        <span className="ml-auto text-amber text-[10px]">{count}</span>
+      )}
+    </button>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5 mb-2">
+      <label className="text-[10px] font-mono text-text-dim uppercase">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Input({
+  value, onChange: onCh, placeholder, type = "text",
+}: {
+  value: string | number;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <input
+      type={type}
+      value={value ?? ""}
+      onChange={e => onCh(e.target.value)}
+      placeholder={placeholder}
+      className="px-2 py-1 bg-elevated border border-border rounded text-[12px] text-text-primary font-mono focus:border-amber focus:outline-none"
+    />
+  );
+}
+
+function Select({
+  value, options, onChange: onCh,
+}: {
+  value: string;
+  options: readonly string[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={e => onCh(e.target.value)}
+      className="px-2 py-1 bg-elevated border border-border rounded text-[12px] text-text-primary font-mono focus:border-amber focus:outline-none"
+    >
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
 export default function NodeEditor({ node, allNodeIds, onChange, onDelete }: Props) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     core: true, feeds: false, thresholds: false, indicators: false, gates: false,
@@ -42,54 +115,6 @@ export default function NodeEditor({ node, allNodeIds, onChange, onDelete }: Pro
 
   const update = <K extends keyof BuilderNode>(key: K, value: BuilderNode[K]) =>
     onChange({ ...node, [key]: value });
-
-  // ── Section header ─────────────────────────────────────────────────
-
-  const Section = ({ id, label, count }: { id: string; label: string; count?: number }) => (
-    <button
-      onClick={() => toggle(id)}
-      className="flex items-center gap-1.5 w-full py-1.5 text-[11px] font-mono uppercase tracking-wide text-text-muted hover:text-text-primary"
-    >
-      {expandedSections[id] ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-      {label}
-      {count !== undefined && count > 0 && (
-        <span className="ml-auto text-amber text-[10px]">{count}</span>
-      )}
-    </button>
-  );
-
-  // ── Field components ───────────────────────────────────────────────
-
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className="flex flex-col gap-0.5 mb-2">
-      <label className="text-[10px] font-mono text-text-dim uppercase">{label}</label>
-      {children}
-    </div>
-  );
-
-  const Input = ({ value, onChange: onCh, placeholder, type = "text" }: {
-    value: string | number; onChange: (v: string) => void; placeholder?: string; type?: string;
-  }) => (
-    <input
-      type={type}
-      value={value ?? ""}
-      onChange={e => onCh(e.target.value)}
-      placeholder={placeholder}
-      className="px-2 py-1 bg-elevated border border-border rounded text-[12px] text-text-primary font-mono focus:border-amber focus:outline-none"
-    />
-  );
-
-  const Select = ({ value, options, onChange: onCh }: {
-    value: string; options: readonly string[]; onChange: (v: string) => void;
-  }) => (
-    <select
-      value={value}
-      onChange={e => onCh(e.target.value)}
-      className="px-2 py-1 bg-elevated border border-border rounded text-[12px] text-text-primary font-mono focus:border-amber focus:outline-none"
-    >
-      {options.map(o => <option key={o} value={o}>{o}</option>)}
-    </select>
-  );
 
   return (
     <div className="flex flex-col h-full">
@@ -114,7 +139,7 @@ export default function NodeEditor({ node, allNodeIds, onChange, onDelete }: Pro
 
       <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
         {/* ── Core Properties ─────────────────────────────────────── */}
-        <Section id="core" label="Core" />
+        <Section id="core" label="Core" expanded={!!expandedSections.core} onToggle={toggle} />
         {expandedSections.core && (
           <div className="pl-2 space-y-0">
             <Field label="ID">
@@ -198,7 +223,7 @@ export default function NodeEditor({ node, allNodeIds, onChange, onDelete }: Pro
         )}
 
         {/* ── Data Feeds ──────────────────────────────────────────── */}
-        <Section id="feeds" label="Data Feeds" count={node.feeds.length} />
+        <Section id="feeds" label="Data Feeds" count={node.feeds.length} expanded={!!expandedSections.feeds} onToggle={toggle} />
         {expandedSections.feeds && (
           <div className="pl-2 space-y-2">
             {node.feeds.map((feed, i) => (
@@ -274,7 +299,7 @@ export default function NodeEditor({ node, allNodeIds, onChange, onDelete }: Pro
         )}
 
         {/* ── Thresholds ──────────────────────────────────────────── */}
-        <Section id="thresholds" label="Thresholds" count={node.thresholds.length} />
+        <Section id="thresholds" label="Thresholds" count={node.thresholds.length} expanded={!!expandedSections.thresholds} onToggle={toggle} />
         {expandedSections.thresholds && (
           <div className="pl-2 space-y-2">
             {node.thresholds.map((t, i) => (
@@ -318,7 +343,7 @@ export default function NodeEditor({ node, allNodeIds, onChange, onDelete }: Pro
         )}
 
         {/* ── Manual Indicators ───────────────────────────────────── */}
-        <Section id="indicators" label="Indicators" count={node.indicators.length} />
+        <Section id="indicators" label="Indicators" count={node.indicators.length} expanded={!!expandedSections.indicators} onToggle={toggle} />
         {expandedSections.indicators && (
           <div className="pl-2 space-y-2">
             {node.indicators.map((ind, i) => (
@@ -372,7 +397,7 @@ export default function NodeEditor({ node, allNodeIds, onChange, onDelete }: Pro
         )}
 
         {/* ── Gate Dependencies ────────────────────────────────────── */}
-        <Section id="gates" label="Gate Dependencies" count={node.gatedBy.length} />
+        <Section id="gates" label="Gate Dependencies" count={node.gatedBy.length} expanded={!!expandedSections.gates} onToggle={toggle} />
         {expandedSections.gates && (
           <div className="pl-2 space-y-2">
             {node.gatedBy.map((gateId, i) => (

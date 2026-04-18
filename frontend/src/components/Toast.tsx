@@ -1,41 +1,11 @@
-import { useState, useCallback, useRef, createContext, useContext, type ReactNode } from "react";
+import { useState, useCallback, useRef, type ReactNode } from "react";
 import { X, AlertTriangle, AlertOctagon, CheckCircle, Info } from "lucide-react";
-
-export type ToastType = "success" | "error" | "warning" | "info";
-
-interface ToastAction {
-  label: string;
-  onClick: () => void;
-}
-
-interface ToastOptions {
-  type?: ToastType;
-  /** Override auto-dismiss in milliseconds. Pass 0 (or any non-positive value) to require manual dismiss. */
-  duration?: number;
-  /** Optional inline action button (e.g. "Retry", "Undo"). */
-  action?: ToastAction;
-}
-
-interface ToastItem {
-  id: number;
-  message: string;
-  type: ToastType;
-  action?: ToastAction;
-}
-
-interface ToastContextType {
-  toast: (message: string, typeOrOpts?: ToastType | ToastOptions) => number;
-  dismiss: (id: number) => void;
-}
-
-const ToastContext = createContext<ToastContextType>({
-  toast: () => 0,
-  dismiss: () => {},
-});
-
-export function useToast() {
-  return useContext(ToastContext);
-}
+import {
+  ToastContext,
+  type ToastItem,
+  type ToastOptions,
+  type ToastType,
+} from "./toast";
 
 let _nextId = 0;
 

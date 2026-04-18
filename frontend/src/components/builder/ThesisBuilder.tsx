@@ -109,18 +109,23 @@ export default function ThesisBuilder() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
   const skipHistoryRef = useRef(false);
+  // Mirror historyIdx in a ref so pushHistory stays referentially stable
+  // (otherwise effects/callbacks that depend on pushHistory re-fire on every
+  // history mutation, causing infinite loops in the load effect).
+  const historyIdxRef = useRef(-1);
+  useEffect(() => { historyIdxRef.current = historyIdx; }, [historyIdx]);
 
   // Push to undo stack
   const pushHistory = useCallback((nodes: BuilderNode[], edges: BuilderEdge[]) => {
     if (skipHistoryRef.current) { skipHistoryRef.current = false; return; }
     setHistory(prev => {
-      const trimmed = prev.slice(0, historyIdx + 1);
+      const trimmed = prev.slice(0, historyIdxRef.current + 1);
       const next = [...trimmed, { nodes: JSON.parse(JSON.stringify(nodes)), edges: JSON.parse(JSON.stringify(edges)) }];
       if (next.length > 50) next.shift();
       return next;
     });
     setHistoryIdx(prev => Math.min(prev + 1, 49));
-  }, [historyIdx]);
+  }, []);
 
   const undo = useCallback(() => {
     if (historyIdx <= 0) return;
@@ -207,7 +212,7 @@ export default function ThesisBuilder() {
         setStatus(`Loaded: ${data.meta.title}`);
       })
       .catch(err => setStatus(`Error loading: ${err.message}`));
-  }, [editId]);
+  }, [editId, pushHistory]);
 
   // ── Import-from-session (set by BuilderList when user picks a file) ──
   useEffect(() => {

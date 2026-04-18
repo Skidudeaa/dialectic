@@ -14,7 +14,7 @@ function emptyInstrument(): BuilderInstrument {
   return { id: "", monthly: 0, role: "", beta: 0.5, ref: 0, targetLow: null, targetHigh: null, stop: null };
 }
 
-export default function InstrumentEditor({ nodeId: _nodeId, nodeLabel, instruments, onChange }: Props) {
+export default function InstrumentEditor({ nodeId, nodeLabel, instruments, onChange }: Props) {
   const updateInst = (idx: number, field: keyof BuilderInstrument, value: unknown) => {
     const updated = [...instruments];
     updated[idx] = { ...updated[idx], [field]: value };
@@ -22,7 +22,7 @@ export default function InstrumentEditor({ nodeId: _nodeId, nodeLabel, instrumen
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-node-id={nodeId}>
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-mono text-text-muted uppercase">
           Instruments → {nodeLabel}

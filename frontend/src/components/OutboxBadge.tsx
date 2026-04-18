@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Inbox, Loader2 } from "lucide-react";
 import { fetchOutboxStatus, replayOutbox } from "../lib/api";
 import type { OutboxStatus } from "../lib/outbox";
-import { useToast } from "./Toast";
+import { useToast } from "./toast";
 
 const POLL_MS = 60_000;
 
