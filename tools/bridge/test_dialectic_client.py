@@ -60,6 +60,12 @@ class _StubDialectic(BaseHTTPRequestHandler):
         ],
     }
     require_auth = True
+    # WHY: existing tests assume the new /trading/alerts endpoint doesn't
+    # exist (so the client falls back to the threads-walk). Tests that want
+    # to exercise the primary endpoint flip this flag to True.
+    serve_trading_alerts = False
+    # Tracks call counts so tests can assert which endpoint(s) were hit.
+    call_log: list[str] = []
 
     def log_message(self, *_a, **_k):
         pass
@@ -70,8 +76,32 @@ class _StubDialectic(BaseHTTPRequestHandler):
             if not auth.startswith("Bearer "):
                 self._json(401, {"error": "missing token"})
                 return
+        type(self).call_log.append(self.path)
         if self.path == "/health":
             self._json(200, {"status": "ok", "checks": {}})
+            return
+        # Primary path: /rooms/{id}/trading/alerts (only when flag on).
+        if "/trading/alerts" in self.path:
+            if not type(self).serve_trading_alerts:
+                self._json(404, {"error": "endpoint not deployed"})
+                return
+            room = self.path.split("/")[2]
+            # Server-side filter: only return curator messages for the room.
+            curated = [
+                dict(m, thread_id="T-1") for m in type(self).messages.get("T-1", [])
+                if m.get("speaker_type") == "llm_annotator"
+            ]
+            # Honor since= cutoff if present.
+            if "since=" in self.path:
+                from urllib.parse import urlparse, parse_qs
+                qs = parse_qs(urlparse(self.path).query)
+                since = qs.get("since", [""])[0]
+                curated = [m for m in curated if m["created_at"] >= since]
+            # Filter by room scope (only T-1 belongs to ROOM-1 in this stub).
+            if type(self).threads.get(room) is None:
+                self._json(200, {"messages": []})
+                return
+            self._json(200, {"messages": curated})
             return
         if self.path.startswith("/rooms/") and self.path.endswith("/threads"):
             room = self.path.split("/")[2]
@@ -95,6 +125,9 @@ class _StubDialectic(BaseHTTPRequestHandler):
 
 @pytest.fixture
 def server():
+    # Reset class-level state so tests don't pollute each other.
+    _StubDialectic.serve_trading_alerts = False
+    _StubDialectic.call_log = []
     srv = _make_server(_StubDialectic)
     yield srv
     srv.shutdown()
@@ -161,3 +194,47 @@ class TestDialecticClient:
         # And it works.
         alerts = client.fetch_curator_alerts("ROOM-1")
         assert len(alerts) == 2
+
+    # ---- Primary endpoint (post-2026-04-17 dialectic) -------------------
+
+    def test_uses_trading_alerts_endpoint_when_available(self, server):
+        """When /trading/alerts is deployed, the client should use it
+        directly and skip the threads-walk."""
+        _StubDialectic.serve_trading_alerts = True
+        port = server.server_address[1]
+        client = dc.DialecticClient(f"http://127.0.0.1:{port}", token="t")
+        alerts = client.fetch_curator_alerts("ROOM-1")
+        assert len(alerts) == 2
+        assert all(a.speaker_type == "llm_annotator" for a in alerts)
+        # Verify the threads/messages walk did NOT happen.
+        paths = [p for p in _StubDialectic.call_log if "/trading/alerts" in p
+                 or "/threads" in p]
+        assert any("/trading/alerts" in p for p in paths)
+        assert not any("/messages" in p for p in paths)
+
+    def test_falls_back_to_threads_walk_on_404(self, server):
+        """When /trading/alerts returns 404 (older dialectic), the client
+        falls back to the threads-walk path automatically."""
+        _StubDialectic.serve_trading_alerts = False  # explicit
+        port = server.server_address[1]
+        client = dc.DialecticClient(f"http://127.0.0.1:{port}", token="t")
+        alerts = client.fetch_curator_alerts("ROOM-1")
+        assert len(alerts) == 2
+        # Both endpoints were tried in order.
+        paths = _StubDialectic.call_log
+        assert any("/trading/alerts" in p for p in paths)
+        assert any("/threads" in p for p in paths)
+
+    def test_primary_endpoint_respects_since(self, server):
+        """The since= cutoff is forwarded to the server when using the
+        primary endpoint (server-side filter, not client-side)."""
+        _StubDialectic.serve_trading_alerts = True
+        port = server.server_address[1]
+        client = dc.DialecticClient(f"http://127.0.0.1:{port}", token="t")
+        alerts = client.fetch_curator_alerts(
+            "ROOM-1", since_iso="2026-04-16T06:00:00+00:00",
+        )
+        assert len(alerts) == 1
+        assert alerts[0].message_id == "M-4"
+        # Confirm the since= was actually sent (URL-encoded).
+        assert any("since=" in p for p in _StubDialectic.call_log)

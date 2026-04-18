@@ -155,17 +155,70 @@ class DialecticClient:
                              since_iso: Optional[str] = None,
                              limit_per_thread: int = 50) -> list[CuratorAlert]:
         """
-        Pull all LLM_ANNOTATOR messages from every thread in a room, optionally
-        filtered to messages newer than `since_iso`.
+        Pull curator alert messages from a room, optionally filtered to
+        messages newer than `since_iso`.
 
-        WHY iterate threads: Dialectic's API has no room-level message list;
-        messages live on threads. For trading rooms there's typically one
-        active thread, so this is one extra round-trip in the common case.
-        Each thread query already returns ancestry so we don't have to walk
-        the parent chain manually.
+        Primary path: GET /rooms/{room_id}/trading/alerts?since=<iso> --
+        server-side filter on metadata.source = 'trading_curator', already
+        ordered ascending. One round-trip, no per-thread fan-out.
+
+        Fallback path: walk /threads + /messages and filter client-side.
+        Used only when the dialectic deploy predates the alerts endpoint
+        (HTTP 404 on the new path).
+
+        `limit_per_thread` is preserved for fallback compatibility; the
+        primary path uses it as a soft cap on total messages returned.
 
         Returns a list of CuratorAlert sorted by created_at ascending.
         """
+        try:
+            return self._fetch_alerts_via_endpoint(room_id, since_iso, limit_per_thread)
+        except DialecticAPIError as e:
+            # WHY only fall back on 404: any other error (auth, network, 5xx)
+            # should surface to the caller. 404 specifically means the
+            # dialectic deploy is older than the new endpoint.
+            if "HTTP 404" not in str(e):
+                raise
+            print(
+                f"[dialectic-client] /trading/alerts returned 404 for room "
+                f"{room_id}; falling back to threads-walk",
+                file=sys.stderr,
+            )
+            return self._fetch_alerts_via_threads(room_id, since_iso, limit_per_thread)
+
+    def _fetch_alerts_via_endpoint(self, room_id: str,
+                                   since_iso: Optional[str],
+                                   limit: int) -> list[CuratorAlert]:
+        """Primary path: server-side filter via the trading/alerts endpoint."""
+        query: dict = {"limit": min(max(limit, 1), 1000)}
+        if since_iso:
+            query["since"] = since_iso
+        resp = self._get(f"/rooms/{room_id}/trading/alerts", query=query)
+        # Endpoint returns either {"messages": [...]} or a bare list depending
+        # on dialectic version; handle both.
+        messages = (
+            resp.get("messages") if isinstance(resp, dict) else resp
+        ) or []
+        alerts: list[CuratorAlert] = []
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            speaker = (msg.get("speaker_type") or "").lower()
+            alerts.append(CuratorAlert(
+                message_id=str(msg.get("id") or ""),
+                thread_id=str(msg.get("thread_id") or ""),
+                sequence=int(msg.get("sequence") or 0),
+                created_at=str(msg.get("created_at") or ""),
+                content=str(msg.get("content") or ""),
+                speaker_type=speaker or "llm_annotator",
+            ))
+        # Server orders ascending; preserve.
+        return alerts
+
+    def _fetch_alerts_via_threads(self, room_id: str,
+                                  since_iso: Optional[str],
+                                  limit_per_thread: int) -> list[CuratorAlert]:
+        """Fallback path: walk threads + messages and filter client-side."""
         threads = self.list_threads(room_id)
         if not threads:
             return []
