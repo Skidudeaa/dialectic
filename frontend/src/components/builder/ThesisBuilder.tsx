@@ -434,7 +434,14 @@ export default function ThesisBuilder() {
       {/* ── Top toolbar ───────────────────────────────────────────── */}
       <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border-b border-border shrink-0">
         <button
-          onClick={() => navigate("/")}
+          onClick={() => {
+            // WHY guard: beforeunload only fires for browser-level navigation
+            // (tab close, address bar). In-app SPA nav goes straight through
+            // navigate() and silently drops unsaved edits. Mirror the same
+            // confirm UX so the user has one consistent contract.
+            if (dirty && !window.confirm("You have unsaved changes. Discard and leave?")) return;
+            navigate("/");
+          }}
           className="flex items-center gap-1 text-[12px] font-mono text-text-muted hover:text-text-primary"
         >
           <ArrowLeft size={14} /> Back

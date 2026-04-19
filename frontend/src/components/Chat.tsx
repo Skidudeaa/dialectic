@@ -33,7 +33,7 @@ const MENTIONS: Array<{ key: string; label: string; desc: string; cls: string }>
   { key: "gpt", label: "@gpt", desc: "OpenAI GPT — broad general", cls: "text-green" },
   { key: "gemini", label: "@gemini", desc: "Google Gemini — fast multimodal", cls: "text-blue" },
   { key: "deepseek", label: "@deepseek", desc: "DeepSeek R1 — chain-of-thought", cls: "text-purple" },
-  { key: "compare", label: "@compare", desc: "Run claude + gpt side-by-side", cls: "text-teal" },
+  { key: "compare", label: "@compare", desc: "Run claude + gpt + gemini side-by-side", cls: "text-teal" },
 ];
 
 const SLASH_COMMANDS: Array<{ cmd: string; desc: string; usage?: string }> = [
@@ -412,8 +412,13 @@ export default function Chat({ room }: Props) {
   const dispatchLLM = useCallback(
     (cmd: string, prompt: string) => {
       if (cmd === "compare") {
-        // Track both core models for compare mode
-        const models = ["anthropic/claude-sonnet-4.6", "openai/gpt-5.3-chat"];
+        // WHY all three: the onboarding tour + welcome page promise "@compare runs
+        // claude + gpt + gemini side-by-side". Drop one and the spec lies.
+        const models = [
+          "anthropic/claude-sonnet-4.6",
+          "openai/gpt-5.3-chat",
+          "google/gemini-3.1-pro-preview",
+        ];
         models.forEach((m) => {
           llmStartTimes.current[m] = Date.now();
           setPendingLLM((p) => new Set(p).add(m));

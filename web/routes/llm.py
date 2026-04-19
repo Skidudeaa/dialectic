@@ -226,6 +226,13 @@ async def compare(req: LLMCompareRequest, user: User = Depends(get_current_user)
                   repo: Repository = Depends(get_repo)) -> dict:
     """Send same prompt to multiple models, stream all responses concurrently."""
     async def _run_model(model: str) -> tuple[str, str]:
+        # WHY resolve aliases here too: /chat does the same so callers can pass
+        # plain "claude" / "gpt" / "gemini". Without this, the frontend has to
+        # hardcode full IDs (and any third-party caller breaks).
+        for alias, full_model in MODEL_ALIASES.items():
+            if model.lower() == alias:
+                model = full_model
+                break
         model_label = model.split("/")[-1] if "/" in model else model
         try:
             full_response = await _stream_llm(model, req.prompt, req.room_id, user.username, model_label, repo)
