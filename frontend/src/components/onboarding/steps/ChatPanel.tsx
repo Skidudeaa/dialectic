@@ -104,7 +104,7 @@ export default function ChatPanelStep() {
               ariaLabel: "Copy Claude prompt about XOP entry",
             },
             {
-              label: "Devil's advocate — trump-tariffs room",
+              label: "Devil's advocate — iran-hormuz room",
               text: "@compare argue both sides: should we trim the planting-miss countdown trade with 17d to go, or hold for the full window?",
               ariaLabel: "Copy compare prompt about planting-miss",
             },

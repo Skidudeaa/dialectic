@@ -92,9 +92,11 @@ function NodeList() {
 }
 
 function ConfluenceBars() {
+  // em-stress mirrors the live iran-hormuz snapshot (fired, confluence 2.05).
+  // earnings-compression is the approaching foil — below the 2.0 trade bar.
   const rows = [
-    { id: "em-stress", score: 1.67, w: 75 },
-    { id: "earnings-compression", score: 2.05, w: 92 },
+    { id: "em-stress", score: 2.05, w: 92 },
+    { id: "earnings-compression", score: 1.67, w: 75 },
   ];
   return (
     <div className="space-y-1">
@@ -172,7 +174,7 @@ export default function ThesisViewerStep() {
           snippets={[
             {
               label: "Ask the LLM to walk the edges",
-              text: "@claude open iran-hormuz, list every upstream node feeding em-stress and tell me which path is currently the strongest contributor to its 1.67 score.",
+              text: "@claude open iran-hormuz, list every upstream node feeding em-stress and tell me which path is currently the strongest contributor to its 2.05 score.",
               ariaLabel: "Copy prompt to walk em-stress confluence",
             },
           ]}

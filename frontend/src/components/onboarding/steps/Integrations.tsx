@@ -100,8 +100,10 @@ export default function IntegrationsStep() {
             },
             {
               label: "Force a full pipeline run for one book",
-              text: "DIALECTIC_ROOM_TOKEN=$TOKEN python3 tools/bridge/run-all.py --books books/iran-hormuz-graph.json",
-              caption: "Fetch → snapshot → diff → push, end-to-end. Useful right after editing a book.",
+              multiline: true,
+              text: `mkdir -p /tmp/td-one && cp books/iran-hormuz-graph.json /tmp/td-one/
+DIALECTIC_ROOM_TOKEN=$TOKEN python3 tools/bridge/run-all.py --books /tmp/td-one`,
+              caption: "Fetch → snapshot → diff → push, end-to-end. --books takes a directory, so we stage the single book in a temp dir.",
               ariaLabel: "Copy run-all command for iran-hormuz",
             },
           ]}

@@ -140,11 +140,16 @@ export default function Welcome() {
                 downstream is told.
               </p>
               <p className="text-text-primary">
-                The result is a desk that lets you anticipate, not chase. Two theses
-                run live today —{" "}
-                <span className="font-mono text-amber">iran-hormuz-graph</span> and{" "}
-                <span className="font-mono text-amber">trump-tariffs-graph</span> — each
-                with its own room, its own portfolio, its own running confluence.
+                The result is a desk that lets you anticipate, not chase. Five
+                theses load live today —{" "}
+                <span className="font-mono text-amber">iran-hormuz-graph</span>,{" "}
+                <span className="font-mono text-amber">trump-tariffs-graph</span>,{" "}
+                <span className="font-mono text-amber">japan-rate-shock-graph</span>,{" "}
+                <span className="font-mono text-amber">ai-capex-unwind-graph</span>,{" "}
+                <span className="font-mono text-amber">china-property-cascade-graph</span> —
+                each with its own room, its own portfolio, its own running
+                confluence. Two of the five (iran-hormuz, trump-tariffs) also
+                stream into dedicated Dialectic discussion rooms.
               </p>
             </div>
           </section>

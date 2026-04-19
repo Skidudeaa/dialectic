@@ -160,7 +160,7 @@ export default function BuilderStep() {
         },
         {
           title: "Library page lists every book",
-          body: "Edit existing theses (iran-hormuz, trump-tariffs) or fork a copy as a starting point.",
+          body: "Edit all five live theses (iran-hormuz, trump-tariffs, japan-rate-shock, ai-capex-unwind, china-property-cascade) or fork a copy as a starting point.",
         },
       ]}
       tryThis={
