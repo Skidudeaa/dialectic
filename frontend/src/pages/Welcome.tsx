@@ -22,6 +22,8 @@ import WorkspaceDiagram from "../components/welcome/WorkspaceDiagram";
 import FeatureCard from "../components/welcome/FeatureCard";
 import ArchitectureDiagram from "../components/welcome/ArchitectureDiagram";
 import SectionToc from "../components/welcome/SectionToc";
+import CookbookSection from "../components/welcome/CookbookSection";
+import NegativesSection from "../components/welcome/NegativesSection";
 
 // Welcome — the evergreen guide to Trading Desk. Always reachable from
 // the dashboard "?" link. Pairs with Team A's first-login modal tour;
@@ -219,6 +221,12 @@ export default function Welcome() {
               ))}
             </ol>
           </section>
+
+          {/* ─────────────────────────────────────────────── COOKBOOK */}
+          <CookbookSection />
+
+          {/* ─────────────────────────────────────────────── WHAT THIS ISN'T */}
+          <NegativesSection />
 
           {/* ─────────────────────────────────────────────── ARCHITECTURE */}
           <section id="architecture" aria-labelledby="architecture-title">

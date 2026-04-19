@@ -5,6 +5,7 @@
 // reader what the panel will look like in real life.
 
 import StepFrame from "../StepFrame";
+import TryThis from "../TryThis";
 
 function CascadeRibbon() {
   // 5 phase boxes: 1 fired, 2 fired, 3 starting, 4-5 untouched.
@@ -157,6 +158,26 @@ export default function ThesisViewerStep() {
           body: "Three or more independent causal paths firing on one node. That's the conviction signal.",
         },
       ]}
+      tryThis={
+        <TryThis
+          intro={
+            <>
+              Click <span className="font-mono text-amber">em-stress</span>{" "}
+              in the iran-hormuz right panel — see why three independent
+              paths (oil price, dollar strength, EM credit spreads) all
+              converge on one node. Trades on em-stress are
+              conviction-weighted higher than any single-path signal.
+            </>
+          }
+          snippets={[
+            {
+              label: "Ask the LLM to walk the edges",
+              text: "@claude open iran-hormuz, list every upstream node feeding em-stress and tell me which path is currently the strongest contributor to its 1.67 score.",
+              ariaLabel: "Copy prompt to walk em-stress confluence",
+            },
+          ]}
+        />
+      }
     />
   );
 }

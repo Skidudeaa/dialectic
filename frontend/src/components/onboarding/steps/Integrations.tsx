@@ -4,6 +4,7 @@
 // exist: Dialectic curator, outbox queue, future native clients.
 
 import StepFrame from "../StepFrame";
+import TryThis from "../TryThis";
 import { Cloud, Inbox, Smartphone, MessageSquare } from "lucide-react";
 
 function IntegrationGrid() {
@@ -80,6 +81,32 @@ export default function IntegrationsStep() {
           body: "Cron at 08:00 Mon/Wed/Fri fetches fresh data, diffs against last snapshot, and pushes only on changes.",
         },
       ]}
+      tryThis={
+        <TryThis
+          intro={
+            <>
+              When the OutboxBadge in the top bar shows queued pushes,
+              click <span className="font-mono text-amber">Drain</span>{" "}
+              in its popover — or hit the endpoint directly from a
+              terminal.
+            </>
+          }
+          snippets={[
+            {
+              label: "Drain the outbox queue",
+              text: "curl -X POST -H \"Authorization: Bearer $TD_JWT\" http://167.99.113.232:8000/api/bridge/outbox/replay",
+              caption: "Retries every queued push; returns the count delivered + the count still failing.",
+              ariaLabel: "Copy curl command to drain the outbox",
+            },
+            {
+              label: "Force a full pipeline run for one book",
+              text: "DIALECTIC_ROOM_TOKEN=$TOKEN python3 tools/bridge/run-all.py --books books/iran-hormuz-graph.json",
+              caption: "Fetch → snapshot → diff → push, end-to-end. Useful right after editing a book.",
+              ariaLabel: "Copy run-all command for iran-hormuz",
+            },
+          ]}
+        />
+      }
     />
   );
 }

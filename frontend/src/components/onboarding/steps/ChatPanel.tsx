@@ -5,6 +5,7 @@
 // obvious in one glance.
 
 import StepFrame from "../StepFrame";
+import TryThis from "../TryThis";
 
 function MiniTranscript() {
   return (
@@ -87,6 +88,34 @@ export default function ChatPanelStep() {
           <span className="kbd">Enter</span> to send,{" "}
           <span className="kbd">Shift+Enter</span> for newline
         </>
+      }
+      tryThis={
+        <TryThis
+          intro={
+            <>
+              Three prompts that earn their keep on day one. Pick one,
+              paste it into the room tied to the matching book.
+            </>
+          }
+          snippets={[
+            {
+              label: "Confluence question — iran-hormuz room",
+              text: "@claude given Brent at $90 vs the $115 persistence threshold, is the XOP-HORMUZ entry still on, or did we miss it?",
+              ariaLabel: "Copy Claude prompt about XOP entry",
+            },
+            {
+              label: "Devil's advocate — trump-tariffs room",
+              text: "@compare argue both sides: should we trim the planting-miss countdown trade with 17d to go, or hold for the full window?",
+              ariaLabel: "Copy compare prompt about planting-miss",
+            },
+            {
+              label: "Slash command — any room",
+              text: "/brief",
+              caption: "Drops this morning's snapshot summary into the room — node states, cascade phase, open trades.",
+              ariaLabel: "Copy /brief slash command",
+            },
+          ]}
+        />
       }
     />
   );

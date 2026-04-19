@@ -5,6 +5,7 @@
 // sequence so the user sees propagation before they ever see a real thesis.
 
 import StepFrame from "../StepFrame";
+import TryThis from "../TryThis";
 
 function MiniGraph() {
   // Three nodes in a chain — first fired, second approaching, third stable.
@@ -177,6 +178,23 @@ export default function WelcomeStep() {
         },
       ]}
       primaryLabel="Show me how"
+      tryThis={
+        <TryThis
+          intro={
+            <>
+              Open any room and paste this. Claude will scan all five
+              books — iran-hormuz, trump-tariffs, japan-rate-shock,
+              ai-capex-unwind, china-property-cascade — and rank them.
+            </>
+          }
+          snippets={[
+            {
+              text: "@claude what's the highest-confluence node across all five books right now, and which one would you trade first?",
+              ariaLabel: "Copy starter prompt for Claude across all books",
+            },
+          ]}
+        />
+      }
     />
   );
 }

@@ -26,6 +26,10 @@ interface Props {
   /** Optional override for the primary action label (e.g. "Get started" on
    *  the last step). */
   primaryLabel?: string;
+  /** Optional "Try this" footer block — concrete copyable example(s) the
+   *  user can paste into chat / Pine / curl right now. Renders below the
+   *  bullets with its own styling (see TryThis component). */
+  tryThis?: ReactNode;
 }
 
 export default function StepFrame({
@@ -35,6 +39,7 @@ export default function StepFrame({
   bullets,
   shortcut,
   primaryLabel,
+  tryThis,
 }: Props) {
   const { tour, next, prev, dismissTour, completeTour, goTo } = useOnboarding();
 
@@ -107,6 +112,8 @@ export default function StepFrame({
             <span>{shortcut}</span>
           </div>
         )}
+
+        {tryThis}
       </div>
 
       {/* Footer — progress dots + nav. Sticks to the bottom of the modal. */}

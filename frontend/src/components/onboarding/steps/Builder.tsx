@@ -5,6 +5,7 @@
 // editor screenshot.
 
 import StepFrame from "../StepFrame";
+import TryThis from "../TryThis";
 
 function BuilderSketch() {
   return (
@@ -162,6 +163,32 @@ export default function BuilderStep() {
           body: "Edit existing theses (iran-hormuz, trump-tariffs) or fork a copy as a starting point.",
         },
       ]}
+      tryThis={
+        <TryThis
+          intro={
+            <>
+              Open ai-capex-unwind in the Builder. Drag from the{" "}
+              <span className="font-mono text-amber">gpu-price</span>{" "}
+              node to a new node, name it{" "}
+              <span className="font-mono text-amber">amd-rev-rerate</span>,
+              double-click the edge and fill in the mechanism + lag
+              below. Validate, save, refresh — your new transmission
+              channel is live.
+            </>
+          }
+          snippets={[
+            {
+              label: "Edge metadata to paste into the editor",
+              multiline: true,
+              text: `mechanism: "guidance cut → consensus EPS rebase"
+lag: "1q"
+amplification: 0.7`,
+              caption: "Drop these into the edge sidebar after drawing gpu-price → amd-rev-rerate.",
+              ariaLabel: "Copy edge mechanism and lag metadata",
+            },
+          ]}
+        />
+      }
     />
   );
 }

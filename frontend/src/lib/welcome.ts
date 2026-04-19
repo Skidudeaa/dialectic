@@ -20,6 +20,8 @@ export const WELCOME_SECTIONS: readonly TocSection[] = [
   { id: "outbox", label: "Outbox & observability" },
   { id: "llm", label: "LLM in chat" },
   { id: "stories", label: "A day on the desk" },
+  { id: "cookbook", label: "Cookbook" },
+  { id: "isnt", label: "What it isn't" },
   { id: "architecture", label: "Architecture" },
   { id: "roadmap", label: "What's coming" },
   { id: "links", label: "Quick links" },
@@ -217,36 +219,36 @@ export interface UseCaseDef {
   body: string;
 }
 
-// Day-in-the-life vignettes. These are concrete and reference the real
-// thesis ids, binding ids, and room names; do not water them down.
+// Day-in-the-life vignettes. Concrete journal entries — timestamp + verb,
+// no connective tissue, end on a decision. Real thesis ids and bindings.
 export const USE_CASES: readonly UseCaseDef[] = [
   {
     id: "morning",
-    time: "08:00 ET",
-    title: "Morning brief — what changed overnight?",
+    time: "08:02 ET",
+    title: "Opened dashboard, /brief'd",
     body:
-      "Cron kicks run-all.py: every active book fetches, exports a snapshot, diffs against last night, and pushes only on change. /brief in your room paints the delta — phase advance on iran-hormuz-graph, two new approaching nodes on trump-tariffs-graph, one cross-book recession signal that aligned. You read it before the kettle boils.",
+      "Overnight cron fired run-all.py at 07:55. iran-hormuz-graph advanced from amplification to policy-response phase; two trump-tariffs-graph nodes flipped to approaching; em-stress + consumer-deterioration aligned cross-book. Decision: hold XOP, add to SH on the open.",
   },
   {
     id: "brent",
     time: "10:42 ET",
-    title: "Brent crosses $115 — the desk moves with it",
+    title: "brent-persistence-close-above-115 fired",
     body:
-      "Pine Script fires brent-persistence-close-above-115 at the desk. The signed webhook lands, incrementClosesObserved bumps the counter, and on the third qualifying close brent flips to fired. Both your screens update inside a second. You and Dan are arguing in chat about whether to add to XOP — @claude already sees the new state and weighs in without you pasting anything.",
+      "Third qualifying close lands. incrementClosesObserved → 3. brent flips to fired, em-stress confluence jumps from 0.92 to 1.30. @compare ran in chat in 4s. Decision: added 25% to XOP at $148.20, journaled the entry.",
   },
   {
     id: "planting",
     time: "14:00 ET",
-    title: "Planting deadline approaches",
+    title: "Argued planting-miss EV with Dan",
     body:
-      "Countdown on planting-miss pulses amber: 17 days. The fert-shortage scenario probability bumps. Dialectic curator drops a short alert into the trump-tariffs room: \"CF setup is 3 of 4 confluence signals; planting-miss countdown < 21d.\" You don't need to be at your desk to see it.",
+      "planting-miss countdown pulsed at 17d. Argued with Dan via @compare on whether the CF setup justifies sizing up. @claude flagged the un-priced fert-shortage probability shift; @gpt countered on USDA report risk. Decision: held CF flat, set Polymarket alert at 0.55.",
   },
   {
     id: "cross",
     time: "16:30 ET",
-    title: "Cross-book correlation detected",
+    title: "Cross-book recession alignment surfaced",
     body:
-      "Both books register independent recession signals — em-stress confluence on iran-hormuz-graph and consumer-deterioration on trump-tariffs-graph cross thresholds within the same hour. The Cross-Book panel surfaces it, ranks the alignment, and links straight to the contributing nodes in each viewer.",
+      "Cross-Book panel ranked iran-hormuz em-stress + trump-tariffs consumer-deterioration as a concurrent recession signal inside the same hour. Clicked through to both contributing nodes. Decision: trimmed risk-on book 10%, kept SH thesis intact.",
   },
 ] as const;
 
@@ -309,3 +311,206 @@ export const EXTERNAL_LINKS = {
   tradingDeskRepo: "https://github.com/Skidudeaa/tradingDesk",
   dialecticRepo: "https://github.com/Skidudeaa/dialectic",
 } as const;
+
+// ─────────────────────────────────────────────────────────────────────────
+// COOKBOOK
+//
+// Concrete recipes the user can lift and run. Every snippet is real:
+// real binding ids, real book names, real slash commands. No invented
+// tickers or fake bindings — Amo will spot it.
+
+export type RecipeSurface =
+  | "CHAT"
+  | "THESIS"
+  | "TV"
+  | "BUILDER"
+  | "OUTCOMES";
+
+export interface RecipeDef {
+  id: string;
+  surface: RecipeSurface;
+  title: string;
+  /** Snippet to copy. Multi-line, exact. */
+  snippet: string;
+  /** Display language hint — drives the "Copy as" label. Default: text. */
+  lang?: "text" | "pine" | "json" | "bash";
+  /** One-line "why it matters". */
+  why: string;
+}
+
+export const RECIPES: readonly RecipeDef[] = [
+  // ── CHAT (5) ─────────────────────────────────────────────────────
+  {
+    id: "chat-pressure-test",
+    surface: "CHAT",
+    title: "Pressure-test a thesis",
+    snippet:
+      "@compare are you actually convinced the dxy-stress confluence is real, or is this just three correlated symptoms?",
+    why: "Forces the three models to disagree out loud. The disagreements are the signal.",
+  },
+  {
+    id: "chat-pre-mortem",
+    surface: "CHAT",
+    title: "Pre-mortem a trade",
+    snippet:
+      "@claude argue against the XOP long given Brent at $90 vs the $115 trigger",
+    why: "Best way to find the hole in your own thesis is to make the LLM defend the other side.",
+  },
+  {
+    id: "chat-calibrate",
+    surface: "CHAT",
+    title: "Calibrate a prediction",
+    snippet: "/predict 70% — Brent closes above $100 by Friday",
+    why: "Forces a number on a guess. Per-user accuracy stats roll up across rooms.",
+  },
+  {
+    id: "chat-diff",
+    surface: "CHAT",
+    title: "Compare daily delta",
+    snippet: "/diff",
+    why: "Shows you exactly what changed since the last cron run — phase advances, new approaching nodes, price moves.",
+  },
+  {
+    id: "chat-cross-book",
+    surface: "CHAT",
+    title: "Cross-book sweep",
+    snippet:
+      "@gpt which two books have the strongest recession-aligned signal right now?",
+    why: "GPT cross-references all loaded snapshots. Cheaper than reading five thesis viewers.",
+  },
+
+  // ── THESIS (3) ──────────────────────────────────────────────────
+  {
+    id: "thesis-em-stress",
+    surface: "THESIS",
+    title: "Hover em-stress in iran-hormuz",
+    snippet:
+      "Open Thesis Viewer → iran-hormuz-graph → hover the em-stress node",
+    lang: "text",
+    why: "The tooltip shows every upstream contributor and its weighted contribution to the confluence score.",
+  },
+  {
+    id: "thesis-cascade-compare",
+    surface: "THESIS",
+    title: "Compare cascade phases across books",
+    snippet:
+      "Switch the book selector: iran-hormuz-graph → trump-tariffs-graph → japan-rate-shock-graph",
+    lang: "text",
+    why: "Watch the WE ARE HERE marker move. Three books in different phases means three different trades.",
+  },
+  {
+    id: "thesis-derived",
+    surface: "THESIS",
+    title: "Inspect a node's derivedIndicators",
+    snippet:
+      "Open ai-capex-unwind-graph → expand the smh node → check the RSI/ATR badges",
+    lang: "text",
+    why: "Wilder RSI/ATR/SMA from Yahoo OHLCV are overlay-only. They never feed eval_node_state — that's a tripwire, not a convention.",
+  },
+
+  // ── TRADINGVIEW (3) ─────────────────────────────────────────────
+  {
+    id: "tv-brent",
+    surface: "TV",
+    title: "Brent persistence, 3 closes ≥ 115",
+    snippet:
+      'alertcondition(\n  close > 115 and close[1] > 115 and close[2] > 115,\n  "brent-persistence",\n  "{\\"book\\":\\"iran-hormuz-graph\\",\\"bindingId\\":\\"brent-persistence-close-above-115\\",\\"value\\":\\"{{close}}\\"}"\n)',
+    lang: "pine",
+    why: "Pine fires; webhook lands signed; incrementClosesObserved bumps; on the third close brent flips to fired.",
+  },
+  {
+    id: "tv-vix",
+    surface: "TV",
+    title: "VIX spike → japan-rate-shock",
+    snippet:
+      'alertcondition(\n  close > 25,\n  "vix-spike",\n  "{\\"book\\":\\"japan-rate-shock-graph\\",\\"bindingId\\":\\"vix-spike-above-25\\",\\"value\\":\\"{{close}}\\"}"\n)',
+    lang: "pine",
+    why: "Drops a setCurrent on the volatility node. Useful when the carry-unwind thesis needs a vol confirmation leg.",
+  },
+  {
+    id: "tv-smh",
+    surface: "TV",
+    title: "SMH break of 50dma → ai-capex-unwind",
+    snippet:
+      'alertcondition(\n  ta.crossunder(close, ta.sma(close, 50)),\n  "smh-50dma",\n  "{\\"book\\":\\"ai-capex-unwind-graph\\",\\"bindingId\\":\\"smh-50dma-break\\",\\"value\\":\\"{{close}}\\"}"\n)',
+    lang: "pine",
+    why: "First-touch technical confirmation of the AI capex deceleration thesis. Cheap signal, high signal-to-noise on the daily.",
+  },
+
+  // ── BUILDER (2) ─────────────────────────────────────────────────
+  {
+    id: "builder-deadline",
+    surface: "BUILDER",
+    title: "Add a deadline node",
+    snippet:
+      '{\n  "id": "planting-miss",\n  "type": "deadline",\n  "label": "US corn planting cutoff",\n  "deadline": "2026-05-25",\n  "thresholds": { "approachingDays": 30, "firedDays": 0 }\n}',
+    lang: "json",
+    why: "Drop into nodes[] of any book JSON. Countdown pulses amber once approachingDays hits, fires when the date passes.",
+  },
+  {
+    id: "builder-wire",
+    surface: "BUILDER",
+    title: "Wire two nodes",
+    snippet:
+      "1. Drag from output port of node A to body of node B.\n2. Click the new edge.\n3. Set mechanism (causal sentence), lag (hours/days), amplification (0.0–2.0).",
+    lang: "text",
+    why: "Edges aren't decoration — propagation reads mechanism, lag, and amp every cycle. Be precise on lag; that's where macro trades live or die.",
+  },
+
+  // ── OUTCOMES (2) ────────────────────────────────────────────────
+  {
+    id: "out-brief",
+    surface: "OUTCOMES",
+    title: "Daily morning brief",
+    snippet:
+      "/brief                        # in your active room, any time after 08:00 ET",
+    lang: "text",
+    why: "Cron picks up the snapshot at 07:55. /brief renders state + cross-book signals + ledger summary in one paste. Read it before the kettle boils.",
+  },
+  {
+    id: "out-outbox",
+    surface: "OUTCOMES",
+    title: "Drain the outbox manually",
+    snippet:
+      'curl -X POST "$URL/api/bridge/outbox/replay" \\\n  -H "Authorization: Bearer $TOKEN" \\\n  -d \'{}\'',
+    lang: "bash",
+    why: "Use when Dialectic was slow / down and you need to flush queued snapshots immediately instead of waiting for the next worker tick.",
+  },
+] as const;
+
+// ─────────────────────────────────────────────────────────────────────────
+// WHAT THIS ISN'T — sets scope. One line each, no prose.
+
+export interface NegativeDef {
+  id: string;
+  title: string;
+  detail: string;
+}
+
+export const NEGATIVES: readonly NegativeDef[] = [
+  {
+    id: "not-daytrading",
+    title: "Not a daytrading tool",
+    detail: "Graphs evaluate every few minutes, not every tick.",
+  },
+  {
+    id: "not-tracker",
+    title: "Not a portfolio tracker",
+    detail: "No broker integration, no real fills, no live P&L.",
+  },
+  {
+    id: "not-backtester",
+    title: "Not a backtester",
+    detail: "Propagation is rule-driven, not stat-driven.",
+  },
+  {
+    id: "not-saas",
+    title: "Not a multi-tenant SaaS",
+    detail: "Built for two analysts. No auth scaffolding for n+1.",
+  },
+  {
+    id: "not-intraday",
+    title: "Not for one-off intraday plays",
+    detail: "If the trade isn't tied to a thesis node, it doesn't belong here.",
+  },
+] as const;

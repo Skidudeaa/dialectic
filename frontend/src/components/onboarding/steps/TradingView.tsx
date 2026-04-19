@@ -5,6 +5,7 @@
 // (HMAC, nonce, ts) is visible — operators care about that.
 
 import StepFrame from "../StepFrame";
+import TryThis from "../TryThis";
 
 function WebhookFlow() {
   return (
@@ -74,6 +75,38 @@ export default function TradingViewStep() {
           body: "See every Pine alert wired to your books, fire counts, and the last 20 webhook hits color-coded by status.",
         },
       ]}
+      tryThis={
+        <TryThis
+          intro={
+            <>
+              Wire this to a Brent chart on TradingView — three closes
+              above $115 promote the brent node to fired and open the
+              XOP gate. The binding{" "}
+              <span className="font-mono text-amber">
+                brent-persistence-close-above-115
+              </span>{" "}
+              is already seeded, so the message body just needs to match.
+            </>
+          }
+          snippets={[
+            {
+              label: "Pine alertcondition recipe",
+              multiline: true,
+              text: `alertcondition(close > 115 and close > close[1] and close[1] > close[2],
+  "brent-persistence",
+  "{\\"book\\":\\"iran-hormuz-graph\\",\\"bindingId\\":\\"brent-persistence-close-above-115\\",\\"value\\":\\"{{close}}\\"}")`,
+              caption: "Paste into a Pine script on a Brent (CL1!) chart, then create an alert with webhook URL pointed at /api/tradingview/webhook.",
+              ariaLabel: "Copy Pine alertcondition recipe for brent persistence",
+            },
+            {
+              label: "Sign + send a test hit from the CLI",
+              text: "TV_WEBHOOK_SECRET=$TV_WEBHOOK_SECRET python3 tools/bridge/sign_tv_alert.py --book iran-hormuz-graph --binding brent-persistence-close-above-115 --value 116.20",
+              caption: "Prints a ready-to-run signed curl command — verifies the round-trip without waiting for a real close.",
+              ariaLabel: "Copy CLI command to sign and send a test TradingView alert",
+            },
+          ]}
+        />
+      }
     />
   );
 }
