@@ -1,7 +1,7 @@
 {
   "v": 2,
-  "timestamp": "2026-04-10T04:41:51Z",
-  "title": "Iran/Hormuz Thesis \u2014 March 2026",
+  "timestamp": "2026-04-19T00:08:13Z",
+  "title": "Iran/Hormuz Thesis — March 2026",
   "nodeStates": {
     "hormuz": "fired",
     "curve": "stable",
@@ -11,17 +11,17 @@
     "fert-shortage": "approaching",
     "dxy-stress": "fired",
     "diesel": "fired",
-    "planting-miss": "approaching",
+    "planting-miss": "fired",
     "em-currency": "fired",
     "freight": "fired",
-    "food-spike": "approaching",
+    "food-spike": "fired",
     "employment": "fired",
     "em-stress": "fired",
     "demand-destruction": "fired",
     "de-escalation": "stable"
   },
   "confluenceScores": {
-    "em-stress": 1.67
+    "em-stress": 2.05
   },
   "cascadePhase": {
     "number": 3,
@@ -33,11 +33,11 @@
       "nodeId": "planting-miss",
       "label": "Planting Cycle Miss",
       "deadline": "2026-04-15",
-      "daysRemaining": 6
+      "daysRemaining": 0
     }
   ],
   "marketSnapshot": {
-    "brent": 96.3,
+    "brent": 95.2,
     "wti": 99.64,
     "goldSpot": 4492,
     "usRigs": 543,
@@ -49,7 +49,7 @@
   "scenarioImpacts": {
     "reopen-apr1": {
       "probability": 0.1,
-      "netImpact": 1.4
+      "netImpact": 1.0
     },
     "closed-may": {
       "probability": 0.45,
@@ -61,7 +61,7 @@
     },
     "selective-reopen": {
       "probability": 0.3,
-      "netImpact": 10.7
+      "netImpact": 9.6
     }
   },
   "portfolioSummary": {
@@ -83,6 +83,7 @@
         "diesel": "fired",
         "freight": "monitoring",
         "employment": "monitoring",
+        "planting-miss": "fired",
         "food-spike": "monitoring",
         "dxy-stress": "monitoring",
         "em-currency": "monitoring",
@@ -93,8 +94,7 @@
         "services": "gated",
         "de-escalation": "stable",
         "brent": "stable",
-        "fert-shortage": "approaching",
-        "planting-miss": "approaching"
+        "fert-shortage": "approaching"
       },
       "confluence": {}
     },
@@ -102,6 +102,7 @@
       "states": {
         "hormuz": "fired",
         "employment": "monitoring",
+        "planting-miss": "fired",
         "food-spike": "monitoring",
         "em-stress": "monitoring",
         "demand-destruction": "monitoring",
@@ -113,7 +114,6 @@
         "fert-shortage": "approaching",
         "dxy-stress": "fired",
         "diesel": "fired",
-        "planting-miss": "approaching",
         "em-currency": "fired",
         "freight": "fired"
       },
@@ -122,6 +122,7 @@
     "T+90d": {
       "states": {
         "hormuz": "fired",
+        "planting-miss": "fired",
         "food-spike": "monitoring",
         "curve": "stable",
         "rig-confirm": "monitoring",
@@ -130,7 +131,6 @@
         "fert-shortage": "approaching",
         "dxy-stress": "fired",
         "diesel": "fired",
-        "planting-miss": "approaching",
         "em-currency": "fired",
         "freight": "fired",
         "employment": "fired",
@@ -141,6 +141,30 @@
       "confluence": {
         "em-stress": 1.3
       }
+    }
+  },
+  "tvIndicators": {
+    "brent": {
+      "rsi14": 43.75,
+      "atr14": 8.5,
+      "sma50": 90.02,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-04-19T00:08:13Z"
+    },
+    "food-spike": {
+      "rsi14": 51.32,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-04-19T00:08:13Z"
+    },
+    "dxy-stress": {
+      "rsi14": 38.97,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-04-19T00:08:13Z"
+    },
+    "demand-destruction": {
+      "rsi14": 41.9,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-04-19T00:08:13Z"
     }
   }
 }

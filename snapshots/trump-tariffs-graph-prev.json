@@ -1,7 +1,7 @@
 {
   "v": 2,
-  "timestamp": "2026-04-10T04:33:39Z",
-  "title": "Trump Tariff Escalation Thesis \u2014 March 2026",
+  "timestamp": "2026-04-19T00:06:54Z",
+  "title": "Trump Tariff Escalation Thesis — March 2026",
   "nodeStates": {
     "tariff-shock": "fired",
     "section122-expiry": "gated",
@@ -34,7 +34,7 @@
       "nodeId": "section122-expiry",
       "label": "Section 122 Expiration",
       "deadline": "2026-07-24",
-      "daysRemaining": 106
+      "daysRemaining": 97
     }
   ],
   "marketSnapshot": {
@@ -147,6 +147,25 @@
         "earnings-compression": 2.05,
         "recession-risk": 1.25
       }
+    }
+  },
+  "tvIndicators": {
+    "input-costs": {
+      "rsi14": 60.76,
+      "atr14": 3.31,
+      "sma50": 169.91,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-04-19T00:06:54Z"
+    },
+    "auto-sector": {
+      "rsi14": 75.17,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-04-19T00:06:54Z"
+    },
+    "usd-cny": {
+      "rsi14": 34.03,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-04-19T00:06:54Z"
     }
   }
 }
