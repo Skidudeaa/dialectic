@@ -1202,8 +1202,8 @@ async def receive_trading_snapshot(
     WHY: Bridges Trading Desk cascade/confluence state into Dialectic rooms.
     TRADEOFF: Full snapshot per push (larger payload) vs deltas (complex diffing).
 
-    SCHEMA VERSIONING: The `v` field is pinned to Literal[1]. Any other value
-    fails fast with HTTP 400 — schema drift surfaces loudly, not silently.
+    SCHEMA VERSIONING: The `v` field is pinned to Literal[1, 2]. Other values
+    fail fast with HTTP 400 — schema drift surfaces loudly, not silently.
     """
     # Parse body manually so we can return a clean 400 on version drift
     # before Pydantic raises a generic 422 ValidationError.
@@ -1216,10 +1216,10 @@ async def receive_trading_snapshot(
         raise HTTPException(status_code=400, detail="Body must be a JSON object")
 
     body_v = body.get("v")
-    if body_v != 1:
+    if body_v not in (1, 2):
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported snapshot version: got {body_v!r}, expected 1",
+            detail=f"Unsupported snapshot version: got {body_v!r}, expected 1 or 2",
         )
 
     try:

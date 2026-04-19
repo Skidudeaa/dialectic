@@ -463,7 +463,12 @@ class TradingSnapshotRequest(BaseModel):
     WHY: Bridges the Trading Desk's cascade/confluence engine into Dialectic rooms.
     TRADEOFF: Stores full node state per snapshot vs deltas — simpler, larger payload.
     """
-    v: Literal[1]
+    # WHY Literal[1, 2]: v=1 is the original snapshot shape per INTEGRATION.md;
+    # v=2 added the non-causal `tvIndicators` overlay block (RSI/ATR/SMA from
+    # tradingDesk's TradingView integration) without changing any v=1 field.
+    # Dialectic stores the whole payload as JSONB so v=2 doesn't need new
+    # handling — just accept it. Reject any other value loudly.
+    v: Literal[1, 2]
     timestamp: str
     title: Optional[str] = None
     nodeStates: dict[str, str]
@@ -473,6 +478,7 @@ class TradingSnapshotRequest(BaseModel):
     marketSnapshot: Optional[dict[str, float]] = None
     scenarioImpacts: Optional[dict] = None
     portfolioSummary: Optional[dict] = None
+    tvIndicators: Optional[dict] = None  # v=2 non-causal indicator overlays
 
     @model_validator(mode="after")
     def sanitize_and_validate(self) -> "TradingSnapshotRequest":
