@@ -104,10 +104,17 @@ def _detect_shared_markets(snapshots: Dict[str, Snapshot]) -> Tuple[Dict[str, Di
 def _detect_cross_confluence(snapshots: Dict[str, Snapshot]) -> List[CrossBookFlag]:
     """WHAT: Flag when recession-adjacent confluence nodes fire across books."""
     flags = []
-    # Map of recession-adjacent nodes per book
+    # Map of recession-adjacent nodes per book.
+    # WHY hardcoded: each book picks its own node IDs; the correlator needs
+    # to know which nodes in each book signal "recession-adjacent stress".
+    # Add an entry here when shipping a new book so cross-book confluence
+    # detection lights up when it aligns with the existing books.
     recession_nodes = {
         "iran-hormuz-graph": ["em-stress", "demand-destruction"],
         "trump-tariffs-graph": ["recession-risk", "earnings-compression", "consumer-confidence"],
+        "japan-rate-shock-graph": ["vix-spike", "tech-breakdown"],
+        "ai-capex-unwind-graph": ["broad-multiple-compression", "credit-spreads", "vix-spike"],
+        "china-property-cascade-graph": ["em-stress", "em-currency", "recession-risk"],
     }
 
     fired_recession = {}

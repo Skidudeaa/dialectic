@@ -1,0 +1,146 @@
+{
+  "v": 2,
+  "timestamp": "2026-04-19T03:05:35Z",
+  "title": "AI Capex Unwind — April 2026",
+  "nodeStates": {
+    "gpu-price": "fired",
+    "power-constraint": "monitoring",
+    "tlt-rally": "gated",
+    "tsm-utilization": "fired",
+    "capex-guide": "gated",
+    "utilities-rerate": "fired",
+    "nvda-revenue-concentration": "monitoring",
+    "datacenter-reit-leases": "stable",
+    "semis-breakdown": "approaching",
+    "vix-spike": "approaching",
+    "credit-spreads": "approaching",
+    "broad-multiple-compression": "approaching",
+    "fed-reaction": "monitoring",
+    "capex-reaccel": "stable"
+  },
+  "confluenceScores": {
+    "nvda-revenue-concentration": 0.7,
+    "semis-breakdown": 0.8,
+    "credit-spreads": 0.35,
+    "broad-multiple-compression": 1.1
+  },
+  "cascadePhase": {
+    "number": 1,
+    "key": "shock",
+    "status": "WATCHING"
+  },
+  "countdowns": [
+    {
+      "nodeId": "capex-guide",
+      "label": "Hyperscaler Capex Guide",
+      "deadline": "2026-05-02",
+      "daysRemaining": 14
+    }
+  ],
+  "marketSnapshot": {
+    "smh": 290.0,
+    "tsm": 200.0,
+    "xlu": 82.0,
+    "vix": 16.5,
+    "tnx10y": 4.25,
+    "gpuPrice": 2.1
+  },
+  "scenarioImpacts": {
+    "soft-landing-moderation": {
+      "probability": 0.4,
+      "netImpact": -11.0
+    },
+    "single-hyperscaler-guide-down": {
+      "probability": 0.3,
+      "netImpact": -19.1
+    },
+    "broad-capex-unwind": {
+      "probability": 0.15,
+      "netImpact": 2.8
+    },
+    "ai-productivity-proof": {
+      "probability": 0.15,
+      "netImpact": 0.0
+    }
+  },
+  "portfolioSummary": {
+    "monthlyBudget": 7000,
+    "topPositions": [
+      "SMH $1400/mo",
+      "XLK $1000/mo",
+      "XLU $800/mo",
+      "TLT $800/mo",
+      "SOXX $600/mo",
+      "DLR $600/mo"
+    ],
+    "sgovAvailable": 400
+  },
+  "horizonTrace": {
+    "T+7d": {
+      "states": {
+        "capex-guide": "gated",
+        "gpu-price": "fired",
+        "power-constraint": "monitoring",
+        "nvda-revenue-concentration": "monitoring",
+        "tsm-utilization": "fired",
+        "datacenter-reit-leases": "monitoring",
+        "semis-breakdown": "approaching",
+        "utilities-rerate": "fired",
+        "credit-spreads": "monitoring",
+        "broad-multiple-compression": "monitoring",
+        "fed-reaction": "monitoring",
+        "tlt-rally": "gated",
+        "capex-reaccel": "stable",
+        "vix-spike": "approaching"
+      },
+      "confluence": {}
+    },
+    "T+28d": {
+      "states": {
+        "capex-guide": "gated",
+        "gpu-price": "fired",
+        "power-constraint": "monitoring",
+        "tsm-utilization": "fired",
+        "datacenter-reit-leases": "monitoring",
+        "utilities-rerate": "fired",
+        "fed-reaction": "monitoring",
+        "tlt-rally": "gated",
+        "capex-reaccel": "stable",
+        "nvda-revenue-concentration": "monitoring",
+        "semis-breakdown": "approaching",
+        "vix-spike": "approaching",
+        "credit-spreads": "approaching",
+        "broad-multiple-compression": "approaching"
+      },
+      "confluence": {
+        "semis-breakdown": 0.8,
+        "broad-multiple-compression": 1.1
+      }
+    },
+    "T+90d": {
+      "states": {
+        "gpu-price": "fired",
+        "power-constraint": "monitoring",
+        "tlt-rally": "gated",
+        "tsm-utilization": "fired",
+        "capex-guide": "gated",
+        "utilities-rerate": "fired",
+        "nvda-revenue-concentration": "monitoring",
+        "datacenter-reit-leases": "stable",
+        "semis-breakdown": "approaching",
+        "vix-spike": "approaching",
+        "credit-spreads": "approaching",
+        "broad-multiple-compression": "approaching",
+        "fed-reaction": "monitoring",
+        "capex-reaccel": "stable"
+      },
+      "confluence": {
+        "nvda-revenue-concentration": 0.7,
+        "semis-breakdown": 0.8,
+        "credit-spreads": 0.35,
+        "broad-multiple-compression": 1.1
+      }
+    }
+  },
+  "tvIndicators": {}
+}

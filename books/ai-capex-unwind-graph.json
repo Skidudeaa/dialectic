@@ -1,0 +1,1222 @@
+{
+  "meta": {
+    "title": "AI Capex Unwind — April 2026",
+    "claim": "Hyperscaler AI capex (~$320B/yr across MSFT/META/GOOGL/AMZN, ~30% of S&P capex growth) hits three convergent constraints: (1) physical power capacity, (2) Blackwell+ saturation creating GPU price softness, (3) CFO ROI fatigue. Capex guide-down → semis crater → utilities re-rate (less power demand than priced) → datacenter REITs roll (peak leases) → broad multiple compression. Trade the transmission, not the headline.",
+    "monthlyBudget": 7000,
+    "asOf": "2026-04-17",
+    "version": "1.0.0",
+    "type": "thesis-graph",
+    "dialecticRoomId": "",
+    "dialecticRoomToken": ""
+  },
+  "nodes": [
+    {
+      "id": "capex-guide",
+      "label": "Hyperscaler Capex Guide",
+      "type": "deadline",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "Top 4 hyperscalers (MSFT, META, GOOGL, AMZN) collectively guided ~$320B FY26 capex on Q4-2025 calls — up from ~$220B FY25. Q1 prints land late-Apr/early-May. Any of the four guiding flat/down for FY26 is the trigger event. META Q4-2022 -22% reset (stock $328→$90) is the canonical analog. Calibration TBD on which name moves first.",
+      "countdown": true,
+      "deadline": "2026-05-02",
+      "irreversible": false,
+      "logic": "any",
+      "_builderX": 100.0,
+      "_builderY": 60.0,
+      "conditions": [
+        "MSFT.capex_guide < consensus",
+        "META.capex_guide < consensus",
+        "GOOGL.capex_guide < consensus",
+        "AMZN.capex_guide < consensus"
+      ],
+      "indicators": [
+        {
+          "label": "FY26 capex consensus",
+          "feed": "manual",
+          "value": "$320B (top 4)",
+          "status": "amber"
+        },
+        {
+          "label": "Reporting window",
+          "feed": "manual",
+          "value": "Apr 24 - May 2",
+          "status": "amber"
+        }
+      ]
+    },
+    {
+      "id": "gpu-price",
+      "label": "GPU Secondary Price",
+      "type": "price",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "H100 secondary rental rate has slipped from $4.50/hr peak (mid-2024) to ~$2.10/hr as Blackwell ships in volume. Below $1.50 = clear glut signal — historically marks the inflection where hyperscalers slow new orders rather than write down inventory. Calibration TBD: no clean public series; tracked manually via SF Compute / GPU broker quotes.",
+      "current": 2.10,
+      "feeds": [
+        {
+          "source": "manual",
+          "label": "H100/hr secondary rental"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 1.50,
+          "label": "glut confirmed"
+        },
+        {
+          "level": 1.00,
+          "label": "fire-sale / order cancellations"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 60.0,
+      "regimes": {
+        "tight": {
+          "min": 2.50,
+          "color": "#6E8FAD"
+        },
+        "softening": {
+          "min": 1.50,
+          "max": 2.49,
+          "color": "#E69A4C"
+        },
+        "glut": {
+          "min": 1.00,
+          "max": 1.49,
+          "color": "#E05555"
+        },
+        "fire-sale": {
+          "max": 0.99,
+          "color": "#D32F2F"
+        }
+      }
+    },
+    {
+      "id": "power-constraint",
+      "label": "Datacenter Power Limit",
+      "type": "indicator",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "Northern Virginia (PJM/Loudoun) interconnect queue >5 years for new utility-scale loads. ERCOT large-load study capped 2026 datacenter additions ~12 GW vs 22 GW requested. Power, not chips, is the binding constraint on next-gen builds. When Microsoft signs a nuclear PPA (Three Mile Island restart, $0.115/kWh, ~3x merchant) the real cost shows up.",
+      "feeds": [
+        {
+          "source": "manual",
+          "label": "PJM interconnect queue"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "XLU",
+          "label": "Utilities ETF"
+        }
+      ],
+      "indicators": [
+        {
+          "label": "PJM queue (yrs)",
+          "feed": "manual",
+          "value": "5-7",
+          "status": "red"
+        },
+        {
+          "label": "ERCOT large-load cap",
+          "feed": "manual",
+          "value": "12 GW (vs 22 req)",
+          "status": "red"
+        },
+        {
+          "label": "Nuclear PPA premium",
+          "feed": "manual",
+          "value": "~3x merchant",
+          "status": "amber"
+        }
+      ],
+      "_builderX": 660.0,
+      "_builderY": 60.0
+    },
+    {
+      "id": "nvda-revenue-concentration",
+      "label": "NVDA Hyperscaler Concentration",
+      "type": "event",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "Top 4 customers = ~42% of NVDA datacenter revenue per FY25 10-K disclosures. Datacenter is ~88% of total revenue. So ~37% of NVDA total revenue is concentrated in 4 capex budgets. Any guide-down rolls through consensus EPS within one quarter — historical sell-side revision lag is 2-4 weeks post-print.",
+      "probability": 0.45,
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "NVDA"
+        }
+      ],
+      "indicators": [
+        {
+          "label": "Top-4 % of DC rev",
+          "feed": "manual",
+          "value": "42%",
+          "status": "red"
+        },
+        {
+          "label": "DC % of total rev",
+          "feed": "manual",
+          "value": "88%",
+          "status": "amber"
+        }
+      ],
+      "_builderX": 100.0,
+      "_builderY": 240.0
+    },
+    {
+      "id": "tsm-utilization",
+      "label": "TSM CoWoS Utilization",
+      "type": "price",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "TSMC CoWoS advanced-packaging capacity is the single physical bottleneck for Blackwell/MI300 supply. Utilization ran ~98% through 2025. Drops below 90% historically lead chip pricing by 1-2 quarters. TSM monthly revenue print is the tell. Calibration TBD: utilization reported in-line with quarterly results, monthly revenue is the high-frequency proxy.",
+      "current": 200.0,
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "TSM"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 220,
+          "label": "demand intact"
+        },
+        {
+          "level": 180,
+          "label": "softening"
+        },
+        {
+          "level": 160,
+          "label": "demand crack"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 240.0,
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "TSM",
+          "overlay": true
+        },
+        {
+          "kind": "sma",
+          "period": 50,
+          "symbol": "TSM",
+          "overlay": true
+        }
+      ]
+    },
+    {
+      "id": "datacenter-reit-leases",
+      "label": "Datacenter REIT Lease Pace",
+      "type": "indicator",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "DLR + EQIX signed record leasing in 2024-25 at peak rents ($180-220/kW vs $130 long-term avg). Lease backlog ~24 months. Once hyperscalers slow signings, mark-to-market on new business resets fast — REITs have $0 negotiating power once the bid disappears. EQIX/DLR forward AFFO consensus assumes pricing power persists.",
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "DLR"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "EQIX"
+        }
+      ],
+      "indicators": [
+        {
+          "label": "Peak lease rate",
+          "feed": "manual",
+          "value": "$180-220/kW",
+          "status": "amber"
+        },
+        {
+          "label": "Lease backlog",
+          "feed": "manual",
+          "value": "~24 months",
+          "status": "amber"
+        }
+      ],
+      "_builderX": 660.0,
+      "_builderY": 240.0
+    },
+    {
+      "id": "semis-breakdown",
+      "label": "Semis ETF Breakdown",
+      "type": "price",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "SMH 200dma is the line. 2018 trade-war analog: SMH lost 200dma in October, dropped 24% in 11 weeks. Confluence node — fires only after capex guide AND TSM utilization both confirm. The 'high-conviction short' window opens here, not before.",
+      "current": 290.0,
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "SMH"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 285,
+          "label": "200dma loss",
+          "closesRequired": 3
+        },
+        {
+          "level": 260,
+          "label": "trend break"
+        },
+        {
+          "level": 230,
+          "label": "capitulation"
+        }
+      ],
+      "_builderX": 100.0,
+      "_builderY": 420.0,
+      "regimes": {
+        "trending": {
+          "min": 285.01,
+          "color": "#6E8FAD"
+        },
+        "broken": {
+          "min": 260,
+          "max": 285,
+          "color": "#E69A4C"
+        },
+        "trend-break": {
+          "min": 230,
+          "max": 259.99,
+          "color": "#E05555"
+        },
+        "capitulation": {
+          "max": 229.99,
+          "color": "#D32F2F"
+        }
+      },
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "SMH",
+          "overlay": true
+        },
+        {
+          "kind": "atr",
+          "period": 14,
+          "symbol": "SMH",
+          "overlay": true
+        },
+        {
+          "kind": "sma",
+          "period": 200,
+          "symbol": "SMH",
+          "overlay": true
+        }
+      ]
+    },
+    {
+      "id": "utilities-rerate",
+      "label": "Utilities Bid Recede",
+      "type": "price",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "XLU has rallied ~28% in 12 months on AI power-demand narrative. CEG, VST, NRG carry 2x sector multiples on PPA pipeline assumptions. Capex guide-down breaks the demand-curve assumption — utilities re-rate but slower than semis. Long XLU hedge thesis: even if AI capex slows, baseload power demand stays sticky and rates fall (TLT-correlated).",
+      "current": 82.0,
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "XLU"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 88,
+          "label": "defensive bid intact"
+        },
+        {
+          "level": 75,
+          "label": "AI premium gone"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 420.0
+    },
+    {
+      "id": "vix-spike",
+      "label": "VIX / Concentration Risk",
+      "type": "indicator",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "S&P top-7 = 33% of index weight. AI-themed names (NVDA, MSFT, GOOGL, META, AMZN) = ~22%. Capex unwind concentrates losses — VIX historically prints 30+ on tech-led drawdowns even when broad index is down only 8-10%. 2018 Q4 template: VIX 12→36 in 6 weeks on chip-led rotation.",
+      "current": 16.5,
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "^VIX"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 22,
+          "label": "stress emerging"
+        },
+        {
+          "level": 30,
+          "label": "concentration risk realized"
+        }
+      ],
+      "_builderX": 660.0,
+      "_builderY": 420.0
+    },
+    {
+      "id": "credit-spreads",
+      "label": "IG/HY Credit Stress",
+      "type": "indicator",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "Hyperscaler debt issuance spiked in 2024-25 to fund capex (META $30B, MSFT $40B). If capex ROI questioned, IG OAS widens 30-50bps fast. HY follows with 100-200bps amplification. LQD/HYG ratio is the cleanest read.",
+      "feeds": [
+        {
+          "source": "fred",
+          "series": "BAMLC0A0CM",
+          "label": "IG OAS"
+        },
+        {
+          "source": "fred",
+          "series": "BAMLH0A0HYM2",
+          "label": "HY OAS"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "LQD"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "HYG"
+        }
+      ],
+      "indicators": [
+        {
+          "label": "IG OAS (current)",
+          "feed": "manual",
+          "value": "~88 bps",
+          "status": "amber"
+        },
+        {
+          "label": "HY OAS (current)",
+          "feed": "manual",
+          "value": "~310 bps",
+          "status": "amber"
+        }
+      ],
+      "_builderX": 940.0,
+      "_builderY": 420.0
+    },
+    {
+      "id": "broad-multiple-compression",
+      "label": "S&P Multiple Compression",
+      "type": "indicator",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "Triple-confluence node: semis-breakdown + vix-spike + credit-spreads. AI capex was ~30% of S&P capex growth in 2024-25. Strip it out and forward EPS revisions cut ~$15 from $285 consensus. At 19x that's a 5% multiple drag on top of EPS cut. Path: SPX 5500 → 4900-5000 fast.",
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "^GSPC",
+          "label": "S&P 500"
+        }
+      ],
+      "indicators": [
+        {
+          "label": "Forward P/E",
+          "feed": "manual",
+          "value": "~19.5x",
+          "status": "amber"
+        },
+        {
+          "label": "AI share of capex growth",
+          "feed": "manual",
+          "value": "~30%",
+          "status": "red"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 600.0,
+      "confluence": [
+        "semis-breakdown",
+        "vix-spike",
+        "credit-spreads"
+      ]
+    },
+    {
+      "id": "fed-reaction",
+      "label": "Fed Cut Reaction",
+      "type": "gate",
+      "phase": 4,
+      "state": "monitoring",
+      "context": "Capex-led drawdown is NOT classic recession — payrolls hold up initially because hyperscalers don't fire datacenter staff fast. Fed historically lags tech-led drawdowns by 2-3 quarters (2000, 2018Q4). Gate: Fed funds futures pricing 3+ cuts in 6mo = confirmed pivot. TLT trade requires this to fire.",
+      "current": 4.25,
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "^TNX",
+          "label": "10Y yield"
+        }
+      ],
+      "_builderX": 100.0,
+      "_builderY": 780.0,
+      "condition": "fed funds futures price 3+ cuts in 6mo",
+      "gates": [
+        "tlt-rally"
+      ]
+    },
+    {
+      "id": "tlt-rally",
+      "label": "Long Bond Rally",
+      "type": "conditional",
+      "phase": 4,
+      "state": "monitoring",
+      "context": "TLT only works after fed-reaction gate fires. Pre-pivot the long end can keep selling on issuance fears. Don't front-run the duration trade — wait for fed-funds-futures confirmation. Earliest plausible window: late Q3 2026 if capex guide-down lands April/May.",
+      "gatedBy": [
+        "fed-reaction"
+      ],
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "TLT"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 780.0
+    },
+    {
+      "id": "capex-reaccel",
+      "label": "Capex Re-Acceleration",
+      "type": "reversal",
+      "phase": 5,
+      "state": "monitoring",
+      "context": "Kill-switch for the short book. If a hyperscaler prints clean ROI on AI workloads (e.g., MSFT Copilot ARR > $20B run-rate AND attach rate > 30%) the narrative resets and capex re-accelerates. Or: Inference cost crashes 10x via custom silicon and unlocks new demand. Cut shorts on confirmation, not on rumor.",
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "MSFT"
+        }
+      ],
+      "_builderX": 660.0,
+      "_builderY": 780.0,
+      "threshold": 20,
+      "additionalCondition": "Copilot ARR > $20B + attach > 30% OR custom-silicon inference 10x cheaper",
+      "action": "Cut SMH/XLK short 1/2, close NVDA puts, hold XLU long, trim TLT 1/3 if held"
+    }
+  ],
+  "edges": [
+    {
+      "from": "capex-guide",
+      "to": "nvda-revenue-concentration",
+      "mechanism": "Hyperscaler Q1 capex print ≥5% below guide → NVDA datacenter rev growth re-rates from 60% YoY to 30% YoY → consensus EPS cut 12-18% within 4 weeks → multiple compresses 15-25% on 24-month earnings risk premium",
+      "lag": "1-4 weeks (sell-side revision cycle)",
+      "strength": 0.85,
+      "amplification": 1.3
+    },
+    {
+      "from": "capex-guide",
+      "to": "datacenter-reit-leases",
+      "mechanism": "Capex slow → new lease signings pause → DLR/EQIX mark-to-market on incremental business resets to long-term avg ($130/kW vs current $180-220) → forward AFFO cuts 8-12%",
+      "lag": "1-2 quarters",
+      "strength": 0.75
+    },
+    {
+      "from": "gpu-price",
+      "to": "nvda-revenue-concentration",
+      "mechanism": "Secondary GPU rental < $1.50/hr signals oversupply → hyperscalers delay/cancel orders → NVDA ASP and units both pressure",
+      "lag": "1 quarter",
+      "strength": 0.7
+    },
+    {
+      "from": "gpu-price",
+      "to": "tsm-utilization",
+      "mechanism": "GPU glut → CoWoS bookings cut → TSM monthly revenue prints below seasonal pattern",
+      "lag": "1-2 months",
+      "strength": 0.65
+    },
+    {
+      "from": "power-constraint",
+      "to": "capex-guide",
+      "mechanism": "Hyperscalers can't deploy capex they've allocated if there's no power on the grid → CFO rationalizes guide-down as 'pacing to capacity' rather than admitting demand softness",
+      "lag": "1-2 quarters",
+      "strength": 0.6
+    },
+    {
+      "from": "power-constraint",
+      "to": "utilities-rerate",
+      "mechanism": "If AI demand is structurally power-capped, utilities lose the upside-case narrative — XLU re-rates from 19x to 16x as multi-decade growth scenarios fade",
+      "lag": "2-3 quarters",
+      "strength": 0.5
+    },
+    {
+      "from": "nvda-revenue-concentration",
+      "to": "semis-breakdown",
+      "mechanism": "NVDA is 22% of SMH by weight + correlated drawdown across AVGO/AMD → SMH loses 200dma → CTA/momentum unwinds amplify 30-40%",
+      "lag": "1-3 weeks",
+      "strength": 0.9,
+      "amplification": 1.4
+    },
+    {
+      "from": "tsm-utilization",
+      "to": "semis-breakdown",
+      "mechanism": "TSM is leading indicator on chip demand globally — when TSM breaks, sector follows",
+      "lag": "2-4 weeks",
+      "strength": 0.8
+    },
+    {
+      "from": "datacenter-reit-leases",
+      "to": "credit-spreads",
+      "mechanism": "REIT FFO cuts → debt service coverage tightens → DLR/EQIX bond spreads widen → contagion to broader IG REIT complex",
+      "lag": "1-2 months",
+      "strength": 0.55
+    },
+    {
+      "from": "semis-breakdown",
+      "to": "vix-spike",
+      "mechanism": "Semis = 12% of S&P weight when including ancillary names → drawdown forces vol-target funds to de-gross → VIX bid",
+      "lag": "immediate",
+      "strength": 0.75
+    },
+    {
+      "from": "vix-spike",
+      "to": "credit-spreads",
+      "mechanism": "VIX > 25 historically correlates with HY spread widening of 50-100bps within 2 weeks",
+      "lag": "1-2 weeks",
+      "strength": 0.7
+    },
+    {
+      "from": "semis-breakdown",
+      "to": "broad-multiple-compression",
+      "mechanism": "Top-7 = 33% of S&P weight → tech-led drawdown drags index 6-10% even with no broader recession",
+      "lag": "2-6 weeks",
+      "strength": 0.85
+    },
+    {
+      "from": "vix-spike",
+      "to": "broad-multiple-compression",
+      "mechanism": "VIX > 30 forces multi-asset funds to cut equity allocation → mechanical selling pressure on index",
+      "lag": "1-3 weeks",
+      "strength": 0.7
+    },
+    {
+      "from": "credit-spreads",
+      "to": "broad-multiple-compression",
+      "mechanism": "ERP rises with credit spreads → equity multiple compresses ~1x for every 50bps of HY widening",
+      "lag": "2-4 weeks",
+      "strength": 0.65
+    },
+    {
+      "from": "broad-multiple-compression",
+      "to": "fed-reaction",
+      "mechanism": "S&P -10% from highs typically gets verbal Fed support; -15% gets cut probability priced in",
+      "lag": "1-2 quarters",
+      "strength": 0.6
+    },
+    {
+      "from": "broad-multiple-compression",
+      "to": "capex-reaccel",
+      "mechanism": "Lower multiples + cheaper hardware (post-glut) eventually restore ROI math → capex re-accelerates from a lower base",
+      "lag": "3-6 quarters",
+      "strength": 0.4
+    }
+  ],
+  "instruments": {
+    "semis-breakdown": [
+      {
+        "id": "SMH",
+        "monthly": 1400,
+        "role": "primary semis short — high beta",
+        "beta": -1.5,
+        "ref": 290.0,
+        "targetLow": 230,
+        "targetHigh": 250,
+        "stop": 308
+      },
+      {
+        "id": "SOXX",
+        "monthly": 600,
+        "role": "secondary semis short — diversification",
+        "beta": -1.3,
+        "ref": 230.0,
+        "targetLow": 185,
+        "targetHigh": 200,
+        "stop": 244
+      }
+    ],
+    "broad-multiple-compression": [
+      {
+        "id": "XLK",
+        "monthly": 1000,
+        "role": "broad tech short",
+        "beta": -1.0,
+        "ref": 230.0,
+        "targetLow": 195,
+        "targetHigh": 210,
+        "stop": 244
+      }
+    ],
+    "utilities-rerate": [
+      {
+        "id": "XLU",
+        "monthly": 800,
+        "role": "long hedge — utilities catch bid as power-demand fears recede + rates fall",
+        "beta": 0.5,
+        "ref": 82.0,
+        "targetLow": 88,
+        "targetHigh": 92,
+        "stop": 76
+      }
+    ],
+    "tlt-rally": [
+      {
+        "id": "TLT",
+        "monthly": 800,
+        "role": "long duration — Fed cut expectations rise on capex-led slowdown",
+        "beta": 0.8,
+        "ref": 92.0,
+        "targetLow": 102,
+        "targetHigh": 108,
+        "stop": 86
+      }
+    ],
+    "datacenter-reit-leases": [
+      {
+        "id": "DLR",
+        "monthly": 600,
+        "role": "datacenter REIT short — peak lease pricing rolls",
+        "beta": -1.0,
+        "ref": 175.0,
+        "targetLow": 145,
+        "targetHigh": 155,
+        "stop": 188
+      },
+      {
+        "id": "EQIX",
+        "monthly": 400,
+        "role": "secondary REIT short",
+        "beta": -0.8,
+        "ref": 850.0,
+        "targetLow": 720,
+        "targetHigh": 760,
+        "stop": 905
+      }
+    ],
+    "vix-spike": [
+      {
+        "id": "VXX",
+        "monthly": 400,
+        "role": "vol long — concentration-risk hedge (decay-aware)",
+        "beta": 1.5,
+        "ref": 45.0,
+        "targetLow": 60,
+        "targetHigh": 75,
+        "stop": 38,
+        "note": "Roll cost ~7%/mo. Tactical, not buy-and-hold."
+      }
+    ],
+    "nvda-revenue-concentration": [
+      {
+        "id": "NVDA",
+        "monthly": 600,
+        "role": "single-name short via 90-120 DTE puts — surgical",
+        "beta": -1.8,
+        "ref": 145.0,
+        "targetLow": 110,
+        "targetHigh": 120,
+        "stop": 158,
+        "note": "Puts only, no naked. 2% premium cap."
+      }
+    ],
+    "reserve": [
+      {
+        "id": "SGOV",
+        "monthly": 400,
+        "role": "deployment ammo",
+        "isReserve": true,
+        "ref": 100.5
+      }
+    ],
+    "overlays": {
+      "vix-acceleration": {
+        "condition": "VIX > 25 for 3 closes",
+        "gatedBy": [
+          "vix-spike"
+        ],
+        "instruments": [
+          {
+            "id": "VXX",
+            "ref": 45.0,
+            "targetLow": 65,
+            "targetHigh": 80,
+            "stop": 40,
+            "note": "Add only on confirmation, not anticipation."
+          }
+        ]
+      },
+      "credit-blowout": {
+        "condition": "HY OAS > 425 bps",
+        "gatedBy": [
+          "credit-spreads"
+        ],
+        "instruments": [
+          {
+            "id": "HYG",
+            "ref": 80.0,
+            "targetLow": 74,
+            "targetHigh": 76,
+            "stop": 82,
+            "note": "Short HYG via puts if HY OAS breaks 425."
+          }
+        ]
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "id": "soft-landing-moderation",
+      "name": "Soft-landing capex moderation",
+      "probability": 0.40,
+      "notes": "Most likely. Hyperscalers guide FY26 capex flat-to-up-5% (vs +25% expected). Semis pull back 8-12% but no breakdown. Utilities flat. The hedge book takes small wins, the short book breaks even.",
+      "overrides": {
+        "capex-guide": "approaching",
+        "semis-breakdown": 270,
+        "vix-spike": 22
+      },
+      "portfolioImpact": {
+        "SMH": {
+          "direction": "up",
+          "estimate": "+8%",
+          "action": "hold short"
+        },
+        "XLK": {
+          "direction": "up",
+          "estimate": "+5%",
+          "action": "hold short"
+        },
+        "XLU": {
+          "direction": "up",
+          "estimate": "+3%",
+          "action": "hold long"
+        },
+        "TLT": {
+          "direction": "flat",
+          "estimate": "+1%",
+          "action": "hold"
+        }
+      }
+    },
+    {
+      "id": "single-hyperscaler-guide-down",
+      "name": "Single hyperscaler guide-down (META 2022 analog)",
+      "probability": 0.30,
+      "notes": "META Q4-2022 redux. One name (most likely META or AMZN given retail-cycle exposure) cuts FY26 capex 15-20%. Single-name -25% in week one. SMH -15%. Cross-sector contagion. NVDA puts pay 4-6x.",
+      "overrides": {
+        "capex-guide": "fired",
+        "nvda-revenue-concentration": "fired",
+        "semis-breakdown": 245,
+        "vix-spike": 28
+      },
+      "portfolioImpact": {
+        "SMH": {
+          "direction": "up",
+          "estimate": "+18%",
+          "action": "hold, deploy SGOV tranche"
+        },
+        "XLK": {
+          "direction": "up",
+          "estimate": "+12%",
+          "action": "hold"
+        },
+        "DLR": {
+          "direction": "up",
+          "estimate": "+10%",
+          "action": "hold short"
+        },
+        "XLU": {
+          "direction": "up",
+          "estimate": "+5%",
+          "action": "hold long"
+        },
+        "VXX": {
+          "direction": "up",
+          "estimate": "+25%",
+          "action": "trim 1/2 on VIX > 28"
+        },
+        "NVDA": {
+          "direction": "up",
+          "estimate": "+150%",
+          "action": "roll puts up, take 1/3 off"
+        }
+      }
+    },
+    {
+      "id": "broad-capex-unwind",
+      "name": "Broad capex unwind (telecom 2001 analog)",
+      "probability": 0.15,
+      "notes": "Multiple hyperscalers cut. Power constraint + GPU glut + ROI doubt all hit simultaneously. SMH -35%. SPX -18%. Credit spreads blow out. VIX > 35. Fed pivots in Q3. TLT rallies hard. The full short book pays.",
+      "overrides": {
+        "capex-guide": "fired",
+        "gpu-price": 1.20,
+        "semis-breakdown": 200,
+        "vix-spike": 38,
+        "fed-reaction": "fired"
+      },
+      "portfolioImpact": {
+        "SMH": {
+          "direction": "up",
+          "estimate": "+38%",
+          "action": "hold, full SGOV deployment"
+        },
+        "XLK": {
+          "direction": "up",
+          "estimate": "+25%",
+          "action": "hold"
+        },
+        "DLR": {
+          "direction": "up",
+          "estimate": "+22%",
+          "action": "hold short"
+        },
+        "XLU": {
+          "direction": "up",
+          "estimate": "+12%",
+          "action": "hold long, add"
+        },
+        "TLT": {
+          "direction": "up",
+          "estimate": "+18%",
+          "action": "hold long, add on cut confirmation"
+        },
+        "VXX": {
+          "direction": "up",
+          "estimate": "+80%",
+          "action": "trim 1/2, then 1/2 again"
+        },
+        "NVDA": {
+          "direction": "up",
+          "estimate": "+300%",
+          "action": "take all off, redeploy"
+        }
+      }
+    },
+    {
+      "id": "ai-productivity-proof",
+      "name": "AI productivity proof saves the day",
+      "probability": 0.15,
+      "notes": "MSFT prints clean Copilot ARR + attach rate. ROI thesis vindicated. Capex stays elevated. Custom silicon (Trillium, MI400) drops inference cost 5-10x and unlocks new demand. Hedge book takes losses. Cut and rotate.",
+      "overrides": {
+        "capex-guide": "stable",
+        "capex-reaccel": "fired",
+        "semis-breakdown": 320
+      },
+      "portfolioImpact": {
+        "SMH": {
+          "direction": "down",
+          "estimate": "-12%",
+          "action": "cut 1/2, stop trip"
+        },
+        "XLK": {
+          "direction": "down",
+          "estimate": "-8%",
+          "action": "cut 1/2"
+        },
+        "DLR": {
+          "direction": "down",
+          "estimate": "-8%",
+          "action": "close"
+        },
+        "XLU": {
+          "direction": "down",
+          "estimate": "-4%",
+          "action": "hold (defensive)"
+        },
+        "TLT": {
+          "direction": "down",
+          "estimate": "-3%",
+          "action": "hold"
+        },
+        "NVDA": {
+          "direction": "down",
+          "estimate": "-90%",
+          "action": "puts expire, accept loss within premium cap"
+        }
+      }
+    }
+  ],
+  "cascadePhases": {
+    "shock": {
+      "label": "Phase 1: Shock — Capex Guide Print",
+      "status": "WATCHING",
+      "signposts": [
+        {
+          "text": "Any of MSFT/META/GOOGL/AMZN guides FY26 capex < consensus",
+          "status": "monitoring"
+        },
+        {
+          "text": "GPU secondary rental < $1.50/hr",
+          "status": "monitoring"
+        },
+        {
+          "text": "Hyperscaler nuclear/PPA pricing leaked",
+          "status": "monitoring"
+        },
+        {
+          "text": "Q1 print window opens (Apr 24 - May 2)",
+          "status": "approaching"
+        }
+      ]
+    },
+    "transmission": {
+      "label": "Phase 2: Transmission — Supply Chain",
+      "status": "NOT YET",
+      "signposts": [
+        {
+          "text": "TSM monthly revenue prints below seasonal",
+          "status": "monitoring"
+        },
+        {
+          "text": "NVDA datacenter guide cut",
+          "status": "monitoring"
+        },
+        {
+          "text": "DLR/EQIX leasing pace softens on call",
+          "status": "monitoring"
+        },
+        {
+          "text": "Sell-side EPS cuts begin (top 5 chip names)",
+          "status": "monitoring"
+        }
+      ],
+      "estimatedTiming": "1-4 weeks post capex-guide event"
+    },
+    "amplification": {
+      "label": "Phase 3: Amplification — Cross-Asset",
+      "status": "NOT YET",
+      "signposts": [
+        {
+          "text": "SMH loses 200dma (3 closes)",
+          "status": "monitoring"
+        },
+        {
+          "text": "VIX > 25 sustained",
+          "status": "monitoring"
+        },
+        {
+          "text": "HY OAS > 400 bps",
+          "status": "monitoring"
+        },
+        {
+          "text": "S&P forward P/E compresses 1.5x",
+          "status": "monitoring"
+        },
+        {
+          "text": "CTA/vol-target funds documented de-grossing",
+          "status": "monitoring"
+        }
+      ],
+      "estimatedTiming": "Q3 2026 if trigger lands April/May"
+    },
+    "policyResponse": {
+      "label": "Phase 4: Policy Response — Fed Pivot",
+      "status": "NOT YET",
+      "signposts": [
+        {
+          "text": "Fed funds futures price 3+ cuts in 6mo",
+          "status": "not yet"
+        },
+        {
+          "text": "FOMC verbal support after S&P -10%",
+          "status": "not yet"
+        },
+        {
+          "text": "Treasury issuance shift toward bills",
+          "status": "not yet"
+        }
+      ],
+      "estimatedTiming": "Q4 2026 - Q1 2027 (Fed historically lags tech-led 2-3 quarters)"
+    },
+    "resolution": {
+      "label": "Phase 5: Resolution — Reset or Re-accel",
+      "status": "NOT YET",
+      "signposts": [
+        {
+          "text": "MSFT Copilot ARR > $20B run-rate",
+          "status": "not yet"
+        },
+        {
+          "text": "Custom-silicon inference cost crashes 5-10x",
+          "status": "not yet"
+        },
+        {
+          "text": "OR: New capex base 30%+ below 2025 peak sustained 2 quarters",
+          "status": "not yet"
+        }
+      ]
+    }
+  },
+  "rules": [
+    "<strong>Don't front-run the print.</strong> Build initial short positions only AFTER first hyperscaler guide-down confirms. Pre-print sizing: max 1/3 of target. Q1 print window Apr 24 - May 2.",
+    "<strong>Confluence rule:</strong> SMH short fires only when capex-guide AND tsm-utilization both confirm. Single-signal entries get cut by 1/2.",
+    "<strong>Power constraint asymmetry:</strong> XLU long is the cleanest hedge — wins in capex-up (rates lower) AND capex-down (defensive bid). Never short XLU even in re-accel scenario.",
+    "<strong>VXX decay discipline:</strong> Roll cost ~7%/mo. Tactical only. Trim 1/2 on VIX > 28, full close on VIX > 35.",
+    "<strong>NVDA puts only.</strong> Single-name shares short on the most-shorted-by-CTAs name = squeeze risk. 90-120 DTE puts, 2% premium cap, no naked calls/puts.",
+    "<strong>Don't fight the Fed.</strong> TLT trade gates on fed-reaction node. Pre-pivot the long end can keep selling on issuance fears — DO NOT add TLT until fed funds futures price 3+ cuts.",
+    "<strong>Kill switch:</strong> If capex-reaccel fires (MSFT Copilot ARR > $20B + attach > 30%), cut SMH/XLK 1/2, close NVDA puts, hold XLU.",
+    "<strong>Single-name risk cap:</strong> No single ticker > 12% of book. NVDA puts capped at $600/mo premium.",
+    "<strong>Review cadence:</strong> Daily during Q1 print window (Apr 24 - May 2). Otherwise Mon/Wed/Fri close.",
+    "<strong>Scenario discipline:</strong> Trade probability-weighted. Soft-landing (40%) means initial sizing should expect modest moves, not blow-out scenarios."
+  ],
+  "provenance": [],
+  "fetchSymbols": {
+    "equities": {
+      "NVDA": "nvda",
+      "AVGO": "avgo",
+      "AMD": "amd",
+      "TSM": "tsm",
+      "META": "meta",
+      "MSFT": "msft",
+      "GOOGL": "googl",
+      "AMZN": "amzn"
+    },
+    "etfs": {
+      "SMH": "smh",
+      "SOXX": "soxx",
+      "XLK": "xlk",
+      "XLU": "xlu",
+      "DLR": "dlr",
+      "EQIX": "eqix",
+      "TLT": "tlt",
+      "LQD": "lqd",
+      "HYG": "hyg"
+    },
+    "indices": {
+      "^VIX": "vix",
+      "^TNX": "tnx10y",
+      "^GSPC": "spx"
+    }
+  },
+  "marketFields": [
+    {
+      "key": "smh",
+      "label": "SMH $",
+      "value": 290.0,
+      "step": 0.01,
+      "nodeId": "semis-breakdown"
+    },
+    {
+      "key": "tsm",
+      "label": "TSM $",
+      "value": 200.0,
+      "step": 0.01,
+      "nodeId": "tsm-utilization"
+    },
+    {
+      "key": "xlu",
+      "label": "XLU $",
+      "value": 82.0,
+      "step": 0.01,
+      "nodeId": "utilities-rerate"
+    },
+    {
+      "key": "vix",
+      "label": "VIX",
+      "value": 16.5,
+      "step": 0.01,
+      "nodeId": "vix-spike"
+    },
+    {
+      "key": "tnx10y",
+      "label": "10Y %",
+      "value": 4.25,
+      "step": 0.01,
+      "nodeId": "fed-reaction"
+    },
+    {
+      "key": "gpuPrice",
+      "label": "H100 $/hr",
+      "value": 2.10,
+      "step": 0.01,
+      "nodeId": "gpu-price"
+    }
+  ],
+  "analogs": [
+    {
+      "id": "meta-2022",
+      "name": "META Q4-2022 Capex Reset",
+      "similarity": "very high",
+      "startDate": "2022-02-02",
+      "peakDate": "2022-02-02",
+      "keyLags": {
+        "guide-to-stock-bottom": "9 months",
+        "guide-to-capex-cut": "3 quarters"
+      },
+      "priceAction": {
+        "metaStart": 328,
+        "metaTrough": 90,
+        "drawdown": "-73%",
+        "capexCut": "FY23 -22% vs initial guide"
+      },
+      "lessons": [
+        "Single-name capex guide-down can cause -25% in a week + drag sector 8-15%.",
+        "Sell-side EPS revisions lag print by 2-4 weeks — fade the first bounce.",
+        "Bottom came after 3 consecutive quarters of capex discipline + buyback announcement.",
+        "Recovery was slow until clear ROI proof emerged (Reels monetization, ad efficiency)."
+      ],
+      "notes": "The cleanest single-name analog. META alone rerated mega-cap growth multiples for 18 months."
+    },
+    {
+      "id": "telecom-2001",
+      "name": "Telecom Capex Unwind 2000-2002",
+      "similarity": "high",
+      "startDate": "2000-09-01",
+      "peakDate": "2000-09-01",
+      "keyLags": {
+        "capex-peak-to-equipment-bottom": "24 months",
+        "capex-peak-to-credit-blow": "18 months"
+      },
+      "priceAction": {
+        "ciscoStart": 80,
+        "ciscoTrough": 8,
+        "drawdown": "-90%",
+        "sectorDrawdown": "-78%"
+      },
+      "lessons": [
+        "When the spending narrative breaks, equipment makers de-rate violently and stay derated for years.",
+        "Credit followed equity by 12-18 months as bond covenants tripped on revenue cuts.",
+        "Survivors emerged 60-70% off peak even after operational recovery.",
+        "Multiple compression dwarfed earnings cuts — the rerating was the trade."
+      ],
+      "notes": "The 'broad unwind' scenario template. Probability-weighted lower but catastrophic if it plays."
+    },
+    {
+      "id": "2018q4",
+      "name": "2018 Q4 Tech-Led Drawdown",
+      "similarity": "medium",
+      "startDate": "2018-10-03",
+      "peakDate": "2018-10-03",
+      "keyLags": {
+        "peak-to-bottom": "11 weeks",
+        "fed-pivot": "8 weeks after bottom"
+      },
+      "priceAction": {
+        "smhPeak": 110,
+        "smhTrough": 78,
+        "smhDrawdown": "-29%",
+        "spxDrawdown": "-19.8%",
+        "vixPeak": 36
+      },
+      "lessons": [
+        "Chip-led drawdowns spike VIX faster than other rotations (12 → 36 in 6 weeks).",
+        "Fed pivot (Powell 'patient' Jan 2019) marked the bottom within days.",
+        "Recovery was V-shaped because no underlying recession — different from capex unwind which is structural.",
+        "Cross-sector contagion: utilities and bonds rallied even as tech bled."
+      ],
+      "notes": "Useful for the 'amplification → policy response' transition timing."
+    }
+  ]
+}
