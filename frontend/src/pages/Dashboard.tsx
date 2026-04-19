@@ -15,7 +15,9 @@ import {
   Search,
   Book,
   Hammer,
+  HelpCircle,
 } from "lucide-react";
+import { useOnboarding } from "../components/onboarding/useOnboarding";
 import { apiFetch, getDisplayName, clearAuth } from "../lib/api";
 import type { Room, ThesisBook } from "../lib/types";
 import Chat from "../components/Chat";
@@ -131,6 +133,7 @@ export default function Dashboard({ onLogout }: Props) {
   const modKey = isMac ? "Cmd" : "Ctrl";
   const { toast } = useToast();
   const connection = useConnectionStatus();
+  const { startTour } = useOnboarding();
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [books, setBooks] = useState<ThesisBook[]>([]);
@@ -466,6 +469,22 @@ pass
           <button onClick={() => togglePanel("journal")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "journal" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Journal">J</button>
           <button onClick={() => togglePanel("tradingview")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "tradingview" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="TradingView"><Activity size={13} /></button>
           <div className="w-px h-4 bg-border mx-1" />
+          <button
+            onClick={() => startTour()}
+            className="p-1 text-text-dim hover:text-text-primary"
+            title="Replay product tour"
+            aria-label="Replay product tour"
+          >
+            <HelpCircle size={12} />
+          </button>
+          <button
+            onClick={() => navigate("/welcome")}
+            className="p-1 text-text-dim hover:text-text-primary"
+            title="Open the full guide"
+            aria-label="Open the welcome guide"
+          >
+            <Book size={12} />
+          </button>
           <button
             onClick={() => setShowShortcuts(true)}
             className="p-1 text-text-dim hover:text-text-primary"

@@ -2,6 +2,7 @@ import { useState, useCallback, lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { isAuthenticated } from "./lib/api";
 import { ToastProvider } from "./components/Toast";
+import { OnboardingProvider } from "./components/onboarding/OnboardingProvider";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 
@@ -10,10 +11,14 @@ import Dashboard from "./pages/Dashboard";
 // theses and never visit /builder.
 const BuilderRoute = lazy(() => import("./components/builder/BuilderRoute"));
 
-function BuilderFallback() {
+// Welcome is a marketing-grade evergreen guide. Lazy-load: most sessions don't
+// visit it, no reason to pay for the SVG diagrams + prose on every page load.
+const Welcome = lazy(() => import("./pages/Welcome"));
+
+function RouteFallback({ label }: { label: string }) {
   return (
     <div className="h-screen flex items-center justify-center bg-void text-text-muted text-xs font-mono">
-      loading builder…
+      loading {label}…
     </div>
   );
 }
@@ -31,18 +36,28 @@ export default function App() {
       {!authed ? (
         <Login onLogin={onLogin} />
       ) : (
-        <Routes>
-          <Route
-            path="/builder"
-            element={
-              <Suspense fallback={<BuilderFallback />}>
-                <BuilderRoute />
-              </Suspense>
-            }
-          />
-          <Route path="/*" element={<Dashboard onLogout={onLogout} />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <OnboardingProvider>
+          <Routes>
+            <Route
+              path="/builder"
+              element={
+                <Suspense fallback={<RouteFallback label="builder" />}>
+                  <BuilderRoute />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/welcome"
+              element={
+                <Suspense fallback={<RouteFallback label="welcome" />}>
+                  <Welcome />
+                </Suspense>
+              }
+            />
+            <Route path="/*" element={<Dashboard onLogout={onLogout} />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </OnboardingProvider>
       )}
     </ToastProvider>
   );
