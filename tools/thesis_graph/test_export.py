@@ -794,5 +794,251 @@ class TestDerivedIndicatorsFlow:
         assert eval_node_state(node, {}, []) == "approaching"
 
 
+class TestPropagateAtHorizonCumulative:
+    """Cumulative path-lag horizon propagation (v2 Unit 15).
+
+    WHY: The prior implementation filtered each edge by its own lag only, so
+    a two-hop chain A -(7d)-> B -(7d)-> C fired C at T+7 instead of T+14. The
+    fix walks the graph to compute each node's earliest arrival time from any
+    self-firing source, then keeps only edges whose cumulative arrival is
+    within the horizon.
+    """
+
+    def test_two_hop_chain_does_not_fire_at_half_horizon(self):
+        from tools.thesis_graph.thesisgraph import propagate_at_horizon
+        cfg = {
+            "meta": {"title": "two-hop"},
+            "nodes": [
+                {"id": "A", "label": "A", "type": "event", "state": "fired"},
+                {"id": "B", "label": "B", "type": "indicator"},
+                {"id": "C", "label": "C", "type": "indicator"},
+            ],
+            "edges": [
+                {"from": "A", "to": "B", "strength": 0.9, "lag": "1 week"},
+                {"from": "B", "to": "C", "strength": 0.9, "lag": "1 week"},
+            ],
+        }
+        result = propagate_at_horizon(cfg, 7, ref_date=date(2026, 4, 5))
+        assert result["states"]["B"] == "fired"
+        # C's cumulative arrival is 14 days; at horizon 7, signal hasn't reached.
+        assert result["states"]["C"] == "monitoring"
+
+    def test_two_hop_chain_fires_at_full_horizon(self):
+        from tools.thesis_graph.thesisgraph import propagate_at_horizon
+        cfg = {
+            "meta": {"title": "two-hop"},
+            "nodes": [
+                {"id": "A", "label": "A", "type": "event", "state": "fired"},
+                {"id": "B", "label": "B", "type": "indicator"},
+                {"id": "C", "label": "C", "type": "indicator"},
+            ],
+            "edges": [
+                {"from": "A", "to": "B", "strength": 0.9, "lag": "1 week"},
+                {"from": "B", "to": "C", "strength": 0.9, "lag": "1 week"},
+            ],
+        }
+        result = propagate_at_horizon(cfg, 14, ref_date=date(2026, 4, 5))
+        assert result["states"]["C"] == "fired"
+
+    def test_single_edge_fires_at_shorter_horizon(self):
+        from tools.thesis_graph.thesisgraph import propagate_at_horizon
+        cfg = {
+            "meta": {"title": "single-hop"},
+            "nodes": [
+                {"id": "A", "label": "A", "type": "event", "state": "fired"},
+                {"id": "B", "label": "B", "type": "indicator"},
+            ],
+            "edges": [
+                {"from": "A", "to": "B", "strength": 0.9, "lag": "5 days"},
+            ],
+        }
+        result = propagate_at_horizon(cfg, 7, ref_date=date(2026, 4, 5))
+        assert result["states"]["B"] == "fired"
+
+    def test_parallel_paths_shortest_wins(self):
+        """Two paths from A to D with cumulative 15d vs 10d — D arrives at 10d."""
+        from tools.thesis_graph.thesisgraph import propagate_at_horizon
+        cfg = {
+            "meta": {"title": "parallel"},
+            "nodes": [
+                {"id": "A", "label": "A", "type": "event", "state": "fired"},
+                {"id": "B", "label": "B", "type": "indicator"},
+                {"id": "C", "label": "C", "type": "indicator"},
+                {"id": "D", "label": "D", "type": "indicator"},
+            ],
+            "edges": [
+                {"from": "A", "to": "B", "strength": 0.9, "lag": "10 days"},
+                {"from": "A", "to": "C", "strength": 0.9, "lag": "5 days"},
+                {"from": "B", "to": "D", "strength": 0.9, "lag": "5 days"},
+                {"from": "C", "to": "D", "strength": 0.9, "lag": "5 days"},
+            ],
+        }
+        # At T+9: C reached at 5d, D via C reached at 10d > 9 → not yet
+        result_9 = propagate_at_horizon(cfg, 9, ref_date=date(2026, 4, 5))
+        assert result_9["states"]["C"] == "fired"
+        assert result_9["states"]["D"] == "monitoring"
+        # At T+10: D via C reaches exactly
+        result_10 = propagate_at_horizon(cfg, 10, ref_date=date(2026, 4, 5))
+        assert result_10["states"]["D"] == "fired"
+
+    def test_diamond_uses_shortest_arrival(self):
+        """Diamond graph — downstream arrival is the shorter of two paths."""
+        from tools.thesis_graph.thesisgraph import compute_arrival_times
+        cfg = {
+            "nodes": [
+                {"id": "A", "label": "A", "type": "event", "state": "fired"},
+                {"id": "B", "label": "B", "type": "indicator"},
+                {"id": "C", "label": "C", "type": "indicator"},
+                {"id": "D", "label": "D", "type": "indicator"},
+            ],
+            "edges": [
+                {"from": "A", "to": "B", "lag": "2 weeks"},
+                {"from": "A", "to": "C", "lag": "1 week"},
+                {"from": "B", "to": "D", "lag": "1 week"},
+                {"from": "C", "to": "D", "lag": "2 weeks"},
+            ],
+        }
+        arrival = compute_arrival_times(cfg, ref_date=date(2026, 4, 5))
+        assert arrival["A"] == 0
+        assert arrival["B"] == 14
+        assert arrival["C"] == 7
+        # D via B: 14+7=21; D via C: 7+14=21. Tie here — either shortest path.
+        assert arrival["D"] == 21
+
+    def test_unreachable_node_stays_default(self):
+        """A node whose only upstream never fires gets no signal at any horizon."""
+        from tools.thesis_graph.thesisgraph import propagate_at_horizon
+        cfg = {
+            "meta": {"title": "unreachable"},
+            "nodes": [
+                {"id": "dormant", "label": "D", "type": "event", "state": "monitoring"},
+                {"id": "child", "label": "C", "type": "indicator"},
+            ],
+            "edges": [
+                {"from": "dormant", "to": "child", "strength": 0.9, "lag": "1 day"},
+            ],
+        }
+        result = propagate_at_horizon(cfg, 365, ref_date=date(2026, 4, 5))
+        assert result["states"]["child"] == "monitoring"
+
+
+class TestValidateConfigStructured:
+    """Hardened validate_config — returns structured issues, never raises (v2 Unit 15)."""
+
+    def _errors(self, issues):
+        return [i for i in issues if i["severity"] == "error"]
+
+    def _warnings(self, issues):
+        return [i for i in issues if i["severity"] == "warning"]
+
+    def test_returns_list_of_issue_dicts(self):
+        from tools.thesis_graph.thesisgraph import validate_config
+        issues = validate_config({"meta": {"title": "t"}, "nodes": [], "edges": []})
+        assert isinstance(issues, list)
+        for issue in issues:
+            assert set(issue.keys()) >= {"field", "message", "severity"}
+            assert issue["severity"] in {"error", "warning"}
+
+    def test_non_dict_input_does_not_raise(self):
+        from tools.thesis_graph.thesisgraph import validate_config
+        issues = validate_config("not a dict")  # type: ignore[arg-type]
+        errors = self._errors(issues)
+        assert any("must be a dict" in e["message"] for e in errors)
+
+    def test_threshold_level_as_string_is_error(self):
+        """'0.7' as a string level — reject, don't coerce."""
+        from tools.thesis_graph.thesisgraph import validate_config
+        cfg = {
+            "meta": {"title": "t"},
+            "nodes": [
+                {"id": "p", "label": "P", "type": "price",
+                 "thresholds": [{"level": "115", "label": "persistence"}]},
+            ],
+            "edges": [],
+        }
+        errors = self._errors(validate_config(cfg))
+        assert any("thresholds[0].level" in e["field"] for e in errors)
+
+    def test_invalid_gated_by_reference_is_error(self):
+        from tools.thesis_graph.thesisgraph import validate_config
+        cfg = {
+            "meta": {"title": "t"},
+            "nodes": [
+                {"id": "n", "label": "N", "type": "conditional", "gatedBy": ["ghost"]},
+            ],
+            "edges": [],
+        }
+        errors = self._errors(validate_config(cfg))
+        assert any("gatedBy" in e["field"] and "ghost" in e["message"] for e in errors)
+
+    def test_scenario_probability_above_one_is_error(self):
+        from tools.thesis_graph.thesisgraph import validate_config
+        cfg = {
+            "meta": {"title": "t"},
+            "nodes": [], "edges": [],
+            "scenarios": [{"id": "s", "probability": 1.7, "overrides": {}}],
+        }
+        errors = self._errors(validate_config(cfg))
+        assert any("probability" in e["field"] and "[0,1]" in e["message"] for e in errors)
+
+    def test_scenario_probability_wrong_type_is_error(self):
+        from tools.thesis_graph.thesisgraph import validate_config
+        cfg = {
+            "meta": {"title": "t"},
+            "nodes": [], "edges": [],
+            "scenarios": [{"id": "s", "probability": "0.5", "overrides": {}}],
+        }
+        errors = self._errors(validate_config(cfg))
+        assert any("probability" in e["field"] for e in errors)
+
+    def test_duplicate_instrument_id_is_error(self):
+        from tools.thesis_graph.thesisgraph import validate_config
+        cfg = {
+            "meta": {"title": "t"},
+            "nodes": [{"id": "n", "label": "N", "type": "indicator"}],
+            "edges": [],
+            "instruments": {
+                "n": [{"id": "XOP"}, {"id": "XOP"}],
+            },
+        }
+        errors = self._errors(validate_config(cfg))
+        assert any("duplicate instrument id" in e["message"] for e in errors)
+
+    def test_unparseable_lag_is_warning(self):
+        from tools.thesis_graph.thesisgraph import validate_config
+        cfg = {
+            "meta": {"title": "t"},
+            "nodes": [
+                {"id": "a", "label": "A", "type": "event", "state": "fired"},
+                {"id": "b", "label": "B", "type": "indicator"},
+            ],
+            "edges": [{"from": "a", "to": "b", "strength": 0.5, "lag": "sometime"}],
+        }
+        warnings = self._warnings(validate_config(cfg))
+        assert any("lag" in w["field"] for w in warnings)
+
+    def test_all_books_validate_clean(self):
+        """Every active book must validate with zero errors."""
+        from tools.thesis_graph.thesisgraph import validate_config
+        import glob
+        books_dir = os.path.join(os.path.dirname(__file__), "..", "..", "books")
+        for path in sorted(glob.glob(os.path.join(books_dir, "*.json"))):
+            cfg = load_config(path)
+            issues = validate_config(cfg)
+            errors = self._errors(issues)
+            assert not errors, f"{path} has validation errors: {errors}"
+
+    def test_malformed_edge_does_not_crash_topo(self):
+        """A missing 'to' field would KeyError in topo_sort — surface as issue, not crash."""
+        from tools.thesis_graph.thesisgraph import validate_config
+        cfg = {
+            "meta": {"title": "t"},
+            "nodes": [{"id": "a", "label": "A", "type": "event"}],
+            "edges": [{"from": "a", "strength": 0.5}],  # missing 'to'
+        }
+        issues = validate_config(cfg)  # must not raise
+        assert any(i["severity"] == "error" for i in issues)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

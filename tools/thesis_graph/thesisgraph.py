@@ -40,7 +40,15 @@ REQUIRED_TOP = ["meta", "nodes", "edges"]
 REQUIRED_NODE = ["id", "label", "type"]
 REQUIRED_EDGE = ["from", "to", "strength"]
 VALID_NODE_TYPES = {"event", "price", "indicator", "deadline", "gate", "constraint", "conditional", "reversal"}
+VALID_PHASE_STATUS = {
+    "MONITORING", "WATCHING", "NOT YET", "APPROACHING", "STARTING",
+    "ACTIVE", "COMPLETE", "RESOLVED",
+}
 HEX_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def _issue(field: str, message: str, severity: str = "error") -> dict:
+    return {"field": field, "message": message, "severity": severity}
 
 
 def load_config(path: str) -> dict:
@@ -55,87 +63,283 @@ def load_config(path: str) -> dict:
         sys.exit(1)
 
 
-def validate_config(cfg: dict) -> tuple[list[str], list[str]]:
-    """Validate graph config. Returns (errors, warnings)."""
-    errors = []
-    warnings = []
+def validate_config(cfg: dict) -> list[dict]:
+    """Validate graph config. Returns a list of structured issues.
 
-    for field in REQUIRED_TOP:
-        if field not in cfg:
-            errors.append(f"missing required field '{field}'")
+    Each issue is {"field": <dotted-path>, "message": str, "severity": "error"|"warning"}.
+    Never raises — malformed inputs surface as severity='error' entries so the
+    caller (CLI, coordinator, builder API) gets a single, uniform failure surface.
 
-    meta = cfg.get("meta", {})
-    if not meta.get("title"):
-        errors.append("meta.title is required")
+    Callers needing the legacy (errors, warnings) tuple can split by severity:
+        errors = [i for i in issues if i["severity"] == "error"]
+        warnings = [i for i in issues if i["severity"] == "warning"]
+    """
+    issues: list[dict] = []
 
-    # Nodes
-    node_ids = set()
-    if "nodes" in cfg:
-        for i, n in enumerate(cfg["nodes"]):
+    try:
+        if not isinstance(cfg, dict):
+            issues.append(_issue("<root>", f"config must be a dict, got {type(cfg).__name__}"))
+            return issues
+
+        for field in REQUIRED_TOP:
+            if field not in cfg:
+                issues.append(_issue(field, f"missing required field '{field}'"))
+
+        meta = cfg.get("meta")
+        if not isinstance(meta, dict):
+            issues.append(_issue("meta", "meta must be a dict"))
+            meta = {}
+        if not meta.get("title"):
+            issues.append(_issue("meta.title", "meta.title is required"))
+
+        # Nodes
+        node_ids: set = set()
+        nodes = cfg.get("nodes", [])
+        if not isinstance(nodes, list):
+            issues.append(_issue("nodes", "nodes must be a list"))
+            nodes = []
+        for i, n in enumerate(nodes):
+            if not isinstance(n, dict):
+                issues.append(_issue(f"nodes[{i}]", "node must be a dict"))
+                continue
             nid = n.get("id", f"[node {i}]")
             for f in REQUIRED_NODE:
                 if f not in n:
-                    errors.append(f"node {nid}: missing '{f}'")
-            if n.get("type") and n["type"] not in VALID_NODE_TYPES:
-                errors.append(f"node {nid}: invalid type '{n['type']}' (valid: {VALID_NODE_TYPES})")
+                    issues.append(_issue(f"nodes[{nid}].{f}", f"missing '{f}'"))
+            ntype = n.get("type")
+            if ntype and ntype not in VALID_NODE_TYPES:
+                issues.append(_issue(
+                    f"nodes[{nid}].type",
+                    f"invalid type '{ntype}' (valid: {sorted(VALID_NODE_TYPES)})",
+                ))
             if nid in node_ids:
-                errors.append(f"node {nid}: duplicate ID")
+                issues.append(_issue(f"nodes[{nid}].id", "duplicate node ID"))
             node_ids.add(nid)
 
-    # Edges
-    if "edges" in cfg:
-        for i, e in enumerate(cfg["edges"]):
-            eid = f"[edge {i}]"
+            # Threshold numeric types — reject strings like "0.7".
+            for ti, th in enumerate(n.get("thresholds", []) or []):
+                if not isinstance(th, dict):
+                    continue
+                level = th.get("level")
+                if level is not None and not isinstance(level, (int, float)):
+                    issues.append(_issue(
+                        f"nodes[{nid}].thresholds[{ti}].level",
+                        f"must be numeric, got {type(level).__name__}: {level!r}",
+                    ))
+                closes_req = th.get("closesRequired")
+                if closes_req is not None and not isinstance(closes_req, int):
+                    issues.append(_issue(
+                        f"nodes[{nid}].thresholds[{ti}].closesRequired",
+                        f"must be int, got {type(closes_req).__name__}",
+                    ))
+
+            # Feed schema by provider.
+            feed = n.get("feed")
+            if isinstance(feed, dict):
+                provider = feed.get("source")
+                if provider == "polymarket" and not feed.get("slug"):
+                    issues.append(_issue(f"nodes[{nid}].feed", "polymarket feed requires 'slug'"))
+                elif provider == "yahoo" and not feed.get("symbol"):
+                    issues.append(_issue(f"nodes[{nid}].feed", "yahoo feed requires 'symbol'"))
+                elif provider == "fred" and not feed.get("series"):
+                    issues.append(_issue(f"nodes[{nid}].feed", "fred feed requires 'series'"))
+
+        # Reference validity for gatedBy / constrainedBy — needs full node set.
+        for n in nodes:
+            if not isinstance(n, dict):
+                continue
+            nid = n.get("id", "<?>")
+            for ref in n.get("gatedBy", []) or []:
+                if ref not in node_ids:
+                    issues.append(_issue(
+                        f"nodes[{nid}].gatedBy",
+                        f"references unknown node '{ref}'",
+                    ))
+            for ref in n.get("constrainedBy", []) or []:
+                if ref not in node_ids:
+                    issues.append(_issue(
+                        f"nodes[{nid}].constrainedBy",
+                        f"references unknown node '{ref}'",
+                    ))
+
+        # Edges
+        edges = cfg.get("edges", [])
+        if not isinstance(edges, list):
+            issues.append(_issue("edges", "edges must be a list"))
+            edges = []
+        for i, e in enumerate(edges):
+            if not isinstance(e, dict):
+                issues.append(_issue(f"edges[{i}]", "edge must be a dict"))
+                continue
+            eid = f"edges[{i}]"
             for f in REQUIRED_EDGE:
                 if f not in e:
-                    errors.append(f"edge {eid}: missing '{f}'")
+                    issues.append(_issue(f"{eid}.{f}", f"missing '{f}'"))
             if e.get("from") and e["from"] not in node_ids:
-                errors.append(f"edge {eid}: 'from' node '{e['from']}' not defined")
+                issues.append(_issue(f"{eid}.from", f"'from' node '{e['from']}' not defined"))
             if e.get("to") and e["to"] not in node_ids:
-                errors.append(f"edge {eid}: 'to' node '{e['to']}' not defined")
-            if e.get("strength") is not None:
-                s = e["strength"]
-                if not (0 < s <= 1):
-                    warnings.append(f"edge {eid}: strength {s} outside (0,1]")
+                issues.append(_issue(f"{eid}.to", f"'to' node '{e['to']}' not defined"))
+            strength = e.get("strength")
+            if strength is not None:
+                if not isinstance(strength, (int, float)):
+                    issues.append(_issue(
+                        f"{eid}.strength",
+                        f"must be numeric in (0,1], got {type(strength).__name__}: {strength!r}",
+                    ))
+                elif not (0 < strength <= 1):
+                    issues.append(_issue(
+                        f"{eid}.strength",
+                        f"strength {strength} outside (0,1]",
+                        severity="warning",
+                    ))
+            amp = e.get("amplification")
+            if amp is not None and not isinstance(amp, (int, float)):
+                issues.append(_issue(
+                    f"{eid}.amplification",
+                    f"must be numeric, got {type(amp).__name__}",
+                ))
+            # Lag format validity — parse_lag_days returns a conservative 30-day
+            # fallback for unparseable strings. Flag those so operators notice.
+            lag = e.get("lag")
+            if lag and isinstance(lag, str) and lag.lower() != "immediate":
+                if not re.match(
+                    r"^(date-gated\s+.+|\d+(?:\s*-\s*\d+)?\s*(day|week|month)s?)$",
+                    lag.strip(),
+                    re.IGNORECASE,
+                ):
+                    issues.append(_issue(
+                        f"{eid}.lag",
+                        f"unparseable lag '{lag}' — will fall back to 30d; "
+                        "use 'immediate', 'N weeks', 'N-M months', or 'date-gated <date>'",
+                        severity="warning",
+                    ))
 
-    # Instruments
-    # WHY: The instruments dict may contain an "overlays" key with nested
-    # overlay definitions (dicts, not arrays). Skip non-list values.
-    if "instruments" in cfg:
-        for nid, insts in cfg["instruments"].items():
+        # Instruments
+        # WHY: The instruments dict may contain an "overlays" key with nested
+        # overlay definitions (dicts, not arrays). Skip non-list values.
+        instruments = cfg.get("instruments", {})
+        if instruments and not isinstance(instruments, dict):
+            issues.append(_issue("instruments", "instruments must be a dict keyed by node id"))
+            instruments = {}
+        seen_inst_ids: set = set()
+        for nid, insts in instruments.items():
             if not isinstance(insts, list):
-                continue  # Skip overlay definitions and other non-list values
+                continue
             if nid not in node_ids and nid != "reserve":
-                warnings.append(f"instruments: node '{nid}' not found in graph")
+                issues.append(_issue(
+                    f"instruments.{nid}",
+                    f"node '{nid}' not found in graph",
+                    severity="warning",
+                ))
             for inst in insts:
-                if "id" not in inst:
-                    errors.append(f"instruments[{nid}]: missing instrument 'id'")
+                if not isinstance(inst, dict):
+                    issues.append(_issue(f"instruments.{nid}", "instrument must be a dict"))
+                    continue
+                iid = inst.get("id")
+                if not iid:
+                    issues.append(_issue(f"instruments.{nid}", "missing instrument 'id'"))
+                    continue
+                if iid in seen_inst_ids:
+                    issues.append(_issue(
+                        f"instruments.{nid}.{iid}",
+                        f"duplicate instrument id '{iid}'",
+                    ))
+                seen_inst_ids.add(iid)
 
-    # Scenarios
-    if "scenarios" in cfg:
-        for s in cfg["scenarios"]:
+        # marketFields — list of {key, label, value, step, nodeId} entries
+        mf = cfg.get("marketFields")
+        if mf is not None:
+            if not isinstance(mf, list):
+                issues.append(_issue("marketFields", "marketFields must be a list"))
+            else:
+                for i, field in enumerate(mf):
+                    if not isinstance(field, dict):
+                        issues.append(_issue(
+                            f"marketFields[{i}]", "each marketField must be a dict"
+                        ))
+                        continue
+                    if not field.get("key"):
+                        issues.append(_issue(
+                            f"marketFields[{i}].key", "marketField missing 'key'"
+                        ))
+                    value = field.get("value")
+                    if value is not None and not isinstance(value, (int, float)):
+                        issues.append(_issue(
+                            f"marketFields[{i}].value",
+                            f"must be numeric, got {type(value).__name__}",
+                        ))
+
+        # Scenarios
+        for si, s in enumerate(cfg.get("scenarios", []) or []):
+            if not isinstance(s, dict):
+                issues.append(_issue(f"scenarios[{si}]", "scenario must be a dict"))
+                continue
+            sid = s.get("id", f"[scenario {si}]")
             if "id" not in s:
-                errors.append("scenario missing 'id'")
-            for override_node in s.get("overrides", {}):
+                issues.append(_issue(f"scenarios[{si}].id", "scenario missing 'id'"))
+            prob = s.get("probability")
+            if prob is not None:
+                if not isinstance(prob, (int, float)):
+                    issues.append(_issue(
+                        f"scenarios[{sid}].probability",
+                        f"must be numeric in [0,1], got {type(prob).__name__}",
+                    ))
+                elif not (0 <= prob <= 1):
+                    issues.append(_issue(
+                        f"scenarios[{sid}].probability",
+                        f"{prob} outside [0,1]",
+                    ))
+            for override_node in (s.get("overrides") or {}):
                 if override_node not in node_ids:
-                    warnings.append(f"scenario '{s.get('id', '?')}': override node '{override_node}' not in graph")
+                    issues.append(_issue(
+                        f"scenarios[{sid}].overrides",
+                        f"override node '{override_node}' not in graph",
+                        severity="warning",
+                    ))
 
-    # Cascade phases
-    if "cascadePhases" in cfg:
-        expected = {"shock", "transmission", "amplification", "policyResponse", "resolution"}
-        actual = set(cfg["cascadePhases"].keys())
-        missing = expected - actual
-        if missing:
-            warnings.append(f"cascadePhases: missing phases {missing}")
+        # Cascade phases
+        phases = cfg.get("cascadePhases")
+        if phases is not None:
+            if not isinstance(phases, dict):
+                issues.append(_issue("cascadePhases", "cascadePhases must be a dict"))
+            else:
+                expected = {"shock", "transmission", "amplification", "policyResponse", "resolution"}
+                actual = set(phases.keys())
+                missing = expected - actual
+                if missing:
+                    issues.append(_issue(
+                        "cascadePhases",
+                        f"missing phases {sorted(missing)}",
+                        severity="warning",
+                    ))
+                for pk, pv in phases.items():
+                    if not isinstance(pv, dict):
+                        continue
+                    status = pv.get("status")
+                    if status and str(status).upper() not in VALID_PHASE_STATUS:
+                        issues.append(_issue(
+                            f"cascadePhases.{pk}.status",
+                            f"invalid status '{status}' (valid: {sorted(VALID_PHASE_STATUS)})",
+                        ))
 
-    # Cycle check via topo sort
-    if "nodes" in cfg and "edges" in cfg:
-        try:
-            topo_sort(cfg["nodes"], cfg["edges"])
-        except ValueError as e:
-            errors.append(str(e))
+        # Cycle check via topo sort. A malformed edge dict would otherwise
+        # raise a KeyError deep in the graph walk; catch that so the validator
+        # always returns a structured result.
+        if isinstance(cfg.get("nodes"), list) and isinstance(cfg.get("edges"), list):
+            try:
+                topo_sort(cfg["nodes"], cfg["edges"])
+            except (ValueError, KeyError, TypeError) as ex:
+                issues.append(_issue("<graph>", f"topo sort failed: {ex}"))
 
-    return errors, warnings
+    except Exception as ex:
+        # Belt-and-suspenders: any unexpected validator error surfaces as a
+        # structured issue so callers never see a raw exception.
+        issues.append(_issue(
+            "<validator>",
+            f"validator internal error: {type(ex).__name__}: {ex}",
+        ))
+
+    return issues
 
 
 # =========================================================================
@@ -398,28 +602,81 @@ def parse_lag_days(lag_str: str, ref_date: date | None = None) -> int:
     return 30  # conservative fallback for unparseable strings
 
 
+def compute_arrival_times(cfg: dict,
+                          ref_date: date | None = None) -> dict[str, float]:
+    """Shortest-path arrival time at each node from any self-firing source.
+
+    WHY: The horizon filter needs cumulative path lag, not per-edge lag. A
+    chain A -(7d)-> B -(7d)-> C should see C arrive at T+14, not T+7. This
+    helper computes the earliest day each node could receive a causal signal
+    via any path from a node that is already firing / approaching at T=0.
+
+    A node "self-fires" when eval_node_state(node, {}, []) returns fired or
+    approaching — that is, the node would be firing even with no upstream.
+    Events with state=fired, price nodes above threshold, past-deadline
+    deadline nodes, etc.
+
+    Nodes that depend on upstream see arrival = min(src_arrival + lag(edge)).
+    Unreachable nodes return float("inf").
+    """
+    order = topo_sort(cfg["nodes"], cfg["edges"])
+    node_map = {n["id"]: n for n in cfg["nodes"]}
+    incoming_by_node: dict[str, list] = {nid: [] for nid in order}
+    for e in cfg["edges"]:
+        if e.get("to") in incoming_by_node:
+            incoming_by_node[e["to"]].append(e)
+
+    arrival: dict[str, float] = {nid: float("inf") for nid in order}
+    for nid in order:
+        node = node_map[nid]
+        # Self-firing sources seed at 0.
+        self_state = eval_node_state(node, {}, [])
+        if self_state in ("fired", "approaching"):
+            arrival[nid] = 0
+        # Relax via incoming edges. Topo order guarantees src is settled.
+        for e in incoming_by_node[nid]:
+            src_arr = arrival.get(e["from"], float("inf"))
+            if src_arr == float("inf"):
+                continue
+            lag = parse_lag_days(e.get("lag", "immediate"), ref_date)
+            candidate = src_arr + lag
+            if candidate < arrival[nid]:
+                arrival[nid] = candidate
+
+    return arrival
+
+
 def propagate_at_horizon(cfg: dict, horizon_days: int,
                          ref_date: date | None = None) -> dict:
-    """Run propagation filtered by temporal reachability.
+    """Run propagation filtered by cumulative temporal reachability.
 
     WHY: The standard propagate() treats all edges as instantaneous — lag
-    declarations are decorative. This function removes edges whose lag exceeds
-    the horizon, then runs the existing propagate() + score_confluence() on
-    the time-filtered graph. The result answers: "given current upstream states,
-    what fires by T+horizon_days?"
+    declarations are decorative. This function keeps only edges whose
+    CUMULATIVE arrival at the destination is within the horizon, then runs
+    propagate() + score_confluence() on the time-filtered graph.
+
+    An edge from X to Y is kept iff (arrival_time[X] + lag(edge)) <= horizon.
+    Two 7-day edges in series correctly require T>=14 for the downstream
+    node to receive signal, not T>=7.
 
     Returns {"states": {nodeId: state}, "confluence": {nodeId: score}}.
     """
     import copy
     hcfg = copy.deepcopy(cfg)
-    # WHY: Remove edges whose lag exceeds the horizon. This changes the graph
-    # topology so that indicator nodes only see the edges that have had time to
-    # transmit. A node with 3 incoming paths but 2 with 3-month lags will only
-    # see 1 path at T+7d — correctly reflecting temporal reachability.
-    hcfg["edges"] = [
-        e for e in hcfg["edges"]
-        if parse_lag_days(e.get("lag", "immediate"), ref_date) <= horizon_days
-    ]
+    arrival = compute_arrival_times(hcfg, ref_date)
+
+    kept_edges = []
+    for e in hcfg["edges"]:
+        src_arr = arrival.get(e.get("from"), float("inf"))
+        if src_arr == float("inf"):
+            # Upstream never fires under current state — edge carries no
+            # signal at any horizon. Drop it so downstream doesn't see noise.
+            continue
+        lag = parse_lag_days(e.get("lag", "immediate"), ref_date)
+        if src_arr + lag <= horizon_days:
+            kept_edges.append(e)
+    hcfg["edges"] = kept_edges
+
     states = propagate(hcfg)
     confluence = score_confluence(hcfg, states)
     return {"states": states, "confluence": confluence}
@@ -2580,12 +2837,14 @@ Examples:
     cfg = load_config(args.config)
 
     # Validate
-    errors, warnings = validate_config(cfg)
+    issues = validate_config(cfg)
+    errors = [i for i in issues if i["severity"] == "error"]
+    warnings = [i for i in issues if i["severity"] == "warning"]
     for w in warnings:
-        print(f"  WARN: {w}", file=sys.stderr)
+        print(f"  WARN: {w['field']}: {w['message']}", file=sys.stderr)
     if errors:
         for e in errors:
-            print(f"  ERROR: {e}", file=sys.stderr)
+            print(f"  ERROR: {e['field']}: {e['message']}", file=sys.stderr)
         print(f"\n  {len(errors)} error(s). Fix and retry.", file=sys.stderr)
         sys.exit(1)
     print(f"  Valid ({len(warnings)} warning(s))", file=log)
