@@ -40,7 +40,8 @@ def _hash_password(password: str) -> str:
     return dk.hex()
 
 
-# WHY: Hardcoded dev users — this is a two-person trading desk, not a SaaS.
+# WHY: Hardcoded dev users — small trading desk, not a SaaS. All users share
+# the same privileges; there is no admin role.
 # Passwords default to env var or "changeme" for dev.
 _default_pw = os.environ.get("DEV_USER_PASSWORD", "changeme")
 DEV_USERS = {
@@ -52,6 +53,11 @@ DEV_USERS = {
     "dan": {
         "username": "dan",
         "display_name": "Dan",
+        "hashed_password": _hash_password(_default_pw),
+    },
+    "salloum": {
+        "username": "salloum",
+        "display_name": "Salloum",
         "hashed_password": _hash_password(_default_pw),
     },
 }
