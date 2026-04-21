@@ -27,10 +27,14 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from web.adapters import thesis as thesis_adapter
+
+if TYPE_CHECKING:
+    from web.persistence.repository import Repository
 
 log = logging.getLogger(__name__)
 
@@ -151,12 +155,25 @@ _OP_TYPE_ALLOW: Dict[str, Tuple[str, ...]] = {
 _ALLOWED_STATES = {"active", "resolved", "partial", "monitoring", "fired"}
 
 
-def apply_op(node: dict, binding: dict, alert_value: Optional[float]) -> Any:
-    """Apply the binding's declared op to the node in-place.
+def apply_op(
+    node: dict,
+    binding: dict,
+    alert_value: Optional[float],
+    *,
+    repo: "Optional[Repository]" = None,
+    thesis_id: Optional[str] = None,
+) -> Any:
+    """Apply the binding's declared op and return the new value/state.
 
-    Returns the new value of whichever field was mutated — used by the
-    route to build the TVWebhookAck payload and broadcast payload. Raises
-    MutationError on any contract violation.
+    WHY repo + thesis_id kwargs: incrementClosesObserved now inserts a row
+    into the close_observations SQLite table (instead of mutating the node's
+    closesObserved field). The table is the canonical source; the coordinator
+    reads the streak before propagate. These kwargs are required for
+    incrementClosesObserved and ignored for the other three ops.
+
+    Returns the new value of whichever field was mutated (or the new streak
+    count for incrementClosesObserved). Raises MutationError on contract
+    violations.
     """
     op = binding.get("op")
     if op not in _OP_TYPE_ALLOW:
@@ -170,9 +187,38 @@ def apply_op(node: dict, binding: dict, alert_value: Optional[float]) -> Any:
         )
 
     if op == "incrementClosesObserved":
-        current = int(node.get("closesObserved", 0) or 0)
-        node["closesObserved"] = current + 1
-        return node["closesObserved"]
+        if repo is None or thesis_id is None:
+            raise MutationError(
+                "incrementClosesObserved requires repo + thesis_id — "
+                "the webhook route must supply them"
+            )
+        threshold_level = binding.get("thresholdLevel")
+        if threshold_level is None:
+            raise MutationError("binding missing thresholdLevel")
+        threshold_key = str(threshold_level)
+        # Pine Script fires on bar close — the alert's reception date is the
+        # market_date for the close it represents. Alert body may carry the
+        # explicit close value; if absent, fall back to the threshold level
+        # itself (still qualifies by construction).
+        market_date = date.today().isoformat()
+        close_value = (
+            float(alert_value) if alert_value is not None else float(threshold_level)
+        )
+        qualifies = close_value >= float(threshold_level)
+        repo.insert_close_observation(
+            thesis_id=thesis_id,
+            node_id=node["id"],
+            market_date=market_date,
+            threshold_key=threshold_key,
+            close_value=close_value,
+            qualifies=qualifies,
+            source="tv_webhook",
+        )
+        return repo.get_close_streak(
+            thesis_id=thesis_id,
+            node_id=node["id"],
+            threshold_key=threshold_key,
+        )
 
     if op == "setNodeState":
         target = binding.get("targetState")
@@ -232,12 +278,22 @@ async def apply_webhook(
     book_id: str,
     binding_id: str,
     alert_value: Optional[float],
+    repo: "Optional[Repository]" = None,
 ) -> ApplyResult:
     """Apply one validated Pine alert to the book and return the structured result.
 
     Serializes concurrent webhooks against the same book via per-book asyncio
     locks. File I/O runs in a worker thread so the event loop stays free.
+
+    WHY repo parameter: incrementClosesObserved now writes to the
+    close_observations SQLite table via Repository. The route passes its
+    app.state.repo down so the adapter can insert + compute streak. Other
+    ops still mutate the book JSON.
     """
+    # WHY book_id is also thesis_id: the coordinator keys theses by
+    # Path(path).stem which matches the book_id used by the webhook route.
+    thesis_id = book_id
+
     lock = await _lock_for_book(book_id)
     async with lock:
         cfg = await asyncio.to_thread(load_book, book_id)
@@ -247,9 +303,16 @@ async def apply_webhook(
             raise LookupError(f"unknown bindingId: {binding_id}")
 
         # Capture prior states BEFORE mutation so we can report transitions.
+        # Patch closesObserved from the table first — the engine reads this
+        # field during propagate but it is no longer the persistent source.
+        if repo is not None:
+            _patch_closes_from_table(cfg, repo, thesis_id)
         prior_states = _propagate_states(cfg)
 
-        new_value = apply_op(match.node, match.binding, alert_value)
+        new_value = apply_op(
+            match.node, match.binding, alert_value,
+            repo=repo, thesis_id=thesis_id,
+        )
 
         # Stamp audit fields on the binding itself for operator visibility.
         match.binding["fireCount"] = int(match.binding.get("fireCount", 0) or 0) + 1
@@ -258,13 +321,18 @@ async def apply_webhook(
 
         # Persist the updated book first — a crash before propagate leaves
         # the mutation durable, matching the existing fetch_prices pattern.
+        # Note: closesObserved is deliberately NOT persisted here because it
+        # is a derived field computed from the close_observations table; the
+        # value on disk stays at whatever the book author set (typically 0).
         await asyncio.to_thread(write_book_atomic, book_id, cfg)
 
         # Invalidate the thesis-state cache so the next GET reads fresh.
         thesis_adapter.invalidate_cache(book_id)
 
-        # Recompute states from the mutated cfg. We use the in-memory cfg
-        # (already mutated) rather than round-tripping through a reload.
+        # Recompute states from the post-insert table. Patch closesObserved
+        # again because the insert may have bumped the streak.
+        if repo is not None:
+            _patch_closes_from_table(cfg, repo, thesis_id)
         new_states = _propagate_states(cfg)
 
         return ApplyResult(
@@ -276,6 +344,44 @@ async def apply_webhook(
             prior_states=prior_states,
             new_states=new_states,
         )
+
+
+def _patch_closes_from_table(
+    cfg: dict, repo: "Repository", thesis_id: str,
+) -> None:
+    """Patch node.closesObserved in-memory from the close_observations table.
+
+    Mirrors RuntimeCoordinator._patch_closes_observed. For each price/reversal
+    node with a closesRequired threshold, finds the highest threshold where
+    current >= level, queries the streak for that threshold_key, and writes
+    the count onto the node. This keeps the webhook-local propagate() in
+    agreement with the coordinator's cycle propagate().
+    """
+    for node in cfg.get("nodes", []):
+        if node.get("type") not in ("price", "reversal"):
+            continue
+        thresholds = node.get("thresholds") or []
+        thresholds_with_closes = [
+            th for th in thresholds
+            if isinstance(th, dict) and th.get("closesRequired") and th.get("level") is not None
+        ]
+        if not thresholds_with_closes:
+            continue
+        current = node.get("current")
+        if current is None:
+            node["closesObserved"] = 0
+            continue
+        for th in sorted(thresholds_with_closes,
+                         key=lambda t: t["level"], reverse=True):
+            if current >= th["level"]:
+                node["closesObserved"] = int(repo.get_close_streak(
+                    thesis_id=thesis_id,
+                    node_id=node["id"],
+                    threshold_key=str(th["level"]),
+                ))
+                break
+        else:
+            node["closesObserved"] = 0
 
 
 def _propagate_states(cfg: dict) -> Dict[str, str]:

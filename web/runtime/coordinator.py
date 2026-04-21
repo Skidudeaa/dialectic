@@ -272,10 +272,13 @@ class RuntimeCoordinator:
         try:
             await asyncio.to_thread(thesisgraph.fetch_prices, effective)
             await asyncio.to_thread(thesisgraph.fetch_polymarket, effective)
-            # Derived indicators (best-effort)
+            # Derived indicators + close-observation ingest (best-effort)
             try:
                 await asyncio.to_thread(thesisgraph.fetch_ohlcv_for_derived, effective)
                 await asyncio.to_thread(thesisgraph.compute_derived_indicators, effective)
+                await asyncio.to_thread(
+                    self._persist_close_events, thesis_id, effective
+                )
             except Exception as e:
                 log.warning("derived_indicators failed for %s: %s", thesis_id, e)
 
@@ -294,6 +297,12 @@ class RuntimeCoordinator:
         # 3. Query active overrides and apply precedence
         overrides = self._repo.list_active_overrides(thesis_id)
         self._apply_overrides(effective, overrides)
+
+        # 3b. Patch closesObserved from the SQLite streak count. The engine
+        # no longer mutates this field; the table is canonical. Patch happens
+        # AFTER override application so a manual closesObserved override still
+        # wins if an operator sets one.
+        self._patch_closes_observed(thesis_id, effective)
 
         # 4. Propagate
         states = thesisgraph.propagate(effective)
@@ -391,6 +400,79 @@ class RuntimeCoordinator:
             return snap
         else:
             raise ValueError(f"Unknown op: {op}")
+
+    # ════════════════════════════════════════════════════════════════
+    # INTERNALS — close-observation ingest + streak patch
+    # ════════════════════════════════════════════════════════════════
+
+    def _persist_close_events(self, thesis_id: str, effective: dict) -> None:
+        """Translate engine close events to table INSERTs.
+
+        WHY this mapper lives here (not in the engine): the engine is stdlib
+        only and must never import web.persistence. It emits a transient
+        `_close_events` list on the effective cfg; we drain it and write to
+        SQLite via the Repository. INSERT OR IGNORE on the PK
+        (thesis_id, node_id, market_date, threshold_key) gives us free dedup
+        across overlapping runs.
+        """
+        events = effective.pop("_close_events", None) or []
+        if not events:
+            return
+        for evt in events:
+            try:
+                self._repo.insert_close_observation(
+                    thesis_id=thesis_id,
+                    node_id=evt["node_id"],
+                    market_date=evt["market_date"],
+                    threshold_key=evt["threshold_key"],
+                    close_value=float(evt["close_value"]),
+                    qualifies=bool(evt["qualifies"]),
+                    source="derived",
+                )
+            except (KeyError, ValueError, TypeError) as e:
+                log.warning(
+                    "close_event insert failed for %s/%s: %s",
+                    thesis_id, evt.get("node_id"), e,
+                )
+
+    def _patch_closes_observed(self, thesis_id: str, effective: dict) -> None:
+        """Replace node.closesObserved with the streak count from the table.
+
+        WHY: The engine's closesRequired gate reads `node.closesObserved`.
+        With the engine no longer mutating that field, the coordinator is
+        responsible for sourcing the value from SQLite before propagate().
+        We iterate each node's thresholds highest-first (matching the engine's
+        own iteration in eval_node_state) and patch the streak for the first
+        qualifying threshold.
+        """
+        for node in effective.get("nodes", []):
+            if node.get("type") not in ("price", "reversal"):
+                continue
+            thresholds = node.get("thresholds") or []
+            thresholds_with_closes = [
+                th for th in thresholds
+                if isinstance(th, dict) and th.get("closesRequired") and th.get("level") is not None
+            ]
+            if not thresholds_with_closes:
+                continue
+            current = node.get("current")
+            if current is None:
+                node["closesObserved"] = 0
+                continue
+            # Highest threshold where current >= level wins — matches
+            # eval_node_state's `sorted_th = sorted(..., reverse=True)` walk.
+            for th in sorted(thresholds_with_closes,
+                             key=lambda t: t["level"], reverse=True):
+                if current >= th["level"]:
+                    streak = self._repo.get_close_streak(
+                        thesis_id=thesis_id,
+                        node_id=node["id"],
+                        threshold_key=str(th["level"]),
+                    )
+                    node["closesObserved"] = int(streak)
+                    break
+            else:
+                node["closesObserved"] = 0
 
     # ════════════════════════════════════════════════════════════════
     # INTERNALS — override application

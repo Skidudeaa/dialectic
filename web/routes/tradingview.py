@@ -214,6 +214,7 @@ async def receive_alert(request: Request) -> JSONResponse:
             book_id=alert.book,
             binding_id=alert.bindingId,
             alert_value=alert.value,
+            repo=repo,
         )
     except FileNotFoundError as e:
         repo.save_tv_event(

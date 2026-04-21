@@ -1169,17 +1169,48 @@ def fetch_ohlcv_for_derived(cfg: dict, retries: int = 2) -> dict:
                     succeeded = True
                     break
                 quote = results[0].get("indicators", {}).get("quote", [{}])[0]
+                timestamps_raw = results[0].get("timestamp") or []
                 closes_raw = quote.get("close") or []
                 highs_raw = quote.get("high") or []
                 lows_raw = quote.get("low") or []
-                closes = [round(float(c), 4) for c in closes_raw if c is not None]
-                highs = [round(float(h), 4) for h in highs_raw if h is not None]
-                lows = [round(float(l), 4) for l in lows_raw if l is not None]
+                # Pair each close with its timestamp (Yahoo aligns these arrays
+                # index-by-index). Filter out nulls in the close position, and
+                # convert the timestamp to ISO market-date for close-observation
+                # table keying downstream.
+                paired = list(zip(
+                    timestamps_raw or [None] * len(closes_raw),
+                    closes_raw,
+                    highs_raw or [None] * len(closes_raw),
+                    lows_raw or [None] * len(closes_raw),
+                ))
+                closes: list[float] = []
+                highs: list[float] = []
+                lows: list[float] = []
+                dates: list[str] = []
+                for ts, c, h, l in paired:
+                    if c is None:
+                        continue
+                    closes.append(round(float(c), 4))
+                    if h is not None:
+                        highs.append(round(float(h), 4))
+                    if l is not None:
+                        lows.append(round(float(l), 4))
+                    if ts is not None:
+                        try:
+                            dates.append(
+                                datetime.fromtimestamp(int(ts), tz=timezone.utc)
+                                .date().isoformat()
+                            )
+                        except (ValueError, TypeError, OSError):
+                            dates.append("")
+                    else:
+                        dates.append("")
                 if closes:
                     cfg["_ohlcv"][symbol] = {
                         "closes": closes,
                         "highs": highs,
                         "lows": lows,
+                        "dates": dates,
                     }
                     fetched += 1
                     print(f"  ohlcv {symbol}: {len(closes)} closes", file=sys.stderr)
@@ -1201,31 +1232,39 @@ def fetch_ohlcv_for_derived(cfg: dict, retries: int = 2) -> dict:
 
 
 def compute_derived_indicators(cfg: dict) -> dict:
-    """Populate each node's tvIndicators from its derivedIndicators specs.
+    """Populate each node's tvIndicators and emit close events.
 
     Call order: runs AFTER fetch_ohlcv_for_derived() (which populates the
-    transient cfg["_ohlcv"] stash) and BEFORE propagate() (so the
-    closesObserved counter bump is visible to eval_node_state's
-    closesRequired gate).
+    transient cfg["_ohlcv"] stash) and BEFORE propagate(). The coordinator
+    is responsible for consuming the emitted close events (writing them to
+    SQLite and patching per-node streak counts onto effective cfg) before
+    propagate() runs.
 
     Mutates cfg in-place:
         - Writes node["tvIndicators"] = {"rsi14": ..., "atr14": ...,
           "source": "derived_from_yahoo", "computedAt": ISO8601}.
-        - Bumps node["closesObserved"] for price nodes whose threshold has
-          closesRequired set, using the contiguous tail-run of closes
-          above the threshold level.
+        - Attaches cfg["_close_events"] = [{node_id, threshold_key,
+          threshold_level, market_date, close_value, qualifies}, ...] — one
+          record per (node × threshold-with-closesRequired × close-in-series).
         - Strips cfg["_ohlcv"] at the end (transient only).
 
+    Does NOT mutate node["closesObserved"] — the streak count is now sourced
+    from the close_observations SQLite table, driven by the coordinator. CLI
+    callers that still want closesObserved visible in generated HTML must
+    derive it from the returned events.
+
     Does NOT touch node["current"], node["state"], node["probability"], or
-    any other propagation-read field. The lone exception is closesObserved,
-    which was designed to be exactly this kind of auto-incrementing counter
-    — see eval_node_state's closesRequired gate comment.
+    any other propagation-read field.
     """
     di_dir = os.path.abspath(
         os.path.join(os.path.dirname(__file__), "..", "data_fetch")
     )
     if di_dir not in sys.path:
         sys.path.insert(0, di_dir)
+
+    # Always seed an empty events bucket so the coordinator can branch on
+    # "key exists" without special-casing import/OHLCV failures.
+    cfg["_close_events"] = []
 
     try:
         import derived_indicators as di
@@ -1242,7 +1281,7 @@ def compute_derived_indicators(cfg: dict) -> dict:
 
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     updated_nodes = 0
-    counter_bumps = 0
+    events_emitted = 0
 
     for node in cfg.get("nodes", []):
         specs = node.get("derivedIndicators") or []
@@ -1261,11 +1300,17 @@ def compute_derived_indicators(cfg: dict) -> dict:
             node["tvIndicators"] = tv
             updated_nodes += 1
 
-        # closesObserved integration — the ONE authorized write into an
-        # engine-read field. The closesRequired gate at eval_node_state
-        # was designed to consume this counter; we're feeding it the data
-        # it was waiting for, not adding new state logic.
-        if node.get("type") != "price":
+        # Emit close events for every (threshold, close) pair on price/reversal
+        # nodes with closesRequired gates. The coordinator writes these to the
+        # close_observations table (PK-dedup on thesis_id + node_id +
+        # market_date + threshold_key) and computes the streak count.
+        if node.get("type") not in ("price", "reversal"):
+            continue
+        thresholds_with_closes = [
+            th for th in (node.get("thresholds") or [])
+            if isinstance(th, dict) and th.get("closesRequired") and th.get("level") is not None
+        ]
+        if not thresholds_with_closes:
             continue
         for spec in specs:
             if not isinstance(spec, dict):
@@ -1273,28 +1318,30 @@ def compute_derived_indicators(cfg: dict) -> dict:
             symbol = spec.get("symbol")
             series = ohlcv.get(symbol) or {}
             closes = series.get("closes") or []
+            dates = series.get("dates") or []
             if not closes:
                 continue
-            for th in node.get("thresholds", []) or []:
-                if not th.get("closesRequired"):
-                    continue
-                level = th.get("level")
-                if level is None:
-                    continue
-                count = di.consecutive_closes_above(closes, float(level))
-                prior = int(node.get("closesObserved", 0) or 0)
-                if count > prior:
-                    node["closesObserved"] = count
-                    print(
-                        f"  {node['id']}: closesObserved {prior}->{count} "
-                        f"(>= {level})",
-                        file=sys.stderr,
-                    )
-                    counter_bumps += 1
+            # Pair closes with dates; fall back to the empty string when Yahoo
+            # didn't return timestamps (keeps the PK deterministic).
+            for idx, close_value in enumerate(closes):
+                market_date = dates[idx] if idx < len(dates) else ""
+                if not market_date:
+                    continue  # Skip undated rows — can't key the PK safely.
+                for th in thresholds_with_closes:
+                    level = float(th["level"])
+                    cfg["_close_events"].append({
+                        "node_id": node["id"],
+                        "threshold_key": str(th["level"]),
+                        "threshold_level": level,
+                        "market_date": market_date,
+                        "close_value": float(close_value),
+                        "qualifies": close_value >= level,
+                    })
+                    events_emitted += 1
 
     print(
         f"  derived_indicators: updated {updated_nodes} node(s), "
-        f"bumped {counter_bumps} counter(s)",
+        f"emitted {events_emitted} close event(s)",
         file=sys.stderr,
     )
     cfg.pop("_ohlcv", None)

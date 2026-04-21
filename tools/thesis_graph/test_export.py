@@ -680,6 +680,13 @@ class TestDerivedIndicatorsFlow:
     def _make_cfg_with_derived(self, level: int = 115,
                                closes_required: int = 3) -> dict:
         """Build a minimal cfg with one price node and pre-populated OHLCV."""
+        # 30 closes, final 4 above 115 consecutively
+        closes = [100 + i * 0.5 for i in range(26)] + [115.5, 116, 117, 118]
+        # Synthetic market dates aligned 1:1 with the close series so Unit 11's
+        # close_observations pipeline can key its PK off them.
+        base = date(2026, 3, 1)
+        dates = [(base.toordinal() + i) for i in range(len(closes))]
+        iso_dates = [date.fromordinal(d).isoformat() for d in dates]
         return {
             "meta": {"title": "Unit Test Book"},
             "nodes": [
@@ -702,10 +709,10 @@ class TestDerivedIndicatorsFlow:
             # Pre-populated OHLCV stash — bypasses fetch_ohlcv_for_derived.
             "_ohlcv": {
                 "BZ=F": {
-                    # 30 closes, final 4 above 115 consecutively
-                    "closes": [100 + i * 0.5 for i in range(26)] + [115.5, 116, 117, 118],
+                    "closes": closes,
                     "highs": [],
                     "lows": [],
+                    "dates": iso_dates,
                 },
             },
         }
@@ -759,13 +766,31 @@ class TestDerivedIndicatorsFlow:
         # update_config_file(), which is what prevents book-JSON bloat.
         assert "_ohlcv" not in cfg
 
-    def test_compute_derived_bumps_closes_observed(self):
+    def test_compute_derived_emits_close_events_without_mutating_closes_observed(self):
+        """Unit 11: the engine stops mutating closesObserved and instead
+        emits a `_close_events` list on the cfg for the coordinator to drain
+        into the close_observations SQLite table.
+        """
         cfg = self._make_cfg_with_derived(level=115, closes_required=3)
         brent = cfg["nodes"][0]
         assert brent.get("closesObserved", 0) == 0
         compute_derived_indicators(cfg)
-        # The fixture ends in 4 consecutive closes >= 115 → counter = 4
-        assert brent.get("closesObserved") == 4
+        # No mutation of the node field — that is now the coordinator's job.
+        assert brent.get("closesObserved", 0) == 0
+        # One event per (close, threshold-with-closesRequired) pair.
+        events = cfg.get("_close_events") or []
+        assert len(events) == 30
+        # Exactly 4 qualifying events at the tail of the series (>= 115).
+        qualifying = [e for e in events if e["qualifies"]]
+        assert len(qualifying) == 4
+        # Each event carries the fields the coordinator needs.
+        for e in events:
+            assert set(e.keys()) >= {
+                "node_id", "threshold_key", "threshold_level",
+                "market_date", "close_value", "qualifies",
+            }
+            assert e["node_id"] == "brent"
+            assert e["threshold_key"] == "115"
 
     def test_closes_observed_meets_required_promotes_to_fired(self):
         """eval_node_state must promote to fired when the counter is satisfied."""

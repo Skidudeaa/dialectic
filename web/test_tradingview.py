@@ -564,31 +564,69 @@ class TestWebhookAuth:
 # ═════════════════════════════════════════════════════════════════════════
 
 class TestWebhookApply:
-    def test_increment_closes_observed_bumps_counter(self, temp_books):
+    def test_increment_closes_observed_inserts_table_row(self, temp_books, isolate_state):
+        """Unit 11: incrementClosesObserved inserts into close_observations.
+
+        WHY the book JSON is no longer mutated: closesObserved is a derived
+        field computed from the SQLite streak. The webhook's job is to
+        register the close event; the coordinator (and apply_webhook's local
+        patch) projects it back onto the cfg before propagate.
+        """
         resp = _post_webhook({
             "book": "test-book",
             "bindingId": "brent-persistence-close-above-115",
+            "value": 116.5,  # above threshold 115
         })
         assert resp.status_code == 200
-        # Read the book back — closesObserved should be 1
+        repo = isolate_state
+        # Streak is 1 after the first qualifying close.
+        assert repo.get_close_streak(
+            thesis_id="test-book", node_id="brent", threshold_key="115",
+        ) == 1
+        # The API echoes the streak as newValue.
+        assert resp.json()["newValue"] == 1
+        # Book JSON's closesObserved is NOT touched — no longer canonical.
         book = json.loads((temp_books / "test-book.json").read_text())
         brent = next(n for n in book["nodes"] if n["id"] == "brent")
-        assert brent["closesObserved"] == 1
+        assert brent.get("closesObserved", 0) == 0
 
-    def test_three_increments_promote_state_to_fired(self, temp_books):
-        for i in range(3):
-            resp = _post_webhook(
-                {"book": "test-book", "bindingId": "brent-persistence-close-above-115"},
-                nonce=f"nonce-{i}-abc123",
-            )
-            assert resp.status_code == 200
-        # After 3 bumps, closesObserved == closesRequired → fired
-        book = json.loads((temp_books / "test-book.json").read_text())
-        brent = next(n for n in book["nodes"] if n["id"] == "brent")
-        assert brent["closesObserved"] == 3
-        # Third response should report the state change
-        data = resp.json()
-        assert data["newValue"] == 3
+    def test_three_increments_promote_state_to_fired(self, temp_books, isolate_state):
+        """Three qualifying closes (one per market date) take the streak to 3.
+
+        The adapter uses today's date as market_date, which would dedup three
+        same-day inserts down to 1. To simulate three distinct market dates
+        we patch the adapter's date.today() for this test.
+        """
+        from unittest.mock import patch as mock_patch
+        from datetime import date as real_date
+        fake_dates = [
+            real_date(2026, 4, 15), real_date(2026, 4, 16), real_date(2026, 4, 17),
+        ]
+
+        class _FakeDate(real_date):
+            _seq = iter(fake_dates)
+
+            @classmethod
+            def today(cls) -> real_date:
+                return next(cls._seq)
+
+        with mock_patch("web.adapters.tradingview.date", _FakeDate):
+            responses = []
+            for i in range(3):
+                r = _post_webhook(
+                    {"book": "test-book",
+                     "bindingId": "brent-persistence-close-above-115",
+                     "value": 116.0 + i},
+                    nonce=f"nonce-{i}-abc123",
+                )
+                assert r.status_code == 200
+                responses.append(r)
+        repo = isolate_state
+        assert repo.get_close_streak(
+            thesis_id="test-book", node_id="brent", threshold_key="115",
+        ) == 3
+        # Third response echoes the final streak count.
+        assert responses[-1].json()["newValue"] == 3
 
     def test_set_node_state_on_event_node(self, temp_books):
         resp = _post_webhook({
