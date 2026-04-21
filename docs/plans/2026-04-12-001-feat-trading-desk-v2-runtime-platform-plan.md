@@ -12,13 +12,13 @@ supersedes: docs/plans/2026-03-31-002-feat-trading-desk-web-ui-plan.md
 
 ## Implementation Status (2026-04-21)
 
-11 of 15 units shipped. Remaining: overrides (partial), close-observation table, scenarios, health/readiness split.
+12 of 15 units shipped. Remaining: overrides (partial), scenarios, health/readiness split.
 
 | Milestone | Units | Status |
 |---|---|---|
 | M0 Contracts & Packaging | 1–5 | ✅ shipped |
 | M1 Runtime Core | 6–9 | ✅ shipped |
-| M2 Read-Only Desk Upgrades | 10, 11, 12 | 12 shipped; 10 partial; 11 not started |
+| M2 Read-Only Desk Upgrades | 10, 11, 12 | 11 ✅ (commits d040326, 4fa1901); 12 ✅; 10 partial |
 | M3 Interactive Workflows | 13, 14 | not started |
 | M4 Engine Hardening | 15 | ✅ shipped — cumulative path-lag horizon + structured validator (commit 658e235) |
 
@@ -701,7 +701,7 @@ immutable_definition (books/*.json, loaded once)
 
 ---
 
-- [ ] **Unit 11: Close observation table + unified counting**
+- [x] **Unit 11: Close observation table + unified counting**
 
 **Goal:** Single canonical close-observation source in SQLite. Both derived_indicators and TradingView webhook INSERT into the table instead of mutating node fields. Streak-based counting (not total count) preserves consecutive-close semantics.
 
