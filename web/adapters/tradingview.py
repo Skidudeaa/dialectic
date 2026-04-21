@@ -41,18 +41,11 @@ log = logging.getLogger(__name__)
 _ROOT = Path(__file__).resolve().parent.parent.parent
 BOOKS_DIR = _ROOT / "books"
 
-# One asyncio.Lock per book_id — serializes concurrent webhook mutations
-# against the same file. Two POSTs to the same book will execute in order,
-# with the second one reading the book state the first wrote.
-_book_locks: Dict[str, asyncio.Lock] = {}
-_book_locks_guard = asyncio.Lock()
-
-
-async def _lock_for_book(book_id: str) -> asyncio.Lock:
-    async with _book_locks_guard:
-        if book_id not in _book_locks:
-            _book_locks[book_id] = asyncio.Lock()
-        return _book_locks[book_id]
+# WHY no local locks: the RuntimeCoordinator owns a single per-thesis
+# asyncio.Lock shared by the scheduler tick, overrides, and webhooks. All
+# TV webhook mutations are dispatched through coordinator.submit(thesis_id,
+# "tv_webhook", ...), which acquires that lock before invoking
+# apply_webhook_sync. The old _book_locks dict is removed.
 
 
 # ── Path + ID validation ──────────────────────────────────────────────────
@@ -273,77 +266,67 @@ class ApplyResult:
         )
 
 
-async def apply_webhook(
-    *,
-    book_id: str,
+def apply_webhook_sync(
+    thesis_id: str,
     binding_id: str,
     alert_value: Optional[float],
-    repo: "Optional[Repository]" = None,
+    repo: "Repository",
 ) -> ApplyResult:
-    """Apply one validated Pine alert to the book and return the structured result.
+    """Apply one validated Pine alert — synchronous, already under the lock.
 
-    Serializes concurrent webhooks against the same book via per-book asyncio
-    locks. File I/O runs in a worker thread so the event loop stays free.
+    WHY synchronous: this is the mechanical half of the webhook flow —
+    load_book, find_binding, apply_op, persist, propagate. The
+    RuntimeCoordinator acquires the per-thesis lock in `submit()` and
+    then calls this via `asyncio.to_thread`, keeping the event loop free
+    while the blocking file I/O runs.
 
-    WHY repo parameter: incrementClosesObserved now writes to the
-    close_observations SQLite table via Repository. The route passes its
-    app.state.repo down so the adapter can insert + compute streak. Other
-    ops still mutate the book JSON.
+    WHY thesis_id == book_id: the coordinator keys theses by `Path.stem`
+    which matches the book_id used by the TV webhook route. We accept
+    thesis_id as the parameter name to make the coordinator boundary
+    obvious in callers' code.
     """
-    # WHY book_id is also thesis_id: the coordinator keys theses by
-    # Path(path).stem which matches the book_id used by the webhook route.
-    thesis_id = book_id
+    cfg = load_book(thesis_id)
 
-    lock = await _lock_for_book(book_id)
-    async with lock:
-        cfg = await asyncio.to_thread(load_book, book_id)
+    match = find_binding(cfg, binding_id)
+    if match is None:
+        raise LookupError(f"unknown bindingId: {binding_id}")
 
-        match = find_binding(cfg, binding_id)
-        if match is None:
-            raise LookupError(f"unknown bindingId: {binding_id}")
+    # Capture prior states BEFORE mutation so we can report transitions.
+    # Patch closesObserved from the table first — the engine reads this
+    # field during propagate but it is no longer the persistent source.
+    _patch_closes_from_table(cfg, repo, thesis_id)
+    prior_states = _propagate_states(cfg)
 
-        # Capture prior states BEFORE mutation so we can report transitions.
-        # Patch closesObserved from the table first — the engine reads this
-        # field during propagate but it is no longer the persistent source.
-        if repo is not None:
-            _patch_closes_from_table(cfg, repo, thesis_id)
-        prior_states = _propagate_states(cfg)
+    new_value = apply_op(
+        match.node, match.binding, alert_value,
+        repo=repo, thesis_id=thesis_id,
+    )
 
-        new_value = apply_op(
-            match.node, match.binding, alert_value,
-            repo=repo, thesis_id=thesis_id,
-        )
+    # Stamp audit fields on the binding itself for operator visibility.
+    match.binding["fireCount"] = int(match.binding.get("fireCount", 0) or 0) + 1
+    from datetime import datetime, timezone
+    match.binding["lastFiredAt"] = datetime.now(timezone.utc).isoformat()
 
-        # Stamp audit fields on the binding itself for operator visibility.
-        match.binding["fireCount"] = int(match.binding.get("fireCount", 0) or 0) + 1
-        from datetime import datetime, timezone
-        match.binding["lastFiredAt"] = datetime.now(timezone.utc).isoformat()
+    # Persist the updated book. closesObserved is deliberately NOT a
+    # persistent field — the close_observations table is its source.
+    write_book_atomic(thesis_id, cfg)
 
-        # Persist the updated book first — a crash before propagate leaves
-        # the mutation durable, matching the existing fetch_prices pattern.
-        # Note: closesObserved is deliberately NOT persisted here because it
-        # is a derived field computed from the close_observations table; the
-        # value on disk stays at whatever the book author set (typically 0).
-        await asyncio.to_thread(write_book_atomic, book_id, cfg)
+    # Invalidate the thesis-state cache so the next GET reads fresh.
+    thesis_adapter.invalidate_cache(thesis_id)
 
-        # Invalidate the thesis-state cache so the next GET reads fresh.
-        thesis_adapter.invalidate_cache(book_id)
+    # Recompute states from the post-insert table.
+    _patch_closes_from_table(cfg, repo, thesis_id)
+    new_states = _propagate_states(cfg)
 
-        # Recompute states from the post-insert table. Patch closesObserved
-        # again because the insert may have bumped the streak.
-        if repo is not None:
-            _patch_closes_from_table(cfg, repo, thesis_id)
-        new_states = _propagate_states(cfg)
-
-        return ApplyResult(
-            book_id=book_id,
-            node_id=match.node["id"],
-            binding_id=binding_id,
-            op=match.binding["op"],
-            new_value=new_value,
-            prior_states=prior_states,
-            new_states=new_states,
-        )
+    return ApplyResult(
+        book_id=thesis_id,
+        node_id=match.node["id"],
+        binding_id=binding_id,
+        op=match.binding["op"],
+        new_value=new_value,
+        prior_states=prior_states,
+        new_states=new_states,
+    )
 
 
 def _patch_closes_from_table(

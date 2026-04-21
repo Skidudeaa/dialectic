@@ -69,8 +69,6 @@ def reset_modules():
     """Clear shared singletons between tests."""
     nonce_store.clear()
     tv_routes.rate_limiter.reset()
-    # Clear per-book asyncio locks so new temp books start fresh
-    tv_adapter._book_locks.clear()
     # Clear thesis cache
     thesis_adapter._state_cache.clear()
     yield
@@ -173,11 +171,31 @@ def temp_books(tmp_path: Path):
 
     original_books = tv_adapter.BOOKS_DIR
     original_thesis_books = thesis_adapter.BOOKS_DIR
+    import web.runtime.coordinator as coord_mod
+    original_coord_books = coord_mod.BOOKS_DIR
     tv_adapter.BOOKS_DIR = books_dir
     thesis_adapter.BOOKS_DIR = books_dir
+    coord_mod.BOOKS_DIR = books_dir
+
+    # Unit 11b: TV webhooks route through the coordinator. Spin up a fresh
+    # coordinator scoped to the temp books dir and the test's in-memory repo.
+    # We don't call start() — the tick loop isn't needed for webhook tests —
+    # just load definitions so `submit()` accepts the test-book thesis id.
+    from web.runtime.coordinator import RuntimeCoordinator
+    from web.ws import manager as ws_manager
+    coordinator = RuntimeCoordinator(
+        repo=app.state.repo, ws_manager=ws_manager, tick_interval=9999,
+    )
+    coordinator._load_definitions()
+    app.state.coordinator = coordinator
+
     yield books_dir
+
     tv_adapter.BOOKS_DIR = original_books
     thesis_adapter.BOOKS_DIR = original_thesis_books
+    coord_mod.BOOKS_DIR = original_coord_books
+    if hasattr(app.state, "coordinator"):
+        delattr(app.state, "coordinator")
 
 
 def _signed_webhook_headers(body: bytes, *, ts: int | None = None,

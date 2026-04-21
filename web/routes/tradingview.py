@@ -208,13 +208,33 @@ async def receive_alert(request: Request) -> JSONResponse:
         )
         return JSONResponse(status_code=400, content={"error": "invalid body shape"})
 
-    # Apply mutation via adapter
+    # Apply mutation via the coordinator — single lock per thesis, unified
+    # with scheduler ticks and overrides. The coordinator internally calls
+    # apply_webhook_sync under its per-thesis asyncio.Lock.
+    coordinator = getattr(request.app.state, "coordinator", None)
+    if coordinator is None:
+        repo.save_tv_event(
+            result="coordinator_missing", book_id=alert.book,
+            binding_id=alert.bindingId, source_ip=client_ip,
+            detail="app.state.coordinator not initialized",
+        )
+        return JSONResponse(status_code=503,
+                            content={"error": "coordinator unavailable"})
+    if alert.book not in coordinator.definitions:
+        repo.save_tv_event(
+            result="book_not_found", book_id=alert.book,
+            binding_id=alert.bindingId, source_ip=client_ip,
+            detail=f"no thesis registered for book_id: {alert.book}",
+        )
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"unknown book: {alert.book}"},
+        )
     try:
-        result = await tv_adapter.apply_webhook(
-            book_id=alert.book,
-            binding_id=alert.bindingId,
-            alert_value=alert.value,
-            repo=repo,
+        result = await coordinator.submit(
+            thesis_id=alert.book,
+            op="tv_webhook",
+            payload={"binding_id": alert.bindingId, "alert_value": alert.value},
         )
     except FileNotFoundError as e:
         repo.save_tv_event(
@@ -235,11 +255,21 @@ async def receive_alert(request: Request) -> JSONResponse:
         )
         return JSONResponse(status_code=422, content={"error": str(e)})
     except ValueError as e:
+        # Covers both coordinator's "Unknown thesis" and binding validation
         repo.save_tv_event(
             result="validation_failed", book_id=alert.book,
             binding_id=alert.bindingId, source_ip=client_ip, detail=str(e),
         )
         return JSONResponse(status_code=400, content={"error": str(e)})
+    except asyncio.TimeoutError:
+        repo.save_tv_event(
+            result="timeout", book_id=alert.book,
+            binding_id=alert.bindingId, source_ip=client_ip,
+            detail="coordinator submit timed out",
+        )
+        return JSONResponse(status_code=503,
+                            content={"error": "coordinator busy, retry"},
+                            headers={"Retry-After": "5"})
 
     # Audit + success event
     repo.save_tv_event(

@@ -172,9 +172,16 @@ class RuntimeCoordinator:
             log.warning("Books directory not found: %s", BOOKS_DIR)
             return
 
-        for path in sorted(BOOKS_DIR.glob("*-graph.json")):
+        # WHY *.json (not just *-graph.json): the shipping books all follow
+        # the -graph.json suffix, but the TV webhook accepts any `book_id`
+        # matching the book filename stem (see web/models.py TVWebhookAlert
+        # pattern). Widening the glob keeps the coordinator and the webhook
+        # in agreement. Non-thesis files get rejected by load_config.
+        for path in sorted(BOOKS_DIR.glob("*.json")):
             try:
                 cfg = thesisgraph.load_config(str(path))
+                if not isinstance(cfg, dict) or "nodes" not in cfg:
+                    continue  # Not a thesis file
                 thesis_id = path.stem  # e.g., "iran-hormuz-graph"
                 self._definitions[thesis_id] = cfg
                 self._definition_hashes[thesis_id] = self._compute_hash(cfg)
@@ -398,8 +405,36 @@ class RuntimeCoordinator:
                 # First request before any tick — run a cycle now
                 return await self._run_cycle(thesis_id)
             return snap
+        elif op == "tv_webhook":
+            return await self._run_tv_webhook(thesis_id, payload)
         else:
             raise ValueError(f"Unknown op: {op}")
+
+    async def _run_tv_webhook(self, thesis_id: str, payload: dict) -> Any:
+        """Apply a TradingView webhook mutation under the thesis lock.
+
+        WHY this lives in the coordinator: the per-thesis asyncio.Lock is the
+        single serialization point for all mutations. The TV adapter used to
+        hold its own _book_locks dict — this unified path removes that and
+        guarantees no webhook can interleave with a scheduler tick, an
+        override application, or another webhook for the same thesis.
+
+        Delegates the mechanical work (load_book, find_binding, apply_op,
+        persist, propagate) to stdlib helpers in web.adapters.tradingview
+        to keep that module focused on the engine contract.
+        """
+        from web.adapters import tradingview as tv_adapter
+        binding_id = payload.get("binding_id")
+        alert_value = payload.get("alert_value")
+        if not binding_id:
+            raise ValueError("tv_webhook payload requires binding_id")
+
+        # Run the synchronous mechanical work in a thread so we don't block
+        # the event loop on file I/O.
+        return await asyncio.to_thread(
+            tv_adapter.apply_webhook_sync,
+            thesis_id, binding_id, alert_value, self._repo,
+        )
 
     # ════════════════════════════════════════════════════════════════
     # INTERNALS — close-observation ingest + streak patch
