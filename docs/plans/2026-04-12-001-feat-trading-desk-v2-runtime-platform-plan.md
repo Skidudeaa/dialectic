@@ -12,15 +12,15 @@ supersedes: docs/plans/2026-03-31-002-feat-trading-desk-web-ui-plan.md
 
 ## Implementation Status (2026-04-21)
 
-12 of 15 units shipped. Remaining: overrides (partial), scenarios, health/readiness split.
+13 of 15 units shipped. Remaining: overrides (partial), scenarios.
 
 | Milestone | Units | Status |
 |---|---|---|
 | M0 Contracts & Packaging | 1–5 | ✅ shipped |
 | M1 Runtime Core | 6–9 | ✅ shipped |
-| M2 Read-Only Desk Upgrades | 10, 11, 12 | 11 ✅ (commits d040326, 4fa1901); 12 ✅; 10 partial |
-| M3 Interactive Workflows | 13, 14 | not started |
-| M4 Engine Hardening | 15 | ✅ shipped — cumulative path-lag horizon + structured validator (commit 658e235) |
+| M2 Read-Only Desk Upgrades | 10, 11, 12 | 11 ✅ (d040326, 4fa1901); 12 ✅; 10 partial |
+| M3 Interactive Workflows | 13, 14 | 14 ✅ (39851d5); 13 not started |
+| M4 Engine Hardening | 15 | ✅ shipped — cumulative path-lag horizon + structured validator (658e235) |
 
 See per-unit checkboxes below for detail. Unit 10 has override CRUD inside `repository.py`/`coordinator.py` but no dedicated `web/runtime/overrides.py` or `web/routes/v1/overrides.py`; precedence merge and expiry path are incomplete.
 
@@ -833,7 +833,7 @@ immutable_definition (books/*.json, loaded once)
 
 ---
 
-- [ ] **Unit 14: Health, readiness, and structured logging**
+- [x] **Unit 14: Health, readiness, and structured logging**
 
 **Goal:** Liveness and readiness endpoints. Structured logging with thesis context.
 
