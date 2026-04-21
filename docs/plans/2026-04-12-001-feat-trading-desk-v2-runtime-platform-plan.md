@@ -10,9 +10,9 @@ supersedes: docs/plans/2026-03-31-002-feat-trading-desk-web-ui-plan.md
 
 # feat: Trading Desk v2 — Runtime-First Platform
 
-## Implementation Status (2026-04-20)
+## Implementation Status (2026-04-21)
 
-10 of 15 units shipped. Remaining: overrides (partial), close-observation table, scenarios, health/readiness split, horizon propagation fix.
+11 of 15 units shipped. Remaining: overrides (partial), close-observation table, scenarios, health/readiness split.
 
 | Milestone | Units | Status |
 |---|---|---|
@@ -20,7 +20,7 @@ supersedes: docs/plans/2026-03-31-002-feat-trading-desk-web-ui-plan.md
 | M1 Runtime Core | 6–9 | ✅ shipped |
 | M2 Read-Only Desk Upgrades | 10, 11, 12 | 12 shipped; 10 partial; 11 not started |
 | M3 Interactive Workflows | 13, 14 | not started |
-| M4 Engine Hardening | 15 | not started — `propagate_at_horizon` still uses buggy per-edge filter |
+| M4 Engine Hardening | 15 | ✅ shipped — cumulative path-lag horizon + structured validator (commit 658e235) |
 
 See per-unit checkboxes below for detail. Unit 10 has override CRUD inside `repository.py`/`coordinator.py` but no dedicated `web/runtime/overrides.py` or `web/routes/v1/overrides.py`; precedence merge and expiry path are incomplete.
 
@@ -870,7 +870,7 @@ immutable_definition (books/*.json, loaded once)
 
 ### Milestone 4: Engine Hardening
 
-- [ ] **Unit 15: Horizon propagation fix + validation hardening**
+- [x] **Unit 15: Horizon propagation fix + validation hardening**
 
 **Goal:** Fix the mathematically wrong horizon propagation and harden config validation with structured errors.
 
