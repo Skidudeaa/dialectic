@@ -1,7 +1,9 @@
 ---
 title: "feat: TradingView integration (signal-source, webhook-driven)"
 type: feat
-status: proposed
+status: completed
+completed_date: 2026-04-10
+shipped_in_commits: [a3bfc21, 40a3d16, 8ccd6a0]
 date: 2026-04-05
 origin: https://youtu.be/vIX6ztULs4U (Lewis Jackson — "How To Connect Claude to Trading View")
 competition:

@@ -1,7 +1,8 @@
 ---
 title: "feat: Trading Desk web UI — FastAPI + React dashboard with live data"
 type: feat
-status: active
+status: superseded
+superseded_by: docs/plans/2026-04-12-001-feat-trading-desk-v2-runtime-platform-plan.md
 date: 2026-03-31
 origin: docs/brainstorms/2026-03-31-trading-desk-web-ui-requirements.md
 ---

@@ -10,6 +10,41 @@ supersedes: docs/plans/2026-03-31-002-feat-trading-desk-web-ui-plan.md
 
 # feat: Trading Desk v2 — Runtime-First Platform
 
+## Implementation Status (2026-04-20)
+
+10 of 15 units shipped. Remaining: overrides (partial), close-observation table, scenarios, health/readiness split, horizon propagation fix.
+
+| Milestone | Units | Status |
+|---|---|---|
+| M0 Contracts & Packaging | 1–5 | ✅ shipped |
+| M1 Runtime Core | 6–9 | ✅ shipped |
+| M2 Read-Only Desk Upgrades | 10, 11, 12 | 12 shipped; 10 partial; 11 not started |
+| M3 Interactive Workflows | 13, 14 | not started |
+| M4 Engine Hardening | 15 | not started — `propagate_at_horizon` still uses buggy per-edge filter |
+
+See per-unit checkboxes below for detail. Unit 10 has override CRUD inside `repository.py`/`coordinator.py` but no dedicated `web/runtime/overrides.py` or `web/routes/v1/overrides.py`; precedence merge and expiry path are incomplete.
+
+## Sequencing vs `2026-04-20-001` (live-data cockpit)
+
+Two active plans share `web/runtime/coordinator.py` and the engine. To avoid merge conflict and scope drift, the tail of this plan is sequenced against the cockpit plan as follows:
+
+**Phase A — Engine-correctness sprint (this plan, ~1 week, blocks nothing in cockpit M1):**
+
+1. **Unit 15** (horizon propagation fix). Pure engine, no runtime overlap. `propagate_at_horizon` currently uses a per-edge filter; the cumulative-path-lag rewrite lands first so any book that relies on horizons — including the new ai-capex / china-property / japan-rates demos — produces correct results.
+2. **Unit 11** (close-observation table). Touches coordinator + engine + TV adapter. Land before cockpit Unit 6 (live-tape bus) to keep TV webhook routing through the coordinator lock unchanged.
+
+Both are strictly additive to the runtime contract — no new WS envelope types, no new REST shapes. Safe to ship independently of cockpit work.
+
+**Phase B — Cockpit M1 starts in parallel with v2 tail (overlapping OK):**
+
+- **Unit 10** (overrides): completes while cockpit M1 Units 1–5 (relay + FRED + calendar + curve + freshness) are in flight. Overrides route lives under `/api/v1/overrides`; cockpit M1 adds no collisions there.
+- **Unit 13** (scenario evaluation): runs alongside cockpit M2. Scenario route is read-only and never touches the coordinator's mutation lock.
+- **Unit 14** (health/readiness + structured logging): lands last on this plan. Cockpit M3 (agent-in-room panel) benefits from the structured log context — sequence 14 before cockpit Unit 11.
+
+**Hard contention rule:** if a cockpit unit and a v2 tail unit both need `coordinator.py`, v2 ships first (engine correctness beats feature adds). All other files are non-overlapping per the unit specs above.
+
+**Exit criteria for v2 plan:** all 15 units `[x]`, live rooms (hormuz, tariffs) running on the new runtime for 48 hours without coordinator restart, full test suite green.
+
 ## Overview
 
 Rebuild the trading desk web layer from a page-first React port into a runtime-first platform. The center of the system becomes a **RuntimeCoordinator** that produces deterministic snapshots, emits durable events, and fans out structured WebSocket updates. SQLite replaces file-based JSON/JSONL persistence. The engine gets proper Python packaging (no `sys.path` hacks). The existing React frontend and chat system are preserved and evolved in place.
@@ -200,7 +235,7 @@ immutable_definition (books/*.json, loaded once)
 
 ### Milestone 0: Contracts and Packaging
 
-- [ ] **Unit 1: Engine directory rename + pyproject.toml**
+- [x] **Unit 1: Engine directory rename + pyproject.toml**
 
 **Goal:** Eliminate `sys.path` hacks. Make all engine modules properly importable via normal Python imports.
 
@@ -256,7 +291,7 @@ immutable_definition (books/*.json, loaded once)
 
 ---
 
-- [ ] **Unit 2: Pydantic schemas for snapshot, events, and API contracts**
+- [x] **Unit 2: Pydantic schemas for snapshot, events, and API contracts**
 
 **Goal:** Define the v2 data contracts as Pydantic models. These become the single source of truth for snapshot shape, event shape, API request/response, and WebSocket envelopes.
 
@@ -298,7 +333,7 @@ immutable_definition (books/*.json, loaded once)
 
 ---
 
-- [ ] **Unit 3: SQLite persistence layer + migration runner**
+- [x] **Unit 3: SQLite persistence layer + migration runner**
 
 **Goal:** Replace `web/state.py` file-based persistence with SQLite. Implement a simple migration runner and initial schema.
 
@@ -343,7 +378,7 @@ immutable_definition (books/*.json, loaded once)
 
 ---
 
-- [ ] **Unit 4: Data migration script**
+- [x] **Unit 4: Data migration script**
 
 **Goal:** One-time script that reads existing `web/data/` JSON/JSONL files and populates the SQLite database. Run once during first v2 deploy.
 
@@ -383,7 +418,7 @@ immutable_definition (books/*.json, loaded once)
 
 ---
 
-- [ ] **Unit 5: Wire persistence into existing routes**
+- [x] **Unit 5: Wire persistence into existing routes**
 
 **Goal:** Replace all `web/state.py` calls in existing routes with Repository calls wrapped in `asyncio.to_thread()`. Tests keep passing.
 
@@ -431,7 +466,7 @@ immutable_definition (books/*.json, loaded once)
 
 ### Milestone 1: Runtime Core
 
-- [ ] **Unit 6: RuntimeCoordinator + per-thesis scheduler**
+- [x] **Unit 6: RuntimeCoordinator + per-thesis scheduler**
 
 **Goal:** Central coordinator that owns per-thesis locks, schedules periodic fetch/evaluate cycles, serializes mutations, and produces committed snapshots.
 
@@ -494,7 +529,7 @@ immutable_definition (books/*.json, loaded once)
 
 ---
 
-- [ ] **Unit 7: Durable alert events + event repository**
+- [x] **Unit 7: Durable alert events + event repository**
 
 **Goal:** Persist meaningful state transitions as durable events in SQLite. Events survive process restarts and WebSocket disconnections.
 
@@ -534,7 +569,7 @@ immutable_definition (books/*.json, loaded once)
 
 ---
 
-- [ ] **Unit 8: WebSocket protocol upgrade — bootstrap + delta + chat**
+- [x] **Unit 8: WebSocket protocol upgrade — bootstrap + delta + chat**
 
 **Goal:** Versioned WebSocket protocol with structured envelopes. Bootstrap on connect, incremental deltas thereafter. Chat messages as additional envelope types.
 
@@ -581,7 +616,7 @@ immutable_definition (books/*.json, loaded once)
 
 ---
 
-- [ ] **Unit 9: Bootstrap REST endpoint + versioned API prefix**
+- [x] **Unit 9: Bootstrap REST endpoint + versioned API prefix**
 
 **Goal:** `GET /api/v1/bootstrap` endpoint for deterministic first render. Begin versioned API surface.
 
@@ -716,7 +751,7 @@ immutable_definition (books/*.json, loaded once)
 
 ---
 
-- [ ] **Unit 12: Outbox worker for Dialectic delivery**
+- [x] **Unit 12: Outbox worker for Dialectic delivery**
 
 **Goal:** Reliable external delivery via outbox pattern. Snapshot commit + outbox INSERT in same transaction. Worker drains pending rows and POSTs to Dialectic.
 
