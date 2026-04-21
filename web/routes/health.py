@@ -1,8 +1,19 @@
-"""Health check endpoint — no auth required."""
+"""Health check endpoints — no auth required.
+
+- `/api/health`                    legacy combined health (kept stable)
+- `/api/v1/health/live`            liveness probe — always 200 once running
+- `/api/v1/health/ready`           readiness probe — 200 when DB + coordinator + first tick done
+
+WHY the split (v2 Unit 14): liveness answers "is the process up?" and drives
+orchestrator restarts. Readiness answers "can the process serve requests?"
+and drives load-balancer traffic. Collapsing them makes rolling deploys
+chatty with false-positive restarts while the coordinator is still hydrating.
+"""
 
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 from web.main import get_uptime
 from web.models import HealthResponse
@@ -39,6 +50,57 @@ async def health() -> HealthResponse:
         books_loaded=books,
         last_snapshots=last_snapshots,
         llm_available=llm_available,
+    )
+
+
+@router.get("/api/v1/health/live")
+async def live() -> dict:
+    """Liveness probe — 200 as soon as the ASGI app is serving requests.
+
+    WHY never 503 here: a 503 on liveness triggers orchestrator restarts.
+    Anything transient (DB contention, coordinator hydration) belongs on
+    /ready, not here.
+    """
+    return {"status": "alive", "uptime_seconds": round(get_uptime(), 1)}
+
+
+@router.get("/api/v1/health/ready")
+async def ready(request: Request) -> JSONResponse:
+    """Readiness probe — 200 iff DB writable + coordinator + first tick done.
+
+    Any missing dependency returns 503 with a `detail` dict the operator can
+    inspect to decide whether to wait, page, or roll back.
+    """
+    detail: dict[str, object] = {
+        "db_writable": False,
+        "coordinator_initialized": False,
+        "first_tick_done": False,
+    }
+
+    # DB writable — cheap round-trip; any exception is a fatal for readiness.
+    repo = getattr(request.app.state, "repo", None)
+    if repo is not None:
+        try:
+            repo.ping()
+            detail["db_writable"] = True
+        except Exception as e:  # noqa: BLE001 — surface whatever broke
+            detail["db_error"] = str(e)
+
+    # Coordinator presence + first-tick flag.
+    coordinator = getattr(request.app.state, "coordinator", None)
+    if coordinator is not None:
+        detail["coordinator_initialized"] = True
+        detail["first_tick_done"] = bool(getattr(coordinator, "is_ready", False))
+
+    ok = all((
+        detail["db_writable"],
+        detail["coordinator_initialized"],
+        detail["first_tick_done"],
+    ))
+    status = 200 if ok else 503
+    return JSONResponse(
+        status_code=status,
+        content={"status": "ready" if ok else "not_ready", "detail": detail},
     )
 
 

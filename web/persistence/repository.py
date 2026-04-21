@@ -90,6 +90,23 @@ class Repository:
         finally:
             conn.close()
 
+    def ping(self) -> bool:
+        """Cheap writability probe for readiness checks.
+
+        Opens a connection, runs a trivial write-path query (CREATE TEMP
+        TABLE) and closes. Returns True on success; raises on failure so
+        callers get the real exception instead of a silent False.
+        """
+        conn = self._conn()
+        try:
+            conn.execute("CREATE TEMP TABLE IF NOT EXISTS _ping (x INTEGER)")
+            conn.execute("INSERT INTO _ping (x) VALUES (1)")
+            conn.execute("DROP TABLE _ping")
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+
     # ════════════════════════════════════════════════════════════════
     # ROOMS
     # ════════════════════════════════════════════════════════════════

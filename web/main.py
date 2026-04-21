@@ -18,6 +18,9 @@ from fastapi.responses import FileResponse
 
 _ROOT = Path(__file__).resolve().parent.parent
 
+# Default to a human-readable format for unit tests and anyone importing the
+# module as a library. The lifespan hook flips to structured JSON once the
+# full app is booting (see configure_structured_logging below).
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
@@ -29,6 +32,15 @@ async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle."""
     global _start_time
     _start_time = time.time()
+
+    # v2 Unit 14: switch to JSONL structured logging so every coordinator
+    # cycle tags log lines with thesisId, revision, runId. Off by default
+    # for imports; on here so production + integration runs get it.
+    import os
+    if os.environ.get("LOG_FORMAT", "json").lower() == "json":
+        from web.observability import configure_structured_logging
+        configure_structured_logging()
+
     log.info("tradingDesk web starting — root: %s", _ROOT)
 
     # WHY: Initialize SQLite persistence. Repository is stored on app.state

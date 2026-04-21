@@ -26,6 +26,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from tools.thesis_graph import thesisgraph  # type: ignore[import-untyped]
 
+from web.observability import thesis_context
 from web.persistence.repository import Repository
 from web.schemas.snapshots import snapshot_from_export
 
@@ -269,6 +270,12 @@ class RuntimeCoordinator:
         """
         t0 = time.monotonic()
         cfg = self._definitions[thesis_id]
+        # v2 Unit 14: push thesisId (and runId once we have it) into the
+        # contextvars so every log line emitted downstream is tagged.
+        with thesis_context(thesis_id):
+            return await self._run_cycle_inner(thesis_id, cfg, t0)
+
+    async def _run_cycle_inner(self, thesis_id: str, cfg: dict, t0: float) -> dict:
 
         # 1. Deep-copy the immutable definition
         effective = copy.deepcopy(cfg)
