@@ -36,6 +36,18 @@ _ROOT = Path(__file__).resolve().parent.parent.parent
 BOOKS_DIR = _ROOT / "books"
 
 
+class ScenarioEvaluationError(Exception):
+    """Raised by evaluate_scenario() with a structured reason code.
+
+    WHY: The route translates reason → HTTP status (404 for not-found kinds),
+    and tests assert on the reason rather than the human message.
+    """
+
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(reason)
+
+
 class RuntimeCoordinator:
     """Central mutation authority — owns thesis locks, scheduling, and snapshot commits.
 
@@ -162,6 +174,110 @@ class RuntimeCoordinator:
 
     def get_thesis_ids(self) -> List[str]:
         return list(self._definitions.keys())
+
+    def evaluate_scenario(
+        self,
+        thesis_id: str,
+        scenario_id: str,
+        against_revision: Optional[int] = None,
+    ) -> dict:
+        """Evaluate a scenario against a specific committed revision — read-only.
+
+        WHY: The scenario tab on the desk needs to answer "what would happen if
+        scenario X fired right now?" without touching live state. Because the
+        underlying engine is deterministic (inputs → propagate → states), the
+        result is fully reproducible: same revision + same definition always
+        yields the same answer.
+
+        TRADEOFF: Acquires NO coordinator lock and performs NO writes. A
+        scenario request running concurrently with a tick sees whatever
+        snapshot is committed at that moment; it never blocks or delays a
+        mutation. Returning a stale-by-one-revision result is acceptable
+        because the response carries baseRevision for the client.
+
+        Raises ScenarioEvaluationError with reason codes:
+            - "thesis_not_found": thesis_id not in loaded definitions
+            - "scenario_not_found": scenario_id not in cfg.scenarios
+            - "revision_not_found": against_revision specified but no snapshot
+        """
+        if thesis_id not in self._definitions:
+            raise ScenarioEvaluationError("thesis_not_found")
+
+        cfg = self._definitions[thesis_id]
+
+        # Locate the scenario in the definition
+        scenario = None
+        for s in cfg.get("scenarios", []) or []:
+            if isinstance(s, dict) and s.get("id") == scenario_id:
+                scenario = s
+                break
+        if scenario is None:
+            raise ScenarioEvaluationError("scenario_not_found")
+
+        # Resolve the base snapshot + revision
+        if against_revision is None:
+            base_snap = self._latest_snapshots.get(thesis_id)
+            base_revision = self._revisions.get(thesis_id, 0)
+            provider_values = self._repo.get_latest_provider_values(thesis_id)
+        else:
+            base_snap = self._repo.get_snapshot_by_revision(thesis_id, against_revision)
+            if base_snap is None:
+                raise ScenarioEvaluationError("revision_not_found")
+            base_revision = against_revision
+            provider_values = self._repo.get_provider_values_for_revision(
+                thesis_id, against_revision
+            )
+
+        base_states = (base_snap or {}).get("nodeStates", {}) or {}
+
+        # Deep-copy the immutable definition, then hydrate the current/probability
+        # values that were in effect at the target revision so propagate() sees
+        # the same inputs the base snapshot did.
+        effective = copy.deepcopy(cfg)
+        if provider_values:
+            node_map = {n["id"]: n for n in effective.get("nodes", [])}
+            for key, val in provider_values.items():
+                if key.endswith("_prob"):
+                    nid = key[:-5]
+                    if nid in node_map:
+                        node_map[nid]["probability"] = val
+                elif key in node_map:
+                    node_map[key]["current"] = val
+
+        # Run the engine's scenario evaluator. Deterministic; no I/O.
+        new_states, impact = thesisgraph.eval_scenario(
+            effective, scenario, base_states if base_states else None
+        )
+
+        # Diff nodes whose state changed relative to the base snapshot
+        changed_nodes: Dict[str, Dict[str, str]] = {}
+        for nid, new_state in new_states.items():
+            old_state = base_states.get(nid, "stable")
+            if new_state != old_state:
+                changed_nodes[nid] = {"old": old_state, "new": new_state}
+
+        # Human-readable summary
+        probability = float(scenario.get("probability", 0) or 0)
+        label = scenario.get("label") or scenario.get("name") or scenario_id
+        if changed_nodes:
+            explanation = (
+                f"{len(changed_nodes)} node(s) change state under '{label}' "
+                f"(probability {probability:.0%})."
+            )
+        else:
+            explanation = (
+                f"No node states change under '{label}' at this revision."
+            )
+
+        return {
+            "baseRevision": base_revision if base_revision else None,
+            "scenarioId": scenario_id,
+            "label": label,
+            "probability": probability,
+            "changedNodes": changed_nodes,
+            "portfolioImpact": impact,
+            "explanation": explanation,
+        }
 
     # ════════════════════════════════════════════════════════════════
     # INTERNALS — definition loading

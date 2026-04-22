@@ -105,6 +105,7 @@ def get_uptime() -> float:
 from web.routes import auth, health, thesis, market, builder as builder_routes, outcomes, rooms, messages, llm, journal, predictions, tradingview
 from web.routes import bridge
 from web.routes.v1 import bootstrap as v1_bootstrap
+from web.routes.v1 import scenarios as v1_scenarios
 
 app.include_router(auth.router)
 app.include_router(health.router)
@@ -126,6 +127,7 @@ app.include_router(bridge.router)
 
 # v1-versioned API routes (additive — existing unversioned routes stay)
 app.include_router(v1_bootstrap.router)
+app.include_router(v1_scenarios.router)
 
 # ── Static frontend serving ─────────────────────────────────────────────
 # WHY: Serve the production build directly from FastAPI so there's no need

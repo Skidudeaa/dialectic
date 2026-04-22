@@ -562,6 +562,29 @@ class Repository:
         finally:
             conn.close()
 
+    def get_snapshot_by_revision(self, thesis_id: str,
+                                 revision: int) -> Optional[dict]:
+        """Return the committed snapshot at a specific (thesis_id, revision).
+
+        WHY: Scenario evaluation needs a specific historical base snapshot so
+        the result is deterministic and bound to a known revision — the caller
+        can tell which snapshot the scenario was compared against.
+        """
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                """SELECT snapshot_json, revision FROM thesis_snapshots
+                   WHERE thesis_id = ? AND revision = ?""",
+                (thesis_id, revision),
+            ).fetchone()
+            if not row:
+                return None
+            data = json.loads(row["snapshot_json"])
+            data["_revision"] = row["revision"]
+            return data
+        finally:
+            conn.close()
+
     def get_latest_revision(self, thesis_id: str) -> int:
         conn = self._conn()
         try:
@@ -893,6 +916,28 @@ class Repository:
                      AND provider_values_json IS NOT NULL
                    ORDER BY run_id DESC LIMIT 1""",
                 (thesis_id,),
+            ).fetchone()
+            return json.loads(row["provider_values_json"]) if row else None
+        finally:
+            conn.close()
+
+    def get_provider_values_for_revision(self, thesis_id: str,
+                                         revision: int) -> Optional[dict]:
+        """Get provider values from the fetch_run that committed this revision.
+
+        WHY: Scenario evaluation against a historical revision needs the
+        node.current / node.probability values that were in effect at that
+        revision — not today's — so propagation produces the same base as
+        the committed snapshot.
+        """
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                """SELECT provider_values_json FROM fetch_runs
+                   WHERE thesis_id = ? AND revision = ? AND status = 'success'
+                     AND provider_values_json IS NOT NULL
+                   ORDER BY run_id DESC LIMIT 1""",
+                (thesis_id, revision),
             ).fetchone()
             return json.loads(row["provider_values_json"]) if row else None
         finally:
