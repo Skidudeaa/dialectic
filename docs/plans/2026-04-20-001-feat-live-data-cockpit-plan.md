@@ -125,7 +125,7 @@ The v2 rebuild landed M0 + M1 + Unit 12, plus cosmetic polish (builder, onboardi
 
 ### Milestone 1: Own the data path
 
-- [ ] **Unit 1: CORS relay + retire allorigins**
+- [x] **Unit 1: CORS relay + retire allorigins** (shipped — 18179b7)
 
 **Goal:** Stdlib-only relay at `/api/relay/yahoo` with strict allowlist. Frontend stops hitting `allorigins.win`.
 
@@ -187,7 +187,7 @@ The v2 rebuild landed M0 + M1 + Unit 12, plus cosmetic polish (builder, onboardi
 
 ---
 
-- [ ] **Unit 5: Freshness contract schema + UI staleness badges**
+- [x] **Unit 5: Freshness contract schema + UI staleness badges** (this commit)
 
 **Goal:** Every provider writes `fetched_at` / `source` / `ttl_seconds` into the snapshot. Frontend surfaces amber badges when TTL is exceeded.
 

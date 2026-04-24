@@ -64,6 +64,21 @@ class Watermarks(BaseModel):
     polymarket: Optional[str] = None
 
 
+# ── Per-source freshness contract (cockpit Unit 5) ─────────────────────
+
+# WHY: every live provider stamps `fetched_at` + `ttl_seconds` into the
+# snapshot so the UI can render amber staleness badges without guessing.
+# Keyed by source name (`yahoo`, `polymarket`, `derived`, `fred`, `econ`).
+# A cell is stale iff `now - fetched_at > ttl_seconds`. Missing source means
+# we never got a fetch this session — also treated as stale by the UI.
+class FeedFreshness(BaseModel):
+    source: str
+    fetchedAt: str  # ISO8601 UTC
+    ttlSeconds: int = Field(ge=1)
+    # Optional free-text hint surfaced as hover tooltip: "42/50 symbols OK".
+    detail: Optional[str] = None
+
+
 # ── Snapshot sub-structures ─────────────────────────────────────────────
 
 class CascadePhase(BaseModel):
@@ -185,6 +200,9 @@ class ThesisSnapshot(BaseModel):
     # Derived technical indicators (v:2 addition, non-causal overlay)
     tvIndicators: Dict[str, TVIndicatorReading] = Field(default_factory=dict)
 
+    # Per-source freshness (cockpit Unit 5). Keyed by source name.
+    feedFreshness: Dict[str, FeedFreshness] = Field(default_factory=dict)
+
     # Summary for dashboard cards (v2 addition — computed from nodeStates)
     summary: Optional[SnapshotSummary] = None
 
@@ -218,5 +236,8 @@ def snapshot_from_export(export: dict, thesis_id: Optional[str] = None) -> Thesi
         },
         tvIndicators={
             k: TVIndicatorReading(**v) for k, v in export.get("tvIndicators", {}).items()
+        },
+        feedFreshness={
+            k: FeedFreshness(**v) for k, v in export.get("feedFreshness", {}).items()
         },
     )

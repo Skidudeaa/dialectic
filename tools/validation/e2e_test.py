@@ -43,7 +43,7 @@ from mock_dialectic import (
 SNAPSHOT_KEYS = {
     "v", "timestamp", "title", "nodeStates", "confluenceScores",
     "cascadePhase", "countdowns", "marketSnapshot", "scenarioImpacts",
-    "portfolioSummary", "horizonTrace", "tvIndicators",
+    "portfolioSummary", "horizonTrace", "tvIndicators", "feedFreshness",
 }
 
 

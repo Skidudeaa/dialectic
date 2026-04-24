@@ -122,6 +122,85 @@ function relativeAge(iso: string | undefined): { label: string; seconds: number 
   return { label, seconds };
 }
 
+/** Pretty-label for a feed-freshness source key. */
+const SOURCE_LABELS: Record<string, string> = {
+  yahoo: "Yahoo",
+  polymarket: "Polymarket",
+  derived: "Derived",
+  fred: "FRED",
+  econ: "Calendar",
+};
+
+/**
+ * Per-source freshness strip (cockpit Unit 5).
+ *
+ * Renders one pill per entry in `feedFreshness`. Amber if
+ * `now - fetchedAt > ttlSeconds`, otherwise muted/teal. The `tickNow` prop
+ * is how we stay live without refetching — ThesisViewer already bumps it
+ * once a minute.
+ */
+function FeedFreshnessStrip({
+  freshness,
+  tickNow,
+}: {
+  freshness: ThesisState["feedFreshness"];
+  tickNow: number;
+}) {
+  const entries = freshness ? Object.values(freshness) : [];
+  if (!entries.length) return null;
+  // `tickNow` is implicitly read so this component re-renders on tick.
+  void tickNow;
+  const now = Date.now();
+
+  return (
+    <div
+      className="card py-1 px-2"
+      aria-label="Live data freshness per source"
+      role="group"
+    >
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="text-[9px] text-text-dim uppercase tracking-widest">
+          Feeds
+        </span>
+        <span className="text-[9px] text-text-dim font-mono">
+          stale &gt; ttl
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {entries.map((f) => {
+          const parsed = Date.parse(f.fetchedAt);
+          const ageMs = Number.isNaN(parsed) ? Infinity : now - parsed;
+          const stale = ageMs > f.ttlSeconds * 1000;
+          const age = relativeAge(f.fetchedAt);
+          const label = SOURCE_LABELS[f.source] ?? f.source;
+          const pillCls = stale
+            ? "bg-amber/20 text-amber border-amber/40"
+            : "bg-teal/10 text-teal border-teal/30";
+          return (
+            <span
+              key={f.source}
+              className={`inline-flex items-center gap-1 text-[9px] font-mono px-1.5 py-px rounded border ${pillCls}`}
+              title={
+                f.detail
+                  ? `${label} · ${f.detail} · ttl ${f.ttlSeconds}s · fetched ${f.fetchedAt}`
+                  : `${label} · ttl ${f.ttlSeconds}s · fetched ${f.fetchedAt}`
+              }
+            >
+              <span className="uppercase tracking-wide">{label}</span>
+              <span className={stale ? "opacity-90" : "opacity-70"}>
+                {age ? age.label : "—"}
+              </span>
+              {stale && (
+                <span className="text-[8px] uppercase tracking-wider">stale</span>
+              )}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /** Live-region polite announcer: builds a one-line summary of state changes. */
 function diffNodeStates(
   prev: Record<string, string>,
@@ -479,6 +558,9 @@ export default function ThesisViewer({ bookId, books }: Props) {
               </div>
             )}
           </div>
+
+          {/* ── Feed freshness strip (cockpit Unit 5) ─────────────────── */}
+          <FeedFreshnessStrip freshness={state.feedFreshness} tickNow={tickNow} />
 
           {/* ── Nodes ─────────────────────────────────────────────────── */}
           <div>

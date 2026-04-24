@@ -98,6 +98,15 @@ export interface ThesisState {
   }>;
   portfolioSummary: Record<string, unknown>;
   horizonTrace?: Record<string, unknown>;
+  // Cockpit Unit 5: per-source freshness, keyed by source name
+  // (yahoo / polymarket / derived / fred / econ). UI paints amber when
+  // Date.now() - Date.parse(fetchedAt) > ttlSeconds*1000.
+  feedFreshness?: Record<string, {
+    source: string;
+    fetchedAt: string;
+    ttlSeconds: number;
+    detail?: string;
+  }>;
 }
 
 export interface CrossBookFlag {

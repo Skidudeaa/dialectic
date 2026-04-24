@@ -24,6 +24,12 @@ log = logging.getLogger(__name__)
 _state_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
 _CACHE_TTL = 60.0  # seconds
 
+# Per-book feed freshness record, survives cache invalidation (which reloads
+# cfg from disk and drops the in-memory _feed_freshness stamp). Keyed by
+# book_id, value is the `snapshot["feedFreshness"]` dict stamped on the last
+# successful fetch. Overlayed onto every snapshot returned by get_state().
+_freshness_by_book: Dict[str, Dict[str, Dict[str, Any]]] = {}
+
 
 def _validate_book_id(book_id: str) -> None:
     """Reject book IDs that could traverse the filesystem."""
@@ -95,6 +101,11 @@ def get_state(book_id: str) -> Dict[str, Any]:
         cfg, states, confluence, phase_num, phase_key,
         scenarios_result, today=date.today(),
     )
+    # Overlay any freshness stamped by the last fetch so the UI can age it
+    # even while the cached snapshot is reused for ~60s.
+    remembered = _freshness_by_book.get(book_id)
+    if remembered:
+        result["feedFreshness"] = dict(remembered)
     _state_cache[book_id] = (now, result)
     return result
 
@@ -191,6 +202,15 @@ def fetch_prices_for_book(book_id: str) -> Dict[str, Any]:
             # Single-feed node matching the key
             if "current" in node:
                 mf["value"] = node["current"]
+
+    # Capture freshness stamped by the fetch providers BEFORE the disk write
+    # (update_config_file strips `_`-prefixed keys, so the stamp would be gone
+    # after the write). Keep it in _freshness_by_book so get_state overlays it
+    # onto the next snapshot — UI shows accurate "fetched 3s ago" even though
+    # the reloaded cfg has no stamp.
+    stamped = cfg.get("_feed_freshness")
+    if stamped:
+        _freshness_by_book[book_id] = dict(stamped)
 
     # Save the updated config back to disk so propagation uses live data
     thesisgraph.update_config_file(str(config_path), cfg)

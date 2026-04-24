@@ -899,6 +899,14 @@ def export_state(cfg: dict, states: dict, confluence: dict,
         if isinstance(tv, dict) and tv:
             tv_indicators[node["id"]] = dict(tv)
 
+    # --- feedFreshness: per-source fetched_at / ttl for UI staleness ---
+    # WHY: fetch_prices / fetch_polymarket / compute_derived_indicators stamp
+    # cfg["_feed_freshness"][source] = {source, fetchedAt, ttlSeconds, detail}
+    # on a successful fetch. Promote that into the snapshot so downstream
+    # consumers (WS broadcast, bootstrap, diff, frontend) know what's fresh.
+    # Always emitted (possibly empty) to keep the v:2 shape stable.
+    feed_freshness = dict(cfg.get("_feed_freshness", {}))
+
     # --- Assemble snapshot ---
     snapshot = {
         "v": 2,
@@ -910,6 +918,7 @@ def export_state(cfg: dict, states: dict, confluence: dict,
         "countdowns": countdowns,
         "marketSnapshot": market_snapshot,
         "scenarioImpacts": scenario_impacts,
+        "feedFreshness": feed_freshness,
         "portfolioSummary": portfolio_summary,
         "horizonTrace": horizon_trace,
         "tvIndicators": tv_indicators,
@@ -1017,7 +1026,38 @@ def fetch_prices(cfg: dict, retries: int = 2) -> dict:
                     count += 1
 
     print(f"  Fetched {count}/{len(all_syms)} prices", file=sys.stderr)
+
+    # Stamp feed freshness for the Yahoo source if we got anything back.
+    # `cfg["_feed_freshness"]` is a private namespace picked up by
+    # export_state() and promoted to snapshot["feedFreshness"]. UI reads that
+    # to paint amber badges once `now - fetched_at > ttl_seconds`.
+    if count > 0:
+        _stamp_feed_freshness(
+            cfg,
+            source="yahoo",
+            ttl_seconds=300,  # 5 min — spark API is roughly 15-min-delayed
+            detail=f"{count}/{len(all_syms)} symbols",
+        )
     return cfg
+
+
+def _stamp_feed_freshness(cfg: dict, *, source: str, ttl_seconds: int,
+                          detail: str | None = None) -> None:
+    """Record that `source` completed a live fetch just now.
+
+    Keeps the write on a private cfg namespace so it propagates through the
+    propagate() → export_state() pipeline without polluting the book JSON
+    schema. Idempotent — a second call for the same source overwrites.
+    """
+    freshness = cfg.setdefault("_feed_freshness", {})
+    entry: dict = {
+        "source": source,
+        "fetchedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ttlSeconds": int(ttl_seconds),
+    }
+    if detail:
+        entry["detail"] = detail
+    freshness[source] = entry
 
 
 def update_config_file(config_path: str, cfg: dict) -> None:
@@ -1025,11 +1065,18 @@ def update_config_file(config_path: str, cfg: dict) -> None:
 
     WHY: Atomic write via tmp+rename prevents config corruption if the process
     is killed or disk fills up mid-write. os.replace() is atomic on POSIX.
+
+    Underscore-prefixed top-level keys (_feed_freshness, _ohlcv, _close_events)
+    are transient runtime state and MUST NOT be persisted to the book JSON.
+    They are stripped before write to keep the on-disk schema clean.
     """
+    # Shallow copy without `_`-prefixed keys; values stay shared so we don't
+    # duplicate the whole graph.
+    to_write = {k: v for k, v in cfg.items() if not str(k).startswith("_")}
     tmp_path = config_path + ".tmp"
     try:
         with open(tmp_path, "w") as f:
-            json.dump(cfg, f, indent=2, ensure_ascii=False)
+            json.dump(to_write, f, indent=2, ensure_ascii=False)
             f.write("\n")
             f.flush()
             os.fsync(f.fileno())
@@ -1112,6 +1159,17 @@ def fetch_polymarket(cfg: dict) -> dict:
                 count += 1
 
     print(f"  polymarket: updated {count}/{len(slugs)} node(s)", file=sys.stderr)
+
+    # Stamp freshness if at least one slug resolved. Polymarket prediction
+    # markets update on minutes-to-tens-of-minutes cadence; 15 min TTL is a
+    # reasonable "amber if older than this" bound.
+    if count > 0:
+        _stamp_feed_freshness(
+            cfg,
+            source="polymarket",
+            ttl_seconds=900,
+            detail=f"{count}/{len(slugs)} markets",
+        )
     return cfg
 
 
@@ -1344,6 +1402,16 @@ def compute_derived_indicators(cfg: dict) -> dict:
         f"emitted {events_emitted} close event(s)",
         file=sys.stderr,
     )
+    # Stamp freshness when at least one node got new indicator values.
+    # Derived indicators compute off daily closes so TTL tracks the daily
+    # bar cadence (24h).
+    if updated_nodes > 0:
+        _stamp_feed_freshness(
+            cfg,
+            source="derived",
+            ttl_seconds=86400,
+            detail=f"{updated_nodes} node(s)",
+        )
     cfg.pop("_ohlcv", None)
     return cfg
 

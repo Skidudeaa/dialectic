@@ -30,7 +30,7 @@ SCRIPT_PATH = os.path.join(os.path.dirname(__file__), "thesisgraph.py")
 REQUIRED_KEYS = {
     "v", "timestamp", "title", "nodeStates", "confluenceScores",
     "cascadePhase", "countdowns", "marketSnapshot", "scenarioImpacts",
-    "portfolioSummary", "horizonTrace", "tvIndicators",
+    "portfolioSummary", "horizonTrace", "tvIndicators", "feedFreshness",
 }
 
 
@@ -1063,6 +1063,68 @@ class TestValidateConfigStructured:
         }
         issues = validate_config(cfg)  # must not raise
         assert any(i["severity"] == "error" for i in issues)
+
+
+class TestFeedFreshness:
+    """Cockpit Unit 5: per-source freshness flows from provider → snapshot."""
+
+    def test_fresh_unstamped_snapshot_has_empty_freshness(self, cfg, evaluated):
+        """Baseline: no provider ran, snapshot carries an empty dict."""
+        states, confluence, phase_num, phase_key, scenarios_result = evaluated
+        snapshot = export_state(cfg, states, confluence, phase_num, phase_key,
+                                scenarios_result)
+        assert snapshot["feedFreshness"] == {}
+
+    def test_stamp_promotes_to_snapshot(self, cfg, evaluated):
+        """A stamped source in cfg["_feed_freshness"] surfaces on the snapshot."""
+        from tools.thesis_graph.thesisgraph import _stamp_feed_freshness
+        _stamp_feed_freshness(cfg, source="yahoo", ttl_seconds=300,
+                              detail="5/5 symbols")
+        states, confluence, phase_num, phase_key, scenarios_result = evaluated
+        snapshot = export_state(cfg, states, confluence, phase_num, phase_key,
+                                scenarios_result)
+        entry = snapshot["feedFreshness"]["yahoo"]
+        assert entry["source"] == "yahoo"
+        assert entry["ttlSeconds"] == 300
+        assert entry["detail"] == "5/5 symbols"
+        # fetchedAt is ISO8601 Z — parseable
+        datetime.strptime(entry["fetchedAt"], "%Y-%m-%dT%H:%M:%SZ")
+
+    def test_multiple_sources_coexist(self, cfg, evaluated):
+        """yahoo + polymarket + derived can each stamp independently."""
+        from tools.thesis_graph.thesisgraph import _stamp_feed_freshness
+        _stamp_feed_freshness(cfg, source="yahoo", ttl_seconds=300)
+        _stamp_feed_freshness(cfg, source="polymarket", ttl_seconds=900)
+        _stamp_feed_freshness(cfg, source="derived", ttl_seconds=86400)
+        states, confluence, phase_num, phase_key, scenarios_result = evaluated
+        snapshot = export_state(cfg, states, confluence, phase_num, phase_key,
+                                scenarios_result)
+        assert set(snapshot["feedFreshness"].keys()) == {"yahoo", "polymarket", "derived"}
+        assert snapshot["feedFreshness"]["polymarket"]["ttlSeconds"] == 900
+        assert snapshot["feedFreshness"]["derived"]["ttlSeconds"] == 86400
+
+    def test_restamp_same_source_overwrites(self, cfg, evaluated):
+        """A second stamp for the same source replaces the first."""
+        from tools.thesis_graph.thesisgraph import _stamp_feed_freshness
+        _stamp_feed_freshness(cfg, source="yahoo", ttl_seconds=300, detail="first")
+        _stamp_feed_freshness(cfg, source="yahoo", ttl_seconds=60, detail="second")
+        states, confluence, phase_num, phase_key, scenarios_result = evaluated
+        snapshot = export_state(cfg, states, confluence, phase_num, phase_key,
+                                scenarios_result)
+        assert snapshot["feedFreshness"]["yahoo"]["ttlSeconds"] == 60
+        assert snapshot["feedFreshness"]["yahoo"]["detail"] == "second"
+
+    def test_schema_validates_freshness_block(self, cfg, evaluated):
+        """ThesisSnapshot Pydantic model accepts the stamped dict."""
+        from tools.thesis_graph.thesisgraph import _stamp_feed_freshness
+        from web.schemas.snapshots import snapshot_from_export
+        _stamp_feed_freshness(cfg, source="yahoo", ttl_seconds=300)
+        states, confluence, phase_num, phase_key, scenarios_result = evaluated
+        snapshot = export_state(cfg, states, confluence, phase_num, phase_key,
+                                scenarios_result)
+        model = snapshot_from_export(snapshot)
+        assert "yahoo" in model.feedFreshness
+        assert model.feedFreshness["yahoo"].ttlSeconds == 300
 
 
 if __name__ == "__main__":
