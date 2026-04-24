@@ -24,6 +24,8 @@ from web.main import app
 from web.auth import create_access_token
 from web.adapters import outcomes as outcomes_adapter
 from web.routes.v1 import trades as trades_route
+from web.deps import get_repo
+from web.persistence.repository import Repository
 
 
 TRADE_IDS = ("TRD-XOP-HORMUZ", "TRD-CF-PLANTING", "TRD-SH-RECESSION")
@@ -70,12 +72,19 @@ SEED_TRADES = [
 
 @pytest.fixture(autouse=True)
 def reset_tokens():
-    """Each test starts with an empty confirm-token map."""
-    with trades_route._kill_tokens_lock:
-        trades_route._kill_tokens.clear()
-    yield
-    with trades_route._kill_tokens_lock:
-        trades_route._kill_tokens.clear()
+    """Each test starts with an isolated SQLite repo so confirm_tokens
+    and audit_log rows from previous tests don't leak in.
+
+    WHY: Unit 12 moved the in-memory _kill_tokens dict into a persisted
+    SQLite table. Tests now swap the repo dependency for a fresh
+    in-memory database per test.
+    """
+    repo = Repository(":memory:")
+    repo.initialize()
+    app.dependency_overrides[get_repo] = lambda: repo
+    app.state.repo = repo
+    yield repo
+    app.dependency_overrides.pop(get_repo, None)
 
 
 @pytest.fixture
@@ -160,7 +169,7 @@ class TestKillAuth:
 
 
 class TestKillFlow:
-    def test_first_call_issues_confirm_token(self, client, auth_headers, isolated_outcomes):
+    def test_first_call_issues_confirm_token(self, client, auth_headers, isolated_outcomes, reset_tokens):
         resp = client.post(
             "/api/v1/trades/TRD-XOP-HORMUZ/kill",
             json={"reason": "thesis invalidated"},
@@ -170,9 +179,16 @@ class TestKillFlow:
         body = resp.json()["detail"]
         assert body["confirm_required"] is True
         assert isinstance(body["confirm_token"], str) and len(body["confirm_token"]) > 10
-        assert body["expires_at"] > 0
-        # Verify the in-memory store received it.
-        assert "TRD-XOP-HORMUZ" in trades_route._kill_tokens
+        # Persisted store: expires_at is now an ISO8601 timestamp string,
+        # not a unix-epoch float.
+        assert isinstance(body["expires_at"], str) and body["expires_at"]
+        # Verify the persisted confirm_tokens table received the row.
+        repo = reset_tokens
+        rows = repo._conn().execute(
+            "SELECT target FROM confirm_tokens WHERE target = ?",
+            ("TRD-XOP-HORMUZ",),
+        ).fetchall()
+        assert len(rows) == 1
 
     def test_wrong_token_is_400(self, client, auth_headers, isolated_outcomes):
         # Issue a token first
@@ -241,22 +257,27 @@ class TestKillFlow:
         assert resp.status_code == 409
         assert resp.json()["detail"] == "already_closed"
 
-    def test_expired_token_is_400(self, client, auth_headers, isolated_outcomes, monkeypatch):
+    def test_expired_token_is_400(self, client, auth_headers, isolated_outcomes, reset_tokens):
         first = client.post(
             "/api/v1/trades/TRD-XOP-HORMUZ/kill",
             json={"reason": "r"}, headers=auth_headers,
         )
         token = first.json()["detail"]["confirm_token"]
-        # Force the stored token to expire by rewinding its expiry stamp.
-        with trades_route._kill_tokens_lock:
-            trades_route._kill_tokens["TRD-XOP-HORMUZ"]["expires"] = 1.0
+        # Force the stored token to expire by rewinding its expires_at
+        # column. Persisted store: ISO8601 string, far in the past.
+        repo = reset_tokens
+        conn = repo._conn()
+        conn.execute(
+            "UPDATE confirm_tokens SET expires_at = '1970-01-01T00:00:00+00:00' WHERE token = ?",
+            (token,),
+        )
+        conn.commit()
         resp = client.post(
             "/api/v1/trades/TRD-XOP-HORMUZ/kill",
             json={"reason": "r", "confirm_token": token}, headers=auth_headers,
         )
-        # Expired tokens are pruned before lookup, so the consumer sees
-        # "missing" rather than "expired" — both are 400, both indicate
-        # "confirm step required again".
+        # Expired tokens collapse to confirm_token_invalid — both are
+        # 400, both indicate "confirm step required again".
         assert resp.status_code == 400
         assert "confirm" in resp.json()["detail"]
 

@@ -35,7 +35,9 @@ class TestMigrations:
         conn = get_connection(":memory:")
         from web.persistence.migrations import run_migrations
         count = run_migrations(conn)
-        assert count == 1  # one migration file applied
+        # 001 (initial schema) + 002 (audit_log + confirm_tokens). Bump
+        # this when a new numbered migration lands in web/persistence/sql/.
+        assert count == 2
         tables = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         )}
@@ -44,6 +46,7 @@ class TestMigrations:
             "journal_entries", "predictions", "tv_events",
             "thesis_snapshots", "alert_events", "manual_overrides",
             "close_observations", "fetch_runs", "outbox",
+            "audit_log", "confirm_tokens",
         }
         assert expected.issubset(tables)
         conn.close()

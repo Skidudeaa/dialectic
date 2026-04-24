@@ -13,8 +13,9 @@ All methods are synchronous. Callers wrap in asyncio.to_thread().
 import json
 import logging
 import re
+import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -990,5 +991,173 @@ class Repository:
                 (error, outbox_id),
             )
             conn.commit()
+        finally:
+            conn.close()
+
+    # ════════════════════════════════════════════════════════════════
+    # AUDIT LOG (Unit 12)
+    # ════════════════════════════════════════════════════════════════
+
+    def add_audit_row(self, actor: str, action: str, target: str,
+                      reason: Optional[str] = None,
+                      confirm_token: Optional[str] = None,
+                      payload: Optional[dict] = None) -> int:
+        """Insert an audit row, return the auto-increment id.
+
+        WHY: Destructive routes call this AFTER a successful mutation so
+        the audit trail records "the kill/apply/delete actually committed",
+        not "the kill was attempted". Failures are not recorded here —
+        those live in the application log.
+        """
+        conn = self._conn()
+        try:
+            cur = conn.execute(
+                """INSERT INTO audit_log
+                   (ts, actor, action, target, reason, confirm_token, payload_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (_now_iso(), actor, action, target, reason, confirm_token,
+                 json.dumps(payload) if payload is not None else None),
+            )
+            conn.commit()
+            return cur.lastrowid
+        finally:
+            conn.close()
+
+    def list_audit(self, since_iso: Optional[str] = None,
+                   actor: Optional[str] = None,
+                   action: Optional[str] = None,
+                   limit: int = 100) -> List[dict]:
+        """Read audit rows with optional filters.
+
+        WHY all-optional: the audit panel needs three views — recent
+        activity (no filter), "what did Amo do today" (actor + since),
+        and "every trade.kill ever" (action only). One method covers all.
+        """
+        conn = self._conn()
+        try:
+            conditions: list = []
+            params: list = []
+            if since_iso:
+                conditions.append("ts >= ?")
+                params.append(since_iso)
+            if actor:
+                conditions.append("actor = ?")
+                params.append(actor)
+            if action:
+                conditions.append("action = ?")
+                params.append(action)
+            where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+            rows = conn.execute(
+                f"SELECT * FROM audit_log {where} ORDER BY id DESC LIMIT ?",
+                params + [int(limit)],
+            ).fetchall()
+            return [self._audit_from_row(r) for r in rows]
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _audit_from_row(row) -> dict:
+        return {
+            "id": row["id"],
+            "ts": row["ts"],
+            "actor": row["actor"],
+            "action": row["action"],
+            "target": row["target"],
+            "reason": row["reason"],
+            "confirm_token": row["confirm_token"],
+            "payload": json.loads(row["payload_json"]) if row["payload_json"] else None,
+        }
+
+    # ════════════════════════════════════════════════════════════════
+    # CONFIRM TOKENS (Unit 12)
+    # ════════════════════════════════════════════════════════════════
+
+    def issue_confirm_token(self, actor: str, action: str, target: str,
+                            ttl_seconds: int = 30) -> dict:
+        """Mint and persist a single-use confirm token.
+
+        WHY 16 bytes hex: 32 hex chars, ~128 bits of entropy — same
+        ballpark as session cookies, more than enough for a short-lived
+        single-use grant. ``secrets.token_hex`` is cryptographically
+        secure on every platform Python supports.
+        """
+        token = secrets.token_hex(16)
+        now = datetime.now(timezone.utc)
+        issued_at = now.isoformat()
+        expires_at = (now + timedelta(seconds=int(ttl_seconds))).isoformat()
+        conn = self._conn()
+        try:
+            conn.execute(
+                """INSERT INTO confirm_tokens
+                   (token, actor, action, target, issued_at, expires_at, consumed_at)
+                   VALUES (?, ?, ?, ?, ?, ?, NULL)""",
+                (token, actor, action, target, issued_at, expires_at),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return {
+            "token": token,
+            "actor": actor,
+            "action": action,
+            "target": target,
+            "issued_at": issued_at,
+            "expires_at": expires_at,
+        }
+
+    def consume_confirm_token(self, token: str, actor: str,
+                              action: str, target: str) -> bool:
+        """Atomically consume a confirm token.
+
+        Returns True iff the token exists, has not been consumed, has
+        not expired, AND the (actor, action, target) tuple matches what
+        was issued. False otherwise — caller maps to 409.
+
+        WHY check all three fields: a token issued to "amo" for
+        "trade.kill TRD-A" must not be replayable as "dan" against
+        "trade.kill TRD-B". Single-action, single-actor, single-target.
+        """
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM confirm_tokens WHERE token = ?", (token,),
+            ).fetchone()
+            if row is None:
+                return False
+            if row["consumed_at"] is not None:
+                return False
+            now = datetime.now(timezone.utc).isoformat()
+            if row["expires_at"] <= now:
+                return False
+            if row["actor"] != actor:
+                return False
+            if row["action"] != action:
+                return False
+            if row["target"] != target:
+                return False
+            # WHY UPDATE ... WHERE consumed_at IS NULL: if two requests race
+            # to consume the same token, only one UPDATE flips it; the other
+            # sees rowcount=0 and returns False.
+            cur = conn.execute(
+                """UPDATE confirm_tokens
+                   SET consumed_at = ?
+                   WHERE token = ? AND consumed_at IS NULL""",
+                (now, token),
+            )
+            conn.commit()
+            return cur.rowcount == 1
+        finally:
+            conn.close()
+
+    def purge_expired_confirm_tokens(self) -> int:
+        """Drop expired tokens. Returns count purged."""
+        conn = self._conn()
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            cur = conn.execute(
+                "DELETE FROM confirm_tokens WHERE expires_at <= ?", (now,),
+            )
+            conn.commit()
+            return cur.rowcount
         finally:
             conn.close()

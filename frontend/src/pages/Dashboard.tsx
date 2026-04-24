@@ -19,10 +19,11 @@ import {
   Target,
   NotebookPen,
   AlertOctagon,
+  Layers,
 } from "lucide-react";
 import { useOnboarding } from "../components/onboarding/useOnboarding";
 import { apiFetch, getDisplayName, clearAuth } from "../lib/api";
-import type { Room, ThesisBook } from "../lib/types";
+import type { Room, ThesisBook, ThesisState } from "../lib/types";
 import Chat from "../components/Chat";
 import ThesisViewer from "../components/ThesisViewer";
 import MarketTicker from "../components/MarketTicker";
@@ -30,6 +31,8 @@ import MorningBrief from "../components/MorningBrief";
 import PredictionTracker from "../components/PredictionTracker";
 import TradeJournal from "../components/TradeJournal";
 import CrossBookPanel from "../components/CrossBookPanel";
+import CrossBookMatrix from "../components/CrossBookMatrix";
+import BookTabBar from "../components/BookTabBar";
 import TradingViewPanel from "../components/TradingViewPanel";
 import TradeLifecyclePanel from "../components/TradeLifecyclePanel";
 import OutboxBadge from "../components/OutboxBadge";
@@ -45,6 +48,7 @@ type RightPanel =
   | "predictions"
   | "journal"
   | "crossbook"
+  | "matrix"
   | "brief"
   | "tradingview"
   | "trades"
@@ -194,10 +198,43 @@ export default function Dashboard({ onLogout }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Per-book thesis snapshots, keyed by book.id. Populated lazily once
+  // `books` resolves so the tab-bar dots and the cross-book matrix can
+  // share one warm cache. Refreshed every 5min — same cadence as the
+  // ThesisViewer poll. Populated in parallel; failures are silently
+  // dropped so a single broken book doesn't blank the whole UI.
+  const [bookStates, setBookStates] = useState<
+    Record<string, ThesisState | null>
+  >({});
+
+  const loadAllBookStates = useCallback(async (ids: string[]) => {
+    const next: Record<string, ThesisState | null> = {};
+    await Promise.all(
+      ids.map(async (id) => {
+        try {
+          next[id] = await apiFetch<ThesisState>(
+            `/api/thesis/${encodeURIComponent(id)}/state`,
+          );
+        } catch {
+          next[id] = null;
+        }
+      }),
+    );
+    setBookStates((prev) => ({ ...prev, ...next }));
+  }, []);
+
   useEffect(() => {
     loadRooms();
     loadBooks();
   }, [loadRooms, loadBooks]);
+
+  useEffect(() => {
+    if (books.length === 0) return;
+    const ids = books.map((b) => b.id);
+    loadAllBookStates(ids);
+    const interval = setInterval(() => loadAllBookStates(ids), 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [books, loadAllBookStates]);
 
   async function createRoom() {
     if (!newRoomName.trim()) return;
@@ -271,6 +308,7 @@ export default function Dashboard({ onLogout }: Props) {
       { label: "Thesis panel", type: "panel", action: () => { togglePanel("thesis"); setCmdPalette(false); } },
       { label: "Morning brief", type: "panel", action: () => { togglePanel("brief"); setCmdPalette(false); } },
       { label: "Cross-book scan", type: "panel", action: () => { togglePanel("crossbook"); setCmdPalette(false); } },
+      { label: "Cross-book matrix", type: "panel", action: () => { togglePanel("matrix"); setCmdPalette(false); } },
       { label: "Predictions", type: "panel", action: () => { togglePanel("predictions"); setCmdPalette(false); } },
       { label: "Trade journal", type: "panel", action: () => { togglePanel("journal"); setCmdPalette(false); } },
       { label: "TradingView", type: "panel", action: () => { togglePanel("tradingview"); setCmdPalette(false); } },
@@ -326,6 +364,22 @@ export default function Dashboard({ onLogout }: Props) {
         setSidebarOpen((s) => !s);
         return;
       }
+      // Cmd/Ctrl+1..9 — switch active book by tab order. Only handle when
+      // exactly the digit is pressed (skip Shift to avoid clobbering
+      // browser-native shortcuts like Cmd+Shift+1).
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        /^[1-9]$/.test(e.key)
+      ) {
+        const idx = parseInt(e.key, 10) - 1;
+        if (idx >= 0 && idx < books.length) {
+          e.preventDefault();
+          setActiveBookExplicit(books[idx].id);
+        }
+        return;
+      }
       // ? — shortcut overlay (only when not typing in a field)
       const tag = (e.target as HTMLElement | null)?.tagName;
       const isTyping = tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable;
@@ -344,7 +398,7 @@ export default function Dashboard({ onLogout }: Props) {
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [cmdPalette, showShortcuts, rightPanel, sidebarOpen, isNarrow, isVeryNarrow]);
+  }, [cmdPalette, showShortcuts, rightPanel, sidebarOpen, isNarrow, isVeryNarrow, books]);
 
   // Drag-to-resize gutter for the right panel.
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
@@ -471,6 +525,7 @@ export default function Dashboard({ onLogout }: Props) {
           <button onClick={() => togglePanel("thesis")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "thesis" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Thesis"><BarChart3 size={13} /></button>
           <button onClick={() => togglePanel("brief")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "brief" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Brief"><FileText size={13} /></button>
           <button onClick={() => togglePanel("crossbook")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "crossbook" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Cross-Book"><Scan size={13} /></button>
+          <button onClick={() => togglePanel("matrix")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "matrix" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Cross-book matrix" aria-label="Cross-book matrix"><Layers size={13} /></button>
           <button onClick={() => togglePanel("predictions")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "predictions" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Predictions" aria-label="Predictions panel"><Target size={13} /></button>
           <button onClick={() => togglePanel("journal")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "journal" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Journal" aria-label="Trade journal panel"><NotebookPen size={13} /></button>
           <button onClick={() => togglePanel("tradingview")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "tradingview" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="TradingView"><Activity size={13} /></button>
@@ -506,6 +561,17 @@ export default function Dashboard({ onLogout }: Props) {
           <button onClick={handleLogout} className="p-1 text-text-dim hover:text-danger" title="Logout"><LogOut size={11} /></button>
         </div>
       </header>
+
+      {/* Book tab bar — one tab per book, state dot reflects worst node
+          state, click-to-activate, Cmd/Ctrl+1..N keybinds. */}
+      {books.length > 0 && (
+        <BookTabBar
+          books={books}
+          activeBookId={linkedBookId}
+          bookStates={bookStates}
+          onSelect={(id) => setActiveBookExplicit(id)}
+        />
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         {/* LEFT sidebar */}
@@ -618,6 +684,14 @@ export default function Dashboard({ onLogout }: Props) {
                 {rightPanel === "thesis" && <ThesisViewer bookId={linkedBookId} books={books} />}
                 {rightPanel === "brief" && <MorningBrief />}
                 {rightPanel === "crossbook" && <CrossBookPanel />}
+                {rightPanel === "matrix" && (
+                  <CrossBookMatrix
+                    books={books}
+                    bookStates={bookStates}
+                    activeBookId={linkedBookId}
+                    onSelect={(id) => setActiveBookExplicit(id)}
+                  />
+                )}
                 {rightPanel === "predictions" && <PredictionTracker />}
                 {rightPanel === "journal" && <TradeJournal />}
                 {rightPanel === "tradingview" && <TradingViewPanel bookId={linkedBookId} books={books} />}
@@ -812,6 +886,7 @@ function ShortcutsOverlay({ onClose, modKey }: { onClose: () => void; modKey: st
   const rows: Array<[string, string]> = [
     [`${modKey}+K`, "Open command palette"],
     [`${modKey}+B`, "Toggle left sidebar"],
+    [`${modKey}+1..9`, "Switch active book"],
     ["?", "Show this shortcut list"],
     ["Esc", "Close palette / overlay / sheet"],
     ["↑ ↓", "Navigate command palette"],

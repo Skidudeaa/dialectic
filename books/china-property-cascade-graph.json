@@ -138,9 +138,14 @@
       "current": 7.34,
       "feeds": [
         {
+          "source": "fred",
+          "series": "DEXCHUS",
+          "label": "USD/CNY noon buying rate (FRED daily)"
+        },
+        {
           "source": "yahoo",
           "symbol": "CNY=X",
-          "label": "USD/CNY"
+          "label": "USD/CNY (intraday fallback)"
         }
       ],
       "thresholds": [
@@ -317,9 +322,14 @@
       "current": 104.5,
       "feeds": [
         {
+          "source": "fred",
+          "series": "DTWEXBGS",
+          "label": "Trade-weighted USD index broad (FRED daily)"
+        },
+        {
           "source": "yahoo",
           "symbol": "DX-Y.NYB",
-          "label": "DXY"
+          "label": "DXY (intraday fallback)"
         },
         {
           "source": "yahoo",
@@ -422,12 +432,17 @@
         {
           "source": "fred",
           "series": "VIXCLS",
-          "label": "VIX"
+          "label": "VIX (FRED daily close)"
+        },
+        {
+          "source": "fred",
+          "series": "DGS10",
+          "label": "US 10Y Treasury constant maturity (FRED daily)"
         },
         {
           "source": "yahoo",
           "symbol": "^TNX",
-          "label": "10Y Treasury yield"
+          "label": "10Y Treasury yield (intraday fallback)"
         }
       ],
       "_builderX": 1220.0,

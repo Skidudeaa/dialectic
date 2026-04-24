@@ -13,13 +13,15 @@ anyone who can load the SPA can see trade state. The write endpoint
 (kill) is JWT-required and uses a two-step confirm-token flow so a
 misclicked "KILL" button can't remove a trade in one network round
 trip.
+
+Unit 12 swap: confirm tokens used to live in a per-process dict; they
+now live in the SQLite ``confirm_tokens`` table via the shared
+``deps_confirm`` helpers. After a successful kill we also write a row
+to ``audit_log`` so destructive actions have a durable trail.
 """
 
 import asyncio
 import logging
-import secrets
-import threading
-import time
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -27,74 +29,19 @@ from pydantic import BaseModel, Field
 
 from web.auth import get_current_user
 from web.adapters import outcomes as outcomes_adapter
+from web.deps import get_repo
+from web.persistence.repository import Repository
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/trades", tags=["v1", "trades"])
 
 
-# ── Confirm token store ──────────────────────────────────────────────────
-# WHY: Two-step kill (confirm_required → execute). A simple in-memory
-# dict is sufficient: single-process uvicorn, short TTL, single-use.
-# Thread-safe via a module-level lock so concurrent POSTs to the same
-# trade_id don't corrupt the token map.
-
-_CONFIRM_TTL_SECONDS = 30.0
-
-_kill_tokens: Dict[str, Dict[str, Any]] = {}
-_kill_tokens_lock = threading.Lock()
-
-
-def _prune_tokens(now: float) -> None:
-    """Drop expired tokens. Caller must hold _kill_tokens_lock."""
-    expired = [tid for tid, t in _kill_tokens.items() if t["expires"] <= now]
-    for tid in expired:
-        _kill_tokens.pop(tid, None)
-
-
-def _issue_token(trade_id: str) -> Dict[str, Any]:
-    """Create a fresh single-use confirm token for this trade_id.
-
-    WHY: overwrites any prior unused token so a stuck confirm (e.g. user
-    navigated away) doesn't block the next attempt. The token itself is
-    randomly generated so knowing the trade_id isn't enough to replay.
-    """
-    now = time.time()
-    token = secrets.token_urlsafe(16)
-    with _kill_tokens_lock:
-        _prune_tokens(now)
-        record = {
-            "token": token,
-            "expires": now + _CONFIRM_TTL_SECONDS,
-            "issued_at": now,
-        }
-        _kill_tokens[trade_id] = record
-    return {
-        "confirm_required": True,
-        "confirm_token": token,
-        "expires_at": record["expires"],
-        "ttl_seconds": _CONFIRM_TTL_SECONDS,
-    }
-
-
-def _consume_token(trade_id: str, presented: str) -> str:
-    """Validate and consume a confirm token.
-
-    Returns the validation outcome: "ok" | "missing" | "expired" | "mismatch".
-    The token is single-use: any validation attempt removes it, so a
-    wrong token cannot be retried without a fresh issue step.
-    """
-    now = time.time()
-    with _kill_tokens_lock:
-        _prune_tokens(now)
-        record = _kill_tokens.pop(trade_id, None)
-    if record is None:
-        return "missing"
-    if record["expires"] <= now:
-        return "expired"
-    if not secrets.compare_digest(record["token"], presented):
-        return "mismatch"
-    return "ok"
+# WHY: Default TTL for kill tokens. Short — operators are expected to
+# confirm in seconds, not minutes; a long TTL just widens the replay
+# window if a tab is left open.
+_CONFIRM_TTL_SECONDS = 30
+_KILL_ACTION = "trade.kill"
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────
@@ -168,14 +115,21 @@ async def kill_trade(
     trade_id: str,
     req: KillRequest,
     user=Depends(get_current_user),
+    repo: Repository = Depends(get_repo),
 ) -> dict:
     """Two-step trade kill.
 
-    First call (no confirm_token): returns {confirm_required, confirm_token,
-    expires_at}. Second call (confirm_token matches): writes a KILL row
-    to the ledger, removes the trade from open_trades.json, returns the
-    kill record.
+    First call (no confirm_token): returns 409 with a fresh confirm
+    token in the detail. Second call (matching token): writes a KILL
+    row to the ledger, removes the trade from open_trades.json,
+    appends an ``audit_log`` row, returns the kill record.
+
+    WHY the same 409/400 split as Unit 10: the frontend modal and
+    existing client tests already understand this contract — Unit 12
+    is a backend storage swap, not a wire-level redesign.
     """
+    actor = getattr(user, "username", None) or "unknown"
+
     # Verify the trade exists up front so we don't issue tokens for ghosts.
     trades = await asyncio.to_thread(outcomes_adapter.list_open_trades)
     known = any(t.get("trade_id") == trade_id for t in trades)
@@ -196,23 +150,37 @@ async def kill_trade(
                     raise HTTPException(status_code=409, detail="already_closed")
         raise HTTPException(status_code=404, detail=f"Trade not found: {trade_id}")
 
+    # Garbage-collect old tokens opportunistically — keeps the table
+    # bounded without a separate worker.
+    await asyncio.to_thread(repo.purge_expired_confirm_tokens)
+
     if req.confirm_token is None:
-        # First call: issue a confirm token, demand a second POST.
-        token_info = _issue_token(trade_id)
+        # First call: persist a confirm token, demand a second POST.
+        record = await asyncio.to_thread(
+            repo.issue_confirm_token, actor, _KILL_ACTION, trade_id,
+            _CONFIRM_TTL_SECONDS,
+        )
+        token_info = {
+            "confirm_required": True,
+            "confirm_token": record["token"],
+            "expires_at": record["expires_at"],
+            "ttl_seconds": _CONFIRM_TTL_SECONDS,
+        }
         raise HTTPException(status_code=409, detail=token_info)
 
-    outcome = _consume_token(trade_id, req.confirm_token)
-    if outcome == "missing":
+    # Second call: validate-and-consume in one shot. Wrong / expired /
+    # missing all collapse to 400 — same as Unit 10 — so the UI can show
+    # "confirm step required again" without parsing sub-states.
+    consumed = await asyncio.to_thread(
+        repo.consume_confirm_token,
+        req.confirm_token, actor, _KILL_ACTION, trade_id,
+    )
+    if not consumed:
         raise HTTPException(
             status_code=400,
-            detail="no_pending_confirm — call POST without confirm_token first",
+            detail="confirm_token_invalid — call POST without confirm_token first",
         )
-    if outcome == "expired":
-        raise HTTPException(status_code=400, detail="confirm_token_expired")
-    if outcome == "mismatch":
-        raise HTTPException(status_code=400, detail="confirm_token_mismatch")
 
-    actor = getattr(user, "username", None) or "unknown"
     try:
         result = await asyncio.to_thread(
             outcomes_adapter.kill_trade, trade_id, actor, req.reason,
@@ -222,4 +190,18 @@ async def kill_trade(
         if msg == "already_closed":
             raise HTTPException(status_code=409, detail="already_closed")
         raise HTTPException(status_code=404, detail=msg)
+
+    # WHY audit AFTER the mutation: the row only exists if the ledger
+    # write succeeded. A failed kill leaves no audit ghost row.
+    try:
+        await asyncio.to_thread(
+            repo.add_audit_row,
+            actor, _KILL_ACTION, trade_id,
+            req.reason, req.confirm_token, result,
+        )
+    except Exception:
+        log.exception("Audit log write failed for trade.kill %s", trade_id)
+        # Don't fail the response — the kill itself is durable in the
+        # ledger; a missing audit row is a soft degradation, not a
+        # rollback condition.
     return result

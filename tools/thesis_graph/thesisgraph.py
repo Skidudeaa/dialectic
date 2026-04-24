@@ -900,8 +900,8 @@ def export_state(cfg: dict, states: dict, confluence: dict,
             tv_indicators[node["id"]] = dict(tv)
 
     # --- feedFreshness: per-source fetched_at / ttl for UI staleness ---
-    # WHY: fetch_prices / fetch_polymarket / compute_derived_indicators stamp
-    # cfg["_feed_freshness"][source] = {source, fetchedAt, ttlSeconds, detail}
+    # WHY: fetch_prices / fetch_polymarket / fetch_fred / compute_derived_indicators
+    # stamp cfg["_feed_freshness"][source] = {source, fetchedAt, ttlSeconds, detail}
     # on a successful fetch. Promote that into the snapshot so downstream
     # consumers (WS broadcast, bootstrap, diff, frontend) know what's fresh.
     # Always emitted (possibly empty) to keep the v:2 shape stable.
@@ -1169,6 +1169,111 @@ def fetch_polymarket(cfg: dict) -> dict:
             source="polymarket",
             ttl_seconds=900,
             detail=f"{count}/{len(slugs)} markets",
+        )
+    return cfg
+
+
+def fetch_fred(cfg: dict) -> dict:
+    """Fetch live macro series from FRED for nodes with fred feeds.
+
+    WHY separate from fetch_prices / fetch_polymarket: FRED is end-of-day
+    macro data (Treasury yields, FX rates, policy proxies). It writes to
+    node 'current' (like Yahoo) but uses a different API + auth model
+    (requires FRED_API_KEY). Keeping the dispatch separate lets us stamp
+    feed-freshness with the right TTL (3600s, FRED publishes once/day).
+
+    Additive: nodes without `"source": "fred"` feeds are untouched.
+    Silent skip if FRED_API_KEY is missing — the operator may not have
+    configured FRED yet, and we don't want to abort the whole --fetch
+    run for a missing optional key.
+    """
+    # WHY dynamic import: the fred module lives in tools/data_fetch/.
+    # Resolve relative to this script so cwd doesn't matter.
+    fred_dir = os.path.join(os.path.dirname(__file__), "..", "data_fetch")
+    fred_dir = os.path.abspath(fred_dir)
+
+    if not os.path.isfile(os.path.join(fred_dir, "fred.py")):
+        print("  fred: module not found, skipping", file=sys.stderr)
+        return cfg
+
+    if fred_dir not in sys.path:
+        sys.path.insert(0, fred_dir)
+
+    try:
+        import fred as fred_mod  # type: ignore[import-not-found]
+    except ImportError as e:
+        print(f"  fred: import failed: {e}", file=sys.stderr)
+        return cfg
+
+    # Collect all FRED series IDs from node feeds. One series can map to
+    # multiple nodes (e.g. DGS10 used by both us-10y and recession-risk).
+    series_to_nodes: dict = {}
+    for node in cfg.get("nodes", []):
+        for feed in node.get("feeds", []):
+            if feed.get("source") == "fred" and "series" in feed:
+                series_id = feed["series"]
+                if series_id not in series_to_nodes:
+                    series_to_nodes[series_id] = []
+                series_to_nodes[series_id].append(node["id"])
+
+    if not series_to_nodes:
+        return cfg
+
+    series_ids = list(series_to_nodes.keys())
+    print(f"  fred: fetching {len(series_ids)} series...", file=sys.stderr)
+
+    try:
+        results = fred_mod.fetch_series_batch(series_ids)
+    except fred_mod.FredAuthError as e:
+        # WHY silent-on-missing-key: FRED is optional. Operators running
+        # the engine without a FRED key still get Yahoo + Polymarket data.
+        # Surface a single line to stderr so the operator knows why the
+        # fred-sourced nodes weren't updated, but don't abort.
+        print(f"  fred: skipped ({e})", file=sys.stderr)
+        return cfg
+    except Exception as e:
+        print(f"  fred: batch fetch failed: {e}", file=sys.stderr)
+        return cfg
+
+    # Write values back into matching node 'current' fields.
+    node_map = {n["id"]: n for n in cfg["nodes"]}
+    count = 0
+    for series_id, obs in results.items():
+        if not isinstance(obs, dict) or "value" not in obs:
+            continue
+        value = obs["value"]
+        for nid in series_to_nodes.get(series_id, []):
+            if nid not in node_map:
+                continue
+            node = node_map[nid]
+            # WHY only update if 'current' already exists: indicator-type
+            # nodes (no current price field) should not silently grow one.
+            if "current" in node:
+                old = node["current"]
+                node["current"] = round(value, 4)
+                print(
+                    f"  fred: {nid} ({series_id}): {old} -> "
+                    f"{round(value, 4)} (obs {obs.get('observation_date')})",
+                    file=sys.stderr,
+                )
+                count += 1
+
+    print(
+        f"  fred: updated {count} node(s) from {len(results)}/"
+        f"{len(series_ids)} series",
+        file=sys.stderr,
+    )
+
+    # Stamp freshness if at least one series resolved. FRED publishes most
+    # daily series once per business day around 16:00 ET — 3600s TTL keeps
+    # the badge green during a normal coordinator tick interval, and goes
+    # amber if a tick missed (or FRED is mid-publish).
+    if results:
+        _stamp_feed_freshness(
+            cfg,
+            source="fred",
+            ttl_seconds=3600,
+            detail=f"{len(results)}/{len(series_ids)} series",
         )
     return cfg
 
@@ -3007,6 +3112,12 @@ Examples:
         # run when --fetch is used so the graph has complete live data.
         print("\nFetching Polymarket probabilities...", file=log)
         cfg = fetch_polymarket(cfg)
+        # WHY FRED after Yahoo + Polymarket: FRED is end-of-day macro data
+        # (Treasury yields, FX rates, policy proxies). It writes to node
+        # 'current' fields like Yahoo, but uses a separate API + auth.
+        # Silent skip if FRED_API_KEY is unset — FRED is optional.
+        print("\nFetching FRED macro series...", file=log)
+        cfg = fetch_fred(cfg)
         # WHY derived indicators AFTER polymarket, BEFORE update_config:
         # (a) they may bump closesObserved which the propagation engine
         # reads, so they need to be applied before any propagate() call;
