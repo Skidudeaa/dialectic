@@ -50,6 +50,9 @@ class S2CType(str, Enum):
     # TradingView
     tv_alert = "tv.alert"
 
+    # Live market tape (Unit 6 — push-driven MarketTicker)
+    price_tick = "price.tick"
+
     # System
     error = "error"
     ping = "ping"

@@ -28,6 +28,7 @@ from tools.thesis_graph import thesisgraph  # type: ignore[import-untyped]
 
 from web.observability import thesis_context
 from web.persistence.repository import Repository
+from web.runtime.live_bus import get_live_bus
 from web.schemas.snapshots import snapshot_from_export
 
 log = logging.getLogger(__name__)
@@ -511,6 +512,16 @@ class RuntimeCoordinator:
             except Exception:
                 log.warning("WS broadcast failed for %s", thesis_id)
 
+        # 12. Publish price.tick diff on the live bus (Unit 6).
+        # WHY: state_update above is heavyweight (full snapshot + events) and
+        # only fires when a node state changes. A pure price move doesn't
+        # mutate state but still needs to push to the ticker. price.tick is
+        # the diff-only channel for that — target <500ms fetch-to-pixel.
+        try:
+            await self._publish_price_tick(thesis_id, new_rev, old_snap, export)
+        except Exception:  # pragma: no cover — bus must never break the cycle
+            log.warning("live_bus publish failed for %s", thesis_id)
+
         return export
 
     # ════════════════════════════════════════════════════════════════
@@ -664,6 +675,67 @@ class RuntimeCoordinator:
     # ════════════════════════════════════════════════════════════════
     # INTERNALS — event generation
     # ════════════════════════════════════════════════════════════════
+
+    async def _publish_price_tick(
+        self,
+        thesis_id: str,
+        revision: int,
+        old_snap: Optional[dict],
+        new_snap: dict,
+    ) -> None:
+        """Diff marketSnapshot between revisions and publish a price.tick frame.
+
+        WHY a diff-only payload: the full snapshot is already persisted and
+        WS-broadcast on state changes. price.tick is the cheap continuous
+        channel that lets MarketTicker update cells without refetching.
+
+        Publishes nothing if:
+        - old_snap is None (first tick — the bootstrap channel already carries
+          the initial marketSnapshot)
+        - no symbol changed (prevent redundant frames on a quiet tick)
+        """
+        new_market = new_snap.get("marketSnapshot") or {}
+        if old_snap is None or not new_market:
+            return
+
+        old_market = old_snap.get("marketSnapshot") or {}
+        freshness = new_snap.get("feedFreshness") or {}
+
+        changes: Dict[str, Dict[str, Any]] = {}
+        for symbol, curr in new_market.items():
+            prev = old_market.get(symbol)
+            if prev == curr:
+                continue
+            # WHY: source/fetchedAt aren't per-symbol in the current schema —
+            # feedFreshness is keyed by provider (yahoo/polymarket/...). We
+            # can't know which provider a symbol came from without a lookup
+            # table, so we attach the full freshness map. The frontend picks
+            # the provider based on the symbol's own source metadata from
+            # the last /api/market/watchlist call.
+            entry: Dict[str, Any] = {"prev": prev, "curr": curr}
+            changes[symbol] = entry
+
+        # Also surface newly-absent symbols (present before, missing now)
+        # as curr=None so the UI can blank the cell.
+        for symbol, prev in old_market.items():
+            if symbol in new_market:
+                continue
+            changes[symbol] = {"prev": prev, "curr": None}
+
+        if not changes:
+            return
+
+        payload: Dict[str, Any] = {
+            "type": "price.tick",
+            "thesis_id": thesis_id,
+            "revision": revision,
+            "changes": changes,
+        }
+        if freshness:
+            payload["freshness"] = freshness
+
+        bus = get_live_bus()
+        await bus.publish(thesis_id, payload)
 
     def _compute_events(
         self,

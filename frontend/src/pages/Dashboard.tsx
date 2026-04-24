@@ -18,6 +18,7 @@ import {
   HelpCircle,
   Target,
   NotebookPen,
+  AlertOctagon,
 } from "lucide-react";
 import { useOnboarding } from "../components/onboarding/useOnboarding";
 import { apiFetch, getDisplayName, clearAuth } from "../lib/api";
@@ -30,7 +31,9 @@ import PredictionTracker from "../components/PredictionTracker";
 import TradeJournal from "../components/TradeJournal";
 import CrossBookPanel from "../components/CrossBookPanel";
 import TradingViewPanel from "../components/TradingViewPanel";
+import TradeLifecyclePanel from "../components/TradeLifecyclePanel";
 import OutboxBadge from "../components/OutboxBadge";
+import CommandPalette from "../components/CommandPalette";
 import { useToast } from "../components/toast";
 
 interface Props {
@@ -44,6 +47,7 @@ type RightPanel =
   | "crossbook"
   | "brief"
   | "tradingview"
+  | "trades"
   | null;
 
 const RECENT_CMDS_KEY = "td_cmd_recents";
@@ -270,6 +274,7 @@ export default function Dashboard({ onLogout }: Props) {
       { label: "Predictions", type: "panel", action: () => { togglePanel("predictions"); setCmdPalette(false); } },
       { label: "Trade journal", type: "panel", action: () => { togglePanel("journal"); setCmdPalette(false); } },
       { label: "TradingView", type: "panel", action: () => { togglePanel("tradingview"); setCmdPalette(false); } },
+      { label: "Trade lifecycle", type: "panel", action: () => { togglePanel("trades"); setCmdPalette(false); } },
       { label: "New room", type: "action", action: () => { setShowNewRoom(true); setSidebarOpen(true); setCmdPalette(false); } },
       { label: "Show keyboard shortcuts", type: "action", action: () => { setShowShortcuts(true); setCmdPalette(false); } },
       { label: "Logout", type: "action", action: () => { handleLogout(); setCmdPalette(false); } },
@@ -469,6 +474,7 @@ export default function Dashboard({ onLogout }: Props) {
           <button onClick={() => togglePanel("predictions")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "predictions" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Predictions" aria-label="Predictions panel"><Target size={13} /></button>
           <button onClick={() => togglePanel("journal")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "journal" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Journal" aria-label="Trade journal panel"><NotebookPen size={13} /></button>
           <button onClick={() => togglePanel("tradingview")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "tradingview" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="TradingView"><Activity size={13} /></button>
+          <button onClick={() => togglePanel("trades")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "trades" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Trade lifecycle" aria-label="Trade lifecycle panel"><AlertOctagon size={13} /></button>
           <div className="w-px h-4 bg-border mx-1" />
           <button
             onClick={() => startTour()}
@@ -570,7 +576,7 @@ export default function Dashboard({ onLogout }: Props) {
             {/* Watchlist */}
             <div className="flex-1 overflow-y-auto p-1.5">
               <span className="text-[10px] text-text-dim font-medium uppercase tracking-widest block mb-0.5">Watchlist</span>
-              <MarketTicker />
+              <MarketTicker roomId={activeRoom?.id} thesisId={linkedBookId} />
             </div>
           </aside>
         )}
@@ -615,6 +621,7 @@ export default function Dashboard({ onLogout }: Props) {
                 {rightPanel === "predictions" && <PredictionTracker />}
                 {rightPanel === "journal" && <TradeJournal />}
                 {rightPanel === "tradingview" && <TradingViewPanel bookId={linkedBookId} books={books} />}
+                {rightPanel === "trades" && <TradeLifecyclePanel />}
               </div>
             </aside>
           </>
@@ -710,6 +717,9 @@ export default function Dashboard({ onLogout }: Props) {
       {showShortcuts && (
         <ShortcutsOverlay onClose={() => setShowShortcuts(false)} modKey={modKey} />
       )}
+
+      {/* Backend command palette — Ctrl/Cmd+Shift+K, introspects /api/v1/commands */}
+      <CommandPalette defaultBookId={linkedBookId} />
     </div>
   );
 }

@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { RefreshCw, ArrowUp, ArrowDown } from "lucide-react";
-import { apiFetch } from "../lib/api";
-import type { WatchlistItem } from "../lib/types";
+import { apiFetch, subscribeRoomMessages } from "../lib/api";
+import type { PriceTickPayload, WatchlistItem, WSMessage } from "../lib/types";
 
 const REFRESH_MS = 60_000;
+// Unit 6: how long a cell flashes after a live tick lands.
+const FLASH_MS = 900;
 
 function formatPrice(item: WatchlistItem): string {
   if (item.last_price === null) return "—";
@@ -23,14 +25,22 @@ function freshnessLabel(when: Date | null): string {
   return `${Math.floor(sec / 3600)}h ago`;
 }
 
-export default function MarketTicker() {
+interface MarketTickerProps {
+  roomId?: string;
+  thesisId?: string | null;
+}
+
+export default function MarketTicker({ roomId, thesisId }: MarketTickerProps = {}) {
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  // symbol -> "up" | "down" | null — drives the tick flash
+  const [flash, setFlash] = useState<Record<string, "up" | "down">>({});
   const [, force] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const tickRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const flashTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     loadWatchlist();
@@ -42,6 +52,69 @@ export default function MarketTicker() {
       clearInterval(tickRef.current);
     };
   }, []);
+
+  // Unit 6: apply live price.tick deltas in place — no refetch on receipt.
+  useEffect(() => {
+    const unsub = subscribeRoomMessages((msg: WSMessage) => {
+      if (msg.type !== "price.tick") return;
+      const payload = msg.payload as unknown as PriceTickPayload;
+      // WHY: a single RoomSocket may be attached to a different thesis than
+      // the one MarketTicker is displaying (e.g. chat room switched, ticker
+      // pinned). Filter on thesis_id so we don't flash unrelated books.
+      if (thesisId && payload.thesis_id !== thesisId) return;
+
+      const changes = payload.changes || {};
+      if (Object.keys(changes).length === 0) return;
+
+      setItems((prev) =>
+        prev.map((it) => {
+          const change = changes[it.symbol];
+          if (!change) return it;
+          const curr = change.curr;
+          if (curr === undefined || curr === null) return it;
+          // Compute a fresh change_pct relative to the previous price so
+          // the ▲/▼ arrow reflects this tick.
+          const prevPrice = it.last_price;
+          const change_pct =
+            prevPrice && prevPrice > 0
+              ? ((curr - prevPrice) / prevPrice) * 100
+              : it.change_pct;
+          return { ...it, last_price: curr, change_pct };
+        }),
+      );
+      setLastUpdated(new Date());
+
+      // Schedule flash highlights per changed symbol.
+      const nextFlash: Record<string, "up" | "down"> = {};
+      for (const [symbol, entry] of Object.entries(changes)) {
+        if (entry.curr == null || entry.prev == null) continue;
+        if (entry.curr === entry.prev) continue;
+        nextFlash[symbol] = entry.curr > entry.prev ? "up" : "down";
+      }
+      if (Object.keys(nextFlash).length > 0) {
+        setFlash((prev) => ({ ...prev, ...nextFlash }));
+        for (const symbol of Object.keys(nextFlash)) {
+          if (flashTimers.current[symbol]) {
+            clearTimeout(flashTimers.current[symbol]);
+          }
+          flashTimers.current[symbol] = setTimeout(() => {
+            setFlash((prev) => {
+              const next = { ...prev };
+              delete next[symbol];
+              return next;
+            });
+            delete flashTimers.current[symbol];
+          }, FLASH_MS);
+        }
+      }
+    });
+    return () => {
+      unsub();
+    };
+    // WHY: roomId is in the deps only so a room switch in Dashboard rebuilds
+    // the subscription and picks up the new thesisId filter. The subscription
+    // itself taps the process-wide WS fan-out, not a specific room socket.
+  }, [roomId, thesisId]);
 
   async function loadWatchlist() {
     try {
@@ -125,7 +198,11 @@ export default function MarketTicker() {
           )}
           <div className="space-y-0">
             {list.map((item) => (
-              <TickerRow key={`${source}:${item.symbol}`} item={item} />
+              <TickerRow
+                key={`${source}:${item.symbol}`}
+                item={item}
+                flashDir={flash[item.symbol]}
+              />
             ))}
           </div>
         </div>
@@ -134,7 +211,13 @@ export default function MarketTicker() {
   );
 }
 
-function TickerRow({ item }: { item: WatchlistItem }) {
+function TickerRow({
+  item,
+  flashDir,
+}: {
+  item: WatchlistItem;
+  flashDir?: "up" | "down";
+}) {
   const change = item.change_pct;
   const up = change !== null && change > 0;
   const down = change !== null && change < 0;
@@ -144,9 +227,17 @@ function TickerRow({ item }: { item: WatchlistItem }) {
       ? "text-danger"
       : "text-text-muted";
 
+  // Unit 6: a brief background highlight when a live tick updates this row.
+  // Green on up-tick, red on down-tick; fades via Tailwind transition.
+  const flashBg = flashDir === "up"
+    ? "bg-teal/20"
+    : flashDir === "down"
+      ? "bg-danger/20"
+      : "";
+
   return (
     <div
-      className="flex items-center justify-between py-px px-0.5 hover:bg-elevated/50 rounded-sm group"
+      className={`flex items-center justify-between py-px px-0.5 hover:bg-elevated/50 rounded-sm group transition-colors duration-500 ${flashBg}`}
       title={
         item.last_price !== null
           ? `${item.symbol} · ${item.label}\n${formatPrice(item)}${

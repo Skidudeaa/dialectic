@@ -379,6 +379,7 @@ class TestWSProtocol:
             "alert.created", "override.changed", "runtime.status",
             "chat.message", "chat.typing", "chat.presence",
             "llm.chunk", "llm.done", "tv.alert",
+            "price.tick",
             "error", "ping", "pong",
         }
         actual = {t.value for t in S2CType}

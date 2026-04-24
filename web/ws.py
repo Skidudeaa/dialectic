@@ -16,9 +16,11 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from fastapi import WebSocket
+
+from web.runtime.live_bus import get_live_bus
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +42,10 @@ class ConnectionManager:
         # WHY: v2 protocol — monotonic seq counter per connection for gap detection.
         # Client sees seq=47 then seq=49, knows it missed one, re-subscribes.
         self._seq_counters: Dict[int, int] = {}  # id(websocket) -> seq
+        # Unit 6: per-connection live-bus forwarder — subscribes to the
+        # room's linked_book_id channel and forwards price.tick frames.
+        # Key is id(websocket); value is {"task": asyncio.Task, "token": int}.
+        self._bus_forwarders: Dict[int, Dict[str, Any]] = {}
 
     def set_repo(self, repo) -> None:
         """Inject Repository reference. Called from lifespan init."""
@@ -62,6 +68,8 @@ class ConnectionManager:
         # render immediately without additional REST calls. On reconnect, the
         # same bootstrap replaces stale state.
         await self._send_bootstrap(websocket, room_id)
+        # Unit 6: start live-bus forwarder for the room's linked thesis.
+        await self._start_bus_forwarder(websocket, room_id)
         await self.broadcast(room_id, "presence", await self.get_presence(room_id), user="system")
 
     async def disconnect(self, websocket: WebSocket, room_id: str, username: str) -> None:
@@ -75,6 +83,8 @@ class ConnectionManager:
             if username in self._user_activity:
                 del self._user_activity[username]
             self._seq_counters.pop(id(websocket), None)
+        # Unit 6: tear down the live-bus forwarder for this connection.
+        await self._stop_bus_forwarder(websocket)
         log.info("WS disconnected: %s from room %s", username, room_id)
         try:
             await self.broadcast(room_id, "presence", await self.get_presence(room_id), user="system")
@@ -192,6 +202,82 @@ class ConnectionManager:
             await websocket.send_text(json.dumps(message))
         except Exception:
             log.warning("Failed to send to individual WS")
+
+    # ────────────────────────────────────────────────────────────────
+    # LIVE BUS FORWARDER (Unit 6 — push-driven MarketTicker)
+    # ────────────────────────────────────────────────────────────────
+
+    async def _start_bus_forwarder(self, websocket: WebSocket, room_id: str) -> None:
+        """Subscribe to the room's linked-book price.tick channel and forward.
+
+        WHY: MarketTicker needs diff-only price updates within 500ms of
+        fetch. The coordinator publishes to LiveBus on every commit; each
+        connection owns a background task that pulls its room's thesis
+        channel and ships frames over the WS. We gate on linked_book_id —
+        a room with no linked book (e.g. a pure chat room) gets no
+        forwarder.
+        """
+        if self._repo is None:
+            return
+        try:
+            room = self._repo.get_room(room_id)
+        except Exception:  # pragma: no cover — treat as no forwarder
+            return
+        linked_book = (room or {}).get("linked_book_id")
+        if not linked_book:
+            return
+
+        bus = get_live_bus()
+        token, stream = await bus.subscribe(linked_book)
+
+        async def _forward() -> None:
+            try:
+                async for frame in stream:
+                    # WHY: Reuse send_to's envelope (v, type, ts, user, seq)
+                    # so the client sees price.tick with the same metadata
+                    # it already parses on every other S2C message.
+                    try:
+                        await self.send_to(
+                            websocket, "price.tick", frame, user="system",
+                        )
+                    except Exception:
+                        # send_to swallows send errors already, but we
+                        # defensively loop here so a single bad send never
+                        # kills the forwarder for the rest of the session.
+                        log.debug("price.tick forward failed", exc_info=True)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.warning("bus forwarder crashed for room=%s", room_id,
+                            exc_info=True)
+
+        task = asyncio.create_task(_forward())
+        self._bus_forwarders[id(websocket)] = {"task": task, "token": token}
+
+    async def _stop_bus_forwarder(self, websocket: WebSocket) -> None:
+        """Tear down the bus forwarder for a disconnecting WebSocket.
+
+        Idempotent — safe to call more than once. The LiveBus.unsubscribe
+        sentinel terminates the async iterator, which ends the forward
+        task naturally; we also cancel as a belt-and-suspenders measure.
+        """
+        entry = self._bus_forwarders.pop(id(websocket), None)
+        if entry is None:
+            return
+        try:
+            await get_live_bus().unsubscribe(entry["token"])
+        except Exception:  # pragma: no cover
+            log.debug("unsubscribe failed during forwarder teardown",
+                      exc_info=True)
+        task: asyncio.Task = entry["task"]
+        if not task.done():
+            task.cancel()
+            try:
+                await asyncio.wait_for(task, timeout=1.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+            except Exception:  # pragma: no cover
+                log.debug("forwarder task raised on cancel", exc_info=True)
 
     async def _send_bootstrap(self, websocket: WebSocket, room_id: str) -> None:
         """Send bootstrap message with thesis state on connect.

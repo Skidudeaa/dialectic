@@ -133,8 +133,71 @@ export interface TradeInfo {
   book: string;
 }
 
+// ── Trade lifecycle panel (Unit 10) ──────────────────────────────────────
+
+export type TradePredicateState = "fired" | "approaching" | "stable" | "inactive";
+
+export interface TradePredicate {
+  id: string;
+  kind: "state" | "state_set" | "threshold" | "countdown";
+  description: string;
+  state: TradePredicateState;
+  actual: number | string | null;
+  note: string;
+  load_bearing: boolean;
+  is_flipped: boolean;
+  node_id: string | null;
+  path: string | null;
+  expected: string | null;
+  allowed: string[] | null;
+  op: string | null;
+  value: number;
+  days: number;
+}
+
+export interface OpenTradeSummary {
+  trade_id: string;
+  ticker: string;
+  book: string;
+  ref_price: number | null;
+  direction: string;
+  predicate_count: number;
+  fired_count: number;
+  approaching_count: number;
+  error: string | null;
+  snapshot_timestamp?: string;
+}
+
+export interface OpenTradeDetail {
+  trade_id: string;
+  ticker: string;
+  book: string;
+  ref_price: number | null;
+  direction: string;
+  predicates: TradePredicate[];
+  fire_timer_hours: number | null;
+  approach_timer_hours: number | null;
+  fired_count: number;
+  approaching_count: number;
+  snapshot_timestamp: string;
+}
+
+export interface KillConfirmIssued {
+  confirm_required: true;
+  confirm_token: string;
+  expires_at: number;
+  ttl_seconds: number;
+}
+
+export interface KillResult {
+  trade_id: string;
+  killed_at: string;
+  actor: string;
+  reason: string;
+}
+
 export interface WSMessage {
-  type: "message" | "llm_chunk" | "llm_done" | "system" | "state_update" | "error" | "typing" | "presence" | "tv-alert" | "bootstrap";
+  type: "message" | "llm_chunk" | "llm_done" | "system" | "state_update" | "error" | "typing" | "presence" | "tv-alert" | "bootstrap" | "price.tick";
   payload: Record<string, unknown>;
   ts: string;
   user: string;
@@ -143,6 +206,24 @@ export interface WSMessage {
   thesisId?: string;
   revision?: number;
   seq?: number;
+}
+
+// Payload carried by the price.tick WebSocket message (Unit 6)
+export interface PriceTickPayload {
+  type: "price.tick";
+  thesis_id: string;
+  revision: number;
+  // symbol -> { prev, curr, ... } — curr is null if the symbol dropped out
+  changes: Record<string, {
+    prev: number | null;
+    curr: number | null;
+  }>;
+  freshness?: Record<string, {
+    source: string;
+    fetchedAt: string;
+    ttlSeconds: number;
+    detail?: string;
+  }>;
 }
 
 // ── TradingView integration ─────────────────────────────────────────────

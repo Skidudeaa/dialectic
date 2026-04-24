@@ -96,6 +96,23 @@ export async function login(username: string, password: string): Promise<LoginRe
 // WebSocket manager with auto-reconnect
 type WSHandler = (msg: WSMessage) => void;
 
+// WHY (Unit 6): A process-wide tap into every live RoomSocket, so auxiliary
+// components (MarketTicker, future live-tape views) can listen to WS frames
+// without each opening a second WebSocket. The primary RoomSocket created
+// by Chat fans inbound messages through this tap after its own handlers.
+const _globalWSTaps = new Set<WSHandler>();
+
+export function subscribeRoomMessages(handler: WSHandler): () => void {
+  _globalWSTaps.add(handler);
+  return () => _globalWSTaps.delete(handler);
+}
+
+function _dispatchToTaps(msg: WSMessage): void {
+  for (const h of _globalWSTaps) {
+    try { h(msg); } catch { /* a broken tap never kills the socket */ }
+  }
+}
+
 export class RoomSocket {
   private ws: WebSocket | null = null;
   private handlers: Set<WSHandler> = new Set();
@@ -124,6 +141,8 @@ export class RoomSocket {
       try {
         const msg: WSMessage = JSON.parse(evt.data);
         this.handlers.forEach((h) => h(msg));
+        // Fan out to process-wide taps (see subscribeRoomMessages).
+        _dispatchToTaps(msg);
       } catch {
         // Ignore parse errors
       }
