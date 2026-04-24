@@ -1202,8 +1202,16 @@ def fetch_ohlcv_for_derived(cfg: dict, retries: int = 2) -> dict:
     wanted: set[str] = set()
     for node in cfg.get("nodes", []):
         for spec in node.get("derivedIndicators", []) or []:
-            if isinstance(spec, dict) and spec.get("symbol"):
+            if not isinstance(spec, dict):
+                continue
+            if spec.get("symbol"):
                 wanted.add(str(spec["symbol"]))
+            # curveSpread uses two symbols instead of one — pick both up so
+            # compute_node_indicators has OHLCV for the front and back legs.
+            if spec.get("frontSymbol"):
+                wanted.add(str(spec["frontSymbol"]))
+            if spec.get("backSymbol"):
+                wanted.add(str(spec["backSymbol"]))
 
     if not wanted:
         return cfg

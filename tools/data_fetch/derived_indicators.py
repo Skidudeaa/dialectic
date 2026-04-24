@@ -145,6 +145,65 @@ def sma(closes: list[float], period: int) -> float | None:
     return round(sum(closes[-period:]) / period, 2)
 
 
+def curve_spread(front_closes: list[float], back_closes: list[float],
+                 flat_band: float = 0.10) -> dict | None:
+    """Front-month minus back-month futures spread — a structural curve-shape
+    signal (backwardation vs contango).
+
+    WHY this is non-causal: like RSI/ATR, the spread is derived FROM the same
+    futures prices the thesis already watches. Feeding it into
+    eval_node_state() would be reading the same thermometer twice. The
+    `overlay: true` tripwire on every derivedIndicators spec keeps this
+    architectural — curve values live in the tvIndicators overlay block and
+    never cross into propagate() or score_confluence().
+
+    WHY "flat" band: paper-thin spreads (|spread| < $0.10 by default) aren't
+    meaningful curve signals — they're noise. Bucket those as "flat" rather
+    than forcing them into backwardation/contango.
+
+    Arguments:
+        front_closes: daily close series for the front-month contract
+                      (e.g. CL=F). Must have at least one entry; only the
+                      last value is used (spot spread today, not a history).
+        back_closes:  daily close series for the back-month contract
+                      (e.g. CLZ26.NYM). Same contract, different expiry.
+        flat_band:    absolute spread magnitude treated as flat, in the same
+                      units as the contracts (USD for oil).
+
+    Returns:
+        None when either series is empty (missing data → no overlay written).
+        Otherwise a dict:
+            {"spread": 1.23, "shape": "backwardation",
+             "front": 70.50, "back": 69.27}
+        where shape ∈ {"backwardation", "contango", "flat"}:
+            spread >  flat_band → "backwardation" (front richer than back)
+            spread < -flat_band → "contango"      (back richer than front)
+            |spread| <= flat_band → "flat"
+        All numeric values rounded to 2 decimals.
+    """
+    if flat_band < 0:
+        raise ValueError("flat_band must be non-negative")
+    if not front_closes or not back_closes:
+        return None
+    front = front_closes[-1]
+    back = back_closes[-1]
+    if front is None or back is None:
+        return None
+    spread = float(front) - float(back)
+    if spread > flat_band:
+        shape = "backwardation"
+    elif spread < -flat_band:
+        shape = "contango"
+    else:
+        shape = "flat"
+    return {
+        "spread": round(spread, 2),
+        "shape": shape,
+        "front": round(float(front), 2),
+        "back": round(float(back), 2),
+    }
+
+
 def consecutive_closes_above(closes: list[float], threshold: float) -> int:
     """Count how many of the most recent closes sit above `threshold`,
     counting only the contiguous tail run (stops at first close below).
@@ -193,15 +252,26 @@ def validate_derived_indicator_spec(node_id: str, spec: dict) -> None:
             f"as a cause, add a real node with its own feeds and edges."
         )
     kind = spec.get("kind")
-    if kind not in ("rsi", "atr", "sma"):
+    if kind not in ("rsi", "atr", "sma", "curveSpread"):
         raise ValueError(
             f"node {node_id}: unknown derivedIndicator kind {kind!r}. "
-            f"Supported: rsi, atr, sma."
+            f"Supported: rsi, atr, sma, curveSpread."
         )
-    if "symbol" not in spec:
-        raise ValueError(
-            f"node {node_id}: derivedIndicators entry missing 'symbol'"
-        )
+    if kind == "curveSpread":
+        # Curve spread is a two-symbol spec — front month minus back month.
+        # It does NOT carry a single 'symbol' field; requiring both front
+        # and back explicitly is how we prevent silent half-configs.
+        for required in ("frontSymbol", "backSymbol"):
+            if required not in spec:
+                raise ValueError(
+                    f"node {node_id}: curveSpread derivedIndicator missing "
+                    f"{required!r}"
+                )
+    else:
+        if "symbol" not in spec:
+            raise ValueError(
+                f"node {node_id}: derivedIndicators entry missing 'symbol'"
+            )
 
 
 def compute_node_indicators(node: dict, ohlcv: dict) -> dict:
@@ -229,13 +299,33 @@ def compute_node_indicators(node: dict, ohlcv: dict) -> dict:
     node_id = node.get("id", "?")
     for spec in specs:
         validate_derived_indicator_spec(node_id, spec)
+        kind = spec["kind"]
+
+        # curveSpread has a different shape from the single-symbol indicators.
+        # Handle it first and `continue` so the rest of the branch can assume
+        # `spec["symbol"]` exists.
+        if kind == "curveSpread":
+            front_symbol = spec["frontSymbol"]
+            back_symbol = spec["backSymbol"]
+            front_series = ohlcv.get(front_symbol, {})
+            back_series = ohlcv.get(back_symbol, {})
+            front_closes = front_series.get("closes") or []
+            back_closes = back_series.get("closes") or []
+            if not front_closes or not back_closes:
+                # Missing data on either leg → skip, don't half-write.
+                continue
+            flat_band = float(spec.get("flatBand", 0.10))
+            result = curve_spread(front_closes, back_closes, flat_band=flat_band)
+            if result is not None:
+                out["curveSpread"] = result
+            continue
+
         symbol = spec["symbol"]
         series = ohlcv.get(symbol, {})
         closes = series.get("closes") or []
         if not closes:
             continue
 
-        kind = spec["kind"]
         period = int(spec.get("period", 14))
         value: float | None = None
         key = f"{kind}{period}"

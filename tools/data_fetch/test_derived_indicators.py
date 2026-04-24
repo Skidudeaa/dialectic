@@ -11,6 +11,7 @@ from derived_indicators import (
     atr_wilder,
     compute_node_indicators,
     consecutive_closes_above,
+    curve_spread,
     rsi_wilder,
     sma,
     validate_derived_indicator_spec,
@@ -497,3 +498,250 @@ class TestCLI:
         result = _cli_compute(payload, period=14)
         # Last 4 closes (115..118) all >= 115 → count 4
         assert result["consecutiveAbove"] == 4
+
+
+# =========================================================================
+# Curve spread (futures term-structure) tests
+# =========================================================================
+
+class TestCurveSpread:
+    def test_backwardation_front_above_back(self):
+        # Front $70.50, back $69.00 → spread +$1.50 → backwardation.
+        # A richer front month vs further-out contracts is the classic
+        # supply-stress signature in oil.
+        front = [68.0, 69.0, 70.0, 70.50]
+        back = [67.8, 68.5, 68.9, 69.00]
+        result = curve_spread(front, back)
+        assert result is not None
+        assert result["shape"] == "backwardation"
+        assert result["spread"] == 1.50
+        assert result["front"] == 70.50
+        assert result["back"] == 69.00
+
+    def test_contango_back_above_front(self):
+        # Front $68.00, back $70.20 → spread -$2.20 → contango.
+        front = [66.0, 67.0, 67.5, 68.00]
+        back = [69.0, 69.5, 70.0, 70.20]
+        result = curve_spread(front, back)
+        assert result is not None
+        assert result["shape"] == "contango"
+        assert result["spread"] == -2.20
+
+    def test_flat_spread_within_default_band(self):
+        # Spread of $0.05 — below the $0.10 flat-band default → "flat".
+        front = [69.90, 70.00, 70.05]
+        back = [70.10, 70.05, 70.00]
+        result = curve_spread(front, back)
+        assert result is not None
+        assert result["shape"] == "flat"
+        assert abs(result["spread"]) <= 0.10
+
+    def test_flat_band_custom_threshold(self):
+        # With flat_band=2.00, a +$1.50 spread falls inside "flat".
+        front = [68.0, 69.0, 70.50]
+        back = [67.8, 68.5, 69.00]
+        result = curve_spread(front, back, flat_band=2.00)
+        assert result is not None
+        assert result["shape"] == "flat"
+
+    def test_missing_front_returns_none(self):
+        assert curve_spread([], [70.0, 71.0]) is None
+
+    def test_missing_back_returns_none(self):
+        assert curve_spread([70.0, 71.0], []) is None
+
+    def test_both_empty_returns_none(self):
+        assert curve_spread([], []) is None
+
+    def test_trailing_none_returns_none(self):
+        # Defensive: if the last close is None, bail rather than crash.
+        assert curve_spread([70.0, None], [69.0, 69.5]) is None  # type: ignore[list-item]
+        assert curve_spread([70.0, 71.0], [69.0, None]) is None  # type: ignore[list-item]
+
+    def test_only_last_close_used(self):
+        # Earlier history is ignored — we report today's spread, not a mean.
+        front = [50.0, 60.0, 70.0]
+        back = [100.0, 80.0, 69.0]
+        result = curve_spread(front, back)
+        assert result is not None
+        assert result["spread"] == 1.00
+        assert result["front"] == 70.0
+        assert result["back"] == 69.0
+
+    def test_negative_flat_band_raises(self):
+        with pytest.raises(ValueError, match="flat_band"):
+            curve_spread([70.0], [69.0], flat_band=-0.5)
+
+    def test_exact_flat_band_boundary_is_flat(self):
+        # Spread exactly equal to flat_band (0.10) → flat (inclusive boundary)
+        result = curve_spread([70.10], [70.00])
+        assert result is not None
+        assert result["shape"] == "flat"
+
+    def test_rounding_to_2_decimals(self):
+        front = [70.12345]
+        back = [69.11111]
+        result = curve_spread(front, back)
+        assert result is not None
+        assert result["spread"] == round(result["spread"], 2) == 1.01
+        assert result["front"] == 70.12
+        assert result["back"] == 69.11
+
+
+class TestCurveSpreadIntegration:
+    """End-to-end: curveSpread flows through compute_node_indicators into
+    the node's tvIndicators overlay, preserving the overlay=true tripwire."""
+
+    def test_curve_spread_writes_to_tv_indicators(self):
+        node = {
+            "id": "brent",
+            "derivedIndicators": [
+                {
+                    "kind": "curveSpread",
+                    "frontSymbol": "CL=F",
+                    "backSymbol": "CLZ26.NYM",
+                    "overlay": True,
+                },
+            ],
+        }
+        ohlcv = {
+            "CL=F": {"closes": [68.0, 69.0, 70.50]},
+            "CLZ26.NYM": {"closes": [67.5, 68.0, 69.00]},
+        }
+        result = compute_node_indicators(node, ohlcv)
+        assert "curveSpread" in result
+        assert result["curveSpread"]["shape"] == "backwardation"
+        assert result["curveSpread"]["spread"] == 1.50
+
+    def test_curve_spread_contango_integration(self):
+        node = {
+            "id": "brent",
+            "derivedIndicators": [
+                {
+                    "kind": "curveSpread",
+                    "frontSymbol": "CL=F",
+                    "backSymbol": "CLZ26.NYM",
+                    "overlay": True,
+                },
+            ],
+        }
+        ohlcv = {
+            "CL=F": {"closes": [68.00]},
+            "CLZ26.NYM": {"closes": [70.20]},
+        }
+        result = compute_node_indicators(node, ohlcv)
+        assert result["curveSpread"]["shape"] == "contango"
+
+    def test_missing_front_ohlcv_skips(self):
+        node = {
+            "id": "brent",
+            "derivedIndicators": [
+                {
+                    "kind": "curveSpread",
+                    "frontSymbol": "CL=F",
+                    "backSymbol": "CLZ26.NYM",
+                    "overlay": True,
+                },
+            ],
+        }
+        # Back present, front missing — should not half-write.
+        ohlcv = {"CLZ26.NYM": {"closes": [69.0]}}
+        assert compute_node_indicators(node, ohlcv) == {}
+
+    def test_missing_back_ohlcv_skips(self):
+        node = {
+            "id": "brent",
+            "derivedIndicators": [
+                {
+                    "kind": "curveSpread",
+                    "frontSymbol": "CL=F",
+                    "backSymbol": "CLZ26.NYM",
+                    "overlay": True,
+                },
+            ],
+        }
+        ohlcv = {"CL=F": {"closes": [70.0]}}
+        assert compute_node_indicators(node, ohlcv) == {}
+
+    def test_curve_spread_rejects_missing_overlay(self):
+        """Schema tripwire: curveSpread without overlay=true MUST raise.
+        This is what keeps derived values from ever feeding eval_node_state
+        or score_confluence — the architectural guarantee from the plan."""
+        with pytest.raises(ValueError, match="overlay=true"):
+            validate_derived_indicator_spec(
+                "brent",
+                {
+                    "kind": "curveSpread",
+                    "frontSymbol": "CL=F",
+                    "backSymbol": "CLZ26.NYM",
+                },
+            )
+
+    def test_curve_spread_rejects_missing_front_symbol(self):
+        with pytest.raises(ValueError, match="frontSymbol"):
+            validate_derived_indicator_spec(
+                "brent",
+                {"kind": "curveSpread", "backSymbol": "CLZ26.NYM", "overlay": True},
+            )
+
+    def test_curve_spread_rejects_missing_back_symbol(self):
+        with pytest.raises(ValueError, match="backSymbol"):
+            validate_derived_indicator_spec(
+                "brent",
+                {"kind": "curveSpread", "frontSymbol": "CL=F", "overlay": True},
+            )
+
+    def test_curve_spread_coexists_with_rsi(self):
+        # Both a single-symbol (RSI) spec and a curveSpread spec on the same
+        # node — both should land in the output dict without clobbering.
+        closes = [100.0 + (i % 5) for i in range(30)]
+        node = {
+            "id": "brent",
+            "derivedIndicators": [
+                {"kind": "rsi", "period": 14, "symbol": "BZ=F", "overlay": True},
+                {
+                    "kind": "curveSpread",
+                    "frontSymbol": "CL=F",
+                    "backSymbol": "CLZ26.NYM",
+                    "overlay": True,
+                },
+            ],
+        }
+        ohlcv = {
+            "BZ=F": {"closes": closes},
+            "CL=F": {"closes": [70.50]},
+            "CLZ26.NYM": {"closes": [69.00]},
+        }
+        result = compute_node_indicators(node, ohlcv)
+        assert "rsi14" in result
+        assert "curveSpread" in result
+        assert result["curveSpread"]["shape"] == "backwardation"
+
+    def test_curve_spread_does_not_leak_into_causal_keys(self):
+        """Belt-and-suspenders: the output key for curveSpread is a dict, not
+        a scalar, so even if downstream glue code grabs `node.tvIndicators`
+        and tries to read a numeric threshold from it, curveSpread cannot
+        be mistaken for an eval_node_state input like `current` or
+        `probability`. Verify the shape explicitly."""
+        node = {
+            "id": "brent",
+            "derivedIndicators": [
+                {
+                    "kind": "curveSpread",
+                    "frontSymbol": "CL=F",
+                    "backSymbol": "CLZ26.NYM",
+                    "overlay": True,
+                },
+            ],
+        }
+        ohlcv = {
+            "CL=F": {"closes": [70.50]},
+            "CLZ26.NYM": {"closes": [69.00]},
+        }
+        result = compute_node_indicators(node, ohlcv)
+        assert isinstance(result["curveSpread"], dict)
+        # Must carry the shape label — not just a raw number.
+        assert "shape" in result["curveSpread"]
+        # And the spec itself MUST have been validated with overlay=true
+        # (any violation would have raised before we got here).
+        assert node["derivedIndicators"][0]["overlay"] is True

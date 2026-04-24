@@ -134,6 +134,12 @@
           "period": 50,
           "symbol": "BZ=F",
           "overlay": true
+        },
+        {
+          "kind": "curveSpread",
+          "frontSymbol": "BZ=F",
+          "backSymbol": "BZZ26.NYM",
+          "overlay": true
         }
       ],
       "tvAlertBindings": [
