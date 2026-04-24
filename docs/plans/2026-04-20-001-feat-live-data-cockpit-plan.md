@@ -173,7 +173,7 @@ The v2 rebuild landed M0 + M1 + Unit 12, plus cosmetic polish (builder, onboardi
 
 ---
 
-- [ ] **Unit 4: Futures-curve bootstrap**
+- [x] **Unit 4: Futures-curve bootstrap** (shipped — f101641)
 
 **Goal:** Front/back spread, contango/backwardation for Brent and CL from Yahoo multi-contract symbols.
 
@@ -187,7 +187,7 @@ The v2 rebuild landed M0 + M1 + Unit 12, plus cosmetic polish (builder, onboardi
 
 ---
 
-- [x] **Unit 5: Freshness contract schema + UI staleness badges** (this commit)
+- [x] **Unit 5: Freshness contract schema + UI staleness badges** (shipped — 12edde6)
 
 **Goal:** Every provider writes `fetched_at` / `source` / `ttl_seconds` into the snapshot. Frontend surfaces amber badges when TTL is exceeded.
 
@@ -203,7 +203,7 @@ The v2 rebuild landed M0 + M1 + Unit 12, plus cosmetic polish (builder, onboardi
 
 ### Milestone 2: Cockpit UX
 
-- [ ] **Unit 6: Push-driven MarketTicker via in-process pub/sub**
+- [x] **Unit 6: Push-driven MarketTicker via in-process pub/sub** (shipped — 138d1c3)
 
 **Goal:** Coordinator publishes price-change events to an in-process bus; WS manager subscribes; clients see pixel updates within 500ms.
 
@@ -218,7 +218,7 @@ The v2 rebuild landed M0 + M1 + Unit 12, plus cosmetic polish (builder, onboardi
 
 ---
 
-- [ ] **Unit 7: Command palette expansion + `/api/commands` registry**
+- [x] **Unit 7: Command palette expansion + `/api/commands` registry** (shipped — 138d1c3)
 
 **Goal:** Every slash command, fire/kill action, panel switch becomes a palette entry + a JSON-schema command at `/api/commands`.
 
@@ -264,7 +264,7 @@ The v2 rebuild landed M0 + M1 + Unit 12, plus cosmetic polish (builder, onboardi
 
 ### Milestone 3: Trade lifecycle + agent-in-room
 
-- [ ] **Unit 10: Trade lifecycle panel**
+- [x] **Unit 10: Trade lifecycle panel** (shipped — 138d1c3)
 
 **Goal:** Surface `tools/outcomes/` predicates per trade. Fire-timer, approach-timer, two-step kill-switch.
 
