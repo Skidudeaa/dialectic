@@ -46,6 +46,7 @@ from web.tv_webhook import (  # noqa: E402
     VerifyResult,
     nonce_store,
     sign_body,
+    sign_canonical,
     verify_request,
     verify_signature,
     verify_timestamp,
@@ -203,7 +204,7 @@ def _signed_webhook_headers(body: bytes, *, ts: int | None = None,
     if ts is None:
         ts = int(time.time())
     return {
-        "X-TV-Signature": sign_body(body, TV_SECRET),
+        "X-TV-Signature": sign_canonical(str(ts), nonce, body, TV_SECRET),
         "X-TV-Timestamp": str(ts),
         "X-TV-Nonce": nonce,
         "Content-Type": "application/json",
@@ -332,11 +333,13 @@ class TestVerifyRequest:
     def test_happy_path_returns_ok(self):
         nonce_store.clear()
         body = b'{"a":1}'
+        ts = str(int(time.time()))
+        nonce = "happy-path-nonce"
         ctx = VerificationContext(
             body=body,
-            signature_header=sign_body(body, TV_SECRET),
-            timestamp_header=str(int(time.time())),
-            nonce_header="happy-path-nonce",
+            signature_header=sign_canonical(ts, nonce, body, TV_SECRET),
+            timestamp_header=ts,
+            nonce_header=nonce,
             secret=TV_SECRET,
         )
         assert verify_request(ctx) == VerifyResult.OK
@@ -378,22 +381,67 @@ class TestVerifyRequest:
         nonce_store.clear()
         body = b'{}'
         nonce = "replay-test-nonce"
+        ts1 = str(int(time.time()))
         ctx1 = VerificationContext(
             body=body,
-            signature_header=sign_body(body, TV_SECRET),
-            timestamp_header=str(int(time.time())),
+            signature_header=sign_canonical(ts1, nonce, body, TV_SECRET),
+            timestamp_header=ts1,
             nonce_header=nonce,
             secret=TV_SECRET,
         )
         assert verify_request(ctx1) == VerifyResult.OK
+        ts2 = str(int(time.time()))
         ctx2 = VerificationContext(
             body=body,
-            signature_header=sign_body(body, TV_SECRET),
-            timestamp_header=str(int(time.time())),
+            signature_header=sign_canonical(ts2, nonce, body, TV_SECRET),
+            timestamp_header=ts2,
             nonce_header=nonce,
             secret=TV_SECRET,
         )
         assert verify_request(ctx2) == VerifyResult.NONCE_REPLAY
+
+    def test_captured_signature_cannot_be_replayed_with_fresh_headers(self):
+        """Regression: audit found HMAC covered body only, so an attacker
+        who captured one signed request could replay (body, signature)
+        forever with fresh ts+nonce headers. Since the fix, signature is
+        bound to the specific ts+nonce it was minted with."""
+        nonce_store.clear()
+        body = b'{"book":"iran-hormuz-graph","bindingId":"hormuz-reopen-announced"}'
+        captured_ts = str(int(time.time()) - 120)
+        captured_nonce = "captured-original-nonce"
+        captured_sig = sign_canonical(captured_ts, captured_nonce, body, TV_SECRET)
+
+        # Attacker swaps ts + nonce (both fresh, both pass their own checks)
+        # but reuses the captured signature. Must fail at HMAC.
+        fresh_ts = str(int(time.time()))
+        fresh_nonce = "attacker-fresh-nonce"
+        ctx = VerificationContext(
+            body=body,
+            signature_header=captured_sig,
+            timestamp_header=fresh_ts,
+            nonce_header=fresh_nonce,
+            secret=TV_SECRET,
+        )
+        assert verify_request(ctx) == VerifyResult.BAD_SIGNATURE
+
+    def test_canonical_signature_is_not_body_only(self):
+        """Defense-in-depth: body-only signatures (pre-fix shape) must not
+        accidentally pass verify_request. If this test ever flips to OK, the
+        canonical wiring has been undone."""
+        nonce_store.clear()
+        body = b'{}'
+        ts = str(int(time.time()))
+        nonce = "twelve-char-nonce"
+        # Old-style signature over body alone:
+        body_only_sig = sign_body(body, TV_SECRET)
+        ctx = VerificationContext(
+            body=body,
+            signature_header=body_only_sig,
+            timestamp_header=ts,
+            nonce_header=nonce,
+            secret=TV_SECRET,
+        )
+        assert verify_request(ctx) == VerifyResult.BAD_SIGNATURE
 
 
 # ═════════════════════════════════════════════════════════════════════════

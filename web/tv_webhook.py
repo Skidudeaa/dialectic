@@ -112,18 +112,36 @@ def verify_timestamp(header_value: str, now_seconds: float,
 
 def canonical_signing_string(timestamp_header: str, nonce_header: str,
                               body: bytes) -> bytes:
-    """Build the canonical signing string used by verify_signature.
+    """Build the canonical signing bytes: ``timestamp.nonce.body``.
 
-    NOTE: This plan signs the raw body only (matching the Alpha v2 contract).
-    The function exists as a helper in case a future hardening iteration
-    wants to sign ``timestamp + nonce + body`` — not used today, but the
-    signature stays consistent with the test suite helpers.
+    WHY ts and nonce are inside the MAC: signing the raw body alone lets an
+    attacker who has captured one legitimate signed request replay the exact
+    (body, signature) pair indefinitely with a fresh timestamp + fresh nonce.
+    Both headers are unauthenticated under body-only signing. Folding them
+    into the HMAC binds the signature to a specific moment in time + a
+    specific nonce, so the ±300s window and nonce store become meaningful.
+
+    The encoding is stable: UTF-8 for the two headers, raw bytes for the
+    body. The ``.`` separator is outside any header's allowed charset
+    (digits for ts, hex for nonce), so no collision is possible.
     """
     return b".".join([
         timestamp_header.encode(),
         nonce_header.encode(),
         body,
     ])
+
+
+def sign_canonical(timestamp_header: str, nonce_header: str,
+                   body: bytes, secret: str) -> str:
+    """Produce the X-TV-Signature value covering ts + nonce + body.
+
+    This is the helper relays (``tools/bridge/sign_tv_alert.py``) and tests
+    use. Pair with :func:`verify_request` which computes the same canonical
+    bytes before calling :func:`verify_signature`.
+    """
+    canonical = canonical_signing_string(timestamp_header, nonce_header, body)
+    return sign_body(canonical, secret)
 
 
 # ── Nonce store ───────────────────────────────────────────────────────────
@@ -213,8 +231,15 @@ def verify_request(
         return VerifyResult.BAD_NONCE
 
     # HMAC — constant-time, single hash compute.
+    # WHY sign the canonical string (ts+nonce+body), not body alone: body-only
+    # signing lets a captured request be replayed forever with fresh ts+nonce
+    # headers, because those headers are attacker-controlled and outside the
+    # MAC. See canonical_signing_string docstring for the threat model.
     secret_bytes = ctx.secret.encode() if isinstance(ctx.secret, str) else ctx.secret
-    if not verify_signature(ctx.body, ctx.signature_header, secret_bytes):
+    canonical = canonical_signing_string(
+        ctx.timestamp_header, ctx.nonce_header, ctx.body,
+    )
+    if not verify_signature(canonical, ctx.signature_header, secret_bytes):
         return VerifyResult.BAD_SIGNATURE
 
     # Only register the nonce after signature is valid. This prevents an
@@ -229,12 +254,11 @@ def verify_request(
 # ── Signing helper (test fixtures only) ───────────────────────────────────
 
 def sign_body(body: bytes, secret: str) -> str:
-    """Produce the X-TV-Signature value for a given body + secret.
+    """Produce ``sha256=<hex>`` over raw bytes.
 
-    Used ONLY by tests to forge valid signatures. The live webhook does not
-    sign anything — Pine Script on TradingView's servers does, and the
-    server verifies. Kept in this module so tests import the same code path
-    they're verifying against.
+    Low-level primitive paired with :func:`verify_signature`. For HTTP
+    webhook signing, prefer :func:`sign_canonical` which covers timestamp
+    and nonce — body-only signatures are vulnerable to header-swap replay.
     """
     secret_bytes = secret.encode() if isinstance(secret, str) else secret
     digest = hmac.new(secret_bytes, body, hashlib.sha256).hexdigest()

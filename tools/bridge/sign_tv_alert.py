@@ -65,11 +65,19 @@ def _read_body(args: argparse.Namespace) -> bytes:
     return sys.stdin.read().strip().encode()
 
 
-def _sign(body: bytes, secret: str) -> str:
+def _sign_canonical(timestamp: int, nonce: str, body: bytes, secret: str) -> str:
+    """Sign the canonical ts.nonce.body string.
+
+    WHY canonical and not body-only: body-only signatures let a captured
+    request be replayed forever with a fresh timestamp + nonce, because
+    those headers are unauthenticated. Keep in lockstep with
+    ``web/tv_webhook.py:canonical_signing_string``.
+    """
     import hashlib
     import hmac
 
-    digest = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    canonical = b".".join([str(timestamp).encode(), nonce.encode(), body])
+    digest = hmac.new(secret.encode(), canonical, hashlib.sha256).hexdigest()
     return f"sha256={digest}"
 
 
@@ -116,7 +124,7 @@ def main() -> int:
     timestamp = args.timestamp if args.timestamp is not None else int(time.time())
     nonce = args.nonce or secrets.token_hex(16)  # 32 hex chars
 
-    signature = _sign(body, secret)
+    signature = _sign_canonical(timestamp, nonce, body, secret)
 
     if args.format == "json":
         out = {
