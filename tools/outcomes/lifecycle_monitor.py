@@ -13,6 +13,7 @@ Wires into run-all.py as Step 7.
 Zero external dependencies — stdlib only per project convention.
 """
 
+import fcntl
 import json
 import hashlib
 import re
@@ -199,6 +200,15 @@ def _deserialize_record(line: str) -> Optional[TradeRecord]:
 # SNAPSHOT READER (flat nodeStates format from export_state())
 # =============================================================================
 
+class SnapshotTooStaleError(ValueError):
+    """Raised when a snapshot's timestamp is older than the caller's max_age.
+
+    Callers can catch this explicitly to degrade gracefully (skip evaluation,
+    mark trades stale, warn operator) instead of evaluating predicates on
+    days-old data after a cron/pipeline failure."""
+    pass
+
+
 class Snapshot:
     """WHY: Hard-fail at the contract boundary. If someone writes a Cytoscape
     book JSON to this path, we know immediately — not silently evaluate empty."""
@@ -226,12 +236,44 @@ class Snapshot:
         self.timestamp: str = data.get("timestamp", "")
         self.title: str = data.get("title", "")
 
+    def age_seconds(self, now: Optional[datetime] = None) -> Optional[float]:
+        """Seconds since snapshot.timestamp. None if timestamp is absent or
+        unparseable — callers should treat that as "unknown age"."""
+        if not self.timestamp:
+            return None
+        try:
+            # export_state writes "YYYY-MM-DDTHH:MM:SSZ" (UTC, Z-suffix).
+            # fromisoformat handles the Z since Python 3.11.
+            ts = datetime.fromisoformat(self.timestamp.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if now is None:
+            now = datetime.now(timezone.utc)
+        return (now - ts).total_seconds()
+
     @classmethod
-    def load(cls, path: Path) -> "Snapshot":
+    def load(cls, path: Path, max_age_seconds: Optional[float] = None) -> "Snapshot":
+        """Load a snapshot file.
+
+        If ``max_age_seconds`` is set, raises :class:`SnapshotTooStaleError`
+        when the snapshot's timestamp is older than that. A missing or
+        unparseable timestamp is NOT treated as stale — the caller should
+        decide how to handle unknown-age snapshots separately.
+        """
         if not path.exists():
             raise FileNotFoundError(f"Snapshot missing: {path}")
         data = json.loads(path.read_text())
-        return cls(data, path)
+        snap = cls(data, path)
+        if max_age_seconds is not None:
+            age = snap.age_seconds()
+            if age is not None and age > max_age_seconds:
+                raise SnapshotTooStaleError(
+                    f"Snapshot at {path} is {age:.0f}s old "
+                    f"(max {max_age_seconds:.0f}s). Refusing to evaluate "
+                    f"predicates on stale data — investigate upstream "
+                    f"fetch/export pipeline."
+                )
+        return snap
 
     def content_hash(self) -> str:
         """WHAT: Deterministic hash of snapshot content for dedup and attribution."""
@@ -502,10 +544,24 @@ class PredicateLifecycleMonitor:
         return None
 
     def _log(self, record: TradeRecord) -> None:
-        """WHAT: Append trade lifecycle event to JSONL ledger."""
+        """WHAT: Append trade lifecycle event to JSONL ledger.
+
+        WHY flock: O_APPEND is only per-write atomic up to PIPE_BUF (4096
+        bytes) on Linux. A TradeRecord with many predicates + provenance
+        tags can exceed that, and two concurrent writers (cron + manual
+        seed, two cron runs overlapping) can interleave mid-record and
+        corrupt the JSONL. A subsequent _iter_records parse drops the
+        broken lines silently, destroying the empirical-adjustment sample
+        base. Match the lock convention used by web/state.py."""
         ledger_file = self.ledger_dir / f"{record.trade_id}.jsonl"
+        line = _serialize_record(record) + "\n"
         with ledger_file.open("a") as f:
-            f.write(_serialize_record(record) + "\n")
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                f.write(line)
+                f.flush()
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
     def _weighted_consistency(self, evaluated: List[EvaluatedPredicate],
                               snapshot: Snapshot) -> float:
@@ -653,12 +709,21 @@ SPY_SHORT_GATE = [
 # RUN-ALL.PY INTEGRATION (Step 7)
 # =============================================================================
 
+# WHY 24h: the cron runs Mon/Wed/Fri — a clean weekly cadence is ≤72h between
+# runs, but a 24h ceiling catches the common failure mode of "Monday's run
+# failed silently and Wednesday's pipeline skipped steps 1-6, so step 7 would
+# evaluate against 48-hour-old data as if it were fresh." Callers who know
+# they're running an off-cadence manual evaluation can pass their own ceiling.
+MAX_SNAPSHOT_AGE_SECONDS = 24 * 60 * 60
+
+
 def step7_evaluate_open_trades(
     snapshot_path: Path,
     open_trades_path: Path,
     book_id: str = "",
     book_path: Optional[Path] = None,
     ledger_dir: str = "/root/tradingDesk/outcomes/trades",
+    max_snapshot_age_seconds: Optional[float] = MAX_SNAPSHOT_AGE_SECONDS,
 ) -> Dict[str, str]:
     """WHAT: Evaluate open trades for a specific book against its fresh snapshot.
 
@@ -666,6 +731,13 @@ def step7_evaluate_open_trades(
     nodes; evaluating them against the iran snapshot produces NODE_MISSING on
     every predicate. The book_id filter ensures each trade only evaluates against
     its own book's output.
+
+    If ``max_snapshot_age_seconds`` is set (default 24h) and the snapshot is
+    older than that, every matching trade returns status 'SKIPPED_STALE' and
+    NO ledger writes happen. WHY: evaluating EXIT predicates against stale
+    data can fire a phantom EXIT record, polluting empirical adjustments with
+    wins-recorded-as-losses. Refusing to evaluate is safer than evaluating on
+    data we can't trust. Pass ``None`` to disable the check (testing / manual).
 
     open_trades_path is a JSON file: [
       {"trade_id": "...", "ticker": "...", "predicates": [...], "ref_price": ..., "book": "..."},
@@ -682,6 +754,16 @@ def step7_evaluate_open_trades(
     trades = [t for t in all_trades if not book_id or t.get("book", "") == book_id]
     if not trades:
         return {}
+
+    # Staleness gate — load-and-check once up front, so a stale snapshot skips
+    # evaluation across every trade for this book rather than surfacing the
+    # same error three times.
+    try:
+        Snapshot.load(snapshot_path, max_age_seconds=max_snapshot_age_seconds)
+    except SnapshotTooStaleError as e:
+        import sys as _sys
+        print(f"  [lifecycle] SKIPPED (stale snapshot): {e}", file=_sys.stderr)
+        return {t["trade_id"]: "SKIPPED_STALE" for t in trades}
 
     monitor = PredicateLifecycleMonitor(ledger_dir=ledger_dir)
     results = {}

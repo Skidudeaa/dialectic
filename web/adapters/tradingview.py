@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 import re
 from dataclasses import dataclass
@@ -226,6 +227,12 @@ def apply_op(
         if alert_value is None or not isinstance(alert_value, (int, float)):
             raise MutationError("setProbability requires numeric value in alert body")
         v = float(alert_value)
+        # WHY reject NaN/Inf explicitly: Pydantic with allow_inf_nan=True (the
+        # v2 default) happily parses "NaN"/"Infinity" JSON literals. A NaN
+        # probability poisons every downstream comparator since NaN > x and
+        # NaN < x both return False — the node silently falls out of eval.
+        if math.isnan(v) or math.isinf(v):
+            raise MutationError(f"probability must be finite, got {alert_value!r}")
         if not 0.0 <= v <= 1.0:
             raise MutationError(f"probability out of [0.0, 1.0]: {v}")
         node["probability"] = round(v, 4)
@@ -234,7 +241,14 @@ def apply_op(
     if op == "setCurrent":
         if alert_value is None or not isinstance(alert_value, (int, float)):
             raise MutationError("setCurrent requires numeric value in alert body")
-        node["current"] = round(float(alert_value), 4)
+        v = float(alert_value)
+        # WHY reject NaN/Inf explicitly: see setProbability above. NaN prices
+        # break eval_node_state silently (NaN >= threshold is False for every
+        # threshold), so a malicious or malformed alert could mute a node's
+        # firing without leaving a visible error in the snapshot.
+        if math.isnan(v) or math.isinf(v):
+            raise MutationError(f"current must be finite, got {alert_value!r}")
+        node["current"] = round(v, 4)
         return node["current"]
 
     # Unreachable — the first check rejected unknown ops.

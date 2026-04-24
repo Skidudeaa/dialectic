@@ -13,6 +13,7 @@ Seeds the three trades' predicate gates from lifecycle_monitor.py.
 """
 
 import argparse
+import fcntl
 import json
 import sys
 from dataclasses import asdict
@@ -94,8 +95,18 @@ def seed_entry(trade_key: str, ref_price: float | None, ledger_dir: Path) -> Non
     )
 
     ledger_dir.mkdir(parents=True, exist_ok=True)
+    # WHY flock: match PredicateLifecycleMonitor._log — two concurrent writers
+    # (this CLI + a racing cron) can interleave JSONL records beyond O_APPEND's
+    # PIPE_BUF atomicity guarantee, producing lines that fail parse and
+    # silently drop from _iter_records.
+    line = _serialize_record(record) + "\n"
     with ledger_file.open("a") as f:
-        f.write(_serialize_record(record) + "\n")
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        try:
+            f.write(line)
+            f.flush()
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
     print(f"Seeded ENTRY for {tid} ({trade['ticker']}) at ref ${price:.2f}")
     print(f"  Predicates: {len(predicates)} ({sum(1 for p in predicates if p.load_bearing)} load-bearing)")

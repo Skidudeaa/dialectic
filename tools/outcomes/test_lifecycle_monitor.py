@@ -17,11 +17,12 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from lifecycle_monitor import (
-    Snapshot, Predicate, EvaluatedPredicate, TradeRecord,
+    Snapshot, SnapshotTooStaleError, Predicate, EvaluatedPredicate, TradeRecord,
     ProvenanceTag, DynamicTarget, TargetRefusal, PostExitVerdict,
     evaluate_predicate, compute_provenance_target, detect_inert_fields,
     LedgerAnalyzer, PredicateLifecycleMonitor,
     XOP_GATE, CF_GATE, SPY_SHORT_GATE,
+    step7_evaluate_open_trades,
     _serialize_record, _deserialize_record,
 )
 
@@ -188,6 +189,74 @@ class TestSnapshotLoading:
         snap = Snapshot(iran_snapshot_data)
         assert snap.get_countdown_days("planting-miss") == 14
         assert snap.get_countdown_days("nonexistent") is None
+
+    def test_load_rejects_stale_snapshot(self, tmp_path, iran_snapshot_data):
+        """Regression: evaluating predicates against stale data can fire a
+        phantom EXIT on TRD-XOP-HORMUZ if a cron step silently skipped."""
+        from datetime import datetime, timedelta, timezone
+        old_ts = (datetime.now(timezone.utc) - timedelta(hours=48)
+                 ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        data = dict(iran_snapshot_data)
+        data["timestamp"] = old_ts
+        p = tmp_path / "stale.json"
+        p.write_text(json.dumps(data))
+        with pytest.raises(SnapshotTooStaleError, match="Refusing to evaluate"):
+            Snapshot.load(p, max_age_seconds=24 * 3600)
+
+    def test_load_accepts_fresh_snapshot(self, tmp_path, iran_snapshot_data):
+        from datetime import datetime, timezone
+        fresh_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        data = dict(iran_snapshot_data)
+        data["timestamp"] = fresh_ts
+        p = tmp_path / "fresh.json"
+        p.write_text(json.dumps(data))
+        # Must not raise — a just-written snapshot is well inside 24h.
+        snap = Snapshot.load(p, max_age_seconds=24 * 3600)
+        assert snap.node_states == iran_snapshot_data["nodeStates"]
+
+    def test_load_with_no_max_age_skips_staleness_check(self, tmp_path, iran_snapshot_data):
+        """Backward-compat: callers without a max_age_seconds get the
+        pre-staleness-check behavior — load anything parseable."""
+        from datetime import datetime, timedelta, timezone
+        ancient_ts = (datetime.now(timezone.utc) - timedelta(days=365)
+                     ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        data = dict(iran_snapshot_data)
+        data["timestamp"] = ancient_ts
+        p = tmp_path / "ancient.json"
+        p.write_text(json.dumps(data))
+        snap = Snapshot.load(p)  # no max_age_seconds → no check
+        assert snap.timestamp == ancient_ts
+
+    def test_step7_returns_skipped_stale_when_snapshot_old(self, tmp_path, iran_snapshot_data):
+        """Regression: step7_evaluate_open_trades must short-circuit without
+        ledger writes when the snapshot is older than max_snapshot_age_seconds."""
+        from datetime import datetime, timedelta, timezone
+        old_ts = (datetime.now(timezone.utc) - timedelta(hours=48)
+                 ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        data = dict(iran_snapshot_data)
+        data["timestamp"] = old_ts
+        snap_path = tmp_path / "stale.json"
+        snap_path.write_text(json.dumps(data))
+
+        trades_path = tmp_path / "open_trades.json"
+        trades_path.write_text(json.dumps([{
+            "trade_id": "TRD-TEST",
+            "ticker": "XOP",
+            "book": "iran-hormuz-graph",
+            "predicates": [asdict(p) for p in XOP_GATE],
+        }]))
+        ledger_dir = tmp_path / "trades"
+        ledger_dir.mkdir()
+
+        results = step7_evaluate_open_trades(
+            snapshot_path=snap_path,
+            open_trades_path=trades_path,
+            book_id="iran-hormuz-graph",
+            ledger_dir=str(ledger_dir),
+        )
+        assert results == {"TRD-TEST": "SKIPPED_STALE"}
+        # No ledger writes should have happened on the stale path.
+        assert list(ledger_dir.glob("*.jsonl")) == []
 
 
 # =========================================================================

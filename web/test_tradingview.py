@@ -760,6 +760,49 @@ class TestWebhookApply:
         })
         assert resp.status_code == 422
 
+    def test_set_current_nan_rejected(self, temp_books):
+        """Regression: NaN poisons eval_node_state (NaN >= threshold is False
+        for every threshold), silently muting a node's firing. Must fail
+        before mutating node state."""
+        import math as _math
+        resp = _post_webhook({
+            "book": "test-book",
+            "bindingId": "diesel-set",
+            "value": float("nan"),
+        })
+        # 4xx — exact code depends on whether Pydantic rejects pre-route or
+        # apply_op rejects in-route; either way the mutation must NOT apply.
+        assert 400 <= resp.status_code < 500
+        book = json.loads((temp_books / "test-book.json").read_text())
+        diesel = next(n for n in book["nodes"] if n["id"] == "diesel")
+        current = diesel.get("current")
+        # Node value must NOT be NaN — either unchanged or None.
+        assert current is None or not _math.isnan(current)
+
+    def test_set_current_infinity_rejected(self, temp_books):
+        """Regression: Infinity trivially exceeds every threshold, forcing
+        spurious fires. Must fail before mutating node state."""
+        import math as _math
+        resp = _post_webhook({
+            "book": "test-book",
+            "bindingId": "diesel-set",
+            "value": float("inf"),
+        })
+        assert 400 <= resp.status_code < 500
+        book = json.loads((temp_books / "test-book.json").read_text())
+        diesel = next(n for n in book["nodes"] if n["id"] == "diesel")
+        current = diesel.get("current")
+        assert current is None or not _math.isinf(current)
+
+    def test_set_probability_nan_rejected(self, temp_books):
+        """Same threat as setCurrent, on the probability field."""
+        resp = _post_webhook({
+            "book": "test-book",
+            "bindingId": "hormuz-prob-bump",
+            "value": float("nan"),
+        })
+        assert 400 <= resp.status_code < 500
+
     def test_binding_fire_count_increments(self, temp_books):
         _post_webhook(
             {"book": "test-book", "bindingId": "brent-persistence-close-above-115"},

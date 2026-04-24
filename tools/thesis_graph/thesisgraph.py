@@ -2944,7 +2944,20 @@ Examples:
         else:
             export_path = os.path.abspath(export_target)
             os.makedirs(os.path.dirname(export_path), exist_ok=True)
-            Path(export_path).write_text(snapshot_json)
+            # WHY atomic rename: run-all.py rotates {book}-latest → {book}-prev
+            # then calls this exporter. If the process dies mid-write (OOM,
+            # SIGTERM, disk pressure), a naive write_text can leave a
+            # zero-byte or truncated {book}-latest.json — the next cron pass
+            # either crashes on json.loads or (worse) treats partial data as
+            # canonical. Write to .tmp, fsync, rename — on a POSIX filesystem
+            # the rename is atomic so readers see old-full or new-full, never
+            # a torn file.
+            tmp_path = export_path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(snapshot_json)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, export_path)
             print(f"\n  Exported: {export_path} ({len(snapshot_json):,} bytes)", file=log)
 
         # If -o was not explicitly provided on the command line, stop here
