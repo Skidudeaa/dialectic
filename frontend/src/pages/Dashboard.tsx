@@ -16,6 +16,8 @@ import {
   Book,
   Hammer,
   HelpCircle,
+  Target,
+  NotebookPen,
 } from "lucide-react";
 import { useOnboarding } from "../components/onboarding/useOnboarding";
 import { apiFetch, getDisplayName, clearAuth } from "../lib/api";
@@ -444,7 +446,6 @@ export default function Dashboard({ onLogout }: Props) {
             </button>
           )}
         </div>
-pass
         {/* Command palette hint — center-ish, clickable */}
         <button
           onClick={() => { setCmdPalette(true); setCmdQuery(""); }}
@@ -465,8 +466,8 @@ pass
           <button onClick={() => togglePanel("thesis")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "thesis" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Thesis"><BarChart3 size={13} /></button>
           <button onClick={() => togglePanel("brief")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "brief" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Brief"><FileText size={13} /></button>
           <button onClick={() => togglePanel("crossbook")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "crossbook" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Cross-Book"><Scan size={13} /></button>
-          <button onClick={() => togglePanel("predictions")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "predictions" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Predictions">P</button>
-          <button onClick={() => togglePanel("journal")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "journal" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Journal">J</button>
+          <button onClick={() => togglePanel("predictions")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "predictions" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Predictions" aria-label="Predictions panel"><Target size={13} /></button>
+          <button onClick={() => togglePanel("journal")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "journal" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Journal" aria-label="Trade journal panel"><NotebookPen size={13} /></button>
           <button onClick={() => togglePanel("tradingview")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "tradingview" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="TradingView"><Activity size={13} /></button>
           <div className="w-px h-4 bg-border mx-1" />
           <button

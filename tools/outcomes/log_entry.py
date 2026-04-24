@@ -152,7 +152,11 @@ def main() -> None:
         seed_entry(args.trade, args.ref_price, ledger_dir)
         return
 
-    parser.print_help()
+    # WHY exit 2: no action flag provided is a misuse, not a request for help.
+    # Exit 0 here silently greened cron pipelines that chained `log_entry.py &&
+    # push_snapshot.sh` — the push would proceed after a no-op log step.
+    parser.print_help(sys.stderr)
+    sys.exit(2)
 
 
 if __name__ == "__main__":

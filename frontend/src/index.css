@@ -18,7 +18,11 @@
   --color-blue: #60a5fa;
   --color-text-primary: #e5e5e5;
   --color-text-muted: #737373;
-  --color-text-dim: #525252;
+  /* WHY #7a7a7a: #525252 measured 2.48:1 on void background — fails WCAG AA
+     (4.5:1 body text, 3:1 non-text UI). #7a7a7a hits ~4.7:1 on void, preserving
+     "dim" intent while clearing the threshold. Used by timestamps, countdown
+     chips, keyboard hints — all text a trader needs to read. */
+  --color-text-dim: #7a7a7a;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
 }

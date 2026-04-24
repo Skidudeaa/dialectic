@@ -307,15 +307,27 @@ def generate_brief(
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Morning brief generator")
-    parser.add_argument("--snapshots-dir", default="snapshots")
-    parser.add_argument("--ledger-dir", default="outcomes/trades")
-    parser.add_argument("--books-dir", default="books")
-    parser.add_argument("--output", default=None, help="Write to file instead of stdout")
+    parser = argparse.ArgumentParser(
+        description="Morning brief generator — snapshot + cross-book + ledger digest.",
+        epilog=(
+            "Example: python3 -m tools.outcomes.morning_brief --no-dialectic "
+            "> brief-$(date +%F).txt"
+        ),
+    )
+    parser.add_argument("--snapshots-dir", default="snapshots",
+                        help="Directory with {book}-latest.json snapshot files (default: snapshots)")
+    parser.add_argument("--ledger-dir", default="outcomes/trades",
+                        help="Directory with the JSONL trade ledger (default: outcomes/trades)")
+    parser.add_argument("--books-dir", default="books",
+                        help="Directory with thesis-graph book configs (default: books)")
+    parser.add_argument("--output", default=None,
+                        help="Write brief to this file instead of stdout")
     parser.add_argument("--no-dialectic", action="store_true",
-                        help="Skip the Dialectic curator-alert pull")
-    parser.add_argument("--dialectic-url", default="http://localhost:8002")
-    parser.add_argument("--dialectic-lookback-hours", type=int, default=24)
+                        help="Skip the Dialectic curator-alert pull (offline / local runs)")
+    parser.add_argument("--dialectic-url", default="http://localhost:8002",
+                        help="Dialectic server base URL (default: http://localhost:8002)")
+    parser.add_argument("--dialectic-lookback-hours", type=int, default=24,
+                        help="How many hours of curator alerts to include (default: 24)")
     args = parser.parse_args()
 
     brief = generate_brief(
