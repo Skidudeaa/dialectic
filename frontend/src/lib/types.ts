@@ -197,7 +197,7 @@ export interface KillResult {
 }
 
 export interface WSMessage {
-  type: "message" | "llm_chunk" | "llm_done" | "system" | "state_update" | "error" | "typing" | "presence" | "tv-alert" | "bootstrap" | "price.tick";
+  type: "message" | "llm_chunk" | "llm_done" | "system" | "state_update" | "error" | "typing" | "presence" | "presence.changed" | "tv-alert" | "bootstrap" | "price.tick";
   payload: Record<string, unknown>;
   ts: string;
   user: string;
@@ -206,6 +206,21 @@ export interface WSMessage {
   thesisId?: string;
   revision?: number;
   seq?: number;
+}
+
+// ── Global presence pills (Unit 9) ───────────────────────────────────────
+
+export interface PresenceUser {
+  user_id: string;
+  book_id: string | null;
+  last_activity: string; // ISO 8601
+  kind: "human" | "agent";
+  status?: "thinking" | "idle";
+}
+
+export interface PresencePayload {
+  users: PresenceUser[];
+  generated_at: string;
 }
 
 // Payload carried by the price.tick WebSocket message (Unit 6)
@@ -317,6 +332,39 @@ export interface HealthResponse {
   ws_connections: number;
   books_loaded: string[];
   last_snapshots: Record<string, string>;
+}
+
+// ── Agent-in-room panel (Unit 11) ───────────────────────────────────────
+
+/** One row in the ring buffer of recent LLM calls. Populated server-side by
+ *  record_agent_call() in web/routes/llm.py. `snapshot_revision` is the
+ *  thesis revision the agent was reasoning against at call time; null when
+ *  the room has no linked book or the coordinator never committed yet. */
+export interface AgentCallRow {
+  ts: string;
+  model: string;
+  prompt_first_80: string;
+  tool_calls: string[];
+  latency_ms: number;
+  status: "success" | "error" | "pending" | string;
+  room_id: string | null;
+  thesis_id: string | null;
+  snapshot_revision: number | null;
+}
+
+export interface AgentLogResponse {
+  rows: AgentCallRow[];
+  count: number;
+  fetchedAt: string;
+}
+
+export interface AgentState {
+  thesis_id: string | null;
+  snapshot_revision: number | null;
+  default_model: string;
+  last_call_ts: string | null;
+  last_call_status: string | null;
+  last_call_model: string | null;
 }
 
 

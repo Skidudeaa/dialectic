@@ -25,6 +25,73 @@ from web.runtime.live_bus import get_live_bus
 log = logging.getLogger(__name__)
 
 
+# ── Agent presence state (Unit 9) ──────────────────────────────────────
+# WHY: A tiny module-level dict that web/routes/llm.py writes to on tool-call
+# start/end. broadcast_presence() reads it to synthesize the agent pill.
+# Unit 11 will replace this with the richer agent-in-room state.
+_AGENT_STATE: Dict[str, Any] = {
+    "status": "idle",        # "thinking" | "idle"
+    "last_activity": None,   # ISO 8601 timestamp of most recent tool-call
+    "book_id": None,         # which book the agent is reasoning about
+}
+# WHY: Agent pill drops out of the roster after this idle window so it
+# doesn't linger forever after the LLM finishes.
+_AGENT_ACTIVE_WINDOW_S = 30.0
+
+
+def mark_agent_thinking(book_id: Optional[str] = None) -> None:
+    """LLM hook: agent has started a tool call. Triggers presence broadcast.
+
+    WHY: Two-line surgical hook for web/routes/llm.py. The route wraps each
+    tool call in mark_agent_thinking() / mark_agent_idle() and the presence
+    pill picks it up automatically via the next broadcast.
+    """
+    _AGENT_STATE["status"] = "thinking"
+    _AGENT_STATE["last_activity"] = datetime.now(timezone.utc).isoformat()
+    if book_id is not None:
+        _AGENT_STATE["book_id"] = book_id
+    # WHY: Schedule a broadcast on the running loop. The route may be sync
+    # or async — we don't await here so the hook stays trivially callable.
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(manager.broadcast_presence())
+    except RuntimeError:
+        # No running loop — caller is synchronous. Skip broadcast; the next
+        # connect/disconnect/update will pick up the new state.
+        pass
+
+
+def mark_agent_idle() -> None:
+    """LLM hook: agent has finished its tool call. Triggers presence broadcast."""
+    _AGENT_STATE["status"] = "idle"
+    _AGENT_STATE["last_activity"] = datetime.now(timezone.utc).isoformat()
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(manager.broadcast_presence())
+    except RuntimeError:
+        pass
+
+
+def _agent_is_active() -> bool:
+    """True if the LLM has emitted activity within the active window."""
+    last = _AGENT_STATE.get("last_activity")
+    if not last:
+        return False
+    try:
+        ts = datetime.fromisoformat(last.replace("Z", "+00:00"))
+    except Exception:
+        return False
+    delta = (datetime.now(timezone.utc) - ts).total_seconds()
+    return delta <= _AGENT_ACTIVE_WINDOW_S
+
+
+def _reset_agent_state_for_tests() -> None:
+    """Test helper — clears the global agent state so tests are isolated."""
+    _AGENT_STATE["status"] = "idle"
+    _AGENT_STATE["last_activity"] = None
+    _AGENT_STATE["book_id"] = None
+
+
 class ConnectionManager:
     """Manages WebSocket connections per room with presence tracking."""
 
@@ -46,6 +113,16 @@ class ConnectionManager:
         # room's linked_book_id channel and forwards price.tick frames.
         # Key is id(websocket); value is {"task": asyncio.Task, "token": int}.
         self._bus_forwarders: Dict[int, Dict[str, Any]] = {}
+        # Unit 9: per-WS presence map — what each socket is doing right now.
+        # Key is id(websocket); value is {"user_id", "book_id", "last_activity", "ws"}.
+        # WHY keyed by id(ws): a single user can have multiple sockets
+        # (multiple tabs); each gets a row, but we dedupe in the broadcast
+        # payload by (user_id, book_id) so the pill row stays clean.
+        self._presence: Dict[int, Dict[str, Any]] = {}
+        # WHY: Cache the last broadcast payload so we can debounce duplicates
+        # — flapping connect/disconnect or a client posting the same
+        # presence.update twice produces a single broadcast.
+        self._last_presence_payload: Optional[Dict[str, Any]] = None
 
     def set_repo(self, repo) -> None:
         """Inject Repository reference. Called from lifespan init."""
@@ -63,6 +140,14 @@ class ConnectionManager:
             self._rooms[room_id].add((websocket, username))
             self._user_activity[username] = {"room": room_id, "viewing": ""}
             self._seq_counters[id(websocket)] = 0
+            # Unit 9: register for global presence. book_id starts None and
+            # is set by the client posting a presence.update C2S frame.
+            self._presence[id(websocket)] = {
+                "user_id": username,
+                "book_id": None,
+                "last_activity": datetime.now(timezone.utc).isoformat(),
+                "ws": websocket,
+            }
         log.info("WS connected: %s in room %s", username, room_id)
         # WHY: Send bootstrap with thesis state on connect so the client can
         # render immediately without additional REST calls. On reconnect, the
@@ -71,6 +156,14 @@ class ConnectionManager:
         # Unit 6: start live-bus forwarder for the room's linked thesis.
         await self._start_bus_forwarder(websocket, room_id)
         await self.broadcast(room_id, "presence", await self.get_presence(room_id), user="system")
+        # Unit 9: always send the current roster directly to the newly
+        # connected socket so it renders pills immediately — the broader
+        # fan-out below may dedupe if the roster shape is unchanged.
+        async with self._lock:
+            payload = self._build_global_presence_payload()
+        await self.send_to(websocket, "presence.changed", payload, user="system")
+        # Unit 9: global cross-room presence broadcast (fan-out to others).
+        await self.broadcast_presence()
 
     async def disconnect(self, websocket: WebSocket, room_id: str, username: str) -> None:
         """Remove connection from room registry."""
@@ -83,6 +176,8 @@ class ConnectionManager:
             if username in self._user_activity:
                 del self._user_activity[username]
             self._seq_counters.pop(id(websocket), None)
+            # Unit 9: drop from global presence roster.
+            self._presence.pop(id(websocket), None)
         # Unit 6: tear down the live-bus forwarder for this connection.
         await self._stop_bus_forwarder(websocket)
         log.info("WS disconnected: %s from room %s", username, room_id)
@@ -90,6 +185,11 @@ class ConnectionManager:
             await self.broadcast(room_id, "presence", await self.get_presence(room_id), user="system")
         except Exception as e:
             log.warning("Post-disconnect presence broadcast failed: %s", e)
+        # Unit 9: global broadcast so all rooms see the user drop out.
+        try:
+            await self.broadcast_presence()
+        except Exception as e:
+            log.warning("Post-disconnect global presence broadcast failed: %s", e)
 
     async def broadcast(self, room_id: str, msg_type: str, payload: dict,
                         user: str = "system", exclude: Optional[WebSocket] = None,
@@ -328,6 +428,145 @@ class ConnectionManager:
         """Update what thesis/page a user is viewing (for activity status)."""
         if username in self._user_activity:
             self._user_activity[username]["viewing"] = viewing
+
+    # ────────────────────────────────────────────────────────────────
+    # GLOBAL PRESENCE (Unit 9 — presence pills in the dashboard header)
+    # ────────────────────────────────────────────────────────────────
+
+    async def update_presence(
+        self, websocket: WebSocket, book_id: Optional[str]
+    ) -> None:
+        """Mark the connection as viewing book_id and broadcast.
+
+        WHY: Called from the WS handler on every C2S 'presence.update' frame.
+        The broadcast is debounced — if nothing actually changed (same user,
+        same book) and the roster as a whole is unchanged, broadcast_presence
+        is a no-op and skips the fan-out.
+        """
+        async with self._lock:
+            entry = self._presence.get(id(websocket))
+            if entry is not None:
+                entry["book_id"] = book_id
+                entry["last_activity"] = datetime.now(timezone.utc).isoformat()
+        await self.broadcast_presence()
+
+    async def bump_activity(self, websocket: WebSocket) -> None:
+        """Refresh the last_activity timestamp on any C2S frame.
+
+        WHY: Idle detection in the UI. A pill goes dim after 60s of no
+        traffic. We DO NOT broadcast on every keystroke — the ts changes
+        but content equality skips the fan-out.
+        """
+        async with self._lock:
+            entry = self._presence.get(id(websocket))
+            if entry is not None:
+                entry["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    def _build_global_presence_payload(self) -> Dict[str, Any]:
+        """Construct the {users, generated_at} envelope payload.
+
+        WHY: Dedupe by (user_id, book_id) so multiple tabs don't spam the
+        pill row. Append a synthetic agent row when the LLM is recently
+        active. Caller already holds (or doesn't need) the lock — the read
+        is atomic enough for an O(N=2-4) connection set.
+        """
+        seen: Dict[tuple, Dict[str, Any]] = {}
+        for entry in self._presence.values():
+            key = (entry["user_id"], entry.get("book_id"))
+            existing = seen.get(key)
+            # Keep the most recent last_activity for a duplicate (multi-tab) user
+            if existing is None or entry["last_activity"] > existing["last_activity"]:
+                seen[key] = {
+                    "user_id": entry["user_id"],
+                    "book_id": entry.get("book_id"),
+                    "last_activity": entry["last_activity"],
+                    "kind": "human",
+                }
+        users = list(seen.values())
+        # Stable order — frontend pill row shouldn't reshuffle on every broadcast.
+        users.sort(key=lambda u: (u["user_id"], u.get("book_id") or ""))
+
+        # Append agent pill if the LLM has been active in the last window.
+        if _agent_is_active():
+            users.append({
+                "user_id": "agent",
+                "book_id": _AGENT_STATE.get("book_id"),
+                "last_activity": _AGENT_STATE.get("last_activity"),
+                "kind": "agent",
+                "status": _AGENT_STATE.get("status", "idle"),
+            })
+        return {
+            "users": users,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    async def broadcast_presence(self) -> int:
+        """Fan out a presence.changed envelope to every connected client.
+
+        WHY cross-room: presence is GLOBAL — a user in chat-room-A wants to
+        see that the other analyst joined chat-room-B and is staring at a
+        different book. Returns count of sockets the broadcast reached.
+
+        Debounce: if the (sorted, agent-included) roster is byte-identical
+        to the last broadcast, skip the fan-out. The generated_at timestamp
+        is excluded from the equality check so it doesn't defeat the dedupe.
+        """
+        async with self._lock:
+            payload = self._build_global_presence_payload()
+            # Compare excluding volatile per-row timestamps so a bump of
+            # last_activity (which changes on every C2S frame) doesn't
+            # defeat the dedupe. The meaningful shape is (user_id, book_id,
+            # kind, status) + membership.
+            def _sig(users: list) -> str:
+                compact = [
+                    {
+                        "user_id": u.get("user_id"),
+                        "book_id": u.get("book_id"),
+                        "kind": u.get("kind"),
+                        "status": u.get("status"),
+                    }
+                    for u in users
+                ]
+                return json.dumps(compact, sort_keys=True)
+
+            payload_signature = _sig(payload["users"])
+            last = self._last_presence_payload
+            last_signature = _sig(last["users"]) if last else None
+            if payload_signature == last_signature:
+                return 0
+            self._last_presence_payload = payload
+            # Snapshot the live ws list under the lock.
+            sockets: List[WebSocket] = []
+            for room_conns in self._rooms.values():
+                for ws, _ in room_conns:
+                    sockets.append(ws)
+
+        if not sockets:
+            return 0
+
+        message = {
+            "v": 1,
+            "type": "presence.changed",
+            "payload": payload,
+            "ts": payload["generated_at"],
+            "user": "system",
+        }
+
+        async def _send(ws: WebSocket) -> Optional[WebSocket]:
+            try:
+                ws_id = id(ws)
+                seq = self._seq_counters.get(ws_id, 0) + 1
+                self._seq_counters[ws_id] = seq
+                msg_with_seq = {**message, "seq": seq}
+                await asyncio.wait_for(
+                    ws.send_text(json.dumps(msg_with_seq)), timeout=5.0
+                )
+                return None
+            except Exception:
+                return ws
+
+        results = await asyncio.gather(*[_send(ws) for ws in sockets])
+        return sum(1 for r in results if r is None)
 
     def _build_presence(self, room_id: str) -> dict:
         """Build presence payload for a room."""

@@ -45,6 +45,8 @@ from web.schemas.ws import (
     C2SType,
     ChatMessagePayload,
     ErrorPayload,
+    PresenceChangedPayload,
+    PresenceUser,
     S2CType,
     SnapshotDeltaPayload,
     WSEnvelope,
@@ -372,6 +374,30 @@ class TestWSProtocol:
         err = ErrorPayload(message="Rate limited", code="rate_limit")
         assert err.code == "rate_limit"
 
+    def test_presence_changed_payload(self):
+        """PresenceChangedPayload validates with human + agent rows."""
+        payload = PresenceChangedPayload(
+            users=[
+                PresenceUser(
+                    user_id="amo",
+                    book_id="iran-hormuz",
+                    last_activity="2026-04-24T12:00:00Z",
+                    kind="human",
+                ),
+                PresenceUser(
+                    user_id="agent",
+                    book_id="iran-hormuz",
+                    last_activity="2026-04-24T12:00:00Z",
+                    kind="agent",
+                    status="thinking",
+                ),
+            ],
+            generated_at="2026-04-24T12:00:00Z",
+        )
+        assert len(payload.users) == 2
+        assert payload.users[1].kind == "agent"
+        assert payload.users[1].status == "thinking"
+
     def test_s2c_types_exhaustive(self):
         """All expected S2C types exist."""
         expected = {
@@ -380,6 +406,7 @@ class TestWSProtocol:
             "chat.message", "chat.typing", "chat.presence",
             "llm.chunk", "llm.done", "tv.alert",
             "price.tick",
+            "presence.changed",
             "error", "ping", "pong",
         }
         actual = {t.value for t in S2CType}

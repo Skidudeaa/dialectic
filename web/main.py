@@ -109,6 +109,7 @@ from web.routes.v1 import scenarios as v1_scenarios
 from web.routes.v1 import commands as v1_commands
 from web.routes.v1 import trades as v1_trades
 from web.routes.v1 import audit as v1_audit
+from web.routes.v1 import agent as v1_agent
 
 app.include_router(auth.router)
 app.include_router(health.router)
@@ -135,6 +136,7 @@ app.include_router(v1_scenarios.router)
 app.include_router(v1_commands.router)
 app.include_router(v1_trades.router)
 app.include_router(v1_audit.router)
+app.include_router(v1_agent.router)
 
 # ── Static frontend serving ─────────────────────────────────────────────
 # WHY: Serve the production build directly from FastAPI so there's no need

@@ -113,6 +113,16 @@ function _dispatchToTaps(msg: WSMessage): void {
   }
 }
 
+// WHY (Unit 9): Track the currently-open RoomSocket so aux components
+// (PresencePills in the header) can send C2S frames without holding a
+// direct ref. There's at most one live socket at a time — Chat creates
+// one per active room and closes it on unmount.
+let _activeSocket: RoomSocket | null = null;
+
+export function sendPresenceUpdate(bookId: string | null): void {
+  _activeSocket?.sendPresenceUpdate(bookId);
+}
+
 export class RoomSocket {
   private ws: WebSocket | null = null;
   private handlers: Set<WSHandler> = new Set();
@@ -124,6 +134,7 @@ export class RoomSocket {
 
   constructor(roomId: string) {
     this.roomId = roomId;
+    _activeSocket = this;
     this.connect();
   }
 
@@ -185,9 +196,23 @@ export class RoomSocket {
     }
   }
 
+  // Unit 9: tell the server which book this client is now viewing.
+  // The server broadcasts a presence.changed envelope to every client.
+  sendPresenceUpdate(bookId: string | null): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        JSON.stringify({
+          type: "presence.update",
+          payload: { book_id: bookId },
+        }),
+      );
+    }
+  }
+
   close(): void {
     this.closed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    if (_activeSocket === this) _activeSocket = null;
     this.ws?.close();
   }
 }

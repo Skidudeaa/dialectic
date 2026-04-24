@@ -37,6 +37,27 @@ _ROOT = Path(__file__).resolve().parent.parent.parent
 BOOKS_DIR = _ROOT / "books"
 
 
+# WHY: Module-level revision cache so adjacent modules (web/routes/llm.py,
+# web/routes/v1/agent.py) can ask "what revision is the desk currently on?"
+# without holding a coordinator reference. Populated on every successful
+# commit in _run_cycle_inner — see the _latest_revisions[thesis_id] = new_rev
+# write below. Reads are lock-free (a stale-by-one int read is harmless;
+# the consumer just stamps the call log with the prior revision).
+_latest_revisions: Dict[str, int] = {}
+
+
+def get_latest_revision(thesis_id: str) -> Optional[int]:
+    """Return the most recently committed revision for a thesis, or None.
+
+    WHY: Single import target for non-coordinator modules (e.g. the LLM
+    agent-call ring buffer in web/routes/llm.py) that need to stamp every
+    outbound LLM call with the snapshot revision the agent was reasoning
+    against. Returns None when no commit has happened yet so callers can
+    distinguish "uninitialized" from "revision 0".
+    """
+    return _latest_revisions.get(thesis_id)
+
+
 class ScenarioEvaluationError(Exception):
     """Raised by evaluate_scenario() with a structured reason code.
 
@@ -494,6 +515,11 @@ class RuntimeCoordinator:
 
         # 10. Update in-memory cache
         self._latest_snapshots[thesis_id] = export
+
+        # 10b. Mirror the revision into the module-level cache so other
+        # modules (web/routes/llm.py, web/routes/v1/agent.py) can read it
+        # via the get_latest_revision() helper without importing this class.
+        _latest_revisions[thesis_id] = new_rev
 
         elapsed = time.monotonic() - t0
         log.info(

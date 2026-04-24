@@ -53,6 +53,9 @@ class S2CType(str, Enum):
     # Live market tape (Unit 6 — push-driven MarketTicker)
     price_tick = "price.tick"
 
+    # Presence pills (Unit 9 — global cross-room presence broadcast)
+    presence_changed = "presence.changed"
+
     # System
     error = "error"
     ping = "ping"
@@ -140,3 +143,28 @@ class ErrorPayload(BaseModel):
     """Payload for S2C 'error'."""
     message: str
     code: str = "unknown"
+
+
+class PresenceUser(BaseModel):
+    """Single entry in the global presence roster.
+
+    WHY: Unit 9 — we need to know who else is connected, what book they're
+    viewing, and (for the LLM) whether they're mid-tool-call. `kind` lets the
+    frontend render humans and the agent differently.
+    """
+    user_id: str
+    book_id: Optional[str] = None
+    last_activity: str  # ISO 8601
+    kind: str = "human"  # "human" | "agent"
+    status: Optional[str] = None  # e.g. "thinking" for agent
+
+
+class PresenceChangedPayload(BaseModel):
+    """Payload for S2C 'presence.changed' — global presence roster snapshot.
+
+    WHY: Single broadcast per actual change. Replaces the per-room
+    chat 'presence' envelope for the global pill row; the chat presence
+    envelope is preserved for chat-internal typing indicators.
+    """
+    users: list[PresenceUser] = Field(default_factory=list)
+    generated_at: str  # ISO 8601

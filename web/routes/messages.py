@@ -130,6 +130,13 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str) -> None:
 
             msg_type = parsed.get("type", "message")
 
+            # Unit 9: any C2S frame bumps last_activity for idle detection.
+            # Fire-and-forget — never blocks a real chat message.
+            try:
+                await manager.bump_activity(websocket)
+            except Exception:
+                pass
+
             if msg_type == "typing":
                 await manager.broadcast(
                     room_id, "typing",
@@ -142,6 +149,15 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str) -> None:
                 await manager.broadcast(
                     room_id, "presence", await manager.get_presence(room_id), user="system",
                 )
+            elif msg_type == "presence.update":
+                # Unit 9: client tells us which book it's now viewing.
+                payload = parsed.get("payload") or {}
+                book_id = payload.get("book_id")
+                # Validate — accept None or a non-empty string. Anything else
+                # silently coerced to None to avoid storing junk in the roster.
+                if book_id is not None and not isinstance(book_id, str):
+                    book_id = None
+                await manager.update_presence(websocket, book_id)
             else:
                 content = parsed.get("content", data)
                 msg = await asyncio.to_thread(

@@ -141,7 +141,7 @@ The v2 rebuild landed M0 + M1 + Unit 12, plus cosmetic polish (builder, onboardi
 
 ---
 
-- [ ] **Unit 2: FRED connector**
+- [x] **Unit 2: FRED connector** (shipped — bfef1eb)
 
 **Goal:** Pull Treasury curve, DXY, CPI, PPI, initial claims from FRED. Feed graph nodes with `"source": "fred"`.
 
@@ -158,7 +158,7 @@ The v2 rebuild landed M0 + M1 + Unit 12, plus cosmetic polish (builder, onboardi
 
 ---
 
-- [ ] **Unit 3: Econ calendar connector**
+- [x] **Unit 3: Econ calendar connector** (shipped — bfef1eb)
 
 **Goal:** Populate deadline-node countdowns (FOMC, CPI, payrolls) from a free calendar source.
 
@@ -235,7 +235,7 @@ The v2 rebuild landed M0 + M1 + Unit 12, plus cosmetic polish (builder, onboardi
 
 ---
 
-- [ ] **Unit 8: Multi-book cockpit — tab bar + Cmd+digit + cross-book matrix**
+- [x] **Unit 8: Multi-book cockpit — tab bar + Cmd+digit + cross-book matrix** (shipped — bfef1eb)
 
 **Goal:** Five books fit into the UI without dilution. Cross-book matrix replaces per-book scrollthrough.
 
@@ -249,7 +249,7 @@ The v2 rebuild landed M0 + M1 + Unit 12, plus cosmetic polish (builder, onboardi
 
 ---
 
-- [ ] **Unit 9: Presence pills**
+- [x] **Unit 9: Presence pills** (this commit)
 
 **Goal:** See who else is in a room and what they're viewing. Include the agent as a first-class presence entry.
 
@@ -278,7 +278,7 @@ The v2 rebuild landed M0 + M1 + Unit 12, plus cosmetic polish (builder, onboardi
 
 ---
 
-- [ ] **Unit 11: Agent-in-room panel**
+- [x] **Unit 11: Agent-in-room panel** (this commit)
 
 **Goal:** Make the LLM's state-of-the-world visible. Snapshot version in use, room membership, last message age, tool-call log.
 
@@ -291,7 +291,7 @@ The v2 rebuild landed M0 + M1 + Unit 12, plus cosmetic polish (builder, onboardi
 
 ---
 
-- [ ] **Unit 12: Audit log + destructive action two-step**
+- [x] **Unit 12: Audit log + persisted two-step tokens** (shipped — bfef1eb)
 
 **Goal:** Every fire, kill, rotate, delete writes an audit row and requires a confirmation token that expires in 30s.
 

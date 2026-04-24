@@ -20,9 +20,10 @@ import {
   NotebookPen,
   AlertOctagon,
   Layers,
+  Bot,
 } from "lucide-react";
 import { useOnboarding } from "../components/onboarding/useOnboarding";
-import { apiFetch, getDisplayName, clearAuth } from "../lib/api";
+import { apiFetch, getDisplayName, getUsername, clearAuth, sendPresenceUpdate } from "../lib/api";
 import type { Room, ThesisBook, ThesisState } from "../lib/types";
 import Chat from "../components/Chat";
 import ThesisViewer from "../components/ThesisViewer";
@@ -35,7 +36,9 @@ import CrossBookMatrix from "../components/CrossBookMatrix";
 import BookTabBar from "../components/BookTabBar";
 import TradingViewPanel from "../components/TradingViewPanel";
 import TradeLifecyclePanel from "../components/TradeLifecyclePanel";
+import AgentInRoomPanel from "../components/AgentInRoomPanel";
 import OutboxBadge from "../components/OutboxBadge";
+import PresencePills from "../components/PresencePills";
 import CommandPalette from "../components/CommandPalette";
 import { useToast } from "../components/toast";
 
@@ -52,6 +55,7 @@ type RightPanel =
   | "brief"
   | "tradingview"
   | "trades"
+  | "agent"
   | null;
 
 const RECENT_CMDS_KEY = "td_cmd_recents";
@@ -293,6 +297,16 @@ export default function Dashboard({ onLogout }: Props) {
     return activeRoom?.linked_book_id || books[0]?.id || null;
   }, [activeBookOverride, books, activeRoom]);
 
+  // Unit 9: tell the server which book we're viewing so other clients can
+  // render our presence pill with the right ring color. Also retry shortly
+  // after mount because the active RoomSocket may not be open yet when
+  // linkedBookId first resolves.
+  useEffect(() => {
+    sendPresenceUpdate(linkedBookId);
+    const t = setTimeout(() => sendPresenceUpdate(linkedBookId), 750);
+    return () => clearTimeout(t);
+  }, [linkedBookId, activeRoom?.id]);
+
   // Command palette items — recents bubble to top.
   type CmdItem = { label: string; type: "room" | "panel" | "action"; action: () => void };
   const allCmdItems: CmdItem[] = useMemo(
@@ -313,6 +327,7 @@ export default function Dashboard({ onLogout }: Props) {
       { label: "Trade journal", type: "panel", action: () => { togglePanel("journal"); setCmdPalette(false); } },
       { label: "TradingView", type: "panel", action: () => { togglePanel("tradingview"); setCmdPalette(false); } },
       { label: "Trade lifecycle", type: "panel", action: () => { togglePanel("trades"); setCmdPalette(false); } },
+      { label: "Agent in room", type: "panel", action: () => { togglePanel("agent"); setCmdPalette(false); } },
       { label: "New room", type: "action", action: () => { setShowNewRoom(true); setSidebarOpen(true); setCmdPalette(false); } },
       { label: "Show keyboard shortcuts", type: "action", action: () => { setShowShortcuts(true); setCmdPalette(false); } },
       { label: "Logout", type: "action", action: () => { handleLogout(); setCmdPalette(false); } },
@@ -519,6 +534,9 @@ export default function Dashboard({ onLogout }: Props) {
         <div className="ml-auto flex items-center gap-px">
           {/* Outbox queue badge — hidden when nothing is queued */}
           <OutboxBadge />
+          {/* Unit 9: presence pills — who's connected, what book they view,
+              agent pulse when LLM is mid tool-call. */}
+          <PresencePills myUserId={getUsername()} myBookId={linkedBookId} />
           {/* Connection status */}
           <ConnectionDot status={connection} />
 
@@ -530,6 +548,7 @@ export default function Dashboard({ onLogout }: Props) {
           <button onClick={() => togglePanel("journal")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "journal" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Journal" aria-label="Trade journal panel"><NotebookPen size={13} /></button>
           <button onClick={() => togglePanel("tradingview")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "tradingview" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="TradingView"><Activity size={13} /></button>
           <button onClick={() => togglePanel("trades")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "trades" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Trade lifecycle" aria-label="Trade lifecycle panel"><AlertOctagon size={13} /></button>
+          <button onClick={() => togglePanel("agent")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "agent" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Agent in room" aria-label="Agent in room panel"><Bot size={13} /></button>
           <div className="w-px h-4 bg-border mx-1" />
           <button
             onClick={() => startTour()}
@@ -696,6 +715,7 @@ export default function Dashboard({ onLogout }: Props) {
                 {rightPanel === "journal" && <TradeJournal />}
                 {rightPanel === "tradingview" && <TradingViewPanel bookId={linkedBookId} books={books} />}
                 {rightPanel === "trades" && <TradeLifecyclePanel />}
+                {rightPanel === "agent" && <AgentInRoomPanel bookId={linkedBookId} books={books} roomId={activeRoom?.id ?? null} />}
               </div>
             </aside>
           </>
