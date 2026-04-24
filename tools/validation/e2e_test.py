@@ -371,6 +371,7 @@ class TestSnapshotDiff:
             "hasChanges", "stateChanges", "confluenceChanges",
             "countdownChanges", "marketChanges", "newNodes", "removedNodes",
             "tvIndicatorShifts",
+            "cascadePhaseChange", "scenarioChanges", "portfolioChanges",
         }
         assert expected_keys == set(delta.keys()), (
             f"Missing: {expected_keys - set(delta.keys())}, "
