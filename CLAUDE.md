@@ -147,7 +147,7 @@ Signal confluence: when multiple independent causal paths converge on the same n
 ### Live Price Fetch (`--fetch`)
 
 Two data sources, both called when `--fetch` is used:
-- **Yahoo Finance** — ETFs, futures, FX, indices via v7 spark API (allorigins.win CORS proxy, no API key)
+- **Yahoo Finance** — ETFs, futures, FX, indices via v7 spark API. Backend calls `query1.finance.yahoo.com` directly (no API key). Generated dashboards refresh through the webapp's own `/api/relay/yahoo` (`web/routes/relay.py`) — allowlisted host + path, 60/min per-IP rate limit.
 - **Polymarket** — prediction market probabilities via Gamma API (`https://gamma-api.polymarket.com`), mapped onto graph nodes with `"source": "polymarket"` feeds
 
 ### Polymarket Fetcher (`tools/data_fetch/polymarket.py`)

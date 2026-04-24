@@ -103,7 +103,7 @@ def get_uptime() -> float:
 # ── Route registration ───────────────────────────────────────────────────
 
 from web.routes import auth, health, thesis, market, builder as builder_routes, outcomes, rooms, messages, llm, journal, predictions, tradingview
-from web.routes import bridge
+from web.routes import bridge, relay
 from web.routes.v1 import bootstrap as v1_bootstrap
 from web.routes.v1 import scenarios as v1_scenarios
 
@@ -124,6 +124,7 @@ for tv_router in tradingview.routers:
     app.include_router(tv_router)
 
 app.include_router(bridge.router)
+app.include_router(relay.router)
 
 # v1-versioned API routes (additive — existing unversioned routes stay)
 app.include_router(v1_bootstrap.router)

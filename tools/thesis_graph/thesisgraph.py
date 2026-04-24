@@ -956,10 +956,10 @@ def fetch_prices(cfg: dict, retries: int = 2) -> dict:
     batch_size = 8
     all_results = []
 
-    # WHY: Python is not subject to CORS — call Yahoo Finance directly instead of
-    # routing through allorigins.win proxy. Eliminates third-party exposure of
-    # symbol lists and removes the double-decode (proxy envelope -> Yahoo JSON).
-    # The browser-side JS fetch still uses the proxy (CORS constraint).
+    # WHY: Python is not subject to CORS — call Yahoo Finance directly.
+    # The browser-side JS fetch in the generated dashboard now routes through
+    # our own /api/relay/yahoo endpoint (see web/routes/relay.py); the prior
+    # allorigins.win dependency has been retired.
     for i in range(0, len(all_syms), batch_size):
         batch = all_syms[i:i + batch_size]
         yahoo_url = f"{yahoo_base}?symbols={','.join(batch)}&range=1d&interval=1d"
@@ -2613,18 +2613,41 @@ function bindEvents(){
   document.getElementById('btn-reset').addEventListener('click',resetState);
 
   // Fetch Live
+  //
+  // WHY the two-step fetch: when this dashboard is served by the tradingDesk
+  // webapp, the relative `/api/relay/yahoo` path hits our own relay on the
+  // droplet — no third-party dependency, controlled allowlist, 30s cache.
+  // When the file is opened standalone (file:// or any non-webapp host),
+  // the relay 404s and we fall back to the hosted relay on the production
+  // droplet. allorigins.win is gone.
   document.getElementById('btn-fetch').addEventListener('click',async()=>{
     const btn=document.getElementById('btn-fetch');
     btn.textContent='Fetching...';btn.disabled=true;
+    const RELAY_BASES=[
+      // Same-origin relay first — works when served by the webapp.
+      '/api/relay/yahoo',
+      // Fall back to the production droplet when opened standalone.
+      'https://167.99.113.232:8000/api/relay/yahoo',
+    ];
+    async function relayFetch(yUrl){
+      let lastErr;
+      for(const base of RELAY_BASES){
+        try{
+          const r=await fetch(`${base}?url=${encodeURIComponent(yUrl)}`);
+          if(r.ok)return await r.json();
+          lastErr=new Error(`relay ${base} ${r.status}`);
+        }catch(e){lastErr=e;}
+      }
+      throw lastErr||new Error('relay unreachable');
+    }
     try{
       const allSyms=[...Object.keys(FETCH_SYMS.nodeMap),...FETCH_SYMS.instruments];
       if(!allSyms.length){btn.textContent='No symbols';btn.disabled=false;return}
       // Batch into groups of 8
       for(let i=0;i<allSyms.length;i+=8){
         const batch=allSyms.slice(i,i+8);
-        const yUrl=`https://query2.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(batch.join(','))}&range=1d&interval=1d`;
-        const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(yUrl)}`);
-        const d=JSON.parse((await r.json()).contents);
+        const yUrl=`https://query1.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(batch.join(','))}&range=1d&interval=1d`;
+        const d=await relayFetch(yUrl);
         (d.spark?.result||[]).forEach(item=>{
           const s=item.symbol;
           const p=item.response?.[0]?.meta?.regularMarketPrice;

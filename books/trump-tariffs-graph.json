@@ -1691,7 +1691,7 @@
       "PIIE (China no longer buys US exports, permanent market shift analysis)",
       "S&P Global (soybean sourcing shift: Brazil/Argentina 80%, up from 60%)",
       "Gibson Dunn (semiconductor tariff analysis, Jan 2026 Section 232)",
-      "Yahoo Finance v7 spark API (live price fetch via allorigins.win proxy)",
+      "Yahoo Finance v7 spark API (backend direct fetch; browser refresh via webapp /api/relay/yahoo)",
       "Conference Board (consumer confidence declining 3 months)",
       "ISM World (Manufacturing PMI report, Feb 2026)"
     ],

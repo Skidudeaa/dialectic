@@ -59,7 +59,7 @@ Kahn's topological sort evaluates each node against thresholds and propagates up
 ### Live Price Fetch (`--fetch`)
 
 Pulls from two sources:
-- **Yahoo Finance** — ETFs, futures, FX, indices via v7 spark API (allorigins.win CORS proxy)
+- **Yahoo Finance** — ETFs, futures, FX, indices via v7 spark API. Backend calls `query1.finance.yahoo.com` directly; generated HTML dashboards refresh through the webapp's own `/api/relay/yahoo` (no third-party proxy)
 - **Polymarket** — prediction market probabilities via Gamma API, mapped onto graph nodes with `"source": "polymarket"` feeds
 
 ```bash
