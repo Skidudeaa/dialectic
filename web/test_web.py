@@ -246,6 +246,46 @@ class TestRoutes:
         )
         assert resp.status_code == 404
 
+    def test_slash_command_posts_system_message(self, auth_headers, room_id):
+        # The fix: a slash command runs server-side and posts a SYSTEM message,
+        # which clients themselves are not allowed to author. /predict is
+        # offline + deterministic, so it exercises the full path.
+        resp = client.post(
+            f"/api/rooms/{room_id}/command",
+            json={"text": '/predict "Brent over 120" 70%'},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        msg = resp.json()
+        assert msg["msg_type"] == "system"
+        assert msg["user"] == "system"
+        assert "Prediction created" in msg["content"]
+        # Side effect persisted, and the system message is in the room log.
+        preds = client.get("/api/predictions", headers=auth_headers).json()
+        assert any("Brent over 120" in p["statement"] for p in preds)
+        msgs = client.get(f"/api/rooms/{room_id}/messages", headers=auth_headers).json()
+        assert any(m["msg_type"] == "system" for m in msgs)
+
+    def test_slash_command_unknown_rejected(self, auth_headers, room_id):
+        resp = client.post(
+            f"/api/rooms/{room_id}/command",
+            json={"text": "/bogus arg"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+
+    def test_slash_command_nonexistent_room(self, auth_headers):
+        resp = client.post(
+            "/api/rooms/fake-room-id/command",
+            json={"text": "/brief"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 404
+
+    def test_slash_command_requires_auth(self, room_id):
+        resp = client.post(f"/api/rooms/{room_id}/command", json={"text": "/brief"})
+        assert resp.status_code in (401, 403)
+
     def test_prediction_lifecycle(self, auth_headers):
         # Create
         resp = client.post("/api/predictions", json={

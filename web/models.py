@@ -61,6 +61,17 @@ class MessageCreate(BaseModel):
     model: Optional[str] = None
 
 
+class RoomCommand(BaseModel):
+    """A slash command dispatched from chat (e.g. ``/brief``).
+
+    WHY a dedicated endpoint: command *results* must be posted as ``system``
+    messages, which clients are not allowed to author (see ``MessageCreate``'s
+    ``msg_type`` lock). The server executes the command and posts the trusted
+    system message itself, then broadcasts it to the room.
+    """
+    text: str
+
+
 class PinRequest(BaseModel):
     """Typed pin request — prevents arbitrary dict injection."""
     id: str

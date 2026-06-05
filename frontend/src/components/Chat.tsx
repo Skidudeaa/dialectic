@@ -354,16 +354,6 @@ export default function Chat({ room }: Props) {
   }
 
   // ── Message actions ─────────────────────────────────────────────────
-  const postSystem = useCallback(
-    async (content: string) => {
-      await apiFetch(`/api/rooms/${room.id}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ content, msg_type: "system" }),
-      });
-    },
-    [room.id],
-  );
-
   const pinMessage = useCallback(
     async (msg: Message) => {
       try {
@@ -458,84 +448,28 @@ export default function Chat({ room }: Props) {
   );
 
   // ── Slash command handler ───────────────────────────────────────────
+  // Known commands run server-side (POST /api/rooms/:id/command). The server
+  // executes against the real adapters and posts the result as a *system*
+  // message, then broadcasts it over the WebSocket — clients cannot author
+  // system messages, so the result arrives like any other broadcast. No
+  // optimistic render here, and no per-command logic to keep in sync.
   const handleSlashCommand = useCallback(
     async (text: string): Promise<boolean> => {
       const cmd = text.split(/\s+/)[0].toLowerCase();
-      const args = text.slice(cmd.length).trim();
-
+      if (!SLASH_COMMANDS.some((s) => s.cmd === cmd)) return false;
       try {
-        if (cmd === "/brief") {
-          const data = await apiFetch<{ brief: string }>("/api/outcomes/brief");
-          await postSystem(data.brief);
-          return true;
-        }
-        if (cmd === "/thesis") {
-          const bookId = args || room.linked_book_id || "iran-hormuz-graph";
-          const state = await apiFetch<Record<string, unknown>>(`/api/thesis/${bookId}/state`);
-          const ns = state.nodeStates as Record<string, string>;
-          const cs = state.confluenceScores as Record<string, number>;
-          const phase = state.cascadePhase as Record<string, unknown>;
-          const fired = Object.entries(ns)
-            .filter(([, v]) => v === "fired")
-            .map(([k]) => k);
-          const approaching = Object.entries(ns)
-            .filter(([, v]) => v === "approaching")
-            .map(([k]) => k);
-          const topConf = Object.entries(cs)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 5);
-          const lines = [
-            `THESIS: ${state.title || bookId}`,
-            `Phase ${phase.number} (${phase.key}) — ${phase.status}`,
-            `Fired: ${fired.join(", ") || "none"}`,
-            `Approaching: ${approaching.join(", ") || "none"}`,
-            `Confluence: ${topConf.map(([k, v]) => `${k}=${v}`).join(", ")}`,
-          ];
-          await postSystem(lines.join("\n"));
-          return true;
-        }
-        if (cmd === "/diff") {
-          const bookId = args || room.linked_book_id || "iran-hormuz-graph";
-          await apiFetch(`/api/thesis/${bookId}/fetch-prices`, { method: "POST" });
-          await postSystem(`Prices re-fetched for ${bookId}`);
-          return true;
-        }
-        if (cmd === "/predict") {
-          const match = args.match(/^"([^"]+)"\s+(\d+)%$/);
-          if (match) {
-            const deadline = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-            await apiFetch("/api/predictions", {
-              method: "POST",
-              body: JSON.stringify({
-                statement: match[1],
-                confidence: parseInt(match[2]) / 100,
-                deadline,
-              }),
-            });
-            await postSystem(`Prediction created: "${match[1]}" at ${match[2]}%`);
-          } else {
-            await postSystem('Usage: /predict "statement" 75%');
-          }
-          return true;
-        }
-        if (cmd === "/watchlist") {
-          const items = await apiFetch<
-            Array<{ symbol: string; label: string; last_price: number | null }>
-          >("/api/market/watchlist");
-          const lines = items.map(
-            (i) =>
-              `${i.symbol.padEnd(6)} ${i.last_price !== null ? i.last_price.toFixed(2) : "--"} ${i.label}`,
-          );
-          await postSystem("WATCHLIST\n" + lines.join("\n"));
-          return true;
-        }
+        await apiFetch(`/api/rooms/${room.id}/command`, {
+          method: "POST",
+          body: JSON.stringify({ text }),
+        });
       } catch (err) {
-        await postSystem(`Command failed: ${cmd} — ${(err as Error).message || "unknown error"}`);
-        return true;
+        // Command *execution* failures are surfaced by the server as system
+        // messages; this only catches transport/auth failures.
+        console.error(`slash command ${cmd} failed`, err);
       }
-      return false;
+      return true;
     },
-    [room.linked_book_id, postSystem],
+    [room.id],
   );
 
   // ── Send pipeline (with optimistic + retry) ────────────────────────
