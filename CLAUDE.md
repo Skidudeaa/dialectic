@@ -232,7 +232,8 @@ The TradingView integration is split across the engine and the webapp:
 | Binding | Book | Op | Node | Trade rationale |
 |---|---|---|---|---|
 | `brent-persistence-close-above-115` | iran-hormuz-graph | incrementClosesObserved | brent | XOP long: 3 closes >= $115 promote brent to fired |
-| `hormuz-reopen-announced` | iran-hormuz-graph | setNodeState → resolved | hormuz | Kill-switch: manual fire when news confirms reopening |
+| `hormuz-reopen-announced` | iran-hormuz-graph | setNodeState → partial | hormuz | Stage 1 (political): a reopening *headline* sets hormuz to partial — amplification decays but thesis does NOT collapse |
+| `hormuz-commercial-reopen-confirmed` | iran-hormuz-graph | setNodeState → resolved | hormuz | Stage 2 (commercial): the real kill-switch — fire only when carriers/insurers return + transits recover toward 95/day |
 | `fert-close-above-700` | iran-hormuz-graph | setCurrent | fert-shortage | CF long: Pine fires on NOLA urea close >= $700 |
 | `spy-below-200dma-first-touch` | trump-tariffs-graph | setProbability | tariff-shock | SPY short: technical confirmation of recession thesis |
 
@@ -302,7 +303,7 @@ tradingDesk/
 ├── PROJECT.md                       # architecture spec
 ├── INTEGRATION.md                   # Dialectic integration spec
 ├── books/                           # thesis configs (one JSON per thesis)
-│   ├── iran-hormuz-graph.json       # oil shock DAG — 16 nodes, 14 edges
+│   ├── iran-hormuz-graph.json       # oil shock DAG — 19 nodes, 16 edges
 │   └── trump-tariffs-graph.json     # tariff escalation DAG — 15 nodes, 18 edges
 ├── output/                          # generated HTML dashboards
 ├── snapshots/                       # exported graph state JSONs
@@ -377,7 +378,7 @@ tradingDesk/
 
 | Config | Thesis | Nodes | Edges | Monthly | Dialectic Room |
 |---|---|---|---|---|---|
-| `iran-hormuz-graph.json` | Iran/Hormuz oil shock transmission | 16 | 14 | $8,000/mo | `56ba2f1e` |
+| `iran-hormuz-graph.json` | Iran/Hormuz oil shock transmission | 19 | 16 | $8,000/mo | `56ba2f1e` |
 | `trump-tariffs-graph.json` | Trump tariff escalation | 15 | 18 | $6,000/mo | `8adcabb7` |
 
 ## Project Conventions

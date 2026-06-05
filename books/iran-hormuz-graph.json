@@ -1,10 +1,10 @@
 {
   "meta": {
-    "title": "Iran/Hormuz Thesis — March 2026",
-    "claim": "Oil shock transmits through diesel→freight→employment (Layer 2) and fertilizer→food→EM (Layer 3). Services lag. Don't front-run.",
+    "title": "Iran/Hormuz Thesis — June 2026",
+    "claim": "Oil shock transmitted through diesel→freight→employment (Layer 2) and fertilizer→food→EM (Layer 3). Now ~3 months in: watch the commercial-vs-political reopening gap (not headlines), the cost-of-capital/rates leg, and demand-destruction. Services still lag. Don't front-run.",
     "monthlyBudget": 8000,
-    "asOf": "2026-03-29",
-    "version": "1.0.0",
+    "asOf": "2026-06-03",
+    "version": "1.1.0",
     "type": "thesis-graph",
     "dialecticRoomId": "56ba2f1e-5c70-4290-a77d-52404f0095da",
     "dialecticRoomToken": "a28b98fa6a74425c927fa64e4f614817"
@@ -16,7 +16,7 @@
       "type": "event",
       "phase": 1,
       "state": "active",
-      "context": "Strait effectively closed since Feb 28. Iran allowing selective transit for China, Russia, India, Iraq, Pakistan (Mar 26) and humanitarian/fertilizer shipments (Mar 27). U.S. military campaign to reopen since Mar 19. Trump paused energy infrastructure strikes through Apr 6.",
+      "context": "Strait effectively closed ~3 months since the late-Feb strikes. Running ~10 transits/day vs a ~95/day peacetime norm. IEA: largest oil supply disruption in market history; EIA est. ~10.5 mbpd Gulf shut-in in April. UAE left OPEC May 1 (cuts usable spare capacity); QatarEnergy declared LNG force majeure. Reopening talks ongoing but unresolved — political 'on the path to reopening' statements have NOT brought carriers/insurers back. The gap between political optimism and commercial reality is the #1 watch signal (see reopening-pressure).",
       "probability": 0.685,
       "feeds": [
         {
@@ -28,25 +28,25 @@
         {
           "label": "Tanker transit",
           "feed": "manual",
-          "value": "-70%",
+          "value": "~10/day vs 95 norm (-89%)",
           "status": "red"
         },
         {
-          "label": "Ships anchored",
+          "label": "Gulf shut-in (EIA, Apr)",
           "feed": "manual",
-          "value": "150+",
+          "value": "~10.5 mbpd",
           "status": "red"
         },
         {
-          "label": "Supply disruption",
+          "label": "LNG (Qatar)",
           "feed": "manual",
-          "value": "10+ mbpd",
+          "value": "force majeure",
           "status": "red"
         },
         {
-          "label": "Selective transit",
+          "label": "Reopening: political vs commercial",
           "feed": "manual",
-          "value": "China/Russia/India/Iraq/Pakistan",
+          "value": "talks ongoing; carriers/insurers NOT back",
           "status": "amber"
         }
       ],
@@ -57,9 +57,19 @@
           "bindingId": "hormuz-reopen-announced",
           "nodeId": "hormuz",
           "op": "setNodeState",
-          "targetState": "resolved",
+          "targetState": "partial",
           "expectedPineAlertName": "hormuz_reopen_manual",
-          "description": "Manual Pine alert the operator fires when credible news confirms a Hormuz reopening. Sets the hormuz event node state to 'resolved' and collapses all downstream amplification — this is the kill-switch trade exit.",
+          "description": "Stage 1 (POLITICAL). Manual Pine alert the operator fires on a diplomatic reopening statement ('on the path to reopening'). Sets hormuz to 'partial' → downstream amplification PARTIALLY decays but the thesis does NOT collapse. Per the doc's #1 insight, a headline is not commercial reality — full exit requires the commercial confirmation below. Do not unwind the energy long on this alone.",
+          "fireCount": 0,
+          "lastFiredAt": null
+        },
+        {
+          "bindingId": "hormuz-commercial-reopen-confirmed",
+          "nodeId": "hormuz",
+          "op": "setNodeState",
+          "targetState": "resolved",
+          "expectedPineAlertName": "hormuz_commercial_reopen_manual",
+          "description": "Stage 2 (COMMERCIAL). The real kill-switch. Operator fires this only when carriers + insurers are returning AND transit count is recovering toward the ~95/day norm — the doc's commercial-reality confirmation, not a political statement. Sets hormuz to 'resolved' and collapses all downstream amplification. This is the trade exit.",
           "fireCount": 0,
           "lastFiredAt": null
         }
@@ -71,7 +81,7 @@
       "type": "price",
       "phase": 1,
       "state": "monitoring",
-      "context": "Brent up 53% from pre-crisis. Goldman scenarios: base $130, bear $155. Dallas Fed Hormuz model projects $115-135 sustained.",
+      "context": "Brent ran from a Jan low in the low-$60s to a mid-May peak ~$116-117, then retraced ~15% to ~$97-101 (Jun 3) as the market actively reprices resolution odds — up ~50% YoY but NOT a one-way line. Energy equities have caught up: XLE top holdings (XOM/CVX/COP/WMB) +23-28% YTD, so the 'equities not responding' framing no longer holds. Live debate: does the geopolitical premium persist? XOM/CVX flag $150-160 if inventories draw to record lows. Goldman base $130, bear $155; Dallas Fed Hormuz model $115-135 sustained.",
       "current": 99.78,
       "feeds": [
         {
@@ -326,7 +336,7 @@
       "type": "deadline",
       "phase": 3,
       "state": "monitoring",
-      "context": "US corn belt: mid-April to mid-May window. 93M acres. Nitrogen is the limiting nutrient. If missed, that crop is gone. 17 days remaining.",
+      "context": "US corn belt planting window (mid-April to mid-May) has CLOSED — the Apr 15 nitrogen-availability gate passed. 93M acres; nitrogen was the limiting nutrient. Node is fired/irreversible; the consequence now flows into the H2-2026 food-CPI pipeline (food-spike) rather than being a live countdown.",
       "countdown": true,
       "deadline": "2026-04-15",
       "irreversible": true,
@@ -602,6 +612,69 @@
       "closesRequired": 5,
       "additionalCondition": "restored Hormuz traffic",
       "action": "Cut XOP 1/3, CF/NTR 1/4, close tankers, rebuild VXUS + SGOV"
+    },
+    {
+      "id": "reopening-pressure",
+      "label": "Reopening Rhetoric (GDELT)",
+      "type": "indicator",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "Live GDELT article-volume for Hormuz closure/reopening coverage (query: \"Hormuz\" AND blockade/closure/tanker, English). The doc's #1 watch signal: when reopening RHETORIC rises while transit counts stay flat near ~10/day, that divergence is political optimism running ahead of commercial reality — a caution against front-running de-escalation or firing the Stage-2 commercial kill-switch. Watch-only (no causal edge by design). CALIBRATION TODO: promote to a firing constraint once one clean --fetch establishes the GDELT volume baseline (was rate-limited at authoring time).",
+      "feeds": [
+        {
+          "source": "gdelt",
+          "standardQuery": "iran-hormuz-event"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 60.0
+    },
+    {
+      "id": "rates-term-premium",
+      "label": "Rates / Term Premium",
+      "type": "price",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "Doc Sec 4 cost-of-capital channel. Durable energy premium → inflation + term premium → higher long rates → compressed PV of long-duration growth, making 'here-and-now' cash flow (dividends, producers) relatively more attractive. US 10Y is the anchor (live ~4.47%, Jun 4). Conditional, not certain: if the disruption resolves into a growth scare, yields FALL instead — see growth-scare-yields-fall.",
+      "current": 4.47,
+      "feeds": [
+        {
+          "source": "treasury",
+          "tenor": "10Y"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 4.75,
+          "label": "term-premium repricing"
+        },
+        {
+          "level": 5.0,
+          "label": "cost-of-capital shock"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 180.0
+    },
+    {
+      "id": "growth-scare-yields-fall",
+      "label": "Growth-Scare / Yields Fall",
+      "type": "reversal",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "Doc Sec 9 invalidation #3: if demand destruction resolves into a deflationary growth scare, the 10Y falls and the 'higher rates → value over growth' leg reverses even as oil stays disrupted. Fires when the 10Y closes <= 3.75% (below the pre-shock anchor) for 3 closes.",
+      "current": 4.47,
+      "feeds": [
+        {
+          "source": "treasury",
+          "tenor": "10Y"
+        }
+      ],
+      "threshold": 3.75,
+      "closesRequired": 3,
+      "action": "Unwind the rates leg of the value-over-growth tilt; the cost-of-capital thesis is invalidated even if oil stays bid.",
+      "_builderX": 660.0,
+      "_builderY": 1500.0
     }
   ],
   "edges": [
@@ -701,6 +774,20 @@
       "from": "demand-destruction",
       "to": "de-escalation",
       "mechanism": "the cure for high prices is high prices",
+      "lag": "1-3 months",
+      "strength": 0.5
+    },
+    {
+      "from": "brent",
+      "to": "rates-term-premium",
+      "mechanism": "durable energy premium → inflation + term premium → higher 10Y",
+      "lag": "1-3 months",
+      "strength": 0.55
+    },
+    {
+      "from": "demand-destruction",
+      "to": "growth-scare-yields-fall",
+      "mechanism": "demand destruction → deflationary growth scare → yields fall → rates leg reverses",
       "lag": "1-3 months",
       "strength": 0.5
     }
@@ -917,12 +1004,12 @@
   "scenarios": [
     {
       "id": "reopen-apr1",
-      "name": "Hormuz reopens April 1",
-      "probability": 0.1,
-      "notes": "Best case. Traffic resumes, oil normalizes in 4-6 weeks. Fertilizer still elevated short-term.",
+      "name": "Near-term commercial reopening",
+      "probability": 0.18,
+      "notes": "Carriers + insurers return and commercial traffic resumes within 4-6 weeks (the doc's invalidation #1 — requires COMMERCIAL confirmation, not just a political statement). Oil normalizes toward the $80s; fertilizer stays elevated short-term. Market has been actively repricing these odds up since the mid-May peak.",
       "overrides": {
         "hormuz": "resolved",
-        "brent": 90
+        "brent": 85
       },
       "portfolioImpact": {
         "XOP": {
@@ -953,12 +1040,12 @@
     },
     {
       "id": "closed-may",
-      "name": "Closed through May",
-      "probability": 0.45,
-      "notes": "Layer 3 activates. Corn planting missed. Food cascade begins. EM stress accelerates.",
+      "name": "Prolonged closure (Wood Mackenzie base case)",
+      "probability": 0.42,
+      "notes": "Independent base case (Wood Mackenzie): supply tightness persists through Q3 and a shallow global recession develops in H2 2026. Layer 3 (food/EM) active, corn planting already missed, rates/term-premium leg engaged. The bullish-energy continuation.",
       "overrides": {
         "hormuz": "active",
-        "brent": 135,
+        "brent": 130,
         "planting-miss": "fired",
         "diesel": 6.5
       },
@@ -993,7 +1080,7 @@
     {
       "id": "kharg-strike",
       "name": "Kharg Island attacked",
-      "probability": 0.15,
+      "probability": 0.12,
       "notes": "Extreme scenario. Goldman peak case. All nodes fire. Full deployment.",
       "overrides": {
         "hormuz": "active",
@@ -1031,8 +1118,8 @@
     {
       "id": "selective-reopen",
       "name": "Selective transit continues",
-      "probability": 0.3,
-      "notes": "Current state. China/India/Russia get access. West doesn't. Yuan tolls. Slow bleed.",
+      "probability": 0.28,
+      "notes": "Current state through Q2. China/India/Russia get access; the West doesn't. Yuan tolls. Slow bleed — nominally 'open' yet far below capacity, the Red Sea pattern.",
       "overrides": {
         "hormuz": "partial",
         "brent": 115,
@@ -1095,12 +1182,12 @@
     },
     "transmission": {
       "label": "Phase 2: Transmission",
-      "status": "STARTING",
+      "status": "ACTIVE",
       "signposts": [
         {
           "text": "PMI employment declining",
           "status": "fired",
-          "value": "first negative in 12mo"
+          "value": "negative, sustained"
         },
         {
           "text": "Diesel above demand destruction threshold",
@@ -1114,11 +1201,11 @@
         },
         {
           "text": "Consumer confidence declining",
-          "status": "approaching"
+          "status": "fired"
         },
         {
           "text": "Initial claims rising",
-          "status": "monitoring"
+          "status": "approaching"
         },
         {
           "text": "Freight indices deteriorating",
@@ -1129,19 +1216,19 @@
     },
     "amplification": {
       "label": "Phase 3: Amplification",
-      "status": "APPROACHING",
+      "status": "STARTING",
       "signposts": [
         {
           "text": "Unemployment claims rising sustained",
-          "status": "monitoring"
+          "status": "approaching"
         },
         {
           "text": "Bank lending standards tightening",
-          "status": "monitoring"
+          "status": "approaching"
         },
         {
           "text": "EM currencies breaking",
-          "status": "approaching"
+          "status": "fired"
         },
         {
           "text": "Corporate earnings warnings",
@@ -1149,10 +1236,11 @@
         },
         {
           "text": "Credit spreads blow out",
-          "status": "monitoring"
+          "status": "approaching",
+          "value": "private-credit redemption gates (CCLFX, Partners Group)"
         }
       ],
-      "estimatedTiming": "Q3-Q4 2026 based on 2008 template (3-month lag from oil peak)"
+      "estimatedTiming": "H2 2026 based on 2008 template (3-month lag from oil peak); Wood Mackenzie flags shallow recession"
     },
     "policyResponse": {
       "label": "Phase 4: Policy Response",
@@ -1321,6 +1409,13 @@
       "value": 98.87,
       "step": 0.01,
       "nodeId": "dxy-stress"
+    },
+    {
+      "key": "us10y",
+      "label": "US 10Y %",
+      "value": 4.47,
+      "step": 0.01,
+      "nodeId": "rates-term-premium"
     }
   ],
   "analogs": [
