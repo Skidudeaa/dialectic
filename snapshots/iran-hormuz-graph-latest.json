@@ -1,16 +1,18 @@
 {
   "v": 2,
-  "timestamp": "2026-04-24T23:34:58Z",
-  "title": "Iran/Hormuz Thesis \u2014 March 2026",
+  "timestamp": "2026-06-05T05:13:19Z",
+  "title": "Iran/Hormuz Thesis — June 2026",
   "nodeStates": {
     "hormuz": "fired",
     "curve": "stable",
     "rig-confirm": "monitoring",
     "services": "gated",
+    "reopening-pressure": "monitoring",
     "brent": "stable",
     "fert-shortage": "approaching",
     "dxy-stress": "fired",
     "diesel": "fired",
+    "rates-term-premium": "stable",
     "planting-miss": "fired",
     "em-currency": "fired",
     "freight": "fired",
@@ -18,7 +20,8 @@
     "employment": "fired",
     "em-stress": "fired",
     "demand-destruction": "fired",
-    "de-escalation": "stable"
+    "de-escalation": "stable",
+    "growth-scare-yields-fall": "stable"
   },
   "confluenceScores": {
     "em-stress": 2.05
@@ -26,7 +29,7 @@
   "cascadePhase": {
     "number": 3,
     "key": "amplification",
-    "status": "APPROACHING"
+    "status": "STARTING"
   },
   "countdowns": [
     {
@@ -44,36 +47,49 @@
     "nolaFert": 683,
     "usDiesel": 5.38,
     "curveSpread": 15,
-    "dxy": 98.87
+    "dxy": 98.87,
+    "us10y": 4.47
   },
   "scenarioImpacts": {
     "reopen-apr1": {
-      "probability": 0.1,
-      "netImpact": 1.0
+      "probability": 0.18,
+      "netImpact": 1.8
     },
     "closed-may": {
-      "probability": 0.45,
-      "netImpact": 14.4
+      "probability": 0.42,
+      "netImpact": 5.4
     },
     "kharg-strike": {
-      "probability": 0.15,
-      "netImpact": 6.8
+      "probability": 0.12,
+      "netImpact": 5.4
     },
     "selective-reopen": {
-      "probability": 0.3,
-      "netImpact": 9.6
+      "probability": 0.28,
+      "netImpact": 9.0
     }
   },
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-04-24T23:34:56Z",
+      "fetchedAt": "2026-06-05T05:12:58Z",
       "ttlSeconds": 300,
       "detail": "12/21 symbols"
     },
+    "treasury": {
+      "source": "treasury",
+      "fetchedAt": "2026-06-05T05:13:07Z",
+      "ttlSeconds": 172800,
+      "detail": "curve 2026-06-04"
+    },
+    "gdelt": {
+      "source": "gdelt",
+      "fetchedAt": "2026-06-05T05:13:17Z",
+      "ttlSeconds": 3600,
+      "detail": "1/1 queries"
+    },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-04-24T23:34:58Z",
+      "fetchedAt": "2026-06-05T05:13:19Z",
       "ttlSeconds": 86400,
       "detail": "4 node(s)"
     }
@@ -107,6 +123,9 @@
         "rig-confirm": "monitoring",
         "services": "gated",
         "de-escalation": "stable",
+        "reopening-pressure": "monitoring",
+        "rates-term-premium": "stable",
+        "growth-scare-yields-fall": "stable",
         "brent": "stable",
         "fert-shortage": "approaching"
       },
@@ -125,6 +144,9 @@
         "rig-confirm": "monitoring",
         "services": "gated",
         "de-escalation": "stable",
+        "reopening-pressure": "monitoring",
+        "rates-term-premium": "stable",
+        "growth-scare-yields-fall": "stable",
         "brent": "stable",
         "fert-shortage": "approaching",
         "dxy-stress": "fired",
@@ -143,10 +165,13 @@
         "rig-confirm": "monitoring",
         "services": "gated",
         "de-escalation": "stable",
+        "reopening-pressure": "monitoring",
+        "growth-scare-yields-fall": "stable",
         "brent": "stable",
         "fert-shortage": "approaching",
         "dxy-stress": "fired",
         "diesel": "fired",
+        "rates-term-premium": "stable",
         "em-currency": "fired",
         "freight": "fired",
         "em-stress": "fired",
@@ -157,32 +182,32 @@
   },
   "tvIndicators": {
     "brent": {
-      "rsi14": 51.03,
-      "atr14": 7.98,
-      "sma50": 93.17,
+      "rsi14": 43.18,
+      "atr14": 5.32,
+      "sma50": 103.29,
       "curveSpread": {
-        "spread": 14.53,
+        "spread": 8.96,
         "shape": "backwardation",
-        "front": 99.78,
-        "back": 85.25
+        "front": 95.38,
+        "back": 86.42
       },
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:34:58Z"
+      "computedAt": "2026-06-05T05:13:19Z"
     },
     "food-spike": {
-      "rsi14": 61.25,
+      "rsi14": 34.6,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:34:58Z"
+      "computedAt": "2026-06-05T05:13:19Z"
     },
     "dxy-stress": {
-      "rsi14": 46.14,
+      "rsi14": 57.61,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:34:58Z"
+      "computedAt": "2026-06-05T05:13:19Z"
     },
     "demand-destruction": {
-      "rsi14": 51.61,
+      "rsi14": 46.34,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:34:58Z"
+      "computedAt": "2026-06-05T05:13:19Z"
     }
   }
 }

@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-04-24T23:32:54Z",
+  "timestamp": "2026-04-24T23:34:58Z",
   "title": "Iran/Hormuz Thesis \u2014 March 2026",
   "nodeStates": {
     "hormuz": "fired",
@@ -67,13 +67,13 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-04-24T23:32:52Z",
+      "fetchedAt": "2026-04-24T23:34:56Z",
       "ttlSeconds": 300,
       "detail": "12/21 symbols"
     },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-04-24T23:32:54Z",
+      "fetchedAt": "2026-04-24T23:34:58Z",
       "ttlSeconds": 86400,
       "detail": "4 node(s)"
     }
@@ -167,22 +167,22 @@
         "back": 85.25
       },
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:32:54Z"
+      "computedAt": "2026-04-24T23:34:58Z"
     },
     "food-spike": {
       "rsi14": 61.25,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:32:54Z"
+      "computedAt": "2026-04-24T23:34:58Z"
     },
     "dxy-stress": {
       "rsi14": 46.14,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:32:54Z"
+      "computedAt": "2026-04-24T23:34:58Z"
     },
     "demand-destruction": {
       "rsi14": 51.61,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:32:54Z"
+      "computedAt": "2026-04-24T23:34:58Z"
     }
   }
 }
