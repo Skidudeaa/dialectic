@@ -86,7 +86,7 @@
           "label": "PPI All Commodities"
         }
       ],
-      "current": 171.52,
+      "current": 172.47,
       "thresholds": [
         {
           "level": 4.0,
@@ -143,11 +143,11 @@
         }
       ],
       "tvIndicators": {
-        "rsi14": 59.65,
-        "atr14": 3.42,
-        "sma50": 169.43,
+        "rsi14": 56.19,
+        "atr14": 3.2,
+        "sma50": 169.88,
         "source": "derived_from_yahoo",
-        "computedAt": "2026-04-11T18:44:28Z"
+        "computedAt": "2026-04-24T23:35:08Z"
       }
     },
     {
@@ -247,9 +247,9 @@
         }
       ],
       "tvIndicators": {
-        "rsi14": 64.55,
+        "rsi14": 77.2,
         "source": "derived_from_yahoo",
-        "computedAt": "2026-04-11T18:44:28Z"
+        "computedAt": "2026-04-24T23:35:08Z"
       }
     },
     {
@@ -382,7 +382,7 @@
           "label": "USD/CNY"
         }
       ],
-      "current": 6.83,
+      "current": 6.84,
       "thresholds": [
         {
           "level": 7.0,
@@ -427,9 +427,9 @@
         }
       ],
       "tvIndicators": {
-        "rsi14": 35.04,
+        "rsi14": 43.24,
         "source": "derived_from_yahoo",
-        "computedAt": "2026-04-11T18:44:28Z"
+        "computedAt": "2026-04-24T23:35:08Z"
       }
     },
     {
@@ -714,7 +714,7 @@
         "fed-response"
       ],
       "context": "Polymarket: 38% recession by end-2026. Goldman: 25% (raised from baseline after Feb jobs + oil). JPM: 'no recession but material headwinds.' Bloomberg consensus: 1.5% GDP growth. The tariff tax ($1,500/household) + oil shock + geopolitical uncertainty create a triple drag. Stagflation — inflation above target with slowing growth — is the central risk.",
-      "probability": 0.245
+      "probability": 0.26
     }
   ],
   "edges": [
@@ -853,7 +853,7 @@
         "monthly": 400,
         "role": "S&P 500 hedge (inverse)",
         "beta": -1.0,
-        "ref": 36.35,
+        "ref": 34.65,
         "targetLow": 15.0,
         "targetHigh": 16.5,
         "stop": 13.0
@@ -865,7 +865,7 @@
         "monthly": 600,
         "role": "industrials — tariff beneficiary if domestic",
         "beta": 0.6,
-        "ref": 171.52,
+        "ref": 172.47,
         "targetLow": 165,
         "targetHigh": 175,
         "stop": 145
@@ -877,7 +877,7 @@
         "monthly": 300,
         "role": "domestic auto — potential tariff beneficiary",
         "beta": 0.5,
-        "ref": 12.13,
+        "ref": 12.38,
         "targetLow": 12.5,
         "targetHigh": 14.0,
         "stop": 9.5
@@ -887,7 +887,7 @@
         "monthly": 300,
         "role": "domestic auto — tariff wall moat",
         "beta": 0.5,
-        "ref": 76.42,
+        "ref": 78.05,
         "targetLow": 58,
         "targetHigh": 63,
         "stop": 47
@@ -899,7 +899,7 @@
         "monthly": 400,
         "role": "agriculture commodity basket",
         "beta": 0.4,
-        "ref": 26.89,
+        "ref": 27.39,
         "targetLow": 30,
         "targetHigh": 32,
         "stop": 25.5
@@ -911,7 +911,7 @@
         "monthly": 500,
         "role": "consumer discretionary — short if confidence collapses",
         "beta": -0.6,
-        "ref": 112.89,
+        "ref": 118.69,
         "targetLow": 100,
         "targetHigh": 95,
         "stop": 118
@@ -923,7 +923,7 @@
         "monthly": 500,
         "role": "small cap domestic revenue thesis",
         "beta": 0.5,
-        "ref": 261.3,
+        "ref": 276.65,
         "targetLow": 240,
         "targetHigh": 255,
         "stop": 210
@@ -935,7 +935,7 @@
         "monthly": 600,
         "role": "long duration — flight to safety on recession",
         "beta": -0.7,
-        "ref": 86.49,
+        "ref": 86.71,
         "targetLow": 92,
         "targetHigh": 98,
         "stop": 82
@@ -945,7 +945,7 @@
         "monthly": 500,
         "role": "gold — stagflation hedge",
         "beta": -0.4,
-        "ref": 437.13,
+        "ref": 433.25,
         "targetLow": 445,
         "targetHigh": 460,
         "stop": 395
@@ -957,7 +957,7 @@
         "monthly": 800,
         "role": "deployment ammo",
         "isReserve": true,
-        "ref": 100.5
+        "ref": 100.64
       },
       {
         "id": "TIPS",

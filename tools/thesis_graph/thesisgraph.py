@@ -143,6 +143,12 @@ def validate_config(cfg: dict) -> list[dict]:
                     issues.append(_issue(f"nodes[{nid}].feed", "yahoo feed requires 'symbol'"))
                 elif provider == "fred" and not feed.get("series"):
                     issues.append(_issue(f"nodes[{nid}].feed", "fred feed requires 'series'"))
+                elif provider == "eia" and not (feed.get("series") or feed.get("route")):
+                    issues.append(_issue(f"nodes[{nid}].feed", "eia feed requires 'series' or 'route'"))
+                elif provider == "treasury" and not (feed.get("tenor") or feed.get("spread")):
+                    issues.append(_issue(f"nodes[{nid}].feed", "treasury feed requires 'tenor' or 'spread'"))
+                elif provider == "gdelt" and not (feed.get("query") or feed.get("standardQuery")):
+                    issues.append(_issue(f"nodes[{nid}].feed", "gdelt feed requires 'query' or 'standardQuery'"))
 
         # Reference validity for gatedBy / constrainedBy — needs full node set.
         for n in nodes:
@@ -1274,6 +1280,357 @@ def fetch_fred(cfg: dict) -> dict:
             source="fred",
             ttl_seconds=3600,
             detail=f"{len(results)}/{len(series_ids)} series",
+        )
+    return cfg
+
+
+def fetch_eia(cfg: dict) -> dict:
+    """Fetch EIA Open Data observations for nodes with `source: "eia"`.
+
+    Book JSON shapes accepted:
+        # Petroleum 'series' shorthand (most common — diesel, gasoline)
+        {"source": "eia", "series": "EMD_EPD2D_PTE_NUS_DPG"}
+
+        # Full route + facets (crude stocks, ng storage, refinery util)
+        {"source": "eia", "route": "petroleum/stoc/wstk/data",
+         "facets": {"product": ["EPC0"], "duoarea": ["NUS"]},
+         "frequency": "weekly"}
+
+    WHY separate from fetch_fred: EIA has its own auth (EIA_API_KEY) and
+    a richer query model (route + facets, not a flat series ID). Mirroring
+    the polymarket/fred pattern keeps each source isolated for failure
+    handling and freshness stamping.
+
+    Silent skip if EIA_API_KEY is missing — EIA is optional like FRED.
+    """
+    eia_dir = os.path.join(os.path.dirname(__file__), "..", "data_fetch")
+    eia_dir = os.path.abspath(eia_dir)
+
+    if not os.path.isfile(os.path.join(eia_dir, "eia.py")):
+        print("  eia: module not found, skipping", file=sys.stderr)
+        return cfg
+
+    if eia_dir not in sys.path:
+        sys.path.insert(0, eia_dir)
+
+    try:
+        import eia as eia_mod  # type: ignore[import-not-found]
+    except ImportError as e:
+        print(f"  eia: import failed: {e}", file=sys.stderr)
+        return cfg
+
+    # Build (spec_key -> [node_ids]) and the spec list to fetch.
+    spec_to_nodes: dict = {}
+    specs = []
+    for node in cfg.get("nodes", []):
+        for feed in node.get("feeds", []):
+            if feed.get("source") != "eia":
+                continue
+            # Two forms: 'series' shorthand or full 'route' + 'facets'.
+            if feed.get("series"):
+                spec = eia_mod.spec_petroleum_series(
+                    feed["series"],
+                    frequency=feed.get("frequency", "weekly"),
+                )
+            elif feed.get("route"):
+                spec = eia_mod.EIASpec(
+                    key=feed.get("key") or feed["route"],
+                    route=feed["route"],
+                    facets=feed.get("facets", {}),
+                    frequency=feed.get("frequency"),
+                    length=feed.get("length", 1),
+                )
+            else:
+                continue
+
+            if spec.key not in spec_to_nodes:
+                spec_to_nodes[spec.key] = []
+                specs.append(spec)
+            spec_to_nodes[spec.key].append(node["id"])
+
+    if not specs:
+        return cfg
+
+    print(f"  eia: fetching {len(specs)} series...", file=sys.stderr)
+
+    try:
+        results = eia_mod.fetch_series_batch(specs)
+    except eia_mod.EIAAuthError as e:
+        print(f"  eia: skipped ({e})", file=sys.stderr)
+        return cfg
+    except Exception as e:
+        print(f"  eia: batch fetch failed: {e}", file=sys.stderr)
+        return cfg
+
+    node_map = {n["id"]: n for n in cfg["nodes"]}
+    count = 0
+    resolved = 0
+    for key, obs in results.items():
+        if obs is None:
+            continue
+        resolved += 1
+        for nid in spec_to_nodes.get(key, []):
+            node = node_map.get(nid)
+            if node is None or "current" not in node:
+                continue
+            old = node["current"]
+            node["current"] = round(obs.value, 4)
+            print(
+                f"  eia: {nid} ({key}): {old} -> {round(obs.value, 4)} "
+                f"{obs.units} (period {obs.period})",
+                file=sys.stderr,
+            )
+            count += 1
+
+    print(
+        f"  eia: updated {count} node(s) from {resolved}/{len(specs)} specs",
+        file=sys.stderr,
+    )
+
+    if resolved:
+        _stamp_feed_freshness(
+            cfg,
+            source="eia",
+            ttl_seconds=86400 * 8,  # most EIA series are weekly; allow 8d
+            detail=f"{resolved}/{len(specs)} specs",
+        )
+    return cfg
+
+
+def fetch_treasury(cfg: dict) -> dict:
+    """Fetch US Treasury daily yield curve and apply to nodes.
+
+    Book JSON shapes accepted:
+        {"source": "treasury", "tenor": "10Y"}
+        {"source": "treasury", "spread": ["10Y", "2Y"]}
+
+    Treasury fetches happen once per --fetch run (one HTTP request returns
+    the full year's curve). Spread feeds compute long-short in basis
+    points; tenor feeds write the raw rate (percent).
+
+    No auth required. Silent skip on transient failure — Treasury XML
+    isn't always available the moment a tick fires.
+    """
+    treasury_dir = os.path.join(os.path.dirname(__file__), "..", "data_fetch")
+    treasury_dir = os.path.abspath(treasury_dir)
+
+    if not os.path.isfile(os.path.join(treasury_dir, "treasury.py")):
+        print("  treasury: module not found, skipping", file=sys.stderr)
+        return cfg
+
+    if treasury_dir not in sys.path:
+        sys.path.insert(0, treasury_dir)
+
+    try:
+        import treasury as treasury_mod  # type: ignore[import-not-found]
+    except ImportError as e:
+        print(f"  treasury: import failed: {e}", file=sys.stderr)
+        return cfg
+
+    # Discover treasury feeds and decide whether we need to fetch.
+    treasury_feeds = []
+    for node in cfg.get("nodes", []):
+        for feed in node.get("feeds", []):
+            if feed.get("source") == "treasury":
+                treasury_feeds.append((node["id"], feed))
+
+    if not treasury_feeds:
+        return cfg
+
+    print(
+        f"  treasury: fetching latest yield curve for "
+        f"{len(treasury_feeds)} feed(s)...",
+        file=sys.stderr,
+    )
+
+    try:
+        latest = treasury_mod.fetch_latest()
+    except treasury_mod.TreasuryError as e:
+        print(f"  treasury: fetch failed: {e}", file=sys.stderr)
+        return cfg
+    except Exception as e:
+        print(f"  treasury: unexpected error: {e}", file=sys.stderr)
+        return cfg
+
+    node_map = {n["id"]: n for n in cfg["nodes"]}
+    count = 0
+    for nid, feed in treasury_feeds:
+        node = node_map.get(nid)
+        if node is None or "current" not in node:
+            continue
+
+        if feed.get("tenor"):
+            tenor = feed["tenor"]
+            value = latest.tenors.get(tenor)
+            if value is None:
+                print(
+                    f"  treasury: {nid}: tenor {tenor} missing for "
+                    f"{latest.date}",
+                    file=sys.stderr,
+                )
+                continue
+            old = node["current"]
+            node["current"] = round(value, 4)
+            print(
+                f"  treasury: {nid} ({tenor}): {old} -> {round(value, 4)}% "
+                f"(date {latest.date})",
+                file=sys.stderr,
+            )
+            count += 1
+        elif feed.get("spread"):
+            spread = feed["spread"]
+            if not (isinstance(spread, list) and len(spread) == 2):
+                print(
+                    f"  treasury: {nid}: spread must be [long, short]",
+                    file=sys.stderr,
+                )
+                continue
+            bps = treasury_mod.compute_spread(latest, spread[0], spread[1])
+            if bps is None:
+                print(
+                    f"  treasury: {nid}: spread {spread} unavailable for "
+                    f"{latest.date}",
+                    file=sys.stderr,
+                )
+                continue
+            old = node["current"]
+            node["current"] = round(bps, 4)
+            print(
+                f"  treasury: {nid} ({spread[0]}-{spread[1]}): {old} -> "
+                f"{round(bps, 1)}bps (date {latest.date})",
+                file=sys.stderr,
+            )
+            count += 1
+
+    print(
+        f"  treasury: updated {count}/{len(treasury_feeds)} node(s) "
+        f"(curve date {latest.date})",
+        file=sys.stderr,
+    )
+
+    if count:
+        _stamp_feed_freshness(
+            cfg,
+            source="treasury",
+            ttl_seconds=86400 * 2,  # daily series; 2-day window for weekends
+            detail=f"curve {latest.date}",
+        )
+    return cfg
+
+
+def fetch_gdelt(cfg: dict) -> dict:
+    """Fetch GDELT volume signals for nodes with `source: "gdelt"`.
+
+    Book JSON shapes accepted:
+        {"source": "gdelt", "query": "Hormuz AND blockade", "timespan": "1d"}
+        {"source": "gdelt", "standardQuery": "iran-hormuz-event",
+         "timespan": "7d"}
+
+    Each unique query is fetched once (deduped across nodes). Latest
+    bucket value is written to node['current']. No auth required.
+
+    GDELT recommends ~1 req/sec; we sleep 1s between fetches to stay polite.
+    """
+    gdelt_dir = os.path.join(os.path.dirname(__file__), "..", "data_fetch")
+    gdelt_dir = os.path.abspath(gdelt_dir)
+
+    if not os.path.isfile(os.path.join(gdelt_dir, "gdelt.py")):
+        print("  gdelt: module not found, skipping", file=sys.stderr)
+        return cfg
+
+    if gdelt_dir not in sys.path:
+        sys.path.insert(0, gdelt_dir)
+
+    try:
+        import gdelt as gdelt_mod  # type: ignore[import-not-found]
+    except ImportError as e:
+        print(f"  gdelt: import failed: {e}", file=sys.stderr)
+        return cfg
+
+    # Build (query, timespan) -> [node_ids]. Dedup so we don't double-fetch.
+    fetch_jobs: dict = {}
+    for node in cfg.get("nodes", []):
+        for feed in node.get("feeds", []):
+            if feed.get("source") != "gdelt":
+                continue
+
+            timespan = feed.get("timespan", "1d")
+            if feed.get("standardQuery"):
+                query = gdelt_mod.get_standard_query(feed["standardQuery"])
+                if query is None:
+                    print(
+                        f"  gdelt: unknown standardQuery "
+                        f"{feed['standardQuery']!r}",
+                        file=sys.stderr,
+                    )
+                    continue
+            else:
+                query = feed.get("query")
+                if not query:
+                    continue
+
+            key = (query, timespan)
+            if key not in fetch_jobs:
+                fetch_jobs[key] = []
+            fetch_jobs[key].append(node["id"])
+
+    if not fetch_jobs:
+        return cfg
+
+    print(
+        f"  gdelt: fetching {len(fetch_jobs)} unique queries...",
+        file=sys.stderr,
+    )
+
+    import time as _time
+    node_map = {n["id"]: n for n in cfg["nodes"]}
+    count = 0
+    resolved = 0
+
+    for i, ((query, timespan), nids) in enumerate(fetch_jobs.items()):
+        try:
+            value = gdelt_mod.fetch_volume_latest(query, timespan=timespan)
+        except gdelt_mod.GdeltRateLimitError as e:
+            print(f"  gdelt: rate-limited, aborting: {e}", file=sys.stderr)
+            break
+        except gdelt_mod.GdeltError as e:
+            print(f"  gdelt: {query!r} -> {e}", file=sys.stderr)
+            continue
+
+        # WHY 1s polite pacing between unique queries: matches GDELT guidance.
+        if i < len(fetch_jobs) - 1:
+            _time.sleep(1.0)
+
+        if value is None:
+            print(f"  gdelt: {query!r}: no data in {timespan}", file=sys.stderr)
+            continue
+        resolved += 1
+
+        for nid in nids:
+            node = node_map.get(nid)
+            if node is None or "current" not in node:
+                continue
+            old = node["current"]
+            node["current"] = round(value, 6)
+            print(
+                f"  gdelt: {nid} ({query[:40]!r}): {old} -> "
+                f"{round(value, 6)} ({timespan})",
+                file=sys.stderr,
+            )
+            count += 1
+
+    print(
+        f"  gdelt: updated {count} node(s) from {resolved}/{len(fetch_jobs)} "
+        f"queries",
+        file=sys.stderr,
+    )
+
+    if resolved:
+        _stamp_feed_freshness(
+            cfg,
+            source="gdelt",
+            ttl_seconds=3600,  # GDELT updates every 15 minutes
+            detail=f"{resolved}/{len(fetch_jobs)} queries",
         )
     return cfg
 
@@ -3118,6 +3475,22 @@ Examples:
         # Silent skip if FRED_API_KEY is unset — FRED is optional.
         print("\nFetching FRED macro series...", file=log)
         cfg = fetch_fred(cfg)
+        # WHY EIA after FRED: same dispatch shape (auth-gated, optional),
+        # but a different provider for energy-specific data — diesel,
+        # crude stocks, refinery util, NG storage. Iran/Hormuz cascade
+        # depends on this for diesel + distillate transmission.
+        print("\nFetching EIA energy series...", file=log)
+        cfg = fetch_eia(cfg)
+        # WHY Treasury after EIA: no-auth XML feed for the daily Treasury
+        # yield curve. Daily data, single round-trip per --fetch (full year
+        # in one call). Powers recession-risk + japan-rate-shock nodes.
+        print("\nFetching Treasury yield curve...", file=log)
+        cfg = fetch_treasury(cfg)
+        # WHY GDELT last among data feeds: no-auth article-volume signal
+        # for geopolitical event nodes. Slower (1s/req polite pacing) and
+        # the failure mode is more graceful, so it tail-loads naturally.
+        print("\nFetching GDELT event volumes...", file=log)
+        cfg = fetch_gdelt(cfg)
         # WHY derived indicators AFTER polymarket, BEFORE update_config:
         # (a) they may bump closesObserved which the propagation engine
         # reads, so they need to be applied before any propagate() call;

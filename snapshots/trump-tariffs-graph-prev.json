@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-04-19T00:06:54Z",
+  "timestamp": "2026-04-19T00:08:23Z",
   "title": "Trump Tariff Escalation Thesis — March 2026",
   "nodeStates": {
     "tariff-shock": "fired",
@@ -155,17 +155,17 @@
       "atr14": 3.31,
       "sma50": 169.91,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-19T00:06:54Z"
+      "computedAt": "2026-04-19T00:08:23Z"
     },
     "auto-sector": {
       "rsi14": 75.17,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-19T00:06:54Z"
+      "computedAt": "2026-04-19T00:08:23Z"
     },
     "usd-cny": {
       "rsi14": 34.03,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-19T00:06:54Z"
+      "computedAt": "2026-04-19T00:08:23Z"
     }
   }
 }

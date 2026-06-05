@@ -70,6 +70,225 @@ BATCH_INTER_DELAY = 0.25
 _HEADERS = {"User-Agent": "Mozilla/5.0 (tradingDesk/fred-fetcher)"}
 
 
+# =========================================================================
+# Series catalog
+#
+# WHY this catalog: book JSON files reference FRED series by ID in their
+# feeds arrays. KNOWN_SERIES is the single source of truth for every FRED
+# series wired across thesis books. Provides human-readable labels for the
+# --catalog CLI flag and makes it trivial to enumerate all watched series
+# for batch pre-fetch or freshness audits.
+#
+# Schema per entry:
+#   label      -- human-readable name matching the FRED series title
+#   frequency  -- "d" daily | "w" weekly | "m" monthly | "q" quarterly
+#                 | "a" annual  (metadata only; fetch behavior unchanged)
+#   theme      -- grouping slug used by --catalog display
+#   notes      -- optional caveats: publication lags, quirks, quality flags
+# =========================================================================
+KNOWN_SERIES: Dict[str, dict] = {
+    # --- US Rates ----------------------------------------------------
+    "DGS10": {
+        "label": "US 10-Year Treasury Constant Maturity Rate",
+        "frequency": "d",
+        "theme": "us-rates",
+        "notes": "H.15 release; ~1 business-day lag.",
+    },
+    "DGS2": {
+        "label": "US 2-Year Treasury Constant Maturity Rate",
+        "frequency": "d",
+        "theme": "us-rates",
+    },
+    "DFF": {
+        "label": "Effective Federal Funds Rate (daily)",
+        "frequency": "d",
+        "theme": "us-rates",
+    },
+    "FEDFUNDS": {
+        "label": "Effective Federal Funds Rate (monthly average)",
+        "frequency": "m",
+        "theme": "us-rates",
+        "notes": "Monthly average; use DFF for the daily series.",
+    },
+    "VIXCLS": {
+        "label": "CBOE Volatility Index (VIX) daily close",
+        "frequency": "d",
+        "theme": "us-rates",
+    },
+    "DTWEXBGS": {
+        "label": "Trade Weighted US Dollar Index: Broad, Goods and Services",
+        "frequency": "d",
+        "theme": "us-fx",
+    },
+    # --- US Treasury curve spreads / recession indicators ------------
+    "T10Y2Y": {
+        "label": "10-Year Treasury Minus 2-Year Treasury Yield Spread",
+        "frequency": "d",
+        "theme": "us-rates",
+        "notes": "Negative = inverted curve; sustained inversion = recession signal.",
+    },
+    "T10Y3M": {
+        "label": "10-Year Treasury Minus 3-Month Treasury Yield Spread",
+        "frequency": "d",
+        "theme": "us-rates",
+        "notes": "NY Fed recession-probability model indicator.",
+    },
+    # --- FX -----------------------------------------------------------
+    "DEXJPUS": {
+        "label": "Japan / US Foreign Exchange Rate (JPY per USD)",
+        "frequency": "d",
+        "theme": "japan",
+    },
+    "DEXCHUS": {
+        "label": "China / US Foreign Exchange Rate (CNY per USD)",
+        "frequency": "d",
+        "theme": "china",
+    },
+    # --- US Labor -----------------------------------------------------
+    "ICSA": {
+        "label": "Initial Unemployment Claims, Seasonally Adjusted (weekly)",
+        "frequency": "w",
+        "theme": "us-labor",
+        "notes": "Thursday 8:30 ET release.",
+    },
+    "PAYEMS": {
+        "label": "All Employees: Total Nonfarm Payrolls (thousands, monthly)",
+        "frequency": "m",
+        "theme": "us-labor",
+        "notes": "BLS establishment survey; first Friday of following month.",
+    },
+    "UNRATE": {
+        "label": "Civilian Unemployment Rate (percent, monthly)",
+        "frequency": "m",
+        "theme": "us-labor",
+    },
+    # --- US Macro / Prices --------------------------------------------
+    "CPIAUCSL": {
+        "label": "CPI All Urban Consumers: All Items, SA (monthly)",
+        "frequency": "m",
+        "theme": "us-macro",
+    },
+    "PCEPILFE": {
+        "label": "PCE Price Index Excluding Food and Energy (Core PCE, monthly)",
+        "frequency": "m",
+        "theme": "us-macro",
+    },
+    "CPIUFDSL": {
+        "label": "CPI Food At Home, Seasonally Adjusted (monthly)",
+        "frequency": "m",
+        "theme": "us-macro",
+    },
+    "PPIACO": {
+        "label": "Producer Price Index: All Commodities (monthly)",
+        "frequency": "m",
+        "theme": "us-macro",
+    },
+    "UMCSENT": {
+        "label": "University of Michigan: Consumer Sentiment Index (monthly)",
+        "frequency": "m",
+        "theme": "us-macro",
+    },
+    "NAPM": {
+        "label": "ISM Manufacturing PMI Composite Index (monthly)",
+        "frequency": "m",
+        "theme": "us-macro",
+    },
+    "INDPRO": {
+        "label": "Industrial Production Index (monthly, SA)",
+        "frequency": "m",
+        "theme": "us-macro",
+        "notes": "Fed G.17 release; index base 2017=100.",
+    },
+    "IPMAN": {
+        "label": "Industrial Production: Manufacturing (monthly, SA)",
+        "frequency": "m",
+        "theme": "us-macro",
+        "notes": "Manufacturing sub-component of INDPRO; sensitive to tariff shocks.",
+    },
+    "ISRATIO": {
+        "label": "Total Business: Inventories to Sales Ratio (monthly)",
+        "frequency": "m",
+        "theme": "us-macro",
+        "notes": "Rising ratio = inventory build-up; demand-slowdown precursor.",
+    },
+    # --- Credit spreads ------------------------------------------------
+    "BAMLH0A0HYM2": {
+        "label": "ICE BofA US High Yield Index Option-Adjusted Spread (daily)",
+        "frequency": "d",
+        "theme": "credit-spreads",
+        "notes": "HY OAS bps. Risk-on/off canonical signal.",
+    },
+    "BAMLC0A0CM": {
+        "label": "ICE BofA US Corporate Index Option-Adjusted Spread (daily)",
+        "frequency": "d",
+        "theme": "credit-spreads",
+        "notes": "IG OAS bps.",
+    },
+    "BAMLHE00EHYIOAS": {
+        "label": "ICE BofA Emerging Markets Corporate Plus Index OAS (daily)",
+        "frequency": "d",
+        "theme": "credit-spreads",
+        "notes": "EM HY OAS. Wired in iran-hormuz em-stress node.",
+    },
+    # --- Shipping ------------------------------------------------------
+    "DBDI": {
+        "label": "Baltic Dry Index (daily)",
+        "frequency": "d",
+        "theme": "shipping",
+        "notes": "Dry-bulk freight benchmark; China import demand proxy.",
+    },
+    # --- Japan rates ---------------------------------------------------
+    "IRLTLT01JPM156N": {
+        "label": "Japan Long-Term Government Bond Yield 10Y (OECD monthly)",
+        "frequency": "m",
+        "theme": "japan",
+        "notes": "OECD monthly; ~4-6w lag.",
+    },
+    "IR3TIB01JPM156N": {
+        "label": "Japan 3-Month Interbank Rate (OECD monthly)",
+        "frequency": "m",
+        "theme": "japan",
+        "notes": "Short-end Japan rate; BoJ interbank policy stance proxy.",
+    },
+    "INTDSRJPM193N": {
+        "label": "Japan Central Bank Discount Rate (annual, BIS)",
+        "frequency": "a",
+        "theme": "japan",
+        "notes": "Annual BIS series.",
+    },
+    # --- China macro --------------------------------------------------
+    "QCNR628BIS": {
+        "label": "China Residential Property Prices (BIS, quarterly)",
+        "frequency": "q",
+        "theme": "china",
+        "notes": "BIS quarterly; ~2-quarter lag. FRED proxy for NBS 70-city.",
+    },
+    "XTNTVA01CNQ188S": {
+        "label": "China Net Trade Volume Index (OECD, quarterly)",
+        "frequency": "q",
+        "theme": "china",
+        "notes": "OECD quarterly trade volume growth; commodity-import proxy.",
+    },
+    "IRSTCI01CNM156N": {
+        "label": "China Short-Term Interbank Rate (OECD monthly)",
+        "frequency": "m",
+        "theme": "china",
+        "notes": "PBoC interbank liquidity stance indicator.",
+    },
+}
+
+
+def get_series_info(series_id: str) -> Optional[dict]:
+    """Return the KNOWN_SERIES catalog entry for a series ID, or None.
+
+    WHY: callers (thesisgraph adapters, CLI) can look up human labels and
+    frequency metadata without importing the full catalog. Returns None for
+    series not in the catalog -- intentional, since FRED has 800k+ series
+    and the catalog covers only what the thesis books use.
+    """
+    return KNOWN_SERIES.get(series_id)
+
+
 class FredError(Exception):
     """Base exception for FRED fetcher errors."""
     pass
@@ -306,16 +525,45 @@ def fetch_series_batch(
 # CLI — standalone usage for debugging / manual checks
 # =========================================================================
 
+def _print_catalog() -> None:
+    """Print the KNOWN_SERIES catalog grouped by theme.
+
+    WHY no API key: catalog is a pure metadata dump — useful when the
+    operator has no key handy and just wants to know which series are
+    wired into the thesis books.
+    """
+    by_theme: Dict[str, list] = {}
+    for sid, info in KNOWN_SERIES.items():
+        theme = info.get("theme", "other")
+        by_theme.setdefault(theme, []).append((sid, info))
+    for theme in sorted(by_theme):
+        print(f"\n[{theme}]")
+        for sid, info in by_theme[theme]:
+            freq = info.get("frequency", "?")
+            label = info.get("label", "")
+            notes = info.get("notes", "")
+            note_str = f"  ({notes})" if notes else ""
+            print(f"  {sid} [{freq}]  {label}{note_str}")
+
+
 def main() -> None:
     """Fetch and print latest observations for given series IDs."""
-    if len(sys.argv) < 2:
+    if "--catalog" in sys.argv:
+        _print_catalog()
+        return
+
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
         print(
             "Usage: FRED_API_KEY=<key> fred.py <series_id> [series_id...] "
-            "[--json]",
+            "[--json] [--catalog]",
+            file=sys.stderr,
+        )
+        print(
+            "  --catalog  list all known series by theme (no API key needed)",
             file=sys.stderr,
         )
         print("Example: fred.py DGS10 DEXJPUS", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(0 if len(sys.argv) > 1 else 1)
 
     output_json = "--json" in sys.argv
     series_ids = [s for s in sys.argv[1:] if not s.startswith("--")]
@@ -334,8 +582,10 @@ def main() -> None:
             if obs is None:
                 print(f"  {sid}: FAILED (no data)")
             else:
+                info = get_series_info(sid)
+                label_str = f" [{info['label']}]" if info else ""
                 print(
-                    f"  {sid}: {obs['value']} "
+                    f"  {sid}{label_str}: {obs['value']} "
                     f"({obs['observation_date']}, fetched {obs['fetched_at']})"
                 )
 

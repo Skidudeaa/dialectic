@@ -72,7 +72,7 @@
       "phase": 1,
       "state": "monitoring",
       "context": "Brent up 53% from pre-crisis. Goldman scenarios: base $130, bear $155. Dallas Fed Hormuz model projects $115-135 sustained.",
-      "current": 90.38,
+      "current": 99.78,
       "feeds": [
         {
           "source": "yahoo",
@@ -156,11 +156,17 @@
         }
       ],
       "tvIndicators": {
-        "rsi14": 43.75,
-        "atr14": 8.5,
-        "sma50": 90.02,
+        "rsi14": 51.03,
+        "atr14": 7.98,
+        "sma50": 93.17,
+        "curveSpread": {
+          "spread": 14.53,
+          "shape": "backwardation",
+          "front": 99.78,
+          "back": 85.25
+        },
         "source": "derived_from_yahoo",
-        "computedAt": "2026-04-19T02:30:57Z"
+        "computedAt": "2026-04-24T23:34:58Z"
       }
     },
     {
@@ -368,9 +374,9 @@
         }
       ],
       "tvIndicators": {
-        "rsi14": 51.32,
+        "rsi14": 61.25,
         "source": "derived_from_yahoo",
-        "computedAt": "2026-04-19T02:30:57Z"
+        "computedAt": "2026-04-24T23:34:58Z"
       }
     },
     {
@@ -380,7 +386,7 @@
       "phase": 2,
       "state": "monitoring",
       "context": "DXY strengthening from oil-import dollar demand, not US strength. Classic petrodollar squeeze.",
-      "current": 98.23,
+      "current": 98.51,
       "feeds": [
         {
           "source": "yahoo",
@@ -410,9 +416,9 @@
         }
       ],
       "tvIndicators": {
-        "rsi14": 38.97,
+        "rsi14": 46.14,
         "source": "derived_from_yahoo",
-        "computedAt": "2026-04-19T02:30:57Z"
+        "computedAt": "2026-04-24T23:34:58Z"
       }
     },
     {
@@ -511,9 +517,9 @@
         }
       ],
       "tvIndicators": {
-        "rsi14": 41.9,
+        "rsi14": 51.61,
         "source": "derived_from_yahoo",
-        "computedAt": "2026-04-19T02:30:57Z"
+        "computedAt": "2026-04-24T23:34:58Z"
       }
     },
     {
@@ -706,7 +712,7 @@
         "monthly": 1400,
         "role": "high-beta E&P",
         "beta": 0.7,
-        "ref": 159.69,
+        "ref": 168.05,
         "targetLow": 210,
         "targetHigh": 225,
         "stop": 171
@@ -716,7 +722,7 @@
         "monthly": 1200,
         "role": "large-cap energy",
         "beta": 0.5,
-        "ref": 55.02,
+        "ref": 56.87,
         "targetLow": 68,
         "targetHigh": 72,
         "stop": 56
@@ -726,7 +732,7 @@
         "monthly": 800,
         "role": "global energy",
         "beta": 0.4,
-        "ref": 52.63,
+        "ref": 54.26,
         "targetLow": 64,
         "targetHigh": 68,
         "stop": 53
@@ -738,7 +744,7 @@
         "monthly": 800,
         "role": "nitrogen/fertilizer torque",
         "beta": 0.6,
-        "ref": 112.68,
+        "ref": 120.93,
         "targetLow": 150,
         "targetHigh": 160,
         "stop": 124
@@ -748,7 +754,7 @@
         "monthly": 600,
         "role": "potash/nitrogen/phosphate",
         "beta": 0.5,
-        "ref": 70.62,
+        "ref": 71.57,
         "targetLow": 82,
         "targetHigh": 88,
         "stop": 69
@@ -760,7 +766,7 @@
         "monthly": 1000,
         "role": "gold hedge (anti-dollar)",
         "beta": -0.5,
-        "ref": 445.93,
+        "ref": 433.25,
         "targetLow": 445,
         "targetHigh": 460,
         "stop": 395
@@ -772,7 +778,7 @@
         "monthly": 600,
         "role": "small ex-US (vulnerable)",
         "beta": -0.3,
-        "ref": 83.75,
+        "ref": 82.49,
         "targetLow": 78,
         "targetHigh": 81,
         "stop": 71
@@ -784,13 +790,13 @@
         "monthly": 1200,
         "role": "deployment ammo",
         "isReserve": true,
-        "ref": 100.56
+        "ref": 100.64
       },
       {
         "id": "STIP",
         "monthly": 400,
         "role": "near-term inflation hedge",
-        "ref": 103.71
+        "ref": 104.05
       }
     ],
     "services": [
@@ -798,7 +804,7 @@
         "id": "OIH",
         "overlay": true,
         "condition": "rig-confirm AND NOT curve-constraint",
-        "ref": 400.69,
+        "ref": 437.24,
         "targetLow": 460,
         "targetHigh": 500,
         "stop": 378
@@ -1263,7 +1269,7 @@
     {
       "key": "brent",
       "label": "BRENT $/bbl",
-      "value": 90.38,
+      "value": 99.78,
       "step": 0.01,
       "nodeId": "brent"
     },

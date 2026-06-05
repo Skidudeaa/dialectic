@@ -51,7 +51,7 @@
       "phase": 1,
       "state": "monitoring",
       "context": "H100 secondary rental rate has slipped from $4.50/hr peak (mid-2024) to ~$2.10/hr as Blackwell ships in volume. Below $1.50 = clear glut signal — historically marks the inflection where hyperscalers slow new orders rather than write down inventory. Calibration TBD: no clean public series; tracked manually via SF Compute / GPU broker quotes.",
-      "current": 2.10,
+      "current": 2.1,
       "feeds": [
         {
           "source": "manual",
@@ -60,11 +60,11 @@
       ],
       "thresholds": [
         {
-          "level": 1.50,
+          "level": 1.5,
           "label": "glut confirmed"
         },
         {
-          "level": 1.00,
+          "level": 1.0,
           "label": "fire-sale / order cancellations"
         }
       ],
@@ -72,16 +72,16 @@
       "_builderY": 60.0,
       "regimes": {
         "tight": {
-          "min": 2.50,
+          "min": 2.5,
           "color": "#6E8FAD"
         },
         "softening": {
-          "min": 1.50,
+          "min": 1.5,
           "max": 2.49,
           "color": "#E69A4C"
         },
         "glut": {
-          "min": 1.00,
+          "min": 1.0,
           "max": 1.49,
           "color": "#E05555"
         },
@@ -170,7 +170,7 @@
       "phase": 2,
       "state": "monitoring",
       "context": "TSMC CoWoS advanced-packaging capacity is the single physical bottleneck for Blackwell/MI300 supply. Utilization ran ~98% through 2025. Drops below 90% historically lead chip pricing by 1-2 quarters. TSM monthly revenue print is the tell. Calibration TBD: utilization reported in-line with quarterly results, monthly revenue is the high-frequency proxy.",
-      "current": 200.0,
+      "current": 402.46,
       "feeds": [
         {
           "source": "yahoo",
@@ -206,7 +206,13 @@
           "symbol": "TSM",
           "overlay": true
         }
-      ]
+      ],
+      "tvIndicators": {
+        "rsi14": 68.32,
+        "sma50": 357.0,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-24T23:35:25Z"
+      }
     },
     {
       "id": "datacenter-reit-leases",
@@ -249,7 +255,7 @@
       "phase": 3,
       "state": "monitoring",
       "context": "SMH 200dma is the line. 2018 trade-war analog: SMH lost 200dma in October, dropped 24% in 11 weeks. Confluence node — fires only after capex guide AND TSM utilization both confirm. The 'high-conviction short' window opens here, not before.",
-      "current": 290.0,
+      "current": 506.44,
       "feeds": [
         {
           "source": "yahoo",
@@ -312,7 +318,13 @@
           "symbol": "SMH",
           "overlay": true
         }
-      ]
+      ],
+      "tvIndicators": {
+        "rsi14": 83.96,
+        "atr14": 12.97,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-24T23:35:25Z"
+      }
     },
     {
       "id": "utilities-rerate",
@@ -348,7 +360,7 @@
       "phase": 3,
       "state": "monitoring",
       "context": "S&P top-7 = 33% of index weight. AI-themed names (NVDA, MSFT, GOOGL, META, AMZN) = ~22%. Capex unwind concentrates losses — VIX historically prints 30+ on tech-led drawdowns even when broad index is down only 8-10%. 2018 Q4 template: VIX 12→36 in 6 weeks on chip-led rotation.",
-      "current": 16.5,
+      "current": 18.71,
       "feeds": [
         {
           "source": "yahoo",
@@ -455,7 +467,7 @@
       "phase": 4,
       "state": "monitoring",
       "context": "Capex-led drawdown is NOT classic recession — payrolls hold up initially because hyperscalers don't fire datacenter staff fast. Fed historically lags tech-led drawdowns by 2-3 quarters (2000, 2018Q4). Gate: Fed funds futures pricing 3+ cuts in 6mo = confirmed pivot. TLT trade requires this to fire.",
-      "current": 4.25,
+      "current": 4.31,
       "feeds": [
         {
           "source": "yahoo",
@@ -632,7 +644,7 @@
         "monthly": 1400,
         "role": "primary semis short — high beta",
         "beta": -1.5,
-        "ref": 290.0,
+        "ref": 506.44,
         "targetLow": 230,
         "targetHigh": 250,
         "stop": 308
@@ -642,7 +654,7 @@
         "monthly": 600,
         "role": "secondary semis short — diversification",
         "beta": -1.3,
-        "ref": 230.0,
+        "ref": 461.6,
         "targetLow": 185,
         "targetHigh": 200,
         "stop": 244
@@ -654,7 +666,7 @@
         "monthly": 1000,
         "role": "broad tech short",
         "beta": -1.0,
-        "ref": 230.0,
+        "ref": 160.22,
         "targetLow": 195,
         "targetHigh": 210,
         "stop": 244
@@ -666,7 +678,7 @@
         "monthly": 800,
         "role": "long hedge — utilities catch bid as power-demand fears recede + rates fall",
         "beta": 0.5,
-        "ref": 82.0,
+        "ref": 46.18,
         "targetLow": 88,
         "targetHigh": 92,
         "stop": 76
@@ -678,7 +690,7 @@
         "monthly": 800,
         "role": "long duration — Fed cut expectations rise on capex-led slowdown",
         "beta": 0.8,
-        "ref": 92.0,
+        "ref": 86.71,
         "targetLow": 102,
         "targetHigh": 108,
         "stop": 86
@@ -690,7 +702,7 @@
         "monthly": 600,
         "role": "datacenter REIT short — peak lease pricing rolls",
         "beta": -1.0,
-        "ref": 175.0,
+        "ref": 200.0,
         "targetLow": 145,
         "targetHigh": 155,
         "stop": 188
@@ -700,7 +712,7 @@
         "monthly": 400,
         "role": "secondary REIT short",
         "beta": -0.8,
-        "ref": 850.0,
+        "ref": 1108.76,
         "targetLow": 720,
         "targetHigh": 760,
         "stop": 905
@@ -712,7 +724,7 @@
         "monthly": 400,
         "role": "vol long — concentration-risk hedge (decay-aware)",
         "beta": 1.5,
-        "ref": 45.0,
+        "ref": 29.79,
         "targetLow": 60,
         "targetHigh": 75,
         "stop": 38,
@@ -725,7 +737,7 @@
         "monthly": 600,
         "role": "single-name short via 90-120 DTE puts — surgical",
         "beta": -1.8,
-        "ref": 145.0,
+        "ref": 208.27,
         "targetLow": 110,
         "targetHigh": 120,
         "stop": 158,
@@ -738,7 +750,7 @@
         "monthly": 400,
         "role": "deployment ammo",
         "isReserve": true,
-        "ref": 100.5
+        "ref": 100.64
       }
     ],
     "overlays": {
@@ -780,7 +792,7 @@
     {
       "id": "soft-landing-moderation",
       "name": "Soft-landing capex moderation",
-      "probability": 0.40,
+      "probability": 0.4,
       "notes": "Most likely. Hyperscalers guide FY26 capex flat-to-up-5% (vs +25% expected). Semis pull back 8-12% but no breakdown. Utilities flat. The hedge book takes small wins, the short book breaks even.",
       "overrides": {
         "capex-guide": "approaching",
@@ -813,7 +825,7 @@
     {
       "id": "single-hyperscaler-guide-down",
       "name": "Single hyperscaler guide-down (META 2022 analog)",
-      "probability": 0.30,
+      "probability": 0.3,
       "notes": "META Q4-2022 redux. One name (most likely META or AMZN given retail-cycle exposure) cuts FY26 capex 15-20%. Single-name -25% in week one. SMH -15%. Cross-sector contagion. NVDA puts pay 4-6x.",
       "overrides": {
         "capex-guide": "fired",
@@ -861,7 +873,7 @@
       "notes": "Multiple hyperscalers cut. Power constraint + GPU glut + ROI doubt all hit simultaneously. SMH -35%. SPX -18%. Credit spreads blow out. VIX > 35. Fed pivots in Q3. TLT rallies hard. The full short book pays.",
       "overrides": {
         "capex-guide": "fired",
-        "gpu-price": 1.20,
+        "gpu-price": 1.2,
         "semis-breakdown": 200,
         "vix-spike": 38,
         "fed-reaction": "fired"
@@ -1139,7 +1151,7 @@
     {
       "key": "gpuPrice",
       "label": "H100 $/hr",
-      "value": 2.10,
+      "value": 2.1,
       "step": 0.01,
       "nodeId": "gpu-price"
     }

@@ -1,7 +1,7 @@
 {
   "v": 2,
-  "timestamp": "2026-04-24T23:35:20Z",
-  "title": "China Property + EM Cascade \u2014 April 2026",
+  "timestamp": "2026-04-19T03:05:35Z",
+  "title": "China Property + EM Cascade — April 2026",
   "nodeStates": {
     "property-sales": "fired",
     "pboc-response": "monitoring",
@@ -11,9 +11,9 @@
     "developer-tail": "fired",
     "lgfv-default": "monitoring",
     "bank-capital": "fired",
-    "cny-break": "stable",
-    "china-imports": "stable",
-    "dxy-stress": "stable",
+    "cny-break": "approaching",
+    "china-imports": "approaching",
+    "dxy-stress": "approaching",
     "iron-copper": "fired",
     "aud-cad-weak": "fired",
     "em-currency": "fired",
@@ -23,7 +23,7 @@
   "confluenceScores": {
     "bank-capital": 0.9,
     "cny-break": 1.05,
-    "em-currency": 0.75,
+    "em-currency": 1.15,
     "em-stress": 2.05,
     "recession-risk": 1.35
   },
@@ -45,33 +45,19 @@
   "scenarioImpacts": {
     "managed-deleveraging": {
       "probability": 0.45,
-      "netImpact": 2.5
+      "netImpact": 0.0
     },
     "second-lgfv-wave": {
       "probability": 0.3,
-      "netImpact": 4.2
+      "netImpact": 2.5
     },
     "cny-break-flight": {
       "probability": 0.15,
-      "netImpact": 0.8
+      "netImpact": 0.0
     },
     "fiscal-bazooka": {
       "probability": 0.1,
-      "netImpact": 0.6
-    }
-  },
-  "feedFreshness": {
-    "yahoo": {
-      "source": "yahoo",
-      "fetchedAt": "2026-04-24T23:35:19Z",
-      "ttlSeconds": 300,
-      "detail": "28/30 symbols"
-    },
-    "derived": {
-      "source": "derived",
-      "fetchedAt": "2026-04-24T23:35:20Z",
-      "ttlSeconds": 86400,
-      "detail": "2 node(s)"
+      "netImpact": 0.0
     }
   },
   "portfolioSummary": {
@@ -93,18 +79,18 @@
         "property-sales": "fired",
         "developer-tail": "monitoring",
         "bank-capital": "fired",
-        "cny-break": "stable",
+        "cny-break": "approaching",
         "china-imports": "monitoring",
         "iron-copper": "fired",
         "aud-cad-weak": "monitoring",
-        "dxy-stress": "monitoring",
         "em-currency": "monitoring",
         "em-stress": "monitoring",
         "recession-risk": "monitoring",
         "pboc-response": "monitoring",
         "fiscal-stimulus": "monitoring",
         "fed-reaction": "monitoring",
-        "property-bottom": "stable"
+        "property-bottom": "stable",
+        "dxy-stress": "approaching"
       },
       "confluence": {}
     },
@@ -114,60 +100,48 @@
         "property-sales": "fired",
         "developer-tail": "monitoring",
         "bank-capital": "fired",
-        "cny-break": "stable",
-        "china-imports": "monitoring",
+        "cny-break": "approaching",
         "iron-copper": "fired",
-        "dxy-stress": "monitoring",
-        "em-currency": "monitoring",
         "em-stress": "monitoring",
         "recession-risk": "monitoring",
         "pboc-response": "monitoring",
         "fiscal-stimulus": "monitoring",
         "fed-reaction": "monitoring",
         "property-bottom": "stable",
-        "aud-cad-weak": "fired"
+        "china-imports": "approaching",
+        "dxy-stress": "approaching",
+        "aud-cad-weak": "fired",
+        "em-currency": "approaching"
       },
       "confluence": {}
     },
     "T+90d": {
       "states": {
         "property-sales": "fired",
-        "iron-copper": "fired",
         "pboc-response": "monitoring",
         "fiscal-stimulus": "monitoring",
         "fed-reaction": "monitoring",
         "property-bottom": "stable",
         "developer-tail": "fired",
         "lgfv-default": "monitoring",
-        "aud-cad-weak": "fired",
         "bank-capital": "fired",
-        "cny-break": "stable",
-        "recession-risk": "fired",
-        "china-imports": "stable",
-        "dxy-stress": "stable",
+        "cny-break": "approaching",
+        "china-imports": "approaching",
+        "dxy-stress": "approaching",
+        "iron-copper": "fired",
+        "aud-cad-weak": "fired",
         "em-currency": "fired",
-        "em-stress": "fired"
+        "em-stress": "fired",
+        "recession-risk": "fired"
       },
       "confluence": {
         "bank-capital": 0.9,
         "cny-break": 1.05,
-        "em-currency": 0.75,
-        "em-stress": 2.05
+        "em-currency": 1.15,
+        "em-stress": 2.05,
+        "recession-risk": 1.35
       }
     }
   },
-  "tvIndicators": {
-    "cny-break": {
-      "rsi14": 43.24,
-      "sma50": 6.87,
-      "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:35:20Z"
-    },
-    "iron-copper": {
-      "rsi14": 43.96,
-      "atr14": 3.07,
-      "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:35:20Z"
-    }
-  }
+  "tvIndicators": {}
 }

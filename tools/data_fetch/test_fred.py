@@ -26,6 +26,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(__file__))
 from fred import (  # noqa: E402
     FRED_API_BASE,
+    KNOWN_SERIES,
     FredAPIError,
     FredAuthError,
     FredError,
@@ -34,6 +35,7 @@ from fred import (  # noqa: E402
     _get_api_key,
     fetch_series_batch,
     fetch_series_latest,
+    get_series_info,
 )
 
 
@@ -332,6 +334,154 @@ class TestBatch:
         out = fetch_series_batch(["BOOM", "DEXCHUS"])
         assert "BOOM" not in out
         assert "DEXCHUS" in out
+
+
+# =========================================================================
+# Tests: KNOWN_SERIES catalog
+# =========================================================================
+
+# New series IDs added in this expansion (must all be present in catalog).
+_NEW_SERIES_IDS = [
+    "T10Y2Y",
+    "T10Y3M",
+    "PAYEMS",
+    "UNRATE",
+    "INDPRO",
+    "IPMAN",
+    "ISRATIO",
+    "DBDI",
+    "IR3TIB01JPM156N",
+    "INTDSRJPM193N",
+    "QCNR628BIS",
+    "XTNTVA01CNQ188S",
+    "IRSTCI01CNM156N",
+    "DFF",
+]
+
+# Pre-existing series IDs that must remain in the catalog.
+_PREEXISTING_SERIES_IDS = [
+    "DGS10", "DGS2", "DEXJPUS", "DEXCHUS", "ICSA", "FEDFUNDS",
+    "VIXCLS", "DTWEXBGS", "BAMLH0A0HYM2", "BAMLC0A0CM",
+    "BAMLHE00EHYIOAS", "IRLTLT01JPM156N",
+    "CPIAUCSL", "PCEPILFE", "CPIUFDSL", "PPIACO", "UMCSENT", "NAPM",
+]
+
+
+class TestCatalog:
+    """KNOWN_SERIES catalog structure and completeness."""
+
+    def test_catalog_is_nonempty(self):
+        assert len(KNOWN_SERIES) > 0
+
+    def test_every_entry_has_label_frequency_theme(self):
+        for sid, info in KNOWN_SERIES.items():
+            assert "label" in info, f"{sid} missing 'label'"
+            assert "frequency" in info, f"{sid} missing 'frequency'"
+            assert "theme" in info, f"{sid} missing 'theme'"
+
+    def test_frequency_values_are_valid(self):
+        valid = {"d", "w", "m", "q", "a"}
+        for sid, info in KNOWN_SERIES.items():
+            assert info["frequency"] in valid, (
+                f"{sid} has invalid frequency {info['frequency']!r}"
+            )
+
+    def test_labels_are_nonempty_strings(self):
+        for sid, info in KNOWN_SERIES.items():
+            assert isinstance(info["label"], str) and info["label"]
+
+    def test_themes_are_nonempty_strings(self):
+        for sid, info in KNOWN_SERIES.items():
+            assert isinstance(info["theme"], str) and info["theme"]
+
+
+class TestNewSeriesRegistered:
+    """Each new series ID from this expansion must be in KNOWN_SERIES."""
+
+    @pytest.mark.parametrize("sid", _NEW_SERIES_IDS)
+    def test_new_series_in_catalog(self, sid):
+        assert sid in KNOWN_SERIES, f"{sid} missing from KNOWN_SERIES"
+
+    @pytest.mark.parametrize("sid", _PREEXISTING_SERIES_IDS)
+    def test_preexisting_series_in_catalog(self, sid):
+        assert sid in KNOWN_SERIES, (
+            f"Pre-existing series {sid} missing from KNOWN_SERIES"
+        )
+
+
+class TestGetSeriesInfo:
+    """get_series_info() lookup helper."""
+
+    def test_known_series_returns_dict(self):
+        info = get_series_info("DGS10")
+        assert isinstance(info, dict)
+        assert info["theme"] == "us-rates"
+
+    def test_new_series_returns_dict(self):
+        info = get_series_info("T10Y2Y")
+        assert info is not None
+        assert info["frequency"] == "d"
+
+    def test_unknown_series_returns_none(self):
+        assert get_series_info("FAKEFAKE123") is None
+
+    def test_quarterly_series_info(self):
+        info = get_series_info("QCNR628BIS")
+        assert info["frequency"] == "q"
+        assert info["theme"] == "china"
+
+    def test_annual_series_info(self):
+        info = get_series_info("INTDSRJPM193N")
+        assert info["frequency"] == "a"
+
+
+class TestNewSeriesParse:
+    """Quarterly, annual, negative-value, and large-int series parse OK."""
+
+    @patch("fred._make_request")
+    def test_quarterly_series_parses(self, mock_req, fred_key):
+        mock_req.return_value = _api_response(value="105.3", date="2025-10-01")
+        obs = fetch_series_latest("QCNR628BIS")
+        assert obs["value"] == pytest.approx(105.3)
+        assert obs["observation_date"] == "2025-10-01"
+
+    @patch("fred._make_request")
+    def test_annual_series_parses(self, mock_req, fred_key):
+        mock_req.return_value = _api_response(value="0.10", date="2024-01-01")
+        obs = fetch_series_latest("INTDSRJPM193N")
+        assert obs["value"] == pytest.approx(0.10)
+
+    @patch("fred._make_request")
+    def test_curve_spread_negative_parses(self, mock_req, fred_key):
+        mock_req.return_value = _api_response(value="-0.54", date="2026-05-09")
+        obs = fetch_series_latest("T10Y2Y")
+        assert obs["value"] == pytest.approx(-0.54)
+
+    @patch("fred._make_request")
+    def test_bdi_large_value_parses(self, mock_req, fred_key):
+        mock_req.return_value = _api_response(value="1423", date="2026-05-09")
+        obs = fetch_series_latest("DBDI")
+        assert obs["value"] == pytest.approx(1423.0)
+
+
+class TestBatchWithNewSeries:
+    """Batch fetch including new + existing series IDs."""
+
+    @patch("fred.time.sleep", lambda *_a, **_k: None)
+    @patch("fred.fetch_series_latest")
+    def test_batch_mixed_new_and_existing(self, mock_single, fred_key):
+        mock_single.side_effect = [
+            {"value": 4.35, "observation_date": "2026-05-09",
+             "fetched_at": "2026-05-09T12:00:00Z"},
+            {"value": -0.42, "observation_date": "2026-05-09",
+             "fetched_at": "2026-05-09T12:00:00Z"},
+            {"value": 1387.0, "observation_date": "2026-05-09",
+             "fetched_at": "2026-05-09T12:00:00Z"},
+        ]
+        out = fetch_series_batch(["DGS10", "T10Y2Y", "DBDI"])
+        assert set(out.keys()) == {"DGS10", "T10Y2Y", "DBDI"}
+        assert out["T10Y2Y"]["value"] == pytest.approx(-0.42)
+        assert out["DBDI"]["value"] == pytest.approx(1387.0)
 
 
 # =========================================================================

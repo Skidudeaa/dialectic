@@ -135,7 +135,7 @@
       "phase": 2,
       "state": "monitoring",
       "context": "USD/CNY managed band. PBoC fix anchored 7.10-7.25 through Q1 2026. Offshore CNH currently 7.34. Past 7.50 is the operative breakpoint — historically (2015, 2022) PBoC intervenes hard before this level; a sustained close above implies they have stopped defending. That is the tell.",
-      "current": 7.34,
+      "current": 6.84,
       "feeds": [
         {
           "source": "fred",
@@ -178,7 +178,13 @@
           "symbol": "CNY=X",
           "overlay": true
         }
-      ]
+      ],
+      "tvIndicators": {
+        "rsi14": 43.24,
+        "sma50": 6.87,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-24T23:35:20Z"
+      }
     },
     {
       "id": "china-imports",
@@ -217,7 +223,7 @@
       "phase": 3,
       "state": "monitoring",
       "context": "Iron ore (SGX 62% Fe) currently ~$98/t. 2015 China growth scare took it to $40. Copper (HG) at $4.30/lb — 2015 trough $2.00. VALE / RIO / BHP earnings extreme leverage to Chinese steel demand. FCX has ~70% revenue from copper.",
-      "current": 4.3,
+      "current": 17.17,
       "feeds": [
         {
           "source": "yahoo",
@@ -264,7 +270,13 @@
           "symbol": "FCX",
           "overlay": true
         }
-      ]
+      ],
+      "tvIndicators": {
+        "rsi14": 43.96,
+        "atr14": 3.07,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-24T23:35:20Z"
+      }
     },
     {
       "id": "aud-cad-weak",
@@ -319,7 +331,7 @@
       "phase": 2,
       "state": "monitoring",
       "context": "DXY strengthens on EM/CNY weakness — flight-to-quality dollar bid plus mechanical CNY weight in the basket. Mirror node to iran-hormuz dxy-stress: same node ID intentional for cross-book correlator detection.",
-      "current": 104.5,
+      "current": 27.48,
       "feeds": [
         {
           "source": "fred",
@@ -660,7 +672,7 @@
         "monthly": 1200,
         "role": "copper short (ETN)",
         "beta": -1.2,
-        "ref": 18.5,
+        "ref": 19.56,
         "targetLow": 13,
         "targetHigh": 15,
         "stop": 21
@@ -670,7 +682,7 @@
         "monthly": 800,
         "role": "Southern Copper short",
         "beta": -1.0,
-        "ref": 95.0,
+        "ref": 180.43,
         "targetLow": 65,
         "targetHigh": 75,
         "stop": 108
@@ -680,7 +692,7 @@
         "monthly": 800,
         "role": "iron-ore proxy short",
         "beta": -1.0,
-        "ref": 11.5,
+        "ref": 17.17,
         "targetLow": 7.5,
         "targetHigh": 8.5,
         "stop": 13.5
@@ -690,7 +702,7 @@
         "monthly": 600,
         "role": "diversified miner short",
         "beta": -0.9,
-        "ref": 64.0,
+        "ref": 99.61,
         "targetLow": 48,
         "targetHigh": 53,
         "stop": 71
@@ -702,7 +714,7 @@
         "monthly": 700,
         "role": "AUD short via inverse",
         "beta": -1.0,
-        "ref": 65.0,
+        "ref": 70.88,
         "targetLow": 58,
         "targetHigh": 61,
         "stop": 68
@@ -712,7 +724,7 @@
         "monthly": 500,
         "role": "CAD short via inverse",
         "beta": -0.7,
-        "ref": 70.0,
+        "ref": 71.49,
         "targetLow": 64,
         "targetHigh": 67,
         "stop": 73
@@ -724,7 +736,7 @@
         "monthly": 900,
         "role": "MSCI EM short",
         "beta": -0.8,
-        "ref": 44.0,
+        "ref": 63.74,
         "targetLow": 36,
         "targetHigh": 39,
         "stop": 47
@@ -734,7 +746,7 @@
         "monthly": 700,
         "role": "EM USD sovereign short",
         "beta": -0.6,
-        "ref": 88.0,
+        "ref": 96.2,
         "targetLow": 79,
         "targetHigh": 83,
         "stop": 92
@@ -744,7 +756,7 @@
         "monthly": 500,
         "role": "EM USD corporate short",
         "beta": -0.6,
-        "ref": 42.0,
+        "ref": 45.92,
         "targetLow": 37,
         "targetHigh": 39,
         "stop": 44
@@ -756,7 +768,7 @@
         "monthly": 700,
         "role": "USD index long",
         "beta": 0.4,
-        "ref": 28.0,
+        "ref": 27.48,
         "targetLow": 30,
         "targetHigh": 32,
         "stop": 26.5
@@ -766,7 +778,7 @@
         "monthly": 800,
         "role": "gold tail-hedge / anti-dollar",
         "beta": 0.3,
-        "ref": 240.0,
+        "ref": 433.25,
         "targetLow": 265,
         "targetHigh": 285,
         "stop": 220
@@ -778,7 +790,7 @@
         "monthly": 1000,
         "role": "long-duration Treasury (flight-to-quality)",
         "beta": 0.5,
-        "ref": 92.0,
+        "ref": 86.71,
         "targetLow": 105,
         "targetHigh": 115,
         "stop": 86
@@ -790,7 +802,7 @@
         "monthly": 800,
         "role": "deployment ammo",
         "isReserve": true,
-        "ref": 100.5
+        "ref": 100.64
       }
     ],
     "overlays": {
