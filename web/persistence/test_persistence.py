@@ -35,9 +35,10 @@ class TestMigrations:
         conn = get_connection(":memory:")
         from web.persistence.migrations import run_migrations
         count = run_migrations(conn)
-        # 001 (initial schema) + 002 (audit_log + confirm_tokens). Bump
-        # this when a new numbered migration lands in web/persistence/sql/.
-        assert count == 2
+        # 001 (initial schema) + 002 (audit_log + confirm_tokens) + 003
+        # (message kind+meta). Bump this when a new numbered migration lands
+        # in web/persistence/sql/.
+        assert count == 3
         tables = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         )}

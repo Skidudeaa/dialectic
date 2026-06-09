@@ -21,6 +21,20 @@ export interface Room {
   created_at: string;
 }
 
+// Structured message payloads (kind !== "text"). Carried in Message.meta.
+export interface ArticleMeta {
+  source: string;
+  title: string;
+  take: string;
+}
+export interface CodeExhibitMeta {
+  fn: string;
+  lang: string;
+  code: string;
+}
+
+export type MessageKind = "text" | "article" | "code";
+
 export interface Message {
   id: string;
   room_id: string;
@@ -29,6 +43,10 @@ export interface Message {
   msg_type: "user" | "llm" | "system";
   model: string | null;
   ts: string;
+  // kind discriminates structured entries; meta carries the kind's payload.
+  // Optional for back-compat with older messages / the classic chat view.
+  kind?: MessageKind;
+  meta?: ArticleMeta | CodeExhibitMeta | null;
 }
 
 export interface WatchlistItem {

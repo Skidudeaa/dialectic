@@ -39,6 +39,26 @@ def _validate_id(value: str, label: str = "ID") -> None:
         raise ValueError(f"Invalid {label}: {value}")
 
 
+def _message_from_row(row) -> dict:
+    """Row → message dict, parsing the `meta` JSON blob back to an object.
+
+    Tolerates rows from before migration 003 (no kind/meta columns) and
+    malformed meta JSON (falls back to None) so a single bad row never
+    breaks a room's history load.
+    """
+    msg = dict(row)
+    raw = msg.get("meta")
+    if raw:
+        try:
+            msg["meta"] = json.loads(raw)
+        except (ValueError, TypeError):
+            msg["meta"] = None
+    else:
+        msg["meta"] = None
+    msg.setdefault("kind", "text")
+    return msg
+
+
 class Repository:
     """Synchronous data access layer backed by SQLite.
 
@@ -216,13 +236,17 @@ class Repository:
                     (room_id, limit),
                 ).fetchall()
             # WHY reverse: return oldest-first for display (same as file-based version)
-            return [dict(r) for r in reversed(rows)]
+            return [_message_from_row(r) for r in reversed(rows)]
         finally:
             conn.close()
 
     def save_message(self, room_id: str, user: str, content: str,
                      msg_type: str = "user",
-                     model: Optional[str] = None) -> dict:
+                     model: Optional[str] = None,
+                     kind: str = "text",
+                     meta: Optional[dict] = None) -> dict:
+        # meta is stored as a JSON string; the wire/return shape keeps it a dict.
+        meta_json = json.dumps(meta) if meta else None
         msg = {
             "id": _gen_id(),
             "room_id": room_id,
@@ -231,13 +255,15 @@ class Repository:
             "msg_type": msg_type,
             "model": model,
             "ts": _now_iso(),
+            "kind": kind,
+            "meta": meta,
         }
         conn = self._conn()
         try:
             conn.execute(
-                """INSERT INTO messages (id, room_id, user, content, msg_type, model, ts)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (msg["id"], room_id, user, content, msg_type, model, msg["ts"]),
+                """INSERT INTO messages (id, room_id, user, content, msg_type, model, ts, kind, meta)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (msg["id"], room_id, user, content, msg_type, model, msg["ts"], kind, meta_json),
             )
             conn.commit()
             return msg

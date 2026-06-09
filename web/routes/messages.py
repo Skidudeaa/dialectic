@@ -44,13 +44,31 @@ async def create_message(
 ) -> dict:
     if await asyncio.to_thread(repo.get_room, room_id) is None:
         raise HTTPException(status_code=404, detail="Room not found")
+
+    # Structured kinds carry their payload in `meta`; we also derive a readable
+    # `content` fallback so search, markdown export, and the classic chat view
+    # still render something sensible without knowing about `kind`.
+    meta: Optional[dict] = None
+    content = req.content
+    if req.kind == "article" and req.article is not None:
+        meta = req.article.model_dump()
+        if not content.strip():
+            take = f'\n"{req.article.take}"' if req.article.take else ""
+            content = f"📎 {req.article.title} — {req.article.source}{take}"
+    elif req.kind == "code" and req.code is not None:
+        meta = req.code.model_dump()
+        if not content.strip():
+            content = f"```{req.code.lang}\n{req.code.code}\n```"
+
     msg = await asyncio.to_thread(
         repo.save_message,
         room_id=room_id,
         user=user.username,
-        content=req.content,
+        content=content,
         msg_type=req.msg_type,
         model=req.model,
+        kind=req.kind,
+        meta=meta,
     )
     await manager.broadcast(room_id, "message", msg, user=user.username)
     return msg

@@ -8,7 +8,7 @@ hand-waving.
 
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────
@@ -55,10 +55,48 @@ class Room(BaseModel):
 
 # ── Messages ──────────────────────────────────────────────────────────────
 
+class ArticleMeta(BaseModel):
+    """A shared article clipping — the paperclipped memo in the room."""
+    source: str
+    title: str
+    take: str = ""
+
+
+class CodeExhibitMeta(BaseModel):
+    """A code exhibit filed into the room."""
+    fn: str
+    lang: str = ""
+    code: str
+
+
 class MessageCreate(BaseModel):
-    content: str
+    """Client-authored message.
+
+    ``msg_type`` stays locked to ``"user"`` (system/llm are server-only).
+    ``kind`` discriminates plain dispatches from structured article clippings
+    and code exhibits; the matching payload is required for non-text kinds.
+    The server derives a readable ``content`` fallback for structured kinds so
+    search, export, and the classic chat view still show something sensible.
+    """
+    content: str = ""
     msg_type: Literal["user"] = "user"
     model: Optional[str] = None
+    kind: Literal["text", "article", "code"] = "text"
+    article: Optional[ArticleMeta] = None
+    code: Optional[CodeExhibitMeta] = None
+
+    @model_validator(mode="after")
+    def _check_payload(self) -> "MessageCreate":
+        if self.kind == "text":
+            if not self.content.strip():
+                raise ValueError("text message requires non-empty content")
+        elif self.kind == "article":
+            if self.article is None:
+                raise ValueError("article message requires an `article` payload")
+        elif self.kind == "code":
+            if self.code is None:
+                raise ValueError("code message requires a `code` payload")
+        return self
 
 
 class RoomCommand(BaseModel):
@@ -91,6 +129,10 @@ class Message(BaseModel):
     msg_type: str  # "user" | "llm" | "system"
     model: Optional[str] = None
     ts: str
+    # kind discriminates structured entries; meta carries the kind's payload
+    # (ArticleMeta / CodeExhibitMeta as a dict). Both default for legacy rows.
+    kind: str = "text"
+    meta: Optional[Dict[str, Any]] = None
 
 
 # ── Watchlist ─────────────────────────────────────────────────────────────
