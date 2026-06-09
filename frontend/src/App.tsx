@@ -15,6 +15,11 @@ const BuilderRoute = lazy(() => import("./components/builder/BuilderRoute"));
 // visit it, no reason to pay for the SVG diagrams + prose on every page load.
 const Welcome = lazy(() => import("./pages/Welcome"));
 
+// Dialectic — the "Field Desk" reimagining (dossier aesthetic, room-as-hero).
+// A self-contained alternate surface; lazy so its bespoke CSS + fonts only
+// load for sessions that open it.
+const DialecticRoute = lazy(() => import("./components/dialectic/DialecticRoute"));
+
 function RouteFallback({ label }: { label: string }) {
   return (
     <div className="h-screen flex items-center justify-center bg-void text-text-muted text-xs font-mono">
@@ -51,6 +56,14 @@ export default function App() {
               element={
                 <Suspense fallback={<RouteFallback label="welcome" />}>
                   <Welcome />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/dialectic"
+              element={
+                <Suspense fallback={<RouteFallback label="dialectic" />}>
+                  <DialecticRoute />
                 </Suspense>
               }
             />

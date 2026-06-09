@@ -132,6 +132,33 @@ class TestState:
         messages = repo.list_messages(room["id"])
         assert len(messages) == 1
         assert messages[0]["id"] == msg["id"]
+        # Plain messages default to kind="text" with no meta.
+        assert messages[0]["kind"] == "text"
+        assert messages[0]["meta"] is None
+
+    def test_message_kinds_roundtrip(self, isolate_state):
+        """Article clippings + code exhibits persist kind + structured meta."""
+        repo = isolate_state
+        room = repo.create_room("kind-test")
+        repo.save_message(
+            room["id"], "dan", "📎 Tanker traffic drops — reuters.com",
+            kind="article",
+            meta={"source": "reuters.com", "title": "Tanker traffic drops 18%", "take": "the gap"},
+        )
+        repo.save_message(
+            room["id"], "amo", "```python\nprint(1)\n```",
+            kind="code",
+            meta={"fn": "reroute.py", "lang": "python", "code": "print(1)"},
+        )
+        msgs = repo.list_messages(room["id"])
+        assert len(msgs) == 2
+        art = next(m for m in msgs if m["kind"] == "article")
+        # meta survives the JSON round-trip as a parsed dict.
+        assert art["meta"]["source"] == "reuters.com"
+        assert art["meta"]["title"].startswith("Tanker")
+        code = next(m for m in msgs if m["kind"] == "code")
+        assert code["meta"]["fn"] == "reroute.py"
+        assert code["meta"]["code"] == "print(1)"
 
     def test_prediction_create_resolve(self, isolate_state):
         repo = isolate_state
@@ -245,6 +272,54 @@ class TestRoutes:
             headers=auth_headers,
         )
         assert resp.status_code == 404
+
+    def test_post_article_clipping(self, auth_headers, room_id):
+        resp = client.post(
+            f"/api/rooms/{room_id}/messages",
+            json={
+                "kind": "article",
+                "article": {"source": "reuters.com", "title": "Tanker traffic drops 18%", "take": "the gap"},
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        msg = resp.json()
+        assert msg["kind"] == "article"
+        assert msg["meta"]["source"] == "reuters.com"
+        # server-derived readable fallback content
+        assert "Tanker traffic drops 18%" in msg["content"]
+
+    def test_post_code_exhibit(self, auth_headers, room_id):
+        resp = client.post(
+            f"/api/rooms/{room_id}/messages",
+            json={
+                "kind": "code",
+                "code": {"fn": "reroute.py", "lang": "python", "code": "print('hi')"},
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        msg = resp.json()
+        assert msg["kind"] == "code"
+        assert msg["meta"]["fn"] == "reroute.py"
+        assert "print('hi')" in msg["content"]
+
+    def test_article_kind_requires_payload(self, auth_headers, room_id):
+        # kind=article without an `article` payload is a 422 validation error.
+        resp = client.post(
+            f"/api/rooms/{room_id}/messages",
+            json={"kind": "article", "content": "no payload"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422
+
+    def test_empty_text_message_rejected(self, auth_headers, room_id):
+        resp = client.post(
+            f"/api/rooms/{room_id}/messages",
+            json={"content": "   "},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422
 
     def test_slash_command_posts_system_message(self, auth_headers, room_id):
         # The fix: a slash command runs server-side and posts a SYSTEM message,
