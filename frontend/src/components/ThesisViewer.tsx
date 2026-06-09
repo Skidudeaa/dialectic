@@ -148,9 +148,9 @@ function FeedFreshnessStrip({
 }) {
   const entries = freshness ? Object.values(freshness) : [];
   if (!entries.length) return null;
-  // `tickNow` is implicitly read so this component re-renders on tick.
-  void tickNow;
-  const now = Date.now();
+  // `tickNow` is the parent's minute-tick timestamp — using it (instead of
+  // Date.now()) keeps render pure while still refreshing ages on tick.
+  const now = tickNow;
 
   return (
     <div

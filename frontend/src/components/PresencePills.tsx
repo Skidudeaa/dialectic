@@ -28,10 +28,10 @@ interface Props {
   myBookId: string | null;
 }
 
-function relativeAge(iso: string): string {
+function relativeAge(iso: string, now: number): string {
   const then = Date.parse(iso);
   if (Number.isNaN(then)) return "—";
-  const sec = Math.max(0, Math.round((Date.now() - then) / 1000));
+  const sec = Math.max(0, Math.round((now - then) / 1000));
   if (sec < 5) return "just now";
   if (sec < 60) return `${sec}s ago`;
   if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
@@ -46,9 +46,10 @@ function initials(userId: string): string {
 
 export default function PresencePills({ myUserId, myBookId }: Props) {
   const [roster, setRoster] = useState<PresenceUser[]>([]);
-  // WHY: Bump nowTick every 15s so idle state recomputes — an otherwise static
-  // roster (no new frames) would never transition to "idle" in the UI.
-  const [, setNowTick] = useState(0);
+  // WHY: Refresh `now` every 15s so idle state recomputes — an otherwise
+  // static roster (no new frames) would never transition to "idle" in the UI.
+  // A timestamp (not a counter) so render never calls the impure Date.now().
+  const [now, setNow] = useState(() => Date.now());
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -64,7 +65,7 @@ export default function PresencePills({ myUserId, myBookId }: Props) {
   }, []);
 
   useEffect(() => {
-    tickRef.current = setInterval(() => setNowTick((t) => t + 1), 15_000);
+    tickRef.current = setInterval(() => setNow(Date.now()), 15_000);
     return () => {
       if (tickRef.current) clearInterval(tickRef.current);
     };
@@ -88,6 +89,7 @@ export default function PresencePills({ myUserId, myBookId }: Props) {
         <Pill
           key={`${u.user_id}-${u.book_id ?? ""}-${i}`}
           u={u}
+          now={now}
           isMe={u.kind === "human" && u.user_id === myUserId}
           sameBook={
             u.kind === "human" &&
@@ -111,16 +113,18 @@ export default function PresencePills({ myUserId, myBookId }: Props) {
 
 function Pill({
   u,
+  now,
   isMe,
   sameBook,
 }: {
   u: PresenceUser;
+  now: number;
   isMe: boolean;
   sameBook: boolean;
 }) {
   const age = Date.parse(u.last_activity);
   const isIdle =
-    !Number.isNaN(age) && Date.now() - age > IDLE_MS && u.kind === "human";
+    !Number.isNaN(age) && now - age > IDLE_MS && u.kind === "human";
 
   const isAgent = u.kind === "agent";
   const isThinking = isAgent && u.status === "thinking";
@@ -134,7 +138,7 @@ function Pill({
   const tooltip = [
     isAgent ? "Agent" : `${u.user_id}${isMe ? " (you)" : ""}`,
     u.book_id ? `book: ${u.book_id}` : "no book",
-    relativeAge(u.last_activity),
+    relativeAge(u.last_activity, now),
     isThinking ? "thinking…" : null,
   ]
     .filter(Boolean)

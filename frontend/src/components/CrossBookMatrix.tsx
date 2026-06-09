@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Layers, RefreshCw } from "lucide-react";
 import { apiFetch } from "../lib/api";
 import type { OpenTradeSummary, ThesisBook, ThesisState } from "../lib/types";
-import { bookShortId, worstStateColor } from "./BookTabBar";
+import { bookShortId, worstStateColor } from "../lib/bookState";
 
 interface Props {
   books: ThesisBook[];

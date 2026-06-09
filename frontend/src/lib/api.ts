@@ -134,6 +134,9 @@ export class RoomSocket {
 
   constructor(roomId: string) {
     this.roomId = roomId;
+    // Module-level registry (not an alias for scope juggling): the newest
+    // socket is the presence/broadcast target for subscribeRoomMessages.
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     _activeSocket = this;
     this.connect();
   }
