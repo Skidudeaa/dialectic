@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   apiFetch,
+  getToken,
   getUsername,
   subscribeRoomMessages,
 } from "../../lib/api";
@@ -139,6 +140,11 @@ export function useThesis(bookId: string | null): ThesisBundle {
       if (msg.type === "state_update" || msg.type === "price.tick") {
         const b = (msg.payload?.book_id as string | undefined) ?? msg.thesisId;
         if (!b || b === bookId) fetchState(bookId);
+      } else if (msg.type === "tv-alert") {
+        // Pine alert mutated the thesis (closesObserved / state / probability)
+        // — pull a fresh snapshot so the board reflects it immediately.
+        const b = msg.payload?.bookId as string | undefined;
+        if (!b || b === bookId) fetchState(bookId);
       }
     });
     return () => { clearInterval(poll); unsub(); };
@@ -221,9 +227,7 @@ export function usePresence() {
 
 // ── kill flow (two-step confirm token), mirrors TradeLifecyclePanel ───────
 function authHeaders(): Record<string, string> {
-  const raw = localStorage.getItem("td_auth");
-  let token: string | null = null;
-  if (raw) { try { token = JSON.parse(raw).access_token ?? null; } catch { token = null; } }
+  const token = getToken();
   return { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }
 

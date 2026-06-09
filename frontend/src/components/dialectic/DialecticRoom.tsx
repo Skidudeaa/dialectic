@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Paperclip, FileCode2, X } from "lucide-react";
 import { apiFetch, RoomSocket } from "../../lib/api";
-import type { ArticleMeta, CodeExhibitMeta, Message, Room, ThesisState, WSMessage } from "../../lib/types";
+import type { ArticleMeta, CodeExhibitMeta, Message, Room, ThesisState, TVAlertWSPayload, WSMessage } from "../../lib/types";
 import { ANALYSTS, modelBadge, shortModel } from "./data";
 
 const MENTIONS = [
@@ -58,6 +58,25 @@ function rich(text: string): string {
   return s;
 }
 
+// Signal telex line — a Pine alert that just hit the webhook, surfaced live in
+// the dispatch stream. Ephemeral by design (the durable record is the TV audit
+// log); FLASH (scarlet) when the alert moved thesis state, CONFIRM (teal) for
+// routine telemetry like a closesObserved increment.
+interface TVFlash {
+  id: string;
+  ts: string;
+  good: boolean;
+  text: string;
+  nodeId: string;
+}
+
+function flashText(p: TVAlertWSPayload): string {
+  const head = p.pineAlertName || p.op;
+  const sym = p.chartSymbol ? ` · ${p.chartSymbol}` : "";
+  const moved = p.thesisStateChanged && p.changedNodes.length ? ` · ${p.changedNodes.join(", ")} moved` : "";
+  return `TV alert · ${head}${sym} → ${p.nodeId}${moved}`;
+}
+
 interface Props {
   room: Room;
   bookId: string | null;
@@ -70,6 +89,8 @@ interface Props {
 
 export default function DialecticRoom({ room, bookId, title, claim, state, onFlashNode }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [alerts, setAlerts] = useState<TVFlash[]>([]);
+  const alertSeq = useRef(0);
   const [input, setInput] = useState("");
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [popover, setPopover] = useState<null | { kind: "mention" | "slash"; query: string; sel: number }>(null);
@@ -106,7 +127,7 @@ export default function DialecticRoom({ room, bookId, title, claim, state, onFla
   useEffect(() => {
     // Reset on room switch then fetch; matches the codebase fetch-on-effect pattern.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMessages([]); setPopover(null);
+    setMessages([]); setAlerts([]); setPopover(null);
     apiFetch<Message[]>(`/api/rooms/${room.id}/messages?limit=100`).then(setMessages).catch(() => {});
   }, [room.id]);
 
@@ -132,6 +153,16 @@ export default function DialecticRoom({ room, bookId, title, claim, state, onFla
       } else if (msg.type === "typing") {
         const { username, typing } = msg.payload as { username: string; typing: boolean };
         setTypingUsers((prev) => { const n = new Set(prev); if (typing) n.add(username); else n.delete(username); return n; });
+      } else if (msg.type === "tv-alert") {
+        const p = msg.payload as unknown as TVAlertWSPayload;
+        alertSeq.current += 1;
+        setAlerts((prev) => [...prev, {
+          id: `tv-${alertSeq.current}-${p.bindingId}`,
+          ts: new Date().toISOString(),
+          good: !p.thesisStateChanged,
+          text: flashText(p),
+          nodeId: p.nodeId,
+        }]);
       }
     });
     return () => { unsub(); sock.close(); socketRef.current = null; if (typingTimer.current) clearTimeout(typingTimer.current); };
@@ -142,7 +173,7 @@ export default function DialecticRoom({ room, bookId, title, claim, state, onFla
     if (!followRef.current) return;
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, streamDisplay, pendingLLM]);
+  }, [messages, alerts, streamDisplay, pendingLLM]);
 
   function onScroll() {
     const el = scrollRef.current;
@@ -252,19 +283,28 @@ export default function DialecticRoom({ room, bookId, title, claim, state, onFla
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   }
 
-  // ── render rows (day dividers + entries) ──
+  // ── render rows (day dividers + entries + signal telex, merged by ts) ──
   const rows = useMemo(() => {
-    const out: Array<{ kind: "day"; label: string; key: string } | { kind: "msg"; m: Message; ix: number }> = [];
+    const merged: Array<{ ts: string; m?: Message; a?: TVFlash }> = [
+      ...messages.map((m) => ({ ts: m.ts, m })),
+      ...alerts.map((a) => ({ ts: a.ts, a })),
+    ].sort((x, y) => Date.parse(x.ts) - Date.parse(y.ts));
+    const out: Array<
+      | { kind: "day"; label: string; key: string }
+      | { kind: "msg"; m: Message; ix: number }
+      | { kind: "tv"; a: TVFlash; ix: number }
+    > = [];
     let prev: string | null = null;
     let ix = 0;
-    for (const m of messages) {
-      if (!prev || !sameDay(prev, m.ts)) out.push({ kind: "day", label: dayLabel(m.ts), key: "d" + m.ts });
+    for (const e of merged) {
+      if (!prev || !sameDay(prev, e.ts)) out.push({ kind: "day", label: dayLabel(e.ts), key: "d" + e.ts });
       ix++;
-      out.push({ kind: "msg", m, ix });
-      prev = m.ts;
+      if (e.m) out.push({ kind: "msg", m: e.m, ix });
+      else if (e.a) out.push({ kind: "tv", a: e.a, ix });
+      prev = e.ts;
     }
     return out;
-  }, [messages]);
+  }, [messages, alerts]);
 
   const phase = state?.cascadePhase;
   const typingList = Array.from(typingUsers).filter((u) => u !== (ANALYSTS.amo ? "amo" : ""));
@@ -302,6 +342,16 @@ export default function DialecticRoom({ room, bookId, title, claim, state, onFla
           {rows.map((r) =>
             r.kind === "day" ? (
               <div className="day" key={r.key}><span className="ln" /><span className="t">{r.label}</span><span className="ln" /></div>
+            ) : r.kind === "tv" ? (
+              <div className="disp k-sys" key={r.a.id}>
+                <div className="gut"><span className="tm">{clk(r.a.ts)}</span><span className="ix">#{String(r.ix).padStart(3, "0")}</span></div>
+                <div className="entry">
+                  <div className={`flash ${r.a.good ? "good" : ""}`} style={{ cursor: "pointer" }}
+                    title="Flash node on the board" onClick={() => onFlashNode?.(r.a.nodeId)}>
+                    <span className="pre">{r.a.good ? "CONFIRM" : "FLASH"}</span><span>{r.a.text}</span>
+                  </div>
+                </div>
+              </div>
             ) : (
               <Dispatch key={r.m.id} m={r.m} ix={r.ix} onFlashNode={onFlashNode} />
             ),

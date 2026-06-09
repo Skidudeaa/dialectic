@@ -69,14 +69,18 @@ export default function DialecticCockpit({ state, structure, trade, onKilled, fl
     }
   }, [flashRef, filter]);
 
-  // ── nodes (merge live state with builder phase/label) ──
+  // ── nodes (merge live state with builder phase/label + market reading) ──
   const nodes = useMemo(() => {
     const ids = new Set<string>([...Object.keys(structure), ...Object.keys(state?.nodeStates || {})]);
+    const market = state?.marketSnapshot || {};
     return Array.from(ids).map((id) => ({
       id,
       phase: structure[id]?.phase || 1,
       state: (state?.nodeStates || {})[id] || "monitoring",
       conf: (state?.confluenceScores || {})[id] || 0,
+      current: typeof market[id] === "number"
+        ? market[id].toLocaleString(undefined, { maximumFractionDigits: 2 })
+        : null,
     }));
   }, [structure, state]);
 
@@ -144,6 +148,7 @@ export default function DialecticCockpit({ state, structure, trade, onKilled, fl
                       <div key={n.id} className={`nd ${n.state} ${flashId === n.id ? "flash" : ""}`} data-id={n.id}>
                         <span className="id">{n.id}</span>
                         {n.conf > 1 && <span className="cf">×{n.conf.toFixed(1)}</span>}
+                        {n.current && <span className="cur">{n.current}</span>}
                         <span className={`tag ${s.cls}`}>{s.lab}</span>
                       </div>
                     );

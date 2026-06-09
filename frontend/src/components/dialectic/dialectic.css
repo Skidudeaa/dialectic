@@ -209,6 +209,14 @@
   & .memo .at{font-family:var(--serif);font-size:14.5px;font-weight:600;color:var(--bone);line-height:1.3}
   & .memo .ad{font-family:var(--serif);font-size:12.5px;color:var(--secondary);margin-top:4px;font-style:italic;line-height:1.45}
 
+  /* exhibit (code) */
+  & .exhibit{margin-top:5px;max-width:580px;border:1px solid var(--bean);border-radius:2px;overflow:hidden;background:#0d0805}
+  & .exhibit .xh{display:flex;align-items:center;justify-content:space-between;padding:5px 10px;background:var(--cacao);border-bottom:1px solid var(--bean)}
+  & .exhibit .xh .fn{font-family:var(--mono);font-size:10px;color:var(--amber)}
+  & .exhibit .xh .lg{font-family:var(--mono);font-size:8.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.12em}
+  & .exhibit pre{padding:9px 11px;overflow-x:auto;font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--ink)}
+  & .exhibit .cm{color:var(--faint)} & .exhibit .kw{color:var(--sev-worse)} & .exhibit .st{color:var(--teal)} & .exhibit .fnc{color:var(--amber)} & .exhibit .nu{color:var(--sev-improve)}
+
   & .commit{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:10.5px;color:var(--secondary);padding:2px 0;cursor:pointer}
   & .commit:hover{color:var(--ink)}
   & .commit .gl{color:var(--amber)}
@@ -369,6 +377,10 @@
 .dlx .btn-x:hover{border-color:var(--crater);color:var(--ink)}
 .dlx .btn-kill{padding:6px 14px;font-family:var(--stencil);font-size:11px;letter-spacing:.04em;color:var(--scarlet);background:var(--scar-10);border:1px solid var(--scarlet);border-radius:2px}
 .dlx .btn-kill:hover{background:var(--scar-18)} .dlx .btn-kill:disabled{opacity:.35;cursor:not-allowed}
+
+@media (prefers-reduced-motion: reduce){
+  .dlx *,.dlx *::before,.dlx *::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+}
 
 /* keyframes (global — names unique to dialectic) */
 @keyframes pulseTeal{0%,100%{opacity:1;box-shadow:0 0 0 0 var(--teal-30)}50%{opacity:.6;box-shadow:0 0 0 4px rgba(76,196,180,0)}}
