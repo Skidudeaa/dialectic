@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertOctagon, RefreshCw, ShieldCheck, ChevronDown, ChevronRight, X } from "lucide-react";
-import { apiFetch, subscribeRoomMessages } from "../lib/api";
+import { apiFetch, getToken, subscribeRoomMessages } from "../lib/api";
 import type {
   KillConfirmIssued,
   KillResult,
@@ -499,15 +499,7 @@ export default function TradeLifecyclePanel() {
 // (to receive the confirm token), so we need direct control over the
 // response handling. Keep the auth lookup inline and tiny.
 function authHeaders(): Record<string, string> {
-  const raw = localStorage.getItem("td_auth");
-  let token: string | null = null;
-  if (raw) {
-    try {
-      token = JSON.parse(raw).access_token ?? null;
-    } catch {
-      token = null;
-    }
-  }
+  const token = getToken();
   return {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
