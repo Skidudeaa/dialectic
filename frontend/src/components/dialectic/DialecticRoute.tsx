@@ -16,7 +16,9 @@ import {
   me as getMe,
   PHASE_NAMES,
   phaseColorVar,
+  shortCaseTitle,
   useBookTrade,
+  useCasePulses,
   usePredictions,
   usePresence,
   useRoomsAndBooks,
@@ -42,12 +44,21 @@ export default function DialecticRoute() {
     setActiveBookId((linked || books[0]).id);
   }, [books, rooms, activeBookId]);
 
+  // Prefer the room linked to the active case; fall back to a *general*
+  // (unlinked) room rather than another case's room — borrowing a different
+  // case's dispatch stream under this case's header reads as wrong data.
   const activeRoom = useMemo(
-    () => rooms.find((r) => r.linked_book_id === activeBookId) || rooms[0] || null,
+    () =>
+      rooms.find((r) => r.linked_book_id === activeBookId) ||
+      rooms.find((r) => !r.linked_book_id) ||
+      rooms[0] ||
+      null,
     [rooms, activeBookId],
   );
+  const roomIsLinked = activeRoom?.linked_book_id === activeBookId;
 
   const { state, structure, claim, title } = useThesis(activeBookId);
+  const pulses = useCasePulses(books);
   const { detail: trade, reload: reloadTrade } = useBookTrade(activeBookId);
   const predictions = usePredictions(activeBookId);
 
@@ -110,21 +121,21 @@ export default function DialecticRoute() {
             <div className="books">
               {books.map((b) => {
                 const on = b.id === activeBookId;
-                const ph = on && state?.cascadePhase ? state.cascadePhase.number : null;
+                const pulse = pulses[b.id];
+                const ph = on && state?.cascadePhase ? state.cascadePhase.number : pulse?.phase || null;
                 const here = hereOn(b.id);
-                const confVals = on ? Object.values(state?.confluenceScores || {}) : [];
-                const conf = confVals.length ? Math.min(1, Math.max(...confVals) / 3) : 0;
+                const conf = pulse?.conf || 0;
                 return (
                   <button key={b.id} className={`book ${on ? "on" : ""}`} onClick={() => setActiveBookId(b.id)}>
                     <div className="top">
                       <span className="ph" style={{ background: ph ? phaseColorVar(ph) : "var(--faint)" }} />
-                      <span className="ttl">{b.title}</span>
+                      <span className="ttl">{shortCaseTitle(b.title)}</span>
                     </div>
                     <div className="sub">
                       <span>{ph ? `PH ${ph} · ${PHASE_NAMES[ph]}` : `${b.nodes} nodes · ${b.edges} edges`}</span>
                       <span className="here">{here.map((u) => <i key={u} style={{ background: hueOf(u) }} />)}</span>
                     </div>
-                    {on && conf > 0 && <div className="conf"><i style={{ width: `${Math.round(conf * 100)}%`, background: ph ? phaseColorVar(ph) : "var(--amber)" }} /></div>}
+                    {conf > 0 && <div className="conf"><i style={{ width: `${Math.round(conf * 100)}%`, background: ph ? phaseColorVar(ph) : "var(--amber)" }} /></div>}
                   </button>
                 );
               })}
@@ -166,6 +177,7 @@ export default function DialecticRoute() {
               key={activeRoom.id}
               room={activeRoom}
               bookId={activeBookId}
+              linked={roomIsLinked}
               title={title}
               claim={claim}
               state={state}

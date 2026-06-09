@@ -80,6 +80,8 @@ function flashText(p: TVAlertWSPayload): string {
 interface Props {
   room: Room;
   bookId: string | null;
+  /** false when this is a general room standing in for a case with no linked room */
+  linked?: boolean;
   title: string;
   claim: string;
   state: ThesisState | null;
@@ -87,7 +89,7 @@ interface Props {
   onFlashNode?: (id: string) => void;
 }
 
-export default function DialecticRoom({ room, bookId, title, claim, state, onFlashNode }: Props) {
+export default function DialecticRoom({ room, bookId, linked = true, title, claim, state, onFlashNode }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [alerts, setAlerts] = useState<TVFlash[]>([]);
   const alertSeq = useRef(0);
@@ -314,7 +316,11 @@ export default function DialecticRoom({ room, bookId, title, claim, state, onFla
       {/* room head */}
       <div className="room-h">
         <span className="stamp s-amber classify">EYES ONLY</span>
-        <div className="kicker">{bookId || room.name} · case file</div>
+        <div className="kicker">
+          {linked
+            ? `${bookId || room.name} · case file`
+            : `${room.name} · general dispatches — no room linked to this case`}
+        </div>
         <div className="l1"><span className="title">{title || room.name}</span></div>
         {claim && <div className="claim">{claim}</div>}
         {phase && (

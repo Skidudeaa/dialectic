@@ -89,6 +89,55 @@ export function useRoomsAndBooks() {
   return { rooms, books, loading };
 }
 
+/** Mock-style short case title: strip the "Thesis" suffix and date stamp. */
+export function shortCaseTitle(title: string): string {
+  return title
+    .replace(/\s*[—–-]\s*\w+\s+\d{4}\s*$/u, "")
+    .replace(/\s+Thesis$/i, "")
+    .trim() || title;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// per-book snapshot map — phase diamonds + conf bars for the case drawer
+// ════════════════════════════════════════════════════════════════════════
+export interface CasePulse {
+  phase: number;
+  phaseName: string;
+  /** strongest confluence, normalised to 0–1 for the bar */
+  conf: number;
+}
+
+export function useCasePulses(books: ThesisBook[]): Record<string, CasePulse> {
+  const [pulses, setPulses] = useState<Record<string, CasePulse>>({});
+  useEffect(() => {
+    if (!books.length) return;
+    let alive = true;
+    const load = () => {
+      Promise.all(
+        books.map((b) =>
+          apiFetch<ThesisState>(`/api/thesis/${b.id}/state`)
+            .then((s) => {
+              const confVals = Object.values(s.confluenceScores || {});
+              return [b.id, {
+                phase: s.cascadePhase?.number || 1,
+                phaseName: PHASE_NAMES[s.cascadePhase?.number || 1] || s.cascadePhase?.key || "",
+                conf: confVals.length ? Math.min(1, Math.max(...confVals) / 3) : 0,
+              }] as const;
+            })
+            .catch(() => null),
+        ),
+      ).then((entries) => {
+        if (!alive) return;
+        setPulses(Object.fromEntries(entries.filter((e): e is NonNullable<typeof e> => e !== null)));
+      });
+    };
+    load();
+    const poll = setInterval(load, 120_000);
+    return () => { alive = false; clearInterval(poll); };
+  }, [books]);
+  return pulses;
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // thesis snapshot (live) + builder structure (node→phase mapping + claim)
 // ════════════════════════════════════════════════════════════════════════
