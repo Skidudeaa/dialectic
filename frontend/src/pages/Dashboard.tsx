@@ -328,7 +328,7 @@ export default function Dashboard({ onLogout }: Props) {
       { label: "TradingView", type: "panel", action: () => { togglePanel("tradingview"); setCmdPalette(false); } },
       { label: "Trade lifecycle", type: "panel", action: () => { togglePanel("trades"); setCmdPalette(false); } },
       { label: "Agent in room", type: "panel", action: () => { togglePanel("agent"); setCmdPalette(false); } },
-      { label: "Field Desk (dossier view)", type: "action", action: () => { navigate("/dialectic"); setCmdPalette(false); } },
+      { label: "Field Desk (dossier view)", type: "action", action: () => { navigate("/"); setCmdPalette(false); } },
       { label: "New room", type: "action", action: () => { setShowNewRoom(true); setSidebarOpen(true); setCmdPalette(false); } },
       { label: "Show keyboard shortcuts", type: "action", action: () => { setShowShortcuts(true); setCmdPalette(false); } },
       { label: "Logout", type: "action", action: () => { handleLogout(); setCmdPalette(false); } },
@@ -552,7 +552,7 @@ export default function Dashboard({ onLogout }: Props) {
           <button onClick={() => togglePanel("agent")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "agent" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Agent in room" aria-label="Agent in room panel"><Bot size={13} /></button>
           <div className="w-px h-4 bg-border mx-1" />
           <button
-            onClick={() => navigate("/dialectic")}
+            onClick={() => navigate("/")}
             className="px-1.5 py-0.5 rounded text-[9px] font-mono tracking-wider text-amber border border-amber/40 hover:bg-elevated whitespace-nowrap"
             title="Open the Field Desk — dossier view: cases, dispatch stream, situation board"
             aria-label="Open the Field Desk"

@@ -51,9 +51,9 @@ assets.
 2. **Mock vs live density:** the mockup is a curated demo (scripted narrative,
    tool-trace blocks, rev badges). Live renders real data; agent tool traces
    and rev numbers have no backend support — drop or build, decide later.
-3. **Open question for Amo:** should `/dialectic` become the default
-   post-login view? One-line route change in `App.tsx`; not done because not
-   yet requested.
+3. ~~Open question: default view?~~ **Resolved same day:** the Field Desk now
+   IS the default view at `/`; the classic desk moved to `/desk`, and
+   `/dialectic` redirects home for old bookmarks.
 4. TV telex entries are ephemeral (by design — durable record is
    `web/data/tradingview-events.jsonl`). Could hydrate recent alerts from the
    audit log on room load if persistence is wanted.

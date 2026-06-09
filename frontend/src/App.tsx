@@ -59,15 +59,19 @@ export default function App() {
                 </Suspense>
               }
             />
+            {/* Field Desk is the desk — default post-login view. */}
             <Route
-              path="/dialectic"
+              path="/"
               element={
-                <Suspense fallback={<RouteFallback label="dialectic" />}>
+                <Suspense fallback={<RouteFallback label="field desk" />}>
                   <DialecticRoute />
                 </Suspense>
               }
             />
-            <Route path="/*" element={<Dashboard onLogout={onLogout} />} />
+            {/* legacy URL — keep old bookmarks working */}
+            <Route path="/dialectic" element={<Navigate to="/" replace />} />
+            {/* classic desk, demoted to /desk */}
+            <Route path="/desk/*" element={<Dashboard onLogout={onLogout} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </OnboardingProvider>

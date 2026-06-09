@@ -107,7 +107,7 @@ export default function DialecticRoute() {
           </div>
 
           <div className="top-right">
-            <Link to="/" className="clock" style={{ color: "var(--secondary)" }} title="Back to the classic desk">← desk</Link>
+            <Link to="/desk" className="clock" style={{ color: "var(--secondary)" }} title="Open the classic desk">classic desk →</Link>
             <div className="telex"><span className="d" /><b>WIRE LIVE</b><span>{latency}ms</span></div>
             <span className="clock">{clock}</span>
           </div>
