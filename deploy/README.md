@@ -43,7 +43,49 @@ systemctl status tradingdesk
 curl http://127.0.0.1:8006/api/health
 ```
 
-The service binds to `0.0.0.0:8006`. Front it with nginx/cloudflared for TLS termination before exposing publicly.
+The service binds to `0.0.0.0:8006`. Front it with nginx/cloudflared for TLS termination before exposing publicly (see below).
+
+## Public HTTPS (nginx + Cloudflare)
+
+Live at **`https://td.somacura.org`** (also reachable directly at `http://167.99.113.232:8006`). The droplet is **shared** with other sites, so the Trading Desk vhost is kept in its own isolated file and never edits the others.
+
+**The vhost** — `/etc/nginx/sites-available/td.somacura.org` (symlinked into `sites-enabled/`) reverse-proxies to `127.0.0.1:8006`, with WebSocket upgrade handling on `/ws/` for live chat/streaming. It listens on **both `:80` and `:443`**:
+- `:80` — what Cloudflare actually hits today, because the `somacura.org` zone runs in Cloudflare **"Flexible"** SSL mode (shared with `feb8.somacura.org`, whose origin is `:80`-only).
+- `:443` — a self-signed origin cert at `/etc/ssl/cloudflare/td.somacura.org.{crt,key}`, ready for a per-hostname upgrade to "Full" (see below). It's self-signed on purpose: Cloudflare "Full" (non-strict) doesn't validate the origin cert, so a Cloudflare Origin cert isn't required.
+
+**DNS:** `td` A record in the **`somacura.org`** Cloudflare zone → `167.99.113.232`, **proxied (orange cloud)**. The browser↔Cloudflare hop uses Cloudflare's trusted edge cert.
+
+**Firewall:** `ufw` opens `80/443` to **Cloudflare IP ranges only** — the origin isn't directly reachable on those ports, so the unencrypted Flexible hop is not publicly exposed.
+
+```bash
+# Always validate before reloading — a syntax error would take down ALL sites on this box.
+nginx -t && systemctl reload nginx      # reload, never restart (zero-downtime, keeps other vhosts)
+
+# Verify (origin both ports, then through Cloudflare):
+curl -s  -H "Host: td.somacura.org" http://127.0.0.1/api/health     # :80  (Flexible path)
+curl -sk -H "Host: td.somacura.org" https://127.0.0.1/api/health    # :443 (Full path)
+curl -s  https://td.somacura.org/api/health                          # public, via Cloudflare
+```
+
+**Encrypting the Cloudflare↔origin hop (optional hardening).** The whole `somacura.org` zone is on Flexible (HTTP to origin). **Do NOT flip the zone to "Full"** — that breaks `feb8.somacura.org`, which has no `:443` origin. Instead scope it to this hostname only:
+
+> Cloudflare dashboard → **SSL/TLS → Configuration Rules** → new rule:
+> *When hostname equals `td.somacura.org`* → set **SSL = Full**.
+
+The `:443` self-signed block already in the vhost handles it — no cert paste, no zone change, `feb8` untouched.
+
+**Renew the self-signed origin cert** (only relevant once on Full; expires in 10 years, so rarely):
+
+```bash
+openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
+  -keyout /etc/ssl/cloudflare/td.somacura.org.key \
+  -out    /etc/ssl/cloudflare/td.somacura.org.crt \
+  -subj "/CN=td.somacura.org" -addext "subjectAltName=DNS:td.somacura.org"
+chmod 600 /etc/ssl/cloudflare/td.somacura.org.key
+nginx -t && systemctl reload nginx
+```
+
+> If you instead point a **grey-cloud (DNS-only)** record straight at the droplet, use real Let's Encrypt instead of the above: `certbot --nginx -d <host> --redirect`. That path needs port 80 reachable from the internet (loosen the Cloudflare-only `ufw` rule first).
 
 ## Day-to-day operations
 
