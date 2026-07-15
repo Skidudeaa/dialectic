@@ -1,0 +1,45 @@
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(8, 5, 4, 0.78);
+  backdrop-filter: blur(4px);
+}
+
+.settings-dialog {
+  width: min(520px, 100%);
+  padding: 1.25rem;
+  border: 1px solid var(--color-bean);
+  background: var(--color-cacao);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+}
+
+.settings-dialog-header,
+.settings-actions,
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.settings-dialog-header h2 { color: var(--color-bone); }
+.settings-dialog-header p,
+.settings-toggle small,
+.settings-loading { color: var(--color-secondary); }
+
+.settings-fields {
+  display: grid;
+  gap: 1.25rem;
+  margin: 1.25rem 0;
+}
+
+.settings-fields label { color: var(--color-ink); }
+.settings-fields input[type='range'] { width: 100%; margin-top: 0.5rem; }
+.settings-toggle { justify-content: flex-start; }
+.settings-toggle span { display: grid; }
+.settings-error { margin-top: 1rem; color: var(--color-danger, #f28b82); }
+.settings-actions { justify-content: flex-end; margin-top: 1rem; }

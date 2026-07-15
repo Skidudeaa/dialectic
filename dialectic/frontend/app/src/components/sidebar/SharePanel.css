@@ -1,19 +1,43 @@
 .share-section { padding: 0.5rem 0; }
 .share-section p {
-    color: var(--text-tertiary);
-    font-size: 0.8rem;
+    color: var(--color-faint);
+    font-family: var(--font-serif);
+    font-size: 12px;
     margin-bottom: 0.75rem;
     line-height: 1.5;
 }
 .share-link-row { display: flex; gap: 0.35rem; }
-.share-link-row input {
+.share-link-row input,
+.share-link-row textarea {
     flex: 1;
-    padding: 0.45rem 0.6rem;
-    background: var(--bg-void);
-    border: 1px solid var(--border-subtle);
+    min-width: 0;
+    padding: 6px 9px;
+    background: var(--color-void);
+    border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
-    color: var(--text-secondary);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.72rem;
+    color: var(--color-secondary);
+    font-family: var(--font-mono);
+    font-size: 10px;
     outline: none;
+    resize: none;
 }
+.share-link-row input:focus,
+.share-link-row textarea:focus { border-color: var(--amber-30); }
+
+.share-invite-row { align-items: stretch; }
+.share-invite-row button { align-self: stretch; }
+.share-field-label {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--color-secondary);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.share-manual-fields {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+}
+.share-hint { margin-top: 14px; }

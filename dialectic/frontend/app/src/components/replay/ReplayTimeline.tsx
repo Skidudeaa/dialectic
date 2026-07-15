@@ -3,16 +3,12 @@ import { api } from '../../lib/api';
 import './ReplayTimeline.css';
 
 interface TimelineBucket {
-  start: string;
-  end: string;
-  count: number;
-}
-
-interface TimelineData {
-  buckets: TimelineBucket[];
-  total_events: number;
+  start_sequence: number;
+  end_sequence: number;
   start_time: string;
   end_time: string;
+  event_count: number;
+  event_types: Record<string, number>;
 }
 
 interface ReplayTimelineProps {
@@ -23,7 +19,7 @@ interface ReplayTimelineProps {
 const SPEEDS = [1, 2, 4, 8];
 
 export function ReplayTimeline({ roomId, onSeek }: ReplayTimelineProps) {
-  const [timeline, setTimeline] = useState<TimelineData | null>(null);
+  const [timeline, setTimeline] = useState<TimelineBucket[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -32,9 +28,8 @@ export function ReplayTimeline({ roomId, onSeek }: ReplayTimelineProps) {
   const playTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   useEffect(() => {
-    setLoading(true);
     api.getTimeline(roomId)
-      .then((data) => setTimeline(data as TimelineData))
+      .then((data) => setTimeline(data as TimelineBucket[]))
       .catch(() => setTimeline(null))
       .finally(() => setLoading(false));
   }, [roomId]);
@@ -61,8 +56,9 @@ export function ReplayTimeline({ roomId, onSeek }: ReplayTimelineProps) {
   // Notify parent on position change
   useEffect(() => {
     if (!timeline || !onSeek) return;
-    const start = new Date(timeline.start_time).getTime();
-    const end = new Date(timeline.end_time).getTime();
+    if (timeline.length === 0) return;
+    const start = new Date(timeline[0].start_time).getTime();
+    const end = new Date(timeline[timeline.length - 1].end_time).getTime();
     const ts = new Date(start + (end - start) * position).toISOString();
     onSeek(ts);
   }, [position, timeline, onSeek]);
@@ -78,14 +74,14 @@ export function ReplayTimeline({ roomId, onSeek }: ReplayTimelineProps) {
     return <div className="replay-timeline"><div className="replay-loading">Loading timeline...</div></div>;
   }
 
-  if (!timeline || !timeline.buckets?.length) {
+  if (!timeline?.length) {
     return <div className="replay-timeline"><div className="replay-loading">No replay data available.</div></div>;
   }
 
-  const maxCount = Math.max(...timeline.buckets.map((b) => b.count), 1);
+  const maxCount = Math.max(...timeline.map((b) => b.event_count), 1);
   const currentTs = (() => {
-    const start = new Date(timeline.start_time).getTime();
-    const end = new Date(timeline.end_time).getTime();
+    const start = new Date(timeline[0].start_time).getTime();
+    const end = new Date(timeline[timeline.length - 1].end_time).getTime();
     return new Date(start + (end - start) * position);
   })();
 
@@ -107,8 +103,8 @@ export function ReplayTimeline({ roomId, onSeek }: ReplayTimelineProps) {
 
       <div className="replay-track-container" ref={trackRef} onClick={handleTrackClick}>
         <div className="replay-heatmap">
-          {timeline.buckets.map((bucket, i) => {
-            const intensity = bucket.count / maxCount;
+          {timeline.map((bucket, i) => {
+            const intensity = bucket.event_count / maxCount;
             // Gradient from blue (sparse) to red (dense)
             const r = Math.round(59 + intensity * 180);
             const g = Math.round(130 - intensity * 100);

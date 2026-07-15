@@ -14,10 +14,12 @@ export interface Message {
   thread_id: string;
   sequence: number;
   created_at: string;
-  speaker_type: 'human' | 'llm_primary' | 'llm_provoker' | 'llm_annotator' | 'system';
+  speaker_type: 'human' | 'llm_primary' | 'llm_provoker' | 'llm_annotator' | 'llm_persona' | 'system';
   user_id: string | null;
   message_type: 'text' | 'claim' | 'question' | 'definition' | 'counterexample';
   content: string;
+  user_name?: string;
+  persona_name?: string;
   protocol_id?: string;
   protocol_phase?: number;
 }
@@ -89,6 +91,7 @@ export interface PresenceUser {
 export interface UserRoom {
   id: string;
   name: string | null;
+  token: string;
   unread_count: number;
   last_message_at: string | null;
   last_message_preview: string | null;
@@ -116,15 +119,17 @@ export interface TradingSnapshot {
 // WebSocket message types
 export type InboundMessageType =
   | 'send_message' | 'typing_start' | 'typing_stop' | 'typing_content'
-  | 'fork_thread' | 'add_memory' | 'edit_memory' | 'invalidate_memory'
+  | 'switch_thread' | 'fork_thread' | 'add_memory' | 'edit_memory' | 'invalidate_memory'
   | 'summon_llm' | 'cancel_llm' | 'invoke_protocol' | 'advance_protocol' | 'abort_protocol'
   | 'create_commitment' | 'record_confidence' | 'resolve_commitment'
   | 'ping' | 'presence_heartbeat';
 
 export type OutboundMessageType =
-  | 'message_created' | 'user_typing' | 'llm_thinking' | 'llm_streaming' | 'llm_done'
-  | 'thread_forked' | 'memory_updated' | 'annotation_created'
+  | 'message_created' | 'persona_response' | 'user_typing'
+  | 'user_joined' | 'user_left' | 'presence_update'
+  | 'llm_thinking' | 'llm_streaming' | 'llm_done' | 'llm_error' | 'llm_cancelled'
+  | 'thread_created' | 'thread_forked' | 'memory_updated' | 'annotation_created'
   | 'protocol_started' | 'protocol_phase_advanced' | 'protocol_concluded' | 'protocol_aborted'
-  | 'commitment_created' | 'commitment_resolved' | 'commitment_surfaced'
+  | 'commitment_created' | 'commitment_confidence_updated' | 'commitment_resolved' | 'commitment_surfaced'
   | 'trading_update'
   | 'pong' | 'error';

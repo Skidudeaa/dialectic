@@ -1,101 +1,99 @@
+/* Auth screen — centered on void background */
 .auth-screen {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  background: var(--bg-void);
-  padding: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: var(--color-void);
+    padding: 1rem;
 }
-
 .auth-card {
-  width: 100%;
-  max-width: 420px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 2rem;
-  box-shadow: var(--shadow-lg);
-  animation: fadeInScale 0.4s var(--ease-out);
+    width: 100%;
+    max-width: 420px;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 2rem;
+    box-shadow: var(--shadow-md);
+    animation: fadeInScale 0.4s var(--ease-out);
 }
-
 .auth-header {
-  text-align: center;
-  margin-bottom: 1.5rem;
+    text-align: center;
+    margin-bottom: 1.5rem;
 }
-
 .auth-logo {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--claude-primary);
-  letter-spacing: -0.02em;
+    font-family: var(--font-stencil);
+    font-size: 1.5rem;
+    color: var(--color-amber);
+    letter-spacing: .08em;
+    text-transform: uppercase;
 }
-
 .auth-subtitle {
-  color: var(--text-tertiary);
-  font-size: 0.8rem;
-  margin-top: 0.3rem;
+    color: var(--color-faint);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .18em;
+    margin-top: 0.3rem;
 }
-
 .auth-tabs {
-  display: flex;
-  gap: 2px;
-  background: var(--bg-raised);
-  border-radius: var(--radius-md);
-  padding: 3px;
-  margin-bottom: 1.5rem;
+    display: flex;
+    gap: 2px;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    margin-bottom: 1.5rem;
 }
-
 .auth-tab {
-  flex: 1;
-  padding: 0.5rem 0.4rem;
-  background: transparent;
-  border: none;
-  border-radius: calc(var(--radius-md) - 2px);
-  color: var(--text-tertiary);
-  font-size: 0.78rem;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.2s;
+    flex: 1;
+    padding: 5px 8px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-faint);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    cursor: pointer;
+    transition: all 0.15s;
 }
-
-.auth-tab:hover {
-  color: var(--text-secondary);
-}
-
+.auth-tab:hover { color: var(--color-secondary); }
 .auth-tab.active {
-  background: var(--bg-overlay);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
+    background: var(--color-cacao);
+    color: var(--color-bone);
+    border: 1px solid var(--color-bean);
 }
-
 .auth-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
-
 .auth-label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--color-secondary);
 }
-
+/* Error: uses --color-error (warm orange-red, not scarlet on structural border) */
 .auth-error {
-  background: rgba(248, 113, 113, 0.08);
-  border: 1px solid rgba(248, 113, 113, 0.2);
-  color: var(--error);
-  font-size: 0.8rem;
-  padding: 0.6rem 0.8rem;
-  border-radius: var(--radius-sm);
-  margin-bottom: 0.5rem;
+    background: rgba(199,91,57,.08);
+    border: 1px solid rgba(199,91,57,.25);
+    color: var(--color-error);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.5rem;
 }
-
 .auth-hint {
-  color: var(--text-tertiary);
-  font-size: 0.78rem;
-  line-height: 1.4;
+    color: var(--color-faint);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    line-height: 1.4;
 }

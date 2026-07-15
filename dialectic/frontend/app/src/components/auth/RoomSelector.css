@@ -1,146 +1,143 @@
+/* Room selector screen */
 .room-screen {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  background: var(--bg-void);
-  padding: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: var(--color-void);
+    padding: 1rem;
 }
-
 .room-card {
-  width: 100%;
-  max-width: 500px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 2rem;
-  box-shadow: var(--shadow-lg);
-  animation: fadeInScale 0.4s var(--ease-out);
+    width: 100%;
+    max-width: 500px;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 2rem;
+    box-shadow: var(--shadow-md);
+    animation: fadeInScale 0.4s var(--ease-out);
 }
-
+/* NOTE: .room-header in RoomSelector is a local name — different from the main app header */
 .room-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
 }
-
 .room-title {
-  font-size: 1.3rem;
-  font-weight: 600;
-  color: var(--claude-primary);
-  letter-spacing: -0.02em;
+    font-family: var(--font-stencil);
+    font-size: 1.3rem;
+    color: var(--color-amber);
+    letter-spacing: .04em;
+    text-transform: uppercase;
 }
-
 .room-subtitle {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  margin-top: 0.2rem;
+    color: var(--color-secondary);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin-top: 0.2rem;
 }
-
+/* Error — non-structural, warm error color */
 .room-error {
-  background: rgba(248, 113, 113, 0.08);
-  border: 1px solid rgba(248, 113, 113, 0.2);
-  color: var(--error);
-  font-size: 0.8rem;
-  padding: 0.6rem 0.8rem;
-  border-radius: var(--radius-sm);
-  margin-bottom: 1rem;
+    background: rgba(199,91,57,.08);
+    border: 1px solid rgba(199,91,57,.25);
+    color: var(--color-error);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 1rem;
 }
-
 .room-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
 }
-
 .room-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-  background: var(--bg-raised);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 1rem;
-  margin-bottom: 1.5rem;
-  animation: fadeIn 0.2s var(--ease-out);
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    animation: fadeIn 0.2s var(--ease-out);
 }
-
 .room-form-actions {
-  display: flex;
-  gap: 0.5rem;
+    display: flex;
+    gap: 0.5rem;
 }
-
 .room-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
 }
-
 .room-list-title {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.3rem;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--color-faint);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin-bottom: 0.3rem;
 }
-
 .room-empty {
-  color: var(--text-tertiary);
-  font-size: 0.8rem;
-  padding: 1rem 0;
-  text-align: center;
+    color: var(--color-faint);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    padding: 1rem 0;
+    text-align: center;
 }
-
+/* Room item in selector — espresso card with bean border */
 .room-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  width: 100%;
-  padding: 0.8rem 1rem;
-  background: var(--bg-raised);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: left;
-  font-family: inherit;
-  color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    width: 100%;
+    padding: 9px 11px;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: border-color 0.15s;
+    text-align: left;
+    font-family: inherit;
+    color: inherit;
+    box-shadow: var(--shadow-md);
 }
-
 .room-item:hover {
-  background: var(--bg-overlay);
-  border-color: var(--border-default);
+    border-color: var(--color-crater);
 }
-
 .room-item-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
-
 .room-item-name {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--text-primary);
+    font-family: var(--font-serif);
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--color-bone);
 }
-
 .room-item-badge {
-  background: var(--claude-primary-dim);
-  color: white;
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 0.1rem 0.45rem;
-  border-radius: var(--radius-full);
-  min-width: 1.2rem;
-  text-align: center;
+    background: var(--color-amber);
+    color: var(--color-void);
+    font-family: var(--font-stencil);
+    font-size: 8px;
+    padding: 1px 5px;
+    border-radius: var(--radius-sm);
+    min-width: 1.2rem;
+    text-align: center;
 }
-
 .room-item-preview {
-  font-size: 0.78rem;
-  color: var(--text-tertiary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--color-faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: .06em;
 }

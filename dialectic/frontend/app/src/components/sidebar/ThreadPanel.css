@@ -1,34 +1,44 @@
+/* Thread cards — dossier style */
 .thread-card {
-    padding: 0.6rem 0.7rem;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
+    padding: 7px 9px;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
     margin-bottom: 0.4rem;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: border-color 0.15s;
+    box-shadow: var(--shadow-md);
 }
-.thread-card:hover { background: var(--bg-raised); border-color: var(--border-default); }
+.thread-card:hover { border-color: var(--color-crater); }
 .thread-card.active {
-    border-color: var(--claude-primary-border);
-    background: var(--claude-primary-bg);
+    border-color: var(--amber-30);
+    background: linear-gradient(var(--color-espresso), var(--color-cacao));
 }
 .thread-card-title {
+    font-family: var(--font-serif);
     font-weight: 500;
-    font-size: 0.82rem;
+    font-size: 13px;
     margin-bottom: 0.15rem;
+    color: var(--color-bone);
 }
+.thread-card.active .thread-card-title { color: var(--color-bone); }
 .thread-card-meta {
-    font-size: 0.68rem;
-    color: var(--text-ghost);
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    color: var(--color-ghost);
     display: flex;
     align-items: center;
     gap: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
 }
 .thread-card-fork-badge {
-    padding: 0.05rem 0.3rem;
-    background: rgba(99,102,241,0.1);
+    padding: 1px 4px;
+    background: var(--amber-08);
+    border: 1px solid var(--amber-30);
     border-radius: var(--radius-sm);
-    color: var(--claude-primary);
-    font-size: 0.6rem;
-    font-weight: 600;
+    color: var(--color-amber);
+    font-family: var(--font-stencil);
+    font-size: 7px;
+    letter-spacing: .04em;
 }

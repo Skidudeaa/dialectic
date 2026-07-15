@@ -143,6 +143,7 @@ async def signup(
         access_token=access_token,
         refresh_token=refresh_token,
         user_id=user_id,
+        display_name=request.display_name,
     )
 
 
@@ -159,7 +160,7 @@ async def login(
     # Find user by email
     row = await db.fetchrow(
         """
-        SELECT u.id, uc.password_hash, uc.email_verified
+        SELECT u.id, u.display_name, uc.password_hash, uc.email_verified
         FROM user_credentials uc
         JOIN users u ON uc.user_id = u.id
         WHERE uc.email = $1
@@ -193,6 +194,7 @@ async def login(
         access_token=access_token,
         refresh_token=refresh_token,
         user_id=user_id,
+        display_name=row["display_name"],
     )
 
 

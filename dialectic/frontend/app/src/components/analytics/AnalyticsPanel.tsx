@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
+import type { ConversationDNA } from '../../types';
+import { DNAGlyph } from './DNAGlyph';
 import './AnalyticsPanel.css';
 
 interface ThreadAnalytics {
@@ -10,7 +12,7 @@ interface ThreadAnalytics {
   fork_count: number;
   memory_crystallizations: number;
   provoker_interventions: number;
-  speaker_counts: Record<string, number>;
+  turn_balance: Record<string, number>;
 }
 
 interface AnalyticsPanelProps {
@@ -36,19 +38,30 @@ const SPEAKER_LABELS: Record<string, string> = {
 
 export function AnalyticsPanel({ threadId, roomId }: AnalyticsPanelProps) {
   const [data, setData] = useState<ThreadAnalytics | null>(null);
+  const [dna, setDna] = useState<ConversationDNA | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!threadId && !roomId) return;
-    setLoading(true);
 
-    const fetchData = threadId
+    const analyticsRequest = threadId
       ? api.getThreadAnalytics(threadId)
       : Promise.resolve(null);
+    const dnaRequest = threadId
+      ? api.getThreadDNA(threadId)
+      : roomId
+        ? api.getRoomDNA(roomId)
+        : Promise.resolve(null);
 
-    fetchData
-      .then((result) => setData(result as ThreadAnalytics | null))
-      .catch(() => setData(null))
+    Promise.all([analyticsRequest, dnaRequest])
+      .then(([result, dnaResult]) => {
+        setData(result as ThreadAnalytics | null);
+        setDna(dnaResult as ConversationDNA | null);
+      })
+      .catch(() => {
+        setData(null);
+        setDna(null);
+      })
       .finally(() => setLoading(false));
   }, [threadId, roomId]);
 
@@ -70,11 +83,14 @@ export function AnalyticsPanel({ threadId, roomId }: AnalyticsPanelProps) {
     );
   }
 
-  const maxCount = Math.max(...Object.values(data.speaker_counts ?? {}), 1);
+  const speakerCounts = data.turn_balance ?? {};
+  const maxCount = Math.max(...Object.values(speakerCounts), 1);
 
   return (
     <div className="analytics-panel">
       <h3>Analytics</h3>
+
+      {dna && <DNAGlyph dna={dna} />}
 
       <div className="analytics-grid">
         <div className="stat-card">
@@ -103,10 +119,10 @@ export function AnalyticsPanel({ threadId, roomId }: AnalyticsPanelProps) {
         </div>
       </div>
 
-      {data.speaker_counts && Object.keys(data.speaker_counts).length > 0 && (
+      {Object.keys(speakerCounts).length > 0 && (
         <div className="turn-balance">
           <h4>Turn Balance</h4>
-          {Object.entries(data.speaker_counts).map(([speaker, count]) => (
+          {Object.entries(speakerCounts).map(([speaker, count]) => (
             <div className="turn-bar" key={speaker}>
               <span className="turn-label">{SPEAKER_LABELS[speaker] ?? speaker}</span>
               <div className="turn-track">

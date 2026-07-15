@@ -1,37 +1,45 @@
 .participants-bar {
     display: flex;
     align-items: center;
-    padding: 0.4rem 1.25rem;
+    padding: 5px 16px;
     gap: 0.75rem;
-    border-bottom: 1px solid var(--border-subtle);
-    background: rgba(14, 14, 19, 0.6);
+    border-bottom: 1px solid var(--color-bean);
+    background: var(--color-obsidian);
     flex-shrink: 0;
+    font-family: var(--font-mono);
     font-size: 0.72rem;
 }
+/* Outline chips with currentColor border + transparent fill — no solid backgrounds */
 .participant-chip {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    padding: 0.15rem 0.5rem 0.15rem 0.25rem;
-    border-radius: var(--radius-full);
-    background: var(--bg-raised);
-    border: 1px solid var(--border-subtle);
+    padding: 2px 7px 2px 5px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    border: 1px solid currentColor;
+    color: var(--color-secondary);
 }
 .participant-chip .presence-dot {
     width: 5px;
     height: 5px;
     border-radius: 50%;
 }
-.participant-chip .presence-dot.online { background: var(--success); }
-.participant-chip .presence-dot.away { background: var(--warning); }
-.participant-chip .presence-dot.offline { background: var(--text-ghost); }
+.participant-chip .presence-dot.online  { background: var(--sev-stable); }
+.participant-chip .presence-dot.away    { background: var(--color-warning); }
+.participant-chip .presence-dot.offline { background: var(--color-ghost); }
 .participant-chip .p-name {
-    font-size: 0.7rem;
-    color: var(--text-secondary);
-    font-weight: 500;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: inherit;
+    font-weight: normal;
 }
+/* Claude chip: amber outline */
 .participant-chip.is-claude {
-    border-color: var(--claude-primary-border);
-    background: var(--claude-primary-bg);
+    color: var(--color-amber);
+    border-color: var(--amber-30);
+    background: var(--amber-08);
 }
-.participant-chip.is-claude .p-name { color: var(--claude-primary); }
+.participant-chip.is-claude .p-name { color: var(--color-amber); }

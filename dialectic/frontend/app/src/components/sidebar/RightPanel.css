@@ -1,27 +1,31 @@
+/* Right panel tabs */
 .sidebar-tabs {
     display: flex;
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: 1px solid var(--color-bean);
     flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
 }
 .sidebar-tab-btn {
-    flex: 1;
-    padding: 0.65rem 0.5rem;
+    flex: 0 0 auto;
+    min-width: 54px;
+    padding: 7px 6px;
     background: transparent;
     border: none;
-    color: var(--text-ghost);
+    color: var(--color-ghost);
     cursor: pointer;
-    font-size: 0.7rem;
-    font-weight: 600;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: normal;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: .1em;
     border-bottom: 2px solid transparent;
     transition: all 0.15s;
-    font-family: inherit;
 }
-.sidebar-tab-btn:hover { color: var(--text-tertiary); }
+.sidebar-tab-btn:hover { color: var(--color-faint); }
 .sidebar-tab-btn.active {
-    color: var(--claude-primary);
-    border-bottom-color: var(--claude-primary);
+    color: var(--color-amber);
+    border-bottom-color: var(--color-amber);
 }
 .sidebar-panel {
     flex: 1;

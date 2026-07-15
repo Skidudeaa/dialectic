@@ -1,0 +1,17 @@
+# JavaScript package installs
+node_modules/
+
+# Yarn's machine-local install metadata
+**/.yarn/install-state.gz
+
+# Generated build output
+dist/
+*.tsbuildinfo
+
+# Generated planning/search indexes
+.planning/intel/
+**/.planning/intel/
+
+# Browser automation artifacts
+.playwright-mcp/
+**/.playwright-mcp/

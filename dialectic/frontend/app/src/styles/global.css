@@ -1,68 +1,125 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Google Fonts loaded in index.html:
+   Newsreader (serif body), JetBrains Mono (ledger/meta),
+   Saira Stencil One (stamps/chips), Caveat (margin annotations) */
 @import './tokens.css';
 @import './animations.css';
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; overflow: hidden; }
+
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: var(--bg-void);
-    color: var(--text-primary);
+    font-family: var(--font-serif);
+    font-size: 14px;
+    line-height: 1.52;
+    background: var(--color-void);
+    color: var(--color-ink);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-image: radial-gradient(120% 80% at 50% -10%, rgba(230,154,76,.04), transparent 55%);
 }
-code, pre { font-family: 'JetBrains Mono', monospace; }
 
-/* Shared utility classes */
+/* Monospace shorthand */
+code, pre { font-family: var(--font-mono); }
+
+/* Scrollbar — Dark Roast */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-bean); border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-crater); }
+
+/* Focus ring — amber */
+*:focus { outline: none; }
+*:focus-visible { outline: 1.5px solid var(--color-amber); outline-offset: 1px; }
+
+/* ── Shared button base ──────────────────────────────────────────────── */
 .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 0.7rem 1.4rem;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: 0.85rem;
+    padding: 6px 14px;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
     font-weight: 500;
     font-family: inherit;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.15s;
     gap: 0.5rem;
 }
+
+/* Primary action: solid amber — the only solid-amber object on the page */
 .btn-primary {
-    background: var(--claude-primary-dim);
-    color: white;
+    background: var(--color-amber);
+    color: var(--color-void);
+    border-color: var(--color-amber);
+    font-family: var(--font-stencil);
+    font-size: 11px;
+    letter-spacing: .06em;
+    border-radius: var(--radius-sm);
 }
-.btn-primary:hover { background: var(--claude-primary); transform: translateY(-1px); box-shadow: var(--shadow-glow-indigo); }
+.btn-primary:hover { background: var(--color-amber-hot); border-color: var(--color-amber-hot); }
+
 .btn-secondary {
-    background: var(--bg-raised);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-default);
+    background: var(--color-espresso);
+    color: var(--color-secondary);
+    border: 1px solid var(--color-bean);
 }
-.btn-secondary:hover { background: var(--bg-overlay); color: var(--text-primary); }
+.btn-secondary:hover { border-color: var(--color-crater); color: var(--color-ink); }
+
 .btn-ghost {
     background: transparent;
-    color: var(--text-secondary);
-    padding: 0.4rem 0.6rem;
+    color: var(--color-secondary);
+    border-color: transparent;
+    padding: 4px 8px;
 }
-.btn-ghost:hover { background: var(--bg-raised); color: var(--text-primary); }
+.btn-ghost:hover { background: var(--color-espresso); color: var(--color-ink); }
+
 .btn-full { width: 100%; }
-.btn-sm { padding: 0.35rem 0.7rem; font-size: 0.75rem; }
+.btn-sm { padding: 3px 8px; font-size: 0.75rem; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 
+/* ── Form inputs ─────────────────────────────────────────────────────── */
 .form-input {
     width: 100%;
-    padding: 0.7rem 0.9rem;
-    background: var(--bg-raised);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    color: var(--text-primary);
-    font-size: 0.9rem;
+    padding: 7px 10px;
+    background: var(--color-void);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    color: var(--color-bone);
+    font-size: 0.88rem;
     font-family: inherit;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    transition: border-color 0.15s, box-shadow 0.15s;
     outline: none;
 }
 .form-input:focus {
-    border-color: var(--claude-primary-dim);
-    box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+    border-color: var(--amber-30);
+    box-shadow: 0 0 0 2px rgba(230,154,76,.1);
 }
-.form-input::placeholder { color: var(--text-ghost); }
+.form-input::placeholder { color: var(--color-faint); font-style: italic; }
+
+/* ── Utility classes ─────────────────────────────────────────────────── */
+.mono  { font-family: var(--font-mono); }
+.serif { font-family: var(--font-serif); }
+.stencil { font-family: var(--font-stencil); }
+.hand    { font-family: var(--font-hand); }
+
+/* Dense section label */
+.lbl {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--color-secondary);
+    text-transform: uppercase;
+    letter-spacing: .18em;
+}
+
+/* Reading measure — message body prose */
+.prose-body {
+    max-width: 72ch;
+    font-family: var(--font-serif);
+    font-size: 14px;
+    line-height: 1.52;
+    color: var(--color-ink);
+}
+
+/* Attachment / exhibit card cap */
+.exhibit-cap { max-width: 580px; }

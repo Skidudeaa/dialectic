@@ -1,35 +1,68 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import './SharePanel.css'
 
 interface SharePanelProps {
+  roomId: string
   roomToken: string
 }
 
-export function SharePanel({ roomToken }: SharePanelProps) {
-  // SECURITY: Never put room tokens in shareable URLs.
-  // Share the token directly (user copies it manually) — the join flow
-  // uses a token input field, not a URL parameter.
-  const [copied, setCopied] = useState(false)
+type CopyTarget = 'invite' | 'room' | 'token'
 
-  const handleCopyToken = useCallback(() => {
-    if (roomToken) {
-      navigator.clipboard.writeText(roomToken)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }, [roomToken])
+export function SharePanel({ roomId, roomToken }: SharePanelProps) {
+  // SECURITY: The invite is an explicit secret, not a URL. That keeps the
+  // room token out of browser history, referrer headers, and proxy logs.
+  const inviteCode = useMemo(
+    () => roomId && roomToken ? `dialectic-v1:${roomId}:${roomToken}` : '',
+    [roomId, roomToken],
+  )
+  const [copied, setCopied] = useState<CopyTarget | null>(null)
+
+  const handleCopy = useCallback(async (target: CopyTarget, value: string) => {
+    if (!value) return
+    await navigator.clipboard.writeText(value)
+    setCopied(target)
+    window.setTimeout(() => setCopied((current) => current === target ? null : current), 2000)
+  }, [])
 
   return (
     <div className="share-section">
-      <p>Share this room token with someone to invite them:</p>
-      <div className="share-link-row">
-        <input type="password" value={roomToken} readOnly aria-label="Room token" />
-        <button className="btn btn-secondary btn-sm" onClick={handleCopyToken}>
-          {copied ? 'Copied!' : 'Copy Token'}
+      <p>Send this invite code privately. It grants access to this room.</p>
+      <label className="share-field-label" htmlFor="dialectic-invite-code">Invite code</label>
+      <div className="share-link-row share-invite-row">
+        <textarea
+          id="dialectic-invite-code"
+          value={inviteCode}
+          readOnly
+          rows={3}
+          aria-label="Dialectic invite code"
+        />
+        <button className="btn btn-secondary btn-sm" onClick={() => void handleCopy('invite', inviteCode)} disabled={!inviteCode}>
+          {copied === 'invite' ? 'Copied!' : 'Copy Invite'}
         </button>
       </div>
+
+      <div className="share-manual-fields">
+        <div>
+          <label className="share-field-label" htmlFor="dialectic-room-id">Room ID</label>
+          <div className="share-link-row">
+            <input id="dialectic-room-id" type="text" value={roomId} readOnly />
+            <button className="btn btn-ghost btn-sm" onClick={() => void handleCopy('room', roomId)} disabled={!roomId}>
+              {copied === 'room' ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="share-field-label" htmlFor="dialectic-room-token">Room token</label>
+          <div className="share-link-row">
+            <input id="dialectic-room-token" type="text" value={roomToken} readOnly />
+            <button className="btn btn-ghost btn-sm" onClick={() => void handleCopy('token', roomToken)} disabled={!roomToken}>
+              {copied === 'token' ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      </div>
       <p className="share-hint">
-        They can paste this token in the "Join Room" field.
+        Your collaborator can paste the complete code into “Join Room.” Room ID and token are shown separately for older clients.
       </p>
     </div>
   )

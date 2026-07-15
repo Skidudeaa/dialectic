@@ -65,15 +65,21 @@ class CrossSessionMemoryManager:
         current_room_id: Optional[UUID] = None,
         limit: int = 10,
         include_current_room: bool = True,
+        require_global_scope: bool = False,
     ) -> List[GlobalSearchResult]:
         """
         Search all memories accessible to a user across all their rooms.
         
         Uses vector similarity search with room membership filtering.
         """
-        # Generate embedding for query
+        # Generate embedding for query.
+        # WHY str conversion: asyncpg has no codec for ::vector, so the
+        # embedding must be passed in pgvector's text form ('[0.1,0.2,...]').
+        # Passing the raw list raised "expected str, got list" and silently
+        # disabled cross-session memory search via graceful degradation.
+        from .vector_store import VectorStore
         embedding_result = await self.embedder.embed(query)
-        query_vector = embedding_result.vector
+        query_vector = VectorStore._vector_to_str(embedding_result.vector)
 
         # Search across all rooms user is member of
         sql = """
@@ -95,6 +101,7 @@ class CrossSessionMemoryManager:
           AND m.status = 'active'
           AND m.embedding IS NOT NULL
           AND ($4 OR m.room_id != $3)  -- Optionally exclude current room
+          AND (NOT $6::boolean OR m.scope = 'global')
         ORDER BY similarity DESC
         LIMIT $5
         """
@@ -105,7 +112,8 @@ class CrossSessionMemoryManager:
             query_vector,
             current_room_id or uuid4(),  # Dummy UUID if not provided
             include_current_room,
-            limit
+            limit,
+            require_global_scope,
         )
 
         return [
@@ -140,6 +148,9 @@ class CrossSessionMemoryManager:
             current_room_id=current_room_id,
             limit=limit * 2,  # Get more, then filter
             include_current_room=False,  # Only cross-room
+            # SECURITY: Automatic prompt injection may only cross room
+            # boundaries after a user explicitly promoted the memory.
+            require_global_scope=True,
         )
 
         # Filter by similarity threshold
@@ -460,6 +471,7 @@ class CrossSessionMemoryManager:
             WHERE c.user_id = $1 
               AND c.auto_inject = true
               AND m.status = 'active'
+              AND m.scope = 'global'
             ORDER BY m.updated_at DESC
             """,
             user_id

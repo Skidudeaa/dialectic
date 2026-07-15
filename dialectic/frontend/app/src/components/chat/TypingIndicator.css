@@ -2,9 +2,10 @@
     display: none;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.5rem 1.5rem;
-    font-size: 0.78rem;
-    color: var(--text-tertiary);
+    padding: 5px 1.5rem;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-faint);
     max-width: 800px;
     margin: 0 auto;
     width: 100%;
@@ -15,9 +16,9 @@
     gap: 3px;
 }
 .typing-dots span {
-    width: 5px;
-    height: 5px;
-    background: var(--text-tertiary);
+    width: 4px;
+    height: 4px;
+    background: var(--color-secondary);
     border-radius: 50%;
     animation: typingBounce 1.4s infinite;
 }

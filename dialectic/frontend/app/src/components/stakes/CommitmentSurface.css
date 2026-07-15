@@ -1,78 +1,65 @@
 .commitment-surface {
-  position: fixed;
-  bottom: 80px;
-  right: 24px;
-  z-index: 90;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: 360px;
+    position: fixed;
+    bottom: 80px;
+    right: 24px;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 360px;
 }
-
+/* Elevated surfaced card — espresso with amber left edge */
 .surfaced-card {
-  background: var(--bg-raised);
-  border: 1px solid var(--claude-provoker-border);
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
-  box-shadow: var(--shadow-md), var(--shadow-glow-amber);
-  animation: surface-in 0.3s var(--ease-spring);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-left: 2px solid var(--amber-30);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    box-shadow: var(--shadow-md);
+    animation: surface-in 0.3s var(--ease-spring);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
-
 @keyframes surface-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+    from { opacity: 0; transform: translateY(10px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-
 .surfaced-card .surfaced-label {
-  font-size: 10px;
-  color: var(--claude-provoker);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 600;
+    font-family: var(--font-stencil);
+    font-size: 8.5px;
+    color: var(--color-amber);
+    text-transform: uppercase;
+    letter-spacing: .06em;
 }
-
 .surfaced-card .surfaced-claim {
-  font-size: 13px;
-  color: var(--text-primary);
-  line-height: 1.4;
+    font-family: var(--font-serif);
+    font-size: 13px;
+    color: var(--color-bone);
+    line-height: 1.45;
 }
-
 .surfaced-card .surfaced-confidence {
-  display: flex;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--text-secondary);
+    display: flex;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--color-secondary);
 }
-
 .surfaced-card .surfaced-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
 }
-
 .surfaced-card .surfaced-actions button {
-  background: transparent;
-  border: none;
-  font-size: 11px;
-  font-family: 'Inter', sans-serif;
-  cursor: pointer;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
+    background: transparent;
+    border: none;
+    font-family: var(--font-stencil);
+    font-size: 9px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 2px 7px;
+    border-radius: var(--radius-sm);
 }
-
-.surfaced-card .dismiss-btn {
-  color: var(--text-tertiary);
-}
-
-.surfaced-card .view-btn {
-  color: var(--claude-provoker);
-}
+.surfaced-card .dismiss-btn { color: var(--color-faint); }
+.surfaced-card .view-btn { color: var(--color-amber); }

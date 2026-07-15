@@ -121,6 +121,7 @@ class AnthropicProvider(LLMProvider):
                 "stream": True,
             }
         ) as response:
+            response.raise_for_status()
             async for line in response.aiter_lines():
                 if line.startswith("data: "):
                     event = json.loads(line[6:])
@@ -192,6 +193,7 @@ class OpenAIProvider(LLMProvider):
                 "stream": True,
             }
         ) as response:
+            response.raise_for_status()
             async for line in response.aiter_lines():
                 if line.startswith("data: ") and line != "data: [DONE]":
                     event = json.loads(line[6:])
@@ -205,6 +207,14 @@ PROVIDERS: dict[ProviderName, type[LLMProvider]] = {
     ProviderName.OPENAI: OpenAIProvider,
 }
 
+# WHY: Providers hold an httpx.AsyncClient. Constructing one per call leaked
+# an unclosed client (and its connection pool) on every message, because
+# orchestrators/routers are rebuilt per WebSocket message. Module-level
+# singletons share one client per provider for the process lifetime.
+_provider_cache: dict[ProviderName, LLMProvider] = {}
+
 
 def get_provider(name: ProviderName) -> LLMProvider:
-    return PROVIDERS[name]()
+    if name not in _provider_cache:
+        _provider_cache[name] = PROVIDERS[name]()
+    return _provider_cache[name]

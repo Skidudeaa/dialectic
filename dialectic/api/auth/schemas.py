@@ -60,6 +60,7 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     user_id: UUID
+    display_name: Optional[str] = None
 
 
 class UserResponse(BaseModel):

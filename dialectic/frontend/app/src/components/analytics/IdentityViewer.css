@@ -1,91 +1,93 @@
+/* Identity Viewer — LLM self-model display */
 .identity-viewer {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: var(--shadow-md);
 }
-
 .identity-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
-
 .identity-header h3 {
-  margin: 0;
-  font-size: 15px;
-  color: var(--text-primary);
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .18em;
+    color: var(--color-secondary);
 }
-
 .identity-meta {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  display: flex;
-  gap: 12px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--color-faint);
+    display: flex;
+    gap: 12px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
 }
-
 .identity-header button {
-  padding: 5px 14px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-family: 'Inter', sans-serif;
-  cursor: pointer;
-  border: none;
-  transition: opacity 0.15s var(--ease-out);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-stencil);
+    font-size: 9px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid var(--color-bean);
+    transition: opacity 0.15s;
 }
-
 .identity-header .edit-btn {
-  background: var(--bg-raised);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
+    background: var(--color-espresso);
+    color: var(--color-secondary);
 }
-
+.identity-header .edit-btn:hover { border-color: var(--color-crater); color: var(--color-ink); }
 .identity-header .save-btn {
-  background: var(--claude-primary);
-  color: #fff;
+    background: var(--color-amber);
+    color: var(--color-void);
+    border-color: var(--color-amber);
 }
-
 .identity-header .cancel-btn {
-  background: transparent;
-  color: var(--text-tertiary);
-  border: 1px solid var(--border-subtle);
+    background: transparent;
+    color: var(--color-faint);
+    border-color: var(--color-bean);
 }
-
 .identity-content {
-  font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  font-family: 'Inter', sans-serif;
+    font-family: var(--font-serif);
+    font-size: 13px;
+    color: var(--color-secondary);
+    line-height: 1.52;
+    white-space: pre-wrap;
 }
-
 .identity-editor {
-  width: 100%;
-  min-height: 200px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  padding: 12px;
-  resize: vertical;
-  line-height: 1.5;
-  box-sizing: border-box;
+    width: 100%;
+    min-height: 200px;
+    background: var(--color-void);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    color: var(--color-bone);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 10px;
+    resize: vertical;
+    line-height: 1.5;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.15s;
 }
-
-.identity-editor:focus {
-  outline: none;
-  border-color: var(--claude-primary);
-}
-
+.identity-editor:focus { border-color: var(--amber-30); }
 .identity-loading,
 .identity-empty {
-  text-align: center;
-  padding: 32px 16px;
-  color: var(--text-tertiary);
-  font-size: 13px;
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--color-ghost);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
 }

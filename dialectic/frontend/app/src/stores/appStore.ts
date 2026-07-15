@@ -59,6 +59,7 @@ interface AppState {
   setMessages: (messages: Message[]) => void;
   setMemories: (memories: Memory[]) => void;
   updateStreamingContent: (content: string) => void;
+  appendStreamingToken: (token: string) => void;
   setLLMState: (thinking: boolean, streaming: boolean) => void;
   setProtocol: (protocol: ProtocolState | null) => void;
   updateProtocolPhase: (phase: number) => void;
@@ -150,6 +151,12 @@ export const useAppStore = create<AppState>()(
       setMemories: (memories) => set({ memories }),
 
       updateStreamingContent: (content) => set({ streamingContent: content }),
+
+      // WHY: The server streams one token per llm_streaming event
+      // ({token, index}), not accumulated content — the client owns
+      // accumulation.
+      appendStreamingToken: (token) =>
+        set((state) => ({ streamingContent: state.streamingContent + token })),
 
       setLLMState: (thinking, streaming) =>
         set({

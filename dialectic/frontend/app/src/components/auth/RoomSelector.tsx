@@ -4,12 +4,31 @@ import { api } from '../../lib/api.ts'
 import type { UserRoom, Room, Thread } from '../../types/index.ts'
 import './RoomSelector.css'
 
+const INVITE_PREFIX = 'dialectic-v1:'
+
+function parseInviteCode(value: string): { roomId: string; token: string } | null {
+  const trimmed = value.trim()
+  if (!trimmed.startsWith(INVITE_PREFIX)) return null
+
+  const [version, roomId, token, ...extra] = trimmed.split(':')
+  if (version !== 'dialectic-v1' || !roomId || !token || extra.length > 0) return null
+
+  return { roomId, token }
+}
+
 export function RoomSelector() {
   const user = useAppStore((s) => s.user);
+  const accessToken = useAppStore((s) => s.accessToken);
+  const refreshToken = useAppStore((s) => s.refreshToken);
   const setRoom = useAppStore((s) => s.setRoom);
   const setThread = useAppStore((s) => s.setThread);
   const setThreads = useAppStore((s) => s.setThreads);
   const logout = useAppStore((s) => s.logout);
+
+  const handleLogout = useCallback(() => {
+    if (refreshToken) void api.logoutSession(refreshToken).catch(() => undefined);
+    logout();
+  }, [refreshToken, logout]);
 
   const [rooms, setRooms] = useState<UserRoom[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,22 +41,34 @@ export function RoomSelector() {
 
   // Join room
   const [showJoin, setShowJoin] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [showManualJoin, setShowManualJoin] = useState(false);
   const [joinRoomId, setJoinRoomId] = useState('');
   const [joinToken, setJoinToken] = useState('');
   const [joining, setJoining] = useState(false);
+  const [enteringRoomId, setEnteringRoomId] = useState<string | null>(null);
 
   const fetchRooms = useCallback(async () => {
     if (!user) return;
+    api.setAccessToken(accessToken ?? '');
+    if (!accessToken) {
+      // Guest identities can still join with an invite code, but they do not
+      // have a JWT-backed saved-room list.
+      setRooms([]);
+      setLoading(false);
+      return;
+    }
+    setError('');
     setLoading(true);
     try {
-      const data = await api.getRooms(user.id) as UserRoom[];
+      const data = await api.getRooms() as UserRoom[];
       setRooms(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load rooms');
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, accessToken]);
 
   useEffect(() => {
     void fetchRooms();
@@ -45,28 +76,19 @@ export function RoomSelector() {
 
   const handleSelectRoom = async (room: UserRoom) => {
     setError('');
+    setEnteringRoomId(room.id);
     try {
-      // We need the room token to connect. Fetch room details or use stored token.
-      // The /rooms endpoint returns token on create, and /rooms/{id}/join also uses token.
-      // For existing memberships, we need to get the token from the room.
-      // Use a direct fetch to get the room token via join (already member returns status).
-      // Actually, we need the token. Let's fetch threads which requires token.
-      // The simplest approach: store room tokens when joining. For now, prompt for token.
+      if (!room.token) throw new Error('This room is missing its access token. Refresh the room list and try again.');
 
-      // For rooms the user is already a member of, we need their token.
-      // The backend's UserRoomResponse doesn't include the token.
-      // We'll fetch it by trying to get threads with the room.
-      // Workaround: use the room ID as a key to get the token from a lookup.
-
-      // NOTE: The backend doesn't expose room tokens for existing memberships via GET.
-      // This is a known gap. For now, we'll ask the user for the token when selecting.
-      // A proper fix would add token to UserRoomResponse or a dedicated endpoint.
-
-      setJoinRoomId(room.id);
-      setShowJoin(true);
-      setShowCreate(false);
+      api.setToken(room.token);
+      const threads = await api.getThreads(room.id) as Thread[];
+      setRoom({ id: room.id, name: room.name, token: room.token }, room.token);
+      setThreads(threads);
+      if (threads.length > 0) setThread(threads[0]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to select room');
+    } finally {
+      setEnteringRoomId(null);
     }
   };
 
@@ -102,12 +124,33 @@ export function RoomSelector() {
     setError('');
     setJoining(true);
     try {
-      api.setToken(joinToken);
-      await api.joinRoom(joinRoomId, user.id);
+      const invite = showManualJoin
+        ? { roomId: joinRoomId.trim(), token: joinToken.trim() }
+        : parseInviteCode(joinCode);
+
+      if (!invite?.roomId || !invite.token) {
+        throw new Error(showManualJoin
+          ? 'Room ID and room token are both required'
+          : 'Paste a valid Dialectic invite code');
+      }
+
+      api.setToken(invite.token);
+      await api.joinRoom(invite.roomId, user.id);
 
       // Get threads
-      const threads = await api.getThreads(joinRoomId) as Thread[];
-      setRoom({ id: joinRoomId, name: null, token: joinToken }, joinToken);
+      const threads = await api.getThreads(invite.roomId) as Thread[];
+      let roomName: string | null = null;
+      if (accessToken) {
+        try {
+          const updatedRooms = await api.getRooms() as UserRoom[];
+          setRooms(updatedRooms);
+          roomName = updatedRooms.find((room) => room.id === invite.roomId)?.name ?? null;
+        } catch {
+          // Joining succeeded; room metadata can refresh the next time the selector opens.
+        }
+      }
+
+      setRoom({ id: invite.roomId, name: roomName, token: invite.token }, invite.token);
       setThreads(threads);
       if (threads.length > 0) {
         setThread(threads[0]);
@@ -129,7 +172,7 @@ export function RoomSelector() {
               Welcome, {user?.display_name ?? 'Guest'}
             </p>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={logout}>
+          <button className="btn btn-ghost btn-sm" onClick={handleLogout}>
             Sign Out
           </button>
         </div>
@@ -145,7 +188,14 @@ export function RoomSelector() {
           </button>
           <button
             className="btn btn-secondary"
-            onClick={() => { setShowJoin(true); setShowCreate(false); setJoinRoomId(''); }}
+            onClick={() => {
+              setShowJoin(true);
+              setShowCreate(false);
+              setJoinCode('');
+              setJoinRoomId('');
+              setJoinToken('');
+              setShowManualJoin(false);
+            }}
           >
             Join Room
           </button>
@@ -181,29 +231,56 @@ export function RoomSelector() {
 
         {showJoin && (
           <form className="room-form" onSubmit={handleJoinRoom}>
-            <label className="auth-label">
-              Room ID
-              <input
-                className="form-input"
-                type="text"
-                value={joinRoomId}
-                onChange={(e) => setJoinRoomId(e.target.value)}
-                placeholder="Paste room ID"
-                required
-                autoFocus
-              />
-            </label>
-            <label className="auth-label">
-              Room Token
-              <input
-                className="form-input"
-                type="password"
-                value={joinToken}
-                onChange={(e) => setJoinToken(e.target.value)}
-                placeholder="Paste room token"
-                required
-              />
-            </label>
+            {!showManualJoin ? (
+              <label className="auth-label">
+                Invite Code
+                <input
+                  className="form-input"
+                  type="text"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value)}
+                  placeholder="dialectic-v1:room-id:token"
+                  required
+                  autoFocus
+                  autoComplete="off"
+                />
+              </label>
+            ) : (
+              <>
+                <label className="auth-label">
+                  Room ID
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={joinRoomId}
+                    onChange={(e) => setJoinRoomId(e.target.value)}
+                    placeholder="Paste room ID"
+                    required
+                    autoFocus
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="auth-label">
+                  Room Token
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={joinToken}
+                    onChange={(e) => setJoinToken(e.target.value)}
+                    placeholder="Paste room token"
+                    required
+                    autoComplete="off"
+                  />
+                </label>
+              </>
+            )}
+            <button
+              className="btn btn-ghost btn-sm"
+              type="button"
+              onClick={() => setShowManualJoin((value) => !value)}
+            >
+              {showManualJoin ? 'Use invite code' : 'Enter room ID and token manually'}
+            </button>
             <div className="room-form-actions">
               <button className="btn btn-primary" type="submit" disabled={joining}>
                 {joining ? 'Joining...' : 'Join'}
@@ -223,17 +300,18 @@ export function RoomSelector() {
           <h2 className="room-list-title">Your Rooms</h2>
           {loading && <p className="room-empty">Loading rooms...</p>}
           {!loading && rooms.length === 0 && (
-            <p className="room-empty">No rooms yet. Create one or join with a token.</p>
+            <p className="room-empty">No rooms yet. Create one or join with an invite code.</p>
           )}
           {rooms.map((room) => (
             <button
               key={room.id}
               className="room-item"
               onClick={() => handleSelectRoom(room)}
+              disabled={enteringRoomId !== null}
             >
               <div className="room-item-header">
                 <span className="room-item-name">
-                  {room.name ?? 'Unnamed Room'}
+                  {enteringRoomId === room.id ? 'Opening…' : (room.name ?? 'Unnamed Room')}
                 </span>
                 {room.unread_count > 0 && (
                   <span className="room-item-badge">{room.unread_count}</span>

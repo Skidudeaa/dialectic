@@ -18,6 +18,32 @@ No other platform does this. Chat apps don't have AI agency. AI assistants don't
 
 ## Quick Start
 
+### Amo and Dan: use the live app
+
+Open **https://dialectic.somacura.org** and sign in with your existing account.
+Both accounts are already members of **Iran/Hormuz Trading Room**, so it should
+appear under **Your Rooms** without re-entering an invite.
+
+Use one room per durable project or thinking stream. Inside a room:
+
+1. Write normally for human-to-human collaboration; use `@Claude` when you want
+   an immediate streamed response.
+2. Mark a message as a claim, question, or definition before sending when its
+   role matters.
+3. Use **Memory** for durable shared context and decisions.
+4. Use **Fork** on any message to explore a branch without derailing the main
+   line of thought.
+5. Use **Protocol** for Steelman, Socratic, Devil's Advocate, or Synthesis work.
+6. Use **Stakes** for predictions, commitments, confidence updates, and later
+   resolution; use **Insights** and **History** to inspect how the work evolved.
+7. Use **Share** to copy a single invite code when adding a collaborator. Treat
+   that code like a password because it grants room access.
+
+The green **Connected** indicator confirms real-time sync. If it is offline,
+reload once before writing; unsent text is deliberately kept in the composer.
+
+### Local development
+
 ```bash
 # 1. Install
 cd dialectic
@@ -51,7 +77,7 @@ Or use `make run` and `make frontend` for the legacy frontend at `http://localho
 - **Dual persona** — "primary" (co-thinker) and "provoker" (destabilizer for lazy consensus)
 - **Multi-model rooms** — add named AI personas (e.g., "Skeptic" using Haiku, "Deep Thinker" using Opus) with configurable trigger strategies (on mention, after primary, on disagreement, periodic)
 - **Thread forking** — branch any message into a new conversation thread, with full ancestry traversal
-- **Shared memories** — versioned, embeddable, cross-room. The AI reads relevant memories in every prompt via semantic search
+- **Shared memories** — versioned and embeddable. Room memories stay in their room; only explicitly promoted/global memories can cross room boundaries
 
 ### Thinking Protocols
 Structured reasoning modes where the AI becomes a facilitator:
@@ -67,7 +93,7 @@ The AI isn't stateless. It evolves through dialogue:
 - **Self-memory** — after each response, a background process extracts the AI's claims and positions, storing them as persistent memories. It remembers what it argued last week.
 - **Evolved identity** — per-room identity document distilled after sessions. The AI knows it tends toward functionalism in Room A and empiricism in Room B. Humans can view and edit this.
 - **User models** — the AI builds a model of each human's thinking style, strengths, and blind spots. It knows that you retreat to analogies under pressure and that your friend tends toward empiricism when challenged.
-- **Cross-session context** — memories from other rooms are injected into every prompt, creating a web of connected thinking.
+- **Cross-session context** — explicitly promoted/global memories can be reused across rooms without leaking ordinary room-scoped thinking.
 
 ### Async Dialogue (The Slow Channel)
 When only one person is online, the AI switches from participant to curator:
@@ -141,7 +167,7 @@ python -m http.server 3000 --directory dialectic/frontend
 ```bash
 cd dialectic
 python -m pytest tests/ -q
-# 134 passed in 1.5s
+# 237 passed
 ```
 
 ### Multi-worker with Redis
@@ -229,7 +255,7 @@ dialectic/
 | `PRODUCTION` | No | Set to `1` for multi-worker mode |
 | `WEB_CONCURRENCY` | No | Number of uvicorn workers in production |
 | `ALLOWED_ORIGINS` | No | CORS allowed origins (comma-separated) |
-| `JWT_SECRET_KEY` | No | JWT signing secret (auto-generated if not set) |
+| `JWT_SECRET_KEY` | Yes | JWT signing secret; generate a stable random value for production |
 
 ## How It Works Under the Hood
 
@@ -257,7 +283,7 @@ BASE_IDENTITY (or FACILITATOR_IDENTITY during protocols)
         → Room Context (ontology + rules)
           → Participant Preferences (aggression, metaphysics tolerance)
             → Relevant Memories (semantic search, max 20)
-              → Cross-Session Context (memories from other rooms)
+              → Cross-Session Context (explicitly promoted/global memories)
 ```
 
 ### Vector Memory

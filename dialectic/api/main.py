@@ -22,6 +22,9 @@ from llm.orchestrator import LLMOrchestrator
 from transport.websocket import ConnectionManager, InboundMessage, OutboundMessage, MessageTypes
 from transport.handlers import MessageHandler
 from api.auth.routes import router as auth_router, set_db_pool as set_auth_db_pool
+from api.auth.dependencies import AuthenticatedUser, get_current_user
+from api.auth.utils import decode_token
+from jwt.exceptions import InvalidTokenError
 from api.notifications.routes import router as notifications_router, set_notifications_db_pool
 from analytics.routes import router as analytics_router, set_analytics_db_pool
 from analytics.graph_routes import router as graph_router, set_graph_db_pool
@@ -247,7 +250,7 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Room-Token"],
 )
 
 # Include auth router with rate limiting applied to all auth endpoints
@@ -1710,6 +1713,61 @@ async def _distill_identity_on_disconnect(
 # WEBSOCKET ENDPOINT
 # ============================================================
 
+async def _finalize_websocket_connection(conn) -> None:
+    """Disconnect a socket and persist offline presence after its last local tab."""
+    try:
+        await connection_manager.disconnect(conn)
+    except Exception:
+        logger.exception("WebSocket registry cleanup failed")
+
+    # ConnectionManager keeps the authoritative local list. Do not mark a user
+    # offline when another tab/socket for the same room is still connected.
+    if connection_manager.get_user_connections(conn.user_id, conn.room_id):
+        return
+
+    try:
+        now = datetime.now(timezone.utc)
+        display_name = None
+        async with db_pool.acquire() as db:
+            await db.execute(
+                """INSERT INTO user_presence (user_id, room_id, status, last_heartbeat)
+                   VALUES ($1, $2, 'offline', $3)
+                   ON CONFLICT (user_id, room_id)
+                   DO UPDATE SET status = 'offline', last_heartbeat = $3""",
+                conn.user_id,
+                conn.room_id,
+                now,
+            )
+            display_name = await db.fetchval(
+                "SELECT display_name FROM users WHERE id = $1",
+                conn.user_id,
+            )
+
+        await connection_manager.broadcast(conn.room_id, OutboundMessage(
+            type=MessageTypes.PRESENCE_BROADCAST,
+            payload={
+                "user_id": str(conn.user_id),
+                "display_name": display_name or "Unknown",
+                "status": "offline",
+                "timestamp": now.isoformat(),
+            },
+        ))
+    except Exception:
+        # Cleanup must not turn a normal socket close into an application error,
+        # especially while the DB pool is itself shutting down.
+        logger.exception("Failed to persist offline presence")
+
+
+async def _websocket_thread_belongs_to_room(db, thread_id: Optional[UUID], room_id: UUID) -> bool:
+    """Validate an optional handshake thread before registering the socket."""
+    if thread_id is None:
+        return True
+    return bool(await db.fetchval(
+        "SELECT id FROM threads WHERE id = $1 AND room_id = $2",
+        thread_id,
+        room_id,
+    ))
+
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -1728,6 +1786,7 @@ async def websocket_endpoint(
             timeout=5.0
         )
         token = auth_data.get("token")
+        access_token = auth_data.get("access_token")
         user_id_str = auth_data.get("user_id")
         thread_id_str = auth_data.get("thread_id")
 
@@ -1755,6 +1814,21 @@ async def websocket_endpoint(
             await websocket.close(code=4001, reason="Invalid room token")
             return
 
+        # Credentialed identities must prove ownership with their account JWT.
+        # Guest identities intentionally remain invite-capability based.
+        has_credentials = bool(await db.fetchval(
+            "SELECT 1 FROM user_credentials WHERE user_id = $1",
+            user_id,
+        ))
+        if has_credentials or access_token:
+            try:
+                claims = decode_token(access_token or "")
+                if claims.get("type") != "access" or claims.get("sub") != str(user_id):
+                    raise ValueError("JWT subject mismatch")
+            except (InvalidTokenError, ValueError, RuntimeError):
+                await websocket.close(code=4001, reason="Invalid account token")
+                return
+
         membership = await db.fetchrow(
             "SELECT * FROM room_memberships WHERE room_id = $1 AND user_id = $2",
             room_id, user_id
@@ -1763,12 +1837,44 @@ async def websocket_endpoint(
             await websocket.close(code=4002, reason="Not a room member")
             return
 
+        if not await _websocket_thread_belongs_to_room(db, thread_id, room_id):
+            await websocket.close(code=4002, reason="Thread not found in room")
+            return
+
+        display_name = await db.fetchval(
+            "SELECT display_name FROM users WHERE id = $1",
+            user_id,
+        )
+        connected_at = datetime.now(timezone.utc)
+        # Preserve an existing heartbeat on connect so a welcome briefing can
+        # still use the prior session boundary. The first client heartbeat will
+        # advance it; disconnect always records the new session boundary.
+        await db.execute(
+            """INSERT INTO user_presence (user_id, room_id, status, last_heartbeat)
+               VALUES ($1, $2, 'online', $3)
+               ON CONFLICT (user_id, room_id)
+               DO UPDATE SET status = 'online'""",
+            user_id,
+            room_id,
+            connected_at,
+        )
+
     conn = await connection_manager.connect(
         websocket=websocket,
         user_id=user_id,
         room_id=room_id,
         thread_id=thread_id,
     )
+
+    await connection_manager.broadcast(room_id, OutboundMessage(
+        type=MessageTypes.PRESENCE_BROADCAST,
+        payload={
+            "user_id": str(user_id),
+            "display_name": display_name or "Unknown",
+            "status": "online",
+            "timestamp": connected_at.isoformat(),
+        },
+    ), exclude_user=user_id)
 
     try:
         while True:
@@ -1777,7 +1883,7 @@ async def websocket_endpoint(
 
             async with db_pool.acquire() as db:
                 memory_manager = MemoryManager(db)
-                llm_orchestrator = LLMOrchestrator(db)
+                llm_orchestrator = LLMOrchestrator(db, db_pool=db_pool)
                 handler = MessageHandler(
                     db=db,
                     connection_manager=connection_manager,
@@ -1787,15 +1893,12 @@ async def websocket_endpoint(
                 await handler.handle(conn, message)
 
     except WebSocketDisconnect:
-        await connection_manager.disconnect(conn)
-        # Fire-and-forget: distill LLM identity on session end
-        asyncio.create_task(
-            _distill_identity_on_disconnect(room_id, user_id, conn.thread_id)
-        )
+        pass
     except Exception as e:
         logger.exception(f"WebSocket error: {e}")
-        await connection_manager.disconnect(conn)
-        # Fire-and-forget: distill LLM identity on session end (even on error)
+    finally:
+        await _finalize_websocket_connection(conn)
+        # Fire-and-forget: distill LLM identity on every session end.
         asyncio.create_task(
             _distill_identity_on_disconnect(room_id, user_id, conn.thread_id)
         )
@@ -1862,7 +1965,7 @@ class UserRoomResponse(BaseModel):
 
 @app.get("/users/me/rooms", response_model=List[UserRoomResponse])
 async def get_user_rooms(
-    user_id: UUID = Query(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """
@@ -1871,6 +1974,7 @@ async def get_user_rooms(
     ARCHITECTURE: Single query with subqueries for efficiency.
     WHY: Enables room list with unread badges in sidebar.
     """
+    user_id = current_user.user_id
     rows = await db.fetch(
         """
         SELECT
@@ -1929,6 +2033,30 @@ class PresenceUserResponse(BaseModel):
     last_heartbeat: Optional[datetime]
 
 
+PRESENCE_STALE_AFTER = timedelta(seconds=90)
+
+
+def _effective_presence_status(
+    stored_status: Optional[str],
+    last_heartbeat: Optional[datetime],
+    *,
+    locally_connected: bool,
+    now: Optional[datetime] = None,
+) -> str:
+    """Convert abandoned online/away rows to offline after the heartbeat TTL."""
+    if locally_connected:
+        return "online"
+
+    status = stored_status or "offline"
+    current_time = now or datetime.now(timezone.utc)
+    if status in {"online", "away"} and (
+        last_heartbeat is None
+        or last_heartbeat < current_time - PRESENCE_STALE_AFTER
+    ):
+        return "offline"
+    return status
+
+
 @app.get("/rooms/{room_id}/presence", response_model=List[PresenceUserResponse])
 async def get_room_presence(
     room_id: UUID,
@@ -1965,12 +2093,23 @@ async def get_room_presence(
         room_id
     )
 
-    return [PresenceUserResponse(
+    now = datetime.now(timezone.utc)
+    presence = [PresenceUserResponse(
         user_id=row['user_id'],
         display_name=row['display_name'],
-        status=row['status'],
+        status=_effective_presence_status(
+            row['status'],
+            row['last_heartbeat'],
+            locally_connected=bool(
+                connection_manager.get_user_connections(row['user_id'], room_id)
+            ),
+            now=now,
+        ),
         last_heartbeat=row['last_heartbeat'],
     ) for row in rows]
+    order = {"online": 0, "away": 1, "offline": 2}
+    presence.sort(key=lambda item: (order.get(item.status, 3), item.display_name.lower()))
+    return presence
 
 
 # ============================================================

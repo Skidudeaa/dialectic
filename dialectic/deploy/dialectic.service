@@ -1,15 +1,22 @@
 [Unit]
 Description=Dialectic backend (FastAPI + dialogue engine)
-Documentation=file:///root/DwoodAmo/dialectic/CLAUDE.md
-After=network-online.target postgresql.service
-Wants=network-online.target
+Documentation=file:///opt/dialectic/current/dialectic/README.md
+After=network-online.target postgresql.service redis-server.service
+Wants=network-online.target redis-server.service
+# Leave a crash breadcrumb if the loop flaps.
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/DwoodAmo/dialectic
-EnvironmentFile=/root/DwoodAmo/dialectic/.env
-ExecStart=/usr/bin/python3 run.py
+WorkingDirectory=/opt/dialectic/current/dialectic
+Environment=HOST=127.0.0.1
+Environment=PORT=8002
+Environment=WEB_CONCURRENCY=2
+EnvironmentFile=/etc/dialectic/dialectic.env
+ExecStart=/opt/dialectic/current/dialectic/venv/bin/uvicorn api.main:app --host ${HOST} --port ${PORT} --workers ${WEB_CONCURRENCY} --proxy-headers --forwarded-allow-ips=127.0.0.1
+UMask=0077
 # Restart on crash AND on kill; 5s backoff to avoid tight loops on broken configs
 Restart=always
 RestartSec=5
@@ -19,9 +26,6 @@ TimeoutStopSec=15
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=dialectic
-# Leave a crash breadcrumb if the loop flaps
-StartLimitIntervalSec=300
-StartLimitBurst=5
 
 [Install]
 WantedBy=multi-user.target

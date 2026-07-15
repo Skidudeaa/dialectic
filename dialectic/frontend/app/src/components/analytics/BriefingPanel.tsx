@@ -7,7 +7,12 @@ interface BriefingData {
   messages_missed: number;
   memories_created: number;
   threads_forked: number;
-  highlights: { content: string; speaker_type: string }[];
+  highlights: {
+    speaker: string;
+    content_preview: string;
+    message_type: string;
+    timestamp: string;
+  }[];
 }
 
 interface BriefingPanelProps {
@@ -21,7 +26,6 @@ export function BriefingPanel({ roomId, userId, onDismiss }: BriefingPanelProps)
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
     api.getBriefing(roomId, userId)
       .then((data) => setBriefing(data as BriefingData))
       .catch(() => setBriefing(null))
@@ -36,7 +40,7 @@ export function BriefingPanel({ roomId, userId, onDismiss }: BriefingPanelProps)
     );
   }
 
-  if (!briefing) return null;
+  if (!briefing || briefing.messages_missed === 0) return null;
 
   return (
     <div className="briefing-panel">
@@ -66,7 +70,9 @@ export function BriefingPanel({ roomId, userId, onDismiss }: BriefingPanelProps)
         <div className="briefing-highlights">
           <h4>Key moments</h4>
           {briefing.highlights.map((h, i) => (
-            <div className="highlight-card" key={i}>{h.content}</div>
+            <div className="highlight-card" key={i}>
+              <strong>{h.speaker}</strong> {h.content_preview}
+            </div>
           ))}
         </div>
       )}

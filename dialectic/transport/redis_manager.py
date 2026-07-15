@@ -134,6 +134,13 @@ class RedisConnectionManager(ConnectionManager):
 
         while True:
             try:
+                # redis-py returns immediately when no channels are subscribed.
+                # Without this guard the outer loop busy-spins and can starve
+                # FastAPI startup before the first WebSocket joins a room.
+                if not self._subscribed_rooms:
+                    await asyncio.sleep(0.1)
+                    continue
+
                 async for raw_message in self._pubsub.listen():
                     if raw_message["type"] != "message":
                         continue

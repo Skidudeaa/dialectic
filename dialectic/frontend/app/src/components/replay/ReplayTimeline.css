@@ -1,111 +1,106 @@
+/* Replay timeline — ledger / dossier style */
 .replay-timeline {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: var(--shadow-md);
 }
-
 .replay-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
-
 .replay-controls .play-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--claude-primary);
-  border: none;
-  color: #fff;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: opacity 0.15s var(--ease-out);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--color-amber);
+    border: none;
+    color: var(--color-void);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s;
 }
-
-.replay-controls .play-btn:hover {
-  opacity: 0.85;
-}
-
+.replay-controls .play-btn:hover { background: var(--color-amber-hot); }
 .replay-timestamp {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  color: var(--text-secondary);
-  min-width: 140px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-secondary);
+    min-width: 140px;
 }
-
 .speed-selector {
-  display: flex;
-  gap: 2px;
-  background: var(--bg-raised);
-  border-radius: var(--radius-sm);
-  padding: 2px;
-  margin-left: auto;
+    display: flex;
+    gap: 2px;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    margin-left: auto;
 }
-
 .speed-selector button {
-  padding: 3px 8px;
-  border: none;
-  border-radius: 3px;
-  font-size: 10px;
-  font-family: 'JetBrains Mono', monospace;
-  cursor: pointer;
-  background: transparent;
-  color: var(--text-tertiary);
-  transition: all 0.15s var(--ease-out);
+    padding: 2px 7px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--color-faint);
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: .06em;
 }
-
 .speed-selector button.active {
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
+    background: var(--color-espresso);
+    color: var(--color-bone);
+    border: 1px solid var(--color-bean);
 }
-
 /* Heatmap track */
 .replay-track-container {
-  position: relative;
-  height: 28px;
-  cursor: pointer;
+    position: relative;
+    height: 24px;
+    cursor: pointer;
 }
-
 .replay-heatmap {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  gap: 1px;
-  border-radius: 4px;
-  overflow: hidden;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    gap: 1px;
+    border-radius: 2px;
+    overflow: hidden;
+    border: 1px solid var(--color-bean);
 }
-
 .heatmap-bar {
-  flex: 1;
-  border-radius: 2px;
-  transition: opacity 0.15s var(--ease-out);
+    flex: 1;
+    border-radius: 1px;
+    transition: opacity 0.15s;
 }
-
 /* Scrubber thumb */
 .replay-thumb {
-  position: absolute;
-  top: -2px;
-  width: 3px;
-  height: 32px;
-  background: var(--text-primary);
-  border-radius: 2px;
-  pointer-events: none;
-  box-shadow: 0 0 6px rgba(234, 234, 240, 0.3);
-  transition: left 0.05s linear;
+    position: absolute;
+    top: -2px;
+    width: 2px;
+    height: 28px;
+    background: var(--color-amber);
+    border-radius: 1px;
+    pointer-events: none;
+    box-shadow: 0 0 6px rgba(230,154,76,.4);
+    transition: left 0.05s linear;
 }
-
 .replay-loading {
-  text-align: center;
-  padding: 16px;
-  color: var(--text-tertiary);
-  font-size: 13px;
+    text-align: center;
+    padding: 16px;
+    color: var(--color-ghost);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
 }

@@ -1,166 +1,152 @@
 .commitment-dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
-
 .commitment-dashboard h3 {
-  margin: 0;
-  font-size: 15px;
-  color: var(--text-primary);
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .18em;
+    color: var(--color-secondary);
 }
-
 .commitment-tabs {
-  display: flex;
-  gap: 4px;
-  background: var(--bg-raised);
-  border-radius: var(--radius-sm);
-  padding: 3px;
+    display: flex;
+    gap: 3px;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 3px;
 }
-
 .commitment-tabs button {
-  flex: 1;
-  padding: 6px 12px;
-  border: none;
-  border-radius: 4px;
-  font-size: 12px;
-  font-family: 'Inter', sans-serif;
-  cursor: pointer;
-  background: transparent;
-  color: var(--text-secondary);
-  transition: all 0.15s var(--ease-out);
+    flex: 1;
+    padding: 4px 10px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    cursor: pointer;
+    background: transparent;
+    color: var(--color-faint);
+    transition: all 0.15s var(--ease-out);
 }
-
 .commitment-tabs button.active {
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
+    background: var(--color-cacao);
+    color: var(--color-bone);
+    border: 1px solid var(--color-bean);
 }
-
 .commitment-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
-
 .commitment-empty {
-  text-align: center;
-  padding: 32px 16px;
-  color: var(--text-tertiary);
-  font-size: 13px;
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--color-ghost);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
 }
-
+/* New commitment button — dashed bean border */
 .new-commitment-btn {
-  background: var(--bg-raised);
-  border: 1px dashed var(--border-default);
-  border-radius: var(--radius-md);
-  padding: 12px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-family: 'Inter', sans-serif;
-  cursor: pointer;
-  text-align: center;
-  transition: border-color 0.15s var(--ease-out);
+    background: transparent;
+    border: 1px dashed var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    color: var(--color-faint);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 0.15s;
 }
-
 .new-commitment-btn:hover {
-  border-color: var(--claude-primary);
-  color: var(--claude-primary);
+    border-color: var(--amber-30);
+    color: var(--color-amber);
 }
-
 /* Create form */
 .commitment-create-form {
-  background: var(--bg-raised);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: var(--shadow-md);
 }
-
 .commitment-create-form label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--color-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
-
 .commitment-create-form input,
 .commitment-create-form textarea,
 .commitment-create-form select {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  padding: 8px 10px;
+    background: var(--color-void);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    color: var(--color-bone);
+    font-family: var(--font-serif);
+    font-size: 13px;
+    padding: 7px 9px;
+    outline: none;
+    transition: border-color 0.15s;
 }
-
 .commitment-create-form input:focus,
 .commitment-create-form textarea:focus,
-.commitment-create-form select:focus {
-  outline: none;
-  border-color: var(--claude-primary);
-}
-
-.commitment-create-form textarea {
-  resize: vertical;
-  min-height: 60px;
-}
-
-.form-row {
-  display: flex;
-  gap: 10px;
-}
-
-.form-row label {
-  flex: 1;
-}
-
+.commitment-create-form select:focus { border-color: var(--amber-30); }
+.commitment-create-form textarea { resize: vertical; min-height: 60px; }
+.form-row { display: flex; gap: 10px; }
+.form-row label { flex: 1; }
 .form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
 }
-
 .form-actions button {
-  padding: 6px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-family: 'Inter', sans-serif;
-  cursor: pointer;
-  border: none;
+    padding: 5px 12px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-stencil);
+    font-size: 9px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    cursor: pointer;
 }
-
 .form-actions .cancel-btn {
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
+    background: transparent;
+    color: var(--color-secondary);
+    border: 1px solid var(--color-bean);
 }
-
 .form-actions .submit-btn {
-  background: var(--claude-primary);
-  color: #fff;
+    background: var(--color-amber);
+    color: var(--color-void);
+    border: 1px solid var(--color-amber);
 }
-
-.form-actions .submit-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
+.form-actions .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 /* Calibration chart */
 .calibration-section {
-  background: var(--bg-raised);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 16px;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    box-shadow: var(--shadow-md);
 }
-
 .calibration-section h4 {
-  margin: 0 0 12px;
-  font-size: 13px;
-  color: var(--text-secondary);
+    margin: 0 0 10px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--color-secondary);
 }

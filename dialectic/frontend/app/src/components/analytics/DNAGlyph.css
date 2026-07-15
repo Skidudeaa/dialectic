@@ -1,39 +1,26 @@
+/* DNA Glyph — identity visualization */
 .dna-glyph {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
 }
-
 .dna-glyph svg {
-  filter: drop-shadow(0 0 6px var(--glyph-glow, rgba(129, 140, 248, 0.3)));
+    filter: drop-shadow(0 0 6px rgba(230,154,76,.25));
 }
-
 .dna-fingerprint {
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--text-tertiary);
-  letter-spacing: 0.5px;
+    font-family: var(--font-mono);
+    color: var(--color-faint);
+    letter-spacing: .08em;
+    text-transform: uppercase;
 }
-
-.dna-glyph.small .dna-fingerprint {
-  font-size: 8px;
-}
-
-.dna-glyph.large .dna-fingerprint {
-  font-size: 11px;
-}
-
+.dna-glyph.small .dna-fingerprint { font-size: 8px; }
+.dna-glyph.large .dna-fingerprint { font-size: 10px; }
 .dna-archetype {
-  font-family: 'Inter', sans-serif;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+    font-family: var(--font-stencil);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--color-amber);
 }
-
-.dna-glyph.small .dna-archetype {
-  font-size: 8px;
-}
-
-.dna-glyph.large .dna-archetype {
-  font-size: 12px;
-}
+.dna-glyph.small .dna-archetype { font-size: 8px; }
+.dna-glyph.large .dna-archetype { font-size: 11px; }

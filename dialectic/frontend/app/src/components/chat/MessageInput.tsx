@@ -5,9 +5,10 @@ import './MessageInput.css'
 type MessageType = Message['message_type']
 
 interface MessageInputProps {
-  onSend: (content: string, messageType: MessageType) => void
+  onSend: (content: string, messageType: MessageType) => boolean
   onTypingStart?: () => void
   onTypingStop?: () => void
+  onTypingContent?: (content: string) => void
   disabled?: boolean
   replyTo?: { author: string; content: string } | null
   onCancelReply?: () => void
@@ -20,7 +21,7 @@ const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
   { value: 'definition', label: 'Definition' },
 ]
 
-export function MessageInput({ onSend, onTypingStart, onTypingStop, disabled, replyTo, onCancelReply }: MessageInputProps) {
+export function MessageInput({ onSend, onTypingStart, onTypingStop, onTypingContent, disabled, replyTo, onCancelReply }: MessageInputProps) {
   const [content, setContent] = useState('')
   const [messageType, setMessageType] = useState<MessageType>('text')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -29,7 +30,8 @@ export function MessageInput({ onSend, onTypingStart, onTypingStop, disabled, re
   const handleSend = useCallback(() => {
     const trimmed = content.trim()
     if (!trimmed) return
-    onSend(trimmed, messageType)
+    const sent = onSend(trimmed, messageType)
+    if (!sent) return
     setContent('')
     setMessageType('text')
     if (textareaRef.current) {
@@ -48,6 +50,7 @@ export function MessageInput({ onSend, onTypingStart, onTypingStop, disabled, re
 
   const handleInput = (value: string) => {
     setContent(value)
+    onTypingContent?.(value)
     // Auto-resize
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'

@@ -1,19 +1,26 @@
 const BASE = '';  // Same origin via Vite proxy
 
 class DialecticAPI {
-  private token: string = '';
+  private roomToken: string = '';
+  private accessToken: string = '';
 
-  setToken(token: string) { this.token = token; }
-  getToken(): string { return this.token; }
+  // `setToken` remains as a compatibility alias for existing room-entry code.
+  setToken(token: string) { this.setRoomToken(token); }
+  setRoomToken(token: string) { this.roomToken = token; }
+  setAccessToken(token: string) { this.accessToken = token; }
+  getAccessToken(): string { return this.accessToken; }
+  getToken(): string { return this.roomToken; }
 
   private async fetch<T>(path: string, options?: RequestInit): Promise<T> {
-    // SECURITY: Token sent via Authorization header, never in URL query params.
-    // URL params are logged by proxies, browsers, and analytics platforms.
+    // User identity and room access are different credentials. JWT belongs in
+    // Authorization; the invite capability uses a dedicated header so neither
+    // secret is exposed in URLs.
     const res = await window.fetch(`${BASE}${path}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {}),
+        ...(this.accessToken ? { 'Authorization': `Bearer ${this.accessToken}` } : {}),
+        ...(this.roomToken ? { 'X-Room-Token': this.roomToken } : {}),
         ...options?.headers,
       },
     });
@@ -22,7 +29,8 @@ class DialecticAPI {
         // Token expired or invalid — could trigger re-auth flow
         console.warn('API authentication failed');
       }
-      throw new Error(`API error: ${res.status}`);
+      const data = await res.json().catch(() => null) as { detail?: string } | null;
+      throw new Error(data?.detail ?? `API error: ${res.status}`);
     }
     return res.json();
   }
@@ -35,7 +43,13 @@ class DialecticAPI {
   async getMemories(roomId: string) { return this.fetch(`/rooms/${roomId}/memories`); }
   async getPresence(roomId: string) { return this.fetch(`/rooms/${roomId}/presence`); }
   async getSettings(roomId: string) { return this.fetch(`/rooms/${roomId}/settings`); }
-  async getRooms(userId: string) { return this.fetch(`/users/me/rooms?user_id=${userId}`); }
+  async getRooms() { return this.fetch('/users/me/rooms'); }
+  async updateSettings(roomId: string, userId: string, settings: object) {
+    return this.fetch(`/rooms/${roomId}/settings?user_id=${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(settings),
+    });
+  }
 
   // Trading
   async getTradingConfig(roomId: string) {
@@ -54,8 +68,8 @@ class DialecticAPI {
   // Identity
   async getIdentity(roomId: string) { return this.fetch(`/rooms/${roomId}/identity`); }
   async getUserModel(roomId: string, userId: string) { return this.fetch(`/rooms/${roomId}/user-models/${userId}`); }
-  async updateIdentity(roomId: string, content: string) {
-    return this.fetch(`/rooms/${roomId}/identity`, { method: 'PUT', body: JSON.stringify({ content }) });
+  async updateIdentity(roomId: string, userId: string, content: string) {
+    return this.fetch(`/rooms/${roomId}/identity?user_id=${userId}`, { method: 'PUT', body: JSON.stringify({ content }) });
   }
 
   // Briefing
@@ -70,11 +84,29 @@ class DialecticAPI {
   async getCalibration(roomId: string, userId?: string) { return this.fetch(`/stakes/rooms/${roomId}/calibration${userId ? `?user_id=${userId}` : ''}`); }
 
   // Auth (no room token needed)
+  // WHY: surfaces the backend's `detail` message (e.g. "Invalid email or password")
+  // instead of returning the error body as if it were a TokenResponse — a swallowed
+  // 401 here cascades into user_id=undefined 422s on every later request.
+  private async authFetch<T>(path: string, body: Record<string, unknown>): Promise<T> {
+    const res = await window.fetch(`${BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const detail = data && typeof data.detail === 'string' ? data.detail : `API error: ${res.status}`;
+      throw new Error(detail);
+    }
+    return data as T;
+  }
   async signup(email: string, password: string, displayName: string) {
-    return window.fetch(`${BASE}/auth/signup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, display_name: displayName }) }).then(r => r.json());
+    return this.authFetch('/auth/signup', { email, password, display_name: displayName });
   }
   async login(email: string, password: string) {
-    return window.fetch(`${BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) }).then(r => r.json());
+    return this.authFetch('/auth/login', { email, password });
+  }
+  async refreshSession(refreshToken: string) {
+    return this.authFetch('/auth/refresh', { refresh_token: refreshToken });
+  }
+  async logoutSession(refreshToken: string) {
+    return this.authFetch('/auth/logout', { refresh_token: refreshToken });
   }
 }
 

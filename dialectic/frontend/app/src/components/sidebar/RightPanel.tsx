@@ -6,9 +6,13 @@ import { ThreadPanel } from './ThreadPanel'
 import { UsersPanel } from './UsersPanel'
 import { SharePanel } from './SharePanel'
 import { TradingPanel } from '../trading/TradingPanel'
+import { AnalyticsPanel } from '../analytics/AnalyticsPanel'
+import { IdentityViewer } from '../analytics/IdentityViewer'
+import { ReplayTimeline } from '../replay/ReplayTimeline'
+import { CommitmentDashboard } from '../stakes/CommitmentDashboard'
 import './RightPanel.css'
 
-type TabId = 'users' | 'memory' | 'threads' | 'share' | 'trading'
+type TabId = 'users' | 'memory' | 'threads' | 'analytics' | 'stakes' | 'history' | 'identity' | 'share' | 'trading'
 
 interface RightPanelProps {
   memories: Memory[]
@@ -17,18 +21,47 @@ interface RightPanelProps {
   onThreadSelect: (threadId: string) => void
   onForkThread: () => void
   onAddMemory: (key: string, content: string) => void
+  roomId: string
   roomToken: string
+  userId: string
   users: { id: string; name: string; status: string }[]
+  onCreateCommitment: (
+    claim: string,
+    criteria: string,
+    category?: string,
+    deadline?: string,
+    initialConfidence?: number,
+  ) => void
+  onUpdateConfidence: (commitmentId: string, confidence: number) => void
+  onResolveCommitment: (commitmentId: string) => void
 }
 
 const BASE_TABS: { id: TabId; label: string }[] = [
   { id: 'users', label: 'Users' },
   { id: 'memory', label: 'Memory' },
-  { id: 'threads', label: 'Threads' },
+  { id: 'threads', label: 'Branches' },
+  { id: 'analytics', label: 'Insights' },
+  { id: 'stakes', label: 'Stakes' },
+  { id: 'history', label: 'History' },
+  { id: 'identity', label: 'AI' },
   { id: 'share', label: 'Share' },
 ]
 
-export function RightPanel({ memories, threads, activeThreadId, onThreadSelect, onForkThread, onAddMemory, roomToken, users }: RightPanelProps) {
+export function RightPanel({
+  memories,
+  threads,
+  activeThreadId,
+  onThreadSelect,
+  onForkThread,
+  onAddMemory,
+  roomId,
+  roomToken,
+  userId,
+  users,
+  onCreateCommitment,
+  onUpdateConfidence,
+  onResolveCommitment,
+}: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>('memory')
   const tradingConfig = useAppStore((s) => s.tradingConfig)
 
@@ -56,7 +89,19 @@ export function RightPanel({ memories, threads, activeThreadId, onThreadSelect, 
         {activeTab === 'users' && <UsersPanel users={users} />}
         {activeTab === 'memory' && <MemoryPanel memories={memories} onAddMemory={onAddMemory} />}
         {activeTab === 'threads' && <ThreadPanel threads={threads} activeThreadId={activeThreadId} onThreadSelect={onThreadSelect} onForkThread={onForkThread} />}
-        {activeTab === 'share' && <SharePanel roomToken={roomToken} />}
+        {activeTab === 'analytics' && activeThreadId && <AnalyticsPanel key={activeThreadId} threadId={activeThreadId} roomId={roomId} />}
+        {activeTab === 'stakes' && (
+          <CommitmentDashboard
+            key={roomId}
+            roomId={roomId}
+            onCreateCommitment={onCreateCommitment}
+            onUpdateConfidence={onUpdateConfidence}
+            onResolve={onResolveCommitment}
+          />
+        )}
+        {activeTab === 'history' && <ReplayTimeline key={roomId} roomId={roomId} />}
+        {activeTab === 'identity' && <IdentityViewer key={roomId} roomId={roomId} userId={userId} />}
+        {activeTab === 'share' && <SharePanel roomId={roomId} roomToken={roomToken} />}
         {activeTab === 'trading' && <TradingPanel />}
       </div>
     </>

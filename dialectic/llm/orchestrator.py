@@ -1,6 +1,7 @@
 # llm/orchestrator.py — Main orchestration entry point
 
 import asyncio
+import asyncpg
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import AsyncIterator, Optional
@@ -15,7 +16,7 @@ from models import (
     SpeakerType, MessageType, MessageCreatedPayload,
     ProtocolState,
 )
-from .providers import ProviderName, LLMRequest, get_provider
+from .providers import ProviderName, LLMRequest
 from .router import ModelRouter, RoutingResult
 from .heuristics import InterjectionEngine, InterjectionDecision
 from .prompts import PromptBuilder, AssembledPrompt
@@ -54,8 +55,14 @@ class LLMOrchestrator:
     TRADEOFF: God object risk vs coordination clarity.
     """
 
-    def __init__(self, db):
+    def __init__(self, db, db_pool=None):
+        # WHY: `db` is typically a pooled connection scoped to one WebSocket
+        # message. Background tasks (self-memory extraction, delayed
+        # effectiveness measurement) outlive that scope, so they must acquire
+        # fresh connections from `db_pool` — using `db` after release is a
+        # use-after-release bug that made those tasks fail silently.
         self.db = db
+        self.db_pool = db_pool
         self.heuristics = InterjectionEngine()
         self.prompt_builder = PromptBuilder()
         self._routers: dict[UUID, ModelRouter] = {}
@@ -160,6 +167,9 @@ class LLMOrchestrator:
         TRADEOFF: Extra conditional path vs separate method — keeps single entry point.
         """
 
+        speaker_balance: Optional[dict[str, int]] = None
+        unsurfaced_memory_count: Optional[int] = None
+
         # Protocol mode: always interject, skip heuristics
         if protocol is not None:
             decision = InterjectionDecision(
@@ -170,15 +180,15 @@ class LLMOrchestrator:
             )
         else:
             # Compute speaker balance from last 10 messages
-            speaker_balance: dict[str, int] = {}
+            balance: dict[str, int] = {}
             for msg in messages[-10:]:
                 if msg.speaker_type == SpeakerType.HUMAN and msg.user_id:
                     uid = str(msg.user_id)
-                    speaker_balance[uid] = speaker_balance.get(uid, 0) + 1
+                    balance[uid] = balance.get(uid, 0) + 1
+            speaker_balance = balance or None
 
             # Count unsurfaced memories: semantically similar to latest message
             # but not yet referenced in recent conversation
-            unsurfaced_memory_count: Optional[int] = None
             latest_human = next(
                 (m for m in reversed(messages) if m.speaker_type == SpeakerType.HUMAN),
                 None,
@@ -209,7 +219,7 @@ class LLMOrchestrator:
                 mentioned=mentioned,
                 semantic_novelty=semantic_novelty,
                 unsurfaced_memory_count=unsurfaced_memory_count,
-                speaker_balance=speaker_balance if speaker_balance else None,
+                speaker_balance=speaker_balance,
             )
 
         if not decision.should_interject:
@@ -227,8 +237,8 @@ class LLMOrchestrator:
                 decision=decision,
                 human_turn_count=getattr(decision, '_human_turns', None),
                 semantic_novelty=semantic_novelty,
-                unsurfaced_memory_count=unsurfaced_memory_count if 'unsurfaced_memory_count' in dir() else None,
-                speaker_balance=speaker_balance if 'speaker_balance' in dir() else None,
+                unsurfaced_memory_count=unsurfaced_memory_count,
+                speaker_balance=speaker_balance,
                 message_count=len(messages),
                 mode="silence",
             )
@@ -311,7 +321,7 @@ class LLMOrchestrator:
         response_message = await self._persist_response(
             thread=thread,
             content=content,
-            speaker_type=SpeakerType.LLM_PRIMARY,
+            speaker_type=SpeakerType.LLM_PROVOKER if decision.use_provoker else SpeakerType.LLM_PRIMARY,
             model_used=routing.response.model,
             prompt_hash=routing.prompt_hash,
             token_count=routing.response.input_tokens + routing.response.output_tokens,
@@ -334,7 +344,7 @@ class LLMOrchestrator:
             triggered_by_message_id=triggered_msg.id if triggered_msg else None,
             decision=decision,
             semantic_novelty=semantic_novelty,
-            speaker_balance=speaker_balance if 'speaker_balance' in dir() else None,
+            speaker_balance=speaker_balance,
             message_count=len(messages),
             response_message_id=response_message.id,
             mode=mode,
@@ -434,7 +444,7 @@ class LLMOrchestrator:
         response_message = await self._persist_response(
             thread=thread,
             content=content,
-            speaker_type=SpeakerType.LLM_PRIMARY,
+            speaker_type=SpeakerType.LLM_PROVOKER if use_provoker else SpeakerType.LLM_PRIMARY,
             model_used=routing.response.model,
             prompt_hash=routing.prompt_hash,
             token_count=routing.response.input_tokens + routing.response.output_tokens,
@@ -468,7 +478,8 @@ class LLMOrchestrator:
         Yields tuples of (event_type, data) where event_type is:
         - "thinking": Processing started
         - "streaming": Token received {"token": str, "index": int}
-        - "done": Complete {"message_id": str, "content": str, "model_used": str, "truncated": bool}
+        - "done": Complete persisted-message metadata including sequence,
+          created_at, speaker_type, and message_type
         - "error": Failed {"error": str, "partial_content": str}
         """
         # Signal processing started
@@ -511,17 +522,21 @@ class LLMOrchestrator:
             stream=True,
         )
 
-        # Get provider from router cache to avoid creating new httpx clients per stream
+        # WHY: Streaming previously bypassed the fallback chain entirely —
+        # router.stream() falls back across providers until the first token.
         router = self._get_router(room)
-        provider_name = ProviderName(room.primary_provider)
-        provider = router._get_provider(provider_name)
 
         # Track accumulated content
         accumulated_content = ""
         token_index = 0
+        model_used = model
 
         try:
-            async for token in provider.stream(request):
+            async for event_type, data in router.stream(request):
+                if event_type == "attempt":
+                    model_used = data["model"]
+                    continue
+                token = data["token"]
                 accumulated_content += token
                 yield ("streaming", {"token": token, "index": token_index})
                 token_index += 1
@@ -534,7 +549,7 @@ class LLMOrchestrator:
                 thread=thread,
                 content=accumulated_content,
                 speaker_type=speaker_type,
-                model_used=model,
+                model_used=model_used,
                 prompt_hash=prompt_hash,
                 token_count=0,  # Not available from streaming
             )
@@ -545,8 +560,12 @@ class LLMOrchestrator:
             yield ("done", {
                 "message_id": str(response_message.id),
                 "content": accumulated_content,
-                "model_used": model,
+                "model_used": model_used,
                 "truncated": context.truncated,
+                "sequence": response_message.sequence,
+                "created_at": response_message.created_at.isoformat(),
+                "speaker_type": response_message.speaker_type.value,
+                "message_type": response_message.message_type.value,
             })
 
         except Exception as e:
@@ -562,11 +581,29 @@ class LLMOrchestrator:
         room_id: UUID,
         messages: list[Message],
     ) -> None:
-        """Schedule background extraction of LLM self-memories from a response."""
-        self_memory = LLMSelfMemory(self.db, MemoryManager(self.db))
-        asyncio.create_task(
-            self_memory.extract_and_store(message, room_id, messages[-10:])
-        )
+        """
+        Schedule background extraction of LLM self-memories from a response.
+
+        WHY: This task outlives the per-message DB connection scope, so it
+        must acquire its own connection from the pool. Using self.db here
+        was a use-after-release bug — by the time the task ran, the pooled
+        connection had been returned and the extraction failed silently.
+        """
+        if self.db_pool is None:
+            logger.debug("No db_pool available — skipping self-memory extraction")
+            return
+
+        recent = messages[-10:]
+
+        async def _extract() -> None:
+            try:
+                async with self.db_pool.acquire() as conn:
+                    self_memory = LLMSelfMemory(conn, MemoryManager(conn))
+                    await self_memory.extract_and_store(message, room_id, recent)
+            except Exception:
+                logger.exception("Self-memory extraction failed")
+
+        asyncio.create_task(_extract())
 
     def _schedule_effectiveness_measurement(
         self,
@@ -582,13 +619,21 @@ class LLMOrchestrator:
         TRADEOFF: 30s delay means the measurement is always slightly stale,
         but immediate measurement would find zero responses.
         """
+        if self.db_pool is None:
+            logger.debug("No db_pool available — skipping effectiveness measurement")
+            return
+
         async def _delayed_measure() -> None:
             await asyncio.sleep(30)
-            await self._self_model.measure_effectiveness(
-                room_id=room_id,
-                llm_message_id=llm_message_id,
-                decision_id=decision_id,
-            )
+            try:
+                async with self.db_pool.acquire() as conn:
+                    await SelfModel(conn).measure_effectiveness(
+                        room_id=room_id,
+                        llm_message_id=llm_message_id,
+                        decision_id=decision_id,
+                    )
+            except Exception:
+                logger.exception("Effectiveness measurement failed")
 
         asyncio.create_task(_delayed_measure())
 
@@ -611,23 +656,35 @@ class LLMOrchestrator:
         protocol_id = protocol.id if protocol else None
         protocol_phase = protocol.current_phase if protocol else None
 
-        # Atomic INSERT with inline sequence calculation to prevent TOCTOU race
-        row = await self.db.fetchrow(
-            """INSERT INTO messages
-               (id, thread_id, sequence, created_at, speaker_type, user_id,
-                message_type, content, model_used, prompt_hash, token_count,
-                protocol_id, protocol_phase)
-               VALUES (
-                   $1, $2,
-                   (SELECT COALESCE(MAX(sequence), 0) + 1 FROM messages WHERE thread_id = $2),
-                   $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
-               )
-               RETURNING sequence""",
-            message_id, thread.id, now,
-            speaker_type.value, None, message_type.value,
-            content, model_used, prompt_hash, token_count,
-            protocol_id, protocol_phase
-        )
+        # Atomic INSERT with inline sequence calculation to prevent TOCTOU race.
+        # WHY retry: under concurrent inserts to the same thread, two
+        # transactions can still compute the same next sequence; the
+        # UNIQUE (thread_id, sequence) constraint rejects the loser, and a
+        # retry recomputes against the winner's committed row.
+        row = None
+        for attempt in range(3):
+            try:
+                row = await self.db.fetchrow(
+                    """INSERT INTO messages
+                       (id, thread_id, sequence, created_at, speaker_type, user_id,
+                        message_type, content, model_used, prompt_hash, token_count,
+                        protocol_id, protocol_phase)
+                       VALUES (
+                           $1, $2,
+                           (SELECT COALESCE(MAX(sequence), 0) + 1 FROM messages WHERE thread_id = $2),
+                           $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+                       )
+                       RETURNING sequence""",
+                    message_id, thread.id, now,
+                    speaker_type.value, None, message_type.value,
+                    content, model_used, prompt_hash, token_count,
+                    protocol_id, protocol_phase
+                )
+                break
+            except asyncpg.UniqueViolationError:
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(0.05 * (attempt + 1))
         sequence = row['sequence']
 
         message = Message(

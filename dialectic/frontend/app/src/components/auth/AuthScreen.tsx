@@ -33,9 +33,11 @@ export function AuthScreen() {
         access_token: string;
         refresh_token: string;
         user_id: string;
+        display_name?: string;
       };
+      api.setAccessToken(res.access_token);
       setUser(
-        { id: res.user_id, display_name: signInEmail.split('@')[0] },
+        { id: res.user_id, display_name: res.display_name ?? signInEmail.split('@')[0] },
         res.access_token,
         res.refresh_token,
       );
@@ -55,9 +57,11 @@ export function AuthScreen() {
         access_token: string;
         refresh_token: string;
         user_id: string;
+        display_name?: string;
       };
+      api.setAccessToken(res.access_token);
       setUser(
-        { id: res.user_id, display_name: createName },
+        { id: res.user_id, display_name: res.display_name ?? createName },
         res.access_token,
         res.refresh_token,
       );
@@ -81,6 +85,7 @@ export function AuthScreen() {
       if (!res.ok) throw new Error(`Failed: ${res.status}`);
       const data = await res.json() as { id: string; display_name: string };
       // Quick join has no auth tokens — just a user identity
+      api.setAccessToken('');
       setUser({ id: data.id, display_name: data.display_name }, '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Quick join failed');

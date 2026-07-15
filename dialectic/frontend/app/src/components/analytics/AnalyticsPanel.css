@@ -1,94 +1,94 @@
+/* Analytics panel — espresso card with paper shadow */
 .analytics-panel {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: var(--shadow-md);
 }
-
 .analytics-panel h3 {
-  margin: 0;
-  font-size: 15px;
-  color: var(--text-primary);
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .18em;
+    color: var(--color-secondary);
 }
-
 .analytics-loading,
 .analytics-empty {
-  text-align: center;
-  padding: 32px 16px;
-  color: var(--text-tertiary);
-  font-size: 13px;
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--color-ghost);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
 }
-
 .analytics-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
 }
-
 .stat-card {
-  background: var(--bg-raised);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 14px;
-  text-align: center;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 11px;
+    text-align: center;
 }
-
 .stat-card .stat-value {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text-primary);
-  font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
+    font-size: 20px;
+    color: var(--color-bone);
 }
-
 .stat-card .stat-label {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  margin-top: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    color: var(--color-faint);
+    margin-top: 3px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
 }
-
 .turn-balance h4 {
-  margin: 0 0 10px;
-  font-size: 13px;
-  color: var(--text-secondary);
+    margin: 0 0 8px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--color-secondary);
 }
-
 .turn-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
 }
-
 .turn-bar .turn-label {
-  font-size: 11px;
-  color: var(--text-secondary);
-  width: 80px;
-  text-align: right;
-  flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--color-secondary);
+    width: 80px;
+    text-align: right;
+    flex-shrink: 0;
 }
-
 .turn-bar .turn-track {
-  flex: 1;
-  height: 6px;
-  background: var(--bg-overlay);
-  border-radius: 3px;
-  overflow: hidden;
+    flex: 1;
+    height: 4px;
+    background: var(--color-void);
+    border: 1px solid var(--color-bean);
+    overflow: hidden;
 }
-
 .turn-bar .turn-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s var(--ease-out);
+    height: 100%;
+    background: var(--color-amber);
+    transition: width 0.3s var(--ease-out);
 }
-
 .turn-bar .turn-count {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  width: 28px;
-  font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--color-faint);
+    width: 28px;
 }

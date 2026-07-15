@@ -6,6 +6,9 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 import logging
+import re
+
+import asyncpg
 
 from models import (
     Room, User, Thread, Message, Memory, Event, EventType,
@@ -26,6 +29,34 @@ from .websocket import (
 
 logger = logging.getLogger(__name__)
 
+# WHY: The UI and prompt-context layer treat both @llm and @claude as
+# explicit summons; mention detection must accept the same set or
+# "@claude" messages silently fall back to heuristic gating.
+LLM_MENTION_RE = re.compile(r"@(llm|claude)\b", re.IGNORECASE)
+
+
+def _message_type_from_payload(payload: dict) -> MessageType:
+    """Read the canonical message_type field while accepting the legacy type key."""
+    raw_type = payload.get("message_type")
+    if raw_type is None:
+        raw_type = payload.get("type", MessageType.TEXT.value)
+    return MessageType(raw_type)
+
+
+def _llm_done_payload(thread_id: UUID, data: dict) -> dict:
+    """Build the authoritative persisted-message contract for llm_done."""
+    return {
+        "thread_id": str(thread_id),
+        "message_id": data["message_id"],
+        "content": data["content"],
+        "model_used": data["model_used"],
+        "truncated": data["truncated"],
+        "sequence": data["sequence"],
+        "created_at": data["created_at"],
+        "speaker_type": data["speaker_type"],
+        "message_type": data["message_type"],
+    }
+
 
 class MessageHandler:
     """
@@ -36,6 +67,10 @@ class MessageHandler:
     # Class-level tracking for active LLM streams across handler instances
     # Key: thread_id, Value: asyncio.Task
     _active_streams: dict[UUID, Task] = {}
+    # Human messages can arrive simultaneously from different sockets. Serialize
+    # the decision/response cycle per branch so one thought does not produce two
+    # competing automatic interjections from stale context.
+    _thread_llm_locks: dict[UUID, asyncio.Lock] = {}
 
     def __init__(
         self,
@@ -55,8 +90,8 @@ class MessageHandler:
 
         handlers = {
             MessageTypes.SEND_MESSAGE: self._handle_send_message,
-            MessageTypes.TYPING_START: self._handle_typing,
-            MessageTypes.TYPING_STOP: self._handle_typing,
+            MessageTypes.TYPING_START: self._handle_typing_start,
+            MessageTypes.TYPING_STOP: self._handle_typing_stop,
             MessageTypes.FORK_THREAD: self._handle_fork_thread,
             MessageTypes.SWITCH_THREAD: self._handle_switch_thread,
             MessageTypes.ADD_MEMORY: self._handle_add_memory,
@@ -89,6 +124,33 @@ class MessageHandler:
             logger.warning(f"Unknown message type: {message.type}")
             await self._send_error(conn, f"Unknown message type: {message.type}")
 
+    async def _validated_room_thread(
+        self,
+        conn: Connection,
+        raw_thread_id,
+        *,
+        update_connection: bool = False,
+    ) -> Optional[UUID]:
+        """Return a thread UUID only when it belongs to the socket's room."""
+        try:
+            thread_id = raw_thread_id if isinstance(raw_thread_id, UUID) else UUID(str(raw_thread_id))
+        except (TypeError, ValueError, AttributeError):
+            await self._send_error(conn, "Invalid thread_id")
+            return None
+
+        found = await self.db.fetchval(
+            "SELECT id FROM threads WHERE id = $1 AND room_id = $2",
+            thread_id,
+            conn.room_id,
+        )
+        if not found:
+            await self._send_error(conn, "Thread not found in this room")
+            return None
+
+        if update_connection:
+            conn.thread_id = thread_id
+        return thread_id
+
     async def _handle_send_message(self, conn: Connection, payload: dict) -> None:
         """Handle new message from user."""
 
@@ -96,10 +158,24 @@ class MessageHandler:
         if not content:
             return
 
-        message_type = MessageType(payload.get("type", "text"))
+        try:
+            message_type = _message_type_from_payload(payload)
+        except (TypeError, ValueError):
+            await self._send_error(conn, "Invalid message_type")
+            return
         references_message_id = payload.get("references_message_id")
 
-        thread_id = conn.thread_id
+        requested_thread_id = payload.get("thread_id") or conn.thread_id
+        thread_id = None
+        if requested_thread_id:
+            thread_id = await self._validated_room_thread(
+                conn,
+                requested_thread_id,
+                update_connection=True,
+            )
+            if thread_id is None:
+                return
+
         if not thread_id:
             row = await self.db.fetchrow(
                 """SELECT id FROM threads
@@ -108,6 +184,8 @@ class MessageHandler:
                 conn.room_id
             )
             thread_id = row['id'] if row else None
+            if thread_id:
+                conn.thread_id = thread_id
 
         if not thread_id:
             await self._send_error(conn, "No active thread")
@@ -115,23 +193,50 @@ class MessageHandler:
 
         now = datetime.now(timezone.utc)
         message_id = uuid4()
-        refs_msg_id = UUID(references_message_id) if references_message_id else None
+        refs_msg_id = None
+        if references_message_id:
+            try:
+                refs_msg_id = UUID(str(references_message_id))
+            except (TypeError, ValueError, AttributeError):
+                await self._send_error(conn, "Invalid references_message_id")
+                return
+            referenced_room_id = await self.db.fetchval(
+                """SELECT t.room_id
+                   FROM messages m
+                   JOIN threads t ON t.id = m.thread_id
+                   WHERE m.id = $1""",
+                refs_msg_id,
+            )
+            if referenced_room_id != conn.room_id:
+                await self._send_error(conn, "Referenced message not found in this room")
+                return
 
-        # Atomic INSERT with inline sequence calculation to prevent TOCTOU race
-        row = await self.db.fetchrow(
-            """INSERT INTO messages
-               (id, thread_id, sequence, created_at, speaker_type, user_id,
-                message_type, content, references_message_id)
-               VALUES (
-                   $1, $2,
-                   (SELECT COALESCE(MAX(sequence), 0) + 1 FROM messages WHERE thread_id = $2),
-                   $3, $4, $5, $6, $7, $8
-               )
-               RETURNING sequence""",
-            message_id, thread_id, now,
-            SpeakerType.HUMAN.value, conn.user_id, message_type.value,
-            content, refs_msg_id
-        )
+        # Atomic INSERT with inline sequence calculation to prevent TOCTOU race.
+        # Retry on UNIQUE (thread_id, sequence) collision: concurrent inserts
+        # can still compute the same next sequence; the loser retries against
+        # the winner's committed row.
+        row = None
+        for attempt in range(3):
+            try:
+                row = await self.db.fetchrow(
+                    """INSERT INTO messages
+                       (id, thread_id, sequence, created_at, speaker_type, user_id,
+                        message_type, content, references_message_id)
+                       VALUES (
+                           $1, $2,
+                           (SELECT COALESCE(MAX(sequence), 0) + 1 FROM messages WHERE thread_id = $2),
+                           $3, $4, $5, $6, $7, $8
+                       )
+                       RETURNING sequence""",
+                    message_id, thread_id, now,
+                    SpeakerType.HUMAN.value, conn.user_id, message_type.value,
+                    content, refs_msg_id
+                )
+                break
+            except asyncpg.UniqueViolationError:
+                if attempt == 2:
+                    raise
+                await asyncio.sleep(0.05 * (attempt + 1))
         sequence = row['sequence']
 
         message = Message(
@@ -234,7 +339,7 @@ class MessageHandler:
             sender_id=conn.user_id,
         )
 
-        mentioned = "@llm" in content.lower()
+        mentioned = bool(LLM_MENTION_RE.search(content))
 
         # Check typing cache first (pre-computed while user was typing)
         cache = conn.typing_cache
@@ -253,10 +358,12 @@ class MessageHandler:
         # Clear cache after consumption
         conn.typing_cache = None
 
-        await self._trigger_llm(
-            conn.room_id, thread_id, mentioned, novelty, content,
-            pre_computed_memories=pre_memories,
-        )
+        thread_lock = self._thread_llm_locks.setdefault(thread_id, asyncio.Lock())
+        async with thread_lock:
+            await self._trigger_llm(
+                conn.room_id, thread_id, mentioned, novelty, content,
+                pre_computed_memories=pre_memories,
+            )
 
     async def _trigger_llm(
         self,
@@ -334,23 +441,17 @@ class MessageHandler:
                 elif event_type == "done":
                     await self.connections.broadcast(room_id, OutboundMessage(
                         type=MessageTypes.LLM_DONE,
-                        payload={
-                            "thread_id": str(thread_id),
-                            "message_id": data["message_id"],
-                            "content": data["content"],
-                            "model_used": data["model_used"],
-                            "truncated": data["truncated"],
-                        },
+                        payload=_llm_done_payload(thread_id, data),
                     ))
                     # Trigger push for LLM streaming response
                     llm_message = Message(
                         id=UUID(data["message_id"]) if isinstance(data["message_id"], str) else data["message_id"],
                         thread_id=thread_id,
-                        sequence=0,  # Not needed for push
-                        created_at=datetime.now(timezone.utc),
-                        speaker_type=SpeakerType.LLM_PRIMARY,
+                        sequence=data["sequence"],
+                        created_at=datetime.fromisoformat(data["created_at"]),
+                        speaker_type=SpeakerType(data["speaker_type"]),
                         user_id=None,
-                        message_type=MessageType.TEXT,
+                        message_type=MessageType(data["message_type"]),
                         content=data["content"],
                     )
                     await self._trigger_push_notifications(
@@ -427,6 +528,17 @@ class MessageHandler:
                     room_id, thread_id, protocol, result.phase_complete_signal,
                     room, thread, users, memories,
                 )
+        else:
+            # A heuristic pass can deliberately decline to interject. Tell
+            # clients the thinking cycle ended so the UI does not remain stuck
+            # on "Claude is thinking" until another message arrives.
+            await self.connections.broadcast(room_id, OutboundMessage(
+                type=MessageTypes.LLM_CANCELLED,
+                payload={
+                    "thread_id": str(thread_id),
+                    "reason": "no_interjection",
+                },
+            ))
 
         # After LLM response, check if any persona should speak (fire-and-forget)
         # ARCHITECTURE: Persona check runs after primary LLM, not blocking message flow.
@@ -478,61 +590,99 @@ class MessageHandler:
         TRADEOFF: Slight delay before persona response appears vs simpler sequential flow.
         """
         try:
-            coordinator = MultiModelCoordinator(self.db)
-            persona = await coordinator.get_next_persona(
-                room_id, messages, trigger_content,
-            )
-            if not persona:
-                return
-
-            logger.info(
-                "Persona %s triggered (strategy=%s) in room %s",
-                persona.name, persona.trigger_strategy, room_id,
-            )
-
-            # Broadcast thinking indicator for the persona
-            await self.connections.broadcast(room_id, OutboundMessage(
-                type=MessageTypes.LLM_THINKING,
-                payload={
-                    "thread_id": str(thread_id),
-                    "persona_name": persona.name,
-                },
-            ))
-
-            content = await coordinator.generate_persona_response(
-                persona, messages, memories,
-            )
-            if not content:
-                return
-
-            response_msg = await coordinator.persist_persona_response(
-                persona, thread_id, room_id, content,
-            )
-
-            await self.connections.broadcast(room_id, OutboundMessage(
-                type=MessageTypes.PERSONA_RESPONSE,
-                payload={
-                    "id": str(response_msg.id),
-                    "thread_id": str(response_msg.thread_id),
-                    "sequence": response_msg.sequence,
-                    "created_at": response_msg.created_at.isoformat(),
-                    "speaker_type": SpeakerType.LLM_PERSONA.value,
-                    "user_id": None,
-                    "user_name": persona.name,
-                    "persona_id": str(persona.id),
-                    "persona_name": persona.name,
-                    "message_type": response_msg.message_type.value,
-                    "content": response_msg.content,
-                    "model_used": persona.model,
-                },
-            ))
+            # The handler's connection belongs to the foreground WebSocket
+            # message and may already be returned to the pool. A background
+            # persona task must own a fresh connection for its full lifetime.
+            if self.llm.db_pool is not None:
+                async with self.llm.db_pool.acquire() as background_db:
+                    await self._run_persona_response(
+                        background_db, room_id, thread_id, messages, memories,
+                        trigger_content,
+                    )
+            else:
+                await self._run_persona_response(
+                    self.db, room_id, thread_id, messages, memories,
+                    trigger_content,
+                )
 
         except Exception as e:
             logger.error("Persona response failed (non-critical): %s", e)
 
-    async def _handle_typing(self, conn: Connection, payload: dict) -> None:
-        """Broadcast typing indicator."""
-        is_typing = payload.get("typing", False)
+    async def _run_persona_response(
+        self,
+        db,
+        room_id: UUID,
+        thread_id: UUID,
+        messages: list,
+        memories: list,
+        trigger_content: str,
+    ) -> None:
+        """Run one persona decision and response on an owned DB connection."""
+        coordinator = MultiModelCoordinator(db)
+        persona = await coordinator.get_next_persona(
+            room_id, messages, trigger_content,
+        )
+        if not persona:
+            return
+
+        logger.info(
+            "Persona %s triggered (strategy=%s) in room %s",
+            persona.name, persona.trigger_strategy, room_id,
+        )
+
+        await self.connections.broadcast(room_id, OutboundMessage(
+            type=MessageTypes.LLM_THINKING,
+            payload={
+                "thread_id": str(thread_id),
+                "persona_name": persona.name,
+            },
+        ))
+
+        content = await coordinator.generate_persona_response(
+            persona, messages, memories,
+        )
+        if not content:
+            return
+
+        response_msg = await coordinator.persist_persona_response(
+            persona, thread_id, room_id, content,
+        )
+
+        await self.connections.broadcast(room_id, OutboundMessage(
+            type=MessageTypes.PERSONA_RESPONSE,
+            payload={
+                "id": str(response_msg.id),
+                "thread_id": str(response_msg.thread_id),
+                "sequence": response_msg.sequence,
+                "created_at": response_msg.created_at.isoformat(),
+                "speaker_type": SpeakerType.LLM_PERSONA.value,
+                "user_id": None,
+                "user_name": persona.name,
+                "persona_id": str(persona.id),
+                "persona_name": persona.name,
+                "message_type": response_msg.message_type.value,
+                "content": response_msg.content,
+                "model_used": persona.model,
+            },
+        ))
+
+    async def _handle_typing_start(self, conn: Connection, payload: dict) -> None:
+        """Handle canonical typing_start while honoring legacy boolean payloads."""
+        await self._handle_typing(conn, payload, default=True)
+
+    async def _handle_typing_stop(self, conn: Connection, payload: dict) -> None:
+        """Handle canonical typing_stop while honoring legacy boolean payloads."""
+        await self._handle_typing(conn, payload, default=False)
+
+    async def _handle_typing(
+        self,
+        conn: Connection,
+        payload: dict,
+        *,
+        default: bool,
+    ) -> None:
+        """Broadcast a backwards-compatible typing indicator."""
+        is_typing = bool(payload.get("is_typing", payload.get("typing", default)))
 
         # Clear typing cache when user stops typing (abandoned draft)
         if not is_typing:
@@ -540,11 +690,18 @@ class MessageHandler:
             if conn._typing_analysis_task and not conn._typing_analysis_task.done():
                 conn._typing_analysis_task.cancel()
 
+        user_row = await self.db.fetchrow(
+            "SELECT display_name FROM users WHERE id = $1",
+            conn.user_id,
+        )
+
         await self.connections.broadcast(conn.room_id, OutboundMessage(
             type=MessageTypes.USER_TYPING,
             payload={
                 "user_id": str(conn.user_id),
                 "typing": is_typing,
+                "is_typing": is_typing,
+                "display_name": user_row["display_name"] if user_row else "Unknown",
             },
         ), exclude_user=conn.user_id)
 
@@ -638,8 +795,49 @@ class MessageHandler:
     async def _handle_fork_thread(self, conn: Connection, payload: dict) -> None:
         """Create a new thread forking from current."""
 
-        source_thread_id = UUID(payload["source_thread_id"])
-        fork_after_message_id = UUID(payload["fork_after_message_id"])
+        source_thread_raw = payload.get("source_thread_id")
+        fork_message_raw = payload.get("fork_after_message_id", payload.get("fork_message_id"))
+        if not source_thread_raw or not fork_message_raw:
+            await self._send_error(
+                conn,
+                "source_thread_id and fork_after_message_id are required",
+            )
+            return
+
+        source_thread_id = await self._validated_room_thread(conn, source_thread_raw)
+        if source_thread_id is None:
+            return
+
+        try:
+            fork_after_message_id = UUID(str(fork_message_raw))
+        except (TypeError, ValueError, AttributeError):
+            await self._send_error(conn, "Invalid fork_after_message_id")
+            return
+
+        fork_message_room_id = await self.db.fetchval(
+            """SELECT t.room_id
+               FROM messages m
+               JOIN threads t ON t.id = m.thread_id
+               WHERE m.id = $1""",
+            fork_after_message_id,
+        )
+        if fork_message_room_id != conn.room_id:
+            await self._send_error(conn, "Fork message not found in this room")
+            return
+
+        # A fork point must be visible in the source thread, including inherited
+        # ancestry. Merely checking that both IDs are in the same room still lets
+        # an unrelated sibling branch become the fork point.
+        from operations import get_thread_messages
+        visible_messages = await get_thread_messages(
+            self.db,
+            source_thread_id,
+            include_ancestry=True,
+        )
+        if not any(message.id == fork_after_message_id for message in visible_messages):
+            await self._send_error(conn, "Fork message is not visible in the source thread")
+            return
+
         title = payload.get("title")
 
         from operations import fork_thread
@@ -656,16 +854,28 @@ class MessageHandler:
             type=MessageTypes.THREAD_CREATED,
             payload={
                 "id": str(new_thread.id),
+                "room_id": str(new_thread.room_id),
                 "parent_thread_id": str(new_thread.parent_thread_id),
                 "fork_point_message_id": str(new_thread.fork_point_message_id),
                 "title": new_thread.title,
+                "message_count": 0,
+                "created_by_user_id": str(conn.user_id),
             },
         ))
 
     async def _handle_switch_thread(self, conn: Connection, payload: dict) -> None:
         """Switch user's active thread."""
-        thread_id = UUID(payload["thread_id"])
-        conn.thread_id = thread_id
+        raw_thread_id = payload.get("thread_id")
+        if not raw_thread_id:
+            await self._send_error(conn, "thread_id required")
+            return
+        thread_id = await self._validated_room_thread(
+            conn,
+            raw_thread_id,
+            update_connection=True,
+        )
+        if thread_id is None:
+            return
         logger.info(f"User {conn.user_id} switched to thread {thread_id}")
 
     async def _handle_add_memory(self, conn: Connection, payload: dict) -> None:
@@ -689,8 +899,22 @@ class MessageHandler:
 
     async def _handle_edit_memory(self, conn: Connection, payload: dict) -> None:
         """Edit existing memory."""
+        try:
+            memory_id = UUID(str(payload["memory_id"]))
+        except (KeyError, TypeError, ValueError, AttributeError):
+            await self._send_error(conn, "Invalid memory_id")
+            return
+
+        memory_room_id = await self.db.fetchval(
+            "SELECT room_id FROM memories WHERE id = $1",
+            memory_id,
+        )
+        if memory_room_id != conn.room_id:
+            await self._send_error(conn, "Memory not found in this room")
+            return
+
         memory = await self.memory.edit_memory(
-            memory_id=UUID(payload["memory_id"]),
+            memory_id=memory_id,
             new_content=payload["content"],
             edited_by_user_id=conn.user_id,
         )
@@ -708,8 +932,22 @@ class MessageHandler:
 
     async def _handle_invalidate_memory(self, conn: Connection, payload: dict) -> None:
         """Invalidate a memory."""
+        try:
+            memory_id = UUID(str(payload["memory_id"]))
+        except (KeyError, TypeError, ValueError, AttributeError):
+            await self._send_error(conn, "Invalid memory_id")
+            return
+
+        memory_room_id = await self.db.fetchval(
+            "SELECT room_id FROM memories WHERE id = $1",
+            memory_id,
+        )
+        if memory_room_id != conn.room_id:
+            await self._send_error(conn, "Memory not found in this room")
+            return
+
         memory = await self.memory.invalidate_memory(
-            memory_id=UUID(payload["memory_id"]),
+            memory_id=memory_id,
             invalidated_by_user_id=conn.user_id,
             reason=payload.get("reason"),
         )
@@ -994,13 +1232,7 @@ class MessageHandler:
             elif event_type == "done":
                 await self.connections.broadcast(conn.room_id, OutboundMessage(
                     type=MessageTypes.LLM_DONE,
-                    payload={
-                        "thread_id": str(thread_id),
-                        "message_id": data["message_id"],
-                        "content": data["content"],
-                        "model_used": data["model_used"],
-                        "truncated": data["truncated"],
-                    },
+                    payload=_llm_done_payload(thread_id, data),
                 ))
             elif event_type == "error":
                 await self.connections.broadcast(conn.room_id, OutboundMessage(
@@ -1529,7 +1761,21 @@ class MessageHandler:
 
         source_message_id = payload.get("source_message_id")
         if source_message_id:
-            source_message_id = UUID(source_message_id)
+            try:
+                source_message_id = UUID(str(source_message_id))
+            except (TypeError, ValueError, AttributeError):
+                await self._send_error(conn, "Invalid source_message_id")
+                return
+            source_room_id = await self.db.fetchval(
+                """SELECT t.room_id
+                   FROM messages m
+                   JOIN threads t ON t.id = m.thread_id
+                   WHERE m.id = $1""",
+                source_message_id,
+            )
+            if source_room_id != conn.room_id:
+                await self._send_error(conn, "Source message not found in this room")
+                return
 
         mgr = CommitmentManager(self.db)
         result = await mgr.create_commitment(
@@ -1544,6 +1790,20 @@ class MessageHandler:
             initial_confidence=initial_confidence,
         )
 
+        confidence_history = []
+        if result["initial_confidence"] is not None:
+            user_row = await self.db.fetchrow(
+                "SELECT display_name FROM users WHERE id = $1",
+                conn.user_id,
+            )
+            confidence_history.append({
+                "user_id": str(conn.user_id),
+                "display_name": user_row["display_name"] if user_row else "Unknown",
+                "confidence": result["initial_confidence"],
+                "reasoning": None,
+                "recorded_at": result["created_at"].isoformat(),
+            })
+
         await self.connections.broadcast(conn.room_id, OutboundMessage(
             type=MessageTypes.COMMITMENT_CREATED,
             payload={
@@ -1554,7 +1814,9 @@ class MessageHandler:
                 "category": result["category"],
                 "created_by_user_id": str(conn.user_id),
                 "deadline": result["deadline"].isoformat() if result["deadline"] else None,
+                "created_at": result["created_at"].isoformat(),
                 "initial_confidence": result["initial_confidence"],
+                "confidence_history": confidence_history,
                 "status": "active",
             },
         ))
@@ -1587,7 +1849,7 @@ class MessageHandler:
 
         mgr = CommitmentManager(self.db)
         try:
-            await mgr.record_confidence(
+            result = await mgr.record_confidence(
                 commitment_id=commitment_id,
                 user_id=conn.user_id,
                 confidence=confidence,
@@ -1595,6 +1857,18 @@ class MessageHandler:
             )
         except ValueError as e:
             await self._send_error(conn, str(e))
+            return
+
+        await self.connections.broadcast(conn.room_id, OutboundMessage(
+            type=MessageTypes.COMMITMENT_CONFIDENCE_UPDATED,
+            payload={
+                "commitment_id": str(commitment_id),
+                "user_id": str(conn.user_id),
+                "confidence": result["confidence"],
+                "reasoning": result["reasoning"],
+                "recorded_at": result["recorded_at"].isoformat(),
+            },
+        ))
 
     async def _handle_resolve_commitment(self, conn: Connection, payload: dict) -> None:
         """Resolve a commitment via WebSocket."""

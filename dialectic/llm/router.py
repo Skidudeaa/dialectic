@@ -43,12 +43,28 @@ class ModelRouter:
         primary_model: str,
         fallback_model: str,
     ):
-        self.chain = [
-            (primary_provider, primary_model),
-            (fallback_provider, self._map_model(primary_model, fallback_provider)),
-            (primary_provider, fallback_model),
-        ]
+        self.primary_provider = primary_provider
+        self.fallback_provider = fallback_provider
+        self.primary_model = primary_model
+        self.fallback_model = fallback_model
+        self.chain = self._build_chain(primary_model)
         self._providers: dict[ProviderName, LLMProvider] = {}
+
+    def _build_chain(self, model: str) -> list[tuple[ProviderName, str]]:
+        """
+        Fallback chain for a specific requested model.
+
+        WHY: The chain must start from the model the caller asked for —
+        a provoker request previously fell through to the primary model
+        because the chain was frozen at construction time.
+        """
+        chain = [
+            (self.primary_provider, model),
+            (self.fallback_provider, self._map_model(model, self.fallback_provider)),
+        ]
+        if self.fallback_model and self.fallback_model != model:
+            chain.append((self.primary_provider, self.fallback_model))
+        return chain
 
     def _get_provider(self, name: ProviderName) -> LLMProvider:
         if name not in self._providers:
@@ -75,8 +91,9 @@ class ModelRouter:
         """Execute request through fallback chain."""
         prompt_hash = self._hash_prompt(request)
         attempts = []
+        chain = self._build_chain(request.model or self.primary_model)
 
-        for provider_name, model in self.chain:
+        for provider_name, model in chain:
             provider = self._get_provider(provider_name)
 
             for retry in range(MAX_RETRIES):
@@ -137,3 +154,57 @@ class ModelRouter:
             attempts=attempts,
             prompt_hash=prompt_hash,
         )
+
+    async def stream(self, request: LLMRequest):
+        """
+        Stream tokens through the fallback chain.
+
+        Yields ("attempt", {"provider": str, "model": str}) at the start of each
+        chain entry, then ("token", {"token": str}) per streamed token.
+
+        ARCHITECTURE: Fallback is only possible while zero tokens have been
+        emitted — once partial content has reached the client, switching
+        providers mid-response would splice two different answers together,
+        so mid-stream failures re-raise instead.
+        WHY: Streaming previously hit the primary provider directly with no
+        fallback at all; a single provider outage killed every summon.
+        """
+        chain = self._build_chain(request.model or self.primary_model)
+        last_error: Optional[Exception] = None
+
+        for provider_name, model in chain:
+            provider = self._get_provider(provider_name)
+            routed = LLMRequest(
+                messages=request.messages,
+                system=request.system,
+                model=model,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+                stream=True,
+            )
+            emitted = False
+            try:
+                yield ("attempt", {"provider": provider_name.value, "model": model})
+                async for token in provider.stream(routed):
+                    emitted = True
+                    yield ("token", {"token": token})
+            except Exception as e:
+                if emitted:
+                    raise
+                last_error = e
+                logger.warning(
+                    f"Stream attempt failed before first token: "
+                    f"{provider_name.value}/{model} — {e}"
+                )
+                continue
+
+            if emitted:
+                return
+            # Stream completed without yielding anything (e.g. empty body):
+            # treat as failure and fall through to the next chain entry.
+            last_error = RuntimeError(
+                f"{provider_name.value}/{model} returned an empty stream"
+            )
+            logger.warning(str(last_error))
+
+        raise last_error if last_error else RuntimeError("Provider chain is empty")

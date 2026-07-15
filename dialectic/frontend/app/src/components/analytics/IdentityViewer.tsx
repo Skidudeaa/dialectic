@@ -3,16 +3,16 @@ import { api } from '../../lib/api';
 import './IdentityViewer.css';
 
 interface IdentityData {
-  identity_document: string;
-  version: number;
-  last_updated: string;
+  content: string | null;
+  exists: boolean;
 }
 
 interface IdentityViewerProps {
   roomId: string;
+  userId: string;
 }
 
-export function IdentityViewer({ roomId }: IdentityViewerProps) {
+export function IdentityViewer({ roomId, userId }: IdentityViewerProps) {
   const [identity, setIdentity] = useState<IdentityData | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -20,7 +20,6 @@ export function IdentityViewer({ roomId }: IdentityViewerProps) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
     api.getIdentity(roomId)
       .then((data) => setIdentity(data as IdentityData))
       .catch(() => setIdentity(null))
@@ -29,7 +28,7 @@ export function IdentityViewer({ roomId }: IdentityViewerProps) {
 
   const handleEdit = () => {
     if (identity) {
-      setEditContent(identity.identity_document);
+      setEditContent(identity.content ?? '');
       setEditing(true);
     }
   };
@@ -42,7 +41,7 @@ export function IdentityViewer({ roomId }: IdentityViewerProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const updated = await api.updateIdentity(roomId, editContent) as IdentityData;
+      const updated = await api.updateIdentity(roomId, userId, editContent) as IdentityData;
       setIdentity(updated);
       setEditing(false);
     } catch (err) {
@@ -61,7 +60,7 @@ export function IdentityViewer({ roomId }: IdentityViewerProps) {
     );
   }
 
-  if (!identity) {
+  if (!identity?.exists || !identity.content) {
     return (
       <div className="identity-viewer">
         <div className="identity-header"><h3>LLM Identity</h3></div>
@@ -69,14 +68,6 @@ export function IdentityViewer({ roomId }: IdentityViewerProps) {
       </div>
     );
   }
-
-  const updated = new Date(identity.last_updated).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 
   return (
     <div className="identity-viewer">
@@ -97,8 +88,7 @@ export function IdentityViewer({ roomId }: IdentityViewerProps) {
       </div>
 
       <div className="identity-meta">
-        <span>v{identity.version}</span>
-        <span>Updated {updated}</span>
+        <span>Shared AI identity for this room</span>
       </div>
 
       {editing ? (
@@ -108,7 +98,7 @@ export function IdentityViewer({ roomId }: IdentityViewerProps) {
           onChange={(e) => setEditContent(e.target.value)}
         />
       ) : (
-        <div className="identity-content">{identity.identity_document}</div>
+        <div className="identity-content">{identity.content}</div>
       )}
     </div>
   );

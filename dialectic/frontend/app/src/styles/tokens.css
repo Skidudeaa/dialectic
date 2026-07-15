@@ -1,71 +1,140 @@
 :root {
-    /* Backgrounds */
-    --bg-void: #07070a;
-    --bg-deep: #0a0a0e;
-    --bg-base: #0e0e13;
-    --bg-surface: #131318;
-    --bg-raised: #1a1a21;
-    --bg-overlay: #22222b;
+    /* ══════════════════════════════════════════════════════
+       DARK ROAST SYSTEM v1 — canonical token set
+       Aesthetic: classified dossier, seen by candlelight.
+       ══════════════════════════════════════════════════════ */
 
-    /* Borders */
-    --border-subtle: #1e1e27;
-    --border-default: #2a2a35;
-    --border-strong: #3a3a48;
+    /* Surfaces — luminance ladder (4 steps) */
+    --color-void:     #120C06;   /* page background, side rails */
+    --color-obsidian: #160E08;   /* stream / content background */
+    --color-cacao:    #1E140E;   /* memo cards, exhibits, composer box, panels */
+    --color-espresso: #2A1C14;   /* elevated cards */
+    --color-bean:     #3C2A1E;   /* all structural borders */
+    --color-crater:   #4D3B31;   /* hover borders, scrollbar thumb */
 
-    /* Text */
-    --text-primary: #eaeaf0;
-    --text-secondary: #a0a0b0;
-    --text-tertiary: #606070;
-    --text-ghost: #404050;
+    /* Ink tiers (pre-mixed — never add opacity on top of these) */
+    --color-display:  #FFF7EE;   /* case title + brand chrome ONLY */
+    --color-bone:     #EBE1D7;   /* section headlines, emphasized text */
+    --color-ink:      #D4C4A8;   /* ALL body/dispatch text (workhorse) */
+    --color-secondary:#8B7355;   /* labels, metadata */
+    --color-faint:    #5C4A38;   /* timestamps, gutter numbers */
+    --color-ghost:    #46382B;   /* ultra-dim gutter */
 
-    /* Participants */
-    --human-1: #2dd4bf;
-    --human-1-dim: #0d9488;
-    --human-1-bg: rgba(45, 212, 191, 0.06);
-    --human-1-border: rgba(45, 212, 191, 0.15);
-    --human-2: #f472b6;
-    --human-2-dim: #db2777;
-    --human-2-bg: rgba(244, 114, 182, 0.06);
-    --human-2-border: rgba(244, 114, 182, 0.15);
-    --claude-primary: #818cf8;
-    --claude-primary-dim: #6366f1;
-    --claude-primary-bg: rgba(129, 140, 248, 0.06);
-    --claude-primary-border: rgba(129, 140, 248, 0.15);
-    --claude-primary-glow: rgba(99, 102, 241, 0.25);
-    --claude-provoker: #fbbf24;
-    --claude-provoker-dim: #f59e0b;
-    --claude-provoker-bg: rgba(251, 191, 36, 0.06);
-    --claude-provoker-border: rgba(251, 191, 36, 0.15);
-    --claude-provoker-glow: rgba(245, 158, 11, 0.25);
-    --claude-annotator: #a78bfa;
-    --claude-annotator-dim: #7c3aed;
-    --claude-annotator-bg: rgba(167, 139, 250, 0.06);
-    --claude-annotator-border: rgba(167, 139, 250, 0.15);
+    /* Accents */
+    --color-amber:      #E69A4C;  /* primary accent, CTAs, cursor */
+    --color-amber-hot:  #D2691E;  /* hover on amber */
+    --color-amber-mute: #C07A4A;  /* reader contexts */
+    --color-teal:       #4CC4B4;  /* live/kinetic, success, CONFIRM */
+    --color-warning:    #BFA162;  /* warning notes */
+    --color-error:      #C75B39;  /* errors (non-structural) */
+    --color-scarlet:    #C44C4C;  /* events ONLY — see red budget rules */
+    --color-gold:       #DAA520;
+
+    /* Severity ramp (node/predicate states) */
+    --sev-crit:    #C44C4C;
+    --sev-worse:   #C25F90;
+    --sev-improve: #D4A040;
+    --sev-stable:  #879A39;  /* olive */
+    --sev-resolve: #4CC4B4;
+
+    /* Opacity fills */
+    --amber-08:  rgba(230,154,76,.08);
+    --amber-12:  rgba(230,154,76,.12);
+    --amber-18:  rgba(230,154,76,.18);
+    --amber-30:  rgba(230,154,76,.3);
+    --teal-10:   rgba(76,196,180,.1);
+    --teal-18:   rgba(76,196,180,.18);
+    --teal-30:   rgba(76,196,180,.3);
+    --scar-10:   rgba(196,76,76,.1);
+    --scar-18:   rgba(196,76,76,.18);
+    --scar-35:   rgba(196,76,76,.35);
+    --scar-50:   rgba(196,76,76,.5);
+
+    /* ══════════════════════════════════════════════════════
+       SEMANTIC ALIASES — component CSS uses these.
+       Remapped to Dark Roast values; old names kept intact
+       so no component CSS breaks.
+       ══════════════════════════════════════════════════════ */
+
+    /* Backgrounds → surface ladder */
+    --bg-void:    var(--color-void);
+    --bg-deep:    var(--color-void);       /* rails same as void */
+    --bg-base:    var(--color-obsidian);   /* stream column */
+    --bg-surface: var(--color-cacao);      /* cards, composer */
+    --bg-raised:  var(--color-espresso);   /* elevated cards */
+    --bg-overlay: var(--color-espresso);   /* was a darker overlay */
+
+    /* Borders — structural lines are always bean */
+    --border-subtle:  var(--color-bean);
+    --border-default: var(--color-bean);
+    --border-strong:  var(--color-crater);
+
+    /* Text → ink tiers */
+    --text-primary:   var(--color-ink);       /* workhorse body text #D4C4A8 */
+    --text-secondary: var(--color-secondary); /* labels, metadata */
+    --text-tertiary:  var(--color-faint);     /* timestamps */
+    --text-ghost:     var(--color-ghost);     /* ultra-dim */
+
+    /* Participants — Dark Roast accent set */
+    /* human-1: amber/teal (you / me) */
+    --human-1:            #4CC4B4;
+    --human-1-dim:        #2E9E90;
+    --human-1-bg:         rgba(76,196,180,.06);
+    --human-1-border:     rgba(76,196,180,.2);
+    /* human-2: gold */
+    --human-2:            #DAA520;
+    --human-2-dim:        #B8881A;
+    --human-2-bg:         rgba(218,165,32,.06);
+    --human-2-border:     rgba(218,165,32,.2);
+    /* claude-primary: amber */
+    --claude-primary:         #E69A4C;
+    --claude-primary-dim:     #C07A4A;
+    --claude-primary-bg:      var(--amber-08);
+    --claude-primary-border:  var(--amber-30);
+    --claude-primary-glow:    rgba(230,154,76,.2);
+    /* claude-provoker: warning gold */
+    --claude-provoker:        #BFA162;
+    --claude-provoker-dim:    #9B7F46;
+    --claude-provoker-bg:     rgba(191,161,98,.06);
+    --claude-provoker-border: rgba(191,161,98,.2);
+    --claude-provoker-glow:   rgba(191,161,98,.15);
+    /* claude-annotator: muted teal */
+    --claude-annotator:       #4CC4B4;
+    --claude-annotator-dim:   #2E9E90;
+    --claude-annotator-bg:    var(--teal-10);
+    --claude-annotator-border:var(--teal-30);
 
     /* Status */
-    --success: #34d399;
-    --warning: #fbbf24;
-    --error: #f87171;
+    --success: var(--sev-stable);   /* #879A39 olive */
+    --warning: var(--color-warning);
+    --error:   var(--color-error);   /* #C75B39 — never on structural borders */
 
-    /* Radii */
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-    --radius-xl: 20px;
-    --radius-full: 9999px;
+    /* Typography */
+    --font-serif:   'Newsreader', Georgia, serif;
+    --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+    --font-stencil: 'Saira Stencil One', var(--font-mono);
+    --font-hand:    'Caveat', cursive;
 
-    /* Shadows */
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-    --shadow-lg: 0 8px 30px rgba(0,0,0,0.5);
-    --shadow-glow-indigo: 0 0 20px rgba(99,102,241,0.15);
-    --shadow-glow-amber: 0 0 20px rgba(245,158,11,0.15);
+    /* Radii — dossier aesthetic: near-flat */
+    --radius-sm:   2px;
+    --radius-md:   2px;
+    --radius-lg:   2px;
+    --radius-xl:   2px;
+    --radius-full: 9999px;  /* pills only */
+
+    /* Shadows — paper-like offset */
+    --shadow-sm:          1px 1px 0 rgba(0,0,0,.15);
+    --shadow-md:          3px 3px 0 rgba(0,0,0,.18);
+    --shadow-lg:          3px 3px 0 rgba(0,0,0,.25);
+    --shadow-glow-indigo: 0 0 12px rgba(230,154,76,.12);  /* repurposed: amber glow */
+    --shadow-glow-amber:  0 0 12px rgba(230,154,76,.15);
+    --shadow-inset:       inset 0 1px 0 rgba(0,0,0,.2);
 
     /* Transitions */
-    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
     --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-    /* Energy */
+    /* Energy (ambient animation) */
     --energy-level: 0;
-    --energy-color: var(--claude-primary-dim);
+    --energy-color: var(--color-amber);
 }

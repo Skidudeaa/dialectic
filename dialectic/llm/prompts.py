@@ -179,11 +179,15 @@ You speak with authority on procedure, not on content."""
         # WHY: Anthropic's API requires the last message to be from the user role.
         # When the annotator fires before the primary LLM (concurrent paths), it adds
         # an assistant message that becomes the last message in the thread. The API
-        # rejects this with 400. Trimming trailing assistant messages ensures the
-        # conversation ends with a user turn, which is always the correct state for
-        # generating the next assistant response.
-        while formatted_messages and formatted_messages[-1]["role"] == "assistant":
-            formatted_messages = formatted_messages[:-1]
+        # rejects this with 400. Appending a neutral user turn satisfies the API
+        # WITHOUT discarding the LLM's own latest contribution — the previous
+        # approach deleted trailing assistant messages, which dropped context and
+        # could produce an empty messages array (also a 400).
+        if formatted_messages and formatted_messages[-1]["role"] == "assistant":
+            formatted_messages.append({
+                "role": "user",
+                "content": "[SYSTEM] Continue the dialogue.",
+            })
 
         return AssembledPrompt(system=system, messages=formatted_messages)
 

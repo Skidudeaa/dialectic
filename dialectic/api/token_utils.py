@@ -1,7 +1,7 @@
 # api/token_utils.py — Shared room token extraction for all routers
 
 """
-ARCHITECTURE: Centralized token extraction supporting query param + Authorization header.
+ARCHITECTURE: Centralized token extraction supporting a dedicated header plus legacy fallbacks.
 WHY: React frontend sends tokens via header; legacy clients use query params.
 TRADEOFF: Single shared dependency vs duplicated extraction logic per router.
 """
@@ -12,20 +12,23 @@ from fastapi import Query, Header, HTTPException
 
 def extract_room_token(
     token: Optional[str] = Query(None),
+    x_room_token: Optional[str] = Header(None, alias="X-Room-Token"),
     authorization: Optional[str] = Header(None),
 ) -> str:
     """
-    Extract room token from query param OR Authorization header.
+    Extract a room token without competing with the user's JWT.
 
-    WHY: Explicit query param takes precedence over the Authorization header.
-    When a JWT-authenticated frontend also sends a room token, both are present
-    simultaneously. The query param carries the room token; the Authorization
-    header carries the user JWT. Preferring the query param avoids the JWT being
-    misinterpreted as a room token, which caused 401s for authenticated users.
+    WHY: Authenticated clients need two credentials at once: the user JWT in
+    Authorization and the room invite capability in X-Room-Token. Keeping them
+    separate avoids room secrets in URLs and prevents a JWT from being mistaken
+    for a room token.
 
-    Authorization header is still accepted as a fallback for clients that send
-    the room token there directly (e.g. push-to-dialectic.py bridge script).
+    Query and Authorization remain compatibility fallbacks for legacy/native
+    clients and the trading bridge. New browser clients use X-Room-Token.
     """
+    if x_room_token:
+        return x_room_token
+
     if token:
         return token
 
@@ -36,5 +39,5 @@ def extract_room_token(
 
     raise HTTPException(
         status_code=401,
-        detail="Room token required (query param or Authorization header)"
+        detail="Room token required"
     )

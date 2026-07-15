@@ -14,7 +14,13 @@ interface CalibrationPoint {
 
 interface CommitmentDashboardProps {
   roomId: string;
-  onCreateCommitment: (claim: string, criteria: string, category?: string) => void;
+  onCreateCommitment: (
+    claim: string,
+    criteria: string,
+    category?: string,
+    deadline?: string,
+    initialConfidence?: number,
+  ) => void;
   onUpdateConfidence: (commitmentId: string, confidence: number) => void;
   onResolve?: (commitmentId: string) => void;
 }
@@ -44,7 +50,12 @@ export function CommitmentDashboard({
       .catch(() => {});
 
     api.getCalibration(roomId)
-      .then((data) => setCalibration((data as { points?: CalibrationPoint[] })?.points ?? []))
+      .then((data) => {
+        const rows = (data as { calibration?: { midpoint: number; accuracy: number | null }[] }).calibration ?? [];
+        setCalibration(rows
+          .filter((point) => point.accuracy !== null)
+          .map((point) => ({ confidence: point.midpoint, accuracy: point.accuracy as number })));
+      })
       .catch(() => {});
   }, [roomId]);
 
@@ -57,8 +68,8 @@ export function CommitmentDashboard({
   });
 
   const handleCreate = () => {
-    if (!claim.trim()) return;
-    onCreateCommitment(claim.trim(), criteria.trim(), category);
+    if (!claim.trim() || !criteria.trim()) return;
+    onCreateCommitment(claim.trim(), criteria.trim(), category, deadline || undefined, initialConf);
     setClaim('');
     setCriteria('');
     setCategory('prediction');
@@ -109,7 +120,7 @@ export function CommitmentDashboard({
           </label>
           <div className="form-actions">
             <button className="cancel-btn" onClick={() => setShowCreate(false)}>Cancel</button>
-            <button className="submit-btn" disabled={!claim.trim()} onClick={handleCreate}>Create</button>
+            <button className="submit-btn" disabled={!claim.trim() || !criteria.trim()} onClick={handleCreate}>Create</button>
           </div>
         </div>
       ) : (

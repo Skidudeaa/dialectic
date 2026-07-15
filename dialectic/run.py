@@ -25,21 +25,23 @@ if __name__ == "__main__":
     workers = int(os.environ.get("WEB_CONCURRENCY", "1"))
 
     port = int(os.environ.get("PORT", "8002"))
+    default_host = "127.0.0.1" if is_production else "0.0.0.0"
+    host = os.environ.get("HOST", default_host)
 
     if is_production:
         uvicorn.run(
             "api.main:app",
-            host="0.0.0.0",
+            host=host,
             port=port,
             reload=False,
-            workers=workers if workers > 1 else 2,
+            workers=max(1, workers),
             log_level="warning",
             access_log=True,
         )
     else:
         uvicorn.run(
             "api.main:app",
-            host="0.0.0.0",
+            host=host,
             port=port,
             reload=True,
             log_level="info",

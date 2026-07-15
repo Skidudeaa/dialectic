@@ -1,6 +1,15 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useAppStore } from '../stores/appStore.ts'
-import type { Message, ProtocolState, Commitment, TradingSnapshot } from '../types/index.ts'
+import { api } from '../lib/api.ts'
+import type {
+  Message,
+  ProtocolState,
+  Commitment,
+  TradingSnapshot,
+  Thread,
+  Memory,
+  PresenceUser,
+} from '../types/index.ts'
 
 const MAX_RECONNECT_ATTEMPTS = 10;
 const BASE_RECONNECT_DELAY = 1000;
@@ -18,9 +27,11 @@ export function useDialecticSocket() {
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const heartbeatTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const connectRef = useRef<() => void>(() => {});
   const [isConnected, setIsConnected] = useState(false);
 
   const user = useAppStore((s) => s.user);
+  const accessToken = useAppStore((s) => s.accessToken);
   const currentRoom = useAppStore((s) => s.currentRoom);
   const roomToken = useAppStore((s) => s.roomToken);
   const currentThread = useAppStore((s) => s.currentThread);
@@ -29,11 +40,84 @@ export function useDialecticSocket() {
   const setTypingUser = useAppStore((s) => s.setTypingUser);
   const setLLMState = useAppStore((s) => s.setLLMState);
   const updateStreamingContent = useAppStore((s) => s.updateStreamingContent);
+  const appendStreamingToken = useAppStore((s) => s.appendStreamingToken);
+  const setThreads = useAppStore((s) => s.setThreads);
+  const setThread = useAppStore((s) => s.setThread);
+  const setMemories = useAppStore((s) => s.setMemories);
+  const setOnlineUsers = useAppStore((s) => s.setOnlineUsers);
   const setProtocol = useAppStore((s) => s.setProtocol);
   const updateProtocolPhase = useAppStore((s) => s.updateProtocolPhase);
   const addCommitment = useAppStore((s) => s.addCommitment);
+  const setActiveCommitments = useAppStore((s) => s.setActiveCommitments);
   const setSurfacedCommitments = useAppStore((s) => s.setSurfacedCommitments);
   const setTradingConfig = useAppStore((s) => s.setTradingConfig);
+
+  const send = useCallback((type: string, payload: Record<string, unknown>): boolean => {
+    if (wsRef.current?.readyState !== WebSocket.OPEN) return false;
+    wsRef.current.send(JSON.stringify({ type, payload }));
+    return true;
+  }, []);
+
+  const refreshThreads = useCallback(async () => {
+    const state = useAppStore.getState();
+    if (!state.currentRoom || !state.roomToken) return;
+    api.setToken(state.roomToken);
+    try {
+      const threads = await api.getThreads(state.currentRoom.id) as Thread[];
+      setThreads(threads);
+    } catch (error) {
+      console.error('[WS] Failed to refresh threads:', error);
+    }
+  }, [setThreads]);
+
+  const refreshMemories = useCallback(async () => {
+    const state = useAppStore.getState();
+    if (!state.currentRoom || !state.roomToken) return;
+    api.setToken(state.roomToken);
+    try {
+      const memories = await api.getMemories(state.currentRoom.id) as Memory[];
+      setMemories(memories);
+    } catch (error) {
+      console.error('[WS] Failed to refresh memories:', error);
+    }
+  }, [setMemories]);
+
+  const refreshPresence = useCallback(async () => {
+    const state = useAppStore.getState();
+    if (!state.currentRoom || !state.roomToken) return;
+    api.setToken(state.roomToken);
+    try {
+      const users = await api.getPresence(state.currentRoom.id) as PresenceUser[];
+      setOnlineUsers(users);
+    } catch (error) {
+      console.error('[WS] Failed to refresh presence:', error);
+    }
+  }, [setOnlineUsers]);
+
+  const refreshCommitments = useCallback(async () => {
+    const state = useAppStore.getState();
+    if (!state.currentRoom || !state.roomToken) return;
+    api.setToken(state.roomToken);
+    try {
+      const commitments = await api.getCommitments(state.currentRoom.id) as Commitment[];
+      setActiveCommitments(commitments);
+    } catch (error) {
+      console.error('[WS] Failed to refresh commitments:', error);
+    }
+  }, [setActiveCommitments]);
+
+  const payloadMatchesActiveThread = useCallback((payload: Record<string, unknown>): boolean => {
+    const nestedMessage = payload.message && typeof payload.message === 'object'
+      ? payload.message as Record<string, unknown>
+      : null;
+    const payloadThreadId = typeof payload.thread_id === 'string'
+      ? payload.thread_id
+      : typeof nestedMessage?.thread_id === 'string'
+        ? nestedMessage.thread_id
+        : null;
+    const activeThreadId = useAppStore.getState().currentThread?.id;
+    return Boolean(activeThreadId && payloadThreadId === activeThreadId);
+  }, []);
 
   const handleMessage = useCallback((event: MessageEvent) => {
     let data: ServerMessage;
@@ -48,51 +132,131 @@ export function useDialecticSocket() {
 
     switch (type) {
       case 'message_created':
+        if (!payloadMatchesActiveThread(payload)) break;
         addMessage(payload as unknown as Message);
+        void refreshThreads();
+        if (payload.speaker_type !== 'human') setLLMState(false, false);
+        break;
+
+      case 'persona_response':
+        if (!payloadMatchesActiveThread(payload)) break;
+        addMessage(payload as unknown as Message);
+        void refreshThreads();
+        setLLMState(false, false);
         break;
 
       case 'user_typing':
         setTypingUser(
           payload.user_id as string,
-          (payload.is_typing as boolean) ?? true,
+          typeof payload.typing === 'boolean'
+            ? payload.typing
+            : payload.is_typing === true,
         );
         break;
 
+      case 'presence_update':
+      case 'user_joined':
+      case 'user_left':
+        void refreshPresence();
+        break;
+
       case 'llm_thinking':
+        if (!payloadMatchesActiveThread(payload)) break;
         setLLMState(true, false);
         break;
 
       case 'llm_streaming':
-        updateStreamingContent(payload.content as string);
+        if (!payloadMatchesActiveThread(payload)) break;
+        // Server contract: one token per event ({token, index}), matching
+        // the mobile client. The previous code read payload.content, which
+        // the server never sends — streamed text silently never rendered.
+        if (typeof payload.token === 'string') {
+          appendStreamingToken(payload.token);
+        } else if (typeof payload.content === 'string') {
+          updateStreamingContent(payload.content);
+        }
         setLLMState(true, true);
         break;
 
-      case 'llm_done':
+      case 'llm_done': {
+        if (!payloadMatchesActiveThread(payload)) break;
+        // There is no payload.message. Build the persisted message from the
+        // authoritative fields carried by llm_done.
         setLLMState(false, false);
         if (payload.message) {
           addMessage(payload.message as unknown as Message);
+        } else if (typeof payload.message_id === 'string') {
+          addMessage({
+            id: payload.message_id,
+            thread_id: (payload.thread_id as string) ?? '',
+            sequence: typeof payload.sequence === 'number'
+              ? payload.sequence
+              : Number.MAX_SAFE_INTEGER,
+            created_at: typeof payload.created_at === 'string'
+              ? payload.created_at
+              : new Date().toISOString(),
+            speaker_type: typeof payload.speaker_type === 'string'
+              ? payload.speaker_type as Message['speaker_type']
+              : 'llm_primary',
+            user_id: null,
+            message_type: typeof payload.message_type === 'string'
+              ? payload.message_type as Message['message_type']
+              : 'text',
+            content: (payload.content as string) ?? '',
+            user_name: payload.speaker_type === 'llm_provoker' ? 'Provoker' : 'Claude',
+          } as Message);
         }
+        void refreshThreads();
+        break;
+      }
+
+      case 'llm_error':
+        if (!payloadMatchesActiveThread(payload)) break;
+        setLLMState(false, false);
+        console.error('[LLM] stream error:', payload.error);
+        break;
+
+      case 'llm_cancelled':
+        if (!payloadMatchesActiveThread(payload)) break;
+        setLLMState(false, false);
         break;
 
       case 'annotation_created':
+        if (!payloadMatchesActiveThread(payload)) break;
         addMessage(payload as unknown as Message);
+        void refreshThreads();
         break;
 
       case 'protocol_started':
-        setProtocol(payload as unknown as ProtocolState);
+        if (!payloadMatchesActiveThread(payload)) break;
+        setProtocol({
+          id: payload.protocol_id as string,
+          thread_id: payload.thread_id as string,
+          protocol_type: payload.protocol_type as ProtocolState['protocol_type'],
+          status: 'active',
+          current_phase: (payload.current_phase as number) ?? 0,
+          total_phases: payload.total_phases as number,
+        });
         break;
 
       case 'protocol_phase_advanced':
+        if (!payloadMatchesActiveThread(payload)) break;
         updateProtocolPhase(payload.current_phase as number);
         break;
 
       case 'protocol_concluded':
       case 'protocol_aborted':
+        if (!payloadMatchesActiveThread(payload)) break;
         setProtocol(null);
         break;
 
       case 'commitment_created':
         addCommitment(payload as unknown as Commitment);
+        break;
+
+      case 'commitment_resolved':
+      case 'commitment_confidence_updated':
+        void refreshCommitments();
         break;
 
       case 'commitment_surfaced':
@@ -101,13 +265,31 @@ export function useDialecticSocket() {
         );
         break;
 
+      case 'thread_created':
       case 'thread_forked': {
-        // Thread fork events are informational; parent fetches thread list
+        void refreshThreads();
+        // The collaborator who created a branch should land in it immediately;
+        // everyone else keeps reading their current branch.
+        if (
+          payload.created_by_user_id === useAppStore.getState().user?.id &&
+          typeof payload.id === 'string' &&
+          typeof payload.room_id === 'string'
+        ) {
+          setThread({
+            id: payload.id,
+            room_id: payload.room_id,
+            parent_thread_id: typeof payload.parent_thread_id === 'string'
+              ? payload.parent_thread_id
+              : null,
+            title: typeof payload.title === 'string' ? payload.title : null,
+            message_count: typeof payload.message_count === 'number' ? payload.message_count : 0,
+          });
+        }
         break;
       }
 
       case 'memory_updated':
-        // Memory updates handled by periodic refresh or explicit fetch
+        void refreshMemories();
         break;
 
       case 'trading_update':
@@ -118,7 +300,7 @@ export function useDialecticSocket() {
         break;
 
       case 'error':
-        console.error('[WS] Server error:', payload.message ?? payload);
+        console.error('[WS] Server error:', payload.error ?? payload.message ?? payload);
         break;
 
       case 'pong':
@@ -131,7 +313,24 @@ export function useDialecticSocket() {
           console.log('[WS] Unhandled message type:', type, payload);
         }
     }
-  }, [addMessage, setTypingUser, setLLMState, updateStreamingContent, setProtocol, updateProtocolPhase, addCommitment, setSurfacedCommitments, setTradingConfig]);
+  }, [
+    addMessage,
+    setTypingUser,
+    setLLMState,
+    updateStreamingContent,
+    appendStreamingToken,
+    setProtocol,
+    updateProtocolPhase,
+    addCommitment,
+    setThread,
+    refreshCommitments,
+    setSurfacedCommitments,
+    setTradingConfig,
+    payloadMatchesActiveThread,
+    refreshThreads,
+    refreshMemories,
+    refreshPresence,
+  ]);
 
   const connect = useCallback(() => {
     if (!currentRoom || !roomToken || !user) return;
@@ -139,8 +338,10 @@ export function useDialecticSocket() {
     // Clean up existing connection + heartbeat to prevent leaks on rapid reconnect
     clearInterval(heartbeatTimerRef.current);
     if (wsRef.current) {
-      wsRef.current.close();
+      const existing = wsRef.current;
       wsRef.current = null;
+      existing.onclose = null;
+      existing.close();
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -153,8 +354,9 @@ export function useDialecticSocket() {
       // Send auth handshake as first message
       ws.send(JSON.stringify({
         token: roomToken,
+        access_token: accessToken,
         user_id: user.id,
-        thread_id: currentThread?.id ?? null,
+        thread_id: useAppStore.getState().currentThread?.id ?? null,
       }));
 
       setIsConnected(true);
@@ -174,6 +376,7 @@ export function useDialecticSocket() {
     ws.onmessage = handleMessage;
 
     ws.onclose = (event) => {
+      if (wsRef.current !== ws) return;
       setIsConnected(false);
       clearInterval(heartbeatTimerRef.current);
 
@@ -195,7 +398,7 @@ export function useDialecticSocket() {
           console.log(`[WS] Reconnecting in ${delay}ms (attempt ${reconnectAttemptRef.current}/${MAX_RECONNECT_ATTEMPTS})`);
         }
 
-        reconnectTimerRef.current = setTimeout(connect, delay);
+        reconnectTimerRef.current = setTimeout(() => connectRef.current(), delay);
       } else {
         console.error('[WS] Max reconnection attempts reached');
       }
@@ -205,11 +408,16 @@ export function useDialecticSocket() {
       // onerror is always followed by onclose, so just log
       console.error('[WS] Connection error');
     };
-  }, [currentRoom, roomToken, user, currentThread?.id, handleMessage]);
+  }, [currentRoom, roomToken, accessToken, user, handleMessage]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   // Connect/disconnect on room change
   useEffect(() => {
     if (currentRoom && roomToken && user) {
+      reconnectAttemptRef.current = 0;
       connect();
     }
 
@@ -218,50 +426,61 @@ export function useDialecticSocket() {
       clearInterval(heartbeatTimerRef.current);
       reconnectAttemptRef.current = MAX_RECONNECT_ATTEMPTS; // Prevent reconnect on unmount
       if (wsRef.current) {
-        wsRef.current.close();
+        const ws = wsRef.current;
         wsRef.current = null;
+        ws.onclose = null;
+        ws.close();
       }
     };
   }, [currentRoom?.id, roomToken, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Keep the server-side connection context aligned with the selected branch
+  // without reconnecting the room socket.
+  useEffect(() => {
+    if (!currentThread?.id) return;
+    setLLMState(false, false);
+    send('switch_thread', { thread_id: currentThread.id });
+  }, [currentThread?.id, send, setLLMState]);
+
   // --- Outbound helpers ---
 
-  const send = useCallback((type: string, payload: Record<string, unknown>) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type, payload }));
-    }
-  }, []);
-
   const sendMessage = useCallback(
-    (content: string, messageType?: string) => {
+    (content: string, messageType?: string): boolean => (
       send('send_message', {
         content,
-        message_type: messageType ?? 'text',
+        type: messageType ?? 'text',
         thread_id: useAppStore.getState().currentThread?.id,
-      });
-    },
+      })
+    ),
     [send],
   );
 
-  const sendTypingStart = useCallback(() => {
+  const sendTypingStart = useCallback((): boolean => (
     send('typing_start', {
+      typing: true,
       thread_id: useAppStore.getState().currentThread?.id,
-    });
-  }, [send]);
+    })
+  ), [send]);
 
-  const sendTypingStop = useCallback(() => {
+  const sendTypingStop = useCallback((): boolean => (
     send('typing_stop', {
+      typing: false,
       thread_id: useAppStore.getState().currentThread?.id,
-    });
-  }, [send]);
+    })
+  ), [send]);
 
   const sendTypingContent = useCallback(
-    (content: string) => {
+    (content: string): boolean => (
       send('typing_content', {
         content,
         thread_id: useAppStore.getState().currentThread?.id,
-      });
-    },
+      })
+    ),
+    [send],
+  );
+
+  const switchThread = useCallback(
+    (threadId: string): boolean => send('switch_thread', { thread_id: threadId }),
     [send],
   );
 
@@ -303,22 +522,30 @@ export function useDialecticSocket() {
   }, [send]);
 
   const forkThread = useCallback(
-    (sourceThreadId: string, forkMessageId: string, title?: string) => {
+    (sourceThreadId: string, forkMessageId: string, title?: string): boolean => (
       send('fork_thread', {
         source_thread_id: sourceThreadId,
-        fork_message_id: forkMessageId,
+        fork_after_message_id: forkMessageId,
         title,
-      });
-    },
+      })
+    ),
     [send],
   );
 
   const createCommitment = useCallback(
-    (claim: string, criteria: string, category?: string) => {
-      send('create_commitment', {
+    (
+      claim: string,
+      criteria: string,
+      category?: string,
+      deadline?: string,
+      initialConfidence?: number,
+    ): boolean => {
+      return send('create_commitment', {
         claim,
         resolution_criteria: criteria,
         category: category ?? 'commitment',
+        deadline,
+        initial_confidence: initialConfidence,
         thread_id: useAppStore.getState().currentThread?.id,
       });
     },
@@ -326,13 +553,24 @@ export function useDialecticSocket() {
   );
 
   const recordConfidence = useCallback(
-    (commitmentId: string, confidence: number, reasoning?: string) => {
-      send('record_confidence', {
+    (commitmentId: string, confidence: number, reasoning?: string): boolean => {
+      return send('record_confidence', {
         commitment_id: commitmentId,
         confidence,
         reasoning,
       });
     },
+    [send],
+  );
+
+  const resolveCommitment = useCallback(
+    (commitmentId: string, resolution: string, resolutionNotes?: string): boolean => (
+      send('resolve_commitment', {
+        commitment_id: commitmentId,
+        resolution,
+        resolution_notes: resolutionNotes,
+      })
+    ),
     [send],
   );
 
@@ -343,6 +581,7 @@ export function useDialecticSocket() {
     sendTypingStart,
     sendTypingStop,
     sendTypingContent,
+    switchThread,
     invokeProtocol,
     advanceProtocol,
     abortProtocol,
@@ -351,5 +590,10 @@ export function useDialecticSocket() {
     forkThread,
     createCommitment,
     recordConfidence,
+    resolveCommitment,
+    refreshThreads,
+    refreshMemories,
+    refreshPresence,
+    refreshCommitments,
   };
 }
