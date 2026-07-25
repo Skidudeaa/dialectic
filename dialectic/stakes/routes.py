@@ -6,6 +6,7 @@ from uuid import UUID
 import logging
 
 from fastapi import APIRouter, HTTPException, Depends, Query
+from api.auth.dependencies import AuthenticatedUser, get_current_user
 from api.token_utils import extract_room_token
 from pydantic import BaseModel, Field
 
@@ -79,7 +80,7 @@ async def create_commitment(
     room_id: UUID,
     request: CreateCommitmentRequest,
     token: str = Depends(extract_room_token),
-    user_id: UUID = Query(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """
@@ -88,6 +89,7 @@ async def create_commitment(
     ARCHITECTURE: REST endpoint for explicit commitment creation.
     WHY: Users can formalize predictions from conversation or create them directly.
     """
+    user_id = current_user.user_id
     await _verify_room_token(room_id, token, db)
     await _verify_room_member(room_id, user_id, db)
 
@@ -154,7 +156,7 @@ async def record_confidence(
     commitment_id: UUID,
     request: RecordConfidenceRequest,
     token: str = Depends(extract_room_token),
-    user_id: UUID = Query(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """
@@ -163,6 +165,7 @@ async def record_confidence(
     ARCHITECTURE: Append-only confidence history per participant.
     WHY: Tracking confidence changes over time reveals epistemic evolution.
     """
+    user_id = current_user.user_id
     # Verify room membership through the commitment's room
     row = await db.fetchrow(
         "SELECT room_id FROM commitments WHERE id = $1", commitment_id,
@@ -192,7 +195,7 @@ async def resolve_commitment(
     commitment_id: UUID,
     request: ResolveRequest,
     token: str = Depends(extract_room_token),
-    user_id: UUID = Query(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """
@@ -201,6 +204,7 @@ async def resolve_commitment(
     ARCHITECTURE: Resolution triggers calibration score updates.
     WHY: Accountability requires closure — predictions must be scored.
     """
+    user_id = current_user.user_id
     row = await db.fetchrow(
         "SELECT room_id FROM commitments WHERE id = $1", commitment_id,
     )

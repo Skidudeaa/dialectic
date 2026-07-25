@@ -11,6 +11,7 @@ from uuid import UUID
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from api.auth.dependencies import AuthenticatedUser, get_current_user
 from api.token_utils import extract_room_token
 
 from analytics.knowledge_graph import (
@@ -92,17 +93,23 @@ async def _get_db():
 @router.get("/concept-map", response_model=ConceptMap)
 async def concept_map(
     query: str = Query(..., min_length=1, description="Semantic search query"),
-    user_id: UUID = Query(..., description="User requesting the map"),
     token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     limit: int = Query(20, ge=1, le=100, description="Max seed nodes"),
     db=Depends(_get_db),
 ):
     """
-    Build a concept map across all rooms the user participates in.
+    Build a concept map across all rooms the caller participates in.
 
     Combines vector similarity search (seed nodes) with graph edge
     traversal (connections between those nodes).
+
+    WHY the caller's JWT and not a user_id param: this endpoint spans every
+    room the subject belongs to, so a caller-supplied user_id let anyone
+    holding any valid room token read another user's cross-room graph —
+    including rooms the caller has no access to.
     """
+    user_id = current_user.user_id
     await _verify_token(token, db)
     await _verify_user_membership(user_id, db)
 

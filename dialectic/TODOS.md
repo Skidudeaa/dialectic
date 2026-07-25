@@ -55,7 +55,13 @@
 
 ## Open — Security (CRITICAL — blocks production)
 
-- [x] **Wire JWT auth to ALL REST endpoints** — Fixed 2026-07-24 (commit 355e497). All 9 endpoints now derive user_id from `Depends(get_current_user)` instead of a trusted query param. Frontend plumbing that carried the vestigial `?user_id=` cleaned up too.
+- [x] **Wire JWT auth to ALL REST endpoints** — Fixed in two passes. 2026-07-24 (commit 355e497) covered the 9 endpoints in `api/main.py`. That pass claimed "ALL" but only searched `main.py`: 4 more endpoints in mounted routers kept the identical vector and were fixed 2026-07-25 — `stakes/routes.py` (create_commitment, record_confidence, resolve_commitment) and `analytics/graph_routes.py` (concept-map). All 13 now derive user_id from `Depends(get_current_user)`.
+  - The graph one was the worst of the set: `_verify_token()` accepts *any* valid room token (not the requested room) and `_verify_user_membership()` only checked the subject belonged to *some* room, so any room token + any user UUID read that user's **cross-room** concept map. Now scoped to the caller.
+  - Verified live: `/openapi.json` went 14 → 1 endpoints exposing `?user_id=`.
+
+- [ ] **Harden `GET /stakes/rooms/{room_id}/calibration`** — The last remaining `?user_id=` param. Different in kind from the above: it's an *optional filter* (`user_id=None` means whole-room), not a spoofed identity, and the frontend legitimately passes it. But it only calls `_verify_room_token()` — never `_verify_room_member()` — so anyone holding the room token can read any member's calibration curve without being a member themselves. Fix: add a `get_current_user` dep, verify the caller is a room member, keep `user_id` as a filter.
+  - Files: `stakes/routes.py:227-244`
+  - Severity: **MEDIUM** (read-only, room-token scoped)
 
 - [ ] **Fix cross-session routes auth** — `cross_session_routes.py` (12 endpoints) still uses hardcoded `UUID("00000000-...")` placeholders and is never mounted in main.py. This is the same modeling gap as the schema/wiring items below were — the *internal* cross-session feature works, only its REST surface doesn't. Phase 2, in progress.
   - Files: `api/cross_session_routes.py`, `api/main.py`
