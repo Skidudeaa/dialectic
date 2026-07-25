@@ -3,7 +3,7 @@
 import os
 import re
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -137,6 +137,51 @@ class TestCreateRefreshToken:
         r_payload = decode_token(refresh)
         # Refresh should expire days later
         assert r_payload["exp"] > a_payload["exp"]
+
+    def test_same_second_logins_produce_distinct_tokens(self):
+        """
+        The regression: iat/exp serialise to whole seconds, so without a jti
+        every claim was identical for a user logging in twice in one second —
+        producing byte-identical tokens. No sleep here on purpose; the whole
+        point is that timing must not matter.
+        """
+        tokens = [create_refresh_token({"sub": "same-user"}) for _ in range(20)]
+        assert len(set(tokens)) == 20
+
+    def test_same_second_logins_produce_distinct_hashes(self):
+        """
+        What actually corrupted state: identical tokens hash identically, so
+        user_sessions got two rows sharing a refresh_token_hash and refresh's
+        fetchrow picked between them arbitrarily.
+        """
+        hashes = [hash_refresh_token(create_refresh_token({"sub": "same-user"}))
+                  for _ in range(20)]
+        assert len(set(hashes)) == 20
+
+    def test_jti_is_unique_and_survives_decode(self):
+        first, second = (create_refresh_token({"sub": "u"}) for _ in range(2))
+        assert decode_token(first)["jti"] != decode_token(second)["jti"]
+
+    def test_payload_otherwise_unchanged(self):
+        """The jti is additive — existing claims keep working."""
+        payload = decode_token(create_refresh_token({"sub": "user123"}))
+        assert payload["sub"] == "user123"
+        assert payload["type"] == "refresh"
+        assert "iat" in payload and "exp" in payload
+
+    def test_pre_jti_tokens_still_decode(self):
+        """
+        Refresh tokens issued before this change have no jti and are valid for
+        90 days, so they must keep working rather than being rejected.
+        """
+        legacy = pyjwt.encode(
+            {"sub": "u", "type": "refresh",
+             "exp": datetime.now(timezone.utc) + timedelta(days=1)},
+            _get_secret_key(), algorithm=ALGORITHM,
+        )
+        payload = decode_token(legacy)
+        assert payload["sub"] == "u"
+        assert "jti" not in payload
 
 
 # ── verify_password / get_password_hash ──

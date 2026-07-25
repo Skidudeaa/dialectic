@@ -80,6 +80,14 @@ def create_refresh_token(data: dict) -> str:
     """
     Create a long-lived refresh token for session persistence.
     Default expiration: 90 days (per CONTEXT.md session duration).
+
+    WHY the `jti`: every other claim here is deterministic for a given user,
+    and JWT serialises `iat`/`exp` to whole seconds — so two logins by the
+    same user inside one second produced byte-identical tokens. Identical
+    tokens hash identically, so user_sessions ended up with two rows sharing
+    a refresh_token_hash, and refresh's fetchrow then picked between them
+    arbitrarily: revoking or touching one silently left the other behind.
+    A random jti makes each token unique regardless of timing.
     """
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
@@ -87,6 +95,7 @@ def create_refresh_token(data: dict) -> str:
         "exp": expire,
         "type": "refresh",
         "iat": datetime.now(timezone.utc),
+        "jti": secrets.token_urlsafe(16),
     })
     return jwt.encode(to_encode, _get_secret_key(), algorithm=ALGORITHM)
 

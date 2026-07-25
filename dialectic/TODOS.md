@@ -78,6 +78,11 @@
   - Verified end-to-end against the live service: 6 logins, then refreshing with the evicted session returned 401 + "You were signed out because you signed in on another device. Only 5 devices can be signed in at once." + the header, while a surviving session still refreshed 200.
   - Files: `api/auth/routes.py`, `migrations/004_session_revoked_reason.sql`, `schema.sql`, `stores/appStore.ts`, `App.tsx`, `components/auth/AuthScreen.tsx`, `tests/test_session_eviction.py`
 
+- [x] **Give refresh tokens a `jti`** — Fixed 2026-07-25. Every claim in a refresh token was deterministic for a given user, and JWT serialises `iat`/`exp` to whole seconds — so two logins by the same user inside one second produced byte-identical tokens, hence two `user_sessions` rows sharing a `refresh_token_hash`, which `refresh`'s `fetchrow` then chose between arbitrarily (revoking or touching one silently left the other). Added a random `jti` (`secrets.token_urlsafe(16)`). Additive and backward-compatible: pre-existing tokens have no `jti` and still decode, which matters because they stay valid for 90 days.
+  - Latent, not historical: checked production before fixing — 18 sessions, zero duplicate hashes. It had not yet bitten.
+  - Verified live with **no** timing gaps (the exact condition that used to collide): 5 back-to-back logins produced 5 distinct tokens, 5 distinct `jti`s, 5 distinct hashes in the DB, and all 5 refreshed 200 independently.
+  - Files: `api/auth/utils.py`, `tests/test_auth_utils.py`
+
 - [ ] **Stop logging verification codes** — `logger.info(f"Verification code for {email}: {code}")` exposes one-time auth codes. Change to DEBUG or remove.
   - Files: `api/auth/routes.py:133, 377`
   - Severity: **HIGH**
