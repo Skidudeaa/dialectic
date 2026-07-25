@@ -42,11 +42,39 @@ class ConnectionManager:
     """
     ARCHITECTURE: In-memory connection registry with room-based routing.
     WHY: Single-server MVP; swap for Redis pub/sub for horizontal scale.
+    TRADEOFF: `_rooms` is the single source of truth, and per-user lookups
+        are linear scans over one room rather than an index.
+
+    WHY no `(user_id, room_id) -> Connection` index: there used to be one
+    alongside `_rooms`, but it held only ONE connection per user per room
+    while `_rooms` held them all. A user's second tab overwrote the first
+    tab's entry, and closing *either* tab deleted the single shared key —
+    so the surviving tab stayed in `_rooms` and kept receiving broadcasts
+    while every directed send to it silently returned False. Rooms hold a
+    handful of participants, so the index bought no measurable lookup win
+    in exchange for that whole class of desync.
     """
 
     def __init__(self):
         self._rooms: dict[UUID, list[Connection]] = {}
-        self._users: dict[tuple[UUID, UUID], Connection] = {}
+
+    def _remove_connection(self, conn: Connection) -> None:
+        """
+        Drop a single connection from the registry.
+
+        WHY identity (`is not`) and not equality: Connection is a dataclass,
+        so `==` compares field-by-field and two live connections could
+        compare equal — removing both when only one closed.
+        """
+        room_conns = self._rooms.get(conn.room_id)
+        if room_conns is None:
+            return
+
+        remaining = [c for c in room_conns if c is not conn]
+        if remaining:
+            self._rooms[conn.room_id] = remaining
+        else:
+            del self._rooms[conn.room_id]
 
     async def connect(
         self,
@@ -63,18 +91,22 @@ class ConnectionManager:
             thread_id=thread_id,
         )
 
-        if room_id not in self._rooms:
-            self._rooms[room_id] = []
-        self._rooms[room_id].append(conn)
+        room_conns = self._rooms.setdefault(room_id, [])
+        # Opening a second tab is not a join event for anyone else, so only
+        # a user's FIRST connection to the room announces presence.
+        is_first_connection = not any(c.user_id == user_id for c in room_conns)
+        room_conns.append(conn)
 
-        self._users[(user_id, room_id)] = conn
+        logger.info(
+            f"Connected: user={user_id}, room={room_id} "
+            f"(connections for this user: {len(self.get_user_connections(user_id, room_id))})"
+        )
 
-        logger.info(f"Connected: user={user_id}, room={room_id}")
-
-        await self.broadcast(room_id, OutboundMessage(
-            type="user_joined",
-            payload={"user_id": str(user_id)},
-        ), exclude_user=user_id)
+        if is_first_connection:
+            await self.broadcast(room_id, OutboundMessage(
+                type="user_joined",
+                payload={"user_id": str(user_id)},
+            ), exclude_user=user_id)
 
         return conn
 
@@ -83,21 +115,23 @@ class ConnectionManager:
         room_id = conn.room_id
         user_id = conn.user_id
 
-        if room_id in self._rooms:
-            self._rooms[room_id] = [c for c in self._rooms[room_id] if c != conn]
-            if not self._rooms[room_id]:
-                del self._rooms[room_id]
+        self._remove_connection(conn)
 
-        key = (user_id, room_id)
-        if key in self._users:
-            del self._users[key]
+        # Mirror of connect(): a user is only "gone" once their LAST
+        # connection closes. Announcing on every tab close evicted users
+        # from the participants list while they were still present.
+        still_present = bool(self.get_user_connections(user_id, room_id))
 
-        logger.info(f"Disconnected: user={user_id}, room={room_id}")
+        logger.info(
+            f"Disconnected: user={user_id}, room={room_id}"
+            + (" (other connections remain)" if still_present else "")
+        )
 
-        await self.broadcast(room_id, OutboundMessage(
-            type="user_left",
-            payload={"user_id": str(user_id)},
-        ))
+        if not still_present:
+            await self.broadcast(room_id, OutboundMessage(
+                type="user_left",
+                payload={"user_id": str(user_id)},
+            ))
 
     async def broadcast(
         self,
@@ -115,14 +149,28 @@ class ConnectionManager:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
-        for conn in self._rooms[room_id]:
+        # Snapshot: sends await, so another task may mutate the room list.
+        dead: list[Connection] = []
+        for conn in list(self._rooms[room_id]):
             if exclude_user and conn.user_id == exclude_user:
                 continue
 
             try:
                 await conn.websocket.send_text(payload)
             except Exception as e:
-                logger.warning(f"Failed to send to {conn.user_id}: {e}")
+                # !r because ConnectionClosed and friends stringify to "",
+                # which logged a bare "Failed to send to <uuid>: " with no
+                # indication of what actually went wrong.
+                logger.warning(f"Failed to send to {conn.user_id}: {e!r}")
+                dead.append(conn)
+
+        # Evict failed sockets instead of retrying them on every subsequent
+        # broadcast. The endpoint's own finally-block still calls
+        # disconnect() for the user_left announcement — dropping the entry
+        # here (rather than calling disconnect()) keeps broadcast
+        # non-reentrant.
+        for conn in dead:
+            self._remove_connection(conn)
 
     async def send_to_user(
         self,
@@ -130,11 +178,14 @@ class ConnectionManager:
         room_id: UUID,
         message: OutboundMessage,
     ) -> bool:
-        """Send message to specific user in room."""
-        key = (user_id, room_id)
-        conn = self._users.get(key)
+        """
+        Send message to a user in a room — to EVERY connection they hold,
+        so a directed message reaches all of their open tabs.
 
-        if not conn:
+        Returns True if at least one connection accepted the message.
+        """
+        conns = self.get_user_connections(user_id, room_id)
+        if not conns:
             return False
 
         payload = json.dumps({
@@ -143,31 +194,42 @@ class ConnectionManager:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
-        try:
-            await conn.websocket.send_text(payload)
-            return True
-        except Exception as e:
-            logger.warning(f"Failed to send to {user_id}: {e}")
-            return False
+        delivered = False
+        dead: list[Connection] = []
+        for conn in conns:
+            try:
+                await conn.websocket.send_text(payload)
+                delivered = True
+            except Exception as e:
+                logger.warning(f"Failed to send to {user_id}: {e!r}")
+                dead.append(conn)
+
+        for conn in dead:
+            self._remove_connection(conn)
+
+        return delivered
 
     def get_room_users(self, room_id: UUID) -> list[UUID]:
-        """Get list of connected user IDs in room."""
-        if room_id not in self._rooms:
-            return []
-        return [conn.user_id for conn in self._rooms[room_id]]
+        """
+        Get list of connected user IDs in room, deduplicated — a user with
+        two tabs open is one participant, not two.
+        """
+        users: list[UUID] = []
+        for conn in self._rooms.get(room_id, ()):
+            if conn.user_id not in users:
+                users.append(conn.user_id)
+        return users
 
     def get_user_connections(self, user_id: UUID, room_id: UUID) -> list[Connection]:
         """
         Get all active connections for a user in a specific room.
         Used to determine if user is currently viewing the room (foreground suppression).
         """
-        if room_id not in self._rooms:
-            return []
-        return [conn for conn in self._rooms[room_id] if conn.user_id == user_id]
+        return [c for c in self._rooms.get(room_id, ()) if c.user_id == user_id]
 
     def is_user_connected(self, user_id: UUID, room_id: UUID) -> bool:
         """Check if user has any active WebSocket connections to room."""
-        return (user_id, room_id) in self._users
+        return bool(self.get_user_connections(user_id, room_id))
 
 
 @dataclass

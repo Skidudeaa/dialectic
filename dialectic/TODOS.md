@@ -151,6 +151,9 @@
   - Files: `transport/websocket.py`
   - Severity: HIGH (blocks multi-worker production)
 
+- [x] **Fix multi-tab connection registry desync** — Fixed 2026-07-25. `ConnectionManager` kept a `(user_id, room_id) -> Connection` index holding one connection per user per room, while `_rooms` held them all. A second tab overwrote the first tab's entry, and closing *either* tab deleted the shared key — the surviving tab stayed in `_rooms` (kept receiving broadcasts) but every directed send to it returned False, so LLM streams and receipts silently vanished. `_rooms` is now the single source of truth; `send_to_user` fans out to all of a user's tabs; `user_joined`/`user_left` fire only on a user's first/last connection; dead sockets are evicted on send failure instead of retried forever; removal is by identity, not dataclass equality. Regression tests in `tests/test_connection_registry.py` (8 of 9 fail against the old code).
+  - Files: `transport/websocket.py`, `tests/test_connection_registry.py`
+
 - [ ] **Refactor main.py** — 1400+ line god object. Split into routers.
   - Severity: MEDIUM
 
