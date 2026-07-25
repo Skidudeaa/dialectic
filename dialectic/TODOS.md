@@ -59,9 +59,10 @@
   - The graph one was the worst of the set: `_verify_token()` accepts *any* valid room token (not the requested room) and `_verify_user_membership()` only checked the subject belonged to *some* room, so any room token + any user UUID read that user's **cross-room** concept map. Now scoped to the caller.
   - Verified live: `/openapi.json` went 14 → 1 endpoints exposing `?user_id=`.
 
-- [ ] **Harden `GET /stakes/rooms/{room_id}/calibration`** — The last remaining `?user_id=` param. Different in kind from the above: it's an *optional filter* (`user_id=None` means whole-room), not a spoofed identity, and the frontend legitimately passes it. But it only calls `_verify_room_token()` — never `_verify_room_member()` — so anyone holding the room token can read any member's calibration curve without being a member themselves. Fix: add a `get_current_user` dep, verify the caller is a room member, keep `user_id` as a filter.
-  - Files: `stakes/routes.py:227-244`
-  - Severity: **MEDIUM** (read-only, room-token scoped)
+- [x] **Harden `GET /stakes/rooms/{room_id}/calibration`** — Fixed 2026-07-25. It verified only `_verify_room_token()`, never `_verify_room_member()`, so anyone holding the room token could read any member's calibration curve without belonging to the room. Now requires a JWT and checks caller membership; when a `user_id` filter is supplied, the subject must be a member too (a clear 403 instead of a silently-empty curve, and no probing for arbitrary user IDs).
+  - `user_id` **stays** a query param here, unlike the write endpoints above — it's a filter, not an identity claim, and omitting it means the whole room, which is the only view `CommitmentDashboard` actually requests. So `/openapi.json` still shows 1 endpoint with `?user_id=`, and that is now correct rather than outstanding.
+  - Tests: `tests/test_calibration_endpoint.py` (3 of 5 fail against the pre-fix endpoint).
+  - Files: `stakes/routes.py`, `tests/test_calibration_endpoint.py`
 
 - [ ] **Fix cross-session routes auth** — `cross_session_routes.py` (12 endpoints) still uses hardcoded `UUID("00000000-...")` placeholders and is never mounted in main.py. This is the same modeling gap as the schema/wiring items below were — the *internal* cross-session feature works, only its REST surface doesn't. Phase 2, in progress.
   - Files: `api/cross_session_routes.py`, `api/main.py`

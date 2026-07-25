@@ -232,17 +232,33 @@ async def resolve_commitment(
 async def get_calibration(
     room_id: UUID,
     token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     user_id: Optional[UUID] = None,
     db=Depends(get_db),
 ):
     """
-    Get calibration curve for a user or room.
+    Get calibration curve for the room, or for one member of it.
 
     ARCHITECTURE: Computes bucketed accuracy for confidence vs outcomes.
     WHY: Calibration is the gold standard for prediction quality — shows
          whether 70% confident predictions are correct ~70% of the time.
+
+    WHY `user_id` stays a query param when the write endpoints above dropped
+    theirs: here it is a filter, not an identity claim. Omitted means the
+    whole room, which is the view the dashboard actually renders — deriving
+    it from the caller's JWT would make that view unreachable. The caller is
+    authenticated and membership-checked regardless; previously this endpoint
+    verified only the room token, so anyone holding it could read any
+    member's calibration without belonging to the room.
     """
     await _verify_room_token(room_id, token, db)
+    await _verify_room_member(room_id, current_user.user_id, db)
+
+    # A subject filter only makes sense for someone in this room. Results are
+    # room-scoped anyway, so this turns a silently-empty curve into a clear
+    # 403 (and blocks using the endpoint to probe for arbitrary user IDs).
+    if user_id is not None and user_id != current_user.user_id:
+        await _verify_room_member(room_id, user_id, db)
 
     mgr = CommitmentManager(db)
     return await mgr.get_calibration(user_id=user_id, room_id=room_id)
