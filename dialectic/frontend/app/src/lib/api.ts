@@ -44,8 +44,8 @@ class DialecticAPI {
   async getPresence(roomId: string) { return this.fetch(`/rooms/${roomId}/presence`); }
   async getSettings(roomId: string) { return this.fetch(`/rooms/${roomId}/settings`); }
   async getRooms() { return this.fetch('/users/me/rooms'); }
-  async updateSettings(roomId: string, userId: string, settings: object) {
-    return this.fetch(`/rooms/${roomId}/settings?user_id=${userId}`, {
+  async updateSettings(roomId: string, settings: object) {
+    return this.fetch(`/rooms/${roomId}/settings`, {
       method: 'PATCH',
       body: JSON.stringify(settings),
     });
@@ -68,12 +68,12 @@ class DialecticAPI {
   // Identity
   async getIdentity(roomId: string) { return this.fetch(`/rooms/${roomId}/identity`); }
   async getUserModel(roomId: string, userId: string) { return this.fetch(`/rooms/${roomId}/user-models/${userId}`); }
-  async updateIdentity(roomId: string, userId: string, content: string) {
-    return this.fetch(`/rooms/${roomId}/identity?user_id=${userId}`, { method: 'PUT', body: JSON.stringify({ content }) });
+  async updateIdentity(roomId: string, content: string) {
+    return this.fetch(`/rooms/${roomId}/identity`, { method: 'PUT', body: JSON.stringify({ content }) });
   }
 
   // Briefing
-  async getBriefing(roomId: string, userId: string) { return this.fetch(`/rooms/${roomId}/briefing?user_id=${userId}`); }
+  async getBriefing(roomId: string) { return this.fetch(`/rooms/${roomId}/briefing`); }
 
   // Replay
   async getState(roomId: string, seq: number) { return this.fetch(`/replay/rooms/${roomId}/state?at_sequence=${seq}`); }

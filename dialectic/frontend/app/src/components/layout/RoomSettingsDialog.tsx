@@ -10,11 +10,10 @@ interface RoomSettings {
 
 interface RoomSettingsDialogProps {
   roomId: string
-  userId: string
   onClose: () => void
 }
 
-export function RoomSettingsDialog({ roomId, userId, onClose }: RoomSettingsDialogProps) {
+export function RoomSettingsDialog({ roomId, onClose }: RoomSettingsDialogProps) {
   const [settings, setSettings] = useState<RoomSettings | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -30,7 +29,7 @@ export function RoomSettingsDialog({ roomId, userId, onClose }: RoomSettingsDial
     setSaving(true)
     setError('')
     try {
-      const updated = await api.updateSettings(roomId, userId, settings) as RoomSettings
+      const updated = await api.updateSettings(roomId, settings) as RoomSettings
       setSettings(updated)
       onClose()
     } catch (err) {

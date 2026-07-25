@@ -9,10 +9,9 @@ interface IdentityData {
 
 interface IdentityViewerProps {
   roomId: string;
-  userId: string;
 }
 
-export function IdentityViewer({ roomId, userId }: IdentityViewerProps) {
+export function IdentityViewer({ roomId }: IdentityViewerProps) {
   const [identity, setIdentity] = useState<IdentityData | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -41,7 +40,7 @@ export function IdentityViewer({ roomId, userId }: IdentityViewerProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const updated = await api.updateIdentity(roomId, userId, editContent) as IdentityData;
+      const updated = await api.updateIdentity(roomId, editContent) as IdentityData;
       setIdentity(updated);
       setEditing(false);
     } catch (err) {

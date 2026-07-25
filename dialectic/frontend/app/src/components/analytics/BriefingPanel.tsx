@@ -17,20 +17,19 @@ interface BriefingData {
 
 interface BriefingPanelProps {
   roomId: string;
-  userId: string;
   onDismiss: () => void;
 }
 
-export function BriefingPanel({ roomId, userId, onDismiss }: BriefingPanelProps) {
+export function BriefingPanel({ roomId, onDismiss }: BriefingPanelProps) {
   const [briefing, setBriefing] = useState<BriefingData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getBriefing(roomId, userId)
+    api.getBriefing(roomId)
       .then((data) => setBriefing(data as BriefingData))
       .catch(() => setBriefing(null))
       .finally(() => setLoading(false));
-  }, [roomId, userId]);
+  }, [roomId]);
 
   if (loading) {
     return (

@@ -23,7 +23,6 @@ interface RightPanelProps {
   onAddMemory: (key: string, content: string) => void
   roomId: string
   roomToken: string
-  userId: string
   users: { id: string; name: string; status: string }[]
   onCreateCommitment: (
     claim: string,
@@ -56,7 +55,6 @@ export function RightPanel({
   onAddMemory,
   roomId,
   roomToken,
-  userId,
   users,
   onCreateCommitment,
   onUpdateConfidence,
@@ -100,7 +98,7 @@ export function RightPanel({
           />
         )}
         {activeTab === 'history' && <ReplayTimeline key={roomId} roomId={roomId} />}
-        {activeTab === 'identity' && <IdentityViewer key={roomId} roomId={roomId} userId={userId} />}
+        {activeTab === 'identity' && <IdentityViewer key={roomId} roomId={roomId} />}
         {activeTab === 'share' && <SharePanel roomId={roomId} roomToken={roomToken} />}
         {activeTab === 'trading' && <TradingPanel />}
       </div>

@@ -715,7 +715,7 @@ async def update_room_settings(
     room_id: UUID,
     request: UpdateRoomSettingsRequest,
     token: str = Depends(extract_room_token),
-    user_id: UUID = Query(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """
@@ -725,6 +725,7 @@ async def update_room_settings(
     WHY: Allows partial updates without overwriting unspecified fields.
     TRADEOFF: Slightly more complex than full replacement, but safer.
     """
+    user_id = current_user.user_id
     await verify_room_token(room_id, token, db)
     await verify_room_member(room_id, user_id, db)
 
@@ -951,10 +952,11 @@ async def send_message(
     thread_id: UUID,
     request: SendMessageRequest,
     token: str = Depends(extract_room_token),
-    user_id: UUID = Query(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """Send a message (REST fallback for WebSocket)."""
+    user_id = current_user.user_id
     if not request.content or not request.content.strip():
         raise HTTPException(status_code=400, detail="Message content cannot be empty")
 
@@ -1014,10 +1016,11 @@ async def fork_thread_endpoint(
     thread_id: UUID,
     request: ForkThreadRequest,
     token: str = Depends(extract_room_token),
-    user_id: UUID = Query(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """Fork a thread."""
+    user_id = current_user.user_id
     thread_row = await db.fetchrow(
         "SELECT * FROM threads WHERE id = $1", thread_id
     )
@@ -1075,10 +1078,11 @@ async def add_memory(
     room_id: UUID,
     request: AddMemoryRequest,
     token: str = Depends(extract_room_token),
-    user_id: UUID = Query(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """Add a new memory."""
+    user_id = current_user.user_id
     await verify_room_token(room_id, token, db)
     await verify_room_member(room_id, user_id, db)
 
@@ -1107,10 +1111,11 @@ async def edit_memory(
     memory_id: UUID,
     request: EditMemoryRequest,
     token: str = Depends(extract_room_token),
-    user_id: UUID = Query(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """Edit a memory."""
+    user_id = current_user.user_id
     row = await db.fetchrow("SELECT room_id FROM memories WHERE id = $1", memory_id)
     if not row:
         raise HTTPException(status_code=404, detail="Memory not found")
@@ -1141,11 +1146,12 @@ async def edit_memory(
 async def invalidate_memory(
     memory_id: UUID,
     token: str = Depends(extract_room_token),
-    user_id: UUID = Query(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     reason: Optional[str] = None,
     db=Depends(get_db),
 ):
     """Invalidate a memory."""
+    user_id = current_user.user_id
     row = await db.fetchrow("SELECT room_id FROM memories WHERE id = $1", memory_id)
     if not row:
         raise HTTPException(status_code=404, detail="Memory not found")
@@ -1447,7 +1453,7 @@ async def update_llm_identity(
     room_id: UUID,
     request: UpdateIdentityRequest,
     token: str = Depends(extract_room_token),
-    user_id: UUID = Query(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """
@@ -1457,6 +1463,7 @@ async def update_llm_identity(
     WHY: The identity should be collaborative — humans can correct misunderstandings.
     TRADEOFF: Human edits may conflict with next distillation, but versioning preserves history.
     """
+    user_id = current_user.user_id
     await verify_room_token(room_id, token, db)
     await verify_room_member(room_id, user_id, db)
 
@@ -1488,7 +1495,7 @@ async def search_messages(
     speaker_type: Optional[str] = Query(None, description="Filter by speaker type"),
     limit: int = Query(50, ge=1, le=200, description="Max results"),
     token: str = Depends(extract_room_token),
-    user_id: UUID = Query(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """
@@ -1498,6 +1505,7 @@ async def search_messages(
     WHY: Native FTS is fast, ranked, and supports stemming/normalization.
     TRADEOFF: Less flexible than Elasticsearch, but zero infrastructure overhead.
     """
+    user_id = current_user.user_id
     # Build query with room membership check
     query = """
         SELECT
@@ -2138,7 +2146,7 @@ class BriefingResponse(BaseModel):
 @app.get("/rooms/{room_id}/briefing", response_model=BriefingResponse)
 async def get_morning_briefing(
     room_id: UUID,
-    user_id: UUID = Query(...),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
@@ -2149,6 +2157,7 @@ async def get_morning_briefing(
     WHY: Async dialogue needs a "catch-up" mechanism, not raw message history.
     TRADEOFF: LLM call per briefing request vs pre-computed summaries.
     """
+    user_id = current_user.user_id
     await verify_room_token(room_id, token, db)
     await verify_room_member(room_id, user_id, db)
 

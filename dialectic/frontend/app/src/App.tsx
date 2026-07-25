@@ -20,10 +20,10 @@ import { ProtocolBanner } from './components/protocols/ProtocolBanner'
 import { BriefingPanel } from './components/analytics/BriefingPanel'
 import { CommitmentSurface } from './components/stakes/CommitmentSurface'
 
-function RoomBriefing({ roomId, userId }: { roomId: string; userId: string }) {
+function RoomBriefing({ roomId }: { roomId: string }) {
   const [dismissed, setDismissed] = useState(false)
   if (dismissed) return null
-  return <BriefingPanel roomId={roomId} userId={userId} onDismiss={() => setDismissed(true)} />
+  return <BriefingPanel roomId={roomId} onDismiss={() => setDismissed(true)} />
 }
 
 function accessTokenExpiry(token: string | null): number {
@@ -248,7 +248,7 @@ function ChatLayout() {
               connected={isConnected}
             />
             <ParticipantsBar participants={participants} />
-            <RoomBriefing key={currentRoom.id} roomId={currentRoom.id} userId={user.id} />
+            <RoomBriefing key={currentRoom.id} roomId={currentRoom.id} />
             {activeProtocol && (
               <ProtocolBanner
                 protocol={activeProtocol}
@@ -289,7 +289,6 @@ function ChatLayout() {
             }}
             roomId={currentRoom.id}
             roomToken={roomToken}
-            userId={user.id}
             users={onlineUsers.map((participant) => ({
               id: participant.user_id,
               name: participant.display_name,
@@ -311,7 +310,6 @@ function ChatLayout() {
       {showSettings && (
         <RoomSettingsDialog
           roomId={currentRoom.id}
-          userId={user.id}
           onClose={() => setShowSettings(false)}
         />
       )}
