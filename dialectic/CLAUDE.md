@@ -105,6 +105,11 @@ psql dialectic < migrations/001_llm_self_model.sql
 psql dialectic < migrations/002_add_trading_config.sql
 ```
 
+`schema.sql` is the fresh-database baseline and already contains 002, 003, 004
+and cross_session_memories. **Existing** databases need later migrations applied
+explicitly — e.g. `psql dialectic < migrations/004_session_revoked_reason.sql`
+(adds `user_sessions.revoked_reason`; applied to the live DB 2026-07-25).
+
 ## File Structure
 
 ```

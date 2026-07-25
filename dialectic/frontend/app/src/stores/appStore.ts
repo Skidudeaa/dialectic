@@ -20,6 +20,10 @@ interface AppState {
   refreshToken: string | null;
   roomToken: string | null;
   isAuthenticated: boolean;
+  // Why the session ended, when the server told us (e.g. signed in on another
+  // device). Deliberately NOT persisted: it explains the sign-out that just
+  // happened, and should not greet the user again after a manual reload.
+  signedOutReason: string | null;
 
   // Room
   currentRoom: Room | null;
@@ -70,7 +74,7 @@ interface AppState {
   setSurfacedCommitments: (commitments: Commitment[]) => void;
   setActiveCommitments: (commitments: Commitment[]) => void;
   setTradingConfig: (config: TradingSnapshot | null) => void;
-  logout: () => void;
+  logout: (reason?: string) => void;
   leaveRoom: () => void;
 }
 
@@ -101,6 +105,7 @@ export const useAppStore = create<AppState>()(
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
+      signedOutReason: null,
       ...initialRoomState,
 
       // Actions
@@ -110,6 +115,7 @@ export const useAppStore = create<AppState>()(
           accessToken,
           refreshToken: refreshToken ?? null,
           isAuthenticated: true,
+          signedOutReason: null,
         }),
 
       setRoom: (room, token) =>
@@ -200,12 +206,13 @@ export const useAppStore = create<AppState>()(
 
       setTradingConfig: (config) => set({ tradingConfig: config }),
 
-      logout: () =>
+      logout: (reason) =>
         set({
           user: null,
           accessToken: null,
           refreshToken: null,
           isAuthenticated: false,
+          signedOutReason: reason ?? null,
           ...initialRoomState,
         }),
 

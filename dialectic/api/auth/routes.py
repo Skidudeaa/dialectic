@@ -42,6 +42,26 @@ router = APIRouter()
 # Maximum active sessions per user (per CONTEXT.md: 3-5 devices)
 MAX_SESSIONS_PER_USER = 5
 
+# Why a session ended, persisted to user_sessions.revoked_reason and echoed
+# to the client on refresh. WHY: all three used to surface as an identical
+# flat 401, so a device evicted by the multi-device limit was indistinguishable
+# from one whose token simply aged out — the app just dropped to a blank auth
+# screen and the user assumed something was broken.
+REVOKED_BY_LOGOUT = "logout"
+REVOKED_BY_NEW_LOGIN = "evicted_by_new_login"
+REVOKED_BY_PASSWORD_RESET = "password_reset"
+
+# Client-facing copy per reason. Anything not listed here (including NULL, for
+# sessions revoked before revoked_reason existed) falls back to a plain expiry.
+REVOCATION_MESSAGES = {
+    REVOKED_BY_NEW_LOGIN: (
+        f"You were signed out because you signed in on another device. "
+        f"Only {MAX_SESSIONS_PER_USER} devices can be signed in at once."
+    ),
+    REVOKED_BY_PASSWORD_RESET: "You were signed out because your password was changed.",
+    REVOKED_BY_LOGOUT: "You signed out of this session.",
+}
+
 
 # ============================================================
 # DATABASE DEPENDENCY
@@ -226,23 +246,35 @@ async def refresh(
             detail="Invalid or expired refresh token"
         )
 
-    # Verify session exists and is not revoked
+    # Look the session up WITHOUT filtering on revoked_at, so a revoked one can
+    # explain itself instead of being indistinguishable from a bad token.
     token_hash = hash_refresh_token(request.refresh_token)
     session = await db.fetchrow(
         """
-        SELECT id, user_id FROM user_sessions
-        WHERE refresh_token_hash = $1
-          AND user_id = $2
-          AND revoked_at IS NULL
-          AND expires_at > NOW()
+        SELECT id, user_id, revoked_at, revoked_reason, (expires_at > NOW()) AS unexpired
+        FROM user_sessions
+        WHERE refresh_token_hash = $1 AND user_id = $2
         """,
         token_hash, user_id
     )
 
-    if session is None:
+    if session is None or not session["unexpired"]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session not found or revoked"
+        )
+
+    if session["revoked_at"] is not None:
+        # `detail` carries the human-readable copy because authFetch on the
+        # client already surfaces it verbatim; the header carries the machine
+        # code for anything that wants to branch on it. An unrecognised or
+        # NULL reason (sessions revoked before this column existed) falls back
+        # to the generic message rather than inventing an explanation.
+        reason = session["revoked_reason"]
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=REVOCATION_MESSAGES.get(reason, "Session not found or revoked"),
+            headers={"X-Session-Revoked-Reason": reason} if reason else None,
         )
 
     # Update last_used_at
@@ -274,10 +306,10 @@ async def logout(
     result = await db.execute(
         """
         UPDATE user_sessions
-        SET revoked_at = NOW()
+        SET revoked_at = NOW(), revoked_reason = $2
         WHERE refresh_token_hash = $1 AND revoked_at IS NULL
         """,
-        token_hash
+        token_hash, REVOKED_BY_LOGOUT
     )
 
     # Always return success (don't leak session existence)
@@ -450,8 +482,12 @@ async def reset_password(
 
     # Revoke all existing sessions for security
     await db.execute(
-        "UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL",
-        user_id
+        """
+        UPDATE user_sessions
+        SET revoked_at = NOW(), revoked_reason = $2
+        WHERE user_id = $1 AND revoked_at IS NULL
+        """,
+        user_id, REVOKED_BY_PASSWORD_RESET
     )
 
     # Auto-login: create new session
@@ -500,10 +536,17 @@ async def _create_session(db, user_id: UUID, refresh_token: str, now: datetime):
         )
         if oldest:
             await db.execute(
-                "UPDATE user_sessions SET revoked_at = NOW() WHERE id = $1",
-                oldest["id"]
+                """
+                UPDATE user_sessions
+                SET revoked_at = NOW(), revoked_reason = $2
+                WHERE id = $1
+                """,
+                oldest["id"], REVOKED_BY_NEW_LOGIN
             )
-            logger.info(f"Revoked oldest session for user {user_id} due to device limit")
+            logger.info(
+                f"Revoked oldest session for user {user_id} due to device limit "
+                f"(session {oldest['id']}); that device will be told why on its next refresh"
+            )
 
     # Create new session
     token_hash = hash_refresh_token(refresh_token)

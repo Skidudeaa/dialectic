@@ -347,7 +347,10 @@ function App() {
           api.setAccessToken(tokens.access_token)
           setUser(user, tokens.access_token, tokens.refresh_token)
         })
-        .catch(() => logout())
+        // The server explains revocations it knows the cause of (evicted by a
+        // login on another device, password change). Carry that through to the
+        // auth screen instead of dropping the user at a blank sign-in form.
+        .catch((err: unknown) => logout(err instanceof Error ? err.message : undefined))
         .finally(() => {
           refreshInFlight.current = null
         })

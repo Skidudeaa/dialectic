@@ -166,7 +166,12 @@ CREATE TABLE user_sessions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL,
-    revoked_at TIMESTAMPTZ
+    revoked_at TIMESTAMPTZ,
+    -- Why the session ended: 'logout' | 'evicted_by_new_login' |
+    -- 'password_reset'. Lets an evicted device tell the user what happened
+    -- instead of dropping to a blank auth screen. NULL = active, or revoked
+    -- before this column existed.
+    revoked_reason TEXT
 );
 
 CREATE INDEX idx_user_sessions_user ON user_sessions(user_id);

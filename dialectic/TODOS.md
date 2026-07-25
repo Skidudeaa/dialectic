@@ -74,6 +74,10 @@
 
 - [x] **CrossSessionContextBuilder wiring** — Already wired into `on_message`, `force_response`, and `stream_response` in `llm/orchestrator.py`. Verified 2026-07-24. (Moved here from Critical Bugs section below — same root cause as the routes item above.)
 
+- [x] **Explain multi-device session eviction** — Fixed 2026-07-25. `MAX_SESSIONS_PER_USER = 5` evicts a user's least-recently-used session on their next login; that's intentional, but it was *silent*. The evicted device found out only when `/auth/refresh` returned a flat 401 identical to an expired token, and the app dropped to a blank sign-in form — indistinguishable from "the app is broken." Sessions now record **why** they were revoked (`user_sessions.revoked_reason`: `logout` / `evicted_by_new_login` / `password_reset`, migration 004), `/auth/refresh` returns the matching explanation in `detail` plus an `X-Session-Revoked-Reason` header, and the auth screen shows it as a notice rather than an error. An unrecognised or NULL reason (sessions revoked before the column existed) falls back to the old generic message rather than inventing one.
+  - Verified end-to-end against the live service: 6 logins, then refreshing with the evicted session returned 401 + "You were signed out because you signed in on another device. Only 5 devices can be signed in at once." + the header, while a surviving session still refreshed 200.
+  - Files: `api/auth/routes.py`, `migrations/004_session_revoked_reason.sql`, `schema.sql`, `stores/appStore.ts`, `App.tsx`, `components/auth/AuthScreen.tsx`, `tests/test_session_eviction.py`
+
 - [ ] **Stop logging verification codes** — `logger.info(f"Verification code for {email}: {code}")` exposes one-time auth codes. Change to DEBUG or remove.
   - Files: `api/auth/routes.py:133, 377`
   - Severity: **HIGH**

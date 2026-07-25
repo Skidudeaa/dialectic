@@ -23,6 +23,10 @@ export function AuthScreen() {
   const [quickName, setQuickName] = useState('');
 
   const setUser = useAppStore((s) => s.setUser);
+  // Set when the server ended the session for a reason it can name — e.g. this
+  // device was evicted by a sign-in elsewhere. Distinct from `error`, which is
+  // about the form the user is currently filling in.
+  const signedOutReason = useAppStore((s) => s.signedOutReason);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,6 +126,10 @@ export function AuthScreen() {
             Quick Join
           </button>
         </div>
+
+        {signedOutReason && !error && (
+          <div className="auth-notice" role="status">{signedOutReason}</div>
+        )}
 
         {error && <div className="auth-error">{error}</div>}
 

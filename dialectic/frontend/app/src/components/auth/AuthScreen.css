@@ -81,6 +81,19 @@
     color: var(--color-secondary);
 }
 /* Error: uses --color-error (warm orange-red, not scarlet on structural border) */
+/* Informational, not a failure: the previous session ended for a known reason
+   (signed in elsewhere, password changed). Warning amber rather than error
+   red — nothing the user did on this screen went wrong. */
+.auth-notice {
+    background: rgba(191,161,98,.08);
+    border: 1px solid rgba(191,161,98,.25);
+    color: var(--color-warning);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.5rem;
+}
 .auth-error {
     background: rgba(199,91,57,.08);
     border: 1px solid rgba(199,91,57,.25);

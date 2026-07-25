@@ -45,7 +45,7 @@ frontend-lint: frontend-install
 
 db-setup:
 	@echo "WARNING: db-setup is a fresh-database baseline, not a migration runner."
-	@echo "schema.sql already includes migrations 002, 003, and cross_session_memories."
+	@echo "schema.sql already includes migrations 002, 003, 004, and cross_session_memories."
 	@echo "Existing databases require a reviewed migration applied with ON_ERROR_STOP."
 	@set -eu; \
 		exists="$$(sudo -u $(DB_USER) psql --no-psqlrc --set=ON_ERROR_STOP=1 \
