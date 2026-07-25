@@ -1,6 +1,6 @@
 # Dialectic — TODO List
 
-> Updated: 2026-02-20 (post deep audit — 4 agents, full codebase analysis)
+> Updated: 2026-07-24 (Phase 1 auth fix + reconciliation against actual code state)
 
 ---
 
@@ -55,17 +55,17 @@
 
 ## Open — Security (CRITICAL — blocks production)
 
-- [ ] **Wire JWT auth to ALL REST endpoints** — Core endpoints accept bare `user_id` query param with no JWT validation. Anyone with a room token can impersonate any user. Add `Depends(get_current_user)` and validate caller matches `user_id`.
-  - Files: `api/main.py` (all endpoints accepting `user_id: UUID = Query(...)`)
-  - Severity: **CRITICAL**
+- [x] **Wire JWT auth to ALL REST endpoints** — Fixed 2026-07-24 (commit 355e497). All 9 endpoints now derive user_id from `Depends(get_current_user)` instead of a trusted query param. Frontend plumbing that carried the vestigial `?user_id=` cleaned up too.
 
-- [ ] **Fix cross-session routes auth** — Remove hardcoded `UUID("00000000-...")` placeholders. Uncomment auth dependency. Mount router in main.py.
+- [ ] **Fix cross-session routes auth** — `cross_session_routes.py` (12 endpoints) still uses hardcoded `UUID("00000000-...")` placeholders and is never mounted in main.py. This is the same modeling gap as the schema/wiring items below were — the *internal* cross-session feature works, only its REST surface doesn't. Phase 2, in progress.
   - Files: `api/cross_session_routes.py`, `api/main.py`
   - Severity: **CRITICAL**
 
-- [ ] **Apply rate limiter to auth routes** — `RateLimiter` class exists but `Depends(check_rate_limit)` is never applied. Wire to auth endpoints (5/min login, 3/min signup). Fix memory leak (evict empty key lists).
-  - Files: `api/main.py`, `api/auth/routes.py`
-  - Severity: **HIGH**
+- [x] **Apply rate limiter to auth routes** — Already wired: `app.include_router(auth_router, ..., dependencies=[Depends(check_rate_limit)])`. Verified 2026-07-24, no action needed.
+
+- [x] **Cross-session schema migration** — Already applied: `memory_references`, `user_memory_collections`, `collection_memories` are all in `schema.sql` (since commit a08fab4, 2026-04-17). Verified 2026-07-24.
+
+- [x] **CrossSessionContextBuilder wiring** — Already wired into `on_message`, `force_response`, and `stream_response` in `llm/orchestrator.py`. Verified 2026-07-24. (Moved here from Critical Bugs section below — same root cause as the routes item above.)
 
 - [ ] **Stop logging verification codes** — `logger.info(f"Verification code for {email}: {code}")` exposes one-time auth codes. Change to DEBUG or remove.
   - Files: `api/auth/routes.py:133, 377`
@@ -93,31 +93,15 @@
 
 ## Open — Critical Bugs
 
-- [ ] **Apply cross-session schema migration** — `memory_references`, `user_memory_collections`, `collection_memories` tables exist in migration file but NOT in schema.sql. Cross-session code references these tables. Blocks 4+ vision features.
-  - Files: `schema.sql`, `migrations/cross_session_memories.sql`
-  - Severity: **CRITICAL** (blocks features)
+- [x] **Cross-session schema migration** — See Security section above; already applied.
+- [x] **Streaming bypass of retry/fallback** — Already fixed: `stream_response()` goes through `router.stream()` with the fallback chain. Verified 2026-07-24.
+- [x] **Context truncation on all LLM paths** — Already applied: `truncated_messages` used in `stream_response`. Verified 2026-07-24.
+- [x] **Wire CrossSessionContextBuilder** — See Security section above; already wired.
+- [x] **httpx client leak in streaming** — Already fixed: module-level `_provider_cache` singleton in `providers.py`. Verified 2026-07-24.
+- [x] **datetime.utcnow() usage** — Already gone. Zero remaining usages, verified 2026-07-24.
 
-- [ ] **Fix streaming bypass of retry/fallback** — `stream_response()` calls provider directly, bypassing `ModelRouter`. Streaming failures are unrecoverable (no retry, no fallback).
-  - Files: `llm/orchestrator.py:251`
-  - Severity: **HIGH**
-
-- [ ] **Apply context truncation to all LLM paths** — `assemble_context()` only called from `stream_response()`. `on_message()` and `force_response()` risk token overflow on long conversations.
-  - Files: `llm/orchestrator.py`
-  - Severity: **HIGH**
-
-- [ ] **Wire CrossSessionContextBuilder** — Fully implemented but never invoked from orchestrator. Cross-session injection is a dead feature.
-  - Files: `llm/orchestrator.py`, `llm/cross_session_context.py`
-  - Severity: **HIGH** (blocks vision features)
-
-- [ ] **Fix httpx client leak in streaming** — `get_provider()` creates new `httpx.AsyncClient` per call. Streaming bypasses router cache, leaking clients.
-  - Files: `llm/orchestrator.py:251`, `llm/providers.py:204-205`
-  - Severity: **HIGH**
-
-- [ ] **Fix datetime.utcnow() usage** — Deprecated since Python 3.12, returns naive datetime. Breaks with TIMESTAMPTZ columns. Present in: `orchestrator.py`, `manager.py`, `operations.py`, `websocket.py`, `handlers.py`.
-  - Severity: MEDIUM
-
-- [ ] **Fix ModelRouter cache invalidation** — Router cached per room_id, never invalidated. Room settings changes (model, provider) ignored until server restart.
-  - Files: `llm/orchestrator.py:47-58`
+- [ ] **Fix ModelRouter cache invalidation** — Router cached per room_id, never invalidated. Room settings changes (model, provider) ignored until server restart. Bundle with `update_room_settings` (Phase 1 touched this endpoint for auth; invalidate the cache in the same handler rather than as a separate change).
+  - Files: `llm/orchestrator.py:47-58`, `api/main.py` (`update_room_settings`)
   - Severity: MEDIUM
 
 ## Open — Data Integrity
@@ -183,6 +167,11 @@
   - Files: `requirements.txt`
   - Severity: LOW-MEDIUM
 
+## Open — Tooling
+pass
+- [ ] **Fix AutoTest watcher false positive on bare conftest.py** — Watcher runs pytest against `tests/conftest.py` in isolation, which has no test functions, gets "no tests ran," and misreports it as a failure. Confirmed on both `dialectic` and `cc-sidecar` repos, 2026-07-24. Full suites pass clean (dialectic 237/237, cc-sidecar 102/102) when run normally; this is watcher noise, not a real regression.
+  - Severity: LOW (false alarm, but erodes trust in the signal)
+pass
 ## Open — Vision Features
 
 See `.planning/NEXT-LEVEL-ROADMAP.md` for full prioritized plan and `.planning/VISION-NEXT.md` for strategic directions.
@@ -201,4 +190,4 @@ See `.planning/NEXT-LEVEL-ROADMAP.md` for full prioritized plan and `.planning/V
 
 ---
 
-**Summary**: 54 items completed, 30 open (9 security, 7 critical bugs, 2 data integrity, 5 performance, 6 architecture, 1 dependencies), 11 vision features planned.
+**Summary**: 62 items completed, 15 open (2 security, 1 critical bug, 2 data integrity, 5 performance, 6 architecture, 1 dependencies, 1 tooling), 11 vision features planned. (2026-07-24 pass: closed JWT auth wiring, reconciled 7 stale items that were already fixed in code but not checked off.)
