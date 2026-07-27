@@ -52,6 +52,7 @@ function ChatLayout() {
   const threads = useAppStore((s) => s.threads)
   const messages = useAppStore((s) => s.messages)
   const memories = useAppStore((s) => s.memories)
+  const reactions = useAppStore((s) => s.reactions)
   const typingUsers = useAppStore((s) => s.typingUsers)
   const onlineUsers = useAppStore((s) => s.onlineUsers)
   const isLLMThinking = useAppStore((s) => s.isLLMThinking)
@@ -103,16 +104,14 @@ function ChatLayout() {
     refreshMemories,
     refreshPresence,
     markMessageRead,
+    editMessageContent,
+    deleteMessage,
+    toggleReaction,
+    refreshReactions,
   } = useDialecticSocket()
 
   const isVisible = useDocumentVisibility()
 
-  // Read receipts are the source of truth for every unread badge, so each
-  // message needs reporting exactly once — a resend on every render would be a
-  // write per frame.
-  // Asked once, on entering a room — which is always downstream of a click, so
-  // the prompt is allowed. A refusal is respected permanently; the title badge
-  // in useAwayAlerts still carries the signal without it.
   // Cmd/Ctrl+K is the near-universal "search this thing" gesture.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -125,12 +124,18 @@ function ChatLayout() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
+  // Asked once, on entering a room — which is always downstream of a click, so
+  // the prompt is allowed. A refusal is respected permanently; the title badge
+  // in useAwayAlerts still carries the signal without it.
   useEffect(() => {
     if (typeof Notification === 'undefined') return
     if (Notification.permission !== 'default') return
     void Notification.requestPermission().catch(() => undefined)
   }, [])
 
+  // Read receipts are the source of truth for every unread badge, so each
+  // message needs reporting exactly once — a resend on every render would be a
+  // write per frame.
   const reportedReadRef = useRef<Set<string>>(new Set())
   const handleSeen = useCallback((messageId: string) => {
     if (reportedReadRef.current.has(messageId)) return
@@ -165,7 +170,10 @@ function ChatLayout() {
         if (Array.isArray(history)) setMessages(history)
       })
       .catch((error) => console.error('Failed to load message history:', error))
-  }, [currentThread, roomToken, setMessages])
+    // Live reaction_updated events only cover changes made while connected, so
+    // the existing set has to be fetched alongside the history.
+    void refreshReactions()
+  }, [currentThread, roomToken, setMessages, refreshReactions])
 
   // Trading is an optional room extension.
   useEffect(() => {
@@ -386,6 +394,10 @@ function ChatLayout() {
               unreadSince={unreadSince}
               onSeen={handleSeen}
               jumpTarget={jumpTarget}
+              reactions={reactions}
+              onToggleReaction={toggleReaction}
+              onEditMessage={editMessageContent}
+              onDeleteMessage={deleteMessage}
             />
             <TypingIndicator typingUsers={typingDisplay} />
             <MessageInput

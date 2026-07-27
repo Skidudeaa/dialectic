@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { Message } from '../../types'
+import type { Message, Reaction } from '../../types'
 import { useDocumentVisibility } from '../../hooks/useDocumentVisibility'
 import { MessageBubble } from './MessageBubble'
 import './MessageList.css'
@@ -21,6 +21,10 @@ interface MessageListProps {
   onSeen?: (messageId: string) => void
   /** A message to scroll to and flash, e.g. after picking a search result. */
   jumpTarget?: { id: string; nonce: number } | null
+  reactions?: Record<string, Reaction[]>
+  onToggleReaction?: (messageId: string, emoji: string, isOn: boolean) => void
+  onEditMessage?: (messageId: string, content: string) => void
+  onDeleteMessage?: (messageId: string) => void
 }
 
 /**
@@ -79,6 +83,10 @@ export function MessageList({
   unreadSince,
   onSeen,
   jumpTarget,
+  reactions = {},
+  onToggleReaction,
+  onEditMessage,
+  onDeleteMessage,
 }: MessageListProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -236,6 +244,11 @@ export function MessageList({
                     replyToAuthor={parent ? getAuthorName(parent, userNames) : undefined}
                     replyToContent={parent?.content}
                     replyToMissing={Boolean(msg.references_message_id && !parent)}
+                    reactions={reactions[msg.id]}
+                    currentUserId={currentUserId}
+                    onToggleReaction={onToggleReaction}
+                    onEdit={onEditMessage}
+                    onDelete={onDeleteMessage}
                   />
                   </Fragment>
                 )

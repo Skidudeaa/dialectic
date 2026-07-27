@@ -51,6 +51,8 @@ class DialecticAPI {
     });
   }
 
+  async getThreadReactions(threadId: string) { return this.fetch(`/threads/${threadId}/reactions`); }
+
   // Search
   async searchMessages(roomId: string, q: string, limit = 40) {
     const params = new URLSearchParams({ q, room_id: roomId, limit: String(limit) });

@@ -23,6 +23,15 @@ export interface Message {
   protocol_id?: string;
   protocol_phase?: number;
   references_message_id?: string | null;
+  /** Set only when the message was revised after posting. */
+  edited_at?: string | null;
+}
+
+/** Reactions on one message, grouped by emoji. */
+export interface Reaction {
+  emoji: string;
+  user_ids: string[];
+  user_names: string[];
 }
 
 export interface Thread {

@@ -87,6 +87,7 @@ CREATE TABLE messages (
     prompt_hash TEXT,
     token_count INT,
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    edited_at TIMESTAMPTZ,
     metadata JSONB,
     UNIQUE (thread_id, sequence)
 );
@@ -210,6 +211,20 @@ CREATE TABLE message_receipts (
 );
 
 CREATE INDEX idx_message_receipts_message ON message_receipts(message_id);
+
+-- Reactions
+-- Rows rather than a JSONB blob on the message: concurrent reactions cannot
+-- clobber each other, and the primary key makes one emoji per person per
+-- message idempotent (toggling off is a delete).
+CREATE TABLE message_reactions (
+    message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id),
+    emoji TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (message_id, user_id, emoji)
+);
+
+CREATE INDEX idx_message_reactions_message ON message_reactions(message_id);
 
 -- ============================================================
 -- FULL-TEXT SEARCH

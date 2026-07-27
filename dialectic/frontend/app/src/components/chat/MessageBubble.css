@@ -286,3 +286,93 @@
     0%, 55% { background-color: var(--amber-18); border-color: var(--color-amber); }
     100%    { background-color: transparent; }
 }
+
+/* ── Revision + reactions ────────────────────────────────────── */
+
+.msg-edited {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: .16em;
+    color: var(--color-faint);
+    font-style: italic;
+}
+
+.msg-edit { display: flex; flex-direction: column; gap: 0.4rem; }
+.msg-edit-input {
+    width: 100%;
+    resize: vertical;
+    background: var(--color-obsidian);
+    border: 1px solid var(--color-crater);
+    border-radius: var(--radius-sm);
+    padding: 0.45rem 0.55rem;
+    color: var(--color-ink);
+    font-family: inherit;
+    font-size: inherit;
+    line-height: 1.55;
+    outline: none;
+}
+.msg-edit-input:focus { border-color: var(--color-amber); }
+.msg-edit-actions { display: flex; align-items: center; gap: 0.4rem; }
+.msg-edit-hint {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 8px;
+    color: var(--color-ghost);
+}
+.msg-action-btn.primary { color: var(--color-amber); border-color: var(--color-amber); }
+.msg-action-btn.danger:hover { color: var(--error); border-color: var(--error); }
+
+.msg-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 5px;
+}
+.reaction-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 7px;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-full);
+    background: var(--color-cacao);
+    color: var(--color-secondary);
+    font-size: 11px;
+    line-height: 1.6;
+    cursor: pointer;
+}
+.reaction-pill:hover { border-color: var(--color-crater); }
+/* Your own reaction reads as pressed, so toggling is obviously reversible. */
+.reaction-pill.mine {
+    border-color: var(--claude-primary-border);
+    background: var(--amber-08);
+    color: var(--color-ink);
+}
+.reaction-emoji { font-size: 12px; }
+.reaction-count { font-family: var(--font-mono); font-size: 9px; }
+
+.msg-react-wrap { position: relative; }
+.reaction-picker {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    right: 0;
+    z-index: 30;
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    box-shadow: var(--shadow-md);
+}
+.reaction-choice {
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 2px 4px;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+}
+.reaction-choice:hover { background: var(--amber-12); }
+.reaction-choice.mine { background: var(--amber-18); }

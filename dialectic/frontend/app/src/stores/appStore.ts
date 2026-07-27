@@ -11,6 +11,7 @@ import type {
   ProtocolState,
   Commitment,
   TradingSnapshot,
+  Reaction,
 } from '../types/index.ts'
 
 interface AppState {
@@ -31,6 +32,8 @@ interface AppState {
   threads: Thread[];
   messages: Message[];
   memories: Memory[];
+  /** Reactions keyed by message id. Absent means none. */
+  reactions: Record<string, Reaction[]>;
 
   // Presence
   onlineUsers: PresenceUser[];
@@ -61,6 +64,10 @@ interface AppState {
   setThreads: (threads: Thread[]) => void;
   addMessage: (message: Message) => void;
   setMessages: (messages: Message[]) => void;
+  editMessage: (messageId: string, content: string, editedAt: string) => void;
+  removeMessage: (messageId: string) => void;
+  setMessageReactions: (messageId: string, reactions: Reaction[]) => void;
+  setAllReactions: (byMessageId: Record<string, Reaction[]>) => void;
   setMemories: (memories: Memory[]) => void;
   updateStreamingContent: (content: string) => void;
   appendStreamingToken: (token: string) => void;
@@ -84,6 +91,7 @@ const initialRoomState = {
   threads: [],
   messages: [],
   memories: [],
+  reactions: {},
   onlineUsers: [],
   typingUsers: [],
   isLLMThinking: false,
@@ -127,6 +135,7 @@ export const useAppStore = create<AppState>()(
           threads: [],
           messages: [],
           memories: [],
+          reactions: {},
           onlineUsers: [],
           typingUsers: [],
           isLLMThinking: false,
@@ -153,6 +162,30 @@ export const useAppStore = create<AppState>()(
         }),
 
       setMessages: (messages) => set({ messages }),
+
+      editMessage: (messageId, content, editedAt) =>
+        set((state) => ({
+          messages: state.messages.map((m) =>
+            m.id === messageId ? { ...m, content, edited_at: editedAt } : m,
+          ),
+        })),
+
+      // Deletion is soft on the server, but the message is gone from every read
+      // path — so dropping it here matches what a reload would show.
+      removeMessage: (messageId) =>
+        set((state) => ({
+          messages: state.messages.filter((m) => m.id !== messageId),
+        })),
+
+      setMessageReactions: (messageId, reactions) =>
+        set((state) => {
+          const next = { ...state.reactions }
+          if (reactions.length === 0) delete next[messageId]
+          else next[messageId] = reactions
+          return { reactions: next }
+        }),
+
+      setAllReactions: (byMessageId) => set({ reactions: byMessageId }),
 
       setMemories: (memories) => set({ memories }),
 

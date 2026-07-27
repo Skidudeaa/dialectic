@@ -259,6 +259,12 @@ class MessageTypes:
     INVALIDATE_MEMORY = "invalidate_memory"
     PING = "ping"
     TYPING_CONTENT = "typing_content"
+    # Message revision (inbound). MESSAGE_EDITED/MESSAGE_DELETED have existed on
+    # the outbound side since the beginning with nothing able to produce them.
+    EDIT_MESSAGE = "edit_message"
+    DELETE_MESSAGE = "delete_message"
+    ADD_REACTION = "add_reaction"
+    REMOVE_REACTION = "remove_reaction"
     # Presence & receipts (inbound)
     PRESENCE_HEARTBEAT = "presence_heartbeat"
     PRESENCE_UPDATE = "presence_update"
@@ -284,6 +290,9 @@ class MessageTypes:
     MESSAGE_CREATED = "message_created"
     MESSAGE_EDITED = "message_edited"
     MESSAGE_DELETED = "message_deleted"
+    # Carries the full reaction set for one message, not a delta — a client that
+    # missed an event still converges on the right state.
+    REACTION_UPDATED = "reaction_updated"
     USER_JOINED = "user_joined"
     USER_LEFT = "user_left"
     USER_TYPING = "user_typing"

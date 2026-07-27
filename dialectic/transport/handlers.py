@@ -102,6 +102,10 @@ class MessageHandler:
             MessageTypes.PRESENCE_UPDATE: self._handle_presence_update,
             MessageTypes.MESSAGE_DELIVERED: self._handle_message_delivered,
             MessageTypes.MESSAGE_READ: self._handle_message_read,
+            MessageTypes.EDIT_MESSAGE: self._handle_edit_message,
+            MessageTypes.DELETE_MESSAGE: self._handle_delete_message,
+            MessageTypes.ADD_REACTION: self._handle_add_reaction,
+            MessageTypes.REMOVE_REACTION: self._handle_remove_reaction,
             MessageTypes.TYPING_CONTENT: self._handle_typing_content,
             MessageTypes.SUMMON_LLM: self._handle_summon_llm,
             MessageTypes.CANCEL_LLM: self._handle_cancel_llm,
@@ -1031,6 +1035,186 @@ class MessageHandler:
                 "timestamp": now.isoformat(),
             },
         ), exclude_user=conn.user_id)
+
+    async def _own_message(self, conn: Connection, payload: dict):
+        """
+        Resolve a message the caller is allowed to revise.
+
+        Authorship is checked in the same query as the room scope, so a message
+        id from another room — or another person's message — is indistinguishable
+        from one that does not exist. That keeps this from doubling as a probe
+        for what exists elsewhere.
+        """
+        raw_id = payload.get("message_id")
+        if not raw_id:
+            await self._send_error(conn, "message_id required")
+            return None
+        try:
+            message_id = UUID(str(raw_id))
+        except (TypeError, ValueError, AttributeError):
+            await self._send_error(conn, "Invalid message_id")
+            return None
+
+        row = await self.db.fetchrow(
+            """SELECT m.id, m.thread_id, m.user_id, m.speaker_type, m.is_deleted
+               FROM messages m
+               JOIN threads t ON m.thread_id = t.id
+               WHERE m.id = $1 AND t.room_id = $2 AND m.user_id = $3""",
+            message_id, conn.room_id, conn.user_id,
+        )
+        if not row:
+            await self._send_error(conn, "Message not found")
+            return None
+        if row['is_deleted']:
+            await self._send_error(conn, "Message was deleted")
+            return None
+        return row
+
+    async def _handle_edit_message(self, conn: Connection, payload: dict) -> None:
+        """Rewrite the caller's own message in place."""
+        content = (payload.get("content") or "").strip()
+        if not content:
+            # Emptying a message is a delete, and should be asked for as one —
+            # otherwise the edit path silently becomes an undocumented delete.
+            await self._send_error(conn, "Content required — use delete_message to remove it")
+            return
+
+        row = await self._own_message(conn, payload)
+        if row is None:
+            return
+
+        now = datetime.now(timezone.utc)
+        await self.db.execute(
+            "UPDATE messages SET content = $1, edited_at = $2 WHERE id = $3",
+            content, now, row['id'],
+        )
+
+        await self.db.execute(
+            """INSERT INTO events (id, timestamp, event_type, room_id, thread_id, user_id, payload)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+            uuid4(), now, "MESSAGE_EDITED", conn.room_id, row['thread_id'], conn.user_id,
+            {"message_id": str(row['id']), "content": content},
+        )
+
+        await self.connections.broadcast(conn.room_id, OutboundMessage(
+            type=MessageTypes.MESSAGE_EDITED,
+            payload={
+                "id": str(row['id']),
+                "thread_id": str(row['thread_id']),
+                "content": content,
+                "edited_at": now.isoformat(),
+            },
+        ))
+
+    async def _handle_delete_message(self, conn: Connection, payload: dict) -> None:
+        """
+        Soft-delete the caller's own message.
+
+        Soft rather than hard: every read path already filters `NOT is_deleted`,
+        replies point at message ids, and the event log is append-only — a real
+        DELETE would strip the parent out from under a reply and rewrite history.
+        """
+        row = await self._own_message(conn, payload)
+        if row is None:
+            return
+
+        now = datetime.now(timezone.utc)
+        await self.db.execute(
+            "UPDATE messages SET is_deleted = TRUE WHERE id = $1", row['id'],
+        )
+
+        await self.db.execute(
+            """INSERT INTO events (id, timestamp, event_type, room_id, thread_id, user_id, payload)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+            uuid4(), now, "MESSAGE_DELETED", conn.room_id, row['thread_id'], conn.user_id,
+            {"message_id": str(row['id'])},
+        )
+
+        await self.connections.broadcast(conn.room_id, OutboundMessage(
+            type=MessageTypes.MESSAGE_DELETED,
+            payload={"id": str(row['id']), "thread_id": str(row['thread_id'])},
+        ))
+
+    async def _broadcast_reactions(self, conn: Connection, message_id: UUID, thread_id) -> None:
+        """Send the full reaction set for a message, grouped by emoji."""
+        rows = await self.db.fetch(
+            """SELECT r.emoji, r.user_id, u.display_name
+               FROM message_reactions r
+               JOIN users u ON r.user_id = u.id
+               WHERE r.message_id = $1
+               ORDER BY r.created_at""",
+            message_id,
+        )
+
+        grouped: dict[str, dict] = {}
+        for row in rows:
+            entry = grouped.setdefault(row['emoji'], {"emoji": row['emoji'], "user_ids": [], "user_names": []})
+            entry["user_ids"].append(str(row['user_id']))
+            entry["user_names"].append(row['display_name'])
+
+        await self.connections.broadcast(conn.room_id, OutboundMessage(
+            type=MessageTypes.REACTION_UPDATED,
+            payload={
+                "message_id": str(message_id),
+                "thread_id": str(thread_id) if thread_id else None,
+                "reactions": list(grouped.values()),
+            },
+        ))
+
+    async def _reactable_message(self, conn: Connection, payload: dict):
+        """
+        Resolve any non-deleted message in this room, plus the emoji.
+
+        Unlike edit and delete, reacting is not restricted to your own messages —
+        reacting to what the other person said is the point.
+        """
+        raw_id = payload.get("message_id")
+        emoji = (payload.get("emoji") or "").strip()
+        if not raw_id or not emoji:
+            await self._send_error(conn, "message_id and emoji required")
+            return None, None
+        # Bounded so this cannot be used to store arbitrary text per message.
+        if len(emoji) > 16:
+            await self._send_error(conn, "Invalid emoji")
+            return None, None
+        try:
+            message_id = UUID(str(raw_id))
+        except (TypeError, ValueError, AttributeError):
+            await self._send_error(conn, "Invalid message_id")
+            return None, None
+
+        row = await self.db.fetchrow(
+            """SELECT m.id, m.thread_id FROM messages m
+               JOIN threads t ON m.thread_id = t.id
+               WHERE m.id = $1 AND t.room_id = $2 AND NOT m.is_deleted""",
+            message_id, conn.room_id,
+        )
+        if not row:
+            await self._send_error(conn, "Message not found")
+            return None, None
+        return row, emoji
+
+    async def _handle_add_reaction(self, conn: Connection, payload: dict) -> None:
+        row, emoji = await self._reactable_message(conn, payload)
+        if row is None:
+            return
+        await self.db.execute(
+            """INSERT INTO message_reactions (message_id, user_id, emoji)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (message_id, user_id, emoji) DO NOTHING""",
+            row['id'], conn.user_id, emoji,
+        )
+        await self._broadcast_reactions(conn, row['id'], row['thread_id'])
+
+    async def _handle_remove_reaction(self, conn: Connection, payload: dict) -> None:
+        row, emoji = await self._reactable_message(conn, payload)
+        if row is None:
+            return
+        await self.db.execute(
+            "DELETE FROM message_reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3",
+            row['id'], conn.user_id, emoji,
+        )
+        await self._broadcast_reactions(conn, row['id'], row['thread_id'])
 
     async def _handle_message_delivered(self, conn: Connection, payload: dict) -> None:
         """

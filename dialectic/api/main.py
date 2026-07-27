@@ -397,6 +397,7 @@ class MessageResponse(BaseModel):
     # WHY: without this, jumping to a search hit renders replies in that window
     # as ordinary messages — the quoted parent silently disappears.
     references_message_id: Optional[UUID] = None
+    edited_at: Optional[datetime] = None
 
 
 class ThreadResponse(BaseModel):
@@ -1576,6 +1577,56 @@ async def search_messages(
         speaker_type=row['speaker_type'],
         created_at=row['created_at'],
         rank=float(row['rank']),
+    ) for row in rows]
+
+
+class ThreadReactionResponse(BaseModel):
+    """Reactions on one message, grouped by emoji."""
+    message_id: UUID
+    emoji: str
+    user_ids: List[UUID]
+    user_names: List[str]
+
+
+@app.get("/threads/{thread_id}/reactions", response_model=List[ThreadReactionResponse])
+async def get_thread_reactions(
+    thread_id: UUID,
+    token: str = Depends(extract_room_token),
+    db=Depends(get_db),
+):
+    """
+    Reactions for every message in a thread.
+
+    ARCHITECTURE: one grouped query for the whole thread rather than per-message
+    lookups, since the client renders the thread as a unit.
+    WHY: live reaction_updated events only cover changes made while connected —
+    without this, reactions vanish on reload.
+    """
+    thread_row = await db.fetchrow("SELECT room_id FROM threads WHERE id = $1", thread_id)
+    if not thread_row:
+        raise HTTPException(status_code=404, detail="Thread not found")
+
+    await verify_room_token(thread_row['room_id'], token, db)
+
+    rows = await db.fetch(
+        """
+        SELECT r.message_id, r.emoji,
+               array_agg(r.user_id ORDER BY r.created_at) AS user_ids,
+               array_agg(u.display_name ORDER BY r.created_at) AS user_names
+        FROM message_reactions r
+        JOIN messages m ON r.message_id = m.id
+        JOIN users u ON r.user_id = u.id
+        WHERE m.thread_id = $1 AND NOT m.is_deleted
+        GROUP BY r.message_id, r.emoji
+        """,
+        thread_id,
+    )
+
+    return [ThreadReactionResponse(
+        message_id=row['message_id'],
+        emoji=row['emoji'],
+        user_ids=row['user_ids'],
+        user_names=row['user_names'],
     ) for row in rows]
 
 

@@ -180,6 +180,9 @@ class Message(BaseModel):
     prompt_hash: Optional[str] = None
     token_count: Optional[int] = None
     is_deleted: bool = False
+    # NULL means never edited — which is what lets a client mark only the
+    # messages that were actually revised rather than guessing from timestamps.
+    edited_at: Optional[datetime] = None
     metadata: Optional[dict] = None
 
     @field_validator("metadata", mode="before")

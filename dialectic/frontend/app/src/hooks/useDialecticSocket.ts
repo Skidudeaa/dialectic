@@ -9,6 +9,7 @@ import type {
   Thread,
   Memory,
   PresenceUser,
+  Reaction,
 } from '../types/index.ts'
 
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -51,6 +52,10 @@ export function useDialecticSocket() {
   const setActiveCommitments = useAppStore((s) => s.setActiveCommitments);
   const setSurfacedCommitments = useAppStore((s) => s.setSurfacedCommitments);
   const setTradingConfig = useAppStore((s) => s.setTradingConfig);
+  const editMessage = useAppStore((s) => s.editMessage);
+  const removeMessage = useAppStore((s) => s.removeMessage);
+  const setMessageReactions = useAppStore((s) => s.setMessageReactions);
+  const setAllReactions = useAppStore((s) => s.setAllReactions);
 
   const send = useCallback((type: string, payload: Record<string, unknown>): boolean => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return false;
@@ -143,6 +148,31 @@ export function useDialecticSocket() {
         addMessage(payload as unknown as Message);
         void refreshThreads();
         setLLMState(false, false);
+        break;
+
+      case 'message_edited':
+        if (typeof payload.id === 'string') {
+          editMessage(
+            payload.id,
+            typeof payload.content === 'string' ? payload.content : '',
+            typeof payload.edited_at === 'string' ? payload.edited_at : new Date().toISOString(),
+          );
+        }
+        break;
+
+      case 'message_deleted':
+        if (typeof payload.id === 'string') removeMessage(payload.id);
+        break;
+
+      case 'reaction_updated':
+        // The server sends the complete set for the message, not a delta, so a
+        // client that missed an event still converges.
+        if (typeof payload.message_id === 'string') {
+          setMessageReactions(
+            payload.message_id,
+            Array.isArray(payload.reactions) ? payload.reactions as Reaction[] : [],
+          );
+        }
         break;
 
       case 'user_typing':
@@ -330,6 +360,9 @@ export function useDialecticSocket() {
     refreshThreads,
     refreshMemories,
     refreshPresence,
+    editMessage,
+    removeMessage,
+    setMessageReactions,
   ]);
 
   const connect = useCallback(() => {
@@ -466,6 +499,42 @@ export function useDialecticSocket() {
     [send],
   );
 
+  const editMessageContent = useCallback(
+    (messageId: string, content: string): boolean =>
+      send('edit_message', { message_id: messageId, content }),
+    [send],
+  );
+
+  const deleteMessage = useCallback(
+    (messageId: string): boolean => send('delete_message', { message_id: messageId }),
+    [send],
+  );
+
+  const toggleReaction = useCallback(
+    (messageId: string, emoji: string, isOn: boolean): boolean =>
+      send(isOn ? 'remove_reaction' : 'add_reaction', { message_id: messageId, emoji }),
+    [send],
+  );
+
+  const refreshReactions = useCallback(async () => {
+    const state = useAppStore.getState();
+    if (!state.currentThread || !state.roomToken) return;
+    api.setToken(state.roomToken);
+    try {
+      const rows = await api.getThreadReactions(state.currentThread.id) as
+        { message_id: string; emoji: string; user_ids: string[]; user_names: string[] }[];
+      const grouped: Record<string, Reaction[]> = {};
+      for (const row of rows) {
+        (grouped[row.message_id] ??= []).push({
+          emoji: row.emoji, user_ids: row.user_ids, user_names: row.user_names,
+        });
+      }
+      setAllReactions(grouped);
+    } catch (error) {
+      console.error('[WS] Failed to refresh reactions:', error);
+    }
+  }, [setAllReactions]);
+
   const sendTypingStart = useCallback((): boolean => (
     send('typing_start', {
       typing: true,
@@ -590,6 +659,10 @@ export function useDialecticSocket() {
     send,
     sendMessage,
     markMessageRead,
+    editMessageContent,
+    deleteMessage,
+    toggleReaction,
+    refreshReactions,
     sendTypingStart,
     sendTypingStop,
     sendTypingContent,
