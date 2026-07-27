@@ -34,6 +34,23 @@ interface MessageListProps {
  */
 const FOLLOW_THRESHOLD_PX = 120
 
+/**
+ * Consecutive messages from the same speaker within this window are shown as
+ * one block, without repeating the avatar and byline. Beyond it the gap is long
+ * enough that re-stating who is talking, and when, is worth the space.
+ */
+const GROUPING_WINDOW_MS = 5 * 60 * 1000
+
+function continuesPrevious(current: Message, previous: Message | undefined): boolean {
+  if (!previous) return false
+  if (current.speaker_type !== previous.speaker_type) return false
+  // Distinguishes the two humans; both are null for Claude, whose speaker_type
+  // has already separated primary from provoker from annotator.
+  if (current.user_id !== previous.user_id) return false
+  const gap = new Date(current.created_at).getTime() - new Date(previous.created_at).getTime()
+  return Number.isFinite(gap) && gap >= 0 && gap < GROUPING_WINDOW_MS
+}
+
 function getAuthorName(msg: Message, userNames: Record<string, string>): string {
   if (msg.speaker_type === 'llm_primary') return 'Claude'
   if (msg.speaker_type === 'llm_provoker') return 'Claude (Provoker)'
@@ -221,10 +238,15 @@ export function MessageList({
                 <span className="day-divider-text">{group.label}</span>
                 <span className="day-divider-line" />
               </div>
-              {group.messages.map(msg => {
+              {group.messages.map((msg, index) => {
                 const parent = msg.references_message_id
                   ? messagesById.get(msg.references_message_id)
                   : undefined
+                // The unread line is a deliberate break in the conversation, so
+                // the message under it always re-states who is speaking.
+                const isContinuation =
+                  msg.id !== firstUnreadId
+                  && continuesPrevious(msg, group.messages[index - 1])
                 return (
                   <Fragment key={msg.id}>
                   {msg.id === firstUnreadId && (
@@ -249,6 +271,7 @@ export function MessageList({
                     onToggleReaction={onToggleReaction}
                     onEdit={onEditMessage}
                     onDelete={onDeleteMessage}
+                    isContinuation={isContinuation}
                   />
                   </Fragment>
                 )

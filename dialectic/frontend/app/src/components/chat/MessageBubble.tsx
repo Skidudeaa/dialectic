@@ -7,6 +7,23 @@ import './MessageBubble.css'
 /** Small, deliberately boring set — a picker is more chrome than this needs. */
 const QUICK_REACTIONS = ['👍', '🤔', '🔥', '❓', '💯']
 
+/**
+ * Above this many characters a message is folded behind "Show more".
+ *
+ * WHY a character count rather than measuring rendered height: measuring means
+ * writing state from an effect after layout, which cascades renders on every
+ * streamed token. The threshold only has to be approximately right — it decides
+ * whether to offer the fold, and the reader decides the rest.
+ */
+const FOLD_THRESHOLD_CHARS = 700
+
+/**
+ * Annotations are notes left for whoever was offline, not turns in the
+ * conversation, so they start folded however long they are. Left expanded they
+ * routinely filled the whole viewport and buried what the humans actually said.
+ */
+const ALWAYS_FOLDED: ReadonlySet<string> = new Set(['llm_annotator'])
+
 interface MessageBubbleProps {
   message: Message
   isSelf: boolean
@@ -22,6 +39,8 @@ interface MessageBubbleProps {
   onToggleReaction?: (messageId: string, emoji: string, isOn: boolean) => void
   onEdit?: (messageId: string, content: string) => void
   onDelete?: (messageId: string) => void
+  /** Same speaker continuing — avatar and byline are suppressed as repetition. */
+  isContinuation?: boolean
 }
 
 /** Quoted parents are a glance, not a re-read. */
@@ -84,10 +103,12 @@ export function MessageBubble({
   onToggleReaction,
   onEdit,
   onDelete,
+  isContinuation,
 }: MessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState(message.content)
   const [showPicker, setShowPicker] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
   const editRef = useRef<HTMLTextAreaElement>(null)
 
   const html = useMemo(() => {
@@ -127,25 +148,41 @@ export function MessageBubble({
   // placeholder has no row to revise.
   const canRevise = isSelf && !isStreaming && message.speaker_type === 'human'
 
+  // A message still arriving is never folded — watching it write itself is the
+  // point, and a fold appearing mid-stream would be jarring.
+  const foldable = !isStreaming && !isEditing && (
+    ALWAYS_FOLDED.has(message.speaker_type) || message.content.length > FOLD_THRESHOLD_CHARS
+  )
+  const isFolded = foldable && !isExpanded
+
   return (
-    <div className={`msg ${cls}${streamCls}`} data-message-id={message.id}>
+    <div
+      className={`msg ${cls}${streamCls}${isContinuation ? ' msg-continuation' : ''}`}
+      data-message-id={message.id}
+    >
       {message.speaker_type !== 'system' && (
         <div className="msg-avatar">
-          <div className={`avatar ${avatarClass(message.speaker_type, isSelf)}`}>
-            {avatarLabel(message.speaker_type, authorName)}
-          </div>
+          {/* The slot is kept even when the avatar is suppressed, so grouped
+              messages stay aligned with the one that carries the byline. */}
+          {!isContinuation && (
+            <div className={`avatar ${avatarClass(message.speaker_type, isSelf)}`}>
+              {avatarLabel(message.speaker_type, authorName)}
+            </div>
+          )}
         </div>
       )}
       <div className="msg-body">
-        <div className="msg-meta">
-          <span className="msg-author">{authorName}</span>
-          <span className="msg-time">{formatTime(message.created_at)}</span>
-          {message.message_type !== 'text' && (
-            <span className="msg-type-badge">{message.message_type}</span>
-          )}
-          {message.edited_at && <span className="msg-edited" title="This message was edited">edited</span>}
-        </div>
-        <div className="msg-bubble">
+        {!isContinuation && (
+          <div className="msg-meta">
+            <span className="msg-author">{authorName}</span>
+            <span className="msg-time">{formatTime(message.created_at)}</span>
+            {message.message_type !== 'text' && (
+              <span className="msg-type-badge">{message.message_type}</span>
+            )}
+            {message.edited_at && <span className="msg-edited" title="This message was edited">edited</span>}
+          </div>
+        )}
+        <div className={`msg-bubble${isFolded ? ' msg-folded' : ''}`}>
           {replyToContent !== undefined && (
             <div className="msg-quote">
               <span className="msg-quote-author">{replyToAuthor}</span>
@@ -182,7 +219,23 @@ export function MessageBubble({
           ) : (
             <div className="msg-content" dangerouslySetInnerHTML={{ __html: html }} />
           )}
+          {isFolded && <div className="msg-fold-veil" aria-hidden="true" />}
         </div>
+
+        {foldable && (
+          <button
+            className="msg-fold-toggle"
+            onClick={() => setIsExpanded((open) => !open)}
+            aria-expanded={isExpanded}
+          >
+            {isExpanded ? 'Show less' : 'Show more'}
+          </button>
+        )}
+        {/* The byline is suppressed on grouped messages, so an edit made to one
+            would otherwise be invisible. */}
+        {isContinuation && message.edited_at && (
+          <span className="msg-edited msg-edited-standalone">edited</span>
+        )}
 
         {reactions.length > 0 && (
           <div className="msg-reactions">

@@ -376,3 +376,77 @@
 }
 .reaction-choice:hover { background: var(--amber-12); }
 .reaction-choice.mine { background: var(--amber-18); }
+
+/* ── Folding long messages ───────────────────────────────────
+   A single Claude annotation could fill the entire viewport, burying what the
+   two people in the room actually said. Long messages — and annotations at any
+   length — open folded. */
+.msg-bubble.msg-folded {
+    max-height: 168px;
+    overflow: hidden;
+}
+.msg-fold-veil {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 62px;
+    pointer-events: none;
+    /* Human bubbles are an opaque cacao card, so one gradient matches them. */
+    background: linear-gradient(to bottom, transparent, var(--color-cacao));
+}
+/* Claude's bubbles are a translucent tint OVER the obsidian stream, so no flat
+   colour can match them — a hardcoded hex reads as a dark band across the fade.
+   Stacking the same two layers the bubble itself is built from reproduces the
+   exact composite, and keeps following the tokens if they are ever retuned. */
+.msg-claude .msg-fold-veil {
+    background:
+        linear-gradient(to bottom, transparent, var(--amber-08)),
+        linear-gradient(to bottom, transparent, var(--color-obsidian));
+}
+.msg-provoker .msg-fold-veil {
+    background:
+        linear-gradient(to bottom, transparent, rgba(191,161,98,.06)),
+        linear-gradient(to bottom, transparent, var(--color-obsidian));
+}
+.msg-annotator .msg-fold-veil {
+    background:
+        linear-gradient(to bottom, transparent, var(--teal-10)),
+        linear-gradient(to bottom, transparent, var(--color-obsidian));
+}
+
+.msg-fold-toggle {
+    align-self: flex-start;
+    margin-top: 3px;
+    padding: 1px 6px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid transparent;
+    color: var(--color-secondary);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .16em;
+    cursor: pointer;
+}
+.msg-fold-toggle:hover { color: var(--color-amber); border-bottom-color: var(--amber-30); }
+.msg-human-self .msg-fold-toggle { align-self: flex-end; }
+
+/* ── Grouped consecutive messages ────────────────────────────
+   Same speaker inside five minutes reads as one block: no repeated avatar, no
+   repeated byline, tighter leading. */
+.msg.msg-continuation { padding-top: 0; margin-top: -2px; }
+.msg.msg-continuation .msg-avatar { width: 26px; }
+.msg-edited-standalone { margin-top: 2px; align-self: flex-start; }
+.msg-human-self .msg-edited-standalone { align-self: flex-end; }
+
+/* ── Annotator as marginalia ─────────────────────────────────
+   These are notes left for whoever was offline, not turns in the conversation.
+   They were rendered at the same weight as human speech and dominated it. */
+.msg.msg-annotator { max-width: 76%; opacity: .92; }
+.msg-annotator .msg-bubble {
+    font-size: 13px;
+    line-height: 1.5;
+}
+.msg-annotator .msg-content { color: var(--color-secondary); }
+.msg-annotator .msg-content strong { color: var(--color-ink); }
