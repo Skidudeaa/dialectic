@@ -1969,6 +1969,12 @@ class UserRoomResponse(BaseModel):
     unread_count: int
     last_message_at: Optional[datetime]
     last_message_preview: Optional[str]
+    # WHY: lets the client draw the "new since you were last here" line at the
+    # same boundary the unread count is derived from, instead of guessing from
+    # the count. NULL means the user has never marked anything read in this
+    # room, in which case the client falls back to their join time.
+    last_read_at: Optional[datetime] = None
+    joined_at: Optional[datetime] = None
 
 
 @app.get("/users/me/rooms", response_model=List[UserRoomResponse])
@@ -2014,7 +2020,15 @@ async def get_user_rooms(
                 JOIN threads t ON m.thread_id = t.id
                 WHERE t.room_id = r.id
                 ORDER BY m.created_at DESC LIMIT 1
-            ) as last_message_preview
+            ) as last_message_preview,
+            (
+                SELECT MAX(mr.timestamp) FROM message_receipts mr
+                JOIN messages m ON mr.message_id = m.id
+                JOIN threads t ON m.thread_id = t.id
+                WHERE mr.user_id = $1 AND mr.receipt_type = 'read'
+                  AND t.room_id = r.id
+            ) as last_read_at,
+            rm.joined_at as joined_at
         FROM rooms r
         JOIN room_memberships rm ON r.id = rm.room_id
         WHERE rm.user_id = $1
@@ -2030,6 +2044,8 @@ async def get_user_rooms(
         unread_count=row['unread_count'] or 0,
         last_message_at=row['last_message_at'],
         last_message_preview=row['last_message_preview'],
+        last_read_at=row['last_read_at'],
+        joined_at=row['joined_at'],
     ) for row in rows]
 
 

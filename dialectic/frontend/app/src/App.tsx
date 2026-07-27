@@ -5,6 +5,8 @@ import { api } from './lib/api.ts'
 import { AuthScreen } from './components/auth/AuthScreen.tsx'
 import { RoomSelector } from './components/auth/RoomSelector.tsx'
 import { useDialecticSocket } from './hooks/useDialecticSocket.ts'
+import { useDocumentVisibility } from './hooks/useDocumentVisibility.ts'
+import { useAwayAlerts } from './hooks/useAwayAlerts.ts'
 import type { Message, Thread, TradingSnapshot, UserRoom } from './types/index.ts'
 import { AppLayout } from './components/layout/AppLayout'
 import { RoomHeader } from './components/layout/RoomHeader'
@@ -95,7 +97,29 @@ function ChatLayout() {
     refreshThreads,
     refreshMemories,
     refreshPresence,
+    markMessageRead,
   } = useDialecticSocket()
+
+  const isVisible = useDocumentVisibility()
+
+  // Read receipts are the source of truth for every unread badge, so each
+  // message needs reporting exactly once — a resend on every render would be a
+  // write per frame.
+  // Asked once, on entering a room — which is always downstream of a click, so
+  // the prompt is allowed. A refusal is respected permanently; the title badge
+  // in useAwayAlerts still carries the signal without it.
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return
+    if (Notification.permission !== 'default') return
+    void Notification.requestPermission().catch(() => undefined)
+  }, [])
+
+  const reportedReadRef = useRef<Set<string>>(new Set())
+  const handleSeen = useCallback((messageId: string) => {
+    if (reportedReadRef.current.has(messageId)) return
+    if (!markMessageRead(messageId)) return
+    reportedReadRef.current.add(messageId)
+  }, [markMessageRead])
 
   // Hydrate collaboration state that is not delivered by the socket handshake.
   useEffect(() => {
@@ -224,6 +248,26 @@ function ChatLayout() {
   // Never send a reference to a message the composer can no longer resolve.
   const effectiveReplyToId = replyTarget ? replyToId : null
 
+  // The "new since you were last here" boundary, taken from the same receipt
+  // data the unread badge is computed from so the line and the badge can never
+  // disagree.
+  //
+  // This is stable in practice rather than by construction: `rooms` is only
+  // refetched when the room, room token, or access token changes, so the value
+  // does not move as receipts are sent while reading. An access-token refresh
+  // mid-session will re-fetch and drop the line, which is acceptable — by then
+  // the messages under it have been read anyway.
+  const roomMeta = rooms.find((room) => room.id === currentRoom?.id)
+  const unreadSince = roomMeta?.last_read_at ?? roomMeta?.joined_at ?? null
+
+  useAwayAlerts({
+    messages,
+    currentUserId: user?.id ?? null,
+    roomName: currentRoom?.name ?? 'Dialectic',
+    isAway: !isVisible,
+    streamingMessageId: isLLMStreaming ? STREAMING_ID : null,
+  })
+
   const typingDisplay = typingUsers.map((id) => userNames[id] ?? id.slice(0, 8))
   if (isLLMThinking && !isLLMStreaming) typingDisplay.push('Claude')
 
@@ -234,6 +278,8 @@ function ChatLayout() {
       name: participant.display_name,
       isOnline: participant.status === 'online',
       isClaude: false,
+      status: participant.status,
+      lastSeen: participant.last_heartbeat,
     })),
   ]
 
@@ -291,6 +337,8 @@ function ChatLayout() {
               }}
               streamingMessageId={isLLMStreaming ? STREAMING_ID : null}
               userNames={userNames}
+              unreadSince={unreadSince}
+              onSeen={handleSeen}
             />
             <TypingIndicator typingUsers={typingDisplay} />
             <MessageInput

@@ -458,6 +458,14 @@ export function useDialecticSocket() {
     [send],
   );
 
+  // WHY: the server has recorded read receipts since the schema was written and
+  // derives every unread badge from them, but no client ever sent one — so
+  // message_receipts was empty and unread counts only ever grew.
+  const markMessageRead = useCallback(
+    (messageId: string): boolean => send('message_read', { message_id: messageId }),
+    [send],
+  );
+
   const sendTypingStart = useCallback((): boolean => (
     send('typing_start', {
       typing: true,
@@ -581,6 +589,7 @@ export function useDialecticSocket() {
     isConnected,
     send,
     sendMessage,
+    markMessageRead,
     sendTypingStart,
     sendTypingStop,
     sendTypingContent,

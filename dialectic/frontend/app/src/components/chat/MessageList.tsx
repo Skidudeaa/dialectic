@@ -1,5 +1,6 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Message } from '../../types'
+import { useDocumentVisibility } from '../../hooks/useDocumentVisibility'
 import { MessageBubble } from './MessageBubble'
 import './MessageList.css'
 
@@ -10,6 +11,14 @@ interface MessageListProps {
   onReply?: (messageId: string) => void
   streamingMessageId?: string | null
   userNames?: Record<string, string>
+  /**
+   * Timestamp of the reader's last read receipt in this room (or their join
+   * time). Everything after it that someone else wrote is new since they were
+   * last here. Frozen on entry so the line does not move while they read.
+   */
+  unreadSince?: string | null
+  /** Reports the newest message the reader has actually had in front of them. */
+  onSeen?: (messageId: string) => void
 }
 
 /**
@@ -58,7 +67,16 @@ function groupByDay(messages: Message[]): DayGroup[] {
   return groups
 }
 
-export function MessageList({ messages, currentUserId, onFork, onReply, streamingMessageId, userNames = {} }: MessageListProps) {
+export function MessageList({
+  messages,
+  currentUserId,
+  onFork,
+  onReply,
+  streamingMessageId,
+  userNames = {},
+  unreadSince,
+  onSeen,
+}: MessageListProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -109,6 +127,36 @@ export function MessageList({ messages, currentUserId, onFork, onReply, streamin
     if (isFollowing) scrollToBottom('auto')
   }, [messages, streamingMessageId, isFollowing, scrollToBottom])
 
+  const isVisible = useDocumentVisibility()
+
+  // The first message someone else wrote after the reader was last here. Derived
+  // rather than frozen: `unreadSince` is stable for the lifetime of a room
+  // session (see App), so the line does not creep down as messages are marked
+  // read underneath it.
+  const firstUnreadId = useMemo(() => {
+    if (!unreadSince) return null
+    const boundary = new Date(unreadSince).getTime()
+    if (Number.isNaN(boundary)) return null
+    return messages.find(
+      (message) =>
+        message.user_id !== currentUserId &&
+        new Date(message.created_at).getTime() > boundary,
+    )?.id ?? null
+  }, [messages, unreadSince, currentUserId])
+
+  // Report the newest message as read, but only when it is genuinely in front of
+  // the reader: tab in the foreground AND scrolled to the live end. Marking read
+  // on delivery alone is exactly what would make the badge lie.
+  useEffect(() => {
+    if (!onSeen || !isFollowing || !isVisible) return
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const candidate = messages[i]
+      if (candidate.id === streamingMessageId) continue
+      onSeen(candidate.id)
+      return
+    }
+  }, [messages, isFollowing, isVisible, onSeen, streamingMessageId])
+
   // Parent lookup for reply quoting. The referenced message may be outside the
   // loaded window (older than the fetched page), in which case the bubble
   // renders an unresolved-reference placeholder instead of pretending.
@@ -151,8 +199,15 @@ export function MessageList({ messages, currentUserId, onFork, onReply, streamin
                   ? messagesById.get(msg.references_message_id)
                   : undefined
                 return (
+                  <Fragment key={msg.id}>
+                  {msg.id === firstUnreadId && (
+                    <div className="unread-divider" role="separator">
+                      <span className="unread-divider-line" />
+                      <span className="unread-divider-text">New since you were last here</span>
+                      <span className="unread-divider-line" />
+                    </div>
+                  )}
                   <MessageBubble
-                    key={msg.id}
                     message={msg}
                     isSelf={msg.user_id === currentUserId}
                     authorName={getAuthorName(msg, userNames)}
@@ -163,6 +218,7 @@ export function MessageList({ messages, currentUserId, onFork, onReply, streamin
                     replyToContent={parent?.content}
                     replyToMissing={Boolean(msg.references_message_id && !parent)}
                   />
+                  </Fragment>
                 )
               })}
             </div>

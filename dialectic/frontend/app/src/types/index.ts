@@ -96,6 +96,9 @@ export interface UserRoom {
   unread_count: number;
   last_message_at: string | null;
   last_message_preview: string | null;
+  /** Last read receipt in this room; null if the user has never marked one. */
+  last_read_at?: string | null;
+  joined_at?: string | null;
 }
 
 export interface TradingSnapshot {

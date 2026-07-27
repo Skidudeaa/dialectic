@@ -81,6 +81,29 @@
     margin-bottom: 0.5rem;
 }
 
+/* ── Unread boundary ─────────────────────────────────────────
+   Scarlet is the events colour and is rationed; this is the one place in the
+   stream where "you have not seen what follows" is worth spending it. */
+.unread-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 0 8px;
+}
+.unread-divider-line {
+    flex: 1;
+    height: 1px;
+    background: var(--scar-35);
+}
+.unread-divider-text {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--color-scarlet);
+    text-transform: uppercase;
+    letter-spacing: .2em;
+    white-space: nowrap;
+}
+
 /* ── Jump to latest ──────────────────────────────────────────
    Appears only when new messages arrived while the reader was up in the
    history. Bottom-centred over the stream, clear of the composer. */
