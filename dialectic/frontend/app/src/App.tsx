@@ -67,6 +67,7 @@ function ChatLayout() {
   const [rooms, setRooms] = useState<UserRoom[]>([])
   const [showProtocolPicker, setShowProtocolPicker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [replyToId, setReplyToId] = useState<string | null>(null)
 
   const handleLogout = useCallback(() => {
     if (refreshToken) void api.logoutSession(refreshToken).catch(() => undefined)
@@ -205,6 +206,24 @@ function ChatLayout() {
     return names
   }, [onlineUsers, user])
 
+  // A reply target belongs to the branch it was written in. Rather than clearing
+  // it from an effect on thread change, resolve it against the messages actually
+  // on screen: switching branches replaces `messages`, so a target from the old
+  // branch stops resolving and both the preview and the outgoing reference fall
+  // away on their own.
+  const replyTarget = useMemo(() => {
+    if (!replyToId) return null
+    const target = messages.find((message) => message.id === replyToId)
+    if (!target) return null
+    const author = target.speaker_type === 'human'
+      ? (target.user_name ?? (target.user_id ? userNames[target.user_id] : null) ?? 'Human')
+      : 'Claude'
+    return { author, content: target.content }
+  }, [replyToId, messages, userNames])
+
+  // Never send a reference to a message the composer can no longer resolve.
+  const effectiveReplyToId = replyTarget ? replyToId : null
+
   const typingDisplay = typingUsers.map((id) => userNames[id] ?? id.slice(0, 8))
   if (isLLMThinking && !isLLMStreaming) typingDisplay.push('Claude')
 
@@ -258,19 +277,34 @@ function ChatLayout() {
             )}
             <CommitmentSurface />
             <MessageList
+              // Remount per branch so follow-the-tail and the unread pill start
+              // fresh instead of inheriting the previous branch's scroll state.
+              key={currentThread?.id ?? 'no-thread'}
               messages={displayMessages}
               currentUserId={user.id}
               onFork={forkFromMessage}
+              onReply={(messageId) => {
+                // The in-flight stream is a synthetic placeholder with no row in
+                // the database, so it cannot be a reply target.
+                if (messageId === STREAMING_ID) return
+                setReplyToId(messageId)
+              }}
               streamingMessageId={isLLMStreaming ? STREAMING_ID : null}
               userNames={userNames}
             />
             <TypingIndicator typingUsers={typingDisplay} />
             <MessageInput
-              onSend={(content, messageType) => sendMessage(content, messageType)}
+              onSend={(content, messageType) => {
+                const sent = sendMessage(content, messageType, effectiveReplyToId)
+                if (sent) setReplyToId(null)
+                return sent
+              }}
               onTypingStart={sendTypingStart}
               onTypingStop={sendTypingStop}
               onTypingContent={sendTypingContent}
               disabled={!isConnected || !currentThread}
+              replyTo={replyTarget}
+              onCancelReply={() => setReplyToId(null)}
             />
           </>
         }

@@ -22,6 +22,7 @@ export interface Message {
   persona_name?: string;
   protocol_id?: string;
   protocol_phase?: number;
+  references_message_id?: string | null;
 }
 
 export interface Thread {

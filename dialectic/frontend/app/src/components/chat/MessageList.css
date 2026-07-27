@@ -1,8 +1,22 @@
+/* Positioning context for the jump-to-latest pill, which floats over the
+   stream rather than scrolling with it. */
+.messages-viewport {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
 .messages-wrapper {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    scroll-behavior: smooth;
+    /* WHY not scroll-behavior: smooth — it applied to every programmatic jump,
+       including the initial thread load and each streamed token, so the stream
+       animated itself constantly. Smoothness is now opt-in per call, used only
+       for the jump-to-latest pill. */
+    scroll-behavior: auto;
     background: var(--color-obsidian);
     /* legal-margin hairline — ONE scarlet rule at 18% opacity, 1px wide.
        Plain gradient, not repeating-: a repeating gradient tiles the line
@@ -66,6 +80,49 @@
     font-weight: 500;
     margin-bottom: 0.5rem;
 }
+
+/* ── Jump to latest ──────────────────────────────────────────
+   Appears only when new messages arrived while the reader was up in the
+   history. Bottom-centred over the stream, clear of the composer. */
+.jump-to-latest {
+    position: absolute;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.85rem;
+    border: 1px solid var(--claude-primary-border);
+    border-radius: var(--radius-full);
+    background: var(--color-espresso);
+    box-shadow: var(--shadow-md);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    cursor: pointer;
+    animation: fadeIn 0.15s var(--ease-out);
+}
+.jump-to-latest:hover {
+    border-color: var(--color-amber);
+    color: var(--color-bone);
+}
+.jump-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--radius-full);
+    background: var(--color-amber);
+    color: var(--color-void);
+    font-weight: 600;
+    font-size: 10px;
+}
+.jump-arrow { color: var(--color-amber); }
 
 @media (max-width: 768px) {
     .messages-container { padding: 1rem; }

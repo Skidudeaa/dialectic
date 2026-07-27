@@ -250,3 +250,29 @@
 @media (max-width: 768px) {
     .msg { max-width: 95%; }
 }
+
+/* ── Quoted parent (reply context) ───────────────────────────
+   A glance at what is being answered, not a second copy of it. The amber
+   rule ties it to the bubble it sits inside. */
+.msg-quote {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-bottom: 0.45rem;
+    padding: 0.3rem 0 0.3rem 0.55rem;
+    border-left: 2px solid var(--claude-primary-border);
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+.msg-quote-author {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .18em;
+    color: var(--color-secondary);
+}
+.msg-quote-text {
+    color: var(--color-faint);
+    overflow-wrap: anywhere;
+}
+.msg-quote-missing .msg-quote-text { font-style: italic; }

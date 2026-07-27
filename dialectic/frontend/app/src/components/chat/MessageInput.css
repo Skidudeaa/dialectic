@@ -130,6 +130,13 @@
     font-size: 9px;
     color: var(--color-ghost);
 }
+/* Delivery failure reads at body weight, not hint weight — it is the one thing
+   on this line the user must not skim past. */
+.input-error {
+    color: var(--error);
+    font-size: 10px;
+    letter-spacing: .02em;
+}
 
 @media (max-width: 768px) {
     .input-area { padding: 0.5rem 0.75rem 0.75rem; }

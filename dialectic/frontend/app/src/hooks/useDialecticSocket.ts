@@ -445,11 +445,14 @@ export function useDialecticSocket() {
   // --- Outbound helpers ---
 
   const sendMessage = useCallback(
-    (content: string, messageType?: string): boolean => (
+    (content: string, messageType?: string, referencesMessageId?: string | null): boolean => (
       send('send_message', {
         content,
         type: messageType ?? 'text',
         thread_id: useAppStore.getState().currentThread?.id,
+        // Omitted rather than sent as null: the handler validates this field as a
+        // UUID whenever it is present.
+        ...(referencesMessageId ? { references_message_id: referencesMessageId } : {}),
       })
     ),
     [send],

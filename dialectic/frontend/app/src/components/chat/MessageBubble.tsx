@@ -11,6 +11,22 @@ interface MessageBubbleProps {
   onFork?: (messageId: string) => void
   onReply?: (messageId: string) => void
   isStreaming?: boolean
+  replyToAuthor?: string
+  replyToContent?: string
+  replyToMissing?: boolean
+}
+
+/** Quoted parents are a glance, not a re-read. */
+const QUOTE_MAX_CHARS = 140
+
+function quoteExcerpt(content: string): string {
+  // Markdown syntax reads as noise at quote size; flatten it to plain text.
+  const flat = content
+    .replace(/```[\s\S]*?```/g, '[code]')
+    .replace(/[*_`>#]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return flat.length > QUOTE_MAX_CHARS ? `${flat.slice(0, QUOTE_MAX_CHARS)}…` : flat
 }
 
 function speakerClass(type: Message['speaker_type'], isSelf: boolean): string {
@@ -45,7 +61,17 @@ function formatTime(iso: string): string {
   }
 }
 
-export function MessageBubble({ message, isSelf, authorName, onFork, onReply, isStreaming }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  isSelf,
+  authorName,
+  onFork,
+  onReply,
+  isStreaming,
+  replyToAuthor,
+  replyToContent,
+  replyToMissing,
+}: MessageBubbleProps) {
   const html = useMemo(() => {
     const raw = marked.parse(message.content, { async: false }) as string
     return DOMPurify.sanitize(raw)
@@ -72,6 +98,17 @@ export function MessageBubble({ message, isSelf, authorName, onFork, onReply, is
           )}
         </div>
         <div className="msg-bubble">
+          {replyToContent !== undefined && (
+            <div className="msg-quote">
+              <span className="msg-quote-author">{replyToAuthor}</span>
+              <span className="msg-quote-text">{quoteExcerpt(replyToContent)}</span>
+            </div>
+          )}
+          {replyToMissing && (
+            <div className="msg-quote msg-quote-missing">
+              <span className="msg-quote-text">Replying to an earlier message</span>
+            </div>
+          )}
           <div className="msg-content" dangerouslySetInnerHTML={{ __html: html }} />
         </div>
       </div>

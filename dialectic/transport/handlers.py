@@ -292,6 +292,14 @@ class MessageHandler:
                 "user_name": user_row['display_name'] if user_row else "Unknown",
                 "message_type": message.message_type.value,
                 "content": message.content,
+                # WHY: the column is persisted and carried on the event, but was
+                # missing here — so a reply rendered as an ordinary message for
+                # everyone live in the room and only revealed its parent after a
+                # reload (GET /threads/{id}/messages selects m.*).
+                "references_message_id": (
+                    str(message.references_message_id)
+                    if message.references_message_id else None
+                ),
             }
         ))
 
