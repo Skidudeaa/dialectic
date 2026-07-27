@@ -51,6 +51,17 @@ class DialecticAPI {
     });
   }
 
+  // Search
+  async searchMessages(roomId: string, q: string, limit = 40) {
+    const params = new URLSearchParams({ q, room_id: roomId, limit: String(limit) });
+    return this.fetch(`/messages/search?${params.toString()}`);
+  }
+  /** Messages surrounding a target, for jumping to a search hit in old history. */
+  async getMessageContext(threadId: string, messageId: string, context = 25) {
+    const params = new URLSearchParams({ message_id: messageId, context: String(context) });
+    return this.fetch(`/threads/${threadId}/messages/context?${params.toString()}`);
+  }
+
   // Trading
   async getTradingConfig(roomId: string) {
     const settings = await this.fetch<Record<string, unknown>>(`/rooms/${roomId}/settings`);

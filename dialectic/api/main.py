@@ -394,6 +394,9 @@ class MessageResponse(BaseModel):
     user_id: Optional[UUID]
     message_type: str
     content: str
+    # WHY: without this, jumping to a search hit renders replies in that window
+    # as ordinary messages — the quoted parent silently disappears.
+    references_message_id: Optional[UUID] = None
 
 
 class ThreadResponse(BaseModel):
@@ -1489,6 +1492,7 @@ async def update_llm_identity(
 @app.get("/messages/search", response_model=List[SearchResultResponse])
 async def search_messages(
     q: str = Query(..., min_length=1, description="Search query"),
+    room_id: Optional[UUID] = Query(None, description="Filter by room"),
     thread_id: Optional[UUID] = Query(None, description="Filter by thread"),
     date_from: Optional[datetime] = Query(None, description="Filter from date"),
     date_to: Optional[datetime] = Query(None, description="Filter to date"),
@@ -1529,6 +1533,14 @@ async def search_messages(
     """
     params = [q, user_id]
     param_idx = 3
+
+    # WHY: without this the search spans every room the caller belongs to, so
+    # searching inside one conversation silently returns hits from another. The
+    # membership join above still governs access — this only narrows the view.
+    if room_id:
+        query += f" AND t.room_id = ${param_idx}"
+        params.append(room_id)
+        param_idx += 1
 
     if thread_id:
         query += f" AND m.thread_id = ${param_idx}"
@@ -1625,6 +1637,7 @@ async def get_message_context(
         user_id=m.user_id,
         message_type=m.message_type.value if hasattr(m.message_type, 'value') else m.message_type,
         content=m.content,
+        references_message_id=m.references_message_id,
     ) for m in messages]
 
 

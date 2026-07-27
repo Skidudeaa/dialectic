@@ -81,7 +81,7 @@ export function MessageBubble({
   const streamCls = isStreaming ? (message.speaker_type === 'llm_provoker' ? ' streaming provoker-stream' : ' streaming') : ''
 
   return (
-    <div className={`msg ${cls}${streamCls}`}>
+    <div className={`msg ${cls}${streamCls}`} data-message-id={message.id}>
       {message.speaker_type !== 'system' && (
         <div className="msg-avatar">
           <div className={`avatar ${avatarClass(message.speaker_type, isSelf)}`}>

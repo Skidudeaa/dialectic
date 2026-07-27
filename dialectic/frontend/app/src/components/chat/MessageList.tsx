@@ -19,6 +19,8 @@ interface MessageListProps {
   unreadSince?: string | null
   /** Reports the newest message the reader has actually had in front of them. */
   onSeen?: (messageId: string) => void
+  /** A message to scroll to and flash, e.g. after picking a search result. */
+  jumpTarget?: { id: string; nonce: number } | null
 }
 
 /**
@@ -76,6 +78,7 @@ export function MessageList({
   userNames = {},
   unreadSince,
   onSeen,
+  jumpTarget,
 }: MessageListProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -156,6 +159,22 @@ export function MessageList({
       return
     }
   }, [messages, isFollowing, isVisible, onSeen, streamingMessageId])
+
+  // Scroll to a jumped-to message and flash it, so the eye lands on the right
+  // line in a wall of text. Pure DOM work — the flash class is added and removed
+  // directly rather than held in state.
+  useEffect(() => {
+    if (!jumpTarget) return
+    const el = wrapperRef.current?.querySelector(`[data-message-id="${CSS.escape(jumpTarget.id)}"]`)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('msg-flash')
+    const timer = window.setTimeout(() => el.classList.remove('msg-flash'), 1600)
+    return () => {
+      window.clearTimeout(timer)
+      el.classList.remove('msg-flash')
+    }
+  }, [jumpTarget, messages])
 
   // Parent lookup for reply quoting. The referenced message may be outside the
   // loaded window (older than the fetched page), in which case the bubble

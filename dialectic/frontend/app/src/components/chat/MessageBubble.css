@@ -276,3 +276,13 @@
     overflow-wrap: anywhere;
 }
 .msg-quote-missing .msg-quote-text { font-style: italic; }
+
+/* Landing marker for a jumped-to message (search result). Fades rather than
+   persists — it answers "which one" and then gets out of the way. */
+.msg.msg-flash .msg-bubble {
+    animation: msgFlash 1.6s var(--ease-out);
+}
+@keyframes msgFlash {
+    0%, 55% { background-color: var(--amber-18); border-color: var(--color-amber); }
+    100%    { background-color: transparent; }
+}

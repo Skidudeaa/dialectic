@@ -18,6 +18,14 @@ export default defineConfig({
       '/graph': { target: 'http://localhost:8002', changeOrigin: true },
       '/replay': { target: 'http://localhost:8002', changeOrigin: true },
       '/stakes': { target: 'http://localhost:8002', changeOrigin: true },
+      // WHY these were added: nginx proxies this whole set in production
+      // (see the location regex in sites-available/dialectic), but dev was
+      // missing them — so /messages/search returned index.html here and JSON in
+      // production. Keep the two lists in step.
+      '/messages': { target: 'http://localhost:8002', changeOrigin: true },
+      '/memories': { target: 'http://localhost:8002', changeOrigin: true },
+      '/personas': { target: 'http://localhost:8002', changeOrigin: true },
+      '/notifications': { target: 'http://localhost:8002', changeOrigin: true },
     },
   },
 })

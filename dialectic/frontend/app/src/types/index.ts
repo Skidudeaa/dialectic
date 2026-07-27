@@ -82,6 +82,18 @@ export interface ConfidenceEntry {
   recorded_at: string;
 }
 
+export interface SearchResult {
+  id: string;
+  thread_id: string;
+  content: string;
+  /** Server-generated ts_headline snippet containing <mark> tags. */
+  snippet: string;
+  sender_name: string;
+  speaker_type: Message['speaker_type'];
+  created_at: string;
+  rank: number;
+}
+
 export interface PresenceUser {
   user_id: string;
   display_name: string;

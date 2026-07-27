@@ -7,7 +7,7 @@ import { RoomSelector } from './components/auth/RoomSelector.tsx'
 import { useDialecticSocket } from './hooks/useDialecticSocket.ts'
 import { useDocumentVisibility } from './hooks/useDocumentVisibility.ts'
 import { useAwayAlerts } from './hooks/useAwayAlerts.ts'
-import type { Message, Thread, TradingSnapshot, UserRoom } from './types/index.ts'
+import type { Message, SearchResult, Thread, TradingSnapshot, UserRoom } from './types/index.ts'
 import { AppLayout } from './components/layout/AppLayout'
 import { RoomHeader } from './components/layout/RoomHeader'
 import { RoomSettingsDialog } from './components/layout/RoomSettingsDialog'
@@ -15,6 +15,7 @@ import { RoomList } from './components/sidebar/RoomList'
 import { RightPanel } from './components/sidebar/RightPanel'
 import { MessageList } from './components/chat/MessageList'
 import { MessageInput } from './components/chat/MessageInput'
+import { SearchOverlay } from './components/chat/SearchOverlay'
 import { ParticipantsBar } from './components/chat/ParticipantsBar'
 import { TypingIndicator } from './components/chat/TypingIndicator'
 import { ProtocolPicker } from './components/protocols/ProtocolPicker'
@@ -70,6 +71,10 @@ function ChatLayout() {
   const [showProtocolPicker, setShowProtocolPicker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [replyToId, setReplyToId] = useState<string | null>(null)
+  const [showSearch, setShowSearch] = useState(false)
+  // The nonce makes a repeat jump to the same message a distinct value, so the
+  // stream re-scrolls instead of ignoring an unchanged prop.
+  const [jumpTarget, setJumpTarget] = useState<{ id: string; nonce: number } | null>(null)
 
   const handleLogout = useCallback(() => {
     if (refreshToken) void api.logoutSession(refreshToken).catch(() => undefined)
@@ -108,6 +113,18 @@ function ChatLayout() {
   // Asked once, on entering a room — which is always downstream of a click, so
   // the prompt is allowed. A refusal is respected permanently; the title badge
   // in useAwayAlerts still carries the signal without it.
+  // Cmd/Ctrl+K is the near-universal "search this thing" gesture.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setShowSearch(true)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   useEffect(() => {
     if (typeof Notification === 'undefined') return
     if (Notification.permission !== 'default') return
@@ -177,6 +194,34 @@ function ChatLayout() {
       window.alert(error instanceof Error ? error.message : 'Could not open that room')
     }
   }, [rooms, currentRoom?.id, setRoom, setThreads, setThread])
+
+  // Jumping to a search hit. Done entirely in this handler rather than through
+  // an effect so the whole sequence stays in one place.
+  //
+  // Two cases: a hit in another branch just switches to it and lets that
+  // branch's normal loader run; a hit in the current branch that is older than
+  // the loaded window pulls a context window around it. Fetching a context
+  // window while a thread switch is also loading would race two writers on the
+  // same message list, which is why the two paths are kept apart.
+  const handleJumpToResult = useCallback(async (result: SearchResult) => {
+    setShowSearch(false)
+    const targetThread = threads.find((thread) => thread.id === result.thread_id)
+    const isCurrentThread = currentThread?.id === result.thread_id
+
+    if (!isCurrentThread) {
+      if (targetThread) setThread(targetThread)
+    } else if (!messages.some((message) => message.id === result.id)) {
+      try {
+        api.setRoomToken(roomToken ?? '')
+        const contextWindow = await api.getMessageContext(result.thread_id, result.id)
+        if (Array.isArray(contextWindow)) setMessages(contextWindow as Message[])
+      } catch (error) {
+        console.error('Failed to load message context:', error)
+      }
+    }
+
+    setJumpTarget({ id: result.id, nonce: Date.now() })
+  }, [threads, currentThread?.id, messages, roomToken, setThread, setMessages])
 
   const forkFromMessage = useCallback((messageId: string) => {
     if (!currentThread) return
@@ -310,6 +355,7 @@ function ChatLayout() {
               }}
               onProtocolClick={() => setShowProtocolPicker(true)}
               onSettingsClick={() => setShowSettings(true)}
+              onSearchClick={() => setShowSearch(true)}
               connected={isConnected}
             />
             <ParticipantsBar participants={participants} />
@@ -339,6 +385,7 @@ function ChatLayout() {
               userNames={userNames}
               unreadSince={unreadSince}
               onSeen={handleSeen}
+              jumpTarget={jumpTarget}
             />
             <TypingIndicator typingUsers={typingDisplay} />
             <MessageInput
@@ -383,6 +430,13 @@ function ChatLayout() {
         }
       />
 
+      {showSearch && (
+        <SearchOverlay
+          roomId={currentRoom.id}
+          onClose={() => setShowSearch(false)}
+          onJump={(result) => { void handleJumpToResult(result) }}
+        />
+      )}
       {showProtocolPicker && (
         <ProtocolPicker
           onInvoke={invokeProtocol}

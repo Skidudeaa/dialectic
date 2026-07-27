@@ -8,10 +8,11 @@ interface RoomHeaderProps {
   onThreadChange: (threadId: string) => void
   onProtocolClick: () => void
   onSettingsClick: () => void
+  onSearchClick: () => void
   connected: boolean
 }
 
-export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, onProtocolClick, onSettingsClick, connected }: RoomHeaderProps) {
+export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, onProtocolClick, onSettingsClick, onSearchClick, connected }: RoomHeaderProps) {
   return (
     <div className="room-header">
       <div className="room-header-left">
@@ -32,6 +33,11 @@ export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, 
       <div className="room-header-right">
         <button className="btn btn-secondary btn-sm" onClick={onProtocolClick} title="Start a structured reasoning protocol">
           Protocol
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={onSearchClick} title="Search this room (Cmd/Ctrl+K)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>
+          </svg>
         </button>
         <button className="btn btn-ghost btn-sm" onClick={onSettingsClick} title="Settings">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
