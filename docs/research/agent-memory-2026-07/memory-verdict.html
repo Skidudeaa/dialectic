@@ -1,0 +1,887 @@
+<title>Agent Memory — Verdict &amp; Evidence</title>
+
+<style>
+  :root {
+    --paper:      #F3F4F7;
+    --card:       #FFFFFF;
+    --card-2:     #FAFBFC;
+    --ink:        #141B24;
+    --ink-2:      #3D4854;
+    --ink-3:      #6B7683;
+    --rule:       #D8DCE3;
+    --rule-soft:  #E7EAEF;
+    --accent:     #1F5673;
+    --accent-ink: #1F5673;
+    --accent-soft:#E5EEF3;
+    --confirm:    #2E6F52;
+    --confirm-bg: #E6F0EA;
+    --refute:     #A33B2A;
+    --refute-bg:  #F6E8E5;
+    --gapc:       #8A6D2F;
+    --gap-bg:     #F4EFE1;
+
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, ui-serif, serif;
+    --sans:  ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono:  ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+    --measure: 68ch;
+    --s1: .375rem;
+    --s2: .75rem;
+    --s3: 1.25rem;
+    --s4: 2rem;
+    --s5: 3.25rem;
+    --s6: 5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:      #0E1319;
+      --card:       #151C24;
+      --card-2:     #121920;
+      --ink:        #E3E8EE;
+      --ink-2:      #AEB8C4;
+      --ink-3:      #7C8794;
+      --rule:       #263039;
+      --rule-soft:  #1D262E;
+      --accent:     #6FB2D2;
+      --accent-ink: #8CC4DF;
+      --accent-soft:#16303D;
+      --confirm:    #74C79A;
+      --confirm-bg: #16281F;
+      --refute:     #E28B77;
+      --refute-bg:  #2B1A16;
+      --gapc:       #D9B764;
+      --gap-bg:     #272013;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:      #0E1319;
+    --card:       #151C24;
+    --card-2:     #121920;
+    --ink:        #E3E8EE;
+    --ink-2:      #AEB8C4;
+    --ink-3:      #7C8794;
+    --rule:       #263039;
+    --rule-soft:  #1D262E;
+    --accent:     #6FB2D2;
+    --accent-ink: #8CC4DF;
+    --accent-soft:#16303D;
+    --confirm:    #74C79A;
+    --confirm-bg: #16281F;
+    --refute:     #E28B77;
+    --refute-bg:  #2B1A16;
+    --gapc:       #D9B764;
+    --gap-bg:     #272013;
+  }
+
+  :root[data-theme="light"] {
+    --paper:      #F3F4F7;
+    --card:       #FFFFFF;
+    --card-2:     #FAFBFC;
+    --ink:        #141B24;
+    --ink-2:      #3D4854;
+    --ink-3:      #6B7683;
+    --rule:       #D8DCE3;
+    --rule-soft:  #E7EAEF;
+    --accent:     #1F5673;
+    --accent-ink: #1F5673;
+    --accent-soft:#E5EEF3;
+    --confirm:    #2E6F52;
+    --confirm-bg: #E6F0EA;
+    --refute:     #A33B2A;
+    --refute-bg:  #F6E8E5;
+    --gapc:       #8A6D2F;
+    --gap-bg:     #F4EFE1;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17.5px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 var(--s3) var(--s6);
+  }
+
+  .col {
+    max-width: var(--measure);
+  }
+
+  /* ---------- type ---------- */
+
+  h1, h2, h3, h4 { text-wrap: balance; }
+
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(2.1rem, 5.2vw, 3.4rem);
+    line-height: 1.08;
+    letter-spacing: -0.021em;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  h2 {
+    font-family: var(--serif);
+    font-size: clamp(1.45rem, 3vw, 1.9rem);
+    line-height: 1.16;
+    letter-spacing: -0.014em;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  h3 {
+    font-family: var(--serif);
+    font-size: 1.14rem;
+    line-height: 1.3;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    margin: 0;
+  }
+
+  p { margin: 0; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .69rem;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0;
+  }
+
+  .deck {
+    font-size: 1.16rem;
+    line-height: 1.5;
+    color: var(--ink-2);
+  }
+
+  strong { font-weight: 600; }
+  em { font-style: italic; }
+
+  code, .num, .tally, .figure {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  code {
+    font-size: .855em;
+    background: var(--rule-soft);
+    padding: .09em .34em;
+    border-radius: 3px;
+    color: var(--ink-2);
+    word-break: break-word;
+  }
+
+  a {
+    color: var(--accent-ink);
+    text-underline-offset: 2px;
+    text-decoration-thickness: 1px;
+    text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  a:hover { text-decoration-color: var(--accent); }
+  a:focus-visible,
+  .jump a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* ---------- layout primitives ---------- */
+
+  .stack   { display: flex; flex-direction: column; gap: var(--s3); }
+  .stack-s { display: flex; flex-direction: column; gap: var(--s2); }
+  .stack-l { display: flex; flex-direction: column; gap: var(--s4); }
+
+  section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+    padding-top: var(--s5);
+    scroll-margin-top: 5rem;
+  }
+
+  .sec-head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s1);
+    border-top: 1px solid var(--rule);
+    padding-top: var(--s2);
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+    padding: var(--s5) 0 var(--s3);
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s1) var(--s3);
+    font-family: var(--mono);
+    font-size: .71rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .meta-row span { white-space: nowrap; }
+
+  .jump {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s1) var(--s2);
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .04em;
+    padding-top: var(--s2);
+    border-top: 1px solid var(--rule-soft);
+  }
+  .jump a {
+    color: var(--ink-3);
+    text-decoration: none;
+    padding: .15rem .1rem;
+  }
+  .jump a:hover { color: var(--accent-ink); }
+
+  /* ---------- verdict slab ---------- */
+
+  .verdict {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--accent);
+    padding: var(--s4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s2);
+  }
+  .verdict .grade {
+    font-family: var(--mono);
+    font-size: .71rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+  }
+  .verdict p { max-width: var(--measure); }
+  .verdict .lede {
+    font-size: 1.32rem;
+    line-height: 1.36;
+    letter-spacing: -0.012em;
+    font-weight: 600;
+  }
+
+  /* ---------- tally chips ---------- */
+
+  .tally {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .69rem;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    padding: .2rem .5rem;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .tally .dot {
+    width: .42rem; height: .42rem;
+    border-radius: 50%;
+    background: currentColor;
+    flex: none;
+  }
+  .t-conf   { color: var(--confirm); background: var(--confirm-bg); }
+  .t-split  { color: var(--gapc);    background: var(--gap-bg); }
+  .t-ref    { color: var(--refute);  background: var(--refute-bg); }
+  .t-plain  { color: var(--ink-3);   background: var(--rule-soft); }
+
+  /* ---------- callout ---------- */
+
+  .callout {
+    background: var(--accent-soft);
+    border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+    padding: var(--s3) var(--s4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s2);
+  }
+  .callout .big {
+    font-family: var(--mono);
+    font-size: clamp(1.9rem, 5vw, 2.7rem);
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--accent-ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- cards ---------- */
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+    gap: var(--s2);
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    padding: var(--s3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s2);
+  }
+  .card > .label {
+    font-family: var(--mono);
+    font-size: .69rem;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+  }
+  .card ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: var(--s2); }
+  .card li { font-size: .95rem; line-height: 1.5; }
+
+  .card-cut  { border-top: 3px solid var(--refute); }
+  .card-cut  > .label { color: var(--refute); }
+  .card-keep { border-top: 3px solid var(--confirm); }
+  .card-keep > .label { color: var(--confirm); }
+  .card-add  { border-top: 3px solid var(--accent); }
+  .card-add  > .label { color: var(--accent-ink); }
+
+  /* ---------- ranked list ---------- */
+
+  ol.ranked {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-top: 1px solid var(--rule);
+  }
+  ol.ranked > li {
+    display: grid;
+    grid-template-columns: 3.1rem 1fr;
+    gap: var(--s3);
+    padding: var(--s3) 0;
+    border-bottom: 1px solid var(--rule-soft);
+    align-items: start;
+  }
+  ol.ranked .rank {
+    font-family: var(--mono);
+    font-size: 1.05rem;
+    color: var(--accent-ink);
+    font-variant-numeric: tabular-nums;
+    padding-top: .12rem;
+  }
+  ol.ranked .body { display: flex; flex-direction: column; gap: var(--s1); max-width: var(--measure); }
+  ol.ranked .body p { font-size: .96rem; color: var(--ink-2); line-height: 1.55; }
+
+  /* ---------- finding ledger ---------- */
+
+  .ledger { display: flex; flex-direction: column; gap: var(--s2); }
+
+  .finding {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    padding: var(--s3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s2);
+  }
+  .finding header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s2);
+  }
+  .finding h3 { flex: 1 1 22ch; }
+  .finding p { font-size: .96rem; line-height: 1.56; color: var(--ink-2); max-width: var(--measure); }
+  .finding .src {
+    font-family: var(--mono);
+    font-size: .72rem;
+    color: var(--ink-3);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s1) var(--s2);
+  }
+
+  /* ---------- table ---------- */
+
+  .scroll-x { overflow-x: auto; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 520px;
+    font-size: .93rem;
+  }
+  th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: .68rem;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    font-weight: 400;
+    color: var(--ink-3);
+    padding: 0 var(--s3) var(--s2) 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: bottom;
+  }
+  td {
+    padding: var(--s2) var(--s3) var(--s2) 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+    line-height: 1.5;
+    color: var(--ink-2);
+  }
+  td:last-child, th:last-child { padding-right: 0; }
+  td.tnum { white-space: nowrap; width: 1%; }
+
+  /* ---------- gap list ---------- */
+
+  .gaps { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--rule); }
+  .gaps > div {
+    display: grid;
+    grid-template-columns: .55rem 1fr;
+    gap: var(--s3);
+    padding: var(--s3) 0;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .gaps .mark {
+    background: var(--gapc);
+    width: .3rem;
+    margin-top: .5rem;
+    height: .3rem;
+    border-radius: 50%;
+  }
+  .gaps .body { display: flex; flex-direction: column; gap: var(--s1); max-width: var(--measure); }
+  .gaps .body p { font-size: .95rem; color: var(--ink-2); line-height: 1.55; }
+  .gaps .body .t { font-weight: 600; color: var(--ink); }
+
+  /* ---------- transfer split ---------- */
+
+  .split {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--s2);
+  }
+
+  /* ---------- footer ---------- */
+
+  footer {
+    margin-top: var(--s6);
+    padding-top: var(--s3);
+    border-top: 1px solid var(--rule);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s2);
+    font-size: .88rem;
+    color: var(--ink-3);
+  }
+  footer .srclist {
+    font-family: var(--mono);
+    font-size: .76rem;
+    line-height: 1.85;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    word-break: break-word;
+  }
+
+  @media (max-width: 620px) {
+    body { font-size: 16.5px; }
+    .verdict { padding: var(--s3); }
+    .callout { padding: var(--s3); }
+    ol.ranked > li { grid-template-columns: 2.2rem 1fr; gap: var(--s2); }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Independent research review · 27 July 2026</p>
+    <h1>Is this over-engineered, or is it just what agent memory looks like now?</h1>
+    <p class="deck col">A verified review of a self-built agent-memory layer — 17.8k active memories, 400–500 writes a day, one Supabase Postgres, no third-party memory platform — measured against the 2025–26 published state of the art, and against its own source code.</p>
+    <div class="meta-row">
+      <span>112 agents</span>
+      <span>29 sources</span>
+      <span>145 claims extracted</span>
+      <span>25 adversarially verified</span>
+      <span>11 confirmed / 14 refuted</span>
+    </div>
+    <nav class="jump" aria-label="Sections">
+      <a href="#dialectic">Transfer to Dialectic</a>
+      <a href="#verdict">Verdict</a>
+      <a href="#lever">The one number</a>
+      <a href="#audit">Code vs. claims</a>
+      <a href="#cka">Cut / Keep / Add</a>
+      <a href="#ranked">Ranked actions</a>
+      <a href="#context">Retrieval vs. 1M context</a>
+      <a href="#evidence">Evidence ledger</a>
+      <a href="#refuted">What didn't survive</a>
+      <a href="#gaps">Evidence gaps</a>
+    </nav>
+  </header>
+
+  <section id="dialectic">
+    <div class="sec-head">
+      <p class="eyebrow">Start here — the part that touches our build</p>
+      <h2>What transfers to Dialectic, and what doesn't</h2>
+    </div>
+    <p class="col">Dialectic is the harder case: two humans and an LLM co-reasoning as equal participants, event-sourced, over WebSocket, with threads that fork. Everything here is drawn from the review that follows — a verified assessment of a mature single-user agent-memory layer — governed by one caveat: <a href="#gaps">there is no published prior art on multi-party conversational memory</a>. Not thin evidence; none. So this is reasoning by analogy from 1:1 systems, and per-speaker attribution in a three-way setting is unmeasured by any benchmark in this review.</p>
+
+    <div class="split">
+      <div class="card card-keep">
+        <p class="label">Port</p>
+        <ul>
+          <li><strong>Three-lane RRF recall, largely unchanged.</strong> We already have pgvector and 1536-d embeddings — this is a query-function port, not an architecture change.</li>
+          <li><strong>Add <code>speaker_id</code> to the entity lane</strong> so a three-way conversation gets per-speaker attribution instead of one undifferentiated "user".</li>
+          <li><strong>The nullable-column-plus-optional-filter pattern</strong> maps cleanly onto per-speaker vs shared-room memory, shared tier as the null case. Note the inversion: the soft-scoping default that's <a href="#audit">arguably a bug in a single-user agent</a> is the <em>correct</em> default here, because three-way dialogue needs cross-speaker reads.</li>
+          <li><strong>Both dedup passes.</strong> Two humans restating the same point in different words is the common case, and trigram catches near-restatements embeddings smooth over.</li>
+        </ul>
+      </div>
+      <div class="card card-cut">
+        <p class="label">Don't port</p>
+        <ul>
+          <li><strong>Paging tiers.</strong> Measured at 32.4s vs 1.0–1.5s per turn — disqualifying when the model must decide mid-conversation whether to speak.</li>
+          <li><strong>Inline entity extraction.</strong> In Dialectic the write path sits on the hot conversational loop, and <a href="#cka">Mem0's own ablation</a> shows it costs 3.2× search latency for a per-category accuracy loss. Extract asynchronously off the event log, if at all.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="finding">
+      <header><h3>Event sourcing does <em>not</em> make validity windows redundant</h3></header>
+      <p>The log gives time-travel over what was <strong>said</strong>. Validity windows track when a <strong>fact was true</strong>. Two different timelines, and collapsing them loses one. Note that <code>memory_history()</code> in the reference implementation is itself a derived projection, not a substitute source of truth.</p>
+      <p>The right port: make supersession a <strong>materialized projection rebuilt from the event log</strong> — log authoritative, memory table a fast index over it. That resolves fork genealogy for free. A forked thread inherits the projection as-of the fork point and then diverges, because the projection is a pure function of the ancestor event prefix. No memory copying, no cross-fork contamination, re-derivable at any time.</p>
+    </div>
+
+    <div class="callout">
+      <p class="big">≈1s</p>
+      <p class="col"><strong>The latency budget for the interjection engine.</strong> Flat-retrieval systems land at 1.0–1.5s total per turn and full-context at 1.726s. One indexed RRF query plus generation is the only viable shape — anything with a recursive read path is out.</p>
+    </div>
+
+    <p class="col">The cost argument lands here before accuracy even enters: the <a href="#context">~10-turn crossover at 100k context</a> sits squarely in Dialectic's regime, since a two-human dialogue passes ten turns almost immediately.</p>
+
+    <p class="col"><em>The rest of this page is the review those recommendations come from — what the system is, whether it holds up, and which widely-repeated arguments about agent memory turned out to be wrong.</em></p>
+  </section>
+
+  <section id="verdict">
+    <div class="verdict">
+      <p class="grade">Verdict</p>
+      <p class="lede">Convergent, not over-engineered. The honest criticism isn't complexity — it's the absence of measurement.</p>
+      <p>Three-lane fused retrieval, temporal validity, write-time consolidation and importance weighting are what Zep/Graphiti ships in production and what Mem0 independently converged on in its v3 pipeline (April 2026). Two funded companies arriving at the same shape from different directions is the definition of convergent design, not over-building.</p>
+      <p>Two details are ahead of where hobby work usually lands: a <code>pg_trgm</code> trigram pass sitting alongside cosine dedup, and entity extraction made non-blocking and disableable — the latter being precisely the hedge Mem0's own ablation says you need. What separates this from what serious teams ship isn't architecture. It's that they have a benchmark number and this doesn't yet. That's one script, not another year of building.</p>
+    </div>
+  </section>
+
+  <section id="lever">
+    <div class="sec-head">
+      <p class="eyebrow">The single highest-leverage finding</p>
+      <h2>The embedding model dominates most of the architecture around it</h2>
+    </div>
+    <div class="callout">
+      <p class="big">+6.2pp</p>
+      <p class="col">MemDelta ran a <em>byte-identical</em> pipeline differing only in embedder — same chunking, same top-k, same vector store, same prompt, same answer model, same judge. all-MiniLM-384d scored <span class="num">47.2%</span> on LongMemEval-S; OpenAI text-embedding-3-small-1536d scored <span class="num">53.4%</span>. <span class="num">p = 0.004</span>, paired McNemar. Per-category the gains land exactly where memory systems claim their value: temporal <span class="num">+10.5pp</span>, multi-session <span class="num">+11.3pp</span>.</p>
+      <p class="col"><strong>That delta is as large as the architectural gains whole papers rest on — and the author already has it banked.</strong> The schema header confirms text-embedding-3-small, 1536-d.</p>
+    </div>
+    <p class="col">The uncomfortable half of the same paper: <strong>naive top-k RAG on that embedder came within <span class="num">1.2pp</span> of Mem0</strong> (73.9% vs 72.7%, matched n=88). One component swap flips a headline verdict. So the elaborate machinery in <em>any</em> of these systems — this one included — is unproven relative to embedder choice until someone runs the control arm.</p>
+    <p class="col"><span class="tally t-conf"><span class="dot"></span>3–0 confirmed</span> &nbsp;<em>Caveat: single-author unreplicated preprint, and MiniLM-vs-OpenAI is weak-vs-strong rather than two peer modern embedders, so treat +6.2pp as an upper-ish bound.</em></p>
+  </section>
+
+  <section id="audit">
+    <div class="sec-head">
+      <p class="eyebrow">Repo audit</p>
+      <h2>The code is real, and more conservative than the write-up</h2>
+    </div>
+    <p class="col">Verified directly against <code>schema.sql</code> in the published template: three RRF lanes with <code>k constant int := 60</code>, HNSW <code>m=16 / ef_construction=64</code>, dedup <code>similarity_threshold float DEFAULT 0.95</code> plus a separate <code>pg_trgm</code> pass for template variations that escape embedding detection, <code>valid_from</code> / <code>valid_until</code> / <code>superseded_by</code> with a <code>memory_history()</code> replay function, and entity extraction via gpt-4o-mini explicitly optional and non-blocking.</p>
+    <p class="col">Three deviations worth naming yourself, before someone else finds them:</p>
+    <div class="ledger">
+      <div class="finding">
+        <header><h3>The claimed quality control isn't in the published code</h3><span class="tally t-plain"><span class="dot"></span>Direct source verification</span></header>
+        <p>No LLM judge, no nightly scoring table, no regression gate, no cron pruning job, no thumbs-feedback loop exist in the open-source template. They live only in the private harness and are therefore unverifiable from outside. Since they <em>are</em> the claimed quality-control layer, the public artifact currently has no measurement story at all.</p>
+      </div>
+      <div class="finding">
+        <header><h3>Project isolation is soft, not hard</h3><span class="tally t-plain"><span class="dot"></span>Direct source verification</span></header>
+        <p><code>project</code> is a nullable column commented <em>"namespace / tenant tag, null = global"</em>, and every function takes <code>filter_project text DEFAULT NULL</code> — omit the parameter and you read across all projects. That's namespacing with cross-project retrieval allowed by default, the opposite of "every memory is project-scoped." Supabase RLS appears in the README as available, not as applied in the schema.</p>
+      </div>
+      <div class="finding">
+        <header><h3>Importance weighting is roughly ±20%</h3><span class="tally t-plain"><span class="dot"></span>Direct source verification</span></header>
+        <p>The blend factor is <code>(1.0 + 0.04 * (importance - 5))</code> across the full 1–10 scale, and recency decay is capped so old-but-relevant memories lose at most 25%, with preferences and corrections exempt entirely. "Corrections outrank passing comments" is delivered mostly through tie-breaking <code>ORDER BY</code> clauses in the FTS and entity lanes, not through the score blend.</p>
+      </div>
+    </div>
+    <p class="col">The code being more hedged than the prose is the right direction for a discrepancy to run — but the prose should be corrected to match.</p>
+  </section>
+
+  <section id="cka">
+    <div class="sec-head">
+      <p class="eyebrow">Recommendations</p>
+      <h2>Cut, keep, add</h2>
+    </div>
+    <div class="cards">
+      <div class="card card-cut">
+        <p class="label">Cut</p>
+        <ul>
+          <li><strong>Inline entity extraction on every write.</strong> The only component with direct published evidence against it — and it's Mem0's <em>own</em> ablation.</li>
+          <li><strong>LoCoMo as a gate.</strong> 50 conversations, ~26k tokens, two speakers, fits inside any modern window, with a documented ~6.4% answer-key error rate.</li>
+          <li><strong>Any temptation toward MemGPT / MemoryOS-style paging tiers.</strong> Measured at ~30× flat retrieval on user-facing latency.</li>
+        </ul>
+      </div>
+      <div class="card card-keep">
+        <p class="label">Keep</p>
+        <ul>
+          <li>Three-lane RRF retrieval — this is table stakes, not invention, but it's correct.</li>
+          <li><strong>Both</strong> dedup passes. Trigram catches near-template restatements that embeddings smooth over.</li>
+          <li>Supersession and validity windows.</li>
+          <li>text-embedding-3-small.</li>
+          <li>The capped decay — cheap, conservative, doing no harm. Just don't defend it on benchmark grounds; nothing here supports Ebbinghaus-style forgetting curves.</li>
+        </ul>
+      </div>
+      <div class="card card-add">
+        <p class="label">Add</p>
+        <ul>
+          <li>An external benchmark harness.</li>
+          <li>Judge calibration against a small human-labelled held-out set.</li>
+          <li>A reranking stage. Zep ships five — RRF, MMR, node-distance, episode-mention frequency, cross-encoder. This system has zero. Clearest gap vs. the reference architecture, but unmeasurable until the harness exists.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="finding">
+      <header><h3>Why extraction is the cut</h3><span class="tally t-split"><span class="dot"></span>2–1 contested</span></header>
+      <p>Mem0's paper, Table 1, per-category LLM-as-judge: single-hop <span class="num">67.13 ± 0.65</span> without graph vs <span class="num">65.71 ± 0.45</span> with; multi-hop <span class="num">51.15 ± 0.31</span> vs <span class="num">47.19 ± 0.67</span>. Confidence intervals don't overlap on either, so the direction isn't noise. Latency <span class="num">0.148s</span> → <span class="num">0.476s</span> p50, memory tokens <span class="num">1,764</span> → <span class="num">3,616</span>. The paper's own reading: <em>"the addition of graph memory in Mem0g does not provide performance gains here, indicating potential inefficiencies or redundancies in structured graph representations."</em></p>
+      <p><strong>Two caveats that matter.</strong> On the headline <em>aggregate</em> Mem0g actually wins (<span class="num">68.44</span> vs <span class="num">66.88</span>). And independent 2026 work finds graph retrieval gives roughly <span class="num">+27</span> average multi-hop gains <em>when paired with multi-step traversal</em>, with ablations showing one-shot retrieval is what fails. So the evidence is against <strong>one-shot entity lookup on conversational memory</strong>, not relational structure as such. Gate it or batch it async — the code already supports disabling it, so this is a config change with a measurable outcome.</p>
+      <p class="src"><span>arXiv:2504.19413</span><span>arXiv:2604.09666</span></p>
+    </div>
+  </section>
+
+  <section id="ranked">
+    <div class="sec-head">
+      <p class="eyebrow">Sequenced by value per unit of effort</p>
+      <h2>What to actually do, in order</h2>
+    </div>
+    <ol class="ranked">
+      <li>
+        <span class="rank">01</span>
+        <div class="body">
+          <h3>Run LongMemEval-S with three arms</h3>
+          <p>Full-context baseline, naive top-k RAG <em>on the identical embedder</em>, and the full system. Highest value by a wide margin — without it every other decision is guesswork, and the naive-RAG arm is the one that reveals whether the last year of work earned its keep.</p>
+          <p><strong>Pass condition: beat 53.4% by more than its 49.0–57.8 confidence interval.</strong> At or below that, the RRF fusion, entity lane, importance blending and supersession stack is buying nothing over a single cosine query on the same embedder. Beating full-context is a stretch goal, not a pass condition.</p>
+        </div>
+      </li>
+      <li>
+        <span class="rank">02</span>
+        <div class="body">
+          <h3>Calibrate the nightly judge before trusting it as a gate</h3>
+          <p>The comfortable defence — "absolute judge scores drift but relative orderings between systems stay stable" — was <strong>refuted 0–3</strong> in verification. What <em>is</em> documented is LoCoMo's judge accepting ~62.8% of deliberately wrong answers. Treat the nightly judge as an uncalibrated instrument until it's scored against a small human-labelled held-out set. That calibration is a prerequisite for it functioning as a regression gate at all.</p>
+        </div>
+      </li>
+      <li>
+        <span class="rank">03</span>
+        <div class="body">
+          <h3>Gate or async-batch entity extraction</h3>
+          <p>Removes hundreds of LLM calls a day and, per the ablation above, <em>plausibly improves</em> single-hop and multi-hop retrieval rather than degrading it. The code already supports disabling it — this is a config change with a measurable outcome.</p>
+        </div>
+      </li>
+      <li>
+        <span class="rank">04</span>
+        <div class="body">
+          <h3>Decide project scoping deliberately</h3>
+          <p>The code defaults to cross-project reads via <code>filter_project DEFAULT NULL</code>, contradicting the stated design. Either make the filter mandatory or drop the hard-isolation framing from the description.</p>
+        </div>
+      </li>
+      <li>
+        <span class="rank">05</span>
+        <div class="body">
+          <h3>Run MemoryAgentBench FactConsolidation</h3>
+          <p>The only harness that tests supersession and selective forgetting — i.e. the validity-window machinery specifically. Best published single-hop is <span class="num">54.0%</span> (HippoRAG-v2); <em>every</em> system scores at most <span class="num">7%</span> multi-hop despite all of them implementing invalidation machinery. Any non-trivial result there would be genuinely novel. This is the one place in the whole review where a new result was within reach.</p>
+        </div>
+      </li>
+      <li>
+        <span class="rank">06</span>
+        <div class="body">
+          <h3>Add a reranker</h3>
+          <p>MMR at minimum, cross-encoder if budget allows. Real gap versus the reference architecture — but it stays unmeasurable until 01 exists, which is why it's last rather than first.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section id="context">
+    <div class="sec-head">
+      <p class="eyebrow">The obvious objection</p>
+      <h2>"Why not just stuff a million tokens in?"</h2>
+    </div>
+    <p class="col"><strong>Don't claim retrieval wins on accuracy.</strong> That argument won't survive scrutiny, and both sides of it are vendors describing themselves. Zep reports beating full-context on LongMemEval (<span class="num">71.2%</span> vs <span class="num">60.2%</span>). Mem0 reports the <em>opposite</em> on LoCoMo, conceding verbatim that <em>"the full-context approach can provide a slight accuracy edge"</em> (<span class="num">72.90</span> vs <span class="num">66.88</span>). A 2026 preprint has long-context GPT-5-mini beating its own memory system by <span class="num">35pp</span> — a finding that runs directly against its authors' commercial interest, which is the least bias-prone direction evidence can point.</p>
+    <p class="col"><strong>Cost and latency are clean, though.</strong> Crossover at roughly ten turns for a 100k context, ~26% cheaper by turn 20 — and the 90% prompt-caching discount was applied <em>exclusively to the long-context arm</em>, biasing the test against memory. Break-even falls as context grows: 30k → 13 turns, 100k → 10, 200k → 9, 500k → 9.</p>
+    <p class="col">Context also isn't free even ignoring price. Anthropic names <em>"context rot"</em> explicitly; NoLiMa (Adobe Research, ICML 2025) found 11 of 13 models claiming 128K+ context fall below half their short-context baseline by 32K tokens. One 2026 caveat: this has improved markedly for the best models, so say "degrades on nearly all models tested", not "all".</p>
+    <p class="col"><strong>Justify retrieval on cost, latency and context hygiene. Not on an accuracy win.</strong></p>
+  </section>
+
+  <section id="evidence">
+    <div class="sec-head">
+      <p class="eyebrow">Evidence ledger</p>
+      <h2>Confirmed findings and how they fared</h2>
+    </div>
+    <div class="ledger">
+      <div class="finding">
+        <header><h3>The three-lane design is convergent with shipped production systems</h3><span class="tally t-split"><span class="dot"></span>2–1 contested</span></header>
+        <p>Zep combines cosine similarity, Okapi BM25 full-text and breadth-first n-hop graph search, fused with RRF — verified verbatim in the arXiv HTML and still current in Graphiti's July 2026 docs. Mem0 v3 independently converged on the same three signals. <em>Qualifiers:</em> Zep's third lane is n-hop BFS over a temporal knowledge graph, this one is flat entity matching; Mem0 fuses additively rather than by rank, so RRF specifically is less universal than the three-lane pattern it fuses.</p>
+        <p class="src"><span>arXiv:2501.13956</span><span>Graphiti docs, Jul 2026</span><span>mem0ai/mem0#4805</span></p>
+      </div>
+      <div class="finding">
+        <header><h3>LoCoMo is not a defensible external gate</h3><span class="tally t-conf"><span class="dot"></span>3–0 confirmed</span></header>
+        <p>50 conversations, ~600 dialogues and ~26,000 tokens each, two speakers per conversation, fitting entirely inside any modern context window. A 2026 audit found ~6.4% of the answer key wrong — 99 of 1,540 score-corrupting errors — meaning <strong>the ~6-point deltas papers report on it may sit inside its own error floor</strong>. LongMemEval exists precisely because of this: LoCoMo <em>"does not effectively test critical memory capabilities such as knowledge updates."</em> Most papers also evaluate on the released 10-conversation subset rather than all 50, which strengthens the critique.</p>
+        <p class="src"><span>arXiv:2402.17753</span><span>arXiv:2410.10813</span><span>arXiv:2511.10523</span></p>
+      </div>
+      <div class="finding">
+        <header><h3>Supersession targets the field's genuinely weakest axis — but having the mechanism isn't evidence it works</h3><span class="tally t-split"><span class="dot"></span>2–1 contested</span></header>
+        <p>MemoryAgentBench probes four competencies across 22 systems and 5 backbones and states plainly that <em>"current methods fall short of mastering all four."</em> On selective forgetting: <em>"all methods fail on the multi-hop situation (with achieving at most 7% accuracy)."</em> The systems scoring ≤7% <strong>already implement invalidation machinery</strong> — which is exactly why running the split matters rather than assuming. Note that scheduled decay and pruning is a different mechanism that this benchmark does not measure, so the weekly decay job cannot ride this citation.</p>
+        <p class="src"><span>arXiv:2507.05257 (ICLR 2026)</span><span>arXiv:2606.01435</span></p>
+      </div>
+      <div class="finding">
+        <header><h3>Hierarchical paging is disqualified for anything interactive</h3><span class="tally t-split"><span class="dot"></span>2–1 contested</span></header>
+        <p>Independent third-party evaluation, user-facing latency per turn: full context <span class="num">1.726s</span>; flat-retrieval systems <span class="num">1.06–1.46s</span>; MemoryOS <span class="num">32.372s</span>, of which <span class="num">31.247s</span> is read. Verbatim: <em>"strict hierarchical paging (e.g., STM-LTM recursion) is impractical for interactive settings."</em> <em>Qualifier:</em> n=1 implementation, undisclosed hardware, and Letta/MemGPT was never actually measured — cite the ~30× <strong>relative</strong> gap, never 32 seconds as a portable constant.</p>
+        <p class="src"><span>arXiv:2602.19320</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="refuted">
+    <div class="sec-head">
+      <p class="eyebrow">14 of 25 claims died under verification</p>
+      <h2>Arguments that circulate widely and did not survive</h2>
+    </div>
+    <p class="col">These are the ones worth knowing about, because several of them <em>would have supported</em> the design and all of them appear routinely in practitioner writing. Each needed 2 of 3 independent skeptics to refute. None of these can be leaned on.</p>
+    <div class="scroll-x">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Claim that failed verification</th>
+            <th scope="col">Vote</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>An LLM judge is defensible as a <em>relative</em> regression gate because comparative orderings between systems stay stable even when absolute scores drift.</td>
+            <td class="tnum"><span class="tally t-ref"><span class="dot"></span>0–3</span></td>
+          </tr>
+          <tr>
+            <td>Anthropic's official guidance endorses the "nothing preloaded, retrieve only on relevance" premise. <em>(In fact Anthropic names a latency trade-off and recommends a hybrid — some context up front for speed.)</em></td>
+            <td class="tnum"><span class="tally t-ref"><span class="dot"></span>0–3</span></td>
+          </tr>
+          <tr>
+            <td>Unbounded memory growth actively degrades agent performance, justifying decay and pruning jobs.</td>
+            <td class="tnum"><span class="tally t-ref"><span class="dot"></span>0–3</span></td>
+          </tr>
+          <tr>
+            <td>Long-context models consistently underperform purpose-built memory systems on selective retrieval.</td>
+            <td class="tnum"><span class="tally t-ref"><span class="dot"></span>0–3</span></td>
+          </tr>
+          <tr>
+            <td>Graphiti's four-timestamp bi-temporality is strictly stronger than single-timeline validity windows, so this design lacks a needed audit timeline.</td>
+            <td class="tnum"><span class="tally t-ref"><span class="dot"></span>0–3</span></td>
+          </tr>
+          <tr>
+            <td>LLM fact extraction causes irreversible information loss in three categories that no downstream retrieval quality can recover.</td>
+            <td class="tnum"><span class="tally t-ref"><span class="dot"></span>0–3</span></td>
+          </tr>
+          <tr>
+            <td>Available public benchmarks don't measure lifecycle machinery at all, so running them would validate only the retrieval lane.</td>
+            <td class="tnum"><span class="tally t-ref"><span class="dot"></span>0–3</span></td>
+          </tr>
+          <tr>
+            <td>Mem0's production dedup is an LLM ADD/UPDATE/DELETE/NOOP judgment rather than a fixed cosine cutoff, making a 0.95 threshold the unusual choice.</td>
+            <td class="tnum"><span class="tally t-ref"><span class="dot"></span>1–2</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="gaps">
+    <div class="sec-head">
+      <p class="eyebrow">Unanswered, not answered negatively</p>
+      <h2>Six questions the research could not close</h2>
+    </div>
+    <div class="gaps">
+      <div>
+        <span class="mark" aria-hidden="true"></span>
+        <div class="body">
+          <p class="t">Memory poisoning and injection — zero verified coverage, and the most serious gap.</p>
+          <p>Roughly 207 memories a day are auto-persisted from text the agent read across ~100 git repos and external sources. A system that writes untrusted text into a store later retrieved as authoritative context is precisely the shape MINJA-class attacks target. Nothing on this survived verification, which means it is unexamined rather than cleared.</p>
+        </div>
+      </div>
+      <div>
+        <span class="mark" aria-hidden="true"></span>
+        <div class="body">
+          <p class="t">Whether 0.95 cosine is a defensible dedup threshold on text-embedding-3-small.</p>
+          <p>No embedding-similarity distribution study survived, so it's unknown whether 0.95 almost never fires or is quietly merging distinct facts. The <code>pg_trgm</code> second pass is weak circumstantial evidence the author already found cosine alone insufficient. <strong>This one is answerable in a single SQL query over the existing 17k rows</strong> — pairwise cosine distribution among same-type memories, plus counts of trigram-caught vs cosine-caught merges. That would settle empirically what no published study here could.</p>
+        </div>
+      </div>
+      <div>
+        <span class="mark" aria-hidden="true"></span>
+        <div class="body">
+          <p class="t">IR evidence for RRF's marginal gain and its sensitivity to <code>k=60</code>.</p>
+          <p>k=60 is the canonical Cormack value used unchanged, but nothing verified here validates it for a three-lane memory workload.</p>
+        </div>
+      </div>
+      <div>
+        <span class="mark" aria-hidden="true"></span>
+        <div class="body">
+          <p class="t">pgvector HNSW vs IVFFlat recall degradation as rows grow, and Supabase small-tier behaviour.</p>
+          <p>17k rows sits far below where HNSW recall is normally a concern — but the index uses untuned pgvector defaults with no <code>ef_search</code> set, which means it hasn't been tuned as the scale narrative implies.</p>
+        </div>
+      </div>
+      <div>
+        <span class="mark" aria-hidden="true"></span>
+        <div class="body">
+          <p class="t">Whether thumbs up/down feedback measurably improves retrieval.</p>
+          <p>Nothing survived — and that component is also absent from the published repo.</p>
+        </div>
+      </div>
+      <div>
+        <span class="mark" aria-hidden="true"></span>
+        <div class="body">
+          <p class="t">Prior art on memory for multi-party or group conversation agents, as opposed to 1:1 assistant chat.</p>
+          <p>Nothing. Which means <strong>every recommendation in the <a href="#dialectic">Dialectic section at the top</a> is transfer-by-analogy from 1:1 benchmarks</strong>, and per-speaker attribution in a three-way setting is unmeasured by any benchmark named in this review.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="human">
+    <div class="sec-head">
+      <p class="eyebrow">The actual question</p>
+      <h2>"Am I losing my mind?"</h2>
+    </div>
+    <p class="col">No. Building this was not unreasonable, and it is not the shape of someone losing perspective. The design independently reproduces what two funded companies ship, the single biggest quality lever was pulled correctly by accident or instinct, and two implementation details are more careful than the average production system.</p>
+    <p class="col">The gap between this and what serious teams ship isn't sophistication. It's that they can point at a number. Everything in the ranked list above exists to get you one.</p>
+  </section>
+
+  <footer>
+    <p><strong>Method.</strong> Six search angles fanned out in parallel; 29 sources fetched and read; 145 falsifiable claims extracted; the top 25 put through three independent skeptics each, prompted to refute, requiring 2 of 3 to kill a claim. 11 confirmed, 14 refuted, 0 unverified. Repo assessment covers the published open-source template only — a 551-line <code>schema.sql</code> plus a small client. The running private harness may differ.</p>
+    <p><strong>Bias flags.</strong> Vendor authorship is pervasive: the two most-cited benchmark sources (Zep, Mem0) are each vendors describing themselves, and they publicly contradict each other — Mem0 recomputed Zep's LoCoMo 84% down to 58.44%; Zep counter-claims 75.14% and alleges harness errors. Where those papers are used here it is deliberately <em>against</em> their own interest. Three load-bearing sources are unreviewed preprints. Mem0's numbers are April 2025 and Zep's January 2025 — both predate mature 1M-token context with prompt caching, so quote them as "what that paper showed at that date", never as standing fact about 2026.</p>
+    <div class="srclist">
+      <span>arXiv:2501.13956 — Zep, Rasmussen et al., 20 Jan 2025</span>
+      <span>arXiv:2504.19413 — Mem0, Chhikara et al., Apr 2025</span>
+      <span>arXiv:2410.10813 — LongMemEval, Wu et al., ICLR 2025</span>
+      <span>arXiv:2507.05257 — MemoryAgentBench, Hu et al., ICLR 2026</span>
+      <span>arXiv:2606.29914 — MemDelta, Wang, 29 Jun 2026</span>
+      <span>arXiv:2602.19320 — Anatomy of Agentic Memory, rev. 20 May 2026</span>
+      <span>arXiv:2603.04814 — memory vs long-context cost analysis, 5 Mar 2026</span>
+      <span>arXiv:2605.06716 — From Storage to Experience (survey), 7 May 2026</span>
+      <span>arXiv:2402.17753 — LoCoMo · arXiv:2511.10523 — ConvoMem</span>
+      <span>arXiv:2502.05167 — NoLiMa, Adobe Research, ICML 2025</span>
+      <span>anthropic.com/engineering/effective-context-engineering-for-ai-agents — 29 Sep 2025</span>
+      <span>github.com/reescalder/agent-memory-supabase — schema.sql, read directly</span>
+    </div>
+  </footer>
+
+</div>
