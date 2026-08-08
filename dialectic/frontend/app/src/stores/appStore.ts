@@ -253,11 +253,17 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'dialectic-auth',
+      // WHY currentRoom/roomToken persist: phones evict background tabs
+      // constantly — without these, every app switch dumps the user back on
+      // the room list. The rehydrated token is validated on mount; a revoked
+      // one falls back to the room list (see ChatLayout).
       partialize: (state) => ({
         user: state.user,
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
+        currentRoom: state.currentRoom,
+        roomToken: state.roomToken,
       }),
     },
   ),

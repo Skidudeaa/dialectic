@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './styles/global.css'
 import { useAppStore } from './stores/appStore.ts'
-import { api } from './lib/api.ts'
+import { api, ApiError } from './lib/api.ts'
 import { AuthScreen } from './components/auth/AuthScreen.tsx'
 import { RoomSelector } from './components/auth/RoomSelector.tsx'
 import { useDialecticSocket } from './hooks/useDialecticSocket.ts'
@@ -100,7 +100,6 @@ function ChatLayout() {
     createCommitment,
     recordConfidence,
     resolveCommitment,
-    refreshThreads,
     refreshMemories,
     refreshPresence,
     markMessageRead,
@@ -144,10 +143,22 @@ function ChatLayout() {
   }, [markMessageRead])
 
   // Hydrate collaboration state that is not delivered by the socket handshake.
+  // Threads are fetched directly (not via refreshThreads) so a rehydrated room
+  // whose token or membership has been revoked server-side lands back on the
+  // room list instead of a dead chat. A network blip must NOT eject the user —
+  // fetch throws TypeError for those, and only definitive HTTP rejections leave.
   useEffect(() => {
     if (!currentRoom || !roomToken) return
     api.setRoomToken(roomToken)
-    void refreshThreads()
+    api.getThreads(currentRoom.id)
+      .then((data) => setThreads(data as Thread[]))
+      .catch((error) => {
+        if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
+          leaveRoom()
+        } else {
+          console.error('Failed to load threads:', error)
+        }
+      })
     void refreshMemories()
     void refreshPresence()
 
@@ -156,7 +167,13 @@ function ChatLayout() {
         .then((data) => setRooms(data as UserRoom[]))
         .catch((error) => console.error('Failed to load rooms:', error))
     }
-  }, [currentRoom, roomToken, accessToken, refreshThreads, refreshMemories, refreshPresence])
+  }, [currentRoom, roomToken, accessToken, setThreads, leaveRoom, refreshMemories, refreshPresence])
+
+  // A rehydrated or freshly loaded room has threads but no selection yet —
+  // without one, history never loads and the composer stays disabled.
+  useEffect(() => {
+    if (!currentThread && threads.length > 0) setThread(threads[0])
+  }, [currentThread, threads, setThread])
 
   // Load the selected branch's persisted history. Socket events then append live
   // messages, while the store deduplicates by message ID.

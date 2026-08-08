@@ -1,5 +1,19 @@
 const BASE = '';  // Same origin via Vite proxy
 
+/**
+ * WHY a typed error: callers deciding between "this token is dead, leave the
+ * room" and "the network blipped, stay put" need the HTTP status. A network
+ * failure throws TypeError from fetch itself and never carries a status.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 class DialecticAPI {
   private roomToken: string = '';
   private accessToken: string = '';
@@ -30,7 +44,7 @@ class DialecticAPI {
         console.warn('API authentication failed');
       }
       const data = await res.json().catch(() => null) as { detail?: string } | null;
-      throw new Error(data?.detail ?? `API error: ${res.status}`);
+      throw new ApiError(data?.detail ?? `API error: ${res.status}`, res.status);
     }
     return res.json();
   }

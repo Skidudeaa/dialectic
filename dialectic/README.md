@@ -22,7 +22,18 @@ No other platform does this. Chat apps don't have AI agency. AI assistants don't
 
 Open **https://dialectic.somacura.org** and sign in with your existing account.
 Both accounts are already members of **Iran/Hormuz Trading Room**, so it should
-appear under **Your Rooms** without re-entering an invite.
+appear under **Your Rooms** without re-entering an invite. The app remembers
+your room across reloads and app switches — sign in once per device and you
+land back in the conversation.
+
+**Install it as an app** (same site, app icon + full screen, all four devices):
+
+| Device | How |
+|---|---|
+| Android (Dan) | Chrome → ⋮ menu → **Add to Home screen** → **Install** |
+| Windows (Dan) | Edge or Chrome → address-bar **Install** icon (or ⋯ → Apps → Install Dialectic) |
+| iPhone (Amo) | Safari → Share □↑ → **Add to Home Screen** |
+| Mac (Amo) | Safari → **File → Add to Dock** (or Chrome → address-bar Install icon) |
 
 Use one room per durable project or thinking stream. Inside a room:
 
