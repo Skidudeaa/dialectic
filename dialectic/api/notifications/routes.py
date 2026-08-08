@@ -17,6 +17,8 @@ from .schemas import (
     MuteRoomRequest,
     RoomNotificationSettingsResponse,
     BadgeResponse,
+    WebSubscriptionRequest,
+    WebUnsubscribeRequest,
 )
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -110,6 +112,63 @@ async def unregister_push_token(
         user.user_id, request.expo_push_token
     )
     return {"status": "unregistered"}
+
+
+# ============================================================
+# WEB PUSH (VAPID) — the installed PWA's channel
+# ============================================================
+
+@router.get("/vapid-public-key")
+async def get_vapid_public_key():
+    """Public key the browser needs for pushManager.subscribe(). Not a secret."""
+    from .webpush import vapid_public_key
+    key = vapid_public_key()
+    if not key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Web push not configured",
+        )
+    return {"public_key": key}
+
+
+@router.post("/web-subscriptions", status_code=status.HTTP_201_CREATED)
+async def register_web_subscription(
+    request: WebSubscriptionRequest,
+    user: AuthenticatedUser = Depends(get_current_user_with_db),
+    db=Depends(get_db),
+):
+    """
+    Upsert a browser Web Push subscription for the current user.
+
+    Endpoint is globally unique per browser+site; re-subscribing rotates keys,
+    so the upsert refreshes them and re-homes the endpoint to whoever is
+    signed in on that browser now.
+    """
+    await db.execute(
+        """
+        INSERT INTO web_push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (endpoint)
+        DO UPDATE SET user_id = $1, p256dh = $3, auth = $4, user_agent = $5
+        """,
+        user.user_id, request.endpoint, request.keys.p256dh,
+        request.keys.auth, request.user_agent,
+    )
+    return {"status": "subscribed"}
+
+
+@router.delete("/web-subscriptions")
+async def unregister_web_subscription(
+    request: WebUnsubscribeRequest,
+    user: AuthenticatedUser = Depends(get_current_user_with_db),
+    db=Depends(get_db),
+):
+    """Delete a subscription (browser revoked permission or user disabled)."""
+    await db.execute(
+        "DELETE FROM web_push_subscriptions WHERE user_id = $1 AND endpoint = $2",
+        user.user_id, request.endpoint,
+    )
+    return {"status": "unsubscribed"}
 
 
 # ============================================================

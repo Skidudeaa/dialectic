@@ -10,11 +10,12 @@ Dialectic — a collaborative dialogue engine where two humans and an LLM co-rea
 # Run the server (port 8002 — port 8000 is reserved)
 PORT=8002 python dialectic/run.py
 
-# Serve the frontend (separate terminal)
-python -m http.server 3000 --directory dialectic/frontend
+# Serve the frontend (separate terminal) — the React app is the ONLY live
+# frontend; legacy frontend/app.html and frontend/index.html are retired.
+cd dialectic/frontend/app && npm run dev   # http://localhost:3000
 
-# Open in browser
-open http://localhost:3000/app.html
+# Production: https://dialectic.somacura.org (nginx serves the built app from
+# /var/www/dialectic-current; deploy = release dir + symlink flip, see memory)
 
 # Database setup (first time only)
 createdb dialectic
@@ -144,7 +145,8 @@ dialectic/
 │   ├── handlers.py         # WebSocket message dispatch
 │   └── websocket.py        # connection lifecycle
 ├── frontend/
-│   └── app.html            # self-contained single-file SPA
+│   ├── app/                # React (Vite + TS) SPA — the live frontend (PWA)
+│   └── app.html            # RETIRED single-file SPA (kept for history only)
 ├── migrations/             # incremental DB changes
 └── tests/                  # pytest test suite (199 tests)
 ```

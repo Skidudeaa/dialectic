@@ -23,6 +23,24 @@ class UnregisterTokenRequest(BaseModel):
     expo_push_token: str = Field(..., description="Expo push token to unregister")
 
 
+class WebPushKeys(BaseModel):
+    """The two client keys from PushSubscription.toJSON()."""
+    p256dh: str = Field(..., description="Client public key")
+    auth: str = Field(..., description="Auth secret")
+
+
+class WebSubscriptionRequest(BaseModel):
+    """Register a browser Web Push subscription (PushSubscription.toJSON())."""
+    endpoint: str = Field(..., description="Push service endpoint URL")
+    keys: WebPushKeys
+    user_agent: Optional[str] = Field(None, description="Subscribing browser/device")
+
+
+class WebUnsubscribeRequest(BaseModel):
+    """Remove a Web Push subscription by its endpoint."""
+    endpoint: str = Field(..., description="Push service endpoint URL to remove")
+
+
 class MuteRoomRequest(BaseModel):
     """Request to update room notification mute settings."""
     muted: bool = Field(..., description="Whether notifications are muted")

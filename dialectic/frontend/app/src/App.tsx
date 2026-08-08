@@ -7,6 +7,7 @@ import { RoomSelector } from './components/auth/RoomSelector.tsx'
 import { useDialecticSocket } from './hooks/useDialecticSocket.ts'
 import { useDocumentVisibility } from './hooks/useDocumentVisibility.ts'
 import { useAwayAlerts } from './hooks/useAwayAlerts.ts'
+import { usePushSubscription } from './hooks/usePushSubscription.ts'
 import type { Message, SearchResult, Thread, TradingSnapshot, UserRoom } from './types/index.ts'
 import { AppLayout } from './components/layout/AppLayout'
 import { RoomHeader } from './components/layout/RoomHeader'
@@ -110,6 +111,7 @@ function ChatLayout() {
   } = useDialecticSocket()
 
   const isVisible = useDocumentVisibility()
+  const { state: pushState, enable: enablePush } = usePushSubscription(true)
 
   // Cmd/Ctrl+K is the near-universal "search this thing" gesture.
   useEffect(() => {
@@ -205,6 +207,27 @@ function ChatLayout() {
     }).catch(() => setTradingConfig(null))
   }, [currentRoom, roomToken, setTradingConfig])
 
+  // A tapped push notification lands you in the room it came from: the
+  // service worker either posts open-room into a live window, or opens
+  // /?room=<id> for a cold start. Both resolve here once the room list exists.
+  const switchRoomRef = useRef<(roomId: string) => void>(() => undefined)
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; roomId?: string } | null
+      if (data?.type === 'open-room' && data.roomId) switchRoomRef.current(data.roomId)
+    }
+    navigator.serviceWorker.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage)
+  }, [])
+  useEffect(() => {
+    if (rooms.length === 0) return
+    const requested = new URLSearchParams(window.location.search).get('room')
+    if (!requested) return
+    window.history.replaceState(null, '', window.location.pathname)
+    if (requested !== currentRoom?.id) switchRoomRef.current(requested)
+  }, [rooms, currentRoom?.id])
+
   const switchRoom = useCallback(async (roomId: string) => {
     const nextRoom = rooms.find((room) => room.id === roomId)
     if (!nextRoom?.token || nextRoom.id === currentRoom?.id) return
@@ -219,6 +242,7 @@ function ChatLayout() {
       window.alert(error instanceof Error ? error.message : 'Could not open that room')
     }
   }, [rooms, currentRoom?.id, setRoom, setThreads, setThread])
+  switchRoomRef.current = (roomId: string) => { void switchRoom(roomId) }
 
   // Jumping to a search hit. Done entirely in this handler rather than through
   // an effect so the whole sequence stays in one place.
@@ -336,6 +360,8 @@ function ChatLayout() {
     roomName: currentRoom?.name ?? 'Dialectic',
     isAway: !isVisible,
     streamingMessageId: isLLMStreaming ? STREAMING_ID : null,
+    // With a live push subscription the service worker owns OS notifications.
+    suppressNotifications: pushState === 'subscribed',
   })
 
   const typingDisplay = typingUsers.map((id) => userNames[id] ?? id.slice(0, 8))
@@ -384,6 +410,11 @@ function ChatLayout() {
               connected={isConnected}
             />
             <ParticipantsBar participants={participants} />
+            {pushState === 'prompt' && typeof Notification !== 'undefined' && Notification.permission === 'default' && (
+              <button className="push-enable-chip" onClick={enablePush}>
+                🔔 Enable notifications — get buzzed when {participants.length > 2 ? 'the others' : 'the other person'} writes
+              </button>
+            )}
             <RoomBriefing key={currentRoom.id} roomId={currentRoom.id} />
             {activeProtocol && (
               <ProtocolBanner

@@ -128,6 +128,20 @@ CREATE INDEX idx_memories_room ON memories(room_id);
 CREATE INDEX idx_memories_status ON memories(room_id, status);
 CREATE INDEX idx_memories_embedding ON memories USING ivfflat (embedding vector_cosine_ops);
 CREATE INDEX idx_memories_fts ON memories USING gin (fts);
+
+-- Web Push (VAPID) subscriptions for the installed PWA (007)
+CREATE TABLE web_push_subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    endpoint TEXT UNIQUE NOT NULL,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    user_agent TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_success_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_web_push_user ON web_push_subscriptions(user_id);
 CREATE INDEX idx_memories_content_trgm ON memories USING gin (content gin_trgm_ops);
 CREATE INDEX idx_memories_key_trgm ON memories USING gin (key gin_trgm_ops);
 CREATE INDEX idx_memories_speaker ON memories(room_id, speaker_user_id);

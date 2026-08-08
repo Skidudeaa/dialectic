@@ -123,3 +123,17 @@ code, pre { font-family: var(--font-mono); }
 
 /* Attachment / exhibit card cap */
 .exhibit-cap { max-width: 580px; }
+
+/* Web-push enable chip — shown only while permission is still undecided */
+.push-enable-chip {
+    margin: 8px 16px 0;
+    padding: 8px 14px;
+    background: transparent;
+    border: 1px solid var(--color-amber);
+    color: var(--color-amber);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+    text-align: left;
+}
+.push-enable-chip:hover { background: var(--color-espresso); }

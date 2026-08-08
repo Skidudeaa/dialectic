@@ -9,6 +9,12 @@ interface AwayAlertsOptions {
   isAway: boolean
   /** Suppresses the alert for the message currently being streamed in. */
   streamingMessageId?: string | null
+  /**
+   * True when a Web Push subscription is live — the service worker then owns
+   * OS notifications (it fires even with the app closed), so constructing a
+   * second one here would double-notify. The title badge stays either way.
+   */
+  suppressNotifications?: boolean
 }
 
 function authorLabel(message: Message): string {
@@ -41,6 +47,7 @@ export function useAwayAlerts({
   roomName,
   isAway,
   streamingMessageId,
+  suppressNotifications = false,
 }: AwayAlertsOptions): void {
   // Messages already accounted for, so a re-render never re-alerts.
   const seenIdsRef = useRef<Set<string>>(new Set())
@@ -71,6 +78,7 @@ export function useAwayAlerts({
     awayCountRef.current += fresh.length
     document.title = `(${awayCountRef.current}) ${baseTitleRef.current}`
 
+    if (suppressNotifications) return
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
     const newest = fresh[fresh.length - 1]
     try {
@@ -89,7 +97,7 @@ export function useAwayAlerts({
       // Some browsers reject constructed notifications outside a service worker.
       // The title badge above still carried the signal.
     }
-  }, [messages, isAway, currentUserId, roomName, streamingMessageId])
+  }, [messages, isAway, currentUserId, roomName, streamingMessageId, suppressNotifications])
 
   // Coming back clears the badge.
   useEffect(() => {

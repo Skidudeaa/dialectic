@@ -135,6 +135,15 @@ class DialecticAPI {
   async logoutSession(refreshToken: string) {
     return this.authFetch('/auth/logout', { refresh_token: refreshToken });
   }
+
+  // Web Push
+  async getVapidPublicKey() { return this.fetch('/notifications/vapid-public-key'); }
+  async registerWebPushSubscription(subscription: { endpoint: string; keys: { p256dh?: string; auth?: string }; user_agent?: string }) {
+    return this.fetch('/notifications/web-subscriptions', { method: 'POST', body: JSON.stringify(subscription) });
+  }
+  async unregisterWebPushSubscription(endpoint: string) {
+    return this.fetch('/notifications/web-subscriptions', { method: 'DELETE', body: JSON.stringify({ endpoint }) });
+  }
 }
 
 export const api = new DialecticAPI();

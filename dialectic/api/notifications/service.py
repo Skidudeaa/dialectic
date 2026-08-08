@@ -73,16 +73,6 @@ class PushNotificationService:
             is_llm: CONTEXT.md: LLM messages distinguished with emoji
             badge_counts: CONTEXT.md: Badge = rooms with unread (per user)
         """
-        # Get push tokens for recipients
-        tokens = await db.fetch(
-            """SELECT user_id, expo_push_token FROM push_tokens
-               WHERE user_id = ANY($1::uuid[]) AND is_active = true""",
-            recipient_user_ids
-        )
-
-        if not tokens:
-            return {'sent': 0, 'errors': []}
-
         # CONTEXT.md: Title shows sender name, LLM has emoji prefix
         title = f"{LLM_EMOJI} {sender_name}" if is_llm else sender_name
 
@@ -90,6 +80,41 @@ class PushNotificationService:
         body = content[:MAX_BODY_LENGTH]
         if len(content) > MAX_BODY_LENGTH:
             body = body.rsplit(' ', 1)[0] + '...'
+
+        # Web Push channel (the installed PWA — the only channel with live
+        # registrations today). A failure here must never block the Expo path,
+        # and vice versa: the channels prune and error independently.
+        from api.notifications.webpush import send_web_notifications
+        try:
+            web_result = await send_web_notifications(
+                db=db,
+                recipient_user_ids=recipient_user_ids,
+                title=title,
+                body=body,
+                data={
+                    'room_id': room_id,
+                    'thread_id': thread_id,
+                    'message_id': message_id,
+                    'type': 'new_message',
+                },
+                tag=f"room_{room_id}",
+            )
+        except Exception as e:
+            logger.exception("Web push channel failed")
+            web_result = {'sent': 0, 'errors': [str(e)]}
+
+        # Expo channel (native app tokens; none registered until a native app ships)
+        tokens = await db.fetch(
+            """SELECT user_id, expo_push_token FROM push_tokens
+               WHERE user_id = ANY($1::uuid[]) AND is_active = true""",
+            recipient_user_ids
+        )
+
+        if not tokens:
+            return {
+                'sent': web_result['sent'],
+                'errors': web_result['errors'],
+            }
 
         # CONTEXT.md: Distinct sound for Claude vs human
         sound = 'llm_notification.wav' if is_llm else 'human_notification.wav'
@@ -117,7 +142,11 @@ class PushNotificationService:
                 thread_id=f"room_{room_id}",  # iOS grouping
             ))
 
-        return await self._send_batch(db, messages)
+        expo_result = await self._send_batch(db, messages)
+        return {
+            'sent': web_result['sent'] + expo_result['sent'],
+            'errors': web_result['errors'] + expo_result['errors'],
+        }
 
     async def _send_batch(self, db, messages: List[PushMessage]) -> dict:
         """Send batch of messages, handle errors, invalidate bad tokens."""

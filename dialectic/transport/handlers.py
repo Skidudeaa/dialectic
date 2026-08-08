@@ -22,6 +22,21 @@ from llm.protocol_manager import ProtocolManager
 from llm.protocol_library import get_protocol_definition
 from llm.multi_model import MultiModelCoordinator
 from stakes.manager import CommitmentManager
+
+
+def is_llm_speaker(speaker_type: SpeakerType) -> bool:
+    """
+    WHY a function: the inline check compared `.value` against UPPERCASE names,
+    which is always False (enum values are lowercase) — so LLM pushes were never
+    attributed to Claude. Comparing enum members can't drift that way, and a
+    unit test pins it.
+    """
+    return speaker_type in (
+        SpeakerType.LLM_PRIMARY,
+        SpeakerType.LLM_PROVOKER,
+        SpeakerType.LLM_ANNOTATOR,
+        SpeakerType.LLM_PERSONA,
+    )
 from stakes.detector import CommitmentDetector
 from .websocket import (
     ConnectionManager, Connection, InboundMessage, OutboundMessage, MessageTypes
@@ -1543,8 +1558,7 @@ class MessageHandler:
         for user_id in recipients:
             badge_counts[user_id] = await calculate_badge_count(self.db, user_id)
 
-        # Determine if LLM message
-        is_llm = message.speaker_type.value in ('LLM_PRIMARY', 'LLM_PROVOKER', 'LLM_ANNOTATOR')
+        is_llm = is_llm_speaker(message.speaker_type)
         display_name = "Claude" if is_llm else sender_name
 
         # Enrich content with annotation summary when available

@@ -12,8 +12,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Run the server on port 8002 (port 8000 is reserved for another app)
 PORT=8002 python dialectic/run.py
 
-# Serve the frontend
-python -m http.server 3000 --directory dialectic/frontend
+# Serve the frontend (React app — the only live frontend)
+cd dialectic/frontend/app && npm run dev
 
 # Database setup
 createdb dialectic
