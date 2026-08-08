@@ -1884,6 +1884,9 @@ class MessageHandler:
                 key=synthesis_key,
                 content=f"[Protocol {definition.display_name} concluded — synthesis pending]",
                 created_by_user_id=row.get("invoked_by_user_id"),
+                # Placeholder text is identical across protocol runs — dedup
+                # would collapse a new run onto an old run's synthesis slot.
+                dedup=False,
             )
             synthesis_memory_id = synthesis_memory.id
         except Exception as e:

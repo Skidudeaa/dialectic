@@ -2,6 +2,8 @@
 
 -- Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
+-- Trigram matching for the entity/restatement recall lane (006)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- Event log: append-only source of truth
 CREATE TABLE events (
@@ -112,12 +114,23 @@ CREATE TABLE memories (
     invalidated_by_user_id UUID REFERENCES users(id),
     invalidated_at TIMESTAMPTZ,
     invalidation_reason TEXT,
-    embedding VECTOR(1536)
+    embedding VECTOR(1536),
+    -- Whose statement this memory captures (006) — distinct from created_by_user_id (who saved it)
+    speaker_user_id UUID REFERENCES users(id),
+    -- Supersession: valid_from = created_at, valid_until = superseded_at (006)
+    superseded_at TIMESTAMPTZ,
+    superseded_by_memory_id UUID REFERENCES memories(id),
+    -- Full-text lane (006)
+    fts TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', coalesce(key, '') || ' ' || coalesce(content, ''))) STORED
 );
 
 CREATE INDEX idx_memories_room ON memories(room_id);
 CREATE INDEX idx_memories_status ON memories(room_id, status);
 CREATE INDEX idx_memories_embedding ON memories USING ivfflat (embedding vector_cosine_ops);
+CREATE INDEX idx_memories_fts ON memories USING gin (fts);
+CREATE INDEX idx_memories_content_trgm ON memories USING gin (content gin_trgm_ops);
+CREATE INDEX idx_memories_key_trgm ON memories USING gin (key gin_trgm_ops);
+CREATE INDEX idx_memories_speaker ON memories(room_id, speaker_user_id);
 
 -- Memory version history
 CREATE TABLE memory_versions (

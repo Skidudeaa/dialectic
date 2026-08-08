@@ -36,7 +36,7 @@ export OPENAI_API_KEY="sk-..."  # Optional, enables fallback + embeddings
 |--------|---------|
 | `api/main.py` | FastAPI server, REST endpoints, WebSocket handler |
 | `llm/` | LLM orchestration layer |
-| `memory/` | Vector search + versioned shared memories |
+| `memory/` | Three-lane recall (pgvector + FTS + speaker attribution, RRF-fused) over versioned shared memories |
 | `transport/` | WebSocket connection management + message dispatch |
 | `models.py` | Pydantic models, enums, event payloads |
 | `operations.py` | Fork thread, ancestry queries |

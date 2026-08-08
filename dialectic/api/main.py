@@ -1283,6 +1283,8 @@ async def receive_trading_snapshot(
             key=memory_key,
             content=summary,
             scope=MemoryScope.ROOM,
+            # thesis_state_current is a deterministic-key slot upserted above.
+            dedup=False,
         )
         memory_id = memory.id
 

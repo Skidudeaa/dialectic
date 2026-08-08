@@ -114,7 +114,7 @@ You speak with authority on procedure, not on content."""
 
         room_context = self._build_room_context(room)
         user_context = self._blend_user_modifiers(users)
-        memory_context = self._build_memory_context(memories)
+        memory_context = self._build_memory_context(memories, users)
 
         # Build cross-session context if provided
         cross_session_section = ""
@@ -416,14 +416,27 @@ You speak with authority on procedure, not on content."""
 
         return "\n".join(parts)
 
-    def _build_memory_context(self, memories: list[Memory]) -> str:
-        """Format memories for inclusion in prompt."""
+    def _build_memory_context(
+        self, memories: list[Memory], users: Optional[list[User]] = None
+    ) -> str:
+        """
+        Format memories for inclusion in prompt.
+
+        WHY attribution: in a three-way conversation "remember X" is useless
+        without WHO said it and WHEN — the participant needs to distinguish
+        Dan's position from Amo's, and a stale fact from a fresh one.
+        """
         if not memories:
             return ""
 
+        names = {u.id: u.display_name for u in (users or [])}
         lines = []
         for mem in memories:
-            lines.append(f"- **{mem.key}**: {mem.content}")
+            speaker = names.get(mem.speaker_user_id)
+            when = mem.updated_at.strftime("%b %d") if mem.updated_at else ""
+            attribution = ", ".join(p for p in (speaker, when) if p)
+            suffix = f" _({attribution})_" if attribution else ""
+            lines.append(f"- **{mem.key}**: {mem.content}{suffix}")
 
         return "\n".join(lines)
 

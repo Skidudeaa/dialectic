@@ -33,6 +33,17 @@ Two conclusions that are easy to get wrong later, both verified:
 
 ## For Dialectic specifically
 
+**Ported 2026-08-08:** three-lane RRF recall (`memory/vector_store.py::recall`),
+`speaker_user_id` attribution end-to-end (schema → recall → LLM prompt), both dedup
+passes with supersession-as-validity-window (`memory/manager.py`), migration
+`006_memory_recall_lanes.sql`, integration-tested against real Postgres in
+`tests/test_memory_recall_pg.py`. Not ported (per verdict): paging tiers, inline
+entity extraction. Still open: the LongMemEval-S three-arm benchmark harness, and
+supersession as a full event-log projection (currently event + table, not a rebuildable
+projection).
+
+Original recommendation follows.
+
 Port the three-lane RRF recall with `speaker_id` added to the entity lane, and both dedup passes.
 Don't port paging tiers or inline entity extraction. Event sourcing does **not** make validity
 windows redundant — the log records what was *said*, validity windows record when a fact was

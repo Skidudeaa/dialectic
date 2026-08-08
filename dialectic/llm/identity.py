@@ -286,6 +286,9 @@ class LLMIdentityManager:
                 content=content,
                 created_by_user_id=None,
                 scope=MemoryScope.LLM,
+                # Deterministic-key upsert manages its own identity slots;
+                # near-identical initial docs across slots must not collapse.
+                dedup=False,
             )
 
     def _build_session_summary(

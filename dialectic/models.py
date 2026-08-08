@@ -42,6 +42,7 @@ class EventType(str, Enum):
     MEMORY_ADDED = "memory_added"
     MEMORY_EDITED = "memory_edited"
     MEMORY_INVALIDATED = "memory_invalidated"
+    MEMORY_SUPERSEDED = "memory_superseded"
     USER_JOINED_ROOM = "user_joined"
     USER_MODIFIER_UPDATED = "user_modifier_updated"
     # Cross-session memory events
@@ -96,6 +97,7 @@ class MemoryScope(str, Enum):
 class MemoryStatus(str, Enum):
     ACTIVE = "active"
     INVALIDATED = "invalidated"
+    SUPERSEDED = "superseded"  # Replaced by a newer restatement of the same fact
 
 
 # ============================================================
@@ -217,6 +219,10 @@ class Memory(BaseModel):
     invalidated_at: Optional[datetime] = None
     invalidation_reason: Optional[str] = None
     embedding: Optional[list[float]] = None
+    # Whose statement this captures — distinct from created_by_user_id (who saved it)
+    speaker_user_id: Optional[UUID] = None
+    superseded_at: Optional[datetime] = None
+    superseded_by_memory_id: Optional[UUID] = None
 
     @field_validator("embedding", mode="before")
     @classmethod
@@ -299,6 +305,13 @@ class MemoryEditedPayload(BaseModel):
 class MemoryInvalidatedPayload(BaseModel):
     memory_id: UUID
     reason: Optional[str] = None
+
+
+class MemorySupersededPayload(BaseModel):
+    memory_id: UUID                # the superseded (old) memory
+    superseded_by_memory_id: UUID  # the replacement
+    cosine_similarity: Optional[float] = None
+    trigram_similarity: Optional[float] = None
 
 
 # ============================================================

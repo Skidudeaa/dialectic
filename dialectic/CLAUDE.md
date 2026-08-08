@@ -49,7 +49,7 @@ These can live in `dialectic/.env` (auto-loaded by `run.py` via python-dotenv). 
 | `llm/prompts.py` | Layered system prompt: identity + room rules + memories + thesis state |
 | `llm/trading_curator.py` | Offline alert engine — fires when snapshot arrives, user is away |
 | `llm/self_model.py` | LLM self-awareness: tracks participation decisions, evolves identity doc |
-| `memory/manager.py` | Vector search + versioned room memories (pgvector) |
+| `memory/manager.py` | Three-lane recall (dense + FTS + entity/speaker, RRF-fused) + versioned room memories + write-path dedup |
 | `transport/handlers.py` | WebSocket message routing; coordinates annotator + primary LLM |
 | `transport/websocket.py` | WebSocket connection lifecycle |
 | `models.py` | Pydantic data models for all entities |
@@ -92,7 +92,8 @@ The annotator fires even when the primary LLM fires — both produce messages. T
 - **Heuristic interjection**: LLM speaks on: `@llm` mention, 4+ turns, question detected, semantic novelty, stagnation
 - **Two LLM modes**: `llm_primary` (Sonnet, equal participant) and `llm_provoker` (Haiku, destabilizer)
 - **Self-model**: LLM extracts its own positions post-response, builds identity doc + per-user model in memories
-- **pgvector**: 1536-dim OpenAI embeddings for semantic memory search
+- **Three-lane recall**: memory search fuses dense vectors (pgvector, 1536-dim OpenAI), Postgres FTS, and an entity/speaker lane via reciprocal rank fusion — "what did Dan say about X" ranks Dan's memories. Memories carry `speaker_user_id` (whose statement, not who saved it), shown in the LLM prompt.
+- **Write-path dedup**: `add_memory` runs cosine + trigram passes; a same-speaker restatement supersedes the old fact (status `superseded`, validity window closed, `MEMORY_SUPERSEDED` event), cross-speaker confirmation keeps the original. System-managed slots (identity docs, protocol synthesis, thesis state) opt out with `dedup=False`. Ported from the verified July 2026 agent-memory research (`docs/research/agent-memory-2026-07/`).
 
 ## Database
 
@@ -109,6 +110,9 @@ psql dialectic < migrations/002_add_trading_config.sql
 and cross_session_memories. **Existing** databases need later migrations applied
 explicitly — e.g. `psql dialectic < migrations/004_session_revoked_reason.sql`
 (adds `user_sessions.revoked_reason`; applied to the live DB 2026-07-25).
+Migration 006 (`006_memory_recall_lanes.sql`: pg_trgm, `speaker_user_id`,
+FTS/trigram indexes, supersession columns) applied to the live DB 2026-08-08;
+the `schema.sql` baseline includes it.
 
 ## File Structure
 

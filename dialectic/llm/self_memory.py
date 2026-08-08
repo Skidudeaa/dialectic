@@ -206,9 +206,15 @@ class LLMSelfMemory:
             min_score=0.75,
         )
 
-        # Filter to LLM-scoped memories only
+        # Filter to LLM-scoped memories only.
+        # WHY the explicit similarity floor: search_memories now fuses text
+        # and speaker lanes, where a shared keyword is a weaker signal than
+        # 0.75 cosine — merging positions on a merely-related topic would
+        # corrupt the memory being edited.
         for match in matches:
-            if match.scope == MemoryScope.LLM.value:
+            if match.scope == MemoryScope.LLM.value and (
+                match.similarity is not None and match.similarity >= 0.75
+            ):
                 return match
 
         return None
