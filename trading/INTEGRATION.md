@@ -1,5 +1,30 @@
 # tradingDesk × Dialectic Integration
 
+> ### ⚠ SUPERSEDED DESIGN (2026-08-09) — this document is historical
+>
+> This file describes the original **2026-03-30** integration design: per-room
+> bearer token, `run-all.py` clock-driven push, one-shot prompt injection of
+> thesis state into the LLM context. That is **not** how the live integration
+> works.
+>
+> **Live since 2026-08-09**, the integration is instead:
+> - **Event-driven coordinator push** — v3 snapshots on material change + an
+>   hourly heartbeat (`web/runtime/dialectic_push.py`), not a cron-pushed
+>   per-room token script;
+> - **Service-token bridge endpoints** — `GET /api/bridge/snapshot/{thesis_id}`
+>   and `GET /api/bridge/news/{thesis_id}`, `X-Service-Token` auth
+>   (`web/routes/bridge.py`);
+> - **LLM tool loop** — dialectic's LLM calls 11 read-only tools against the
+>   bridge instead of receiving a one-shot prompt injection;
+> - **Shared-JWT auth bridge** — dialectic tokens map to desk users via
+>   `DIALECTIC_USER_MAP` (`web/auth.py`).
+>
+> **Authoritative current sources:** `/root/DwoodAmo/docs/plans/2026-Q3-consigliere-amendment-1-fusion.md`
+> and the code cited above. Everything below this notice is kept as a record
+> of the original design — read it for history, not for instructions.
+
+---
+
 > ### ⚠ CORRECTION (2026-08-09) — read this before the status block below
 >
 > The banner underneath is preserved as written on 2026-04-01 and is **stale in
@@ -23,7 +48,7 @@
 
 ---
 
-> **STATUS: FULLY IMPLEMENTED** (2026-04-01) — *superseded, see correction above*
+> **STATUS: ~~FULLY IMPLEMENTED~~ — SUPERSEDED** (2026-04-01) — *the snapshot-push path below did ship as written, but as a description of the live integration this claim is false; see the superseded-design notice at the top of this file.*
 >
 > Both sides are built and live. Both thesis rooms are wired. Run `python3 tools/bridge/run-all.py` from tradingDesk to push fresh thesis state into both Dialectic rooms. The LLM in each room sees the full thesis state (node states, confluence, countdowns, scenarios, portfolio) on every message.
 >
