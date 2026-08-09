@@ -588,3 +588,26 @@ CREATE INDEX IF NOT EXISTS idx_room_personas_room ON room_personas(room_id);
 
 -- Link messages to personas for attribution
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS persona_id UUID REFERENCES room_personas(id);
+
+-- ============================================================
+-- SCHEDULER (migration 008 — fusion amendment; Q3 plan P3 organ)
+-- ============================================================
+
+-- Generalized idempotency ledger: one row per (job, interval bucket); only
+-- the INSERT winner runs the job, so restarts can never double-fire.
+CREATE TABLE IF NOT EXISTS scheduled_job_runs (
+    id BIGSERIAL PRIMARY KEY,
+    job_name TEXT NOT NULL,
+    scheduled_for TIMESTAMPTZ NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    finished_at TIMESTAMPTZ,
+    status TEXT NOT NULL DEFAULT 'running',   -- running | success | error
+    detail JSONB,
+    UNIQUE (job_name, scheduled_for)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sjr_job_time
+    ON scheduled_job_runs (job_name, scheduled_for DESC);
+
+-- Which tradingDesk thesis book a room is bound to (NULL = not a trading room).
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS linked_book_id TEXT;

@@ -213,7 +213,28 @@ async def lifespan(app: FastAPI):
         connection_manager = ConnectionManager()
         logger.info("Using in-memory connection manager (single-server mode)")
 
+    # The scheduler organ (fusion amendment; built to Q3 plan Phase 3 spec).
+    # WHY here: needs both the pool and the connection manager; jobs receive
+    # them as closures so they never import api.main.
+    scheduler_instance = None
+    if db_pool:
+        from scheduler import Scheduler, SchedulerContext
+        from trading_watch import register_bloodstream_jobs
+
+        async def _scheduler_broadcast(room_id, message):
+            await connection_manager.broadcast(room_id, message)
+
+        scheduler_instance = Scheduler(SchedulerContext(
+            pool=db_pool, broadcast=_scheduler_broadcast,
+        ))
+        register_bloodstream_jobs(scheduler_instance)
+        scheduler_instance.start()
+
     yield
+
+    if scheduler_instance:
+        await scheduler_instance.stop()
+        logger.info("Scheduler stopped")
 
     # Shutdown connection manager (Redis cleanup if applicable)
     if hasattr(connection_manager, 'shutdown'):
