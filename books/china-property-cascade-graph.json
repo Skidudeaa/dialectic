@@ -1,13 +1,13 @@
 {
   "meta": {
-    "title": "China Property + EM Cascade — April 2026",
+    "title": "China Property + EM Cascade \u2014 April 2026",
     "claim": "LGFV defaults + property-developer tail force state-bank forbearance, PBoC manages CNY weakness until band slips past 7.50, then commodity demand (China = ~50% of global iron ore / copper / coal intensity) collapses, dragging AUD/CAD/CLP/BRL and EM equities + sovereigns. Cross-book recession signal lights up when EM-stress fires here AND in iran-hormuz simultaneously.",
     "monthlyBudget": 9000,
     "asOf": "2026-04-17",
     "version": "1.0.0",
     "type": "thesis-graph",
-    "dialecticRoomId": "",
-    "dialecticRoomToken": ""
+    "dialecticRoomId": "e1ff2cca-04ed-4b50-8c38-c0df78520e21",
+    "dialecticRoomToken": "4f636cd3070746d5906af247d64a7c37"
   },
   "nodes": [
     {
@@ -16,7 +16,7 @@
       "type": "event",
       "phase": 1,
       "state": "monitoring",
-      "context": "Local Government Financing Vehicle stock ~$9-13T USD across ~3,000 entities. Provincial land-sale revenue down ~30% YoY, funding gap blowing out. Country Garden 2023 default was the canary; Vanke 2024 widened it; an LGFV in a Tier-2 province defaulting on onshore bondholders (not just offshore) would be the third strike. Beijing has absorbed selectively (Guizhou bailout Q4 2024) — calibration TBD on which province triggers cascade.",
+      "context": "Local Government Financing Vehicle stock ~$9-13T USD across ~3,000 entities. Provincial land-sale revenue down ~30% YoY, funding gap blowing out. Country Garden 2023 default was the canary; Vanke 2024 widened it; an LGFV in a Tier-2 province defaulting on onshore bondholders (not just offshore) would be the third strike. Beijing has absorbed selectively (Guizhou bailout Q4 2024) \u2014 calibration TBD on which province triggers cascade.",
       "probability": 0.35,
       "indicators": [
         {
@@ -73,7 +73,7 @@
       "type": "indicator",
       "phase": 1,
       "state": "monitoring",
-      "context": "Country Garden, Sunac, Logan, Shimao etc. — combined offshore USD bond stack ~$120B trading 5-25c. Vanke's 2026 maturities ($3.6B USD) are the first SOE-adjacent test. Beijing-injected liquidity has bought time, not solvency.",
+      "context": "Country Garden, Sunac, Logan, Shimao etc. \u2014 combined offshore USD bond stack ~$120B trading 5-25c. Vanke's 2026 maturities ($3.6B USD) are the first SOE-adjacent test. Beijing-injected liquidity has bought time, not solvency.",
       "feeds": [
         {
           "source": "yahoo",
@@ -109,7 +109,7 @@
       "type": "price",
       "phase": 2,
       "state": "monitoring",
-      "context": "Big Four state banks (ICBC, CCB, ABC, BoC) hold the bulk of LGFV + developer exposure. CBIRC minimum CET1 = 8.5% for D-SIBs. Average sits ~11.5% as of FY25 — a 100bp NPL writedown crystallizing 3-5% of LGFV book would push Bank of Communications and several joint-stock banks toward forbearance + dividend cuts. Source: PBoC FSR 2025.",
+      "context": "Big Four state banks (ICBC, CCB, ABC, BoC) hold the bulk of LGFV + developer exposure. CBIRC minimum CET1 = 8.5% for D-SIBs. Average sits ~11.5% as of FY25 \u2014 a 100bp NPL writedown crystallizing 3-5% of LGFV book would push Bank of Communications and several joint-stock banks toward forbearance + dividend cuts. Source: PBoC FSR 2025.",
       "current": 11.5,
       "thresholds": [
         {
@@ -134,7 +134,7 @@
       "type": "price",
       "phase": 2,
       "state": "monitoring",
-      "context": "USD/CNY managed band. PBoC fix anchored 7.10-7.25 through Q1 2026. Offshore CNH currently 7.34. Past 7.50 is the operative breakpoint — historically (2015, 2022) PBoC intervenes hard before this level; a sustained close above implies they have stopped defending. That is the tell.",
+      "context": "USD/CNY managed band. PBoC fix anchored 7.10-7.25 through Q1 2026. Offshore CNH currently 7.34. Past 7.50 is the operative breakpoint \u2014 historically (2015, 2022) PBoC intervenes hard before this level; a sustained close above implies they have stopped defending. That is the tell.",
       "current": 6.84,
       "feeds": [
         {
@@ -222,7 +222,7 @@
       "type": "price",
       "phase": 3,
       "state": "monitoring",
-      "context": "Iron ore (SGX 62% Fe) currently ~$98/t. 2015 China growth scare took it to $40. Copper (HG) at $4.30/lb — 2015 trough $2.00. VALE / RIO / BHP earnings extreme leverage to Chinese steel demand. FCX has ~70% revenue from copper.",
+      "context": "Iron ore (SGX 62% Fe) currently ~$98/t. 2015 China growth scare took it to $40. Copper (HG) at $4.30/lb \u2014 2015 trough $2.00. VALE / RIO / BHP earnings extreme leverage to Chinese steel demand. FCX has ~70% revenue from copper.",
       "current": 17.17,
       "feeds": [
         {
@@ -284,7 +284,7 @@
       "type": "indicator",
       "phase": 3,
       "state": "monitoring",
-      "context": "AUD = clearest commodity-currency proxy for China (iron ore ~25% of Australian exports, China ~32% of total exports). CAD lags via copper + crude. 2015 China scare: AUDUSD 0.78 → 0.69. 2022 zero-COVID: AUDUSD 0.74 → 0.62. Current 0.66 — limited room before historical stress floors break.",
+      "context": "AUD = clearest commodity-currency proxy for China (iron ore ~25% of Australian exports, China ~32% of total exports). CAD lags via copper + crude. 2015 China scare: AUDUSD 0.78 \u2192 0.69. 2022 zero-COVID: AUDUSD 0.74 \u2192 0.62. Current 0.66 \u2014 limited room before historical stress floors break.",
       "feeds": [
         {
           "source": "yahoo",
@@ -330,7 +330,7 @@
       "type": "indicator",
       "phase": 2,
       "state": "monitoring",
-      "context": "DXY strengthens on EM/CNY weakness — flight-to-quality dollar bid plus mechanical CNY weight in the basket. Mirror node to iran-hormuz dxy-stress: same node ID intentional for cross-book correlator detection.",
+      "context": "DXY strengthens on EM/CNY weakness \u2014 flight-to-quality dollar bid plus mechanical CNY weight in the basket. Mirror node to iran-hormuz dxy-stress: same node ID intentional for cross-book correlator detection.",
       "current": 27.48,
       "feeds": [
         {
@@ -368,7 +368,7 @@
       "type": "indicator",
       "phase": 3,
       "state": "monitoring",
-      "context": "Commodity-EM currencies (CLP, BRL, ZAR) crater on China demand collapse + dollar squeeze. CLP especially exposed (copper = 50% of Chilean exports). BRL via iron ore + soy. Mirror to iran-hormuz em-currency — same ID for cross-book overlap.",
+      "context": "Commodity-EM currencies (CLP, BRL, ZAR) crater on China demand collapse + dollar squeeze. CLP especially exposed (copper = 50% of Chilean exports). BRL via iron ore + soy. Mirror to iran-hormuz em-currency \u2014 same ID for cross-book overlap.",
       "feeds": [
         {
           "source": "yahoo",
@@ -399,7 +399,7 @@
       "type": "indicator",
       "phase": 3,
       "state": "monitoring",
-      "context": "Confluence node — 3+ independent paths converge. EMB (USD sovereign) and CEMB (corporate USD EM) blow out as commodity exporters lose USD revenue. Node ID matches iran-hormuz em-stress: when BOTH books fire em-stress simultaneously, the cross-book recession signal lights up (see tools/outcomes/cross_book.py).",
+      "context": "Confluence node \u2014 3+ independent paths converge. EMB (USD sovereign) and CEMB (corporate USD EM) blow out as commodity exporters lose USD revenue. Node ID matches iran-hormuz em-stress: when BOTH books fire em-stress simultaneously, the cross-book recession signal lights up (see tools/outcomes/cross_book.py).",
       "feeds": [
         {
           "source": "yahoo",
@@ -486,7 +486,7 @@
       "type": "gate",
       "phase": 4,
       "state": "monitoring",
-      "context": "Two Sessions fiscal deficit ratio currently 3.0% — historically Beijing's restraint floor. Crossing 4%+ with explicit consumption-stimulus mandate (vouchers, cash transfers) would be regime change vs. the property-and-infrastructure default. Real-money trigger that could sharply rebound commodity demand and hurt the short basket.",
+      "context": "Two Sessions fiscal deficit ratio currently 3.0% \u2014 historically Beijing's restraint floor. Crossing 4%+ with explicit consumption-stimulus mandate (vouchers, cash transfers) would be regime change vs. the property-and-infrastructure default. Real-money trigger that could sharply rebound commodity demand and hurt the short basket.",
       "feeds": [
         {
           "source": "manual",
@@ -527,7 +527,7 @@
       "type": "reversal",
       "phase": 5,
       "state": "monitoring",
-      "context": "Reversal trigger: 70-city YoY stops declining for 3 consecutive months AND PBoC + fiscal both fired. At that point cut copper/iron-ore shorts 1/3, cut EEM short 1/2, hold EMB hedge, rotate gold to USD-stable. Don't front-run — wait for the data turn.",
+      "context": "Reversal trigger: 70-city YoY stops declining for 3 consecutive months AND PBoC + fiscal both fired. At that point cut copper/iron-ore shorts 1/3, cut EEM short 1/2, hold EMB hedge, rotate gold to USD-stable. Don't front-run \u2014 wait for the data turn.",
       "feeds": [
         {
           "source": "manual",
@@ -575,7 +575,7 @@
     {
       "from": "bank-capital",
       "to": "cny-break",
-      "mechanism": "PBoC capital injection forces monetary expansion → CNY pressure",
+      "mechanism": "PBoC capital injection forces monetary expansion \u2192 CNY pressure",
       "lag": "1-2 quarters",
       "strength": 0.65
     },
@@ -596,7 +596,7 @@
     {
       "from": "china-imports",
       "to": "iron-copper",
-      "mechanism": "China = ~55% of global iron ore + copper demand; 5% volume drop ≈ 3% price",
+      "mechanism": "China = ~55% of global iron ore + copper demand; 5% volume drop \u2248 3% price",
       "lag": "1-3 months",
       "strength": 0.85,
       "amplification": 1.3
@@ -936,7 +936,7 @@
       "id": "cny-break-flight",
       "name": "CNY break + capital flight",
       "probability": 0.15,
-      "notes": "USD/CNY closes >7.50 for 3 sessions, PBoC visibly stops defending. Capital flight. EM bond market freezes. em-stress fires hard. This is the cross-book overlap scenario — iran-hormuz EM-stress also fires from the supply-shock side.",
+      "notes": "USD/CNY closes >7.50 for 3 sessions, PBoC visibly stops defending. Capital flight. EM bond market freezes. em-stress fires hard. This is the cross-book overlap scenario \u2014 iran-hormuz EM-stress also fires from the supply-shock side.",
       "overrides": {
         "cny-break": 7.65,
         "em-stress": "fired",
@@ -1157,8 +1157,8 @@
     "<strong>Fiscal stimulus is the kill-switch:</strong> Beijing deficit > 4% with consumption mandate = cut commodity-shorts 1/2 the same session.",
     "<strong>Never deploy > 1/3 SGOV</strong> on one signal. Reserve = $800/month.",
     "<strong>No single short > $1,200/month</strong> except JJC (most liquid copper proxy).",
-    "<strong>Confluence rule:</strong> em-stress is the primary confluence node — 3+ incoming fired edges = highest conviction.",
-    "<strong>Property bottom protocol:</strong> 70-city YoY stops declining 3 months + PBoC + fiscal both fired → cut JJC/SCCO 1/3, EEM 1/2, hold TLT/GLD.",
+    "<strong>Confluence rule:</strong> em-stress is the primary confluence node \u2014 3+ incoming fired edges = highest conviction.",
+    "<strong>Property bottom protocol:</strong> 70-city YoY stops declining 3 months + PBoC + fiscal both fired \u2192 cut JJC/SCCO 1/3, EEM 1/2, hold TLT/GLD.",
     "<strong>Calibration TBD:</strong> Exact LGFV trigger province + Vanke onshore-bond status are unresolved. Don't invent precision."
   ],
   "provenance": [],
@@ -1267,10 +1267,10 @@
       "lessons": [
         "PBoC surprise CNY devaluation (Aug 11 2015) was the catalyst that broke commodity floor.",
         "AUD bottomed within 6 weeks of Fed pause signal.",
-        "Iron ore round-tripped fully by mid-2017 — these are violent but mean-reverting.",
+        "Iron ore round-tripped fully by mid-2017 \u2014 these are violent but mean-reverting.",
         "Copper decoupled later than iron ore (different inventory cycles)."
       ],
-      "notes": "Cleanest direct analog. PBoC surprise → commodity collapse → EM-FX rout → Fed pause → reversal."
+      "notes": "Cleanest direct analog. PBoC surprise \u2192 commodity collapse \u2192 EM-FX rout \u2192 Fed pause \u2192 reversal."
     },
     {
       "id": "2022-zero-covid",
@@ -1289,7 +1289,7 @@
       "lessons": [
         "Property + lockdown combo proved more durable than expected (12+ months).",
         "Commodity export EMs (Chile, Brazil) underperformed broader EM by 15-20%.",
-        "Reopening (Dec 2022) snapped commodities back violently — fiscal-bazooka scenario template."
+        "Reopening (Dec 2022) snapped commodities back violently \u2014 fiscal-bazooka scenario template."
       ],
       "notes": "Demand-side shock without supply offset. Closest analog to current property-driven downturn."
     }
