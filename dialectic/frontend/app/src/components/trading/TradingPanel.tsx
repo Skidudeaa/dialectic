@@ -168,10 +168,39 @@ function PortfolioSummary({ portfolio }: { portfolio: { monthlyBudget?: number; 
   )
 }
 
+// --- tradingDesk handoff ---
+
+const TRADINGDESK_URL = 'https://td.somacura.org'
+
+/**
+ * Build the deep link that carries this session across to tradingDesk.
+ *
+ * The token rides in the URL FRAGMENT, never the query string: fragments are
+ * not sent to the server, so the token stays out of nginx/Cloudflare access
+ * logs. tradingDesk strips it from the address bar on arrival.
+ *
+ * WHY the ROOM id and not a book id: the trading snapshot carries no book
+ * identifier — verified against rooms.trading_config in the live DB, whose
+ * only identifying field is a display `title`. Matching on a title would break
+ * silently the first time someone renames a thesis. Each tradingDesk book
+ * already records the room that discusses it (meta.dialecticRoomId), so the
+ * room id IS the join key between the two systems, and the desk resolves it to
+ * the right case on arrival. Omitted if unknown — the desk then falls back to
+ * its own default case rather than following a broken pointer.
+ */
+function buildTradingDeskUrl(accessToken: string, roomId?: string | null): string {
+  const params = new URLSearchParams()
+  params.set('dialectic_token', accessToken)
+  if (roomId) params.set('dialectic_room', roomId)
+  return `${TRADINGDESK_URL}/#${params.toString()}`
+}
+
 // --- Main component ---
 
 export function TradingPanel() {
   const tradingConfig = useAppStore((s) => s.tradingConfig)
+  const accessToken = useAppStore((s) => s.accessToken)
+  const currentRoom = useAppStore((s) => s.currentRoom)
 
   if (!tradingConfig) {
     return (
@@ -250,9 +279,24 @@ export function TradingPanel() {
         </div>
       )}
 
-      {/* Footer link */}
+      {/* Footer link — hands the current session across to tradingDesk. */}
       <div className="trading-footer">
-        <span className="trading-footer-link">Open Full Dashboard (tradingDesk)</span>
+        {accessToken ? (
+          <a
+            className="trading-footer-link"
+            href={buildTradingDeskUrl(accessToken, currentRoom?.id)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open Full Dashboard (tradingDesk) →
+          </a>
+        ) : (
+          // No token means no handoff is possible; a link that silently
+          // dumped you on a login screen would be worse than no link.
+          <span className="trading-footer-link trading-footer-link--inert">
+            Open Full Dashboard (tradingDesk)
+          </span>
+        )}
       </div>
     </div>
   )

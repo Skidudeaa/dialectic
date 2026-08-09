@@ -311,5 +311,27 @@
     font-family: var(--font-mono);
     font-size: 9px;
     color: var(--color-amber-mute);
+    /* WHY not `cursor: default`: this was a dead span for months and read as
+       decoration. Now that it is a real anchor it has to LOOK clickable. */
+    cursor: pointer;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: color 120ms ease, border-color 120ms ease;
+}
+
+.trading-footer-link:hover,
+.trading-footer-link:focus-visible {
+    color: var(--color-amber);
+    border-bottom-color: var(--color-amber);
+}
+
+/* Shown when there is no session to hand across — not clickable, and says so. */
+.trading-footer-link--inert {
     cursor: default;
+    opacity: 0.5;
+}
+
+.trading-footer-link--inert:hover {
+    color: var(--color-amber-mute);
+    border-bottom-color: transparent;
 }

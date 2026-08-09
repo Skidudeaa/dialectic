@@ -6,6 +6,7 @@ TRADEOFF: All auth in one file vs splitting by function (cohesion over granulari
 """
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
@@ -92,6 +93,25 @@ async def get_db():
 # SIGNUP / LOGIN / LOGOUT
 # ============================================================
 
+# WHY signup is gated: tradingDesk verifies Dialectic's access tokens with the
+# same HS256 secret and maps the token's `sub` to a desk user. Signup was open
+# to the internet. That combination means anyone who could self-register here
+# held a token td would cryptographically trust — the only thing standing
+# between them and the desk would be DIALECTIC_USER_MAP. Defence in depth says
+# don't rely on that single list: close the door that mints the tokens.
+#
+# Fails CLOSED: the env var must explicitly say yes. Unset, empty, misspelled,
+# or any unrecognised value all mean "closed", so a config mistake cannot
+# silently reopen registration.
+_SIGNUPS_ENABLED_VALUES = {"1", "true", "yes", "on"}
+
+
+def _signups_enabled() -> bool:
+    """Read the flag at call time so the gate follows the environment the
+    process is actually running in, not the one it imported under."""
+    return os.environ.get("SIGNUPS_ENABLED", "").strip().lower() in _SIGNUPS_ENABLED_VALUES
+
+
 @router.post("/signup", response_model=TokenResponse)
 async def signup(
     request: SignUpRequest,
@@ -100,9 +120,19 @@ async def signup(
     """
     Register a new user account.
 
+    Disabled unless SIGNUPS_ENABLED is explicitly truthy — see the note above.
+
     Creates user record, credentials, generates verification code, and returns tokens.
     Note: Email sending is out of scope - verification code is logged for now.
     """
+    # Checked before ANY database work: a refusal must not create rows, consume
+    # a uuid, or reveal whether an email is already registered.
+    if not _signups_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Signups are closed. Ask Amo for an invite.",
+        )
+
     # Check if email already exists
     existing = await db.fetchrow(
         "SELECT user_id FROM user_credentials WHERE email = $1",
