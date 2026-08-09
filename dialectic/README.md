@@ -1,322 +1,134 @@
-# Dialectic
+# Dialectic — Feature Tour & Manual
 
-## What is this?
+Two humans and an AI think together in real time. The AI is a **participant**:
+it decides when to speak, remembers who said what, checks live market data
+mid-argument, and keeps score of what you both committed to.
 
-Dialectic is a platform where two people and an AI think together. Not the way you use ChatGPT — where you ask and it answers. Here, the AI is sitting at the table with you. It listens. It decides when to speak. It challenges you when you're lazy, synthesizes when you're stuck, and shuts up when you're on a roll.
+Live at **https://dialectic.somacura.org** — built by and for Amo and Dan.
+New here? Start with the five-minute jump-in at the [root README](../README.md).
+This file is the complete tour.
 
-You and a friend open a room. You start talking about whether free will exists, or whether your startup idea is any good, or what consciousness actually is. The AI watches. After a few exchanges, it jumps in — not because you asked, but because it detected that you're going in circles, or that someone asked a question nobody answered, or that the conversation just got genuinely interesting. It has two modes: a thoughtful co-thinker and a provocateur that destabilizes comfortable consensus.
+## Getting in
 
-Any message can become a fork point. You branch the conversation like git branches code. The resulting tree — a cladogram — shows how your ideas evolved. Shared memories persist across sessions, so the AI remembers that you changed your mind about compatibilism three weeks ago and can bring it up when it's relevant.
+1. Open https://dialectic.somacura.org and sign in (invite-only; Amo has credentials).
+2. Install it as an app: Android Chrome → ⋮ → *Add to Home screen*; iPhone Safari →
+   Share → *Add to Home Screen*; desktop Chrome/Edge → install icon in the address bar.
+3. Tap the 🔔 **Enable notifications** chip once per device. This is what makes
+   your pocket buzz with the app closed. Tapping a notification lands in the right room.
+4. The green **Connected** dot means real-time sync is live. If it drops, reload
+   before writing — unsent text stays in the composer.
 
-The AI also remembers *itself*. It extracts its own positions after each conversation, builds a model of how each human thinks, and evolves an identity document over time. It's not just smart — it's *your* interlocutor, shaped by your intellectual history together.
+## The room
 
-## What makes it different
+A room is you, Dan, and Claude. One room per durable scheme or thinking stream.
 
-Every other AI tool treats the AI as a servant. You prompt, it responds. Dialectic treats the AI as a participant. It has heuristics for when to speak, when to stay silent, and when to switch from helpful to adversarial. It has structured reasoning protocols — you can invoke a Steelman analysis, a Socratic descent, or a Devil's Advocate attack, and the AI facilitates multi-phase structured inquiry. Conversations have DNA fingerprints. You can make predictions, track your calibration, and see how well you actually think. You can replay any conversation in real time, seeing exactly what the AI saw when it decided to interject.
-
-No other platform does this. Chat apps don't have AI agency. AI assistants don't have multi-party dialogue. Neither has event sourcing, thread forking, knowledge graphs, or thinking protocols.
-
-## Quick Start
-
-### Amo and Dan: use the live app
-
-Open **https://dialectic.somacura.org** and sign in with your existing account.
-Both accounts are already members of **Iran/Hormuz Trading Room**, so it should
-appear under **Your Rooms** without re-entering an invite. The app remembers
-your room across reloads and app switches — sign in once per device and you
-land back in the conversation.
-
-**Install it as an app** (same site, app icon + full screen, all four devices):
-
-| Device | How |
+| You want… | Do this |
 |---|---|
-| Android (Dan) | Chrome → ⋮ menu → **Add to Home screen** → **Install** |
-| Windows (Dan) | Edge or Chrome → address-bar **Install** icon (or ⋯ → Apps → Install Dialectic) |
-| iPhone (Amo) | Safari → Share □↑ → **Add to Home Screen** |
-| Mac (Amo) | Safari → **File → Add to Dock** (or Chrome → address-bar Install icon) |
+| Claude to answer right now | `@Claude <message>` — streamed reply, watches it work |
+| Claude to join on its own judgment | Just talk. It speaks on questions, stagnation, topic shifts, turn imbalance |
+| Claude to only speak when summoned | Room settings → **auto-interjection** off |
+| A message's role to matter | Mark it **Claim**, **Question**, or **Definition** before sending |
+| A side branch | **Fork** any message — inherits everything above the fork point |
+| Something remembered | **Memory** panel — or just restate it; restating *updates* the fact and keeps the old version's history |
+| A structured argument | **Protocol**: Steelman, Socratic, Devil's Advocate, or Synthesis — Claude facilitates phases and writes conclusions to memory |
+| A prediction tracked | **Stakes** — confidence updates, deadlines, Brier calibration. Claude can draft one for you (below) |
+| To catch up | The "new since you were here" line + Claude's annotations about what happened without you |
 
-Use one room per durable project or thinking stream. Inside a room:
+## Claude's hands and eyes
 
-1. Write normally for human-to-human collaboration; use `@Claude` when you want
-   an immediate streamed response.
-2. Mark a message as a claim, question, or definition before sending when its
-   role matters.
-3. Use **Memory** for durable shared context and decisions. Recall is three-lane (semantic + exact-text + speaker): asking about "the boat deal" or "what Dan said" finds the right memory, each one attributed to whoever said it. Restating a fact updates it instead of duplicating it — the old version keeps its history.
-4. Tap the **🔔 Enable notifications** chip once per device — with the installed app closed and the phone locked, a message from the other person (or Claude) raises a lock-screen notification, and tapping it lands you in that room.
-4. Use **Fork** on any message to explore a branch without derailing the main
-   line of thought.
-5. Use **Protocol** for Steelman, Socratic, Devil's Advocate, or Synthesis work.
-6. Use **Stakes** for predictions, commitments, confidence updates, and later
-   resolution; use **Insights** and **History** to inspect how the work evolved.
-7. Use **Share** to copy a single invite code when adding a collaborator. Treat
-   that code like a password because it grants room access.
+- **Live data mid-argument.** "What's oil at?" "Any news on the Hormuz thesis?"
+  "What if Hormuz closes — run the scenario." Claude checks the desk: live quotes,
+  Polymarket odds, thesis state, what-if scenarios, headlines, open trades — plus
+  the room's own memory and transcript. You see "*Claude is checking live prices…*"
+  while it works, and a "used N tools" footer on the answer you can expand to audit
+  every fetch. This works on `@Claude` AND when Claude jumps in unprompted.
+- **It sees images.** Attach, paste, or drag-drop a chart → "@Claude what's wrong
+  with this?" Files and video upload too (video is store/play/share — Claude
+  doesn't watch video).
+- **It follows up on silence.** Ask Claude something and walk away: after ten
+  quiet minutes it follows up — once. Hard limits: 3 per room per day, silent
+  11pm–7am CT, off entirely if the room's interjection toggle is off.
+- **It drafts, you dispose.** If Claude proposes a prediction, the message carries
+  an **Accept** card. Your tap posts it to tradingDesk. Claude never writes to
+  the desk itself. Order placement is not a thing and won't be.
 
-The green **Connected** indicator confirms real-time sync. If it is offline,
-reload once before writing; unsent text is deliberately kept in the composer.
+## The five trading rooms
 
-### Local development
+Iran/Hormuz · Trump Tariffs · AI Capex Unwind · China Property Cascade · Japan
+Rate Shock — each bound to a live thesis book on the desk:
+
+- Thesis state (cascade phase, fired/approaching nodes, confluence, countdowns)
+  is in Claude's context for every reply — within minutes of anything moving.
+- A **critical** node flip buzzes both pockets. Warnings stay in-room; heartbeats
+  are silent. If the feed ever goes quiet 3+ hours, a watchdog says so in the room.
+- **Open Full Dashboard** in the trading panel → the full DAG canvas at
+  td.somacura.org, no second login (72h bridged session).
+
+## The daily rhythm
+
+- **7:00 AM CT — Morning Brief** in every room that had activity: yesterday's
+  threads, unanswered questions, commitments due within 72h, thesis staleness.
+  Posted in-room, pushed to both phones. Quiet rooms are skipped.
+- Coming back hours later: catch-up annotation ("Connected to / Tension detected /
+  For when Dan returns") waiting on your messages.
+
+## Honest limits
+
+- Claude's memory recall can surface **stale facts as if current** (old prices,
+  old uptime numbers). If a number matters, make it fetch live — that's what the
+  tools are for. Benchmark-driven memory tuning is this quarter's P6.
+- The OpenAI fallback can't see images and can't use tools — on fallback Claude
+  says so rather than pretending.
+- Claude does not take external actions. Ever. The one write-shaped capability
+  (prediction drafts) executes only on a human tap.
+
+## Local development
 
 ```bash
-# 1. Install
-cd dialectic
-pip install -e .
-
-# 2. Database
-createdb dialectic
-psql dialectic < schema.sql
-
-# 3. Environment
-cp .env.example .env
-# Set ANTHROPIC_API_KEY (required) and OPENAI_API_KEY (optional, for fallback + embeddings)
-
-# 4. Run the backend
-PORT=8002 python run.py
-
-# 5. Run the frontend (new terminal)
-cd frontend/app && npm install && npm run dev
-
-# 6. Open
-# http://localhost:3000
+cd dialectic && pip install -e .
+createdb dialectic && psql dialectic < schema.sql
+cp .env.example .env   # DATABASE_URL, ANTHROPIC_API_KEY, JWT_SECRET_KEY required
+PORT=8002 python3 run.py                      # backend on :8002
+cd frontend/app && npm install && npm run dev # frontend on :3000
+python3 -m pytest tests/ -q                   # 790 tests
 ```
 
-Or use `make run` and `make frontend` for the legacy frontend at `http://localhost:3000/app.html`.
+`frontend/app` (React/Vite/TS) is the only live frontend; the legacy
+`frontend/app.html` is retired.
 
-## The Full Feature Set
+## Feature flags (all in `dialectic/.env`, all default ON)
 
-### The Basics
-- **Real-time WebSocket messaging** between 2 humans + 1 AI
-- **Heuristic interjection** — the AI decides when to speak based on 8 signals: explicit mentions, turn count, questions, information gaps, semantic novelty, stagnation, speaker imbalance, and silence logging
-- **Dual persona** — "primary" (co-thinker) and "provoker" (destabilizer for lazy consensus)
-- **Multi-model rooms** — add named AI personas (e.g., "Skeptic" using Haiku, "Deep Thinker" using Opus) with configurable trigger strategies (on mention, after primary, on disagreement, periodic)
-- **Thread forking** — branch any message into a new conversation thread, with full ancestry traversal
-- **Shared memories** — versioned and embeddable. Room memories stay in their room; only explicitly promoted/global memories can cross room boundaries
+| Flag | Gates |
+|---|---|
+| `SCHEDULER_ENABLED` | The whole job scheduler |
+| `NIGHT_SHIFT_ENABLED` | The 7am morning brief |
+| `PARTICIPATION_SWEEP_ENABLED` | The 60s silence-follow-up sweep |
+| `DIALECTIC_TOOLS_ENABLED` | All LLM tool use |
+| `DIALECTIC_VISION_ENABLED` | Image blocks to Claude |
+| `SIGNUPS_ENABLED` | Open signup (keep `0` — invite-only) |
 
-### Thinking Protocols
-Structured reasoning modes where the AI becomes a facilitator:
-- **Steelman** (4 phases) — frame a claim, construct its strongest version, interrogate it, synthesize findings
-- **Socratic Descent** (3 phases) — restate the question, demand precise definitions, trace to axiomatic bedrock
-- **Devil's Advocate** (3 phases) — articulate the consensus, systematically attack it, assess what survived
-- **Synthesis** (2 phases) — map all active tensions, produce a structured integration document
+## How it's built (one paragraph + map)
 
-Each protocol writes its conclusions to shared memory automatically.
-
-### The Third Mind
-The AI isn't stateless. It evolves through dialogue:
-- **Self-memory** — after each response, a background process extracts the AI's claims and positions, storing them as persistent memories. It remembers what it argued last week.
-- **Evolved identity** — per-room identity document distilled after sessions. The AI knows it tends toward functionalism in Room A and empiricism in Room B. Humans can view and edit this.
-- **User models** — the AI builds a model of each human's thinking style, strengths, and blind spots. It knows that you retreat to analogies under pressure and that your friend tends toward empiricism when challenged.
-- **Cross-session context** — explicitly promoted/global memories can be reused across rooms without leaking ordinary room-scoped thinking.
-
-### Async Dialogue (The Slow Channel)
-When only one person is online, the AI switches from participant to curator:
-- **Annotator mode** — instead of arguing, it links your message to prior conversations, surfaces relevant memories, and identifies tensions with previously stated positions
-- **Morning briefing** — when you come back online, get an AI-generated summary of what you missed
-- **Enriched push notifications** — not just "new message" but "Alice argued against your position on X — Claude noted connections to your January discussion on Y"
-
-### Conversation Analytics
-- **Conversation DNA** — 6-dimensional fingerprint measuring tension, velocity, asymmetry, depth, divergence, and memory density
-- **Archetypes** — each conversation is classified: Crucible (intense debate), Deep Dive (slow exploration), Rhizome (branching), Symposium (balanced), Forge (concept-building), Open Field (open-ended)
-- **Metrics** — argument density, question resolution rate, turn balance, fork count, provoker intervention frequency
-
-### Knowledge Graph
-The system already stores graph relationships in its data model — this surfaces them:
-- **Concept maps** — "show me everything we've discussed about consciousness across all my rooms"
-- **Idea provenance** — trace any memory back through its version history, the message that spawned it, the thread fork that created the context
-- **Contribution graphs** — who introduced ideas that became shared memories? Which memories get cited most?
-
-### Event Replay
-Every state change is an immutable event. This enables time travel:
-- **State materialization** — reconstruct complete room state at any point in history
-- **SSE replay stream** — re-watch conversations unfold at 1x-20x speed, with original timing
-- **LLM decision replay** — see exactly what the AI saw (context, memories, prompt hash) when it made any response
-- **Timeline heat map** — visualize conversation intensity over time
-- **State diffing** — see what changed between any two points
-
-### Stakes and Commitments
-Conversations without stakes are entertainment. Conversations with stakes are thinking:
-- **Predictions** — make testable claims with deadlines and confidence levels
-- **Confidence tracking** — update your confidence as new evidence arrives
-- **Calibration curves** — see how well you actually predict (Brier score). Are your 70% predictions right 70% of the time?
-- **Commitment surfacing** — the AI reminds you when a conversation touches a live prediction
-- **The AI predicts too** — creating genuine intellectual symmetry
-
-### Real-Time Typing Analysis
-While you type, the system pre-computes:
-- Semantic novelty of your partial message (will this trigger the AI?)
-- Relevant memories for context injection
-- Result: 50-85% reduction in perceived AI response latency
-- Fully ephemeral — nothing persisted, nothing broadcast. Opt-in per room.
-
-### Horizontal Scaling
-- **Redis pub/sub** — drop-in replacement for in-memory WebSocket broadcasting. Set `REDIS_URL` to enable. Falls back to single-server mode automatically.
-
-## Running It
-
-### Backend
-```bash
-cd dialectic
-export DATABASE_URL="postgresql://localhost/dialectic"
-export ANTHROPIC_API_KEY="sk-ant-..."
-export OPENAI_API_KEY="sk-..."  # Optional
-PORT=8002 python run.py
-```
-
-### Frontend (React)
-```bash
-cd dialectic/frontend/app
-npm install
-npm run dev
-# Opens on http://localhost:3000, proxies API to localhost:8002
-```
-
-### Legacy Frontend
-```bash
-python -m http.server 3000 --directory dialectic/frontend
-# Open http://localhost:3000/app.html
-```
-
-### Tests
-```bash
-cd dialectic
-python -m pytest tests/ -q
-# 237 passed
-```
-
-### Multi-worker with Redis
-```bash
-export REDIS_URL="redis://localhost:6379"
-PRODUCTION=1 WEB_CONCURRENCY=4 PORT=8002 python run.py
-```
-
-## Architecture
+FastAPI + asyncpg over Postgres 16 (pgvector + pg_trgm), event-sourced — the
+append-only `events` table is the truth; Anthropic primary / OpenAI fallback via
+a retrying router; React PWA over WebSocket; systemd units run the git working
+trees (deploy = migration → `systemctl restart dialectic` → frontend release
+symlink flip). Full conventions: [`CLAUDE.md`](CLAUDE.md).
 
 ```
-dialectic/
-├── api/
-│   ├── main.py                 # FastAPI server (51+ endpoints)
-│   ├── token_utils.py          # Auth token extraction (header + query param)
-│   ├── personas.py             # Multi-model persona CRUD
-│   ├── auth/                   # JWT auth (signup, login, refresh, verify)
-│   └── notifications/          # Expo push notifications
-├── llm/
-│   ├── orchestrator.py         # Central LLM coordinator
-│   ├── providers.py            # Anthropic + OpenAI provider abstraction
-│   ├── router.py               # Retry with exponential backoff + provider fallback
-│   ├── heuristics.py           # 8-heuristic interjection decision engine
-│   ├── prompts.py              # Layered prompt assembly (identity → protocol → room → memory)
-│   ├── context.py              # Priority-based context truncation
-│   ├── self_memory.py          # Post-response claim/position extraction
-│   ├── identity.py             # Evolved identity documents + user thinking models
-│   ├── annotator.py            # Async dialogue annotator (curator mode)
-│   ├── multi_model.py          # Multi-persona coordinator + turn-taking
-│   ├── protocol_library.py     # 4 thinking protocol definitions + phase instructions
-│   └── protocol_manager.py     # Protocol lifecycle state machine
-├── memory/
-│   ├── manager.py              # Versioned memory lifecycle + novelty computation
-│   ├── vector_store.py         # pgvector 1536-dim semantic search
-│   ├── embeddings.py           # OpenAI text-embedding-3-small provider
-│   └── cross_session.py        # Cross-room memory search, promotion, collections
-├── transport/
-│   ├── websocket.py            # Connection registry + broadcast
-│   ├── handlers.py             # WebSocket message dispatch (20+ message types)
-│   └── redis_manager.py        # Redis pub/sub drop-in for horizontal scaling
-├── analytics/
-│   ├── analyzer.py             # Conversation metrics engine
-│   ├── dna.py                  # 6-dimensional conversation fingerprint
-│   ├── knowledge_graph.py      # Materialized view + graph traversal engine
-│   ├── graph_routes.py         # Knowledge graph REST endpoints
-│   └── routes.py               # Analytics REST endpoints
-├── replay/
-│   ├── engine.py               # Event replay + state materialization
-│   ├── models.py               # Snapshot, replay event, diff models
-│   └── routes.py               # Replay REST + SSE endpoints
-├── stakes/
-│   ├── manager.py              # Commitment lifecycle + calibration curves
-│   ├── detector.py             # Implicit prediction extraction via LLM
-│   └── routes.py               # Stakes REST endpoints
-├── tests/                      # 134 unit tests
-├── models.py                   # All Pydantic models + enums
-├── operations.py               # Thread fork + ancestry queries
-├── schema.sql                  # PostgreSQL + pgvector schema
-├── pyproject.toml              # Python package configuration
-├── requirements.txt            # Python dependencies
-├── run.py                      # Server entry point
-├── Makefile                    # Setup/run/test shortcuts
-└── frontend/
-    ├── app.html                # Legacy single-file web frontend
-    └── app/                    # React frontend (Vite + TypeScript)
-        ├── src/
-        │   ├── components/     # 27 React components
-        │   ├── hooks/          # WebSocket hook with reconnection
-        │   ├── stores/         # Zustand state management
-        │   ├── lib/            # API client
-        │   ├── types/          # TypeScript types matching backend
-        │   └── styles/         # Design system (40+ CSS tokens)
-        └── package.json
+api/         REST + WS + auth + push + attachments + prediction relay
+llm/         orchestrator · tool_loop + tools (11) · vision · heuristics ·
+             prompts · self_model · participation_fsm · annotator ·
+             briefing · night_shift · silence_sweep · trading_curator
+memory/      three-lane RRF recall (dense + FTS + speaker) · dedup · supersession
+scheduler.py advisory-locked jobs on a double-fire-proof run ledger
+transport/   WebSocket dispatch, Redis pub/sub
+stakes/      commitments + Brier calibration
+analytics/   conversation DNA, briefings, knowledge graph
+replay/      event replay + state materialization
+frontend/app React PWA
+migrations/  011 current; schema.sql = fresh-DB baseline
+tests/       pytest (790) incl. real-Postgres integration tests
 ```
 
-## Environment Variables
-
-| Variable | Required | What it does |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection (e.g., `postgresql://localhost/dialectic`) |
-| `ANTHROPIC_API_KEY` | Yes | Claude API key — the primary LLM |
-| `OPENAI_API_KEY` | No | GPT fallback + vector embeddings for semantic search |
-| `REDIS_URL` | No | Redis for multi-server WebSocket broadcasting |
-| `PORT` | No | Server port (default 8000, we use 8002) |
-| `PRODUCTION` | No | Set to `1` for multi-worker mode |
-| `WEB_CONCURRENCY` | No | Number of uvicorn workers in production |
-| `ALLOWED_ORIGINS` | No | CORS allowed origins (comma-separated) |
-| `JWT_SECRET_KEY` | Yes | JWT signing secret; generate a stable random value for production |
-
-## How It Works Under the Hood
-
-### Event Sourcing
-Every state change — message sent, memory created, thread forked, protocol invoked — is an immutable event in an append-only log with JSONB payloads. The `events` table is the source of truth. Everything else (messages, memories, threads) is derived state. This is what makes replay, time travel, and temporal queries possible.
-
-### The Interjection Engine
-The AI doesn't just respond when asked. It evaluates 8 heuristics after every human message:
-1. **Explicit mention** (@claude) — always respond
-2. **Turn threshold** — 4+ human turns without AI → probably should speak
-3. **Question detection** — someone asked a question nobody answered
-4. **Information gap** — the AI has relevant memories that haven't been surfaced
-5. **Semantic novelty** — the topic just shifted significantly → switch to provoker mode
-6. **Stagnation** — short, repetitive messages → provoke with something new
-7. **Speaker imbalance** — one person is dominating → engage the quiet one
-8. **Silence logging** — even when it doesn't speak, it logs what it considered (for future analysis)
-
-### The Prompt Stack
-The system prompt is assembled in layers:
-```
-BASE_IDENTITY (or FACILITATOR_IDENTITY during protocols)
-  → Evolved Identity (per-room, built over time)
-    → User Models (per-participant thinking profiles)
-      → Protocol Instructions (if a protocol is active)
-        → Room Context (ontology + rules)
-          → Participant Preferences (aggression, metaphysics tolerance)
-            → Relevant Memories (semantic search, max 20)
-              → Cross-Session Context (explicitly promoted/global memories)
-```
-
-### Vector Memory
-Memories have 1536-dimensional embeddings (OpenAI text-embedding-3-small). When the AI prepares to respond, it doesn't dump all memories into the prompt — it runs a semantic search against the current message to find the 20 most relevant ones. Memories can be room-scoped, user-scoped, global, or LLM-authored.
-
-### Knowledge Graph
-The system stores graph relationships implicitly: memory references link memories across rooms, thread forks create genealogy, messages reference other messages. A materialized view unifies these into a queryable graph. Concept maps, provenance tracing, and contribution analysis are all reads over existing data.
-
-## The Tech Stack
-
-- **Backend**: Python 3.12, FastAPI, asyncpg, uvicorn
-- **Database**: PostgreSQL with pgvector extension
-- **LLM**: Anthropic Claude (primary), OpenAI GPT (fallback), with provider abstraction
-- **Embeddings**: OpenAI text-embedding-3-small (1536-dim)
-- **Frontend**: React 18 + TypeScript + Vite (new), single-file HTML (legacy)
-- **State**: Zustand (frontend), PostgreSQL event log (backend)
-- **Real-time**: WebSocket with room-based broadcasting
-- **Scaling**: Optional Redis pub/sub for multi-server
-- **Auth**: JWT with Argon2 password hashing
-- **Search**: PostgreSQL tsvector full-text + pgvector semantic
-
-## License
-
-MIT
+Task board: [`TODOS.md`](TODOS.md) · Quarter plan + Amendment 1: `../docs/plans/`

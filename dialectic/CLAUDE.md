@@ -38,6 +38,11 @@ export OPENAI_API_KEY="sk-..."
 
 These can live in `dialectic/.env` (auto-loaded by `run.py` via python-dotenv). The `.env` file is gitignored — never commit it.
 
+Feature flags (optional, all default ON): `SCHEDULER_ENABLED`,
+`NIGHT_SHIFT_ENABLED` (7am CT brief), `PARTICIPATION_SWEEP_ENABLED` (60s
+silence follow-ups), `DIALECTIC_TOOLS_ENABLED`, `DIALECTIC_VISION_ENABLED`.
+`SIGNUPS_ENABLED` must stay `0` — invite-only since the auth bridge.
+
 ## Architecture
 
 ### Core Modules
@@ -160,7 +165,7 @@ dialectic/
 │   ├── app/                # React (Vite + TS) SPA — the live frontend (PWA)
 │   └── app.html            # RETIRED single-file SPA (kept for history only)
 ├── migrations/             # incremental DB changes
-└── tests/                  # pytest test suite (299 tests)
+└── tests/                  # pytest test suite (790 tests)
 ```
 
 ## Project Conventions
@@ -170,4 +175,4 @@ dialectic/
 - All LLM calls through `ModelRouter` (retry, fallback, provider abstraction)
 - JSONB columns: pass dict directly to asyncpg — pool codec handles serialization
 - Message role alternation: Anthropic API requires last message to be `user` role — `prompts.py` strips trailing assistant messages before API call
-- Tests: pytest + pytest-asyncio, 299 tests, incl. real-Postgres integration tests (test_memory_recall_pg.py needs `createdb dialectic_test && psql dialectic_test -f schema.sql`; skips cleanly without it)
+- Tests: pytest + pytest-asyncio, 790 tests, incl. real-Postgres integration tests (test_memory_recall_pg.py needs `createdb dialectic_test && psql dialectic_test -f schema.sql`; skips cleanly without it)
