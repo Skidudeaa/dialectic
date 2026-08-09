@@ -50,13 +50,21 @@ class ModelRouter:
         self.chain = self._build_chain(primary_model)
         self._providers: dict[ProviderName, LLMProvider] = {}
 
-    def _build_chain(self, model: str) -> list[tuple[ProviderName, str]]:
+    def _build_chain(
+        self, model: str, tools_requested: bool = False
+    ) -> list[tuple[ProviderName, str]]:
         """
         Fallback chain for a specific requested model.
 
         WHY: The chain must start from the model the caller asked for —
         a provoker request previously fell through to the primary model
         because the chain was frozen at construction time.
+
+        Tools are Anthropic-only: when the request carries tools, non-
+        Anthropic entries are filtered out so ToolsUnsupportedError can
+        never fire mid-chain. If every Anthropic entry fails, the TOOL LOOP
+        (not the router) strips tools and re-routes text-only — the room
+        never goes silent because tools were unavailable.
         """
         chain = [
             (self.primary_provider, model),
@@ -64,6 +72,10 @@ class ModelRouter:
         ]
         if self.fallback_model and self.fallback_model != model:
             chain.append((self.primary_provider, self.fallback_model))
+        if tools_requested:
+            chain = [
+                (p, m) for p, m in chain if p == ProviderName.ANTHROPIC
+            ]
         return chain
 
     def _get_provider(self, name: ProviderName) -> LLMProvider:
@@ -91,7 +103,10 @@ class ModelRouter:
         """Execute request through fallback chain."""
         prompt_hash = self._hash_prompt(request)
         attempts = []
-        chain = self._build_chain(request.model or self.primary_model)
+        chain = self._build_chain(
+            request.model or self.primary_model,
+            tools_requested=bool(request.tools),
+        )
 
         for provider_name, model in chain:
             provider = self._get_provider(provider_name)
@@ -109,12 +124,17 @@ class ModelRouter:
                     import time
                     start = time.monotonic()
 
+                    # WHY explicit copy: the routed request is rebuilt so the
+                    # chain entry's model wins; tools/tool_choice must ride
+                    # along or they would be silently dropped here.
                     routed_request = LLMRequest(
                         messages=request.messages,
                         system=request.system,
                         model=model,
                         max_tokens=request.max_tokens,
                         temperature=request.temperature,
+                        tools=request.tools,
+                        tool_choice=request.tool_choice,
                     )
 
                     response = await provider.complete(routed_request)
@@ -204,6 +224,60 @@ class ModelRouter:
             # treat as failure and fall through to the next chain entry.
             last_error = RuntimeError(
                 f"{provider_name.value}/{model} returned an empty stream"
+            )
+            logger.warning(str(last_error))
+
+        raise last_error if last_error else RuntimeError("Provider chain is empty")
+
+    async def stream_events(self, request: LLMRequest):
+        """
+        Typed streaming through the fallback chain — the tool loop's transport.
+
+        Yields ("attempt", {...}) at the start of each chain entry, then the
+        provider's typed events: ("text", {"text"}), ("tool_use", {id, name,
+        input}), ("message_stop", {stop_reason, raw_content}).
+
+        Same invariant as stream(): fallback is only possible while zero
+        content events have been emitted; mid-stream failures re-raise.
+        """
+        chain = self._build_chain(
+            request.model or self.primary_model,
+            tools_requested=bool(request.tools),
+        )
+        last_error: Optional[Exception] = None
+
+        for provider_name, model in chain:
+            provider = self._get_provider(provider_name)
+            routed = LLMRequest(
+                messages=request.messages,
+                system=request.system,
+                model=model,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+                stream=True,
+                tools=request.tools,
+                tool_choice=request.tool_choice,
+            )
+            emitted = False
+            try:
+                yield ("attempt", {"provider": provider_name.value, "model": model})
+                async for kind, payload in provider.stream_events(routed):
+                    emitted = True
+                    yield (kind, payload)
+            except Exception as e:
+                if emitted:
+                    raise
+                last_error = e
+                logger.warning(
+                    f"stream_events attempt failed before first event: "
+                    f"{provider_name.value}/{model} — {e}"
+                )
+                continue
+
+            if emitted:
+                return
+            last_error = RuntimeError(
+                f"{provider_name.value}/{model} returned an empty event stream"
             )
             logger.warning(str(last_error))
 

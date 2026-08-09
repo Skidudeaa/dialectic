@@ -175,3 +175,67 @@ class TestStreamChain:
                              system="s", model="claude-sonnet-4-6", stream=True)
         with pytest.raises(RuntimeError):
             await self.collect(router, request)
+
+
+class TestToolAwareChain:
+    """Tools are Anthropic-only: the chain filters and fields ride along."""
+
+    def test_chain_filters_openai_when_tools_requested(self, primary, fallback):
+        router = make_router(primary, fallback)
+        chain = router._build_chain("claude-sonnet-4-6", tools_requested=True)
+        assert all(p == ProviderName.ANTHROPIC for p, _ in chain)
+        assert len(chain) >= 1
+
+    def test_chain_unfiltered_without_tools(self, primary, fallback):
+        router = make_router(primary, fallback)
+        chain = router._build_chain("claude-sonnet-4-6", tools_requested=False)
+        assert any(p == ProviderName.OPENAI for p, _ in chain)
+
+    @pytest.mark.asyncio
+    async def test_route_passes_tools_through(self, primary, fallback):
+        """route() rebuilds the request per chain entry — tools must survive."""
+        router = make_router(primary, fallback)
+        tools = [{"name": "get_live_quotes", "input_schema": {"type": "object"}}]
+        req = LLMRequest(messages=[], system="s", model="claude-sonnet-4-6",
+                         tools=tools, tool_choice={"type": "auto"})
+        result = await router.route(req)
+        assert result.success
+        routed = primary.complete_calls[0]
+        assert routed.tools == tools
+        assert routed.tool_choice == {"type": "auto"}
+
+    @pytest.mark.asyncio
+    async def test_route_with_tools_never_reaches_openai(self, fallback):
+        """Primary down + tools requested -> fail without touching OpenAI."""
+        bad_primary = FakeProvider(ProviderName.ANTHROPIC, fail_completes=99)
+        router = make_router(bad_primary, fallback)
+        req = LLMRequest(messages=[], system="s", model="claude-sonnet-4-6",
+                         tools=[{"name": "t", "input_schema": {}}])
+        result = await router.route(req)
+        assert not result.success
+        assert fallback.complete_calls == []
+
+    @pytest.mark.asyncio
+    async def test_stream_events_yields_typed_events(self, primary, fallback):
+        """stream_events wraps the default provider stream into typed events."""
+        router = make_router(primary, fallback)
+        req = LLMRequest(messages=[], system="s", model="claude-sonnet-4-6")
+        events = []
+        async for kind, payload in router.stream_events(req):
+            events.append((kind, payload))
+        kinds = [k for k, _ in events]
+        assert kinds[0] == "attempt"
+        assert "text" in kinds
+        assert kinds[-1] == "message_stop"
+
+    @pytest.mark.asyncio
+    async def test_stream_events_falls_back_before_first_event(self, fallback):
+        """Pre-first-event failure falls through to the next chain entry."""
+        bad_primary = FakeProvider(ProviderName.ANTHROPIC, stream_error_after=0)
+        router = make_router(bad_primary, fallback)
+        req = LLMRequest(messages=[], system="s", model="claude-sonnet-4-6")
+        events = []
+        async for kind, payload in router.stream_events(req):
+            events.append((kind, payload))
+        texts = [p["text"] for k, p in events if k == "text"]
+        assert texts == ["hello", " world"]  # from the fallback provider
