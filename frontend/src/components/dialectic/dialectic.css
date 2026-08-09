@@ -181,7 +181,10 @@
   & .mb-gpt{color:var(--sev-stable);border-color:rgba(135,154,57,.3);background:rgba(135,154,57,.08)}
   & .mb-gemini{color:var(--teal);border-color:var(--teal-30);background:var(--teal-10)}
   & .mb-deepseek{color:var(--sev-worse);border-color:rgba(194,95,144,.3);background:rgba(194,95,144,.08)}
-  & .etext{font-family:var(--serif);font-size:14px;color:var(--ink);line-height:1.52;overflow-wrap:anywhere}
+  /* The stream column stretches with the viewport; the writing must not.
+     Nothing typeset past ~72ch reads as composed prose — it reads as a wall.
+     Attachments below hold the matching 580px cap. */
+  & .etext{font-family:var(--serif);font-size:14px;color:var(--ink);line-height:1.52;overflow-wrap:anywhere;max-width:72ch}
   & .etext .m{color:var(--amber);font-family:var(--mono);font-size:12.5px}
   & .etext code{font-family:var(--mono);font-size:12px;background:var(--cacao);border:1px solid var(--bean);padding:0 4px;border-radius:2px;color:var(--bone)}
   & .etext b{color:var(--bone);font-weight:600}
@@ -197,7 +200,7 @@
   & .disp.k-gemini .entry{border-left:2px solid var(--teal-30);padding-left:11px;margin-left:-2px}
   & .disp.k-deepseek .entry{border-left:2px solid rgba(194,95,144,.35);padding-left:11px;margin-left:-2px}
   & .analysis-tag{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--secondary);text-transform:uppercase}
-  & .tools{display:flex;flex-direction:column;gap:2px;margin:6px 0 2px;padding:5px 8px;background:var(--cacao);border:1px solid var(--bean);border-radius:2px}
+  & .tools{display:flex;flex-direction:column;gap:2px;margin:6px 0 2px;padding:5px 8px;background:var(--cacao);border:1px solid var(--bean);border-radius:2px;max-width:580px}
   & .tool{font-family:var(--mono);font-size:9.5px;color:var(--secondary);display:flex;gap:7px}
   & .tool .q{color:var(--teal);text-transform:uppercase;letter-spacing:.08em;flex:0 0 46px}
   & .tool .r{color:var(--ink)}
@@ -289,11 +292,15 @@
   & .sec-h .ic:hover{color:var(--amber)}
 
   & .cascade{position:relative}
-  & .cascade .ribbon{position:relative;margin:14px 0 6px}
+  /* The annotation is the one piece of handwriting on the board — it only
+     reads as handwriting if it has air. Top margin reserves the 13px
+     clearance plus the label's own height; `bottom:100%` measures that
+     clearance from the ribbon rather than guessing at a negative offset. */
+  & .cascade .ribbon{position:relative;margin:30px 0 6px}
   & .cascade .segs{display:flex;gap:4px}
   & .cascade .segs .s{height:7px;flex:1;background:var(--cacao);border:1px solid var(--bean)}
   & .cascade .segs .s.cur{box-shadow:0 0 0 1px var(--amber-30)}
-  & .cascade .here{position:absolute;top:-13px;font-family:var(--hand);font-size:15px;color:var(--amber);white-space:nowrap;pointer-events:none;transform:rotate(-3deg)}
+  & .cascade .here{position:absolute;bottom:100%;margin-bottom:13px;line-height:1;font-family:var(--hand);font-size:15px;color:var(--amber);white-space:nowrap;pointer-events:none;transform:translateX(-50%) rotate(-3deg)}
   & .cascade .now{display:flex;align-items:baseline;justify-content:space-between;margin-top:10px}
   & .cascade .now .nm{font-family:var(--serif);font-size:17px;font-weight:600;color:var(--display)}
   & .cascade .now .ahead{font-family:var(--mono);font-size:9px;color:var(--faint)}

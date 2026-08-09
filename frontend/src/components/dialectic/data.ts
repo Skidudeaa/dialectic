@@ -64,6 +64,88 @@ export function phaseColorVar(n: number): string {
   return n >= 4 ? "var(--teal)" : n >= 3 ? "var(--scarlet)" : "var(--amber)";
 }
 
+// ── predicates as sentences ───────────────────────────────────────────────
+// The API's `description` is the raw evaluator expression
+// ("confluenceScores.em-stress >= 1.6") — correct for agents reading the
+// endpoint, unreadable on a card someone bets money against. The same payload
+// also carries the structured parts (kind/node_id/path/op/value/days/allowed),
+// so the sentence is COMPOSED from those rather than parsed back out of the
+// string. Callers keep the raw expression in a title= tooltip.
+
+const OP_HOLDS: Record<string, string> = {
+  ">=": "holds at or above",
+  ">": "holds above",
+  "<=": "stays at or below",
+  "<": "stays below",
+  "==": "reads",
+  "!=": "is anything but",
+};
+
+/** `confluenceScores.em-stress` → `confluence on em-stress`. */
+function humanizePath(path: string): string {
+  const dot = path.indexOf(".");
+  if (dot === -1) return path;
+  const head = path.slice(0, dot);
+  const tail = path.slice(dot + 1);
+  if (head === "confluenceScores") return `confluence on ${tail}`;
+  if (head === "nodeStates") return `${tail}`;
+  if (head === "marketSnapshot") return `${tail}`;
+  // Unknown container: read the leaf, keep the container as a qualifier.
+  return `${tail} (${head})`;
+}
+
+function joinOr(items: string[]): string {
+  if (items.length <= 1) return items[0] || "";
+  return `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
+}
+
+/**
+ * Render a predicate as the sentence it actually is.
+ *
+ * Falls back to `raw` whenever the structured fields are absent or the kind is
+ * unknown — an unreadable-but-true expression beats a confidently wrong
+ * sentence, and beats an empty row outright.
+ */
+export function humanizePredicate(p: {
+  kind?: string | null;
+  description?: string | null;
+  node_id?: string | null;
+  path?: string | null;
+  expected?: string | null;
+  allowed?: string[] | null;
+  op?: string | null;
+  value?: number | null;
+  days?: number | null;
+}): string {
+  const raw = (p.description || "").trim();
+  switch (p.kind) {
+    case "state":
+      if (p.node_id && p.expected) return `${p.node_id} stays ${p.expected}`;
+      break;
+    case "state_set":
+      if (p.node_id && p.allowed && p.allowed.length) {
+        return `${p.node_id} stays ${joinOr(p.allowed)}`;
+      }
+      break;
+    case "threshold": {
+      const verb = p.op ? OP_HOLDS[p.op] : undefined;
+      if (p.path && verb && typeof p.value === "number") {
+        return `${humanizePath(p.path)} ${verb} ${p.value}`;
+      }
+      break;
+    }
+    case "countdown": {
+      if (p.node_id && typeof p.days === "number") {
+        const d = `${p.days} day${p.days === 1 ? "" : "s"}`;
+        if (p.op === "<=" || p.op === "<") return `${p.node_id} lands within ${d}`;
+        if (p.op === ">=" || p.op === ">") return `${p.node_id} stays more than ${d} out`;
+      }
+      break;
+    }
+  }
+  return raw;
+}
+
 /**
  * Choose which case the desk opens on.
  *

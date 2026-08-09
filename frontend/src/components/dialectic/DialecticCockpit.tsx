@@ -7,6 +7,7 @@ import { AlertOctagon } from "lucide-react";
 import type { OpenTradeDetail, ThesisState, TradePredicate } from "../../lib/types";
 import {
   confirmKill,
+  humanizePredicate,
   PHASE_HINT,
   PHASE_NAMES,
   phaseColorVar,
@@ -106,7 +107,9 @@ export default function DialecticCockpit({ state, structure, trade, onKilled, fl
           <div className="card cascade">
             <div className="sec-h"><span className="lbl">Cascade</span><span className="stamp flat s-amber" style={{ fontSize: 9, padding: "2px 6px" }}>{phase.status}</span></div>
             <div className="ribbon">
-              <div className="here" style={{ left: `calc(${((phase.number - 0.5) / 5) * 100}% - 26px)` }}>we are here ↓</div>
+              {/* centred on the current segment by translateX(-50%), then held
+                  off the card edges so the handwriting is never clipped. */}
+              <div className="here" style={{ left: `${Math.min(88, Math.max(12, ((phase.number - 0.5) / 5) * 100))}%` }}>we are here ↓</div>
               <div className="segs">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <span key={n} className={`s ${n === phase.number ? "cur" : ""}`}
@@ -291,10 +294,10 @@ function TradeCard({ trade, onKilled }: { trade: OpenTradeDetail | null; onKille
           <div key={p.id} className={`pred ${p.state}`}>
             <div className="l1">
               <span className={`tag t-${p.state === "inactive" ? "monitoring" : p.state}`}>{PRED_STATE[p.state]}</span>
-              <span className="pd">{p.description}</span>
-              {p.load_bearing ? <span className="key" title="load-bearing">◆ LB</span> : <span className="sup">supporting</span>}
+              <span className="pd" title={p.description}>{humanizePredicate(p)}</span>
+              {p.load_bearing && <span className="key" title="load-bearing — this one can kill the trade">◆ LB</span>}
             </div>
-            <div className="l2"><span>actual: {p.actual ?? "—"}</span>{p.note && <span className="pwarn">{p.note}</span>}</div>
+            <div className="l2"><span>actual: {p.actual ?? "—"}</span>{p.note && <span className="pwarn">· {p.note}</span>}</div>
           </div>
         ))}
       </div>
