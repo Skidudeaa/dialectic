@@ -527,6 +527,88 @@ def _unlink_quietly(path: Optional[str]) -> None:
         logger.warning("could not remove attachment temp file %s", path, exc_info=True)
 
 
+class AttachmentBindError(Exception):
+    """
+    A bind was refused. Carries an HTTP status so the REST endpoint can map it
+    verbatim, WITHOUT forcing non-HTTP callers to catch an HTTPException.
+
+    WHY this exists: the WebSocket send path needs the same bind semantics
+    (room match, uploader-only, idempotency) but has no HTTP response to raise
+    into. See bind_attachment_to_message.
+    """
+
+    def __init__(self, status_code: int, detail: str):
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+
+
+async def bind_attachment_to_message(
+    db,
+    *,
+    room_id: UUID,
+    user_id: UUID,
+    attachment_id: UUID,
+    message_id: UUID,
+):
+    """
+    Tie one attachment to one message. Returns the updated row.
+
+    ARCHITECTURE: transport-agnostic and does NOT commit — it runs on whatever
+    connection/transaction the caller hands it. A send path can therefore
+    insert the message and bind its attachments in ONE transaction, so the
+    message_created broadcast can carry the attachments and a receiver never
+    sees a message whose image has not landed yet.
+
+    WHY that matters: bind-after-send is racy AND lossy. The broadcast reaches
+    both users at once, so a receiver that reads attachments on the broadcast
+    reliably reads too early; and a client that dies between send and bind
+    leaves the message permanently imageless with an orphaned upload. Binding
+    inside the send transaction makes it all-or-nothing.
+
+    Callers must have already verified the room token and membership — this
+    function assumes an authenticated, in-room user and checks only the
+    attachment-specific invariants.
+
+    Raises AttachmentBindError; the REST endpoint maps it to the same status
+    codes it has always returned.
+    """
+    row = await db.fetchrow(
+        "SELECT * FROM attachments WHERE id = $1 AND room_id = $2",
+        attachment_id, room_id,
+    )
+    if not row:
+        raise AttachmentBindError(404, "Attachment not found")
+
+    if row["uploader_user_id"] != user_id:
+        # Binding someone else's upload into your own message would misattribute
+        # authorship, and the uploader is always the sender in the real flow.
+        raise AttachmentBindError(403, "Only the uploader can bind this attachment")
+
+    message_room_id = await db.fetchval(
+        """SELECT t.room_id FROM messages m
+           JOIN threads t ON t.id = m.thread_id
+           WHERE m.id = $1""",
+        message_id,
+    )
+    if message_room_id is None:
+        raise AttachmentBindError(404, "Message not found")
+    if message_room_id != room_id:
+        raise AttachmentBindError(400, "Message does not belong to this room")
+
+    if row["message_id"] is not None:
+        if row["message_id"] == message_id:
+            return row              # already bound — idempotent no-op
+        raise AttachmentBindError(
+            409, "Attachment is already bound to a different message"
+        )
+
+    return await db.fetchrow(
+        "UPDATE attachments SET message_id = $1 WHERE id = $2 RETURNING *",
+        message_id, attachment_id,
+    )
+
+
 MAX_MESSAGE_IDS_PER_QUERY = 200
 
 
@@ -663,45 +745,14 @@ async def bind_attachment(
     await _verify_room_token(room_id, token, db)
     await _verify_room_member(room_id, user_id, db)
 
-    row = await db.fetchrow(
-        "SELECT * FROM attachments WHERE id = $1 AND room_id = $2",
-        attachment_id, room_id,
-    )
-    if not row:
-        raise HTTPException(status_code=404, detail="Attachment not found")
-
-    if row["uploader_user_id"] != user_id:
-        # Binding someone else's upload into your own message would misattribute
-        # authorship, and the uploader is always the sender in the real flow.
-        raise HTTPException(
-            status_code=403,
-            detail="Only the uploader can bind this attachment",
+    try:
+        row = await bind_attachment_to_message(
+            db,
+            room_id=room_id,
+            user_id=user_id,
+            attachment_id=attachment_id,
+            message_id=request.message_id,
         )
-
-    message_room_id = await db.fetchval(
-        """SELECT t.room_id FROM messages m
-           JOIN threads t ON t.id = m.thread_id
-           WHERE m.id = $1""",
-        request.message_id,
-    )
-    if message_room_id is None:
-        raise HTTPException(status_code=404, detail="Message not found")
-    if message_room_id != room_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Message does not belong to this room",
-        )
-
-    if row["message_id"] is not None:
-        if row["message_id"] == request.message_id:
-            return _to_response(row)   # already bound — idempotent no-op
-        raise HTTPException(
-            status_code=409,
-            detail="Attachment is already bound to a different message",
-        )
-
-    updated = await db.fetchrow(
-        "UPDATE attachments SET message_id = $1 WHERE id = $2 RETURNING *",
-        request.message_id, attachment_id,
-    )
-    return _to_response(updated)
+    except AttachmentBindError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+    return _to_response(row)

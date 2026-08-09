@@ -820,6 +820,126 @@ class TestListByMessage:
 
 
 # =========================================================================
+# THE BIND HELPER, CALLED OUTSIDE HTTP
+# =========================================================================
+
+
+class TestBindHelperDirect:
+    """
+    bind_attachment_to_message exists so the WebSocket send path can bind
+    inside its own transaction. That caller has no HTTPException to catch and
+    no TestClient in front of it, so the contract is exercised directly here —
+    testing it only through the REST endpoint would leave its actual consumer
+    uncovered.
+    """
+
+    def _seed(self, ctx, bound_to=None, uploader=MEMBER_ID, room_id=ROOM_ID):
+        attachment_id = uuid4()
+        ctx.db.attachments[attachment_id] = {
+            "id": attachment_id, "room_id": room_id, "message_id": bound_to,
+            "uploader_user_id": uploader, "kind": "image", "mime": "image/png",
+            "bytes": 10, "sha256": "a" * 64, "width": 1, "height": 1,
+            "original_name": "chart.png", "storage_path": "x/aa/y.png",
+            "created_at": datetime.now(timezone.utc),
+        }
+        return attachment_id
+
+    @pytest.mark.asyncio
+    async def test_binds_and_returns_the_updated_row(self, ctx):
+        attachment_id = self._seed(ctx)
+        message_id = uuid4()
+        ctx.db.messages[message_id] = ROOM_ID
+
+        row = await attachments.bind_attachment_to_message(
+            ctx.db, room_id=ROOM_ID, user_id=MEMBER_ID,
+            attachment_id=attachment_id, message_id=message_id,
+        )
+        assert row["message_id"] == message_id
+        assert ctx.db.attachments[attachment_id]["message_id"] == message_id
+
+    @pytest.mark.asyncio
+    async def test_raises_a_plain_exception_not_an_httpexception(self, ctx):
+        """The WS caller must not have to import fastapi to handle a refusal."""
+        from fastapi import HTTPException as _HTTPException
+
+        message_id = uuid4()
+        ctx.db.messages[message_id] = ROOM_ID
+        with pytest.raises(attachments.AttachmentBindError) as caught:
+            await attachments.bind_attachment_to_message(
+                ctx.db, room_id=ROOM_ID, user_id=MEMBER_ID,
+                attachment_id=uuid4(), message_id=message_id,
+            )
+        assert not isinstance(caught.value, _HTTPException)
+        assert caught.value.status_code == 404
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("scenario,status", [
+        ("unknown_attachment", 404),
+        ("not_the_uploader", 403),
+        ("unknown_message", 404),
+        ("foreign_message", 400),
+        ("already_bound_elsewhere", 409),
+    ])
+    async def test_refusal_status_codes_match_the_rest_endpoint(
+        self, ctx, scenario, status
+    ):
+        message_id = uuid4()
+        ctx.db.messages[message_id] = ROOM_ID
+
+        if scenario == "unknown_attachment":
+            attachment_id = uuid4()
+        elif scenario == "not_the_uploader":
+            attachment_id = self._seed(ctx, uploader=OUTSIDER_ID)
+        elif scenario == "unknown_message":
+            attachment_id = self._seed(ctx)
+            message_id = uuid4()          # never registered
+        elif scenario == "foreign_message":
+            attachment_id = self._seed(ctx)
+            message_id = uuid4()
+            ctx.db.messages[message_id] = OTHER_ROOM_ID
+        else:
+            attachment_id = self._seed(ctx, bound_to=uuid4())
+
+        with pytest.raises(attachments.AttachmentBindError) as caught:
+            await attachments.bind_attachment_to_message(
+                ctx.db, room_id=ROOM_ID, user_id=MEMBER_ID,
+                attachment_id=attachment_id, message_id=message_id,
+            )
+        assert caught.value.status_code == status
+
+    @pytest.mark.asyncio
+    async def test_rebinding_the_same_message_is_a_no_op(self, ctx):
+        message_id = uuid4()
+        ctx.db.messages[message_id] = ROOM_ID
+        attachment_id = self._seed(ctx, bound_to=message_id)
+
+        row = await attachments.bind_attachment_to_message(
+            ctx.db, room_id=ROOM_ID, user_id=MEMBER_ID,
+            attachment_id=attachment_id, message_id=message_id,
+        )
+        assert row["message_id"] == message_id
+
+    @pytest.mark.asyncio
+    async def test_the_helper_never_commits(self, ctx):
+        """
+        It must run inside the CALLER's transaction — a commit of its own
+        would break the atomicity the send path adopts it for.
+        """
+        committed = []
+        ctx.db.commit = lambda *a, **k: committed.append(True)
+
+        attachment_id = self._seed(ctx)
+        message_id = uuid4()
+        ctx.db.messages[message_id] = ROOM_ID
+        await attachments.bind_attachment_to_message(
+            ctx.db, room_id=ROOM_ID, user_id=MEMBER_ID,
+            attachment_id=attachment_id, message_id=message_id,
+        )
+        assert committed == []
+        assert not any("COMMIT" in q.upper() for q in ctx.db.queries)
+
+
+# =========================================================================
 # FETCH FAILURE MODES
 # =========================================================================
 
