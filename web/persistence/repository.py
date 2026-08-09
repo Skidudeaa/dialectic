@@ -17,7 +17,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from web.persistence.connection import get_connection
 from web.persistence.migrations import run_migrations
@@ -623,35 +623,10 @@ class Repository:
         finally:
             conn.close()
 
-    def save_snapshot_and_enqueue(self, thesis_id: str, revision: int,
-                                  snapshot_json: str,
-                                  definition_hash: Optional[str] = None,
-                                  quality_status: str = "healthy") -> Tuple[int, int]:
-        """Atomic: save snapshot + enqueue outbox in one transaction.
-
-        WHY: If the process crashes between save_snapshot and enqueue as
-        separate calls, the Dialectic push is lost. A single transaction
-        makes it all-or-nothing.
-        """
-        conn = self._conn()
-        try:
-            conn.execute(
-                """INSERT OR REPLACE INTO thesis_snapshots
-                   (thesis_id, revision, generated_at, definition_hash,
-                    quality_status, snapshot_json)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (thesis_id, revision, _now_iso(), definition_hash,
-                 quality_status, snapshot_json),
-            )
-            cur = conn.execute(
-                """INSERT INTO outbox (kind, thesis_id, payload_json, status, created_at)
-                   VALUES ('dialectic', ?, ?, 'pending', ?)""",
-                (thesis_id, snapshot_json, _now_iso()),
-            )
-            conn.commit()
-            return revision, cur.lastrowid
-        finally:
-            conn.close()
+    # WHY no save_snapshot_and_enqueue(): it wrote a row to the SQLite
+    # `outbox` table alongside the snapshot, and nothing ever drained that
+    # table. Dialectic delivery is inline from the coordinator now
+    # (web/runtime/dialectic_push.py); the table is dropped in migration 004.
 
     # ════════════════════════════════════════════════════════════════
     # ALERT EVENTS (v2)
@@ -971,54 +946,14 @@ class Repository:
             conn.close()
 
     # ════════════════════════════════════════════════════════════════
-    # OUTBOX (v2)
+    # OUTBOX (v2) — REMOVED
+    #
+    # get_pending_outbox / mark_outbox_sent / increment_outbox_attempt /
+    # mark_outbox_failed were the read+ack half of a queue whose writer
+    # (save_snapshot_and_enqueue) had no reader. None of them was ever
+    # called outside tests. The table is dropped in migration 004; the
+    # live failure spool is snapshots/outbox/ (see routes/bridge.py).
     # ════════════════════════════════════════════════════════════════
-
-    def get_pending_outbox(self, limit: int = 10) -> List[dict]:
-        conn = self._conn()
-        try:
-            rows = conn.execute(
-                """SELECT * FROM outbox
-                   WHERE status = 'pending' AND attempts < 5
-                   ORDER BY created_at LIMIT ?""",
-                (limit,),
-            ).fetchall()
-            return [dict(r) for r in rows]
-        finally:
-            conn.close()
-
-    def mark_outbox_sent(self, outbox_id: int) -> None:
-        conn = self._conn()
-        try:
-            conn.execute(
-                "UPDATE outbox SET status='sent', attempts=attempts+1 WHERE outbox_id=?",
-                (outbox_id,),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
-    def increment_outbox_attempt(self, outbox_id: int, error: str) -> None:
-        conn = self._conn()
-        try:
-            conn.execute(
-                "UPDATE outbox SET attempts=attempts+1, last_error=? WHERE outbox_id=?",
-                (error, outbox_id),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
-    def mark_outbox_failed(self, outbox_id: int, error: str) -> None:
-        conn = self._conn()
-        try:
-            conn.execute(
-                "UPDATE outbox SET status='failed', last_error=? WHERE outbox_id=?",
-                (error, outbox_id),
-            )
-            conn.commit()
-        finally:
-            conn.close()
 
     # ════════════════════════════════════════════════════════════════
     # AUDIT LOG (Unit 12)

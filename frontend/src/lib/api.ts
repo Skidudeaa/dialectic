@@ -17,7 +17,13 @@ import type {
 
 const STORAGE_KEY = "td_auth";
 
-function _loadAuth(): { token: string; username: string; displayName: string } | null {
+interface StoredAuth {
+  token: string;
+  username: string | null;
+  displayName: string | null;
+}
+
+function _loadAuth(): StoredAuth | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
@@ -27,7 +33,71 @@ function _loadAuth(): { token: string; username: string; displayName: string } |
   }
 }
 
-const _stored = _loadAuth();
+// WHY: Dialectic's trading panel links here with its access token in the URL
+// fragment (`#dialectic_token=...`). The server trusts it because both apps
+// verify HS256 with the same secret — see web/auth.py's Dialectic bridge — so
+// arriving with one is the same as having logged in.
+//
+// The fragment is used rather than a query string because fragments are never
+// sent to the server, keeping the token out of nginx and Cloudflare access
+// logs. It is stripped from the address bar on arrival so it does not linger
+// in history, get copy-pasted, or leak through a screenshot.
+const DIALECTIC_TOKEN_PARAM = "dialectic_token";
+const DIALECTIC_ROOM_PARAM = "dialectic_room";
+
+// The Dialectic room the user came FROM, if the link named one. Read once at
+// boot because the fragment is wiped immediately afterwards. The desk resolves
+// it to the book that room discusses, so you land on the case you were just
+// arguing about instead of whichever book happens to sort first.
+let _bridgedRoomId: string | null = null;
+
+/** Dialectic room id from the deep link, or null for an ordinary session. */
+export function getBridgedRoomId(): string | null { return _bridgedRoomId; }
+
+function _adoptBridgedToken(): StoredAuth | null {
+  if (typeof window === "undefined") return null;
+  const rawHash = window.location.hash.replace(/^#/, "");
+  if (!rawHash) return null;
+
+  const params = new URLSearchParams(rawHash);
+  const token = params.get(DIALECTIC_TOKEN_PARAM);
+  if (!token) return null;
+
+  _bridgedRoomId = params.get(DIALECTIC_ROOM_PARAM);
+
+  // Strip the credential immediately, preserving any other fragment params.
+  params.delete(DIALECTIC_TOKEN_PARAM);
+  params.delete(DIALECTIC_ROOM_PARAM);
+  const remainder = params.toString();
+  try {
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}${remainder ? `#${remainder}` : ""}`,
+    );
+  } catch {
+    // replaceState can throw in exotic embedding contexts; a token left in the
+    // bar is untidy but must not stop the handoff from working.
+  }
+
+  // username/displayName are deliberately null: the Dialectic uuid -> desk
+  // username mapping lives on the SERVER (DIALECTIC_USER_MAP). Guessing it
+  // here would duplicate that mapping in a second place, and a client-side
+  // copy that drifted would mis-attribute messages. The UI already degrades
+  // to "operator" when the name is unknown.
+  const adopted: StoredAuth = { token, username: null, displayName: null };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(adopted));
+  } catch {
+    // Private-mode storage failure: the in-memory token below still works for
+    // this tab, which is the whole session the user came for.
+  }
+  return adopted;
+}
+
+// A bridged token WINS over anything already stored: the user just clicked
+// through from Dialectic, so that is the session they asked for.
+const _stored = _adoptBridgedToken() ?? _loadAuth();
 let _token: string | null = _stored?.token ?? null;
 let _username: string | null = _stored?.username ?? null;
 let _displayName: string | null = _stored?.displayName ?? null;

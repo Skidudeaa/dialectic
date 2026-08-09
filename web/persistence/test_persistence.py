@@ -36,9 +36,9 @@ class TestMigrations:
         from web.persistence.migrations import run_migrations
         count = run_migrations(conn)
         # 001 (initial schema) + 002 (audit_log + confirm_tokens) + 003
-        # (message kind+meta). Bump this when a new numbered migration lands
-        # in web/persistence/sql/.
-        assert count == 3
+        # (message kind+meta) + 004 (drop outbox). Bump this when a new
+        # numbered migration lands in web/persistence/sql/.
+        assert count == 4
         tables = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         )}
@@ -46,7 +46,7 @@ class TestMigrations:
             "schema_migrations", "rooms", "messages", "pins",
             "journal_entries", "predictions", "tv_events",
             "thesis_snapshots", "alert_events", "manual_overrides",
-            "close_observations", "fetch_runs", "outbox",
+            "close_observations", "fetch_runs",
             "audit_log", "confirm_tokens",
         }
         assert expected.issubset(tables)
@@ -293,15 +293,18 @@ class TestSnapshots:
     def test_latest_revision_empty(self, repo):
         assert repo.get_latest_revision("nonexistent") == 0
 
-    def test_save_and_enqueue_atomic(self, repo):
-        snap = json.dumps({"v": 2, "nodeStates": {}})
-        rev, outbox_id = repo.save_snapshot_and_enqueue("t", 1, snap)
-        assert rev == 1
-        assert outbox_id > 0
-        # Both exist
-        assert repo.get_latest_snapshot("t") is not None
-        pending = repo.get_pending_outbox()
-        assert len(pending) == 1
+    def test_save_snapshot_is_the_only_commit_path(self, repo):
+        """Snapshots commit via save_snapshot alone — no queue side-effect.
+
+        Regression guard for the outbox kill: the coordinator used to branch
+        to save_snapshot_and_enqueue for Dialectic-linked books, writing a
+        row nothing ever read.
+        """
+        snap = json.dumps({"v": 2, "nodeStates": {"a": "fired"}})
+        repo.save_snapshot("t", 1, snap)
+        latest = repo.get_latest_snapshot("t")
+        assert latest is not None
+        assert latest["nodeStates"]["a"] == "fired"
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -429,28 +432,41 @@ class TestFetchRuns:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# OUTBOX (v2)
+# OUTBOX (v2) — REMOVED IN MIGRATION 004
 # ═══════════════════════════════════════════════════════════════════════
 
-class TestOutbox:
-    def test_pending_and_sent(self, repo):
-        snap = json.dumps({"v": 2})
-        repo.save_snapshot_and_enqueue("t", 1, snap)
-        pending = repo.get_pending_outbox()
-        assert len(pending) == 1
-        repo.mark_outbox_sent(pending[0]["outbox_id"])
-        assert repo.get_pending_outbox() == []
+class TestOutboxRemoved:
+    """The SQLite outbox was a write-only queue with no drainer.
 
-    def test_retry_and_fail(self, repo):
-        snap = json.dumps({"v": 2})
-        _, outbox_id = repo.save_snapshot_and_enqueue("t", 1, snap)
-        repo.increment_outbox_attempt(outbox_id, "HTTP 500")
-        pending = repo.get_pending_outbox()
-        assert len(pending) == 1
-        assert pending[0]["attempts"] == 1
-        # Fail it
-        repo.mark_outbox_failed(outbox_id, "Max retries exceeded")
-        assert repo.get_pending_outbox() == []
+    These guard the removal, not the removal's paperwork: the table check
+    queries a really-migrated database, and the method check interrogates a
+    real Repository object.
+    """
+
+    def test_table_is_dropped_by_migrations(self, repo):
+        from web.persistence.connection import get_connection
+        from web.persistence.migrations import run_migrations
+        conn = get_connection(":memory:")
+        run_migrations(conn)
+        tables = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        )}
+        assert "outbox" not in tables
+        indexes = {r[0] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='index'"
+        )}
+        assert "idx_outbox_pending" not in indexes
+        conn.close()
+
+    @pytest.mark.parametrize("name", [
+        "save_snapshot_and_enqueue",
+        "get_pending_outbox",
+        "mark_outbox_sent",
+        "increment_outbox_attempt",
+        "mark_outbox_failed",
+    ])
+    def test_repository_method_is_gone(self, repo, name):
+        assert not hasattr(repo, name)
 
 
 # ═══════════════════════════════════════════════════════════════════════

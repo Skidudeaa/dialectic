@@ -60,6 +60,14 @@ def list_books() -> List[Dict[str, Any]]:
                 "title": meta.get("title", path.stem),
                 "nodes": len(cfg.get("nodes", [])),
                 "edges": len(cfg.get("edges", [])),
+                # WHY exposed: this is the join key between a Dialectic room and
+                # the book it discusses. Dialectic's "Open Full Dashboard" link
+                # carries its room id, and the desk resolves it to THIS book so
+                # you land on the case you were just arguing about.
+                #
+                # SECURITY: the id ONLY. meta also holds dialecticRoomToken,
+                # which is a room credential and must never reach a client.
+                "dialecticRoomId": meta.get("dialecticRoomId"),
             })
         except Exception as e:
             log.warning("Skipping %s: %s", path.name, e)

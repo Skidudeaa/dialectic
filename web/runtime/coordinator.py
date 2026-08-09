@@ -108,6 +108,12 @@ class RuntimeCoordinator:
         # Track first tick completion for readiness probe
         self._first_tick_done = False
 
+        # Monotonic-clock timestamp of the last successful Dialectic push per
+        # thesis. WHY monotonic: this only ever feeds an elapsed-time compare
+        # for the hourly heartbeat, and a wall-clock step (NTP, DST) must not
+        # be able to suppress a push for an hour or fire a burst of them.
+        self._last_dialectic_push: Dict[str, float] = {}
+
     # ════════════════════════════════════════════════════════════════
     # LIFECYCLE
     # ════════════════════════════════════════════════════════════════
@@ -130,6 +136,12 @@ class RuntimeCoordinator:
             t.cancel()
         await asyncio.gather(*self._tasks, return_exceptions=True)
         self._tasks.clear()
+        # Release the shared push client's connection pool.
+        try:
+            from web.runtime.dialectic_push import aclose_client
+            await aclose_client()
+        except Exception:  # pragma: no cover — shutdown must never raise
+            log.debug("dialectic push client close failed", exc_info=True)
         log.info("Coordinator stopped")
 
     @property
@@ -487,22 +499,20 @@ class RuntimeCoordinator:
         old_snap = self._latest_snapshots.get(thesis_id)
         events = self._compute_events(thesis_id, new_rev, old_snap, export)
 
-        # 9. Commit: snapshot + events + outbox in single transaction
+        # 9. Commit: snapshot + events
+        #
+        # WHY no outbox enqueue here any more: the SQLite `outbox` table was
+        # the intended Dialectic delivery queue and no drainer was ever
+        # written, so every row ever enqueued sat 'pending' forever (58,769 of
+        # them). Delivery is now inline — see step 11b — and the FILE outbox
+        # at snapshots/outbox/ is the failure spool, because that one has a
+        # replay path and an operator UI.
         snap_json = json.dumps(export, separators=(",", ":"))
 
-        # Check if Dialectic room is configured
-        meta = cfg.get("meta", {})
-        dialectic_room = meta.get("dialecticRoomId")
-        if dialectic_room:
-            self._repo.save_snapshot_and_enqueue(
-                thesis_id, new_rev, snap_json,
-                definition_hash=self._definition_hashes.get(thesis_id),
-            )
-        else:
-            self._repo.save_snapshot(
-                thesis_id, new_rev, snap_json,
-                definition_hash=self._definition_hashes.get(thesis_id),
-            )
+        self._repo.save_snapshot(
+            thesis_id, new_rev, snap_json,
+            definition_hash=self._definition_hashes.get(thesis_id),
+        )
 
         if events:
             self._repo.insert_alert_events(events)
@@ -548,7 +558,67 @@ class RuntimeCoordinator:
         except Exception:  # pragma: no cover — bus must never break the cycle
             log.warning("live_bus publish failed for %s", thesis_id)
 
+        # 13. Push to the linked Dialectic room (LAST — an external service
+        # must never delay local WS clients).
+        await self._maybe_push_dialectic(thesis_id, cfg, export, events)
+
         return export
+
+    # ════════════════════════════════════════════════════════════════
+    # DIALECTIC PUSH
+    # ════════════════════════════════════════════════════════════════
+
+    # WHY 3600s: a Dialectic room that has heard nothing for hours cannot
+    # tell "nothing changed" from "the desk is dead" — its own freshness
+    # watchdog keys off last_trading_push_at. An hourly heartbeat makes
+    # silence mean something.
+    DIALECTIC_HEARTBEAT_SECONDS = 3600.0
+
+    def _should_push_dialectic(self, thesis_id: str, events: List[dict]) -> bool:
+        """Push when this tick produced events, or when the heartbeat is due."""
+        if events:
+            return True
+        last = self._last_dialectic_push.get(thesis_id)
+        if last is None:
+            return True
+        return (time.monotonic() - last) >= self.DIALECTIC_HEARTBEAT_SECONDS
+
+    async def _maybe_push_dialectic(
+        self, thesis_id: str, cfg: dict, export: dict, events: List[dict],
+    ) -> None:
+        """Deliver the snapshot to the book's Dialectic room, if it has one.
+
+        WHY fully wrapped: this is the only outbound network call in the
+        cycle. push_snapshot() is written not to raise, and this is the
+        second belt — a Dialectic outage, a bad room token, or an import
+        error in the push module must not be able to fail a fetch cycle.
+        """
+        meta = cfg.get("meta", {}) or {}
+        room_id = meta.get("dialecticRoomId")
+        room_token = meta.get("dialecticRoomToken")
+        if not room_id or not room_token:
+            return
+        if not self._should_push_dialectic(thesis_id, events):
+            return
+
+        try:
+            from web.runtime.dialectic_push import push_snapshot
+            ok = await push_snapshot(
+                thesis_id=thesis_id,
+                snapshot=export,
+                alert_events=events,
+                room_id=room_id,
+                room_token=room_token,
+                reason="events" if events else "heartbeat",
+            )
+        except Exception:  # noqa: BLE001 — cycle survives any push fault
+            log.warning("dialectic push raised for %s", thesis_id, exc_info=True)
+            return
+
+        if ok:
+            # Only a delivered push resets the heartbeat clock. A spooled
+            # failure must leave it due, so the next tick tries again.
+            self._last_dialectic_push[thesis_id] = time.monotonic()
 
     # ════════════════════════════════════════════════════════════════
     # INTERNALS — mutation dispatch

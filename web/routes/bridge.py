@@ -16,19 +16,26 @@ so the format lives in one place.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import importlib.util
 import json
+import logging
 import os
 import sys
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from web.auth import get_current_user
+from web.deps import get_repo
 from web.models import User
+from web.persistence.repository import Repository
+
+log = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/bridge", tags=["bridge"])
@@ -308,3 +315,213 @@ async def replay_outbox_endpoint(
     """
     room_filter = body.roomId if body else None
     return await asyncio.to_thread(_replay_sync, room_filter)
+
+
+# =========================================================================
+# SERVICE READ ENDPOINTS
+#
+# WHY a second auth scheme on this router: /outbox and /outbox/replay are
+# operator actions behind a human's JWT. These two are machine reads — the
+# Dialectic scheduler's trading_reconcile job pulls them every 15 minutes to
+# repair a room whose push was missed, and its LLM tools read the news feed.
+# A service has no JWT and shouldn't be issued one; it presents a shared
+# secret instead.
+#
+# The dependency is deliberately LOCAL to this module rather than added to
+# web/auth.py — service-token auth is a property of the bridge surface, not
+# of the desk's user session model.
+# =========================================================================
+
+
+SERVICE_TOKEN_ENV = "TD_SERVICE_TOKEN"
+
+
+def require_service_token(
+    x_service_token: Optional[str] = Header(None, alias="X-Service-Token"),
+) -> None:
+    """Constant-time shared-secret gate for machine callers.
+
+    503 when the secret is not configured — an unset env var is a
+    misconfigured server, not a rejected caller, and answering 401 would
+    send Dialectic hunting for a bad token that doesn't exist.
+
+    WHY hmac.compare_digest: a plain `==` on a secret leaks its prefix
+    length through timing. The comparison is over a fixed-length token so
+    the digest compare is the right primitive.
+    """
+    expected = os.environ.get(SERVICE_TOKEN_ENV, "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{SERVICE_TOKEN_ENV} is not configured on this server",
+        )
+    supplied = (x_service_token or "").strip()
+    if not supplied or not hmac.compare_digest(supplied, expected):
+        raise HTTPException(status_code=401, detail="Invalid service token")
+
+
+# ── GET /api/bridge/snapshot/{thesis_id} ────────────────────────────────
+
+
+@router.get("/snapshot/{thesis_id}")
+async def get_thesis_snapshot(
+    thesis_id: str,
+    repo: Repository = Depends(get_repo),
+    _svc: None = Depends(require_service_token),
+) -> JSONResponse:
+    """Latest committed snapshot for a thesis, in the v3 push contract.
+
+    alertEvents is always empty here: events describe a TRANSITION between
+    two consecutive cycles, and a point-in-time read has no predecessor to
+    diff against. Emitting the last tick's events would tell Dialectic that
+    a node just fired when it may have fired hours ago — and would re-fire
+    the curator on every 15-minute reconcile. Empty is the honest answer,
+    and it is exactly what gates the curator off on the reconcile path.
+
+    Returns an explicit JSONResponse so the content-type is unambiguous:
+    Dialectic's reconcile job treats a non-JSON 200 as 'endpoint missing',
+    because this app's SPA catch-all answers unknown paths with 200 + HTML.
+    """
+    snapshot = await asyncio.to_thread(repo.get_latest_snapshot, thesis_id)
+    if snapshot is None:
+        raise HTTPException(
+            status_code=404, detail=f"No snapshot for thesis {thesis_id!r}",
+        )
+
+    # get_latest_snapshot stamps the row's revision as `_revision`. Promote it
+    # when the stored body predates the coordinator writing `revision` inline.
+    row_revision = snapshot.pop("_revision", None)
+    if snapshot.get("revision") is None and row_revision is not None:
+        snapshot["revision"] = row_revision
+
+    from web.runtime.dialectic_push import build_v3_payload
+    payload = build_v3_payload(thesis_id, snapshot, alert_events=[])
+    return JSONResponse(content=payload, media_type="application/json")
+
+
+# ── GET /api/bridge/news/{thesis_id} ────────────────────────────────────
+
+
+# WHY a 15-minute TTL: GDELT asks callers for ~1 req/sec and answers 429 when
+# pushed. Dialectic's reconcile runs every 15 minutes and an LLM tool call can
+# arrive at any moment; without a cache a chatty room would hammer a public
+# API on every turn. The window matches the reconcile cadence, so a scheduled
+# pull is always a fresh fetch and everything in between is free.
+NEWS_TTL_SECONDS = 900.0
+
+# Failures cache for much less: a rate-limit blip should not blank the feed
+# for a quarter of an hour, but it should not be retried on every request
+# either.
+NEWS_ERROR_TTL_SECONDS = 120.0
+
+NEWS_MAX_HEADLINES = 15
+
+# thesis_id -> (expires_at_monotonic, payload)
+_news_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _book_path(thesis_id: str) -> Optional[Path]:
+    """Resolve books/{thesis_id}.json, refusing anything that escapes the dir.
+
+    WHY the containment check: thesis_id comes off the URL path. FastAPI
+    will not match a literal '/' into this segment, but '..' and encoded
+    separators are cheap to defend against and the cost of being wrong is
+    reading arbitrary JSON off the disk.
+    """
+    candidate = (_BOOKS_DIR / f"{thesis_id}.json").resolve()
+    try:
+        candidate.relative_to(_BOOKS_DIR.resolve())
+    except ValueError:
+        return None
+    return candidate if candidate.is_file() else None
+
+
+def _gdelt_query_for_book(book: dict) -> Optional[str]:
+    """Find the book's GDELT query, if it declares one.
+
+    Books express feeds per node: nodes[].feeds[] = [{"source": "gdelt",
+    "standardQuery": "iran-hormuz-event"}]. A literal `query` wins over
+    `standardQuery` so a book can override the shared catalog.
+    """
+    from tools.data_fetch.gdelt import get_standard_query
+
+    for node in book.get("nodes", []) or []:
+        for feed in (node.get("feeds") or []):
+            if not isinstance(feed, dict):
+                continue
+            if (feed.get("source") or "").lower() != "gdelt":
+                continue
+            literal = (feed.get("query") or "").strip()
+            if literal:
+                return literal
+            named = (feed.get("standardQuery") or "").strip()
+            if named:
+                resolved = get_standard_query(named)
+                if resolved:
+                    return resolved
+                log.warning("book declares unknown GDELT standardQuery %r", named)
+    return None
+
+
+def _fetch_news_sync(thesis_id: str, book: dict) -> tuple[dict, float]:
+    """Blocking headline fetch. Returns (payload, ttl_seconds)."""
+    query = _gdelt_query_for_book(book)
+    if not query:
+        return {"articles": [], "note": "no gdelt config"}, NEWS_TTL_SECONDS
+
+    from tools.data_fetch import gdelt
+
+    try:
+        articles = gdelt.fetch_articles(query, max_records=NEWS_MAX_HEADLINES)
+    except Exception as exc:  # noqa: BLE001 — a dark feed is not a 500
+        log.warning("GDELT fetch failed for %s: %s: %s",
+                    thesis_id, type(exc).__name__, exc)
+        return (
+            {"articles": [], "note": f"gdelt unavailable: {type(exc).__name__}"},
+            NEWS_ERROR_TTL_SECONDS,
+        )
+
+    headlines: list[dict[str, Any]] = [
+        {
+            "title": a.title,
+            "url": a.url,
+            "seendate": a.seendate,
+            "domain": a.domain,
+        }
+        for a in articles[:NEWS_MAX_HEADLINES]
+    ]
+    return {"articles": headlines}, NEWS_TTL_SECONDS
+
+
+@router.get("/news/{thesis_id}")
+async def get_thesis_news(
+    thesis_id: str,
+    _svc: None = Depends(require_service_token),
+) -> JSONResponse:
+    """Recent GDELT headlines for a thesis book, capped at 15 and TTL-cached.
+
+    A book with no GDELT feed is not an error — most books have none. It
+    answers 200 with an empty list and a `note` so the caller can tell
+    "nothing configured" from "configured but quiet".
+    """
+    path = _book_path(thesis_id)
+    if path is None:
+        raise HTTPException(
+            status_code=404, detail=f"No book for thesis {thesis_id!r}",
+        )
+
+    now = time.monotonic()
+    cached = _news_cache.get(thesis_id)
+    if cached and cached[0] > now:
+        return JSONResponse(content=cached[1], media_type="application/json")
+
+    try:
+        book = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Book {thesis_id!r} is unreadable: {exc}",
+        )
+
+    payload, ttl = await asyncio.to_thread(_fetch_news_sync, thesis_id, book)
+    _news_cache[thesis_id] = (time.monotonic() + ttl, payload)
+    return JSONResponse(content=payload, media_type="application/json")

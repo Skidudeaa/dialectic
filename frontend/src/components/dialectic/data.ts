@@ -64,6 +64,31 @@ export function phaseColorVar(n: number): string {
   return n >= 4 ? "var(--teal)" : n >= 3 ? "var(--scarlet)" : "var(--amber)";
 }
 
+/**
+ * Choose which case the desk opens on.
+ *
+ * Priority, highest first:
+ *  1. the book discussed by the Dialectic room the user came FROM — arriving
+ *     via "Open Full Dashboard" is an explicit statement of which case they
+ *     mean, and it must beat any generic default;
+ *  2. the first book that has a room linked to it;
+ *  3. the first book at all.
+ *
+ * Returns null only when there are no books.
+ */
+export function pickDefaultBook(
+  books: ThesisBook[],
+  rooms: Room[],
+  bridgedRoomId: string | null,
+): ThesisBook | null {
+  if (!books.length) return null;
+  const fromDialectic = bridgedRoomId
+    ? books.find((b) => b.dialecticRoomId === bridgedRoomId)
+    : undefined;
+  const linked = books.find((b) => rooms.some((r) => r.linked_book_id === b.id));
+  return fromDialectic || linked || books[0];
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // rooms + books — the case drawer
 // ════════════════════════════════════════════════════════════════════════

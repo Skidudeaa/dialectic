@@ -91,6 +91,9 @@ export interface ThesisBook {
   title: string;
   nodes: number;
   edges: number;
+  /** Dialectic room that discusses this book, if one is linked. The join key
+   *  the "Open Full Dashboard" deep link resolves against. */
+  dialecticRoomId?: string | null;
 }
 
 export interface ThesisState {

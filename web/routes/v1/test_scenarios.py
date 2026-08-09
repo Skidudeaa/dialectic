@@ -191,11 +191,10 @@ class TestReadOnlyIntegration:
         after = len(repo.list_alert_events(thesis_id=THESIS_ID, limit=1000))
         assert before == after
 
-    def test_no_outbox_enqueued(self, client, auth_headers, repo):
-        before = len(repo.get_pending_outbox(limit=1000))
-        client.post(_url(), headers=auth_headers)
-        after = len(repo.get_pending_outbox(limit=1000))
-        assert before == after
+    # WHY no test_no_outbox_enqueued: it counted rows in the SQLite `outbox`
+    # queue, which migration 004 drops (it had no drainer and nothing read
+    # it). The property it was really asserting — scenario evaluation commits
+    # nothing — is covered by test_no_new_snapshot_committed above.
 
     def test_latest_snapshot_unchanged_after_eval(self, client, auth_headers, coordinator):
         snap_before = copy.deepcopy(coordinator._latest_snapshots[THESIS_ID])

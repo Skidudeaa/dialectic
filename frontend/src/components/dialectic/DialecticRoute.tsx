@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { clearAuth } from "../../lib/api";
+import { clearAuth, getBridgedRoomId } from "../../lib/api";
 import "./dialectic.css";
 import DialecticRoom from "./DialecticRoom";
 import DialecticCockpit from "./DialecticCockpit";
@@ -16,6 +16,7 @@ import {
   me as getMe,
   PHASE_NAMES,
   phaseColorVar,
+  pickDefaultBook,
   shortCaseTitle,
   useBookTrade,
   useCasePulses,
@@ -34,14 +35,18 @@ export default function DialecticRoute() {
   const presence = usePresence();
   const flashRef = useRef<((id: string) => void) | null>(null);
 
-  // Default the active case to the first book that has a room linked to it,
-  // else the first book.
+  // Default the active case. If the user arrived from Dialectic's "Open Full
+  // Dashboard" link, that room names the case they were just arguing about —
+  // honour it over any generic default. Falls through to the previous
+  // behaviour (first book with a linked room, else the first book) when the
+  // link named no room or the room matches no book.
   useEffect(() => {
     if (activeBookId || !books.length) return;
-    const linked = books.find((b) => rooms.some((r) => r.linked_book_id === b.id));
+    const chosen = pickDefaultBook(books, rooms, getBridgedRoomId());
+    if (!chosen) return;
     // One-shot default once books/rooms arrive; not derivable as a memo.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setActiveBookId((linked || books[0]).id);
+    setActiveBookId(chosen.id);
   }, [books, rooms, activeBookId]);
 
   // Prefer the room linked to the active case; fall back to a *general*
