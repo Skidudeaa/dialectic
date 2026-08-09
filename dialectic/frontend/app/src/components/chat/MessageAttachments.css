@@ -1,0 +1,123 @@
+/* Media carried by a message — Dark Roast surfaces, exhibit framing.
+   Kept in its own file so the bubble's own styles stay legible. */
+
+.msg-attachments {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+    align-self: flex-start;
+    max-width: 100%;
+}
+.msg-human-self .msg-attachments { align-self: flex-end; }
+
+.attachment {
+    max-width: 100%;
+    font-family: var(--font-mono);
+}
+
+/* --- images: an exhibit pinned into the page --- */
+.attachment-image-link {
+    display: block;
+    line-height: 0;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: border-color 0.15s;
+}
+.attachment-image-link:hover { border-color: var(--amber-30); }
+.attachment-image-img {
+    display: block;
+    max-width: 100%;
+    max-height: 360px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    background: var(--color-void);
+}
+
+.attachment-placeholder {
+    display: flex;
+    align-items: flex-end;
+    padding: 6px 8px;
+    min-width: 120px;
+    min-height: 60px;
+    max-width: 100%;
+    background: var(--color-cacao);
+    border: 1px dashed var(--color-bean);
+    border-radius: var(--radius-sm);
+}
+.attachment-placeholder-label {
+    font-size: 9px;
+    color: var(--color-faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* --- video --- */
+.attachment-video-el {
+    display: block;
+    max-width: 100%;
+    max-height: 360px;
+    background: var(--color-void);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+}
+.attachment-caption {
+    display: block;
+    margin-top: 2px;
+    font-size: 9px;
+    color: var(--color-faint);
+}
+
+/* --- chips: video-not-yet-loaded, and files --- */
+.attachment-video-poster,
+.attachment-file {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 10px;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    color: var(--color-ink);
+    font-size: 10.5px;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+.attachment-video-poster:hover:not(:disabled),
+.attachment-file:hover:not(:disabled) {
+    border-color: var(--amber-30);
+    background: var(--color-espresso);
+}
+.attachment-file:disabled { cursor: progress; opacity: 0.7; }
+.attachment-glyph { color: var(--color-amber); font-size: 12px; line-height: 1; }
+.attachment-name {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.attachment-size { color: var(--color-faint); font-size: 9px; white-space: nowrap; }
+.attachment-file-failed { border-color: var(--error); }
+.attachment-file-failed .attachment-size { color: var(--error); }
+
+.attachment-error {
+    display: inline-flex;
+    padding: 6px 10px;
+    background: var(--color-cacao);
+    border: 1px solid var(--error);
+    border-radius: var(--radius-sm);
+    color: var(--error);
+    font-size: 10px;
+    cursor: pointer;
+}
+
+@media (max-width: 768px) {
+    .attachment-image-img,
+    .attachment-video-el { max-height: 260px; }
+    .attachment-name { max-width: 150px; }
+}

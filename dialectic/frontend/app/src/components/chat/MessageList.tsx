@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { Message, Reaction } from '../../types'
+import type { Attachment, Message, Reaction } from '../../types'
 import { useDocumentVisibility } from '../../hooks/useDocumentVisibility'
 import { MessageBubble } from './MessageBubble'
 import './MessageList.css'
@@ -22,6 +22,8 @@ interface MessageListProps {
   /** A message to scroll to and flash, e.g. after picking a search result. */
   jumpTarget?: { id: string; nonce: number } | null
   reactions?: Record<string, Reaction[]>
+  /** Media keyed by message id; absent means the message carried none. */
+  attachments?: Record<string, Attachment[]>
   onToggleReaction?: (messageId: string, emoji: string, isOn: boolean) => void
   onEditMessage?: (messageId: string, content: string) => void
   onDeleteMessage?: (messageId: string) => void
@@ -101,6 +103,7 @@ export function MessageList({
   onSeen,
   jumpTarget,
   reactions = {},
+  attachments = {},
   onToggleReaction,
   onEditMessage,
   onDeleteMessage,
@@ -267,6 +270,7 @@ export function MessageList({
                     replyToContent={parent?.content}
                     replyToMissing={Boolean(msg.references_message_id && !parent)}
                     reactions={reactions[msg.id]}
+                    attachments={attachments[msg.id]}
                     currentUserId={currentUserId}
                     onToggleReaction={onToggleReaction}
                     onEdit={onEditMessage}

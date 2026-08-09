@@ -64,6 +64,49 @@ export interface Message {
   metadata?: MessageMetadata | null;
 }
 
+/** What a stored attachment is, as the server classifies it. */
+export type AttachmentKind = 'image' | 'video' | 'file';
+
+/**
+ * One uploaded blob, as returned by POST /rooms/{id}/attachments.
+ *
+ * `url` is the server's own path (/attachments/{id}) and is NOT directly
+ * usable as an <img src> — that endpoint requires the room token and the JWT.
+ * Bytes are fetched with headers and rendered from an object URL; see
+ * lib/attachments.ts.
+ */
+export interface Attachment {
+  id: string;
+  room_id: string;
+  /** Null until the uploader binds it to the message that carries it. */
+  message_id: string | null;
+  uploader_user_id: string;
+  kind: AttachmentKind;
+  mime: string;
+  bytes: number;
+  sha256: string;
+  width: number | null;
+  height: number | null;
+  original_name: string;
+  storage_path: string;
+  created_at: string;
+  url: string;
+  /** True when identical bytes were already in the room and the row was reused. */
+  deduplicated?: boolean;
+}
+
+/**
+ * A send whose attachments cannot be bound yet, because the message id only
+ * exists once the server has written the row and echoed message_created.
+ * Matched back to that echo on (thread, author, content) — see appStore.
+ */
+export interface PendingAttachmentBind {
+  threadId: string;
+  content: string;
+  attachments: Attachment[];
+  queuedAt: number;
+}
+
 /** Reactions on one message, grouped by emoji. */
 export interface Reaction {
   emoji: string;

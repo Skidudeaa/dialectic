@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import type { Message, Reaction } from '../../types'
+import type { Attachment, Message, Reaction } from '../../types'
+import { MessageAttachments } from './MessageAttachments'
 import './MessageBubble.css'
 
 /** Small, deliberately boring set — a picker is more chrome than this needs. */
@@ -41,6 +42,8 @@ interface MessageBubbleProps {
   onDelete?: (messageId: string) => void
   /** Same speaker continuing — avatar and byline are suppressed as repetition. */
   isContinuation?: boolean
+  /** Media carried by this message, if any. */
+  attachments?: Attachment[]
 }
 
 /** Quoted parents are a glance, not a re-read. */
@@ -104,6 +107,7 @@ export function MessageBubble({
   onEdit,
   onDelete,
   isContinuation,
+  attachments = [],
 }: MessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState(message.content)
@@ -237,6 +241,10 @@ export function MessageBubble({
             {isExpanded ? 'Show less' : 'Show more'}
           </button>
         )}
+        {/* Outside the bubble, so a folded message still shows what it carried —
+            the picture is usually the point of the message, not its tail. */}
+        {attachments.length > 0 && <MessageAttachments attachments={attachments} />}
+
         {toolCalls.length > 0 && (
           <div className="msg-tools">
             <button

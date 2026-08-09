@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useAppStore } from '../stores/appStore.ts'
 import { api } from '../lib/api.ts'
+import { groupAttachmentsByMessage, isUuid } from '../lib/attachments.ts'
 import type {
   Message,
   ProtocolState,
@@ -18,6 +19,18 @@ const MAX_RECONNECT_ATTEMPTS = 10;
 const BASE_RECONNECT_DELAY = 1000;
 const MAX_RECONNECT_DELAY = 30000;
 const HEARTBEAT_INTERVAL = 30000;
+
+/**
+ * How long to wait before asking what a newly arrived message carried.
+ *
+ * The sender binds its attachments only AFTER it receives its own
+ * message_created echo, so a receiver that asks the instant the broadcast lands
+ * reliably asks too early and gets nothing — the row is still unbound. This
+ * delay is a workaround for that ordering, not a preference: a server-side bind
+ * (attachment_ids on send_message) or a broadcast after bind removes the need
+ * for it entirely. Reload and thread-switch fills are unaffected and exact.
+ */
+const ATTACHMENT_PROBE_DELAY = 2000;
 
 interface ServerMessage {
   type: string;
@@ -60,6 +73,8 @@ export function useDialecticSocket() {
   const setAllReactions = useAppStore((s) => s.setAllReactions);
   const recordToolActivity = useAppStore((s) => s.recordToolActivity);
   const clearToolActivity = useAppStore((s) => s.clearToolActivity);
+  const resolveAttachmentBind = useAppStore((s) => s.resolveAttachmentBind);
+  const setAllAttachments = useAppStore((s) => s.setAllAttachments);
 
   const send = useCallback((type: string, payload: Record<string, unknown>): boolean => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return false;
@@ -115,6 +130,87 @@ export function useDialecticSocket() {
     }
   }, [setActiveCommitments]);
 
+  /**
+   * Bind this client's just-uploaded attachments to the message that carries
+   * them.
+   *
+   * WHY here and not at send time: /bind needs a message_id, and the id is
+   * minted server-side — message_created is the first moment the client learns
+   * it. The queue entry is matched on (thread, content) because send_message
+   * carries no correlation token; see resolveAttachmentBind in the store.
+   *
+   * The optimistic render happens inside resolveAttachmentBind, before any of
+   * these requests resolve, so the picture appears with the message rather than
+   * a round trip later.
+   */
+  const bindQueuedAttachments = useCallback(async (payload: Record<string, unknown>) => {
+    const state = useAppStore.getState();
+    if (!state.currentRoom || !state.user) return;
+    if (payload.user_id !== state.user.id) return;
+
+    const messageId = typeof payload.id === 'string' ? payload.id : null;
+    const threadId = typeof payload.thread_id === 'string' ? payload.thread_id : null;
+    const content = typeof payload.content === 'string' ? payload.content : null;
+    if (!messageId || !threadId || content === null) return;
+
+    const claimed = resolveAttachmentBind(messageId, threadId, content);
+    if (claimed.length === 0) return;
+
+    api.setToken(state.roomToken ?? '');
+    for (const attachment of claimed) {
+      try {
+        await api.bindAttachment(state.currentRoom.id, attachment.id, messageId);
+      } catch (error) {
+        // The message is already sent and the media already renders for this
+        // client; an unbound row simply will not survive a reload. Loud in the
+        // console, silent in the room — there is nothing the sender can retry.
+        console.error('[WS] Failed to bind attachment', attachment.id, error);
+      }
+    }
+  }, [resolveAttachmentBind]);
+
+  /**
+   * Fill in the media carried by a set of messages.
+   *
+   * Non-UUID ids are dropped rather than sent: the endpoint 400s on one bad id
+   * and fails the whole batch with it, which would cost every real message in
+   * the window its attachments.
+   */
+  const fetchAttachmentsFor = useCallback(async (messageIds: string[]) => {
+    const state = useAppStore.getState();
+    if (!state.currentRoom || !state.roomToken) return;
+    const ids = messageIds.filter(isUuid);
+    if (ids.length === 0) return;
+    api.setToken(state.roomToken);
+    try {
+      const records = await api.listAttachments(state.currentRoom.id, ids);
+      if (records.length > 0) setAllAttachments(groupAttachmentsByMessage(records));
+    } catch (error) {
+      console.error('[WS] Failed to load attachments:', error);
+    }
+  }, [setAllAttachments]);
+
+  /** Media for every message currently loaded — called after a history load. */
+  const refreshAttachments = useCallback(async () => {
+    await fetchAttachmentsFor(useAppStore.getState().messages.map((message) => message.id));
+  }, [fetchAttachmentsFor]);
+
+  // Incoming messages are batched into one probe rather than one request each,
+  // so a burst from the other person costs a single call. See
+  // ATTACHMENT_PROBE_DELAY for why this is delayed at all.
+  const probeQueueRef = useRef<Set<string>>(new Set());
+  const probeTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const probeAttachments = useCallback((messageId: string) => {
+    probeQueueRef.current.add(messageId);
+    clearTimeout(probeTimerRef.current);
+    probeTimerRef.current = setTimeout(() => {
+      const ids = [...probeQueueRef.current];
+      probeQueueRef.current.clear();
+      void fetchAttachmentsFor(ids);
+    }, ATTACHMENT_PROBE_DELAY);
+  }, [fetchAttachmentsFor]);
+
   const payloadMatchesActiveThread = useCallback((payload: Record<string, unknown>): boolean => {
     const nestedMessage = payload.message && typeof payload.message === 'object'
       ? payload.message as Record<string, unknown>
@@ -143,6 +239,13 @@ export function useDialecticSocket() {
       case 'message_created':
         if (!payloadMatchesActiveThread(payload)) break;
         addMessage(payload as unknown as Message);
+        // Your own send binds from the queue; someone else's has to be asked
+        // about, because the broadcast carries no attachments.
+        if (payload.user_id === useAppStore.getState().user?.id) {
+          void bindQueuedAttachments(payload);
+        } else if (typeof payload.id === 'string') {
+          probeAttachments(payload.id);
+        }
         void refreshThreads();
         if (payload.speaker_type !== 'human') setLLMState(false, false);
         break;
@@ -388,6 +491,8 @@ export function useDialecticSocket() {
     setMessageReactions,
     recordToolActivity,
     clearToolActivity,
+    bindQueuedAttachments,
+    probeAttachments,
   ]);
 
   const connect = useCallback(() => {
@@ -474,6 +579,9 @@ export function useDialecticSocket() {
 
   // Connect/disconnect on room change
   useEffect(() => {
+    // Captured at setup so the cleanup below closes over the Set this effect
+    // ran with, rather than reading the ref at teardown time.
+    const probeQueue = probeQueueRef.current;
     if (currentRoom && roomToken && user) {
       reconnectAttemptRef.current = 0;
       connect();
@@ -482,6 +590,10 @@ export function useDialecticSocket() {
     return () => {
       clearTimeout(reconnectTimerRef.current);
       clearInterval(heartbeatTimerRef.current);
+      // A probe scheduled for the room being left would resolve against the
+      // new one and file media under messages that are no longer loaded.
+      clearTimeout(probeTimerRef.current);
+      probeQueue.clear();
       reconnectAttemptRef.current = MAX_RECONNECT_ATTEMPTS; // Prevent reconnect on unmount
       if (wsRef.current) {
         const ws = wsRef.current;
@@ -705,5 +817,6 @@ export function useDialecticSocket() {
     refreshMemories,
     refreshPresence,
     refreshCommitments,
+    refreshAttachments,
   };
 }

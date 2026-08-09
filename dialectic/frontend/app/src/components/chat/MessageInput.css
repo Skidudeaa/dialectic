@@ -8,7 +8,90 @@
 .input-area-inner {
     max-width: 800px;
     margin: 0 auto;
+    /* The drop target is the whole composer, so the outline below has something
+       to hang off without shifting anything when it appears. */
+    position: relative;
+    border-radius: var(--radius-sm);
+    outline: 1px dashed transparent;
+    outline-offset: 6px;
+    transition: outline-color 0.12s;
 }
+.input-area-inner.input-dragging { outline-color: var(--color-amber); }
+
+/* Attachment chips — one per file the composer is holding */
+.attach-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 0.45rem;
+}
+.attach-chip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px 3px 8px;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--color-ink);
+    overflow: hidden;
+}
+.attach-chip-ready { border-color: var(--amber-30); }
+.attach-chip-failed { border-color: var(--error); color: var(--error); }
+.attach-chip-name {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.attach-chip-size { color: var(--color-faint); }
+.attach-chip-failed .attach-chip-size { color: var(--error); }
+.attach-chip-retry,
+.attach-chip-remove {
+    background: none;
+    border: none;
+    padding: 0 2px;
+    color: var(--color-secondary);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+}
+.attach-chip-retry { text-decoration: underline; color: var(--color-amber); }
+.attach-chip-remove { font-size: 13px; line-height: 1; }
+.attach-chip-remove:hover { color: var(--color-bone); }
+/* Progress reads as a filling underline rather than a bar that needs its own
+   row — the chip is already the unit of "this file". */
+.attach-chip-progress {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 2px;
+    background: var(--color-amber);
+    transition: width 0.15s linear;
+}
+
+/* Attach button — quiet sibling of the send button, never solid amber */
+.attach-input { display: none; }
+.attach-btn {
+    height: 42px;
+    width: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    color: var(--color-secondary);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s;
+}
+.attach-btn:hover:not(:disabled) { color: var(--color-amber); border-color: var(--amber-30); }
+.attach-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.attach-btn svg { width: 16px; height: 16px; }
 
 /* Reply preview */
 .reply-preview-bar {
@@ -136,6 +219,17 @@
     color: var(--error);
     font-size: 10px;
     letter-spacing: .02em;
+}
+/* Rejected file, upload still running — a correctable condition, not a failure,
+   so it sits a tier below the delivery error above. */
+.input-notice {
+    color: var(--color-warning);
+    font-size: 10px;
+    letter-spacing: .02em;
+    max-width: 80%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 @media (max-width: 768px) {

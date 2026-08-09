@@ -54,6 +54,8 @@ function ChatLayout() {
   const messages = useAppStore((s) => s.messages)
   const memories = useAppStore((s) => s.memories)
   const reactions = useAppStore((s) => s.reactions)
+  const attachments = useAppStore((s) => s.attachments)
+  const queueAttachmentBind = useAppStore((s) => s.queueAttachmentBind)
   const typingUsers = useAppStore((s) => s.typingUsers)
   const onlineUsers = useAppStore((s) => s.onlineUsers)
   const isLLMThinking = useAppStore((s) => s.isLLMThinking)
@@ -109,6 +111,7 @@ function ChatLayout() {
     deleteMessage,
     toggleReaction,
     refreshReactions,
+    refreshAttachments,
   } = useDialecticSocket()
 
   const isVisible = useDocumentVisibility()
@@ -188,12 +191,16 @@ function ChatLayout() {
         const data = res as { messages?: Message[] } | Message[]
         const history = Array.isArray(data) ? data : data.messages
         if (Array.isArray(history)) setMessages(history)
+        // Attachments are not projected onto messages, so the media a branch
+        // carries has to be read separately. This is the exact fill — the live
+        // probe in the socket hook only covers what arrives while connected.
+        void refreshAttachments()
       })
       .catch((error) => console.error('Failed to load message history:', error))
     // Live reaction_updated events only cover changes made while connected, so
     // the existing set has to be fetched alongside the history.
     void refreshReactions()
-  }, [currentThread, roomToken, setMessages, refreshReactions])
+  }, [currentThread, roomToken, setMessages, refreshReactions, refreshAttachments])
 
   // Trading is an optional room extension.
   useEffect(() => {
@@ -264,14 +271,19 @@ function ChatLayout() {
       try {
         api.setRoomToken(roomToken ?? '')
         const contextWindow = await api.getMessageContext(result.thread_id, result.id)
-        if (Array.isArray(contextWindow)) setMessages(contextWindow as Message[])
+        if (Array.isArray(contextWindow)) {
+          setMessages(contextWindow as Message[])
+          // This path replaces the whole message list without going through the
+          // history effect, so it owns its own attachment fill.
+          void refreshAttachments()
+        }
       } catch (error) {
         console.error('Failed to load message context:', error)
       }
     }
 
     setJumpTarget({ id: result.id, nonce: Date.now() })
-  }, [threads, currentThread?.id, messages, roomToken, setThread, setMessages])
+  }, [threads, currentThread?.id, messages, roomToken, setThread, setMessages, refreshAttachments])
 
   const forkFromMessage = useCallback((messageId: string) => {
     if (!currentThread) return
@@ -451,16 +463,30 @@ function ChatLayout() {
               onSeen={handleSeen}
               jumpTarget={jumpTarget}
               reactions={reactions}
+              attachments={attachments}
               onToggleReaction={toggleReaction}
               onEditMessage={editMessageContent}
               onDeleteMessage={deleteMessage}
             />
             <TypingIndicator typingUsers={typingDisplay} activityLabel={toolActivityLabel} />
             <MessageInput
-              onSend={(content, messageType) => {
+              roomId={currentRoom.id}
+              onSend={(content, messageType, files) => {
                 const sent = sendMessage(content, messageType, effectiveReplyToId)
-                if (sent) setReplyToId(null)
-                return sent
+                if (!sent) return false
+                setReplyToId(null)
+                // Queued, not bound: the message id arrives with the server's
+                // own message_created echo, which is where the bind fires.
+                // Safe to queue after send — the echo is a round trip away and
+                // cannot land before this handler returns.
+                if (files.length > 0 && currentThread) {
+                  queueAttachmentBind({
+                    threadId: currentThread.id,
+                    content,
+                    attachments: files,
+                  })
+                }
+                return true
               }}
               onTypingStart={sendTypingStart}
               onTypingStop={sendTypingStop}

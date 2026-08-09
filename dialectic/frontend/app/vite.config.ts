@@ -34,6 +34,10 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': { target: 'http://localhost:8002', changeOrigin: true, rewrite: (path) => path.replace(/^\/api/, '') },
+      // Attachments stream through the backend with auth headers; without
+      // this line `npm run dev` serves the SPA fallback for them (media
+      // broken in dev only — prod routes via nginx).
+      '/attachments': { target: 'http://localhost:8002', changeOrigin: true },
       '/ws': { target: 'ws://localhost:8002', ws: true },
       '/auth': { target: 'http://localhost:8002', changeOrigin: true },
       '/rooms': { target: 'http://localhost:8002', changeOrigin: true },

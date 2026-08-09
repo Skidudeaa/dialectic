@@ -1,4 +1,9 @@
+import type { Attachment } from '../types/index.ts';
+
 const BASE = '';  // Same origin via Vite proxy
+
+/** Message ids per attachment-list request — see listAttachments. */
+const ATTACHMENT_QUERY_BATCH = 100;
 
 /**
  * WHY a typed error: callers deciding between "this token is dead, leave the
@@ -25,16 +30,28 @@ class DialecticAPI {
   getAccessToken(): string { return this.accessToken; }
   getToken(): string { return this.roomToken; }
 
+  /**
+   * User identity and room access are different credentials. JWT belongs in
+   * Authorization; the invite capability uses a dedicated header so neither
+   * secret is exposed in URLs.
+   *
+   * Split out from `fetch` because multipart uploads and blob reads need the
+   * same two credentials WITHOUT the JSON content type — letting the browser
+   * write its own multipart boundary, and not lying about what comes back.
+   */
+  private authHeaders(): Record<string, string> {
+    return {
+      ...(this.accessToken ? { 'Authorization': `Bearer ${this.accessToken}` } : {}),
+      ...(this.roomToken ? { 'X-Room-Token': this.roomToken } : {}),
+    };
+  }
+
   private async fetch<T>(path: string, options?: RequestInit): Promise<T> {
-    // User identity and room access are different credentials. JWT belongs in
-    // Authorization; the invite capability uses a dedicated header so neither
-    // secret is exposed in URLs.
     const res = await window.fetch(`${BASE}${path}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        ...(this.accessToken ? { 'Authorization': `Bearer ${this.accessToken}` } : {}),
-        ...(this.roomToken ? { 'X-Room-Token': this.roomToken } : {}),
+        ...this.authHeaders(),
         ...options?.headers,
       },
     });
@@ -109,6 +126,115 @@ class DialecticAPI {
   // Stakes
   async getCommitments(roomId: string) { return this.fetch(`/stakes/rooms/${roomId}/commitments`); }
   async getCalibration(roomId: string, userId?: string) { return this.fetch(`/stakes/rooms/${roomId}/calibration${userId ? `?user_id=${userId}` : ''}`); }
+
+  // Attachments
+  //
+  // WHY XHR and not fetch: upload progress. `fetch` can only report progress on
+  // a request body by wrapping it in a ReadableStream, which needs duplex:'half'
+  // and is not supported by Safari — the browser most of this room's media comes
+  // from. XHR's upload.onprogress is the boring option that works everywhere.
+  uploadAttachment(
+    roomId: string,
+    file: File,
+    options?: { onProgress?: (percent: number) => void; signal?: AbortSignal },
+  ): Promise<Attachment> {
+    return new Promise<Attachment>((resolve, reject) => {
+      const form = new FormData();
+      form.append('file', file);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${BASE}/rooms/${roomId}/attachments`);
+      // Deliberately no Content-Type: the browser writes multipart/form-data
+      // with its own boundary, and overriding it makes the body unparseable.
+      for (const [name, value] of Object.entries(this.authHeaders())) {
+        xhr.setRequestHeader(name, value);
+      }
+
+      const onAbort = () => xhr.abort();
+      options?.signal?.addEventListener('abort', onAbort);
+      const cleanup = () => options?.signal?.removeEventListener('abort', onAbort);
+
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        options?.onProgress?.(Math.round((event.loaded / event.total) * 100));
+      };
+      xhr.onload = () => {
+        cleanup();
+        let parsed: unknown = null;
+        try {
+          parsed = JSON.parse(xhr.responseText) as unknown;
+        } catch {
+          parsed = null;
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(parsed as Attachment);
+          return;
+        }
+        const detail = (parsed as { detail?: string } | null)?.detail;
+        reject(new ApiError(detail ?? `Upload failed: ${xhr.status}`, xhr.status));
+      };
+      // status 0 is the shape of both a network failure and an abort; the
+      // caller distinguishes them by whether it was the one who aborted.
+      xhr.onerror = () => { cleanup(); reject(new ApiError('Upload failed — check your connection', 0)); };
+      xhr.onabort = () => { cleanup(); reject(new ApiError('Upload cancelled', 0)); };
+      xhr.send(form);
+    });
+  }
+
+  /**
+   * Attachments bound to a set of messages, as one flat list.
+   *
+   * The endpoint caps message_ids at 200 per call, but the binding constraint
+   * is the URL, not the cap: 200 UUIDs is ~7.4KB of query string, which is
+   * close enough to nginx's 8KB request-line limit to risk a 414 that would
+   * look like a server fault. 100 per request is comfortably under both.
+   */
+  async listAttachments(roomId: string, messageIds: string[]): Promise<Attachment[]> {
+    if (messageIds.length === 0) return [];
+    const batches: string[][] = [];
+    for (let i = 0; i < messageIds.length; i += ATTACHMENT_QUERY_BATCH) {
+      batches.push(messageIds.slice(i, i + ATTACHMENT_QUERY_BATCH));
+    }
+    const pages = await Promise.all(batches.map((batch) => {
+      const params = new URLSearchParams({ message_ids: batch.join(',') });
+      return this.fetch<Attachment[]>(`/rooms/${roomId}/attachments?${params.toString()}`);
+    }));
+    return pages.flat();
+  }
+
+  async bindAttachment(roomId: string, attachmentId: string, messageId: string) {
+    return this.fetch<Attachment>(
+      `/rooms/${roomId}/attachments/${attachmentId}/bind`,
+      { method: 'POST', body: JSON.stringify({ message_id: messageId }) },
+    );
+  }
+
+  /**
+   * The bytes. GET /attachments/{id} authenticates like every other room read,
+   * so this cannot be an <img src> — the caller renders from an object URL.
+   */
+  async fetchAttachmentBlob(attachmentId: string): Promise<Blob> {
+    const res = await window.fetch(`${BASE}/attachments/${attachmentId}`, {
+      headers: this.authHeaders(),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => null) as { detail?: string } | null;
+      throw new ApiError(data?.detail ?? `Attachment error: ${res.status}`, res.status);
+    }
+    // A 200 carrying HTML means the request never reached the API: a proxy that
+    // does not route /attachments falls through to the SPA and answers with
+    // index.html. Without this check that document becomes the object URL, and
+    // every image renders broken with nothing logged anywhere. (The Vite dev
+    // proxy has exactly this gap today; nginx does not.)
+    const contentType = res.headers.get('content-type') ?? '';
+    if (contentType.startsWith('text/html')) {
+      throw new ApiError(
+        'Attachment route is not proxied — /attachments reached the app shell, not the API',
+        502,
+      );
+    }
+    return res.blob();
+  }
 
   // Auth (no room token needed)
   // WHY: surfaces the backend's `detail` message (e.g. "Invalid email or password")

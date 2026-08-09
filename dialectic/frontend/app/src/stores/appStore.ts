@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { revokeAttachmentUrls } from '../lib/attachments.ts'
 import type {
   User,
   Room,
@@ -13,7 +14,16 @@ import type {
   TradingSnapshot,
   Reaction,
   LLMToolActivity,
+  Attachment,
+  PendingAttachmentBind,
 } from '../types/index.ts'
+
+/**
+ * How long a send waits for its own message_created echo before its pending
+ * bind is abandoned. Generous — the echo is a round trip, not a render — but
+ * finite, so a dropped socket cannot strand entries in the queue forever.
+ */
+const PENDING_BIND_TTL_MS = 60_000
 
 interface AppState {
   // Auth
@@ -35,6 +45,16 @@ interface AppState {
   memories: Memory[];
   /** Reactions keyed by message id. Absent means none. */
   reactions: Record<string, Reaction[]>;
+  /**
+   * Attachments keyed by message id.
+   *
+   * Filled from two directions: optimistically for your own sends, at the
+   * moment the message id becomes known, and — once the backend exposes a read
+   * path — in bulk for the whole thread (see setAllAttachments).
+   */
+  attachments: Record<string, Attachment[]>;
+  /** Uploads whose message id is not known yet. See PendingAttachmentBind. */
+  pendingAttachmentBinds: PendingAttachmentBind[];
 
   // Presence
   onlineUsers: PresenceUser[];
@@ -75,6 +95,16 @@ interface AppState {
   removeMessage: (messageId: string) => void;
   setMessageReactions: (messageId: string, reactions: Reaction[]) => void;
   setAllReactions: (byMessageId: Record<string, Reaction[]>) => void;
+  setMessageAttachments: (messageId: string, attachments: Attachment[]) => void;
+  /** Bulk fill, for a thread-wide read of attachments. */
+  setAllAttachments: (byMessageId: Record<string, Attachment[]>) => void;
+  queueAttachmentBind: (bind: Omit<PendingAttachmentBind, 'queuedAt'>) => void;
+  /**
+   * Claim the queued upload set belonging to a just-created message and file it
+   * under that id. Returns the attachments still needing a server-side bind
+   * (empty when this message carried none).
+   */
+  resolveAttachmentBind: (messageId: string, threadId: string, content: string) => Attachment[];
   setMemories: (memories: Memory[]) => void;
   updateStreamingContent: (content: string) => void;
   appendStreamingToken: (token: string) => void;
@@ -101,6 +131,8 @@ const initialRoomState = {
   messages: [],
   memories: [],
   reactions: {},
+  attachments: {},
+  pendingAttachmentBinds: [],
   onlineUsers: [],
   typingUsers: [],
   isLLMThinking: false,
@@ -117,7 +149,7 @@ const initialRoomState = {
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Initial state
       user: null,
       accessToken: null,
@@ -136,7 +168,12 @@ export const useAppStore = create<AppState>()(
           signedOutReason: null,
         }),
 
-      setRoom: (room, token) =>
+      setRoom: (room, token) => {
+        // Attachment bytes are cached as blob: URLs keyed by attachment id, and
+        // every one of them belongs to the room being left. Revoking here is
+        // what keeps a long session from holding every image it has ever
+        // displayed in memory.
+        revokeAttachmentUrls()
         set({
           currentRoom: room,
           roomToken: token,
@@ -146,6 +183,8 @@ export const useAppStore = create<AppState>()(
           messages: [],
           memories: [],
           reactions: {},
+          attachments: {},
+          pendingAttachmentBinds: [],
           onlineUsers: [],
           typingUsers: [],
           isLLMThinking: false,
@@ -157,7 +196,8 @@ export const useAppStore = create<AppState>()(
           activeCommitments: [],
           surfacedCommitments: [],
           tradingConfig: null,
-        }),
+        })
+      },
 
       setThread: (thread) => set({ currentThread: thread }),
 
@@ -197,6 +237,45 @@ export const useAppStore = create<AppState>()(
         }),
 
       setAllReactions: (byMessageId) => set({ reactions: byMessageId }),
+
+      setMessageAttachments: (messageId, attachments) =>
+        set((state) => ({
+          attachments: { ...state.attachments, [messageId]: attachments },
+        })),
+
+      // Merge rather than replace: a bulk read must not drop the optimistic
+      // entries for sends the server has not projected back yet.
+      setAllAttachments: (byMessageId) =>
+        set((state) => ({ attachments: { ...state.attachments, ...byMessageId } })),
+
+      queueAttachmentBind: (bind) =>
+        set((state) => ({
+          pendingAttachmentBinds: [
+            ...state.pendingAttachmentBinds.filter(
+              (entry) => Date.now() - entry.queuedAt < PENDING_BIND_TTL_MS,
+            ),
+            { ...bind, queuedAt: Date.now() },
+          ],
+        })),
+
+      // WHY match on (thread, content) instead of an id the client chose: the
+      // message id is minted server-side, and send_message carries no
+      // correlation token, so the echo is the first moment the two can be
+      // joined. FIFO on ties, so sending the same text twice binds the first
+      // upload set to the first message.
+      resolveAttachmentBind: (messageId, threadId, content) => {
+        const queue = get().pendingAttachmentBinds
+        const index = queue.findIndex(
+          (entry) => entry.threadId === threadId && entry.content === content,
+        )
+        if (index === -1) return []
+        const claimed = queue[index]
+        set((state) => ({
+          pendingAttachmentBinds: state.pendingAttachmentBinds.filter((_, i) => i !== index),
+          attachments: { ...state.attachments, [messageId]: claimed.attachments },
+        }))
+        return claimed.attachments
+      },
 
       setMemories: (memories) => set({ memories }),
 
@@ -277,7 +356,8 @@ export const useAppStore = create<AppState>()(
 
       setTradingConfig: (config) => set({ tradingConfig: config }),
 
-      logout: (reason) =>
+      logout: (reason) => {
+        revokeAttachmentUrls()
         set({
           user: null,
           accessToken: null,
@@ -285,9 +365,13 @@ export const useAppStore = create<AppState>()(
           isAuthenticated: false,
           signedOutReason: reason ?? null,
           ...initialRoomState,
-        }),
+        })
+      },
 
-      leaveRoom: () => set(initialRoomState),
+      leaveRoom: () => {
+        revokeAttachmentUrls()
+        set(initialRoomState)
+      },
     }),
     {
       name: 'dialectic-auth',
