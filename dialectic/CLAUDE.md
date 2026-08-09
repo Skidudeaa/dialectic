@@ -51,6 +51,7 @@ These can live in `dialectic/.env` (auto-loaded by `run.py` via python-dotenv). 
 | `llm/trading_curator.py` | Offline alert engine — fires when snapshot arrives, user is away |
 | `llm/self_model.py` | LLM self-awareness: tracks participation decisions, evolves identity doc |
 | `memory/manager.py` | Three-lane recall (dense + FTS + entity/speaker, RRF-fused) + versioned room memories + write-path dedup |
+| `api/notifications/` | Dual-channel push: Web Push/VAPID (`webpush.py`, the live channel for the installed PWA) + Expo (dormant until a native app ships) |
 | `transport/handlers.py` | WebSocket message routing; coordinates annotator + primary LLM |
 | `transport/websocket.py` | WebSocket connection lifecycle |
 | `models.py` | Pydantic data models for all entities |
@@ -148,7 +149,7 @@ dialectic/
 │   ├── app/                # React (Vite + TS) SPA — the live frontend (PWA)
 │   └── app.html            # RETIRED single-file SPA (kept for history only)
 ├── migrations/             # incremental DB changes
-└── tests/                  # pytest test suite (199 tests)
+└── tests/                  # pytest test suite (299 tests)
 ```
 
 ## Project Conventions
@@ -158,4 +159,4 @@ dialectic/
 - All LLM calls through `ModelRouter` (retry, fallback, provider abstraction)
 - JSONB columns: pass dict directly to asyncpg — pool codec handles serialization
 - Message role alternation: Anthropic API requires last message to be `user` role — `prompts.py` strips trailing assistant messages before API call
-- Tests: pytest + pytest-asyncio, 199 tests across 7 files
+- Tests: pytest + pytest-asyncio, 299 tests, incl. real-Postgres integration tests (test_memory_recall_pg.py needs `createdb dialectic_test && psql dialectic_test -f schema.sql`; skips cleanly without it)

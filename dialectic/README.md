@@ -42,6 +42,7 @@ Use one room per durable project or thinking stream. Inside a room:
 2. Mark a message as a claim, question, or definition before sending when its
    role matters.
 3. Use **Memory** for durable shared context and decisions. Recall is three-lane (semantic + exact-text + speaker): asking about "the boat deal" or "what Dan said" finds the right memory, each one attributed to whoever said it. Restating a fact updates it instead of duplicating it — the old version keeps its history.
+4. Tap the **🔔 Enable notifications** chip once per device — with the installed app closed and the phone locked, a message from the other person (or Claude) raises a lock-screen notification, and tapping it lands you in that room.
 4. Use **Fork** on any message to explore a branch without derailing the main
    line of thought.
 5. Use **Protocol** for Steelman, Socratic, Devil's Advocate, or Synthesis work.
