@@ -300,6 +300,10 @@ class MessageTypes:
     MEMORY_UPDATED = "memory_updated"
     LLM_THINKING = "llm_thinking"
     LLM_STREAMING = "llm_streaming"
+    # The participant reaching for a tool mid-turn. Transient by design: the
+    # client shows it while the check runs and drops it on llm_done/error/
+    # cancelled — the durable record is the message's own tool trace.
+    LLM_TOOL_ACTIVITY = "llm_tool_activity"
     LLM_DONE = "llm_done"
     LLM_ERROR = "llm_error"
     LLM_CANCELLED = "llm_cancelled"

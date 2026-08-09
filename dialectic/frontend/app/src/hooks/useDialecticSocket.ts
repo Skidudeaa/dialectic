@@ -10,6 +10,8 @@ import type {
   Memory,
   PresenceUser,
   Reaction,
+  LLMToolActivity,
+  MessageMetadata,
 } from '../types/index.ts'
 
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -56,6 +58,8 @@ export function useDialecticSocket() {
   const removeMessage = useAppStore((s) => s.removeMessage);
   const setMessageReactions = useAppStore((s) => s.setMessageReactions);
   const setAllReactions = useAppStore((s) => s.setAllReactions);
+  const recordToolActivity = useAppStore((s) => s.recordToolActivity);
+  const clearToolActivity = useAppStore((s) => s.clearToolActivity);
 
   const send = useCallback((type: string, payload: Record<string, unknown>): boolean => {
     if (wsRef.current?.readyState !== WebSocket.OPEN) return false;
@@ -208,11 +212,25 @@ export function useDialecticSocket() {
         setLLMState(true, true);
         break;
 
+      case 'llm_tool_activity': {
+        if (!payloadMatchesActiveThread(payload)) break;
+        if (typeof payload.thread_id === 'string' && typeof payload.tool === 'string') {
+          recordToolActivity(payload.thread_id, {
+            tool: payload.tool,
+            label: typeof payload.label === 'string' ? payload.label : 'checking',
+            status: (payload.status as LLMToolActivity['status']) ?? 'started',
+            latency_ms: typeof payload.latency_ms === 'number' ? payload.latency_ms : undefined,
+          });
+        }
+        break;
+      }
+
       case 'llm_done': {
         if (!payloadMatchesActiveThread(payload)) break;
         // There is no payload.message. Build the persisted message from the
         // authoritative fields carried by llm_done.
         setLLMState(false, false);
+        if (typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
         if (payload.message) {
           addMessage(payload.message as unknown as Message);
         } else if (typeof payload.message_id === 'string') {
@@ -234,6 +252,9 @@ export function useDialecticSocket() {
               : 'text',
             content: (payload.content as string) ?? '',
             user_name: payload.speaker_type === 'llm_provoker' ? 'Provoker' : 'Claude',
+            // Only path the tool trace takes to the client — the REST message
+            // list projects a fixed field set with no metadata in it.
+            metadata: (payload.metadata as MessageMetadata | undefined) ?? null,
           } as Message);
         }
         void refreshThreads();
@@ -243,12 +264,14 @@ export function useDialecticSocket() {
       case 'llm_error':
         if (!payloadMatchesActiveThread(payload)) break;
         setLLMState(false, false);
+        if (typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
         console.error('[LLM] stream error:', payload.error);
         break;
 
       case 'llm_cancelled':
         if (!payloadMatchesActiveThread(payload)) break;
         setLLMState(false, false);
+        if (typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
         break;
 
       case 'annotation_created':
@@ -363,6 +386,8 @@ export function useDialecticSocket() {
     editMessage,
     removeMessage,
     setMessageReactions,
+    recordToolActivity,
+    clearToolActivity,
   ]);
 
   const connect = useCallback(() => {

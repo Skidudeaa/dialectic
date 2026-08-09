@@ -450,3 +450,40 @@
 }
 .msg-annotator .msg-content { color: var(--color-secondary); }
 .msg-annotator .msg-content strong { color: var(--color-ink); }
+
+/* ── Tool trace footer ───────────────────────────────────────
+   Provenance for an answer that checked something live. Collapsed by default,
+   same as the annotation fold above: it exists for the moment someone doubts a
+   number, and should cost nothing on every other turn. */
+.msg-tools { align-self: flex-start; margin-top: 3px; }
+.msg-human-self .msg-tools { align-self: flex-end; }
+.msg-tools-toggle {
+    padding: 1px 6px 1px 0;
+    background: none;
+    border: none;
+    border-bottom: 1px solid transparent;
+    color: var(--color-faint);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .16em;
+    cursor: pointer;
+}
+.msg-tools-toggle:hover { color: var(--color-amber); border-bottom-color: var(--amber-30); }
+.msg-tools-list {
+    margin: 3px 0 0;
+    padding: 0 0 0 10px;
+    list-style: none;
+    border-left: 1px solid var(--amber-30);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.7;
+    color: var(--color-secondary);
+}
+.msg-tools-list li { overflow-wrap: anywhere; }
+.msg-tool-name { color: var(--color-ink); }
+.msg-tool-label,
+.msg-tool-latency,
+.msg-tool-provenance { margin-left: 4px; color: var(--color-faint); }
+.msg-tool-error { margin-left: 4px; color: var(--error); }
+.msg-tool-failed .msg-tool-name { color: var(--error); }

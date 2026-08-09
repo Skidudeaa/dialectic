@@ -436,17 +436,49 @@ class TestTradingContext:
         # Market data should still be present (not suppressed at 3 days)
         assert "hormuz: fired" in prompt.system
 
-    def test_very_stale_snapshot_suppresses_data(self, builder):
-        """Snapshot 8 days old -> shows only staleness warning, no market data."""
+    def test_very_stale_snapshot_degrades_but_keeps_structure(self, builder):
+        """Snapshot 8 days old -> structure survives, numbers carry a hard warning.
+
+        WHY this replaced a suppression test: annihilating the section left the
+        participant unable to name the phase, the fired nodes or the book it was
+        talking about — structure that does not rot at the rate prices do. What
+        must not survive is the numbers being read as current.
+        """
         config = _make_trading_config(timestamp=_stale_timestamp(8))
         room = make_room(trading_config=config)
         prompt = builder.build(room, [], [], [])
-        assert "WARNING" in prompt.system
-        assert "suppressed" in prompt.system.lower() or "stale" in prompt.system.lower()
-        # Market data should be suppressed
-        assert "hormuz" not in prompt.system
-        assert "Closed through May" not in prompt.system
-        assert "Active nodes" not in prompt.system
+
+        assert "WARNING: snapshot is 8 days old" in prompt.system
+        assert "do NOT cite its numbers as current" in prompt.system
+        # Structure stays rendered.
+        assert "Active nodes" in prompt.system
+        assert "hormuz: fired" in prompt.system
+        assert "Closed through May" in prompt.system
+        assert "XOP" in prompt.system
+
+    def test_very_stale_without_tools_does_not_promise_a_live_fetch(self, builder):
+        """No tool channel -> no instruction to go fetch what it cannot fetch."""
+        config = _make_trading_config(timestamp=_stale_timestamp(8))
+        room = make_room(trading_config=config)
+        prompt = builder.build(room, [], [], [])
+        assert "get_live_quotes" not in prompt.system
+
+    def test_very_stale_with_tools_points_at_the_live_tools(self, builder):
+        """Tools live -> the stale snapshot tells it to check instead of cite."""
+        config = _make_trading_config(timestamp=_stale_timestamp(8))
+        room = make_room(trading_config=config)
+        prompt = builder.build(room, [], [], [], tools_enabled=True)
+        assert "get_live_quotes" in prompt.system
+        assert "get_thesis_state" in prompt.system
+
+    def test_unparseable_timestamp_degrades_the_same_way(self, builder):
+        """A snapshot with no usable stamp is treated as very stale, not deleted."""
+        config = _make_trading_config(timestamp="not-a-timestamp")
+        room = make_room(trading_config=config)
+        prompt = builder.build(room, [], [], [])
+        assert "no valid timestamp" in prompt.system
+        assert "do NOT cite its numbers as current" in prompt.system
+        assert "hormuz: fired" in prompt.system
 
     def test_all_nodes_stable_shows_no_active_signals(self, builder):
         """All nodes stable/gated -> shows 'No active signals'."""
@@ -610,3 +642,85 @@ class TestTradingContextRealWireShape:
         prompt = builder.build(room, [], [], [])
         assert "Top scenarios:" in prompt.system
         assert "Closed through May" in prompt.system
+
+    def test_market_snapshot_renders_from_the_real_payload(self, builder, real_config):
+        """marketSnapshot + tvIndicators reach the prompt (they never used to)."""
+        room = make_room(trading_config=real_config)
+        prompt = builder.build(room, [], [], [])
+
+        assert "Market snapshot (as of" in prompt.system
+        # Real levels, read straight off the captured push.
+        assert f"- brent: {real_config['marketSnapshot']['brent']}" in prompt.system
+        assert f"- dxy: {real_config['marketSnapshot']['dxy']}" in prompt.system
+        # Derived indicators, one line per entry.
+        assert "Indicators:" in prompt.system
+        assert "rsi14=" in prompt.system
+        # Per-indicator provenance is below conversation altitude.
+        assert "derived_from_yahoo" not in prompt.system
+
+    def test_market_snapshot_caps_at_twelve_levels(self, builder, real_config):
+        """A wide snapshot is capped and says how much it is not showing."""
+        real_config["marketSnapshot"] = {f"field{i}": i for i in range(20)}
+        room = make_room(trading_config=real_config)
+        prompt = builder.build(room, [], [], [])
+        assert "- field11: 11" in prompt.system
+        assert "- field12: 12" not in prompt.system
+        assert "8 more fields not shown" in prompt.system
+
+    def test_market_snapshot_absent_once_the_snapshot_is_stale(self, builder, real_config):
+        """Levels are the one part of the payload that rots — 3 days is too old.
+
+        Structure still renders (see the staleness tests above); only the raw
+        levels drop out.
+        """
+        real_config["timestamp"] = _stale_timestamp(3)
+        room = make_room(trading_config=real_config)
+        prompt = builder.build(room, [], [], [])
+        assert "Market snapshot (as of" not in prompt.system
+        assert "Indicators:" not in prompt.system
+        assert "Active nodes" in prompt.system
+
+
+class TestToolsSection:
+    """The tool-policy section rides only on turns that actually have tools."""
+
+    def test_absent_by_default(self, builder):
+        prompt = builder.build(make_room(), [], [], [])
+        assert "## Your Tools" not in prompt.system
+
+    def test_present_when_tools_enabled(self, builder):
+        prompt = builder.build(make_room(), [], [], [], tools_enabled=True)
+        assert "## Your Tools" in prompt.system
+        assert "search_memories" in prompt.system
+        assert "search_transcript" in prompt.system
+
+    def test_states_the_citation_rule(self, builder):
+        """The one rule that must survive a tool result: cite what you received.
+
+        Asserted against whitespace-normalised text — the rule is the sentence,
+        not where the section happens to wrap.
+        """
+        prompt = builder.build(make_room(), [], [], [], tools_enabled=True)
+        flat = " ".join(prompt.system.split())
+        assert "or from a tool result you actually received" in flat
+        assert "When a check fails, say so" in flat
+
+    def test_citation_rule_admits_tool_results_only_when_tools_are_live(self, builder):
+        """Otherwise a stale snapshot tells it to fetch and then forbids quoting
+        what it fetched."""
+        room = make_room(trading_config=_make_trading_config())
+        without = builder.build(room, [], [], []).system
+        with_tools = builder.build(room, [], [], [], tools_enabled=True).system
+
+        assert "use ONLY values from the Trading Thesis State above." in without
+        assert "tool result you received this turn" not in without
+        assert "or from a tool result you received this turn" in with_tools
+
+    def test_bookend_stays_last_with_tools_and_trading(self, builder):
+        """The trading bookend is the final line even with the tools section."""
+        room = make_room(trading_config=_make_trading_config())
+        prompt = builder.build(room, [], [], [], tools_enabled=True)
+        assert prompt.system.rstrip().endswith(
+            "Reminder: cite only values from Trading Thesis State for all financial figures."
+        )
+        assert "## Your Tools" in prompt.system

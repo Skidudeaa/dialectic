@@ -8,6 +8,7 @@ from typing import AsyncIterator, Optional
 from uuid import UUID, uuid4
 import hashlib
 import logging
+import os
 
 import re
 
@@ -25,6 +26,8 @@ from .cross_session_context import CrossSessionContextBuilder, CrossSessionConte
 from .self_memory import LLMSelfMemory
 from .self_model import SelfModel
 from .identity import LLMIdentityManager
+from .tool_loop import ToolLoop
+from .tools import ToolRegistry, build_registry
 from memory.cross_session import CrossSessionMemoryManager
 from memory.manager import MemoryManager
 
@@ -32,6 +35,16 @@ logger = logging.getLogger(__name__)
 
 
 _PHASE_COMPLETE_RE = re.compile(r"\[PHASE_COMPLETE:\s*(.+?)\]")
+
+# Kill switch. Unset means ON — the feature ships enabled, and the env var
+# exists so the room can be put back on the plain streaming path in one
+# restart if the tool channel misbehaves live.
+_TOOLS_OFF_VALUES = frozenset({"0", "false", "no", "off"})
+
+
+def tools_enabled() -> bool:
+    """Whether the LLM participant may call tools at all, per environment."""
+    return os.getenv("DIALECTIC_TOOLS_ENABLED", "").strip().lower() not in _TOOLS_OFF_VALUES
 
 
 @dataclass
@@ -478,8 +491,11 @@ class LLMOrchestrator:
         Yields tuples of (event_type, data) where event_type is:
         - "thinking": Processing started
         - "streaming": Token received {"token": str, "index": int}
+        - "tool_activity": A tool started or finished
+          {"tool": str, "label": str, "status": "started"|"finished"|"failed",
+           "latency_ms": int|None}
         - "done": Complete persisted-message metadata including sequence,
-          created_at, speaker_type, and message_type
+          created_at, speaker_type, message_type, and the tool trace
         - "error": Failed {"error": str, "partial_content": str}
         """
         # Signal processing started
@@ -501,6 +517,8 @@ class LLMOrchestrator:
             thread.room_id, users
         )
 
+        registry = self._tool_registry_for(room, use_provoker=use_provoker)
+
         # Build prompt with truncated messages
         prompt = self.prompt_builder.build(
             room=room,
@@ -511,6 +529,7 @@ class LLMOrchestrator:
             cross_session_context=cross_ctx,
             evolved_identity=evolved_identity,
             user_models=user_models,
+            tools_enabled=registry is not None,
         )
 
         # Create request for streaming
@@ -530,16 +549,63 @@ class LLMOrchestrator:
         accumulated_content = ""
         token_index = 0
         model_used = model
+        tool_metadata: Optional[dict] = None
 
         try:
-            async for event_type, data in router.stream(request):
-                if event_type == "attempt":
-                    model_used = data["model"]
-                    continue
-                token = data["token"]
-                accumulated_content += token
-                yield ("streaming", {"token": token, "index": token_index})
-                token_index += 1
+            if registry is not None:
+                labels = registry.labels()
+                # ToolLoop owns the whole turn: it may make several round trips
+                # and the text of all of them is ONE message in the room.
+                async for kind, payload in ToolLoop(router, registry).run_streaming(request):
+                    if kind == "token":
+                        token = payload["token"]
+                        accumulated_content += token
+                        yield ("streaming", {"token": token, "index": token_index})
+                        token_index += 1
+                    elif kind == "tool_start":
+                        yield ("tool_activity", {
+                            "tool": payload["name"],
+                            "label": payload.get("label") or "checking",
+                            "status": "started",
+                            "latency_ms": None,
+                        })
+                    elif kind == "tool_result":
+                        yield ("tool_activity", {
+                            "tool": payload["name"],
+                            # tool_result carries no label — the registry that
+                            # produced the tool_start is still right here.
+                            "label": labels.get(payload["name"], "checking"),
+                            "status": "finished" if payload.get("ok") else "failed",
+                            "latency_ms": payload.get("latency_ms"),
+                        })
+                    elif kind == "loop_done":
+                        # The loop's own accumulation is authoritative: it spans
+                        # every iteration, including a degraded text-only retry
+                        # whose tokens we may have started emitting mid-turn.
+                        accumulated_content = payload.get("text", accumulated_content)
+                        trace = payload.get("tool_trace") or []
+                        if trace:
+                            tool_metadata = {"tools": {
+                                "iterations": payload.get("iterations", 0),
+                                "degraded": bool(payload.get("degraded")),
+                                # Stamp the human-facing label at write time so
+                                # the reader of a months-old trace does not need
+                                # a client-side copy of the label table to make
+                                # sense of it — tools.py stays the one source.
+                                "calls": [
+                                    {**entry, "label": labels.get(entry.get("name"), "")}
+                                    for entry in trace
+                                ],
+                            }}
+            else:
+                async for event_type, data in router.stream(request):
+                    if event_type == "attempt":
+                        model_used = data["model"]
+                        continue
+                    token = data["token"]
+                    accumulated_content += token
+                    yield ("streaming", {"token": token, "index": token_index})
+                    token_index += 1
 
             # Persist the complete message
             speaker_type = SpeakerType.LLM_PROVOKER if use_provoker else SpeakerType.LLM_PRIMARY
@@ -552,6 +618,7 @@ class LLMOrchestrator:
                 model_used=model_used,
                 prompt_hash=prompt_hash,
                 token_count=0,  # Not available from streaming
+                metadata=tool_metadata,
             )
 
             # Fire-and-forget: extract LLM self-memories in background
@@ -566,14 +633,46 @@ class LLMOrchestrator:
                 "created_at": response_message.created_at.isoformat(),
                 "speaker_type": response_message.speaker_type.value,
                 "message_type": response_message.message_type.value,
+                # None when no tool ran — the client renders the footer off its
+                # presence, so an empty dict would mean "used 0 tools".
+                "metadata": tool_metadata,
             })
 
         except Exception as e:
+            # ToolLoop re-raises a provider death that happens AFTER the first
+            # token (splicing two answers together is worse than one truncated
+            # one), so it lands here exactly like a plain stream failure and
+            # the partial text still reaches the room.
             logger.exception("Streaming error")
             yield ("error", {
                 "error": str(e),
                 "partial_content": accumulated_content,
             })
+
+    def _tool_registry_for(
+        self, room: Room, use_provoker: bool, protocol: Optional[ProtocolState] = None,
+    ) -> Optional[ToolRegistry]:
+        """The tools this turn may use, or None to take the plain stream path.
+
+        WHY not every mode: the provoker is a 1-3 sentence interruption whose
+        whole value is arriving fast — a 20s quote check turns a jab into a
+        latency. The protocol facilitator is procedurally neutral on substance,
+        so fetching evidence is out of role for it. The annotator has its own
+        engine and never comes through here at all. That leaves the primary
+        participant, which is the one that gets asked "what is Brent doing".
+        """
+        if use_provoker or protocol is not None:
+            return None
+        if not tools_enabled():
+            logger.info("Tools disabled by DIALECTIC_TOOLS_ENABLED — plain stream path")
+            return None
+        try:
+            registry = build_registry(room, self.db)
+        except Exception:
+            # A registry that cannot be built is not a reason to lose the turn.
+            logger.exception("Tool registry unavailable — falling back to plain stream")
+            return None
+        return registry if registry.schemas() else None
 
     def _schedule_self_memory_extraction(
         self,
@@ -646,8 +745,16 @@ class LLMOrchestrator:
         prompt_hash: str,
         token_count: int,
         protocol: Optional[ProtocolState] = None,
+        metadata: Optional[dict] = None,
     ) -> Message:
-        """Create Message record and log event, with optional protocol attribution."""
+        """Create Message record and log event, with optional protocol attribution.
+
+        `metadata` lands in messages.metadata (JSONB) — today the tool trace
+        {"tools": {iterations, degraded, calls: [...]}}. WHY persist it rather
+        than only streaming it: "where did that number come from" is a question
+        asked hours later, and a failed check the model then talked around is
+        invisible in the text of the message itself.
+        """
 
         now = datetime.now(timezone.utc)
         message_id = uuid4()
@@ -668,17 +775,20 @@ class LLMOrchestrator:
                     """INSERT INTO messages
                        (id, thread_id, sequence, created_at, speaker_type, user_id,
                         message_type, content, model_used, prompt_hash, token_count,
-                        protocol_id, protocol_phase)
+                        protocol_id, protocol_phase, metadata)
                        VALUES (
                            $1, $2,
                            (SELECT COALESCE(MAX(sequence), 0) + 1 FROM messages WHERE thread_id = $2),
-                           $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+                           $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
                        )
                        RETURNING sequence""",
                     message_id, thread.id, now,
                     speaker_type.value, None, message_type.value,
                     content, model_used, prompt_hash, token_count,
-                    protocol_id, protocol_phase
+                    protocol_id, protocol_phase,
+                    # JSONB: the pool's codec serializes the dict — see
+                    # CLAUDE.md "pass dict directly to asyncpg".
+                    metadata,
                 )
                 break
             except asyncpg.UniqueViolationError:
@@ -699,6 +809,7 @@ class LLMOrchestrator:
             model_used=model_used,
             prompt_hash=prompt_hash,
             token_count=token_count,
+            metadata=metadata,
         )
 
         event = Event(

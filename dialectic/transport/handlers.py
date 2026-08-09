@@ -60,7 +60,7 @@ def _message_type_from_payload(payload: dict) -> MessageType:
 
 def _llm_done_payload(thread_id: UUID, data: dict) -> dict:
     """Build the authoritative persisted-message contract for llm_done."""
-    return {
+    payload = {
         "thread_id": str(thread_id),
         "message_id": data["message_id"],
         "content": data["content"],
@@ -71,6 +71,32 @@ def _llm_done_payload(thread_id: UUID, data: dict) -> dict:
         "speaker_type": data["speaker_type"],
         "message_type": data["message_type"],
     }
+    # The tool trace rides the SAME event that creates the message client-side.
+    # WHY here and not on a later fetch: GET /threads/{id}/messages projects a
+    # fixed field set that has no metadata, so this is the only path by which
+    # the bubble learns which checks the answer rests on. Omitted entirely when
+    # no tool ran, so "key present" means "tools were used".
+    metadata = data.get("metadata")
+    if metadata:
+        payload["metadata"] = metadata
+    return payload
+
+
+def _tool_activity_payload(thread_id: UUID, data: dict) -> dict:
+    """Broadcast shape for one tool starting or finishing.
+
+    The started/finished/failed mapping is done once, in the orchestrator, so
+    both streaming call sites here cannot drift apart on it.
+    """
+    payload = {
+        "thread_id": str(thread_id),
+        "tool": data.get("tool"),
+        "label": data.get("label"),
+        "status": data.get("status"),
+    }
+    if data.get("latency_ms") is not None:
+        payload["latency_ms"] = data["latency_ms"]
+    return payload
 
 
 class MessageHandler:
@@ -464,6 +490,11 @@ class MessageHandler:
                             "index": data["index"],
                             "speaker_type": SpeakerType.LLM_PRIMARY.value,
                         },
+                    ))
+                elif event_type == "tool_activity":
+                    await self.connections.broadcast(room_id, OutboundMessage(
+                        type=MessageTypes.LLM_TOOL_ACTIVITY,
+                        payload=_tool_activity_payload(thread_id, data),
                     ))
                 elif event_type == "done":
                     await self.connections.broadcast(room_id, OutboundMessage(
@@ -1435,6 +1466,11 @@ class MessageHandler:
                         "index": data["index"],
                         "speaker_type": SpeakerType.LLM_PROVOKER.value if use_provoker else SpeakerType.LLM_PRIMARY.value,
                     },
+                ))
+            elif event_type == "tool_activity":
+                await self.connections.broadcast(conn.room_id, OutboundMessage(
+                    type=MessageTypes.LLM_TOOL_ACTIVITY,
+                    payload=_tool_activity_payload(thread_id, data),
                 ))
             elif event_type == "done":
                 await self.connections.broadcast(conn.room_id, OutboundMessage(

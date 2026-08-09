@@ -58,6 +58,7 @@ function ChatLayout() {
   const onlineUsers = useAppStore((s) => s.onlineUsers)
   const isLLMThinking = useAppStore((s) => s.isLLMThinking)
   const isLLMStreaming = useAppStore((s) => s.isLLMStreaming)
+  const llmToolActivity = useAppStore((s) => s.llmToolActivity)
   const streamingContent = useAppStore((s) => s.streamingContent)
   const activeProtocol = useAppStore((s) => s.activeProtocol)
   const roomToken = useAppStore((s) => s.roomToken)
@@ -367,6 +368,13 @@ function ChatLayout() {
   const typingDisplay = typingUsers.map((id) => userNames[id] ?? id.slice(0, 8))
   if (isLLMThinking && !isLLMStreaming) typingDisplay.push('Claude')
 
+  // Only a tool that is still running says anything useful — a finished one is
+  // already answered in the tokens arriving underneath it.
+  const latestToolActivity = currentThread ? llmToolActivity[currentThread.id]?.at(-1) : undefined
+  const toolActivityLabel = (isLLMThinking || isLLMStreaming) && latestToolActivity?.status === 'started'
+    ? latestToolActivity.label
+    : null
+
   const participants = [
     { id: 'claude', name: 'Claude', isOnline: true, isClaude: true },
     ...onlineUsers.map((participant) => ({
@@ -447,7 +455,7 @@ function ChatLayout() {
               onEditMessage={editMessageContent}
               onDeleteMessage={deleteMessage}
             />
-            <TypingIndicator typingUsers={typingDisplay} />
+            <TypingIndicator typingUsers={typingDisplay} activityLabel={toolActivityLabel} />
             <MessageInput
               onSend={(content, messageType) => {
                 const sent = sendMessage(content, messageType, effectiveReplyToId)

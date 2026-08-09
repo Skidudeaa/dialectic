@@ -12,6 +12,7 @@ import type {
   Commitment,
   TradingSnapshot,
   Reaction,
+  LLMToolActivity,
 } from '../types/index.ts'
 
 interface AppState {
@@ -43,6 +44,12 @@ interface AppState {
   isLLMThinking: boolean;
   isLLMStreaming: boolean;
   streamingContent: string;
+  /**
+   * Tools the LLM is using right now, keyed by thread. Transient: it exists to
+   * say "checking live prices" while the room waits, and is cleared the moment
+   * the turn ends. The durable record is the finished message's own trace.
+   */
+  llmToolActivity: Record<string, LLMToolActivity[]>;
 
   // Protocol
   activeProtocol: ProtocolState | null;
@@ -72,6 +79,8 @@ interface AppState {
   updateStreamingContent: (content: string) => void;
   appendStreamingToken: (token: string) => void;
   setLLMState: (thinking: boolean, streaming: boolean) => void;
+  recordToolActivity: (threadId: string, activity: LLMToolActivity) => void;
+  clearToolActivity: (threadId: string) => void;
   setProtocol: (protocol: ProtocolState | null) => void;
   updateProtocolPhase: (phase: number) => void;
   setTypingUser: (userId: string, isTyping: boolean) => void;
@@ -97,6 +106,7 @@ const initialRoomState = {
   isLLMThinking: false,
   isLLMStreaming: false,
   streamingContent: '',
+  llmToolActivity: {},
   activeProtocol: null,
   roomDNA: null,
   activeCommitments: [],
@@ -141,6 +151,7 @@ export const useAppStore = create<AppState>()(
           isLLMThinking: false,
           isLLMStreaming: false,
           streamingContent: '',
+          llmToolActivity: {},
           activeProtocol: null,
           roomDNA: null,
           activeCommitments: [],
@@ -202,6 +213,33 @@ export const useAppStore = create<AppState>()(
           isLLMThinking: thinking,
           isLLMStreaming: streaming,
           ...((!thinking && !streaming) ? { streamingContent: '' } : {}),
+        }),
+
+      // A finished/failed event updates the entry its start created, matched on
+      // tool name — the loop never runs the same tool twice concurrently, and
+      // matching on name keeps this a one-line update instead of an id scheme
+      // the server would then have to carry.
+      recordToolActivity: (threadId, activity) =>
+        set((state) => {
+          const current = state.llmToolActivity[threadId] ?? []
+          let next: LLMToolActivity[]
+          if (activity.status === 'started') {
+            next = [...current, activity]
+          } else {
+            const index = current.map((a) => a.tool).lastIndexOf(activity.tool)
+            next = index === -1
+              ? [...current, activity]
+              : current.map((a, i) => (i === index ? { ...a, ...activity } : a))
+          }
+          return { llmToolActivity: { ...state.llmToolActivity, [threadId]: next } }
+        }),
+
+      clearToolActivity: (threadId) =>
+        set((state) => {
+          if (!(threadId in state.llmToolActivity)) return state
+          const next = { ...state.llmToolActivity }
+          delete next[threadId]
+          return { llmToolActivity: next }
         }),
 
       setProtocol: (protocol) => set({ activeProtocol: protocol }),

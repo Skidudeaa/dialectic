@@ -9,6 +9,41 @@ export interface User {
   display_name: string;
 }
 
+/** One tool the participant called while writing a message. */
+export interface ToolCallTrace {
+  name: string;
+  /** Human-facing phrase, stamped server-side from the tool registry. */
+  label?: string;
+  ok: boolean;
+  latency_ms?: number;
+  input?: Record<string, unknown>;
+  /** Present on hypotheticals — e.g. { base_revision: 29395 }. */
+  provenance?: Record<string, unknown>;
+  /** Present only when the call failed. */
+  error?: string;
+}
+
+/**
+ * Per-message server metadata. Only present on LLM messages that used tools,
+ * and only on the live llm_done event — the REST message list does not project
+ * it, so a reloaded transcript shows no footer.
+ */
+export interface MessageMetadata {
+  tools?: {
+    iterations: number;
+    degraded: boolean;
+    calls: ToolCallTrace[];
+  };
+}
+
+/** Transient "Claude is checking live prices…" signal, one per tool event. */
+export interface LLMToolActivity {
+  tool: string;
+  label: string;
+  status: 'started' | 'finished' | 'failed';
+  latency_ms?: number;
+}
+
 export interface Message {
   id: string;
   thread_id: string;
@@ -25,6 +60,8 @@ export interface Message {
   references_message_id?: string | null;
   /** Set only when the message was revised after posting. */
   edited_at?: string | null;
+  /** Tool trace, when this turn checked something live. */
+  metadata?: MessageMetadata | null;
 }
 
 /** Reactions on one message, grouped by emoji. */
@@ -152,7 +189,8 @@ export type InboundMessageType =
 export type OutboundMessageType =
   | 'message_created' | 'persona_response' | 'user_typing'
   | 'user_joined' | 'user_left' | 'presence_update'
-  | 'llm_thinking' | 'llm_streaming' | 'llm_done' | 'llm_error' | 'llm_cancelled'
+  | 'llm_thinking' | 'llm_streaming' | 'llm_tool_activity'
+  | 'llm_done' | 'llm_error' | 'llm_cancelled'
   | 'thread_created' | 'thread_forked' | 'memory_updated' | 'annotation_created'
   | 'protocol_started' | 'protocol_phase_advanced' | 'protocol_concluded' | 'protocol_aborted'
   | 'commitment_created' | 'commitment_confidence_updated' | 'commitment_resolved' | 'commitment_surfaced'

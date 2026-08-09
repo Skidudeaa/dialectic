@@ -109,6 +109,7 @@ export function MessageBubble({
   const [draft, setDraft] = useState(message.content)
   const [showPicker, setShowPicker] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+  const [showTools, setShowTools] = useState(false)
   const editRef = useRef<HTMLTextAreaElement>(null)
 
   const html = useMemo(() => {
@@ -154,6 +155,11 @@ export function MessageBubble({
     ALWAYS_FOLDED.has(message.speaker_type) || message.content.length > FOLD_THRESHOLD_CHARS
   )
   const isFolded = foldable && !isExpanded
+
+  // Which live checks this answer rests on. Collapsed by default for the same
+  // reason annotations are: it is provenance, available when someone doubts a
+  // number, not something to read on every turn.
+  const toolCalls = message.metadata?.tools?.calls ?? []
 
   return (
     <div
@@ -231,6 +237,42 @@ export function MessageBubble({
             {isExpanded ? 'Show less' : 'Show more'}
           </button>
         )}
+        {toolCalls.length > 0 && (
+          <div className="msg-tools">
+            <button
+              className="msg-tools-toggle"
+              onClick={() => setShowTools((open) => !open)}
+              aria-expanded={showTools}
+            >
+              · used {toolCalls.length} tool{toolCalls.length === 1 ? '' : 's'}
+            </button>
+            {showTools && (
+              <ul className="msg-tools-list">
+                {toolCalls.map((call, index) => (
+                  <li
+                    key={`${call.name}-${index}`}
+                    className={call.ok ? 'msg-tool-ok' : 'msg-tool-failed'}
+                  >
+                    <span className="msg-tool-name">{call.name}</span>
+                    {call.label && <span className="msg-tool-label">— {call.label}</span>}
+                    {typeof call.latency_ms === 'number' && (
+                      <span className="msg-tool-latency">— {call.latency_ms}ms</span>
+                    )}
+                    {call.provenance && Object.keys(call.provenance).length > 0 && (
+                      <span className="msg-tool-provenance">
+                        — {Object.entries(call.provenance)
+                          .map(([key, value]) => `${key}: ${String(value)}`)
+                          .join(', ')}
+                      </span>
+                    )}
+                    {call.error && <span className="msg-tool-error">— {call.error}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         {/* The byline is suppressed on grouped messages, so an edit made to one
             would otherwise be invisible. */}
         {isContinuation && message.edited_at && (
