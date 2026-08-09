@@ -1,28 +1,28 @@
 {
   "v": 2,
-  "timestamp": "2026-04-19T03:05:35Z",
+  "timestamp": "2026-08-09T06:00:04Z",
   "title": "AI Capex Unwind — April 2026",
   "nodeStates": {
     "gpu-price": "fired",
     "power-constraint": "monitoring",
     "tlt-rally": "gated",
     "tsm-utilization": "fired",
-    "capex-guide": "gated",
+    "capex-guide": "fired",
     "utilities-rerate": "fired",
     "nvda-revenue-concentration": "monitoring",
-    "datacenter-reit-leases": "stable",
+    "datacenter-reit-leases": "fired",
     "semis-breakdown": "approaching",
     "vix-spike": "approaching",
-    "credit-spreads": "approaching",
+    "credit-spreads": "fired",
     "broad-multiple-compression": "approaching",
     "fed-reaction": "monitoring",
     "capex-reaccel": "stable"
   },
   "confluenceScores": {
-    "nvda-revenue-concentration": 0.7,
+    "nvda-revenue-concentration": 1.8,
     "semis-breakdown": 0.8,
-    "credit-spreads": 0.35,
-    "broad-multiple-compression": 1.1
+    "credit-spreads": 0.9,
+    "broad-multiple-compression": 1.42
   },
   "cascadePhase": {
     "number": 1,
@@ -34,7 +34,7 @@
       "nodeId": "capex-guide",
       "label": "Hyperscaler Capex Guide",
       "deadline": "2026-05-02",
-      "daysRemaining": 14
+      "daysRemaining": 0
     }
   ],
   "marketSnapshot": {
@@ -56,11 +56,25 @@
     },
     "broad-capex-unwind": {
       "probability": 0.15,
-      "netImpact": 2.8
+      "netImpact": 1.6
     },
     "ai-productivity-proof": {
       "probability": 0.15,
       "netImpact": 0.0
+    }
+  },
+  "feedFreshness": {
+    "yahoo": {
+      "source": "yahoo",
+      "fetchedAt": "2026-08-09T06:00:03Z",
+      "ttlSeconds": 300,
+      "detail": "21/23 symbols"
+    },
+    "derived": {
+      "source": "derived",
+      "fetchedAt": "2026-08-09T06:00:04Z",
+      "ttlSeconds": 86400,
+      "detail": "2 node(s)"
     }
   },
   "portfolioSummary": {
@@ -78,7 +92,7 @@
   "horizonTrace": {
     "T+7d": {
       "states": {
-        "capex-guide": "gated",
+        "capex-guide": "fired",
         "gpu-price": "fired",
         "power-constraint": "monitoring",
         "nvda-revenue-concentration": "monitoring",
@@ -97,7 +111,7 @@
     },
     "T+28d": {
       "states": {
-        "capex-guide": "gated",
+        "capex-guide": "fired",
         "gpu-price": "fired",
         "power-constraint": "monitoring",
         "tsm-utilization": "fired",
@@ -113,34 +127,46 @@
         "broad-multiple-compression": "approaching"
       },
       "confluence": {
-        "semis-breakdown": 0.8,
-        "broad-multiple-compression": 1.1
+        "broad-multiple-compression": 0.77
       }
     },
     "T+90d": {
       "states": {
+        "capex-guide": "fired",
         "gpu-price": "fired",
         "power-constraint": "monitoring",
-        "tlt-rally": "gated",
-        "tsm-utilization": "fired",
-        "capex-guide": "gated",
         "utilities-rerate": "fired",
+        "tlt-rally": "gated",
+        "datacenter-reit-leases": "fired",
         "nvda-revenue-concentration": "monitoring",
-        "datacenter-reit-leases": "stable",
+        "tsm-utilization": "fired",
         "semis-breakdown": "approaching",
         "vix-spike": "approaching",
-        "credit-spreads": "approaching",
+        "credit-spreads": "fired",
         "broad-multiple-compression": "approaching",
         "fed-reaction": "monitoring",
         "capex-reaccel": "stable"
       },
       "confluence": {
-        "nvda-revenue-concentration": 0.7,
+        "nvda-revenue-concentration": 1.8,
         "semis-breakdown": 0.8,
-        "credit-spreads": 0.35,
-        "broad-multiple-compression": 1.1
+        "credit-spreads": 0.9,
+        "broad-multiple-compression": 1.42
       }
     }
   },
-  "tvIndicators": {}
+  "tvIndicators": {
+    "tsm-utilization": {
+      "rsi14": 52.06,
+      "sma50": 425.88,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-08-09T06:00:04Z"
+    },
+    "semis-breakdown": {
+      "rsi14": 52.67,
+      "atr14": 25.94,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-08-09T06:00:04Z"
+    }
+  }
 }

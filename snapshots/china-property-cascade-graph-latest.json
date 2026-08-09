@@ -1,7 +1,7 @@
 {
   "v": 2,
-  "timestamp": "2026-04-24T23:35:20Z",
-  "title": "China Property + EM Cascade \u2014 April 2026",
+  "timestamp": "2026-08-09T06:30:11Z",
+  "title": "China Property + EM Cascade — April 2026",
   "nodeStates": {
     "property-sales": "fired",
     "pboc-response": "monitoring",
@@ -63,13 +63,13 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-04-24T23:35:19Z",
+      "fetchedAt": "2026-08-09T06:30:10Z",
       "ttlSeconds": 300,
       "detail": "28/30 symbols"
     },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-04-24T23:35:20Z",
+      "fetchedAt": "2026-08-09T06:30:10Z",
       "ttlSeconds": 86400,
       "detail": "2 node(s)"
     }
@@ -158,16 +158,16 @@
   },
   "tvIndicators": {
     "cny-break": {
-      "rsi14": 43.24,
-      "sma50": 6.87,
+      "rsi14": 32.35,
+      "sma50": 6.77,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:35:20Z"
+      "computedAt": "2026-08-09T06:30:10Z"
     },
     "iron-copper": {
-      "rsi14": 43.96,
-      "atr14": 3.07,
+      "rsi14": 63.31,
+      "atr14": 2.85,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:35:20Z"
+      "computedAt": "2026-08-09T06:30:10Z"
     }
   }
 }

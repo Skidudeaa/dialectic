@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-06-05T05:13:19Z",
+  "timestamp": "2026-08-09T06:31:01Z",
   "title": "Iran/Hormuz Thesis — June 2026",
   "nodeStates": {
     "hormuz": "fired",
@@ -12,7 +12,7 @@
     "fert-shortage": "approaching",
     "dxy-stress": "fired",
     "diesel": "fired",
-    "rates-term-premium": "stable",
+    "rates-term-premium": "approaching",
     "planting-miss": "fired",
     "em-currency": "fired",
     "freight": "fired",
@@ -71,25 +71,19 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-06-05T05:12:58Z",
+      "fetchedAt": "2026-08-09T06:30:14Z",
       "ttlSeconds": 300,
       "detail": "12/21 symbols"
     },
     "treasury": {
       "source": "treasury",
-      "fetchedAt": "2026-06-05T05:13:07Z",
+      "fetchedAt": "2026-08-09T06:30:24Z",
       "ttlSeconds": 172800,
-      "detail": "curve 2026-06-04"
-    },
-    "gdelt": {
-      "source": "gdelt",
-      "fetchedAt": "2026-06-05T05:13:17Z",
-      "ttlSeconds": 3600,
-      "detail": "1/1 queries"
+      "detail": "curve 2026-08-07"
     },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-06-05T05:13:19Z",
+      "fetchedAt": "2026-08-09T06:31:01Z",
       "ttlSeconds": 86400,
       "detail": "4 node(s)"
     }
@@ -124,7 +118,7 @@
         "services": "gated",
         "de-escalation": "stable",
         "reopening-pressure": "monitoring",
-        "rates-term-premium": "stable",
+        "rates-term-premium": "approaching",
         "growth-scare-yields-fall": "stable",
         "brent": "stable",
         "fert-shortage": "approaching"
@@ -145,7 +139,7 @@
         "services": "gated",
         "de-escalation": "stable",
         "reopening-pressure": "monitoring",
-        "rates-term-premium": "stable",
+        "rates-term-premium": "approaching",
         "growth-scare-yields-fall": "stable",
         "brent": "stable",
         "fert-shortage": "approaching",
@@ -171,7 +165,7 @@
         "fert-shortage": "approaching",
         "dxy-stress": "fired",
         "diesel": "fired",
-        "rates-term-premium": "stable",
+        "rates-term-premium": "approaching",
         "em-currency": "fired",
         "freight": "fired",
         "em-stress": "fired",
@@ -182,32 +176,32 @@
   },
   "tvIndicators": {
     "brent": {
-      "rsi14": 43.18,
-      "atr14": 5.32,
-      "sma50": 103.29,
+      "rsi14": 47.63,
+      "atr14": 4.95,
+      "sma50": 84.61,
       "curveSpread": {
-        "spread": 8.96,
+        "spread": 3.56,
         "shape": "backwardation",
-        "front": 95.38,
-        "back": 86.42
+        "front": 83.55,
+        "back": 79.99
       },
       "source": "derived_from_yahoo",
-      "computedAt": "2026-06-05T05:13:19Z"
+      "computedAt": "2026-08-09T06:31:01Z"
     },
     "food-spike": {
-      "rsi14": 34.6,
+      "rsi14": 48.61,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-06-05T05:13:19Z"
+      "computedAt": "2026-08-09T06:31:01Z"
     },
     "dxy-stress": {
-      "rsi14": 57.61,
+      "rsi14": 36.56,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-06-05T05:13:19Z"
+      "computedAt": "2026-08-09T06:31:01Z"
     },
     "demand-destruction": {
-      "rsi14": 46.34,
+      "rsi14": 46.59,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-06-05T05:13:19Z"
+      "computedAt": "2026-08-09T06:31:01Z"
     }
   }
 }

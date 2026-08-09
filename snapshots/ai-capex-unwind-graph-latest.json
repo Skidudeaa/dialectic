@@ -1,28 +1,28 @@
 {
   "v": 2,
-  "timestamp": "2026-04-24T23:35:25Z",
-  "title": "AI Capex Unwind \u2014 April 2026",
+  "timestamp": "2026-08-09T06:30:05Z",
+  "title": "AI Capex Unwind — April 2026",
   "nodeStates": {
     "gpu-price": "fired",
     "power-constraint": "monitoring",
     "tlt-rally": "gated",
     "tsm-utilization": "fired",
-    "capex-guide": "gated",
+    "capex-guide": "fired",
     "utilities-rerate": "fired",
     "nvda-revenue-concentration": "monitoring",
-    "datacenter-reit-leases": "stable",
+    "datacenter-reit-leases": "fired",
     "semis-breakdown": "approaching",
     "vix-spike": "approaching",
-    "credit-spreads": "approaching",
+    "credit-spreads": "fired",
     "broad-multiple-compression": "approaching",
     "fed-reaction": "monitoring",
     "capex-reaccel": "stable"
   },
   "confluenceScores": {
-    "nvda-revenue-concentration": 0.7,
+    "nvda-revenue-concentration": 1.8,
     "semis-breakdown": 0.8,
-    "credit-spreads": 0.35,
-    "broad-multiple-compression": 1.1
+    "credit-spreads": 0.9,
+    "broad-multiple-compression": 1.42
   },
   "cascadePhase": {
     "number": 1,
@@ -34,7 +34,7 @@
       "nodeId": "capex-guide",
       "label": "Hyperscaler Capex Guide",
       "deadline": "2026-05-02",
-      "daysRemaining": 8
+      "daysRemaining": 0
     }
   ],
   "marketSnapshot": {
@@ -56,7 +56,7 @@
     },
     "broad-capex-unwind": {
       "probability": 0.15,
-      "netImpact": 2.8
+      "netImpact": 1.6
     },
     "ai-productivity-proof": {
       "probability": 0.15,
@@ -66,13 +66,13 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-04-24T23:35:24Z",
+      "fetchedAt": "2026-08-09T06:30:04Z",
       "ttlSeconds": 300,
       "detail": "21/23 symbols"
     },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-04-24T23:35:25Z",
+      "fetchedAt": "2026-08-09T06:30:05Z",
       "ttlSeconds": 86400,
       "detail": "2 node(s)"
     }
@@ -92,7 +92,7 @@
   "horizonTrace": {
     "T+7d": {
       "states": {
-        "capex-guide": "gated",
+        "capex-guide": "fired",
         "gpu-price": "fired",
         "power-constraint": "monitoring",
         "nvda-revenue-concentration": "monitoring",
@@ -111,16 +111,16 @@
     },
     "T+28d": {
       "states": {
-        "capex-guide": "gated",
+        "capex-guide": "fired",
         "gpu-price": "fired",
         "power-constraint": "monitoring",
-        "nvda-revenue-concentration": "monitoring",
         "tsm-utilization": "fired",
         "datacenter-reit-leases": "monitoring",
         "utilities-rerate": "fired",
         "fed-reaction": "monitoring",
         "tlt-rally": "gated",
         "capex-reaccel": "stable",
+        "nvda-revenue-concentration": "monitoring",
         "semis-breakdown": "approaching",
         "vix-spike": "approaching",
         "credit-spreads": "approaching",
@@ -132,39 +132,41 @@
     },
     "T+90d": {
       "states": {
-        "capex-guide": "gated",
+        "capex-guide": "fired",
         "gpu-price": "fired",
         "power-constraint": "monitoring",
-        "datacenter-reit-leases": "monitoring",
         "utilities-rerate": "fired",
         "tlt-rally": "gated",
+        "datacenter-reit-leases": "fired",
         "nvda-revenue-concentration": "monitoring",
         "tsm-utilization": "fired",
         "semis-breakdown": "approaching",
         "vix-spike": "approaching",
-        "credit-spreads": "approaching",
+        "credit-spreads": "fired",
         "broad-multiple-compression": "approaching",
         "fed-reaction": "monitoring",
         "capex-reaccel": "stable"
       },
       "confluence": {
+        "nvda-revenue-concentration": 1.8,
         "semis-breakdown": 0.8,
-        "broad-multiple-compression": 1.1
+        "credit-spreads": 0.9,
+        "broad-multiple-compression": 1.42
       }
     }
   },
   "tvIndicators": {
     "tsm-utilization": {
-      "rsi14": 68.32,
-      "sma50": 357.0,
+      "rsi14": 52.06,
+      "sma50": 425.88,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:35:25Z"
+      "computedAt": "2026-08-09T06:30:05Z"
     },
     "semis-breakdown": {
-      "rsi14": 83.96,
-      "atr14": 12.97,
+      "rsi14": 52.67,
+      "atr14": 25.94,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-24T23:35:25Z"
+      "computedAt": "2026-08-09T06:30:05Z"
     }
   }
 }

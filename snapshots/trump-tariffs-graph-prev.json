@@ -1,10 +1,10 @@
 {
   "v": 2,
-  "timestamp": "2026-04-19T00:08:23Z",
+  "timestamp": "2026-08-09T06:01:14Z",
   "title": "Trump Tariff Escalation Thesis — March 2026",
   "nodeStates": {
     "tariff-shock": "fired",
-    "section122-expiry": "gated",
+    "section122-expiry": "fired",
     "input-costs": "fired",
     "supply-chain": "fired",
     "auto-sector": "fired",
@@ -34,7 +34,7 @@
       "nodeId": "section122-expiry",
       "label": "Section 122 Expiration",
       "deadline": "2026-07-24",
-      "daysRemaining": 97
+      "daysRemaining": 0
     }
   ],
   "marketSnapshot": {
@@ -71,6 +71,26 @@
       "netImpact": 0.2
     }
   },
+  "feedFreshness": {
+    "yahoo": {
+      "source": "yahoo",
+      "fetchedAt": "2026-08-09T06:01:08Z",
+      "ttlSeconds": 300,
+      "detail": "21/26 symbols"
+    },
+    "polymarket": {
+      "source": "polymarket",
+      "fetchedAt": "2026-08-09T06:01:12Z",
+      "ttlSeconds": 900,
+      "detail": "1/3 markets"
+    },
+    "derived": {
+      "source": "derived",
+      "fetchedAt": "2026-08-09T06:01:14Z",
+      "ttlSeconds": 86400,
+      "detail": "3 node(s)"
+    }
+  },
   "portfolioSummary": {
     "monthlyBudget": 6000,
     "topPositions": [
@@ -95,7 +115,7 @@
         "usd-cny": "approaching",
         "consumer-confidence": "monitoring",
         "mfg-pmi": "monitoring",
-        "section122-expiry": "gated",
+        "section122-expiry": "fired",
         "earnings-compression": "monitoring",
         "fed-response": "monitoring",
         "negotiation": "stable",
@@ -114,7 +134,7 @@
         "usd-cny": "approaching",
         "consumer-confidence": "monitoring",
         "mfg-pmi": "monitoring",
-        "section122-expiry": "gated",
+        "section122-expiry": "fired",
         "earnings-compression": "monitoring",
         "fed-response": "monitoring",
         "negotiation": "stable",
@@ -129,7 +149,10 @@
         "tariff-shock": "fired",
         "supply-chain": "monitoring",
         "retail-prices": "fired",
-        "section122-expiry": "gated",
+        "section122-expiry": "fired",
+        "fed-response": "monitoring",
+        "negotiation": "stable",
+        "recession-risk": "monitoring",
         "input-costs": "fired",
         "auto-sector": "fired",
         "tech-supply": "fired",
@@ -137,35 +160,31 @@
         "usd-cny": "approaching",
         "mfg-pmi": "fired",
         "consumer-confidence": "fired",
-        "earnings-compression": "fired",
-        "recession-risk": "fired",
-        "fed-response": "monitoring",
-        "negotiation": "stable"
+        "earnings-compression": "fired"
       },
       "confluence": {
         "consumer-confidence": 1.45,
-        "earnings-compression": 2.05,
-        "recession-risk": 1.25
+        "earnings-compression": 2.05
       }
     }
   },
   "tvIndicators": {
     "input-costs": {
-      "rsi14": 60.76,
-      "atr14": 3.31,
-      "sma50": 169.91,
+      "rsi14": 58.65,
+      "atr14": 3.04,
+      "sma50": 179.73,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-19T00:08:23Z"
+      "computedAt": "2026-08-09T06:01:14Z"
     },
     "auto-sector": {
-      "rsi14": 75.17,
+      "rsi14": 52.22,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-19T00:08:23Z"
+      "computedAt": "2026-08-09T06:01:14Z"
     },
     "usd-cny": {
-      "rsi14": 34.03,
+      "rsi14": 32.35,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-04-19T00:08:23Z"
+      "computedAt": "2026-08-09T06:01:14Z"
     }
   }
 }
