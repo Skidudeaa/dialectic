@@ -183,7 +183,8 @@ def resolve_book_id(room, explicit: Optional[str] = None) -> str:
 
     config = getattr(room, "trading_config", None) or {}
     if isinstance(config, dict):
-        for key in ("book_id", "bookId", "book"):
+        # "thesisId" is the key the v3 snapshot contract actually carries.
+        for key in ("book_id", "bookId", "book", "thesisId"):
             value = config.get(key)
             if value:
                 return str(value)

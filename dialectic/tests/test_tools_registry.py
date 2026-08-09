@@ -141,6 +141,31 @@ class TestResolveBookId:
         room = SimpleNamespace(linked_book_id=None, trading_config={"bookId": "x-graph"})
         assert resolve_book_id(room) == "x-graph"
 
+    def test_falls_back_to_snapshot_thesis_id(self):
+        # v3 snapshots carry "thesisId", not book_id — the live contract.
+        room = SimpleNamespace(
+            linked_book_id=None, trading_config={"thesisId": "iran-hormuz-graph"}
+        )
+        assert resolve_book_id(room) == "iran-hormuz-graph"
+
+    def test_room_model_preserves_linked_book_id(self):
+        # Regression for the 2026-08-09 live bug: BaseModel silently dropped
+        # linked_book_id from Room(**dict(select_star_row)).
+        from datetime import datetime, timezone
+        from uuid import uuid4
+
+        from models import Room
+
+        room = Room(
+            **{
+                "id": uuid4(),
+                "created_at": datetime.now(timezone.utc),
+                "token": "t",
+                "linked_book_id": "iran-hormuz-graph",
+            }
+        )
+        assert resolve_book_id(room) == "iran-hormuz-graph"
+
     def test_unbound_room_raises_with_actionable_message(self, room):
         with pytest.raises(ValueError, match="book_id"):
             resolve_book_id(room)

@@ -121,6 +121,11 @@ class Room(BaseModel):
     trading_config: Optional[dict] = None
     last_trading_push_at: Optional[datetime] = None
     trading_push_count: int = 0
+    # WHY: migration 008 added this column but the model never gained the
+    # field — BaseModel silently dropped it from Room(**dict(row)), so
+    # resolve_book_id could never see the room's binding. Found live
+    # 2026-08-09 ("tool needs explicit book ID" in the bound Iran room).
+    linked_book_id: Optional[str] = None
 
     @field_validator("trading_config", mode="before")
     @classmethod
