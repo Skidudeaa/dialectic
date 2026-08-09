@@ -106,6 +106,7 @@ would have gone."""
         user_models: Optional[dict[UUID, str]] = None,
         self_awareness: Optional[str] = None,
         tools_enabled: bool = False,
+        message_images: Optional[dict[UUID, list[dict]]] = None,
     ) -> AssembledPrompt:
         """
         Assemble full prompt from components.
@@ -124,6 +125,12 @@ would have gone."""
                 Adds the tool-policy section and changes what the staleness gate
                 tells the model to do about an old snapshot (check it yourself
                 rather than sit on numbers it must not cite).
+            message_images: {message_id: [content block, ...]} from
+                llm/vision.py. A message named here is rendered in content-block
+                form instead of a plain string, so the participant SEES the
+                chart someone posted rather than reading a filename. Absent or
+                empty leaves every message in the exact string form it had
+                before vision existed.
         """
 
         # Protocol mode: use facilitator identity with protocol-specific override
@@ -204,7 +211,7 @@ would have gone."""
             )
 
         system = "\n".join(system_parts)
-        formatted_messages = self._format_messages(messages, users)
+        formatted_messages = self._format_messages(messages, users, message_images)
 
         # WHY: Anthropic's API requires the last message to be from the user role.
         # When the annotator fires before the primary LLM (concurrent paths), it adds
@@ -213,6 +220,10 @@ would have gone."""
         # WITHOUT discarding the LLM's own latest contribution — the previous
         # approach deleted trailing assistant messages, which dropped context and
         # could produce an empty messages array (also a 400).
+        #
+        # This reads "role" and never "content", so it is indifferent to whether
+        # the last turn is a plain string or the content-block form an image
+        # message takes — a block-form human turn still ends the list correctly.
         if formatted_messages and formatted_messages[-1]["role"] == "assistant":
             formatted_messages.append({
                 "role": "user",
@@ -569,9 +580,22 @@ would have gone."""
         self,
         messages: list[Message],
         users: list[User],
+        message_images: Optional[dict[UUID, list[dict]]] = None,
     ) -> list[dict]:
-        """Convert Message objects to LLM message format."""
+        """Convert Message objects to LLM message format.
+
+        A message with image blocks becomes content-block form, images FIRST
+        and the [Speaker]-prefixed text after them — Anthropic's documented
+        ordering preference, and the one that reads correctly anyway ("here is
+        the chart, here is what Amo said about it"). Every other message keeps
+        the plain string it has always been; a mixed list is valid.
+
+        The prefixed text is used verbatim, which is also what keeps the text
+        block non-empty for a caption-less upload: "[Amo] " still carries the
+        attribution the room's three-way transcript depends on.
+        """
         user_map = {u.id: u.display_name for u in users}
+        images = message_images or {}
         formatted = []
 
         for msg in messages:
@@ -591,7 +615,14 @@ would have gone."""
                 content = f"[SYSTEM] {msg.content}"
                 role = "user"
 
-            formatted.append({"role": role, "content": content})
+            blocks = images.get(msg.id)
+            if blocks:
+                formatted.append({
+                    "role": role,
+                    "content": [*blocks, {"type": "text", "text": content}],
+                })
+            else:
+                formatted.append({"role": role, "content": content})
 
         return formatted
 

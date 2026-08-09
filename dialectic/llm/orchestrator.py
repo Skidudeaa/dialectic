@@ -28,6 +28,7 @@ from .self_model import SelfModel
 from .identity import LLMIdentityManager
 from .tool_loop import ToolLoop
 from .tools import ToolRegistry, build_registry
+from .vision import count_images, load_message_images
 from memory.cross_session import CrossSessionMemoryManager
 from memory.manager import MemoryManager
 
@@ -290,6 +291,11 @@ class LLMOrchestrator:
         except Exception as e:
             logger.debug("Self-awareness context unavailable: %s", e)
 
+        message_images = await self._load_message_images(
+            thread.room_id, truncated_messages,
+            use_provoker=decision.use_provoker, protocol=protocol,
+        )
+
         prompt = self.prompt_builder.build(
             room=room,
             users=users,
@@ -301,6 +307,7 @@ class LLMOrchestrator:
             evolved_identity=evolved_identity,
             user_models=user_models,
             self_awareness=self_awareness_section,
+            message_images=message_images,
         )
 
         router = self._get_router(room)
@@ -415,6 +422,11 @@ class LLMOrchestrator:
             thread.room_id, users
         )
 
+        message_images = await self._load_message_images(
+            thread.room_id, truncated_messages,
+            use_provoker=use_provoker, protocol=protocol,
+        )
+
         prompt = self.prompt_builder.build(
             room=room,
             users=users,
@@ -425,6 +437,7 @@ class LLMOrchestrator:
             protocol=protocol,
             evolved_identity=evolved_identity,
             user_models=user_models,
+            message_images=message_images,
         )
 
         router = self._get_router(room)
@@ -519,6 +532,10 @@ class LLMOrchestrator:
 
         registry = self._tool_registry_for(room, use_provoker=use_provoker)
 
+        message_images = await self._load_message_images(
+            thread.room_id, truncated_messages, use_provoker=use_provoker,
+        )
+
         # Build prompt with truncated messages
         prompt = self.prompt_builder.build(
             room=room,
@@ -530,6 +547,7 @@ class LLMOrchestrator:
             evolved_identity=evolved_identity,
             user_models=user_models,
             tools_enabled=registry is not None,
+            message_images=message_images,
         )
 
         # Create request for streaming
@@ -673,6 +691,47 @@ class LLMOrchestrator:
             logger.exception("Tool registry unavailable — falling back to plain stream")
             return None
         return registry if registry.schemas() else None
+
+    async def _load_message_images(
+        self,
+        room_id: UUID,
+        messages: list[Message],
+        *,
+        use_provoker: bool,
+        protocol: Optional[ProtocolState] = None,
+    ) -> Optional[dict[UUID, list[dict]]]:
+        """Image blocks for the messages about to be rendered, or None.
+
+        WHY not every mode: the same line _tool_registry_for draws, for the same
+        reason. The provoker is a 1-3 sentence interruption whose whole value is
+        arriving fast, and the protocol facilitator is procedurally neutral on
+        substance — both run on deliberately stripped context, and an image is
+        the most expensive thing that can ride on a turn (~1-1.5k tokens each).
+        The participant that gets asked "what's wrong with this chart" is the
+        primary one, and it is the one that gets to look.
+
+        NEVER raises: a DB hiccup or a volume that moved must cost the room the
+        picture, not the answer. `messages` is the post-truncation window, so
+        the query only ever covers turns that are actually in the prompt.
+        """
+        if use_provoker or protocol is not None:
+            return None
+        if not messages:
+            return None
+        try:
+            images = await load_message_images(
+                self.db, room_id, [m.id for m in messages]
+            )
+        except Exception:
+            logger.exception("Image attachments unavailable — continuing text-only")
+            return None
+        if not images:
+            return None
+        logger.info(
+            "Vision: %d image(s) attached to %d message(s) in this prompt",
+            count_images(images), len(images),
+        )
+        return images
 
     def _schedule_self_memory_extraction(
         self,

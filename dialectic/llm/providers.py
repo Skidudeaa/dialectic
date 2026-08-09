@@ -289,6 +289,43 @@ class AnthropicProvider(LLMProvider):
                         yield item
 
 
+# WHY this exists: a message carrying an image attachment is a content-BLOCK
+# list in Anthropic's shape ({"type":"image","source":{...}}), and OpenAI wants
+# image_url with a data: URI — so forwarding it verbatim is a deterministic 400.
+# The router would spend three retries and ~7s of backoff discovering that on
+# every fallback with a picture in context.
+#
+# WHY a note rather than a translation: this provider is the AVAILABILITY
+# fallback, whose job is to produce a sentence when Anthropic is down. A model
+# told plainly that it cannot see the image says so; one handed only the caption
+# describes a chart it never looked at. Translating to image_url is a real
+# option (gpt-4o has vision) and is deliberately left until the fallback is
+# worth that surface — see llm/vision.py.
+_UNSEEN_IMAGE_NOTE = "[an image is attached to this message; you cannot see it]"
+
+
+def flatten_content_blocks(content) -> str:
+    """Anthropic content-block list -> one plain string. Strings pass through.
+
+    Unknown block types (tool_use / tool_result) are dropped rather than
+    rendered: they are meaningless without the tools parameter this provider
+    refuses anyway, and the tool loop rebuilds from the ORIGINAL messages
+    before it ever degrades down the chain.
+    """
+    if isinstance(content, str):
+        return content
+    parts: list[str] = []
+    for block in content or []:
+        if not isinstance(block, dict):
+            continue
+        btype = block.get("type")
+        if btype == "text":
+            parts.append(block.get("text", ""))
+        elif btype == "image":
+            parts.append(_UNSEEN_IMAGE_NOTE)
+    return "\n".join(part for part in parts if part)
+
+
 class OpenAIProvider(LLMProvider):
     name = ProviderName.OPENAI
 
@@ -296,6 +333,16 @@ class OpenAIProvider(LLMProvider):
         "gpt-4o": "gpt-4o",
         "gpt-4o-mini": "gpt-4o-mini",
     }
+
+    def _messages(self, request: LLMRequest) -> list[dict]:
+        """System turn + the conversation, flattened to OpenAI's string form."""
+        messages = [{"role": "system", "content": request.system}]
+        for msg in request.messages:
+            messages.append({
+                **msg,
+                "content": flatten_content_blocks(msg.get("content")),
+            })
+        return messages
 
     def __init__(self):
         self.api_key = os.environ.get("OPENAI_API_KEY")
@@ -311,8 +358,7 @@ class OpenAIProvider(LLMProvider):
             # zero primary users. The router filters the chain; this is the
             # loud safety net. The tool loop degrades to text-only re-route.
             raise ToolsUnsupportedError("OpenAI provider does not accept tools")
-        messages = [{"role": "system", "content": request.system}]
-        messages.extend(request.messages)
+        messages = self._messages(request)
 
         response = await self.client.post(
             f"{self.base_url}/chat/completions",
@@ -343,8 +389,7 @@ class OpenAIProvider(LLMProvider):
         import json
         if request.tools:
             raise ToolsUnsupportedError("OpenAI provider does not accept tools")
-        messages = [{"role": "system", "content": request.system}]
-        messages.extend(request.messages)
+        messages = self._messages(request)
 
         async with self.client.stream(
             "POST",
