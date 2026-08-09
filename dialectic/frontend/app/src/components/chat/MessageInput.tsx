@@ -135,12 +135,11 @@ export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTy
     }
 
     const trimmed = content.trim()
-    // The server drops an empty message body without a word, which would strand
-    // the attachments unbound. A caption-less picture posts under its own name.
-    const outgoing = trimmed || ready.map((entry) => entry.record.original_name).join(', ')
-    if (!outgoing) return
+    // Empty content is legal exactly when files ride along — the server
+    // accepts an attachment-only message and binds them in the send.
+    if (!trimmed && ready.length === 0) return
 
-    const sent = onSend(outgoing, messageType, ready.map((entry) => entry.record))
+    const sent = onSend(trimmed, messageType, ready.map((entry) => entry.record))
     // WHY: onSend returns false when the socket is not open. This used to be a
     // silent no-op — the text stayed in the box with no indication it had not
     // been delivered, which reads as "the app ate my message."

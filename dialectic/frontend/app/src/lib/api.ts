@@ -202,13 +202,6 @@ class DialecticAPI {
     return pages.flat();
   }
 
-  async bindAttachment(roomId: string, attachmentId: string, messageId: string) {
-    return this.fetch<Attachment>(
-      `/rooms/${roomId}/attachments/${attachmentId}/bind`,
-      { method: 'POST', body: JSON.stringify({ message_id: messageId }) },
-    );
-  }
-
   /**
    * The bytes. GET /attachments/{id} authenticates like every other room read,
    * so this cannot be an <img src> — the caller renders from an object URL.

@@ -62,6 +62,9 @@ export interface Message {
   edited_at?: string | null;
   /** Tool trace, when this turn checked something live. */
   metadata?: MessageMetadata | null;
+  /** Carried on the live message_created broadcast; history loads fill the
+   * attachments map instead (see appStore). */
+  attachments?: Attachment[];
 }
 
 /** What a stored attachment is, as the server classifies it. */
@@ -93,18 +96,6 @@ export interface Attachment {
   url: string;
   /** True when identical bytes were already in the room and the row was reused. */
   deduplicated?: boolean;
-}
-
-/**
- * A send whose attachments cannot be bound yet, because the message id only
- * exists once the server has written the row and echoed message_created.
- * Matched back to that echo on (thread, author, content) — see appStore.
- */
-export interface PendingAttachmentBind {
-  threadId: string;
-  content: string;
-  attachments: Attachment[];
-  queuedAt: number;
 }
 
 /** Reactions on one message, grouped by emoji. */

@@ -5,13 +5,14 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
 import api.main as main_mod
 import operations
 import transport.handlers as handlers_mod
+from api.attachments import AttachmentBindError
 from memory.cross_session import CrossSessionMemoryManager
 from llm.orchestrator import LLMOrchestrator
 from llm.prompts import AssembledPrompt
@@ -47,6 +48,44 @@ def make_handler(db=None, memory=None, llm=None):
     return handler, connections
 
 
+class FakeTransaction:
+    """asyncpg Connection.transaction() stand-in: commit/rollback are no-ops."""
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc_info):
+        return False
+
+
+def make_send_db(thread_id, *, display_name="Amo", member_count=1):
+    """db mock for the _handle_send_message happy path (insert + user lookup)."""
+    return SimpleNamespace(
+        fetchval=AsyncMock(side_effect=[thread_id, member_count]),
+        fetchrow=AsyncMock(side_effect=[{"sequence": 7}, {"display_name": display_name}]),
+        execute=AsyncMock(),
+        transaction=lambda: FakeTransaction(),
+    )
+
+
+def make_attachment_row(attachment_id, room_id, user_id, message_id):
+    """An attachments-table row, as bind_attachment_to_message returns it."""
+    return {
+        "id": attachment_id,
+        "room_id": room_id,
+        "message_id": message_id,
+        "uploader_user_id": user_id,
+        "kind": "image",
+        "mime": "image/png",
+        "bytes": 10,
+        "sha256": "a" * 64,
+        "width": 3,
+        "height": 2,
+        "original_name": "chart.png",
+        "storage_path": "x/aa/y.png",
+        "created_at": datetime.now(timezone.utc),
+    }
+
+
 def make_connection(room_id=None, user_id=None, thread_id=None):
     return Connection(
         websocket=SimpleNamespace(),
@@ -70,6 +109,7 @@ async def test_send_message_uses_validated_payload_thread_and_canonical_type():
         fetchval=AsyncMock(side_effect=[thread_id, 1]),
         fetchrow=AsyncMock(side_effect=[{"sequence": 7}, {"display_name": "Amo"}]),
         execute=AsyncMock(),
+        transaction=lambda: FakeTransaction(),
     )
     memory = SimpleNamespace(compute_message_novelty=AsyncMock(return_value=0.4))
     handler, _ = make_handler(db=db, memory=memory)
@@ -89,6 +129,122 @@ async def test_send_message_uses_validated_payload_thread_and_canonical_type():
     assert insert_args[2] == thread_id
     assert insert_args[6] == MessageType.QUESTION.value
     handler._trigger_llm.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_send_message_with_attachment_ids_binds_and_broadcasts_attachments(monkeypatch):
+    room_id = uuid4()
+    thread_id = uuid4()
+    attachment_id = uuid4()
+    conn = make_connection(room_id=room_id)
+    db = make_send_db(thread_id)
+    memory = SimpleNamespace(compute_message_novelty=AsyncMock(return_value=0.4))
+    handler, connections = make_handler(db=db, memory=memory)
+    handler._trigger_push_notifications = AsyncMock()
+    handler._trigger_llm = AsyncMock()
+
+    async def fake_bind(db_conn, *, room_id, user_id, attachment_id, message_id):
+        return make_attachment_row(attachment_id, room_id, user_id, message_id)
+
+    bind = AsyncMock(side_effect=fake_bind)
+    monkeypatch.setattr(handlers_mod, "bind_attachment_to_message", bind)
+
+    await handler._handle_send_message(conn, {
+        "content": "look at this",
+        "thread_id": str(thread_id),
+        "attachment_ids": [str(attachment_id)],
+    })
+
+    bind.assert_awaited_once()
+    bind_kwargs = bind.await_args.kwargs
+    assert bind_kwargs["room_id"] == room_id
+    assert bind_kwargs["user_id"] == conn.user_id
+    assert bind_kwargs["attachment_id"] == attachment_id
+
+    broadcast = connections.broadcasts[-1][1]
+    # Bound to the message the send minted, and carried on the broadcast.
+    assert bind_kwargs["message_id"] == UUID(broadcast.payload["id"])
+    attachments = broadcast.payload["attachments"]
+    assert [a["id"] for a in attachments] == [str(attachment_id)]
+    assert attachments[0]["message_id"] == broadcast.payload["id"]
+    assert attachments[0]["url"] == f"/attachments/{attachment_id}"
+    handler._trigger_llm.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_empty_content_is_accepted_when_attachments_ride_along(monkeypatch):
+    room_id = uuid4()
+    thread_id = uuid4()
+    attachment_id = uuid4()
+    conn = make_connection(room_id=room_id)
+    db = make_send_db(thread_id)
+    memory = SimpleNamespace(compute_message_novelty=AsyncMock(return_value=0.4))
+    handler, connections = make_handler(db=db, memory=memory)
+    handler._trigger_push_notifications = AsyncMock()
+    handler._trigger_llm = AsyncMock()
+
+    async def fake_bind(db_conn, *, room_id, user_id, attachment_id, message_id):
+        return make_attachment_row(attachment_id, room_id, user_id, message_id)
+
+    monkeypatch.setattr(
+        handlers_mod, "bind_attachment_to_message", AsyncMock(side_effect=fake_bind)
+    )
+
+    await handler._handle_send_message(conn, {
+        "content": "",
+        "thread_id": str(thread_id),
+        "attachment_ids": [str(attachment_id)],
+    })
+
+    broadcast = connections.broadcasts[-1][1]
+    assert broadcast.payload["content"] == ""
+    assert [a["id"] for a in broadcast.payload["attachments"]] == [str(attachment_id)]
+
+
+@pytest.mark.asyncio
+async def test_empty_content_without_attachments_is_still_dropped():
+    handler, connections = make_handler()
+    conn = make_connection()
+
+    await handler._handle_send_message(conn, {"content": "   "})
+
+    assert connections.broadcasts == []
+    assert connections.direct == []
+
+
+@pytest.mark.asyncio
+async def test_bind_failure_sends_error_to_sender_and_broadcasts_nothing(monkeypatch):
+    room_id = uuid4()
+    thread_id = uuid4()
+    attachment_id = uuid4()
+    conn = make_connection(room_id=room_id)
+    # Only the thread validation and the insert run before the bind refuses.
+    db = SimpleNamespace(
+        fetchval=AsyncMock(return_value=thread_id),
+        fetchrow=AsyncMock(side_effect=[{"sequence": 7}]),
+        execute=AsyncMock(),
+        transaction=lambda: FakeTransaction(),
+    )
+    handler, connections = make_handler(db=db)
+    handler._trigger_push_notifications = AsyncMock()
+    handler._trigger_llm = AsyncMock()
+    monkeypatch.setattr(
+        handlers_mod,
+        "bind_attachment_to_message",
+        AsyncMock(side_effect=AttachmentBindError(404, "Attachment not found")),
+    )
+
+    await handler._handle_send_message(conn, {
+        "content": "look at this",
+        "thread_id": str(thread_id),
+        "attachment_ids": [str(attachment_id)],
+    })
+
+    assert connections.broadcasts == []
+    handler._trigger_push_notifications.assert_not_awaited()
+    handler._trigger_llm.assert_not_awaited()
+    assert connections.direct[-1][2].type == MessageTypes.ERROR
+    assert "Attachment not found" in connections.direct[-1][2].payload["error"]
 
 
 @pytest.mark.asyncio

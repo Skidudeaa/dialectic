@@ -15,6 +15,11 @@ from models import (
     SpeakerType, MessageType, MessageCreatedPayload,
     ProtocolType,
 )
+from api.attachments import (
+    AttachmentBindError,
+    bind_attachment_to_message,
+    _to_response,
+)
 from memory.manager import MemoryManager
 from llm.orchestrator import LLMOrchestrator
 from llm.annotator import AnnotatorEngine
@@ -200,7 +205,28 @@ class MessageHandler:
         """Handle new message from user."""
 
         content = payload.get("content", "").strip()
-        if not content:
+
+        # Attachments ride the send itself now: the uploader names the ids it
+        # already uploaded, and the bind lands in the same transaction as the
+        # message insert below, so the broadcast can carry the media. Empty
+        # content is legal exactly when the message carries attachments.
+        raw_attachment_ids = payload.get("attachment_ids") or []
+        if not isinstance(raw_attachment_ids, list):
+            await self._send_error(conn, "Invalid attachment_ids")
+            return
+        attachment_ids: list[UUID] = []
+        for raw_attachment_id in raw_attachment_ids:
+            try:
+                attachment_ids.append(
+                    raw_attachment_id
+                    if isinstance(raw_attachment_id, UUID)
+                    else UUID(str(raw_attachment_id))
+                )
+            except (TypeError, ValueError, AttributeError):
+                await self._send_error(conn, "Invalid attachment_ids")
+                return
+
+        if not content and not attachment_ids:
             return
 
         try:
@@ -260,24 +286,47 @@ class MessageHandler:
         # Retry on UNIQUE (thread_id, sequence) collision: concurrent inserts
         # can still compute the same next sequence; the loser retries against
         # the winner's committed row.
+        #
+        # WHY one transaction for insert + binds: the message_created broadcast
+        # below carries the attachments, so no reader may ever see the message
+        # before its media is bound — all-or-nothing is the only ordering that
+        # guarantees that. The retry must wrap the WHOLE transaction: a
+        # UniqueViolationError poisons it, so only a fresh transaction can
+        # retry the pair. A failed bind rolls the message back too — an
+        # imageless message with an orphaned upload is exactly what this
+        # replaced, and it is not coming back.
         row = None
+        bound_attachments: list = []
         for attempt in range(3):
             try:
-                row = await self.db.fetchrow(
-                    """INSERT INTO messages
-                       (id, thread_id, sequence, created_at, speaker_type, user_id,
-                        message_type, content, references_message_id)
-                       VALUES (
-                           $1, $2,
-                           (SELECT COALESCE(MAX(sequence), 0) + 1 FROM messages WHERE thread_id = $2),
-                           $3, $4, $5, $6, $7, $8
-                       )
-                       RETURNING sequence""",
-                    message_id, thread_id, now,
-                    SpeakerType.HUMAN.value, conn.user_id, message_type.value,
-                    content, refs_msg_id
-                )
+                async with self.db.transaction():
+                    row = await self.db.fetchrow(
+                        """INSERT INTO messages
+                           (id, thread_id, sequence, created_at, speaker_type, user_id,
+                            message_type, content, references_message_id)
+                           VALUES (
+                               $1, $2,
+                               (SELECT COALESCE(MAX(sequence), 0) + 1 FROM messages WHERE thread_id = $2),
+                               $3, $4, $5, $6, $7, $8
+                           )
+                           RETURNING sequence""",
+                        message_id, thread_id, now,
+                        SpeakerType.HUMAN.value, conn.user_id, message_type.value,
+                        content, refs_msg_id
+                    )
+                    bound_attachments = []
+                    for attachment_id in attachment_ids:
+                        bound_attachments.append(await bind_attachment_to_message(
+                            self.db,
+                            room_id=conn.room_id,
+                            user_id=conn.user_id,
+                            attachment_id=attachment_id,
+                            message_id=message_id,
+                        ))
                 break
+            except AttachmentBindError as exc:
+                await self._send_error(conn, f"Attachment could not be attached: {exc.detail}")
+                return
             except asyncpg.UniqueViolationError:
                 if attempt == 2:
                     raise
@@ -345,6 +394,13 @@ class MessageHandler:
                     str(message.references_message_id)
                     if message.references_message_id else None
                 ),
+                # Bound in the insert transaction above, so this is the first
+                # read that can carry the media — receivers render from this
+                # and never probe. AttachmentResponse-shaped (see _to_response).
+                "attachments": [
+                    _to_response(row).model_dump(mode="json")
+                    for row in bound_attachments
+                ],
             }
         ))
 

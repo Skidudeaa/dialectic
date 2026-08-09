@@ -351,10 +351,6 @@ class AttachmentResponse(BaseModel):
     deduplicated: bool = False
 
 
-class BindAttachmentRequest(BaseModel):
-    message_id: UUID
-
-
 def _to_response(row, deduplicated: bool = False) -> AttachmentResponse:
     return AttachmentResponse(
         id=row["id"],
@@ -388,8 +384,9 @@ async def upload_attachment(
     db=Depends(_get_db),
 ):
     """
-    Upload one file to a room. Returns the attachment record; the client sends
-    its message afterwards and then calls /bind.
+    Upload one file to a room. Returns the attachment record; the client then
+    sends its message with attachment_ids over the WebSocket, and the send
+    path binds inside the message transaction (see bind_attachment_to_message).
 
     ARCHITECTURE: streams to a temp file in CHUNK_BYTES blocks while hashing,
     then renames into the content-addressed location. Never buffers the whole
@@ -529,10 +526,10 @@ def _unlink_quietly(path: Optional[str]) -> None:
 
 class AttachmentBindError(Exception):
     """
-    A bind was refused. Carries an HTTP status so the REST endpoint can map it
-    verbatim, WITHOUT forcing non-HTTP callers to catch an HTTPException.
+    A bind was refused. Carries an HTTP-style status so callers can report the
+    refusal precisely WITHOUT being forced to catch an HTTPException.
 
-    WHY this exists: the WebSocket send path needs the same bind semantics
+    WHY this exists: the WebSocket send path needs the bind semantics
     (room match, uploader-only, idempotency) but has no HTTP response to raise
     into. See bind_attachment_to_message.
     """
@@ -570,8 +567,8 @@ async def bind_attachment_to_message(
     function assumes an authenticated, in-room user and checks only the
     attachment-specific invariants.
 
-    Raises AttachmentBindError; the REST endpoint maps it to the same status
-    codes it has always returned.
+    Raises AttachmentBindError; the send path turns it into an error frame to
+    the sender and broadcasts nothing.
     """
     row = await db.fetchrow(
         "SELECT * FROM attachments WHERE id = $1 AND room_id = $2",
@@ -716,43 +713,3 @@ async def fetch_attachment(
             "Cache-Control": "private, max-age=31536000, immutable",
         },
     )
-
-
-@router.post(
-    "/rooms/{room_id}/attachments/{attachment_id}/bind",
-    response_model=AttachmentResponse,
-)
-async def bind_attachment(
-    room_id: UUID,
-    attachment_id: UUID,
-    request: BindAttachmentRequest,
-    token: str = Depends(extract_room_token),
-    current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(_get_db),
-):
-    """
-    Attach an uploaded blob to the message that carries it.
-
-    WHY this is a separate call: the bytes are uploaded before the message
-    exists (the user picks a file, then types), so message_id cannot be known
-    at upload time. The client sends the message, then binds.
-
-    Idempotent for a repeat of the same bind; a bind to a DIFFERENT message is
-    409 — re-pointing would silently strip the attachment off the message that
-    already displays it.
-    """
-    user_id = current_user.user_id
-    await _verify_room_token(room_id, token, db)
-    await _verify_room_member(room_id, user_id, db)
-
-    try:
-        row = await bind_attachment_to_message(
-            db,
-            room_id=room_id,
-            user_id=user_id,
-            attachment_id=attachment_id,
-            message_id=request.message_id,
-        )
-    except AttachmentBindError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
-    return _to_response(row)

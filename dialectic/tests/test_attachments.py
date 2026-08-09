@@ -1,5 +1,5 @@
 """
-Tests for api/attachments — the media upload/fetch/bind API.
+Tests for api/attachments — the media upload/fetch/list API.
 
 Strategy: mount the real router on a bare FastAPI app with the db dependency
 replaced by a fake that routes on SQL, and MEDIA_ROOT pointed at tmp_path. The
@@ -567,109 +567,17 @@ class TestAuthorization:
 
 
 # =========================================================================
-# BIND
-# =========================================================================
-
-
-class TestBind:
-    def _bind(self, ctx, attachment_id, message_id, room_id=ROOM_ID):
-        return ctx.client.post(
-            f"/rooms/{room_id}/attachments/{attachment_id}/bind",
-            json={"message_id": str(message_id)},
-            headers=auth_headers() if room_id == ROOM_ID
-            else {"X-Room-Token": "other-token"},
-        )
-
-    def test_bind_sets_message_id(self, ctx):
-        body = upload(ctx, make_png(), "chart.png", "image/png").json()
-        message_id = uuid4()
-        ctx.db.messages[message_id] = ROOM_ID
-
-        resp = self._bind(ctx, body["id"], message_id)
-        assert resp.status_code == 200
-        assert resp.json()["message_id"] == str(message_id)
-        assert ctx.db.attachments[UUID(body["id"])]["message_id"] == message_id
-
-    def test_rebinding_the_same_message_is_idempotent(self, ctx):
-        body = upload(ctx, make_png(), "chart.png", "image/png").json()
-        message_id = uuid4()
-        ctx.db.messages[message_id] = ROOM_ID
-
-        first = self._bind(ctx, body["id"], message_id)
-        second = self._bind(ctx, body["id"], message_id)
-        assert first.status_code == 200 and second.status_code == 200
-        assert second.json()["message_id"] == str(message_id)
-
-    def test_binding_to_a_different_message_is_409(self, ctx):
-        body = upload(ctx, make_png(), "chart.png", "image/png").json()
-        first_message, second_message = uuid4(), uuid4()
-        ctx.db.messages[first_message] = ROOM_ID
-        ctx.db.messages[second_message] = ROOM_ID
-
-        self._bind(ctx, body["id"], first_message)
-        resp = self._bind(ctx, body["id"], second_message)
-        assert resp.status_code == 409
-        # The original binding survives the refusal.
-        assert ctx.db.attachments[UUID(body["id"])]["message_id"] == first_message
-
-    def test_message_from_another_room_is_rejected(self, ctx):
-        """Cross-room bind would leak a private image into another room's view."""
-        body = upload(ctx, make_png(), "chart.png", "image/png").json()
-        foreign_message = uuid4()
-        ctx.db.messages[foreign_message] = OTHER_ROOM_ID
-
-        resp = self._bind(ctx, body["id"], foreign_message)
-        assert resp.status_code == 400
-        assert "does not belong to this room" in resp.json()["detail"]
-        assert ctx.db.attachments[UUID(body["id"])]["message_id"] is None
-
-    def test_unknown_message_is_404(self, ctx):
-        body = upload(ctx, make_png(), "chart.png", "image/png").json()
-        resp = self._bind(ctx, body["id"], uuid4())
-        assert resp.status_code == 404
-        assert "Message not found" in resp.json()["detail"]
-
-    def test_unknown_attachment_is_404(self, ctx):
-        message_id = uuid4()
-        ctx.db.messages[message_id] = ROOM_ID
-        resp = self._bind(ctx, uuid4(), message_id)
-        assert resp.status_code == 404
-
-    def test_attachment_from_another_room_is_404(self, ctx):
-        ctx.db.members.add((OTHER_ROOM_ID, MEMBER_ID))
-        body = upload(ctx, make_png(), "chart.png", "image/png",
-                      room_id=OTHER_ROOM_ID, token="other-token").json()
-        message_id = uuid4()
-        ctx.db.messages[message_id] = ROOM_ID
-        resp = self._bind(ctx, body["id"], message_id)
-        assert resp.status_code == 404
-
-    def test_only_the_uploader_may_bind(self, ctx):
-        body = upload(ctx, make_png(), "chart.png", "image/png").json()
-        message_id = uuid4()
-        ctx.db.messages[message_id] = ROOM_ID
-
-        ctx.db.members.add((ROOM_ID, OUTSIDER_ID))
-        ctx.acting["user_id"] = OUTSIDER_ID
-        resp = self._bind(ctx, body["id"], message_id)
-        assert resp.status_code == 403
-        assert ctx.db.attachments[UUID(body["id"])]["message_id"] is None
-
-
-# =========================================================================
 # LIST BY MESSAGE
 # =========================================================================
 
 
 class TestListByMessage:
     def _bound_upload(self, ctx, filename, message_id, png=None):
+        # Bound directly on the fake: binding moved into the WebSocket send
+        # transaction, so there is no HTTP bind left to set state up through.
         body = upload(ctx, png or make_png(), filename, "image/png").json()
         ctx.db.messages[message_id] = ROOM_ID
-        ctx.client.post(
-            f"/rooms/{ROOM_ID}/attachments/{body['id']}/bind",
-            json={"message_id": str(message_id)},
-            headers=auth_headers(),
-        )
+        ctx.db.attachments[UUID(body["id"])]["message_id"] = message_id
         return body
 
     def _list(self, ctx, message_ids, room_id=ROOM_ID, token=ROOM_TOKEN):
@@ -739,11 +647,7 @@ class TestListByMessage:
         foreign = upload(ctx, make_png(), "secret.png", "image/png",
                          room_id=OTHER_ROOM_ID, token="other-token").json()
         ctx.db.messages[foreign_message] = OTHER_ROOM_ID
-        ctx.client.post(
-            f"/rooms/{OTHER_ROOM_ID}/attachments/{foreign['id']}/bind",
-            json={"message_id": str(foreign_message)},
-            headers={"X-Room-Token": "other-token"},
-        )
+        ctx.db.attachments[UUID(foreign["id"])]["message_id"] = foreign_message
         assert ctx.db.attachments[UUID(foreign["id"])]["message_id"] == foreign_message
 
         # Ask ROOM_ID for the OTHER room's message id.
@@ -829,8 +733,7 @@ class TestBindHelperDirect:
     bind_attachment_to_message exists so the WebSocket send path can bind
     inside its own transaction. That caller has no HTTPException to catch and
     no TestClient in front of it, so the contract is exercised directly here —
-    testing it only through the REST endpoint would leave its actual consumer
-    uncovered.
+    the helper is the whole bind surface now that the REST endpoint is gone.
     """
 
     def _seed(self, ctx, bound_to=None, uploader=MEMBER_ID, room_id=ROOM_ID):

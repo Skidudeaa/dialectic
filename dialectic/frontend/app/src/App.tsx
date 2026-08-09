@@ -55,7 +55,6 @@ function ChatLayout() {
   const memories = useAppStore((s) => s.memories)
   const reactions = useAppStore((s) => s.reactions)
   const attachments = useAppStore((s) => s.attachments)
-  const queueAttachmentBind = useAppStore((s) => s.queueAttachmentBind)
   const typingUsers = useAppStore((s) => s.typingUsers)
   const onlineUsers = useAppStore((s) => s.onlineUsers)
   const isLLMThinking = useAppStore((s) => s.isLLMThinking)
@@ -472,20 +471,16 @@ function ChatLayout() {
             <MessageInput
               roomId={currentRoom.id}
               onSend={(content, messageType, files) => {
-                const sent = sendMessage(content, messageType, effectiveReplyToId)
+                // The ids travel with the send itself: the server binds them in
+                // the message transaction and the broadcast carries them back.
+                const sent = sendMessage(
+                  content,
+                  messageType,
+                  effectiveReplyToId,
+                  files.map((file) => file.id),
+                )
                 if (!sent) return false
                 setReplyToId(null)
-                // Queued, not bound: the message id arrives with the server's
-                // own message_created echo, which is where the bind fires.
-                // Safe to queue after send — the echo is a round trip away and
-                // cannot land before this handler returns.
-                if (files.length > 0 && currentThread) {
-                  queueAttachmentBind({
-                    threadId: currentThread.id,
-                    content,
-                    attachments: files,
-                  })
-                }
                 return true
               }}
               onTypingStart={sendTypingStart}
