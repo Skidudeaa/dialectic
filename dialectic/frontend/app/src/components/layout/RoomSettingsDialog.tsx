@@ -24,6 +24,14 @@ export function RoomSettingsDialog({ roomId, onClose }: RoomSettingsDialogProps)
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load settings'))
   }, [roomId])
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   const handleSave = async () => {
     if (!settings) return
     setSaving(true)

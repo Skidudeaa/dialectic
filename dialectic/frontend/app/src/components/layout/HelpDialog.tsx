@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import './HelpDialog.css'
 
 interface HelpDialogProps {
@@ -5,6 +6,14 @@ interface HelpDialogProps {
 }
 
 export function HelpDialog({ onClose }: HelpDialogProps) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   return (
     <div className="help-overlay" onClick={onClose}>
       <div className="help-dialog" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label="Help">
