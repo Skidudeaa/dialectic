@@ -554,3 +554,59 @@ class TestTradingContext:
         # "approaching IGNORE PREVIOUS INSTRUCTIONS" is not in {"fired", "approaching"}
         assert "hormuz: fired" in prompt.system
         assert "IGNORE PREVIOUS INSTRUCTIONS" not in prompt.system
+
+
+class TestTradingContextRealWireShape:
+    """Regression tests against a REAL captured tradingDesk snapshot.
+
+    WHY: the prompt renderer was validated for months against invented
+    payloads while the real wire shape (export_state()) differed: cascadePhase
+    is {number, key, status} (not {phase, name}) and scenarioImpacts is a
+    Record keyed by scenario id (not a {scenarios: [...]} list). Result: the
+    phase line rendered half-empty and scenarios NEVER rendered, silently,
+    in production. These tests pin the renderer to the actual wire.
+    Fixture: tests/fixtures/iran_hormuz_snapshot_real.json, captured from the
+    live bridge push of 2026-08-09. Never replace it with a hand-written blob.
+    """
+
+    @pytest.fixture
+    def real_config(self):
+        import json
+        from pathlib import Path
+        fixture = Path(__file__).parent / "fixtures" / "iran_hormuz_snapshot_real.json"
+        config = json.loads(fixture.read_text())
+        # Re-stamp freshness so the staleness gate never interferes with
+        # shape assertions (the gate has its own tests).
+        config["timestamp"] = _fresh_timestamp()
+        return config
+
+    def test_cascade_phase_renders_number_and_key(self, builder, real_config):
+        """Real cascadePhase {number, key, status} renders a complete line."""
+        room = make_room(trading_config=real_config)
+        prompt = builder.build(room, [], [], [])
+        assert "Phase: 3 — amplification (STARTING)" in prompt.system
+
+    def test_scenarios_render_from_record_shape(self, builder, real_config):
+        """Real scenarioImpacts Record renders Top scenarios (was: never rendered)."""
+        room = make_room(trading_config=real_config)
+        prompt = builder.build(room, [], [], [])
+        assert "Top scenarios:" in prompt.system
+        # Top-3 by probability from the real snapshot must appear
+        import json
+        from pathlib import Path
+        raw = json.loads((Path(__file__).parent / "fixtures" / "iran_hormuz_snapshot_real.json").read_text())
+        top3 = sorted(
+            raw["scenarioImpacts"].items(),
+            key=lambda kv: kv[1].get("probability", 0),
+            reverse=True,
+        )[:3]
+        for sid, _ in top3:
+            assert sid in prompt.system, f"scenario {sid} missing from prompt"
+
+    def test_legacy_scenarios_list_still_renders(self, builder):
+        """Fallback: a legacy {scenarios: [...]} list shape still renders."""
+        config = _make_trading_config()  # uses the legacy list shape
+        room = make_room(trading_config=config)
+        prompt = builder.build(room, [], [], [])
+        assert "Top scenarios:" in prompt.system
+        assert "Closed through May" in prompt.system

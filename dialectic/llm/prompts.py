@@ -257,10 +257,14 @@ You speak with authority on procedure, not on content."""
             lines.append("")
 
         # --- Cascade phase ---
+        # WHY: the wire shape from tradingDesk export_state() is
+        # {number, key, status} (verified against a real captured snapshot).
+        # The old phase/name keys never existed on the wire — reading them
+        # rendered the phase line half-empty. Old keys kept as fallback only.
         cascade_phase = trading_config.get("cascadePhase")
         if cascade_phase:
-            phase_num = _sanitize(str(cascade_phase.get("phase", "")))
-            phase_name = _sanitize(str(cascade_phase.get("name", "")))
+            phase_num = _sanitize(str(cascade_phase.get("number", cascade_phase.get("phase", ""))))
+            phase_name = _sanitize(str(cascade_phase.get("key", cascade_phase.get("name", ""))))
             phase_status = _sanitize(str(cascade_phase.get("status", "")))
             phase_line = f"Phase: {phase_num}"
             if phase_name:
@@ -312,24 +316,40 @@ You speak with authority on procedure, not on content."""
             lines.append("")
 
         # --- Top 3 scenarios by probability ---
+        # WHY: the wire shape from tradingDesk export_state() is a Record
+        # keyed by scenario id: {sid: {probability, netImpact}} (verified
+        # against a real captured snapshot — the frontend ScenarioPills and
+        # trading_curator already read it this way). The old code called
+        # .get("scenarios") on the Record, which is always None, so scenarios
+        # NEVER rendered into the LLM prompt. A legacy list under a
+        # "scenarios" key is still accepted as fallback.
         scenario_impacts = trading_config.get("scenarioImpacts")
-        if scenario_impacts:
-            scenarios = scenario_impacts.get("scenarios", [])
-            if isinstance(scenarios, list):
-                sorted_scenarios = sorted(
-                    scenarios,
-                    key=lambda s: s.get("probability", 0),
-                    reverse=True,
-                )[:3]
-                if sorted_scenarios:
-                    lines.append("Top scenarios:")
-                    for sc in sorted_scenarios:
-                        name = _sanitize(sc.get("name", "unnamed"))
-                        prob = sc.get("probability", 0)
-                        net = sc.get("netImpact", sc.get("net_impact", "?"))
-                        prob_pct = f"{int(prob * 100)}%" if isinstance(prob, (int, float)) and prob <= 1 else f"{prob}%"
-                        lines.append(f"- {name} ({prob_pct}): net {net}")
-                    lines.append("")
+        if scenario_impacts and isinstance(scenario_impacts, dict):
+            legacy_list = scenario_impacts.get("scenarios")
+            if isinstance(legacy_list, list):
+                scenario_items = [
+                    (sc.get("name", "unnamed"), sc) for sc in legacy_list
+                    if isinstance(sc, dict)
+                ]
+            else:
+                scenario_items = [
+                    (sid, sc) for sid, sc in scenario_impacts.items()
+                    if isinstance(sc, dict)
+                ]
+            sorted_scenarios = sorted(
+                scenario_items,
+                key=lambda item: item[1].get("probability", 0) or 0,
+                reverse=True,
+            )[:3]
+            if sorted_scenarios:
+                lines.append("Top scenarios:")
+                for sid, sc in sorted_scenarios:
+                    name = _sanitize(str(sid))
+                    prob = sc.get("probability", 0)
+                    net = sc.get("netImpact", sc.get("net_impact", "?"))
+                    prob_pct = f"{int(prob * 100)}%" if isinstance(prob, (int, float)) and prob <= 1 else f"{prob}%"
+                    lines.append(f"- {name} ({prob_pct}): net {net}")
+                lines.append("")
 
         # --- Top 5 positions by monthly allocation ---
         portfolio = trading_config.get("portfolioSummary")
