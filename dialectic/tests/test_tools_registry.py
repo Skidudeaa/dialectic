@@ -27,6 +27,7 @@ EXPECTED_TOOLS = {
     "get_thesis_news",
     "search_memories",
     "search_transcript",
+    "draft_prediction",
 }
 
 
@@ -58,9 +59,9 @@ def registry(room, db):
 
 
 class TestRegistryContract:
-    def test_registers_all_ten_tools(self, registry):
+    def test_registers_all_eleven_tools(self, registry):
         assert set(registry.names()) == EXPECTED_TOOLS
-        assert len(registry.tools) == 10
+        assert len(registry.tools) == 11
 
     def test_names_match_anthropic_pattern(self, registry):
         for tool in registry.tools:
@@ -97,8 +98,11 @@ class TestRegistryContract:
         assert registry.get("get_live_quotes") is not None
         assert registry.get("delete_everything") is None
 
-    def test_no_write_or_ui_tools(self, registry):
-        """Read-only by design — no ui.* broadcasts, no mutations."""
+    def test_no_tool_performs_a_server_write(self, registry):
+        """Read-only by design — no ui.* broadcasts, no mutations. The one
+        exception shape is draft_prediction, a PROPOSAL: its executor
+        validates and shapes the draft but writes nothing; the write is the
+        human's Accept tap (api/prediction_relay.py), outside this registry."""
         for name in registry.names():
             assert not name.startswith("ui_")
             assert not any(
@@ -290,6 +294,75 @@ class TestSearchMemories:
         tool = build_registry(room, FakeDB([])).get("search_memories")
         await tool.execute({"query": "q", "limit": 50})
         assert seen["limit"] == 10
+
+
+# ── the prediction draft (a proposal, never a write) ─────────
+
+
+class TestDraftPredictionTool:
+    """draft_prediction validates and shapes a proposal and writes NOTHING —
+    the Accept tap in api/prediction_relay.py is the only write path."""
+
+    DRAFT = {"statement": "Brent closes above $90 by end of Q3",
+             "confidence": 0.7, "deadline": "2026-09-30"}
+
+    @pytest.mark.asyncio
+    async def test_returns_proposal_with_prediction_draft_provenance(self, room):
+        tool = build_registry(room, FakeDB()).get("draft_prediction")
+        out = await tool.execute({**self.DRAFT, "linked_book_id": " iran-hormuz-graph "})
+
+        assert out["provenance"] == {"kind": "prediction_draft"}
+        assert out["proposal"] == {
+            "statement": "Brent closes above $90 by end of Q3",
+            "confidence": 0.7,
+            "deadline": "2026-09-30",
+            "linked_book_id": "iran-hormuz-graph",
+        }
+
+    @pytest.mark.asyncio
+    async def test_linked_book_id_is_optional(self, room):
+        tool = build_registry(room, FakeDB()).get("draft_prediction")
+        out = await tool.execute(self.DRAFT)
+        assert "linked_book_id" not in out["proposal"]
+
+    @pytest.mark.asyncio
+    async def test_makes_no_network_call_and_no_db_write(self, room, td_env):
+        """The write-guard test above checks names; this one checks behaviour —
+        a draft must not touch tradingDesk OR the database."""
+        requests = []
+
+        def handler(request):
+            requests.append(request)
+            return json_response({})
+
+        class RecordingDB(FakeDB):
+            async def execute(self, *args):
+                raise AssertionError("draft_prediction wrote to the database")
+
+        install_transport(handler)
+        tool = build_registry(room, RecordingDB()).get("draft_prediction")
+        await tool.execute(self.DRAFT)
+        assert requests == []
+
+    @pytest.mark.asyncio
+    async def test_blank_statement_rejected(self, room):
+        tool = build_registry(room, FakeDB()).get("draft_prediction")
+        with pytest.raises(ValueError, match="statement"):
+            await tool.execute({**self.DRAFT, "statement": "   "})
+
+    @pytest.mark.asyncio
+    async def test_confidence_out_of_range_rejected(self, room):
+        tool = build_registry(room, FakeDB()).get("draft_prediction")
+        with pytest.raises(ValueError, match="confidence"):
+            await tool.execute({**self.DRAFT, "confidence": 1.4})
+        with pytest.raises(ValueError, match="confidence"):
+            await tool.execute({**self.DRAFT, "confidence": "high"})
+
+    @pytest.mark.asyncio
+    async def test_non_iso_deadline_rejected(self, room):
+        tool = build_registry(room, FakeDB()).get("draft_prediction")
+        with pytest.raises(ValueError, match="deadline"):
+            await tool.execute({**self.DRAFT, "deadline": "end of Q3"})
 
 
 # ── tradingDesk-backed executors ─────────────────────────────────────

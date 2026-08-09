@@ -487,3 +487,61 @@
 .msg-tool-provenance { margin-left: 4px; color: var(--color-faint); }
 .msg-tool-error { margin-left: 4px; color: var(--error); }
 .msg-tool-failed .msg-tool-name { color: var(--error); }
+
+/* ── Prediction proposal card ────────────────────────────────
+   A drafted prediction is a decision the humans owe, not provenance, so it
+   renders louder than the tool trace: a small card under the bubble with the
+   Accept tap that is the ONLY write path to the tradingDesk tracker. */
+.msg-proposal {
+    align-self: flex-start;
+    margin-top: 6px;
+    padding: 8px 10px;
+    max-width: 100%;
+    border-left: 2px solid var(--color-amber);
+    background: var(--amber-10, transparent);
+}
+.msg-human-self .msg-proposal { align-self: flex-end; }
+.msg-proposal-title {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .16em;
+    color: var(--color-faint);
+}
+.msg-proposal-statement {
+    margin-top: 3px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--color-ink);
+    overflow-wrap: anywhere;
+}
+.msg-proposal-meta {
+    margin-top: 2px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-secondary);
+}
+.msg-proposal-accept {
+    margin-top: 6px;
+    padding: 3px 12px;
+    background: none;
+    border: 1px solid var(--color-amber);
+    color: var(--color-amber);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    cursor: pointer;
+}
+.msg-proposal-accept:hover:not(:disabled) { background: var(--amber-30); }
+.msg-proposal-accept:disabled { opacity: .5; cursor: default; }
+.msg-proposal-logged {
+    display: inline-block;
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    color: var(--color-secondary);
+}
+.msg-proposal-error { margin-left: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--error); }

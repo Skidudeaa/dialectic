@@ -24,9 +24,9 @@ export interface ToolCallTrace {
 }
 
 /**
- * Per-message server metadata. Only present on LLM messages that used tools,
- * and only on the live llm_done event — the REST message list does not project
- * it, so a reloaded transcript shows no footer.
+ * Per-message server metadata. Only present on LLM messages that used tools.
+ * Carried on the live llm_done event and, since the REST projection learned
+ * the field, on history reloads too.
  */
 export interface MessageMetadata {
   tools?: {
@@ -34,6 +34,23 @@ export interface MessageMetadata {
     degraded: boolean;
     calls: ToolCallTrace[];
   };
+  /** A draft_prediction awaiting (or granted) the human Accept tap. */
+  proposal?: PredictionProposal;
+}
+
+/**
+ * Claude's drafted prediction. The draft writes nothing; a human tapping
+ * Accept POSTs it to tradingDesk and the server flips `accepted`, so
+ * accepted=false is what keeps the button armed.
+ */
+export interface PredictionProposal {
+  statement: string;
+  /** Probability 0–1, e.g. 0.7. */
+  confidence: number;
+  /** ISO date (YYYY-MM-DD) the prediction resolves by. */
+  deadline: string;
+  linked_book_id?: string;
+  accepted?: boolean;
 }
 
 /** Transient "Claude is checking live prices…" signal, one per tool event. */

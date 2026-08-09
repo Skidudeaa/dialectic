@@ -229,6 +229,18 @@ class DialecticAPI {
     return res.blob();
   }
 
+  /**
+   * The human tap that logs Claude's drafted prediction to tradingDesk.
+   * Room-authed like every other room write; the server flips the proposal's
+   * accepted flag, so a second tap answers 409 instead of double-logging.
+   */
+  async acceptPrediction(roomId: string, messageId: string): Promise<Record<string, unknown>> {
+    return this.fetch(`/rooms/${roomId}/predictions/accept`, {
+      method: 'POST',
+      body: JSON.stringify({ message_id: messageId }),
+    });
+  }
+
   // Auth (no room token needed)
   // WHY: surfaces the backend's `detail` message (e.g. "Invalid email or password")
   // instead of returning the error body as if it were a TokenResponse — a swallowed

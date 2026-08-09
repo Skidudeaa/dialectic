@@ -538,6 +538,91 @@ class TestNonStreamingTracePersistence:
         assert orch._self_model.log_decision.call_args.kwargs["tool_calls"] is None
 
 
+# ── prediction proposal hoisting ─────────────────────────────
+
+
+def draft_registry():
+    """A registry whose draft_prediction returns provenance like the real
+    executor — the hoisting reads the trace entry's input, not the result."""
+    async def draft(args):
+        return {"proposal": {**args}, "provenance": {"kind": "prediction_draft"}}
+
+    return ToolRegistry(tools=[
+        Tool(name="draft_prediction", description="d", label="drafting a prediction",
+             input_schema={"type": "object", "properties": {}}, execute=draft),
+    ])
+
+
+DRAFT_INPUT = {"statement": "Brent closes above $90 by end of Q3",
+               "confidence": 0.7, "deadline": "2026-09-30"}
+
+
+class TestProposalHoisting:
+    """A prediction draft rides the trace into metadata.proposal — the Accept
+    button renders off that key, on BOTH the streaming and on_message paths."""
+
+    @pytest.mark.asyncio
+    async def test_streaming_path_hoists_the_proposal(self, monkeypatch):
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = FakeRouter(event_scripts=[
+            tool_script("draft_prediction", DRAFT_INPUT),
+            text_script("drafted it — Brent above 90 by Q3"),
+        ])
+        orch = make_orchestrator(router, monkeypatch, registry=draft_registry())
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+
+        events = await run_stream(orch, thread)
+
+        metadata = orch._persist_response.call_args.kwargs["metadata"]
+        assert set(metadata) == {"tools", "proposal"}
+        assert metadata["proposal"] == {**DRAFT_INPUT, "accepted": False}
+        done = next(data for kind, data in events if kind == "done")
+        assert done["metadata"]["proposal"] == metadata["proposal"]
+
+    @pytest.mark.asyncio
+    async def test_non_streaming_path_hoists_the_proposal(self, monkeypatch):
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = LoopRouter(results=[
+            loop_ok(tool_use_response([("draft_prediction", DRAFT_INPUT)])),
+            loop_ok(text_response("drafted it")),
+        ])
+        orch = make_orchestrator(router, monkeypatch, registry=draft_registry())
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        orch._self_model.log_decision = AsyncMock(return_value=42)
+
+        await run_on_message(orch, thread)
+
+        metadata = orch._persist_response.call_args.kwargs["metadata"]
+        assert set(metadata) == {"tools", "proposal"}
+        assert metadata["proposal"] == {**DRAFT_INPUT, "accepted": False}
+
+    @pytest.mark.asyncio
+    async def test_failed_draft_is_not_hoisted(self, monkeypatch):
+        """A draft whose executor blew up carries an error, not a proposal."""
+        async def boom(args):
+            raise RuntimeError("validator exploded")
+
+        registry = ToolRegistry(tools=[
+            Tool(name="draft_prediction", description="d", label="drafting a prediction",
+                 input_schema={"type": "object", "properties": {}}, execute=boom),
+        ])
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = FakeRouter(event_scripts=[
+            tool_script("draft_prediction", DRAFT_INPUT),
+            text_script("could not draft that"),
+        ])
+        orch = make_orchestrator(router, monkeypatch, registry=registry)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+
+        await run_stream(orch, thread)
+
+        metadata = orch._persist_response.call_args.kwargs["metadata"]
+        assert set(metadata) == {"tools"}
+
+
 # ── transport forwarding ─────────────────────────────────────────────
 
 

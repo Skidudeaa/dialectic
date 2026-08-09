@@ -48,6 +48,29 @@ def tools_enabled() -> bool:
     return os.getenv("DIALECTIC_TOOLS_ENABLED", "").strip().lower() not in _TOOLS_OFF_VALUES
 
 
+def _hoisted_prediction_proposal(calls: list[dict]) -> Optional[dict]:
+    """The draft_prediction proposal from a tool trace, if this turn made one.
+
+    WHY hoist it out of the trace: the Accept button renders off
+    metadata.proposal, and asking the client AND the relay endpoint to each
+    dig through tools.calls for the one entry carrying prediction-draft
+    provenance would duplicate this exact scan in two places. The proposal
+    body is the tool's input — the executor already validated it, or ok
+    would be False and the entry would be skipped here. First draft wins: a
+    turn that revises its own draft is rare, and the humans can accept the
+    first and ignore the rest.
+    """
+    for entry in calls:
+        if not entry.get("ok"):
+            continue
+        if (entry.get("provenance") or {}).get("kind") != "prediction_draft":
+            continue
+        proposal = dict(entry.get("input") or {})
+        proposal["accepted"] = False
+        return proposal
+    return None
+
+
 @dataclass
 class OrchestrationResult:
     """
@@ -341,6 +364,9 @@ class LLMOrchestrator:
                         for entry in loop_result.tool_trace
                     ],
                 }}
+                proposal = _hoisted_prediction_proposal(loop_result.tool_trace)
+                if proposal is not None:
+                    tool_metadata["proposal"] = proposal
         else:
             routing = await router.route(request)
 
@@ -686,6 +712,9 @@ class LLMOrchestrator:
                                     for entry in trace
                                 ],
                             }}
+                            proposal = _hoisted_prediction_proposal(trace)
+                            if proposal is not None:
+                                tool_metadata["proposal"] = proposal
             else:
                 async for event_type, data in router.stream(request):
                     if event_type == "attempt":
@@ -880,7 +909,9 @@ class LLMOrchestrator:
         """Create Message record and log event, with optional protocol attribution.
 
         `metadata` lands in messages.metadata (JSONB) — today the tool trace
-        {"tools": {iterations, degraded, calls: [...]}}. WHY persist it rather
+        {"tools": {iterations, degraded, calls: [...]}} plus, when the turn
+        drafted one, {"proposal": {...}} for the prediction Accept button.
+        WHY persist it rather
         than only streaming it: "where did that number come from" is a question
         asked hours later, and a failed check the model then talked around is
         invisible in the text of the message itself.

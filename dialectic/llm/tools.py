@@ -3,6 +3,7 @@
 import json
 import logging
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any, Awaitable, Callable, Optional
 from uuid import UUID
 
@@ -14,8 +15,13 @@ logger = logging.getLogger(__name__)
 # command in tradingDesk's registry — ui.focus_panel broadcasts to every
 # connected client) are deliberately excluded: a participant that can move
 # the humans' screens or mutate the book is a different, much larger trust
-# decision than one that can look things up. Proposal-writes, when they
-# come, go behind an explicit human accept — not in this registry.
+# decision than one that can look things up.
+# The one exception shape is draft_prediction, and it is an exception in
+# KIND, not in effect: the executor validates and shapes a proposal and
+# performs NO write. The write happens only when a human taps Accept in the
+# room (api/prediction_relay.py relays it to tradingDesk) — Claude proposes,
+# a human disposes. The etiquette: never log a prediction from inside this
+# registry, and never present the draft as logged until the Accept lands.
 
 THESIS_CHAR_CAP = 6000
 TOOL_RESULT_CHAR_CAP = 8000
@@ -636,6 +642,50 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
             )
         return _shrink(out, TOOL_RESULT_CHAR_CAP)
 
+    async def draft_prediction(args: dict) -> dict:
+        """Validate and shape a prediction proposal. NO write — ever.
+
+        The returned proposal lands in the tool trace via its provenance,
+        the orchestrator hoists it to messages.metadata.proposal, and the
+        room renders an Accept button against it. The write to tradingDesk's
+        prediction tracker is the human's tap (api/prediction_relay.py), so
+        this executor touches nothing but its own arguments.
+        """
+        statement = str(args.get("statement") or "").strip()
+        if not statement:
+            raise ValueError("statement is required — the claim being put on record.")
+
+        try:
+            confidence = float(args.get("confidence"))
+        except (TypeError, ValueError):
+            raise ValueError("confidence must be a number between 0 and 1 (0.7 = 70%).")
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError("confidence must be between 0 and 1 (0.7 = 70%).")
+
+        deadline = str(args.get("deadline") or "").strip()
+        try:
+            date.fromisoformat(deadline)
+        except ValueError:
+            raise ValueError("deadline must be an ISO date, e.g. 2026-09-30.")
+
+        proposal: dict = {
+            "statement": statement,
+            "confidence": confidence,
+            "deadline": deadline,
+        }
+        book = str(args.get("linked_book_id") or "").strip()
+        if book:
+            proposal["linked_book_id"] = book
+
+        return {
+            # The model sees exactly what the human will be asked to accept.
+            "proposal": proposal,
+            # WHY provenance: the tool loop lifts this onto the trace entry
+            # (tool_loop._execute), which is how the orchestrator knows to
+            # hoist the draft to metadata.proposal for the Accept button.
+            "provenance": {"kind": "prediction_draft"},
+        }
+
     return [
         Tool(
             name="search_memories",
@@ -697,13 +747,50 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
             execute=search_transcript,
             label="re-reading the transcript",
         ),
+        Tool(
+            name="draft_prediction",
+            description=(
+                "Draft a falsifiable prediction for the room — a statement, "
+                "your confidence, and a deadline. Calling this logs NOTHING: "
+                "the draft is shown to the humans with an Accept button, and "
+                "only their tap writes it to the tradingDesk prediction "
+                "tracker. Use it when the conversation produces a real "
+                "forecast ('Brent closes above $90 by end of Q3'), not for "
+                "hypotheticals or scenario talk. Never claim the prediction "
+                "is logged until a human accepts it — say you drafted it."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "statement": {
+                        "type": "string",
+                        "description": "The falsifiable claim, e.g. 'Brent closes above $90 by end of Q3'.",
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "description": "Probability between 0 and 1, e.g. 0.7.",
+                    },
+                    "deadline": {
+                        "type": "string",
+                        "description": "ISO date the prediction resolves by, e.g. 2026-09-30.",
+                    },
+                    "linked_book_id": {
+                        "type": "string",
+                        "description": "Optional book slug this prediction rides on, e.g. 'iran-hormuz-graph'.",
+                    },
+                },
+                "required": ["statement", "confidence", "deadline"],
+            },
+            execute=draft_prediction,
+            label="drafting a prediction",
+        ),
     ]
 
 
 def build_registry(room, db) -> ToolRegistry:
     """
-    ARCHITECTURE: Build the per-room tool set — eight tradingDesk reads plus
-    memory and transcript search.
+    ARCHITECTURE: Build the per-room tool set — the tradingDesk reads, memory
+    and transcript search, and the (write-free) prediction draft.
     WHY per room: the executors close over this room's id and book binding,
     so a tool can never read another room's transcript or the wrong book.
     TRADEOFF: rebuilt per turn (cheap — closures, no I/O) rather than cached,

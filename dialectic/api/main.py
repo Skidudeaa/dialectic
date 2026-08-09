@@ -34,6 +34,7 @@ from analytics.knowledge_graph import KnowledgeGraphEngine
 from stakes.routes import router as stakes_router, set_stakes_db_pool
 from api.personas import router as personas_router, set_personas_db_pool
 from api.attachments import router as attachments_router, set_attachments_db_pool
+from api.prediction_relay import router as prediction_relay_router, set_prediction_relay_db_pool
 from collections import defaultdict
 import time
 
@@ -189,6 +190,9 @@ async def lifespan(app: FastAPI):
         # Set db_pool for attachments module
         set_attachments_db_pool(db_pool)
 
+        # Set db_pool for the prediction relay module
+        set_prediction_relay_db_pool(db_pool)
+
         async with db_pool.acquire() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
@@ -308,6 +312,9 @@ app.include_router(personas_router)
 
 # Include attachments router (media uploads: images / video / files)
 app.include_router(attachments_router)
+
+# Include prediction relay router (human Accept → tradingDesk write)
+app.include_router(prediction_relay_router)
 
 connection_manager: ConnectionManager = ConnectionManager()
 
@@ -430,6 +437,9 @@ class MessageResponse(BaseModel):
     # as ordinary messages — the quoted parent silently disappears.
     references_message_id: Optional[UUID] = None
     edited_at: Optional[datetime] = None
+    # WHY: the tool trace and any prediction proposal live in
+    # messages.metadata; dropping them here made both vanish on every reload.
+    metadata: Optional[dict] = None
 
 
 class ThreadResponse(BaseModel):
@@ -973,6 +983,7 @@ async def get_messages(
         user_id=m.user_id,
         message_type=m.message_type.value if hasattr(m.message_type, 'value') else m.message_type,
         content=m.content,
+        metadata=m.metadata,
     ) for m in messages]
 
     return PaginatedMessagesResponse(
@@ -1645,6 +1656,7 @@ async def get_message_context(
         message_type=m.message_type.value if hasattr(m.message_type, 'value') else m.message_type,
         content=m.content,
         references_message_id=m.references_message_id,
+        metadata=m.metadata,
     ) for m in messages]
 
 

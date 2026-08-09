@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import type { Attachment, Message, Reaction } from '../../types'
+import { api } from '../../lib/api'
+import { useAppStore } from '../../stores/appStore'
 import { MessageAttachments } from './MessageAttachments'
 import './MessageBubble.css'
 
@@ -114,7 +116,9 @@ export function MessageBubble({
   const [showPicker, setShowPicker] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const [showTools, setShowTools] = useState(false)
+  const [acceptState, setAcceptState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
   const editRef = useRef<HTMLTextAreaElement>(null)
+  const currentRoomId = useAppStore((s) => s.currentRoom?.id)
 
   const html = useMemo(() => {
     const raw = marked.parse(message.content, { async: false }) as string
@@ -164,6 +168,23 @@ export function MessageBubble({
   // reason annotations are: it is provenance, available when someone doubts a
   // number, not something to read on every turn.
   const toolCalls = message.metadata?.tools?.calls ?? []
+
+  // A drafted prediction, if this turn made one. The Accept tap is the ONLY
+  // write — the tool itself logged nothing. Local state carries the accepted
+  // flip; on reload the server-stamped flag does.
+  const proposal = message.metadata?.proposal
+  const proposalLogged = Boolean(proposal?.accepted) || acceptState === 'accepted'
+
+  const acceptProposal = async () => {
+    if (!currentRoomId || acceptState === 'accepting' || proposalLogged) return
+    setAcceptState('accepting')
+    try {
+      await api.acceptPrediction(currentRoomId, message.id)
+      setAcceptState('accepted')
+    } catch {
+      setAcceptState('error')
+    }
+  }
 
   return (
     <div
@@ -277,6 +298,31 @@ export function MessageBubble({
                   </li>
                 ))}
               </ul>
+            )}
+          </div>
+        )}
+
+        {proposal && (
+          <div className="msg-proposal">
+            <div className="msg-proposal-title">Drafted prediction</div>
+            <div className="msg-proposal-statement">{proposal.statement}</div>
+            <div className="msg-proposal-meta">
+              {Math.round(proposal.confidence * 100)}% by {proposal.deadline}
+              {proposal.linked_book_id && ` · ${proposal.linked_book_id}`}
+            </div>
+            {proposalLogged ? (
+              <span className="msg-proposal-logged">logged to tradingDesk</span>
+            ) : (
+              <button
+                className="msg-proposal-accept"
+                disabled={acceptState === 'accepting'}
+                onClick={acceptProposal}
+              >
+                {acceptState === 'accepting' ? 'Logging…' : 'Accept'}
+              </button>
+            )}
+            {acceptState === 'error' && !proposalLogged && (
+              <span className="msg-proposal-error">could not log — try again</span>
             )}
           </div>
         )}
