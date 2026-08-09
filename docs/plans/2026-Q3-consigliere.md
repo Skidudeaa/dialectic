@@ -1,5 +1,10 @@
 # Dialectic Quarter Plan — "The Consigliere Wakes Up"
 
+> **Amendment 1 (2026-08-09):** Phase 2.5 "The desk plugs in" inserted — the
+> tradingDesk fusion (bloodstream, tools, one login, media). The Phase 3
+> scheduler organ was built early under it. See
+> `2026-Q3-consigliere-amendment-1-fusion.md`; original text below unchanged.
+
 ## Context
 
 Dialectic crossed from prototype to daily tool this week: the LLM has speaker-attributed
