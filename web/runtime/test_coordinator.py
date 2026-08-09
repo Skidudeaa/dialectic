@@ -9,6 +9,7 @@ config construction, event generation, and restart recovery.
 import asyncio
 import json
 import os
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,6 +17,34 @@ import pytest
 
 from web.persistence.repository import Repository
 from web.runtime.coordinator import RuntimeCoordinator, BOOKS_DIR
+
+
+# WHY one helper instead of a nested `with` per fetcher: a cycle now reaches
+# nine outbound calls (four fast, four slow, plus the econ calendar), and a
+# test that stubs eight of them makes a real HTTP request from the suite.
+# Stubbing them in one place means adding a feed to the cycle cannot leave a
+# hole here — and the slow-feed refresher still RUNS, it just gets a fetcher
+# that resolves nothing, which is its documented degrade path.
+_FAST_FETCHERS = (
+    "fetch_prices", "fetch_polymarket",
+    "fetch_ohlcv_for_derived", "compute_derived_indicators",
+)
+_SLOW_FETCHERS = ("fetch_treasury", "fetch_gdelt", "fetch_fred", "fetch_eia")
+
+
+@contextmanager
+def no_network():
+    """Stub every outbound call a fetch cycle can make."""
+    with ExitStack() as stack:
+        # web.runtime.slow_feeds.thesisgraph is the same module object, so
+        # one patch target covers both call sites.
+        for name in _FAST_FETCHERS + _SLOW_FETCHERS:
+            stack.enter_context(patch(f"web.runtime.coordinator.thesisgraph.{name}"))
+        stack.enter_context(patch(
+            "web.runtime.slow_feeds.econ_calendar.get_calendar",
+            AsyncMock(return_value=[]),
+        ))
+        yield
 
 
 @pytest.fixture
@@ -81,11 +110,8 @@ class TestCycleExecution:
 
         # Patch fetch to avoid network calls
         with patch.object(coordinator, '_run_cycle', wraps=coordinator._run_cycle):
-            with patch("web.runtime.coordinator.thesisgraph.fetch_prices"):
-                with patch("web.runtime.coordinator.thesisgraph.fetch_polymarket"):
-                    with patch("web.runtime.coordinator.thesisgraph.fetch_ohlcv_for_derived"):
-                        with patch("web.runtime.coordinator.thesisgraph.compute_derived_indicators"):
-                            result = await coordinator._run_cycle("iran-hormuz-graph")
+            with no_network():
+                result = await coordinator._run_cycle("iran-hormuz-graph")
 
         assert result["revision"] == 1
         assert result["thesisId"] == "iran-hormuz-graph"
@@ -103,12 +129,9 @@ class TestCycleExecution:
         coordinator._load_definitions()
         coordinator._hydrate_from_db()
 
-        with patch("web.runtime.coordinator.thesisgraph.fetch_prices"):
-            with patch("web.runtime.coordinator.thesisgraph.fetch_polymarket"):
-                with patch("web.runtime.coordinator.thesisgraph.fetch_ohlcv_for_derived"):
-                    with patch("web.runtime.coordinator.thesisgraph.compute_derived_indicators"):
-                        r1 = await coordinator._run_cycle("iran-hormuz-graph")
-                        r2 = await coordinator._run_cycle("iran-hormuz-graph")
+        with no_network():
+            r1 = await coordinator._run_cycle("iran-hormuz-graph")
+            r2 = await coordinator._run_cycle("iran-hormuz-graph")
 
         assert r1["revision"] == 1
         assert r2["revision"] == 2
@@ -141,11 +164,8 @@ class TestSubmit:
         coordinator._load_definitions()
         coordinator._hydrate_from_db()
 
-        with patch("web.runtime.coordinator.thesisgraph.fetch_prices"):
-            with patch("web.runtime.coordinator.thesisgraph.fetch_polymarket"):
-                with patch("web.runtime.coordinator.thesisgraph.fetch_ohlcv_for_derived"):
-                    with patch("web.runtime.coordinator.thesisgraph.compute_derived_indicators"):
-                        result = await coordinator.submit("iran-hormuz-graph", "fetch_prices")
+        with no_network():
+            result = await coordinator.submit("iran-hormuz-graph", "fetch_prices")
 
         assert result["revision"] == 1
 
@@ -165,15 +185,19 @@ class TestLocking:
 
         async def slow_cycle(thesis_id):
             order.append(f"start-{len(order)}")
-            with patch("web.runtime.coordinator.thesisgraph.fetch_prices"):
-                with patch("web.runtime.coordinator.thesisgraph.fetch_polymarket"):
-                    with patch("web.runtime.coordinator.thesisgraph.fetch_ohlcv_for_derived"):
-                        with patch("web.runtime.coordinator.thesisgraph.compute_derived_indicators"):
-                            return await coordinator.submit(thesis_id, "fetch_prices")
+            return await coordinator.submit(thesis_id, "fetch_prices")
 
-        t1 = asyncio.create_task(slow_cycle("iran-hormuz-graph"))
-        t2 = asyncio.create_task(slow_cycle("iran-hormuz-graph"))
-        r1, r2 = await asyncio.gather(t1, t2)
+        # WHY the stub context wraps BOTH tasks rather than living inside
+        # slow_cycle: two overlapping `with patch(...)` blocks on the same
+        # attribute unwind in the wrong order. The first task to exit puts
+        # the REAL fetcher back while the second cycle is still running — so
+        # the no-network guarantee lapsed mid-test (the second cycle made
+        # live HTTP calls) and the module attribute was left holding the
+        # other task's mock afterwards.
+        with no_network():
+            t1 = asyncio.create_task(slow_cycle("iran-hormuz-graph"))
+            t2 = asyncio.create_task(slow_cycle("iran-hormuz-graph"))
+            r1, r2 = await asyncio.gather(t1, t2)
         # Both complete, revisions are sequential
         assert {r1["revision"], r2["revision"]} == {1, 2}
 
@@ -183,17 +207,14 @@ class TestLocking:
         coordinator._load_definitions()
         coordinator._hydrate_from_db()
 
-        with patch("web.runtime.coordinator.thesisgraph.fetch_prices"):
-            with patch("web.runtime.coordinator.thesisgraph.fetch_polymarket"):
-                with patch("web.runtime.coordinator.thesisgraph.fetch_ohlcv_for_derived"):
-                    with patch("web.runtime.coordinator.thesisgraph.compute_derived_indicators"):
-                        t1 = asyncio.create_task(
-                            coordinator.submit("iran-hormuz-graph", "fetch_prices")
-                        )
-                        t2 = asyncio.create_task(
-                            coordinator.submit("trump-tariffs-graph", "fetch_prices")
-                        )
-                        r1, r2 = await asyncio.gather(t1, t2)
+        with no_network():
+            t1 = asyncio.create_task(
+                coordinator.submit("iran-hormuz-graph", "fetch_prices")
+            )
+            t2 = asyncio.create_task(
+                coordinator.submit("trump-tariffs-graph", "fetch_prices")
+            )
+            r1, r2 = await asyncio.gather(t1, t2)
 
         assert r1["thesisId"] == "iran-hormuz-graph"
         assert r2["thesisId"] == "trump-tariffs-graph"
@@ -276,11 +297,8 @@ class TestRestartRecovery:
         coordinator._load_definitions()
         coordinator._hydrate_from_db()
 
-        with patch("web.runtime.coordinator.thesisgraph.fetch_prices"):
-            with patch("web.runtime.coordinator.thesisgraph.fetch_polymarket"):
-                with patch("web.runtime.coordinator.thesisgraph.fetch_ohlcv_for_derived"):
-                    with patch("web.runtime.coordinator.thesisgraph.compute_derived_indicators"):
-                        await coordinator._run_cycle("iran-hormuz-graph")
+        with no_network():
+            await coordinator._run_cycle("iran-hormuz-graph")
 
         # Simulate restart: new coordinator, same DB
         coord2 = RuntimeCoordinator(repo=repo, ws_manager=MagicMock(), tick_interval=9999)
