@@ -12,6 +12,20 @@ all."*
 Full working plan: `docs/plans/2026-08-09-fusion-master-plan.md`. This
 amendment records what changes about the COMMITTED quarter plan.
 
+> **Execution status (stamped 2026-08-09, end of the overnight session):**
+> Phase 2.5 items 1–6 are **live in production** — bloodstream (all five
+> rooms on v3 event-driven push, watchdog armed), tools (streaming @Claude
+> path, nine read-only tools, traces persisted), one login + deep link +
+> signup lock + 72h token exchange, five living theses, severity-gated
+> curator + critical web push, media end-to-end with vision on images.
+> 18 commits, 679 dialectic + 701 tradingDesk tests green, each capability
+> verified against the running system (live Brent fetch with trace; byte-
+> identical media round trip). **Remaining tail:** the monorepo move + doc
+> hygiene (weekend), non-streaming tool paths (gated on streaming-path
+> trust), the tradingDesk social-tier cull, transactional attachment bind,
+> and `draft_prediction` after the trust week (~2026-08-16). Handoff:
+> `docs/handoffs/2026-08-09-fusion-overnight.md`.
+
 ## What this inserts: Phase 2.5 — "The desk plugs in" (immediate)
 
 The diagnosis, verified file:line in the working plan: tradingDesk was alive

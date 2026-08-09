@@ -1,5 +1,14 @@
 # Fusion — tradingDesk × Dialectic → one app, with hands, eyes, and media
 
+> **EXECUTED 2026-08-09 (overnight).** Parts 0, A1–A6, B1–B7, C1/C2, D — live
+> in production and verified. Still open: C3/C5 (repo move + doc hygiene,
+> weekend), A7 (non-streaming tool paths — deliberately gated on
+> streaming-path trust), C4 (the cull), A8 (`draft_prediction`, trust-gated
+> ~2026-08-16), and the transactional attachment bind (see task board /
+> handoff). Execution record: `docs/handoffs/2026-08-09-fusion-overnight.md`;
+> plan deltas discovered during execution are noted there rather than
+> silently edited here.
+
 ## Context
 
 Amo's ask (2026-08-08): scour /root/tradingDesk + /root/DwoodAmo, fuse into **one app**.

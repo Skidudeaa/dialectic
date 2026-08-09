@@ -60,3 +60,36 @@ Beyond: supersession as a fully rebuildable event-log projection; the
 LongMemEval harness as a standing regression gate; scheme state rich enough
 that the consigliere can brief a week's decisions across every open scheme;
 and — when the pair wants it — graduated standing permissions for real actions.
+
+---
+
+## Status update — 2026-08-09, the fusion
+
+*The founding statement above is unchanged. This section records what moved
+and the one interpretation made on the record.*
+
+**The participant has hands, eyes, and a bloodstream.** Overnight on
+2026-08-09 (owner's brief: "one goddamn mass of an app… jump start this
+shit"), tradingDesk was fused in as the market-cognition organ: all five
+thesis books push event-driven state into their rooms, the participant can
+check reality mid-argument through nine read-only tools (every call traced
+into the message for audit), sees pasted charts, and the room holds
+images/files/video. One login spans both surfaces. The Phase 3 scheduler was
+built early — a quiet feed is now structurally loud instead of silently
+stale. Full record: `docs/plans/2026-Q3-consigliere-amendment-1-fusion.md`.
+
+**Interpretation recorded against principle "it does not take external
+actions":** reading our own systems is not acting. Every tool is a GET or a
+pure what-if against services the pair already runs. The single write-shaped
+capability — drafting a prediction — produces a proposal a *human* must tap
+to accept (ships only after a trust week of read-only operation), and the
+human's tap performs the write. Order placement remains categorically out.
+This is the first deliberate step on the long arc's "graduated standing
+permissions" — taken as a proposal-etiquette, not a permission.
+
+**Design principle exercised, not just stated:** #5 (honest verification)
+carried the night — every capability above was proven against the live
+system before being called done: the participant fetched a real Brent quote
+through the real WebSocket with the trace persisted; a real image made the
+byte-identical round trip; the freshness watchdog's kill-test is written
+into the amendment's acceptance checks.
