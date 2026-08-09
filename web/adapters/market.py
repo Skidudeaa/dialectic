@@ -6,10 +6,18 @@ polymarket.fetch_markets into consistent API-friendly dicts.
 """
 
 import logging
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Set
 
 log = logging.getLogger(__name__)
+
+# WHY a TTL cache: fetch_quotes fans out to Yahoo per book with inter-batch
+# sleeps (~18.5s measured on the healthy path). The coordinator refreshes
+# every 300s anyway, so a 240s cache means callers (the Dialectic LLM tool,
+# the ticker UI) pay the cold path at most once per cycle and get ms after.
+_QUOTES_CACHE: dict = {"at": 0.0, "data": None}
+QUOTES_CACHE_TTL_S = 240.0
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
 BOOKS_DIR = _ROOT / "books"
@@ -62,23 +70,76 @@ def _collect_symbols_from_books() -> tuple[Set[str], List[str]]:
     return yahoo_symbols, poly_slugs
 
 
-def fetch_quotes() -> List[Dict[str, Any]]:
-    """Fetch Yahoo Finance prices for all configured symbols across books."""
+def _extract_quotes_from_cfg(cfg: dict) -> List[Dict[str, Any]]:
+    """Pull fetched prices out of a cfg MUTATED by thesisgraph.fetch_prices.
+
+    WHY: fetch_prices returns the cfg itself (docstring: "Mutates and returns
+    cfg"), writing prices into node["current"] (nodes with a yahoo feed) and
+    inst["ref"] (instrument tickers). The old code iterated the returned
+    cfg's top-level keys expecting {symbol: price} — none are numeric, so
+    /api/market/quotes had NEVER returned a single quote. Extract from where
+    the values actually land.
+    """
+    quotes: List[Dict[str, Any]] = []
+    for node in cfg.get("nodes", []):
+        for feed in node.get("feeds", []):
+            if feed.get("source") == "yahoo" and feed.get("symbol"):
+                current = node.get("current")
+                if isinstance(current, (int, float)):
+                    quotes.append({
+                        "symbol": feed["symbol"],
+                        "price": current,
+                        "source": "yahoo",
+                        "node_id": node.get("id"),
+                    })
+                break  # one quote per node even if multiple feeds
+    instruments = cfg.get("instruments", {})
+    if isinstance(instruments, dict):
+        for _nid, inst_list in instruments.items():
+            if not isinstance(inst_list, list):
+                continue
+            for inst in inst_list:
+                ref = inst.get("ref") if isinstance(inst, dict) else None
+                if inst.get("id") and isinstance(ref, (int, float)) and ref:
+                    quotes.append({
+                        "symbol": inst["id"],
+                        "price": ref,
+                        "source": "yahoo",
+                    })
+    return quotes
+
+
+def fetch_quotes(force_refresh: bool = False) -> List[Dict[str, Any]]:
+    """Fetch Yahoo Finance prices for all configured symbols across books.
+
+    Served from a short TTL cache; the cold path re-fetches Yahoo per book
+    (slow — inter-batch sleeps inside thesisgraph.fetch_prices).
+    """
+    now = time.monotonic()
+    if (not force_refresh and _QUOTES_CACHE["data"] is not None
+            and now - _QUOTES_CACHE["at"] < QUOTES_CACHE_TTL_S):
+        return _QUOTES_CACHE["data"]
+
     yahoo_symbols, _ = _collect_symbols_from_books()
     if not yahoo_symbols:
         return []
 
     results: List[Dict[str, Any]] = []
+    seen: Set[str] = set()
     for path in sorted(BOOKS_DIR.glob("*-graph.json")):
         try:
             cfg = thesisgraph.load_config(str(path))
-            prices = thesisgraph.fetch_prices(cfg)
-            for sym, price in prices.items():
-                if isinstance(price, (int, float)):
-                    results.append({"symbol": sym, "price": price, "source": "yahoo"})
-                    yahoo_symbols.discard(sym)
+            thesisgraph.fetch_prices(cfg)
+            for quote in _extract_quotes_from_cfg(cfg):
+                if quote["symbol"] not in seen:
+                    seen.add(quote["symbol"])
+                    results.append(quote)
         except Exception as e:
             log.warning("Price fetch failed for %s: %s", path.name, e)
+
+    if results:
+        _QUOTES_CACHE["at"] = now
+        _QUOTES_CACHE["data"] = results
     return results
 
 
