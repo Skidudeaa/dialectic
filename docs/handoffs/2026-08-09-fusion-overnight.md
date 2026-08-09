@@ -26,7 +26,41 @@ writing), 679 + 701 tests green.
 
 ## What is NOT done (task board is authoritative)
 
-1. **#8 Repo move + doc hygiene (weekend):** `git subtree add --prefix=trading /root/tradingDesk master`; 872MB SQLite → `/var/lib/tradingdesk/` + symlink BEFORE the move (`DEFAULT_DB_PATH` in `web/persistence/connection.py:15` is package-relative); systemd repoint + host → 127.0.0.1; venv rebuild; archive old repo (`pre-fusion-final` tag exists? NO — tag at move time); delete Docker files; `.planning/*` → archive; fix stale READMEs + INTEGRATION.md's false "FULLY IMPLEMENTED" (record the correction, don't silently edit). **Note: `books/*.json` carry room tokens and are pushed to GitHub (private repo, pre-existing practice) — revisit at move time.**
+1. ~~**#8 Repo move**~~ — **DONE 2026-08-09 03:0x**, ahead of the weekend slot, at Amo's call. See the amendment below. **Doc hygiene tail remains:** `.planning/*` → archive; fix stale READMEs + INTEGRATION.md's false "FULLY IMPLEMENTED" (record the correction, don't silently edit). **Note: `books/*.json` carry room tokens and are pushed to GitHub (private repo, pre-existing practice) — still unrevisited.**
+
+   > **Amendment (2026-08-09, move executed).** Four things in the original
+   > item were wrong or incomplete; recording them rather than editing the
+   > line above.
+   >
+   > - **SQLite is 630MB, not 872MB** (872MB was the whole working tree,
+   >   which also carried `venv/` and `node_modules/`). It is gitignored and
+   >   untracked, so it was never a git-size problem — `.git` is 31MB and
+   >   `subtree add` imported only that. The relocation was needed for the
+   >   *runtime* path, not the repo size.
+   > - **There are TWO systemd units, not one.** `tradingdesk-bridge.service`
+   >   (currently inactive) also carried `WorkingDirectory`, `EnvironmentFile`
+   >   and an `ExecStart` venv path into `/root/tradingDesk`. Repointing only
+   >   `tradingdesk.service` would have left a unit that fails the next time
+   >   anything starts it. Both are repointed.
+   > - **`subtree add` carries committed history only.** `.env`, `.mcp.json`,
+   >   `.claude/`, `ui-handoff/`, `.planning/` and the two pending
+   >   `snapshots/outbox/*.json` spool files are all gitignored or untracked
+   >   and were copied across by hand. The live `snapshots/*.json` churn was
+   >   committed first (`f278da4`) so it rode the import.
+   > - **`frontend/dist` must be rebuilt AND the service restarted after.**
+   >   `web/main.py:154` guards the SPA mount with `if _DIST.exists()`,
+   >   evaluated at import. Starting the service before the build exists
+   >   registers no SPA route, so `/` 404s while `/api/health` returns 200 —
+   >   which reads exactly like a broken move and isn't one.
+   >
+   > **Verified after cutover:** `/` 200 from `/root/DwoodAmo/trading`, 200
+   > through nginx on `td.somacura.org`, DB resolving via symlink to
+   > `/var/lib/tradingdesk/tradingdesk.db` (16 tables), and the Field Desk
+   > rendering correctly in a browser. Old repo archived at
+   > `/root/_archive-tradingDesk-pre-fusion` (renamed, not deleted), tagged
+   > `pre-fusion-final`, with a full-history bundle at
+   > `/root/tradingDesk-pre-fusion.bundle`. Host moved `0.0.0.0` → `127.0.0.1`;
+   > nginx already proxied via loopback. Docker files deleted.
 2. **#9 Leftovers:** A7 (on_message/force_response through ToolLoop.run + `log_decision` tool_calls + migration 010) — gated on days of streaming-path trust; `router._hash_prompt` compact projection (16MB transient with images; forward hash break accepted); context token estimate blind to images; C4 cull (export td's 36 chat rows first, flip Field Desk default BEFORE deleting, then routes/ws chat lane, `web/state.py`, `mock_dialectic.py` after a clean week); annotator-vision product call — **Amo decides** whether the annotator should see images.
 3. **#10 `draft_prediction`** (proposal + human Accept) — trust week ends ~2026-08-16.
 4. **#12 Transactional bind:** `send_message` accepts `attachment_ids`, binds via the committed helper (`api/attachments.py:546`, raises `AttachmentBindError`, never commits) in the message transaction; broadcast carries attachments; then DELETE the client's bind call + (thread,content) correlation + 2s debounce. Also enables empty-caption-with-attachments (`handlers.py:203`). Single owner; handlers.py is free.
