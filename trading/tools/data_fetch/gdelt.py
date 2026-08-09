@@ -345,8 +345,11 @@ STANDARD_QUERIES: dict = {
         '("Vanke" OR "Country Garden" OR "LGFV" OR "Evergrande") '
         'AND ("default" OR "restructuring") AND sourcelang:eng'
     ),
+    # WHY no "BOJ"/"JGB": GDELT rejects quoted terms under ~4 chars with
+    # "The specified phrase is too short." — the acronyms must be spelled out.
     "japan-rate-shock": (
-        '"BOJ" AND ("yield" OR "rate hike" OR "JGB") AND sourcelang:eng'
+        '"Bank of Japan" AND ("yield" OR "rate hike" OR "government bond") '
+        'AND sourcelang:eng'
     ),
     "ai-capex-cut": (
         '("NVIDIA" OR "TSMC" OR "datacenter") AND '
