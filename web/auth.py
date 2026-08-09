@@ -251,6 +251,55 @@ def decode_token(token: str) -> dict:
     return payload
 
 
+def exchange_dialectic_token(token: str) -> LoginResponse:
+    """
+    Trade a (short-lived) Dialectic access token for a td-native one.
+
+    WHY: Dialectic's ACCESS token lives 15 MINUTES — it is renewed there by a
+    refresh token this desk deliberately refuses. A deep link that stored the
+    raw bridge token therefore died mid-session and bounced the user to the
+    login screen a quarter of an hour after arriving. Exchanging it once, at
+    arrival, for td's own 72h token gives the bridged session the same lifetime
+    as a session started at td's own login form.
+
+    The bridge itself is NOT reimplemented here: decode_token runs the same
+    path every other request takes, so the map, the refresh-token refusal and
+    the signature check are shared by construction, and there is exactly one
+    place to change if Dialectic's claim shape moves.
+
+    Errors, in the order they are decided:
+      401 — unreadable, expired, wrong-secret, refresh-typed, or unmapped
+            (all raised by decode_token / _resolve_dialectic_token, keeping
+            their explanatory detail)
+      400 — a token that is ALREADY td-native. Not an authentication failure,
+            so not a 401: the caller holds a perfectly good credential and
+            asking for another is a client bug worth surfacing as one.
+    """
+    payload = decode_token(token)
+
+    # `dialectic_user_id` is stamped by _resolve_dialectic_token and by nothing
+    # else, so its presence is the shim's OWN record that this token came
+    # through the bridge. Re-sniffing the `type` claim here would be a second
+    # copy of that decision, free to drift from the first.
+    if "dialectic_user_id" not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This is already a tradingDesk token — no exchange is needed."
+            ),
+        )
+
+    # sub/name were resolved against DEV_USERS inside the shim, which 401s
+    # rather than returning a username this desk does not have.
+    username = payload["sub"]
+    display_name = payload.get("name", username)
+    return LoginResponse(
+        access_token=create_access_token(username, display_name),
+        username=username,
+        display_name=display_name,
+    )
+
+
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
 ) -> User:

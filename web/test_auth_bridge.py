@@ -285,6 +285,193 @@ class TestRealAppRequestPath:
         assert resp.status_code == 401
 
 
+class TestTokenExchange:
+    """
+    POST /api/auth/exchange — trade a 15-minute Dialectic access token for a
+    72-hour td-native one.
+
+    WHY the endpoint exists: the deep link from Dialectic's trading panel hands
+    the desk a bridge token, and the desk used to STORE it. Dialectic's access
+    tokens expire in 15 minutes and are renewed there by a refresh token this
+    desk refuses on purpose, so a bridged session died a quarter of an hour
+    after it started and dumped the user on the login screen.
+    """
+
+    ROUTE = "/api/auth/exchange"
+
+    def _decode(self, token: str) -> dict:
+        return jose_jwt.decode(
+            token, auth_mod.JWT_SECRET, algorithms=[auth_mod.JWT_ALGORITHM]
+        )
+
+    @requires_dialectic
+    def test_returns_a_native_token_for_the_mapped_user(self, mapped_users):
+        resp = real_client.post(
+            self.ROUTE, headers=bearer(dialectic_access_token({"sub": AMO_UUID}))
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["username"] == "amo"
+        assert body["display_name"] == "Amo"
+
+        payload = self._decode(body["access_token"])
+        assert payload["sub"] == "amo"
+        # A re-wrap would be worthless: the point is a token that no longer
+        # depends on the bridge, so neither bridge marker may survive.
+        assert "type" not in payload
+        assert "dialectic_user_id" not in payload
+
+    @requires_dialectic
+    def test_the_client_learns_who_it_is(self, mapped_users):
+        """The uuid -> username map is server-side, so before this endpoint a
+        bridged client had no way to name its own user and rendered every
+        session as an anonymous 'operator'."""
+        resp = real_client.post(
+            self.ROUTE, headers=bearer(dialectic_access_token({"sub": DAN_UUID}))
+        )
+        assert resp.json()["display_name"] == "Dan"
+
+    @requires_dialectic
+    def test_exchanged_token_far_outlives_the_one_it_came_from(self, mapped_users):
+        """The whole defect in one assertion: in goes a token with a minute of
+        life, out comes one with td's full session lifetime."""
+        from datetime import datetime, timedelta, timezone
+
+        short = dialectic_access_token(
+            {"sub": AMO_UUID}, expires_delta=timedelta(minutes=1)
+        )
+        short_exp = self._decode(short)["exp"]
+
+        resp = real_client.post(self.ROUTE, headers=bearer(short))
+        assert resp.status_code == 200, resp.text
+        exp = self._decode(resp.json()["access_token"])["exp"]
+
+        now = datetime.now(timezone.utc).timestamp()
+        # Read td's OWN constant rather than restating 72 — a check that
+        # reimplements the rule it verifies drifts away from the code.
+        expected = auth_mod.JWT_EXPIRE_HOURS * 3600
+        assert abs((exp - now) - expected) < 120, f"exp is {exp - now}s out"
+        assert exp - short_exp > 3600
+
+    @requires_dialectic
+    def test_exchanged_token_works_on_a_protected_route(self, mapped_users):
+        token = real_client.post(
+            self.ROUTE, headers=bearer(dialectic_access_token({"sub": AMO_UUID}))
+        ).json()["access_token"]
+
+        resp = real_client.get("/api/predictions", headers=bearer(token))
+        assert resp.status_code not in (401, 403), resp.text
+
+    @requires_dialectic
+    def test_exchanged_token_survives_the_bridge_being_switched_off(
+        self, mapped_users, monkeypatch
+    ):
+        """'Native' has to mean native. Once minted, the token must not still
+        be leaning on DIALECTIC_USER_MAP — otherwise removing a map entry
+        would revoke a desk session mid-trade."""
+        token = real_client.post(
+            self.ROUTE, headers=bearer(dialectic_access_token({"sub": AMO_UUID}))
+        ).json()["access_token"]
+
+        monkeypatch.setattr(auth_mod, "DIALECTIC_USER_MAP", {})
+        resp = probe.get("/whoami", headers=bearer(token))
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"username": "amo", "display_name": "Amo"}
+
+    def test_a_td_token_is_refused_as_a_client_error(self, mapped_users):
+        """400, not 401: the caller's credential is fine, the request is not.
+        A 401 here would send the client into a re-login it does not need."""
+        resp = real_client.post(
+            self.ROUTE, headers=bearer(create_access_token("amo", "Amo"))
+        )
+        assert resp.status_code == 400
+        assert "already a tradingDesk token" in resp.json()["detail"]
+
+    @requires_dialectic
+    def test_unmapped_dialectic_user_is_401(self, mapped_users):
+        resp = real_client.post(
+            self.ROUTE, headers=bearer(dialectic_access_token({"sub": UNMAPPED_UUID}))
+        )
+        assert resp.status_code == 401
+        assert "not authorized for tradingDesk" in resp.json()["detail"]
+
+    @requires_dialectic
+    def test_expired_dialectic_token_is_401(self, mapped_users):
+        """An expired bridge token cannot buy a fresh 72h one — that would
+        make the exchange a way to resurrect any token ever leaked."""
+        from datetime import timedelta
+
+        resp = real_client.post(
+            self.ROUTE,
+            headers=bearer(
+                dialectic_access_token(
+                    {"sub": AMO_UUID}, expires_delta=timedelta(minutes=-5)
+                )
+            ),
+        )
+        assert resp.status_code == 401
+
+    @requires_dialectic
+    def test_refresh_token_cannot_be_exchanged(self, mapped_users):
+        """The refresh token is refused everywhere else; the exchange must not
+        become the one door that upgrades it into a 72h desk credential."""
+        resp = real_client.post(
+            self.ROUTE, headers=bearer(dialectic_refresh_token({"sub": AMO_UUID}))
+        )
+        assert resp.status_code == 401
+        assert "not accepted for API access" in resp.json()["detail"]
+
+    def test_garbage_is_401(self, mapped_users):
+        resp = real_client.post(self.ROUTE, headers=bearer("not-a-real-jwt"))
+        assert resp.status_code == 401
+        assert resp.json()["detail"] == "Invalid or expired token"
+
+    def test_foreign_secret_is_401(self, mapped_users):
+        token = jose_jwt.encode(
+            {"sub": AMO_UUID, "type": "access", "exp": _future()},
+            "some-other-services-secret",
+            algorithm="HS256",
+        )
+        assert real_client.post(self.ROUTE, headers=bearer(token)).status_code == 401
+
+    def test_no_token_is_401(self):
+        assert real_client.post(self.ROUTE).status_code == 401
+
+
+class TestWhoAmI:
+    """GET /api/auth/me — the client's only way to learn its own name."""
+
+    ROUTE = "/api/auth/me"
+
+    def test_td_token_echoes_identity(self, mapped_users):
+        resp = real_client.get(
+            self.ROUTE, headers=bearer(create_access_token("dan", "Dan"))
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"username": "dan", "display_name": "Dan"}
+
+    @requires_dialectic
+    def test_bridged_token_echoes_the_mapped_identity(self, mapped_users):
+        """Answering for a Dialectic token too is what makes /me useful before
+        an exchange has happened — and the answer is the td identity, not the
+        uuid the caller arrived with."""
+        resp = real_client.get(
+            self.ROUTE, headers=bearer(dialectic_access_token({"sub": AMO_UUID}))
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"username": "amo", "display_name": "Amo"}
+
+    @requires_dialectic
+    def test_unmapped_bridged_token_is_401(self, mapped_users):
+        resp = real_client.get(
+            self.ROUTE, headers=bearer(dialectic_access_token({"sub": UNMAPPED_UUID}))
+        )
+        assert resp.status_code == 401
+
+    def test_anonymous_is_401(self):
+        assert real_client.get(self.ROUTE).status_code in (401, 403)
+
+
 def _future() -> int:
     from datetime import datetime, timedelta, timezone
 

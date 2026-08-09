@@ -12,11 +12,62 @@
  * drop you into whatever account the browser last held.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 
 const STORAGE_KEY = "td_auth";
 
 let store: Record<string, string> = {};
+
+/**
+ * Every boot that adopts a token immediately POSTs it to /api/auth/exchange,
+ * so every case has to say what that endpoint does. The default is a network
+ * FAILURE: the fallback (keep the raw Dialectic token) is what most of these
+ * tests are about, and a default that succeeded would quietly rewrite the
+ * token they assert on.
+ */
+let exchangeCalls: Array<{ url: string; init?: RequestInit }> = [];
+
+function stubExchange(
+  handler: (url: string, init?: RequestInit) => Promise<Response> | Response,
+) {
+  vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+    exchangeCalls.push({ url, init });
+    return handler(url, init);
+  });
+}
+
+function exchangeBody(token: string, username: string, displayName: string) {
+  return new Response(
+    JSON.stringify({
+      access_token: token,
+      token_type: "bearer",
+      username,
+      display_name: displayName,
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+}
+
+/** A td-native token + identity, exactly as POST /api/auth/exchange returns. */
+function exchangeOk(token = "td-native-jwt", username = "amo", displayName = "Amo") {
+  stubExchange(() => Promise.resolve(exchangeBody(token, username, displayName)));
+}
+
+/**
+ * Same, but held open until the returned release() is called — the real shape
+ * of the thing: the exchange is a network round trip that lands AFTER the app
+ * has mounted and painted, which is the entire reason identity has to be
+ * announced rather than read once.
+ */
+function gatedExchangeOk(): () => void {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  stubExchange(async () => {
+    await gate;
+    return exchangeBody("td-native-jwt", "amo", "Amo");
+  });
+  return release;
+}
 
 function installLocalStorage() {
   store = {};
@@ -50,6 +101,12 @@ async function bootWithHash(hash: string) {
 beforeEach(() => {
   installLocalStorage();
   window.history.replaceState(null, "", "/");
+  exchangeCalls = [];
+  stubExchange(() => Promise.reject(new Error("network down")));
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("Dialectic token handoff", () => {
@@ -108,8 +165,11 @@ describe("Dialectic token handoff", () => {
 
   it("leaves identity to the server rather than guessing it", async () => {
     // The uuid -> username mapping lives in DIALECTIC_USER_MAP on the server.
-    // A client-side copy would be a second source of truth that could drift.
+    // A client-side copy would be a second source of truth that could drift —
+    // so with the exchange unreachable the name stays unknown rather than
+    // becoming a guess.
     const api = await bootWithHash("#dialectic_token=dialectic-jwt-abc");
+    await api.bridgeExchangeSettled();
 
     expect(api.getUsername()).toBeNull();
     expect(api.getDisplayName()).toBeNull();
@@ -164,6 +224,162 @@ describe("Dialectic token handoff", () => {
     // An untidy address bar must not cost the user their session.
     expect(api.getToken()).toBe("jwt-xyz");
     window.history.replaceState = original;
+  });
+});
+
+describe("Arrival-time token exchange", () => {
+  /**
+   * WHY this exists: the token in the fragment is a DIALECTIC access token,
+   * and those live 15 minutes. Stored as-is it made every deep-linked session
+   * a 15-minute session, ending in a 401 and a bounce to a login form the
+   * arriving user has no password for. The desk trades it once, on arrival,
+   * for a token it minted itself.
+   */
+
+  it("trades the arriving token for the td-native one the server returns", async () => {
+    exchangeOk();
+    const api = await bootWithHash("#dialectic_token=dialectic-jwt-abc");
+    await api.bridgeExchangeSettled();
+
+    expect(api.getToken()).toBe("td-native-jwt");
+  });
+
+  it("persists the td-native token, so a refresh keeps the LONG session", async () => {
+    // The bug in one assertion: what survives a reload has to be the 72h
+    // token, not the 15-minute one that arrived in the URL.
+    exchangeOk();
+    const api = await bootWithHash("#dialectic_token=dialectic-jwt-abc");
+    await api.bridgeExchangeSettled();
+
+    const persisted = JSON.parse(store[STORAGE_KEY]);
+    expect(persisted.token).toBe("td-native-jwt");
+    expect(persisted.username).toBe("amo");
+    expect(persisted.displayName).toBe("Amo");
+  });
+
+  it("presents the Dialectic token as the bearer for the exchange", async () => {
+    // The exchange is callable with NOTHING but the bridge token — that is
+    // the entire point, since the arriving user holds no desk credential.
+    exchangeOk();
+    const api = await bootWithHash("#dialectic_token=dialectic-jwt-abc");
+    await api.bridgeExchangeSettled();
+
+    expect(exchangeCalls).toHaveLength(1);
+    expect(exchangeCalls[0].url).toBe("/api/auth/exchange");
+    expect(exchangeCalls[0].init?.method).toBe("POST");
+    expect(
+      (exchangeCalls[0].init?.headers as Record<string, string>).Authorization,
+    ).toBe("Bearer dialectic-jwt-abc");
+  });
+
+  it("learns the username the server mapped, ending the anonymous 'operator'", async () => {
+    exchangeOk("td-native-jwt", "dan", "Dan");
+    const api = await bootWithHash("#dialectic_token=dialectic-jwt-abc");
+    await api.bridgeExchangeSettled();
+
+    expect(api.getUsername()).toBe("dan");
+    expect(api.getDisplayName()).toBe("Dan");
+  });
+
+  it("tells subscribers that identity arrived", async () => {
+    // Identity lands AFTER first paint. Without this the header, presence
+    // pills and message authorship keep rendering the null read at mount.
+    const release = gatedExchangeOk();
+    const api = await bootWithHash("#dialectic_token=dialectic-jwt-abc");
+    const seen: Array<string | null> = [];
+    api.subscribeAuth(() => seen.push(api.getUsername()));
+
+    // The window the subscription exists for: mounted, authenticated, nameless.
+    expect(api.getUsername()).toBeNull();
+
+    release();
+    await api.bridgeExchangeSettled();
+
+    expect(seen).toEqual(["amo"]);
+  });
+
+  it("stops notifying once unsubscribed", async () => {
+    const release = gatedExchangeOk();
+    const api = await bootWithHash("#dialectic_token=dialectic-jwt-abc");
+    const seen: string[] = [];
+    const off = api.subscribeAuth(() => seen.push("fired"));
+    off();
+    release();
+    await api.bridgeExchangeSettled();
+
+    expect(seen).toEqual([]);
+  });
+
+  it("keeps the raw Dialectic token when the exchange cannot be reached", async () => {
+    // Default stub rejects. A dead network must cost the user nothing they
+    // had before: the bridge token still authenticates for its 15 minutes.
+    const api = await bootWithHash("#dialectic_token=dialectic-jwt-abc");
+    await api.bridgeExchangeSettled();
+
+    expect(api.getToken()).toBe("dialectic-jwt-abc");
+    expect(api.isAuthenticated()).toBe(true);
+    expect(JSON.parse(store[STORAGE_KEY]).token).toBe("dialectic-jwt-abc");
+  });
+
+  it("keeps the raw Dialectic token when the server refuses the exchange", async () => {
+    // 401 = this Dialectic account is not in DIALECTIC_USER_MAP. Discarding
+    // the token here would be pointless (it is equally unmapped for every
+    // other call) and would hide the real reason behind a blank login form.
+    stubExchange(() =>
+      Promise.resolve(new Response('{"detail":"not authorized"}', { status: 401 })),
+    );
+    const api = await bootWithHash("#dialectic_token=dialectic-jwt-abc");
+    await api.bridgeExchangeSettled();
+
+    expect(api.getToken()).toBe("dialectic-jwt-abc");
+    expect(api.getUsername()).toBeNull();
+  });
+
+  it("does not lose the room id to the exchange", async () => {
+    exchangeOk();
+    const api = await bootWithHash(
+      "#dialectic_token=dialectic-jwt-abc&dialectic_room=room-uuid-123",
+    );
+    await api.bridgeExchangeSettled();
+
+    expect(api.getBridgedRoomId()).toBe("room-uuid-123");
+    expect(api.getToken()).toBe("td-native-jwt");
+  });
+
+  it("still strips the fragment when the exchange succeeds", async () => {
+    exchangeOk();
+    const api = await bootWithHash("#dialectic_token=dialectic-jwt-abc");
+    await api.bridgeExchangeSettled();
+
+    expect(window.location.hash).toBe("");
+    expect(window.location.href).not.toContain("dialectic-jwt-abc");
+  });
+
+  it("never exchanges on an ordinary stored session", async () => {
+    // A td token needs no exchange and the server answers 400 for one. Firing
+    // this on every boot would put a pointless failing request in front of
+    // every page load.
+    exchangeOk();
+    store[STORAGE_KEY] = JSON.stringify({
+      token: "persisted-token",
+      username: "amo",
+      displayName: "Amo",
+    });
+
+    const api = await bootWithHash("");
+    await api.bridgeExchangeSettled();
+
+    expect(exchangeCalls).toHaveLength(0);
+    expect(api.getToken()).toBe("persisted-token");
+  });
+
+  it("never exchanges when there is no session at all", async () => {
+    exchangeOk();
+    const api = await bootWithHash("");
+    await api.bridgeExchangeSettled();
+
+    expect(exchangeCalls).toHaveLength(0);
+    expect(api.isAuthenticated()).toBe(false);
   });
 });
 

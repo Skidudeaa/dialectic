@@ -23,7 +23,7 @@ import {
   Bot,
 } from "lucide-react";
 import { useOnboarding } from "../components/onboarding/useOnboarding";
-import { apiFetch, getDisplayName, getUsername, clearAuth, sendPresenceUpdate } from "../lib/api";
+import { apiFetch, getDisplayName, getUsername, clearAuth, sendPresenceUpdate, subscribeAuth } from "../lib/api";
 import type { Room, ThesisBook, ThesisState } from "../lib/types";
 import Chat from "../components/Chat";
 import ThesisViewer from "../components/ThesisViewer";
@@ -148,6 +148,14 @@ export default function Dashboard({ onLogout }: Props) {
   const { toast } = useToast();
   const connection = useConnectionStatus();
   const { startTour } = useOnboarding();
+
+  // WHY: a session arriving from Dialectic's deep link holds a token but no
+  // name — the uuid -> username map is server-side, and the exchange that
+  // resolves it answers a round trip after this component mounts. Without
+  // this nudge the header would sit blank and presence/authorship would keep
+  // using the null read at mount for the rest of the session.
+  const [, setIdentityTick] = useState(0);
+  useEffect(() => subscribeAuth(() => setIdentityTick((n) => n + 1)), []);
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [books, setBooks] = useState<ThesisBook[]>([]);

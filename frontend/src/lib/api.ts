@@ -42,8 +42,22 @@ function _loadAuth(): StoredAuth | null {
 // sent to the server, keeping the token out of nginx and Cloudflare access
 // logs. It is stripped from the address bar on arrival so it does not linger
 // in history, get copy-pasted, or leak through a screenshot.
+//
+// The token is only a BOOTSTRAP credential, never the session: Dialectic's
+// access tokens live 15 MINUTES, and the refresh token that renews them there
+// is one td refuses on purpose. Storing the arriving token as the session
+// therefore bought the user a quarter of an hour before every call started
+// 401ing and the desk bounced them to a login form they had no password for.
+// So the first thing this module does with a bridged token is trade it, via
+// POST /api/auth/exchange, for a td-NATIVE token with td's own 72h lifetime —
+// and that exchange is also where the client finally learns its own username,
+// which lives in the server-side DIALECTIC_USER_MAP and nowhere else.
 const DIALECTIC_TOKEN_PARAM = "dialectic_token";
 const DIALECTIC_ROOM_PARAM = "dialectic_room";
+
+// Set at boot when a token was adopted from the fragment, so the exchange
+// below knows there is something to upgrade. Null on an ordinary session.
+let _bridgedTokenToExchange: string | null = null;
 
 // The Dialectic room the user came FROM, if the link named one. Read once at
 // boot because the fragment is wiped immediately afterwards. The desk resolves
@@ -64,6 +78,7 @@ function _adoptBridgedToken(): StoredAuth | null {
   if (!token) return null;
 
   _bridgedRoomId = params.get(DIALECTIC_ROOM_PARAM);
+  _bridgedTokenToExchange = token;
 
   // Strip the credential immediately, preserving any other fragment params.
   params.delete(DIALECTIC_TOKEN_PARAM);
@@ -80,11 +95,12 @@ function _adoptBridgedToken(): StoredAuth | null {
     // bar is untidy but must not stop the handoff from working.
   }
 
-  // username/displayName are deliberately null: the Dialectic uuid -> desk
-  // username mapping lives on the SERVER (DIALECTIC_USER_MAP). Guessing it
-  // here would duplicate that mapping in a second place, and a client-side
-  // copy that drifted would mis-attribute messages. The UI already degrades
-  // to "operator" when the name is unknown.
+  // username/displayName are null HERE, and are filled in moments later by the
+  // exchange. They are never guessed: the Dialectic uuid -> desk username
+  // mapping lives on the SERVER (DIALECTIC_USER_MAP), and a client-side copy
+  // that drifted would mis-attribute messages. Persisting the raw token first
+  // is what keeps the session alive if the exchange never answers — 15 minutes
+  // of desk beats a login form nobody has the password for.
   const adopted: StoredAuth = { token, username: null, displayName: null };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(adopted));
@@ -107,15 +123,39 @@ export function getUsername(): string | null { return _username; }
 export function getDisplayName(): string | null { return _displayName; }
 export function isAuthenticated(): boolean { return _token !== null; }
 
+// WHY a listener set: identity can arrive AFTER the first render. A bridged
+// session boots with a token but no name, and learns the name a round trip
+// later — without a nudge, React would keep painting the header, presence
+// pills and message authorship from the null it read at mount.
+const _authListeners = new Set<() => void>();
+
+/** Subscribe to identity changes. Returns an unsubscribe function. */
+export function subscribeAuth(listener: () => void): () => void {
+  _authListeners.add(listener);
+  return () => { _authListeners.delete(listener); };
+}
+
+function _notifyAuth(): void {
+  for (const listener of _authListeners) {
+    try { listener(); } catch { /* one broken listener never breaks auth */ }
+  }
+}
+
 export function setAuth(resp: LoginResponse): void {
   _token = resp.access_token;
   _username = resp.username;
   _displayName = resp.display_name;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({
-    token: resp.access_token,
-    username: resp.username,
-    displayName: resp.display_name,
-  }));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      token: resp.access_token,
+      username: resp.username,
+      displayName: resp.display_name,
+    }));
+  } catch {
+    // Private-mode storage failure costs persistence across a reload, not the
+    // session in this tab — and must not abort the notify below.
+  }
+  _notifyAuth();
 }
 
 export function clearAuth(): void {
@@ -123,7 +163,37 @@ export function clearAuth(): void {
   _username = null;
   _displayName = null;
   localStorage.removeItem(STORAGE_KEY);
+  _notifyAuth();
 }
+
+// WHY not awaited by anything in the app: the desk is already usable on the
+// raw bridge token, so blocking the first paint on a network round trip would
+// trade a working session for a spinner. The upgrade lands via _notifyAuth.
+async function _upgradeBridgedSession(token: string): Promise<void> {
+  try {
+    const resp = await fetch("/api/auth/exchange", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    // A refusal (401 unmapped, 400 already-native) is NOT a reason to throw
+    // the session away: the adopted token is either good for its remaining
+    // minutes or already dead, and apiFetch's own 401 handling is the right
+    // place for the latter. Deliberately not apiFetch() — its 401 path
+    // reloads the page, which here would loop on a fragment already stripped.
+    if (!resp.ok) return;
+    setAuth(await resp.json() as LoginResponse);
+  } catch {
+    // Offline or blocked: keep the raw bridge token and let the user work.
+  }
+}
+
+const _bridgeExchange: Promise<void> = _bridgedTokenToExchange
+  ? _upgradeBridgedSession(_bridgedTokenToExchange)
+  : Promise.resolve();
+
+/** Resolves once the arrival-time token exchange has settled (immediately on
+ * an ordinary session). Exists for tests; app code never needs to wait. */
+export function bridgeExchangeSettled(): Promise<void> { return _bridgeExchange; }
 
 export async function apiFetch<T = unknown>(
   path: string,
