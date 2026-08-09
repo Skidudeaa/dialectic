@@ -24,6 +24,7 @@ EXPECTED_TOOLS = {
     "evaluate_scenario",
     "get_open_trades",
     "get_morning_brief",
+    "get_thesis_news",
     "search_memories",
     "search_transcript",
 }
@@ -57,9 +58,9 @@ def registry(room, db):
 
 
 class TestRegistryContract:
-    def test_registers_all_nine_tools(self, registry):
+    def test_registers_all_ten_tools(self, registry):
         assert set(registry.names()) == EXPECTED_TOOLS
-        assert len(registry.tools) == 9
+        assert len(registry.tools) == 10
 
     def test_names_match_anthropic_pattern(self, registry):
         for tool in registry.tools:
@@ -554,6 +555,83 @@ class TestTradingTools:
         tool = build_registry(room, FakeDB()).get("get_polymarket_odds")
         with pytest.raises(td.TradingDeskError, match="not JSON"):
             await tool.execute({})
+
+
+class TestThesisNewsTool:
+    """get_thesis_news rides the service-token bridge path, not the JWT one."""
+
+    @pytest.fixture
+    def svc_env(self, td_env, monkeypatch):
+        monkeypatch.setenv("TD_SERVICE_TOKEN", "svc-token")
+        yield
+
+    @pytest.mark.asyncio
+    async def test_returns_headlines_with_service_token(self, svc_env):
+        room = SimpleNamespace(id=uuid4(), linked_book_id="iran-hormuz-graph",
+                               trading_config=None)
+
+        def handler(request):
+            assert request.url.path == "/api/bridge/news/iran-hormuz-graph"
+            assert request.headers["x-service-token"] == "svc-token"
+            assert "authorization" not in request.headers
+            return json_response({"articles": [
+                {"title": "Tankers divert", "url": "https://ex.com/1",
+                 "seendate": "20260809", "domain": "ex.com"},
+            ]})
+
+        install_transport(handler)
+        tool = build_registry(room, FakeDB()).get("get_thesis_news")
+        out = await tool.execute({})
+
+        assert out["count"] == 1
+        assert out["articles"][0]["title"] == "Tankers divert"
+        assert out["book_id"] == "iran-hormuz-graph"
+
+    @pytest.mark.asyncio
+    async def test_note_only_degradation_is_not_an_error(self, svc_env):
+        """GDELT unavailable answers 200 with articles [] + note — the model
+        must get that note, not a tool failure it will paper over."""
+        room = SimpleNamespace(id=uuid4(), linked_book_id="b", trading_config=None)
+
+        def handler(request):
+            return json_response({"articles": [],
+                                  "note": "gdelt unavailable: ConnectError"})
+
+        install_transport(handler)
+        tool = build_registry(room, FakeDB()).get("get_thesis_news")
+        out = await tool.execute({})
+
+        assert out["articles"] == []
+        assert out["count"] == 0
+        assert "gdelt unavailable" in out["note"]
+        assert out["book_id"] == "b"
+
+    @pytest.mark.asyncio
+    async def test_unknown_book_raises(self, svc_env):
+        room = SimpleNamespace(id=uuid4(), linked_book_id="ghost-book",
+                               trading_config=None)
+
+        def handler(request):
+            return json_response({"detail": "No book for thesis"}, status=404)
+
+        install_transport(handler)
+        tool = build_registry(room, FakeDB()).get("get_thesis_news")
+        with pytest.raises(td.TradingDeskError, match="404"):
+            await tool.execute({})
+
+    @pytest.mark.asyncio
+    async def test_unbound_room_is_named_not_called(self, room, svc_env):
+        tool = build_registry(room, FakeDB()).get("get_thesis_news")
+        with pytest.raises(ValueError, match="book_id"):
+            await tool.execute({})
+
+    @pytest.mark.asyncio
+    async def test_missing_service_token_is_named(self, room, td_env, monkeypatch):
+        monkeypatch.delenv("TD_SERVICE_TOKEN", raising=False)
+        install_transport(lambda request: json_response({}))
+        tool = build_registry(room, FakeDB()).get("get_thesis_news")
+        with pytest.raises(td.TradingDeskError, match="TD_SERVICE_TOKEN"):
+            await tool.execute({"book_id": "b"})
 
 
 # ── tradingDesk client ───────────────────────────────────────────────

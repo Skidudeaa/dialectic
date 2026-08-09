@@ -166,6 +166,38 @@ async def request_json(
     return _require_json(response, f"tradingDesk {path}")
 
 
+async def service_get(path: str, *, timeout: Optional[float] = None) -> Any:
+    """Service-token GET for the /api/bridge/* endpoints (X-Service-Token,
+    not the user JWT everything else here carries).
+
+    WHY a separate path: the bridge endpoints gate on TD_SERVICE_TOKEN
+    service-to-service auth (mirrors trading_watch.trading_reconcile), and
+    re-login-on-401 makes no sense against a static token. A non-JSON 200
+    still trips the SPA guard in _require_json, so an unshipped endpoint
+    surfaces as TradingDeskError("...not JSON..."), never as HTML "data".
+    """
+    token = os.environ.get("TD_SERVICE_TOKEN", "")
+    if not token:
+        raise TradingDeskError(
+            "TD_SERVICE_TOKEN is not set — tradingDesk bridge endpoints "
+            "are unavailable"
+        )
+    client = _get_client()
+    try:
+        response = await client.get(
+            f"{_base_url()}{path}",
+            headers={"X-Service-Token": token},
+            timeout=timeout if timeout is not None else DEFAULT_TIMEOUT_S,
+        )
+    except httpx.TimeoutException as e:
+        raise TradingDeskError(f"tradingDesk {path} timed out: {e}")
+    except httpx.HTTPError as e:
+        raise TradingDeskError(
+            f"tradingDesk {path} unreachable: {type(e).__name__}: {e}"
+        )
+    return _require_json(response, f"tradingDesk {path}")
+
+
 async def get(path: str, *, params: Optional[dict] = None,
               timeout: Optional[float] = None) -> Any:
     return await request_json("GET", path, params=params, timeout=timeout)

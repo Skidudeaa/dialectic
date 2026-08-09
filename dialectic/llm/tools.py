@@ -343,6 +343,22 @@ def _build_trading_tools(room) -> list[Tool]:
         result = await td.run_command("outcomes.morning_brief", {"book_id": book_id})
         return _shrink(result, THESIS_CHAR_CAP)
 
+    async def get_thesis_news(args: dict) -> dict:
+        book_id = resolve_book_id(room, args.get("book_id"))
+        news = await td.service_get(f"/api/bridge/news/{book_id}")
+        if not isinstance(news, dict):
+            return {"articles": [], "book_id": book_id,
+                    "note": "tradingDesk returned an unexpected shape."}
+        # A note-only answer (GDELT unconfigured or down, articles []) is NOT
+        # an error — pass it through so the model can say "feed's quiet"
+        # instead of inventing headlines.
+        shrunk = _shrink(news, THESIS_CHAR_CAP)
+        if isinstance(shrunk, dict):
+            shrunk["book_id"] = book_id
+            articles = shrunk.get("articles")
+            shrunk["count"] = len(articles) if isinstance(articles, list) else 0
+        return shrunk
+
     return [
         Tool(
             name="get_live_quotes",
@@ -487,6 +503,29 @@ def _build_trading_tools(room) -> list[Tool]:
             },
             execute=get_morning_brief,
             label="pulling the brief",
+        ),
+        Tool(
+            name="get_thesis_news",
+            description=(
+                "Recent news headlines for a thesis book, pulled from the desk's "
+                "GDELT feed and capped at 15 with title, url, date and source "
+                "domain. Use it when the conversation turns on what is actually "
+                "happening out there around a thesis — fresh events, not the "
+                "thesis structure itself. An empty articles list with a note "
+                "means the feed is unconfigured or down, NOT that nothing "
+                "happened; report the note rather than inventing headlines."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "book_id": {
+                        "type": "string",
+                        "description": "Book slug. Defaults to this room's book.",
+                    }
+                },
+            },
+            execute=get_thesis_news,
+            label="checking latest headlines",
         ),
     ]
 
@@ -663,7 +702,7 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
 
 def build_registry(room, db) -> ToolRegistry:
     """
-    ARCHITECTURE: Build the per-room tool set — seven tradingDesk reads plus
+    ARCHITECTURE: Build the per-room tool set — eight tradingDesk reads plus
     memory and transcript search.
     WHY per room: the executors close over this room's id and book binding,
     so a tool can never read another room's transcript or the wrong book.
