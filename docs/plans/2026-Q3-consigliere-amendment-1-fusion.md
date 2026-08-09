@@ -26,6 +26,18 @@ amendment records what changes about the COMMITTED quarter plan.
 > and `draft_prediction` after the trust week (~2026-08-16). Handoff:
 > `docs/handoffs/2026-08-09-fusion-overnight.md`.
 
+> **Execution stamp (2026-08-09, evening — same day, second session).** The
+> tail closed early: transactional attachment bind (#12), `get_thesis_news`,
+> **A7** non-streaming tool paths, the **P3 Morning Brief** (07:00 CT,
+> per-room, push), **A8 `draft_prediction`** (trust gate lifted by owner
+> ruling this day, ahead of ~08-16), and the **P4 silence FSM** + sweep
+> (10-min follow-up, cap 3/day, quiet 23:00–07:00 CT) are all committed
+> (6d4fe3e, 4ed40d9, a915059, 9052502, bbeebc5, b448c70), 788 dialectic
+> tests green. Migrations 010/011 committed, NOT yet applied; deploys and
+> device-level acceptance remain. Still open from this amendment: the C4
+> social-tier cull, td local-login sunset, annotator-vision product call,
+> `TRADINGDESK_DB_PATH` override, INTEGRATION.md correction.
+
 ## What this inserts: Phase 2.5 — "The desk plugs in" (immediate)
 
 The diagnosis, verified file:line in the working plan: tradingDesk was alive

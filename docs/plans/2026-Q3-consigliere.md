@@ -98,6 +98,13 @@ Builds:
 
 ## Phase 3 — "You wake up to a brief" (wk 5–6)
 
+> **SHIPPED 2026-08-09** (ahead of schedule; scheduler organ landed with the
+> fusion's Phase 2.5, brief job in the evening session, commit 9052502):
+> builder extracted to `llm/briefing.py`, `morning_brief` job posts + pushes
+> per room 07:00 America/Chicago on the generalized ledger (which superseded
+> `night_shift_runs`, as Amendment 1 declared). Residue: the three-consecutive-
+> mornings device acceptance below.
+
 **Felt outcome:** 7am, both phones buzz; each active room has a Morning Brief —
 yesterday's threads, open questions, commitments due, thesis drift. First unattended act.
 
@@ -122,6 +129,13 @@ Builds:
 night with zero duplicates across that week's inevitable restarts.
 
 ## Phase 4 — "Claude notices the silence" (wk 7–8)
+
+> **SHIPPED 2026-08-09** (commit b448c70): `llm/participation_fsm.py` (states,
+> StateSource tiers, truncation downgrade), 60s `participation_sweep` —
+> question-pending/ignored ≥10min → one `force_response(reason="silence_follow_up")`,
+> cap 3/day/room, quiet 23:00–07:00 CT, respects the (now wired)
+> `auto_interjection_enabled` toggle; migration 011. Residue: the scripted
+> device acceptance below, and CommitmentDetector as proposals (still unwired).
 
 **Felt outcome:** an unanswered question to Claude gets exactly one well-judged
 follow-up minutes later. "I'll wire the deposit Monday" becomes a proposed commitment.

@@ -50,6 +50,13 @@ These can live in `dialectic/.env` (auto-loaded by `run.py` via python-dotenv). 
 | `llm/prompts.py` | Layered system prompt: identity + room rules + memories + thesis state |
 | `llm/trading_curator.py` | Offline alert engine — fires when snapshot arrives, user is away |
 | `llm/self_model.py` | LLM self-awareness: tracks participation decisions, evolves identity doc |
+| `llm/participation_fsm.py` | Conversation state machine (engaged/awaiting-human/question-pending/ignored/dormant) + StateSource confidence tiers; ported from cc-sidecar's reducer |
+| `llm/silence_sweep.py` | 60s scheduler job: one capped follow-up when a question goes unanswered (10min, 3/day, quiet 23:00–07:00 CT) |
+| `llm/briefing.py` | Shared morning-brief builder (endpoint + night-shift job) |
+| `llm/night_shift.py` | `morning_brief` job registration — posts + pushes per room 07:00 America/Chicago |
+| `llm/tool_loop.py` + `llm/tools.py` | Anthropic tool loop + 11-tool registry (read-only + proposal-shaped `draft_prediction`); wired on streaming AND non-streaming paths (provoker/protocol/annotator never) |
+| `api/prediction_relay.py` | Human-Accept relay: proposal in message metadata → POST to tradingDesk on the tap |
+| `scheduler.py` | asyncio job scheduler — advisory lock, `scheduled_job_runs` ledger, interval buckets + wall-clock daily slots (`daily_at`/`daily_tz`) |
 | `memory/manager.py` | Three-lane recall (dense + FTS + entity/speaker, RRF-fused) + versioned room memories + write-path dedup |
 | `api/notifications/` | Dual-channel push: Web Push/VAPID (`webpush.py`, the live channel for the installed PWA) + Expo (dormant until a native app ships) |
 | `transport/handlers.py` | WebSocket message routing; coordinates annotator + primary LLM |

@@ -15,17 +15,43 @@
       push-tap deep-links into the room. LLM-push attribution bug fixed.
 - [x] Redis pub/sub (shipped earlier; the old TODO listing it as open was stale)
 
+### Shipped 2026-08-09 (gap-closing session, six workstreams)
+
+- [x] Transactional attachment bind (fusion handoff #12): `send_message` takes
+      `attachment_ids`, insert + binds in one transaction, broadcast carries
+      media; REST bind endpoint, client correlation + 2s debounce deleted (6d4fe3e)
+- [x] `get_thesis_news` tool over the service-token bridge (4ed40d9)
+- [x] **A7**: tools on the non-streaming `on_message` path; `force_response`
+      joins the self-model (reason param, log_decision, self-awareness);
+      migration 010 (`llm_decisions.tool_calls`); schema.sql finally knows the
+      self-model tables (a915059)
+- [x] **P3 Morning Brief**: briefing builder extracted to `llm/briefing.py`
+      (+commitments ≤72h, thesis staleness, unanswered questions); scheduler
+      learns wall-clock daily slots; `morning_brief` job posts + pushes per
+      room 07:00 America/Chicago, `NIGHT_SHIFT_ENABLED` gate (9052502)
+- [x] **A8 `draft_prediction`** (trust gate lifted by owner 2026-08-09):
+      proposal-only tool, human Accept → relay POSTs to tradingDesk;
+      REST message projection stops dropping `metadata` (bbeebc5)
+- [x] **P4 FSM**: `llm/participation_fsm.py` (states + StateSource tiers +
+      truncation downgrade) + 60s `participation_sweep` — one follow-up after
+      10 quiet minutes, cap 3/day/room, quiet hours 23:00–07:00 CT;
+      `auto_interjection_enabled` toggle FINALLY gates the heuristic path;
+      migration 011 (b448c70)
+
 ## The quarter (see the plan for full detail + acceptance checks)
 
 - [ ] **P1 residue**: real-device push check on all four devices (Amo + Dan)
-- [ ] **P2 (wk 3–4)**: self-model on all three LLM paths; migration 001 folded
-      into schema.sql; `context_truncated` persisted + prompted;
-      cross-session write path wired (routes + WS handlers + promote-to-global
-      UI); `auto_interjection_enabled` toggle made real
-- [ ] **P3 (wk 5–6)**: scheduler + `night_shift_runs` ledger; Morning Brief job
-      (shared implementation with the briefing endpoint), pushes on delivery
-- [ ] **P4 (wk 7–8)**: sidecar FSM port (states + StateSource confidence +
-      timer sweep, re-tuned for chat); CommitmentDetector wired as proposals
+- [ ] **P2 (wk 3–4) residue**: cross-session write path wired (routes + WS
+      handlers + promote-to-global UI); `context_truncated` persisted to
+      `llm_decisions` (it currently only downgrades the FSM tier). Done
+      2026-08-09: self-model on all three LLM paths, schema.sql sync,
+      `auto_interjection_enabled` toggle
+- [ ] **P3 residue**: device-level acceptance — three consecutive mornings,
+      one brief per active room, push received by both users
+- [ ] **P4 residue**: CommitmentDetector wired as proposals
+      (`stakes/detector.py` — imported, still never called); device-level
+      acceptance of the sweep (question + 10min silence → exactly one
+      follow-up, and push)
 - [ ] **P5 (wk 9–10)**: night research job; scheme state generalized beyond
       trading (rooms.scheme_state + scheme_curator)
 - [ ] **P6 (wk 11–12)**: LongMemEval-S three-arm benchmark; cleanup execution;
