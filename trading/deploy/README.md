@@ -11,9 +11,11 @@ Current target: one DigitalOcean droplet, single worker, nginx in front terminat
 ## First-time install (fresh droplet)
 
 ```bash
-# 1. Clone the repo (paths assume /root/tradingDesk; change in the unit file if different)
-git clone <repo> /root/tradingDesk
-cd /root/tradingDesk
+# 1. The desk is the trading/ subtree of the DwoodAmo monorepo (since 2026-08-09).
+#    Clone the monorepo, not this directory. Paths below assume the default
+#    location; change them in the unit file if you put it elsewhere.
+git clone <dwoodamo-repo> /root/DwoodAmo
+cd /root/DwoodAmo/trading
 
 # 2. Python venv + deps
 python3 -m venv venv
@@ -91,7 +93,7 @@ nginx -t && systemctl reload nginx
 
 ```bash
 # Deploy a code change
-cd /root/tradingDesk
+cd /root/DwoodAmo/trading
 git pull
 # If frontend changed:
 cd frontend && npm run build && cd ..
@@ -120,7 +122,7 @@ Any secret lives in `.env` — `JWT_SECRET`, `DEV_USER_PASSWORD`, `TV_WEBHOOK_SE
 
 ```bash
 # 1. Edit .env with the new value
-vim /root/tradingDesk/.env
+vim /root/DwoodAmo/trading/.env
 # 2. Restart the service
 systemctl restart tradingdesk
 # 3. Verify
@@ -141,7 +143,7 @@ curl -sf http://127.0.0.1:8006/api/health
 | `Restart=always` | | Auto-restart on crash, kill, OOM |
 | `RestartSec=5` | | Backoff before relaunch — prevents tight loops on broken configs |
 | `TimeoutStopSec=15` | | Graceful shutdown window for uvicorn to drain in-flight requests |
-| `EnvironmentFile=/root/tradingDesk/.env` | | All secrets load from `.env` (not baked into the unit file) |
+| `EnvironmentFile=/root/DwoodAmo/trading/.env` | | All secrets load from `.env` (not baked into the unit file) |
 | `StandardOutput=journal` | | `journalctl -u tradingdesk` captures stdout |
 | `StandardError=journal` | | Same for stderr |
 | `SyslogIdentifier=tradingdesk` | | Easy to find in general journal |
@@ -149,10 +151,10 @@ curl -sf http://127.0.0.1:8006/api/health
 
 ## Porting to a different path
 
-The unit file hardcodes `/root/tradingDesk` in `WorkingDirectory`, `EnvironmentFile`, and `ExecStart`. If you deploy to a different path, edit those three lines in `tradingdesk.service` before copying to `/etc/systemd/system/`. Single `sed` works:
+The unit file hardcodes `/root/DwoodAmo/trading` in `WorkingDirectory`, `EnvironmentFile`, and `ExecStart`. If you deploy to a different path, edit those three lines in `tradingdesk.service` before copying to `/etc/systemd/system/`. Single `sed` works:
 
 ```bash
-sed -i 's|/root/tradingDesk|/opt/tradingdesk|g' deploy/tradingdesk.service
+sed -i 's|/root/DwoodAmo/trading|/opt/tradingdesk|g' deploy/tradingdesk.service
 ```
 
 ## Future hardening (not yet applied)

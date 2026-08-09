@@ -524,7 +524,7 @@ class LedgerAnalyzer:
     def empirical_weight_adjustment(self, node_id: str) -> Tuple[float, str]
 
 class PredicateLifecycleMonitor:
-    def __init__(self, ledger_dir: str = "/root/tradingDesk/outcomes/trades")
+    def __init__(self, ledger_dir: str = "/root/DwoodAmo/trading/outcomes/trades")
     def _compute_run_id(self, trade_id: str, snapshot_hash: str, predicates: List[Predicate]) -> str
     def _find_existing(self, trade_id: str, run_id: str) -> Optional[TradeRecord]
     def _log(self, record: TradeRecord) -> None
@@ -546,7 +546,7 @@ def _deserialize_record(line: str) -> Optional[TradeRecord]
 def evaluate_predicate(pred: Predicate, snapshot: Snapshot) -> EvaluatedPredicate
 def detect_inert_fields(book_path: Path) -> List[ProvenanceTag]
 def compute_provenance_target(ref_price: float, scenario_impacts: Dict[str, Dict[str, float]], book_path: Optional[Path] = None) -> Union[DynamicTarget, TargetRefusal]
-def step7_evaluate_open_trades(snapshot_path: Path, open_trades_path: Path, book_id: str = "", book_path: Optional[Path] = None, ledger_dir: str = "/root/tradingDesk/outcomes/trades") -> Dict[str, str]
+def step7_evaluate_open_trades(snapshot_path: Path, open_trades_path: Path, book_id: str = "", book_path: Optional[Path] = None, ledger_dir: str = "/root/DwoodAmo/trading/outcomes/trades") -> Dict[str, str]
 ```
 
 ---
@@ -1121,8 +1121,8 @@ Loading: books/iran-hormuz-graph.json
 
 ### Multi-Book Runner (dry run):
 ```
-[dry-run] iran-hormuz-graph: room=56ba2f1e-5c70-4290-a77d-52404f0095da  snapshot=/root/tradingDesk/snapshots/iran-hormuz-graph-latest.json  prev=/root/tradingDesk/snapshots/iran-hormuz-graph-prev.json
-[dry-run] trump-tariffs-graph: room=8adcabb7-817a-4802-87c6-3bfd42e6a9eb  snapshot=/root/tradingDesk/snapshots/trump-tariffs-graph-latest.json  prev=/root/tradingDesk/snapshots/trump-tariffs-graph-prev.json
+[dry-run] iran-hormuz-graph: room=56ba2f1e-5c70-4290-a77d-52404f0095da  snapshot=/root/DwoodAmo/trading/snapshots/iran-hormuz-graph-latest.json  prev=/root/DwoodAmo/trading/snapshots/iran-hormuz-graph-prev.json
+[dry-run] trump-tariffs-graph: room=8adcabb7-817a-4802-87c6-3bfd42e6a9eb  snapshot=/root/DwoodAmo/trading/snapshots/trump-tariffs-graph-latest.json  prev=/root/DwoodAmo/trading/snapshots/trump-tariffs-graph-prev.json
 ```
 
 ### Commodity Book (dry run):

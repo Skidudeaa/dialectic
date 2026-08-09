@@ -311,7 +311,7 @@ Usually one of:
 ### "My trade journal entry disappeared"
 It didn't — entries are appended to `web/data/journal.jsonl` on disk. If the UI doesn't show it:
 - Reload the page.
-- Check the file: `cat /root/tradingDesk/web/data/journal.jsonl | tail -5`.
+- Check the file: `cat /root/DwoodAmo/trading/web/data/journal.jsonl | tail -5`.
 - If the file's healthy but the UI's empty, file bug.
 
 ### "Fetch prices takes forever"
