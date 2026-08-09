@@ -611,3 +611,30 @@ CREATE INDEX IF NOT EXISTS idx_sjr_job_time
 
 -- Which tradingDesk thesis book a room is bound to (NULL = not a trading room).
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS linked_book_id TEXT;
+
+-- ============================================================
+-- ATTACHMENTS (migration 009 — media: images / video / files)
+-- ============================================================
+
+-- WHY message_id is NULLABLE: the upload happens BEFORE the message that
+-- carries it exists — the client POSTs bytes, gets an attachment id back,
+-- then sends the message, then binds. Orphan policy: rows still unbound 24h
+-- after created_at are future-sweep candidates.
+CREATE TABLE IF NOT EXISTS attachments (
+    id UUID PRIMARY KEY,
+    room_id UUID NOT NULL REFERENCES rooms(id),
+    message_id UUID REFERENCES messages(id),   -- NULL until the send_message that references it lands
+    uploader_user_id UUID NOT NULL REFERENCES users(id),
+    kind TEXT NOT NULL,                        -- image | video | file
+    mime TEXT NOT NULL,
+    bytes BIGINT NOT NULL,
+    sha256 TEXT NOT NULL,
+    width INT, height INT,
+    original_name TEXT NOT NULL,
+    storage_path TEXT NOT NULL,                -- relative to MEDIA_ROOT
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_attachments_room ON attachments(room_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments(message_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_sha ON attachments(room_id, sha256);
