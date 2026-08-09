@@ -20,6 +20,7 @@ from models import (
 from .providers import ProviderName, LLMRequest
 from .router import ModelRouter, RoutingResult
 from .heuristics import InterjectionEngine, InterjectionDecision
+from .participation_fsm import ParticipationFSM, decision_event
 from .prompts import PromptBuilder, AssembledPrompt
 from .context import assemble_context
 from .cross_session_context import CrossSessionContextBuilder, CrossSessionContext
@@ -195,6 +196,7 @@ class LLMOrchestrator:
         mentioned: bool = False,
         semantic_novelty: Optional[float] = None,
         protocol: Optional[ProtocolState] = None,
+        force_silence: bool = False,
     ) -> OrchestrationResult:
         """
         Called after each human message. Decides and executes LLM response.
@@ -202,6 +204,12 @@ class LLMOrchestrator:
         ARCHITECTURE: Protocol-aware orchestration.
         WHY: When a protocol is active, skip heuristics and always interject as facilitator.
         TRADEOFF: Extra conditional path vs separate method — keeps single entry point.
+
+        `force_silence` is the auto_interjection_enabled toggle made real
+        (handlers.py): the turn still runs the silence path — decision log
+        and participation FSM both see the message — but the LLM never
+        speaks. Protocol turns are exempt; a facilitated session is not
+        auto-interjection.
         """
 
         speaker_balance: Optional[dict[str, int]] = None
@@ -213,6 +221,13 @@ class LLMOrchestrator:
                 should_interject=True,
                 reason="protocol_active",
                 confidence=1.0,
+                use_provoker=False,
+            )
+        elif force_silence:
+            decision = InterjectionDecision(
+                should_interject=False,
+                reason="auto_interjection_disabled",
+                confidence=0.0,
                 use_provoker=False,
             )
         else:
@@ -259,6 +274,11 @@ class LLMOrchestrator:
                 speaker_balance=speaker_balance,
             )
 
+        # Participation FSM (W6): every turn is one event — the message
+        # arrival plus this decision — and the machine's new state rides the
+        # log_decision upsert below back into llm_participation_state.
+        fsm = await self._apply_fsm_turn(room.id, messages, decision)
+
         if not decision.should_interject:
             logger.debug(f"No interjection: {decision.reason}")
             # WHY: Log silence decisions so the LLM accumulates awareness
@@ -278,6 +298,7 @@ class LLMOrchestrator:
                 speaker_balance=speaker_balance,
                 message_count=len(messages),
                 mode="silence",
+                **self._fsm_log_kwargs(fsm),
             )
             return OrchestrationResult(
                 triggered=False,
@@ -297,6 +318,12 @@ class LLMOrchestrator:
             f"on_message context: {context.included_count}/{context.original_count} messages, "
             f"truncated={context.truncated}, tokens={context.total_tokens}"
         )
+
+        # The truncated flag used to be logged and dropped here; now it feeds
+        # the FSM's post-truncation confidence downgrade (flag pattern, not a
+        # state change) before the state is persisted with this decision.
+        if fsm is not None and context.truncated:
+            fsm.note_truncation()
 
         cross_ctx = await self._get_cross_session_context(messages, thread.room_id)
 
@@ -420,6 +447,7 @@ class LLMOrchestrator:
             response_message_id=response_message.id,
             mode=mode,
             tool_calls=tool_metadata["tools"]["calls"] if tool_metadata else None,
+            **self._fsm_log_kwargs(fsm),
         )
 
         # Schedule effectiveness measurement (~30s later)
@@ -439,6 +467,70 @@ class LLMOrchestrator:
             phase_complete_signal=phase_complete_signal,
         )
 
+    async def _apply_fsm_turn(
+        self,
+        room_id: UUID,
+        messages: list[Message],
+        decision: InterjectionDecision,
+    ) -> Optional[ParticipationFSM]:
+        """Apply this turn to the room's participation FSM; None on failure.
+
+        WHY a helper + a soft failure: the machine is hydrated from
+        llm_participation_state (the DB row is its memory), and a missing or
+        pre-migration row must never cost the room its turn — the caller just
+        passes no FSM fields to log_decision, which COALESCEs around them.
+        The returned machine is NOT persisted here: its state rides the
+        log_decision upsert later in the turn, after any truncation
+        downgrade has been applied.
+        """
+        try:
+            fsm = await self._load_participation_fsm(room_id)
+            latest_human = next(
+                (m for m in reversed(messages) if m.speaker_type == SpeakerType.HUMAN),
+                None,
+            )
+            # Question detection reuses the heuristics engine's signal rather
+            # than inventing a second one.
+            is_question = bool(latest_human) and self.heuristics._is_question(
+                latest_human.content,
+            )
+            event = decision_event(
+                spoke=decision.should_interject,
+                is_question=is_question,
+                current_state=fsm.state,
+            )
+            fsm.apply(event)
+            return fsm
+        except Exception as e:
+            logger.debug("Participation FSM unavailable: %s", e)
+            return None
+
+    async def _load_participation_fsm(self, room_id: UUID) -> ParticipationFSM:
+        """Hydrate the room's FSM from llm_participation_state, or a fresh one."""
+        row = await self.db.fetchrow(
+            """SELECT fsm_state, state_entered_at, state_source
+               FROM llm_participation_state WHERE room_id = $1""",
+            room_id,
+        )
+        if row and row["fsm_state"]:
+            return ParticipationFSM.from_snapshot({
+                "state": row["fsm_state"],
+                "state_entered_at": row["state_entered_at"],
+                "state_source": row["state_source"],
+            })
+        return ParticipationFSM()
+
+    @staticmethod
+    def _fsm_log_kwargs(fsm: Optional[ParticipationFSM]) -> dict:
+        """FSM fields for log_decision, or nothing (COALESCE preserves)."""
+        if fsm is None:
+            return {}
+        return {
+            "fsm_state": fsm.state.value,
+            "state_entered_at": fsm.state_entered_at,
+            "state_source": fsm.state_source.value,
+        }
+
     async def force_response(
         self,
         room: Room,
@@ -457,6 +549,11 @@ class LLMOrchestrator:
         to mark follow-ups it triggered itself. Tools are deliberately NOT
         wired here — the gate in _tool_registry_for excludes every mode that
         calls this path, so there is nothing to route through a loop.
+
+        FSM note: this path deliberately does NOT apply participation-FSM
+        events. Its only FSM-aware caller is the silence sweep, which applies
+        FollowUpSent itself after the turn succeeds — a generic LlmSpoke here
+        would skip that bookkeeping.
         """
         reason = reason or ("protocol_active" if protocol else "forced")
         decision = InterjectionDecision(

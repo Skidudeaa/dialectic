@@ -230,6 +230,7 @@ async def lifespan(app: FastAPI):
         from scheduler import Scheduler, SchedulerContext
         from trading_watch import register_bloodstream_jobs
         from llm.night_shift import register_brief_jobs
+        from llm.silence_sweep import register_sweep_jobs
 
         async def _scheduler_broadcast(room_id, message):
             await connection_manager.broadcast(room_id, message)
@@ -240,6 +241,7 @@ async def lifespan(app: FastAPI):
         ))
         register_bloodstream_jobs(scheduler_instance)
         register_brief_jobs(scheduler_instance)
+        register_sweep_jobs(scheduler_instance)
         scheduler_instance.start()
 
     yield

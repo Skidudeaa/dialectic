@@ -733,6 +733,11 @@ CREATE TABLE IF NOT EXISTS llm_participation_state (
     session_count INTEGER DEFAULT 0,
     days_since_last_session REAL,
 
+    -- Participation FSM (migration 011, llm/participation_fsm.py)
+    fsm_state TEXT,                        -- engaged | awaiting_human | question_pending | ignored | dormant
+    state_entered_at TIMESTAMPTZ,          -- the sweep's follow-up clock keys off this
+    state_source TEXT,                     -- observed | reconciled | inferred
+
     -- Meta
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );

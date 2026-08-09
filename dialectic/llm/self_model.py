@@ -29,6 +29,17 @@ from .heuristics import InterjectionDecision
 logger = logging.getLogger(__name__)
 
 
+# Human-readable glosses for render_self_awareness. Keys mirror
+# llm/participation_fsm.py ParticipationState values.
+_FSM_STATE_BLURBS = {
+    "engaged": "in the flow of the conversation, nothing owed either way",
+    "awaiting_human": "you spoke last — the humans owe the next turn, silence is expected",
+    "question_pending": "a human question is on the floor unanswered",
+    "ignored": "your last contribution went unacknowledged and the humans moved on",
+    "dormant": "the room has been quiet for a long time",
+}
+
+
 @dataclass
 class ParticipationSnapshot:
     """
@@ -72,6 +83,11 @@ class ParticipationSnapshot:
     # Recent silence reasons
     recent_silence_reasons: list[str] = field(default_factory=list)
 
+    # Participation FSM (migration 011, llm/participation_fsm.py)
+    fsm_state: Optional[str] = None
+    state_entered_at: Optional[datetime] = None
+    state_source: Optional[str] = None
+
 
 class SelfModel:
     """
@@ -99,6 +115,9 @@ class SelfModel:
         response_message_id: Optional[UUID] = None,
         mode: str = "silence",
         tool_calls: Optional[list[dict]] = None,
+        fsm_state: Optional[str] = None,
+        state_entered_at: Optional[datetime] = None,
+        state_source: Optional[str] = None,
     ) -> Optional[int]:
         """
         Persist a decision to the llm_decisions log.
@@ -136,6 +155,9 @@ class SelfModel:
                 decision=decision,
                 response_message_id=response_message_id,
                 mode=mode,
+                fsm_state=fsm_state,
+                state_entered_at=state_entered_at,
+                state_source=state_source,
             )
 
             return decision_id
@@ -154,12 +176,19 @@ class SelfModel:
         decision: InterjectionDecision,
         response_message_id: Optional[UUID],
         mode: str,
+        fsm_state: Optional[str] = None,
+        state_entered_at: Optional[datetime] = None,
+        state_source: Optional[str] = None,
     ) -> None:
         """
         Update the per-room participation reducer.
 
         ARCHITECTURE: Upsert pattern — creates the row on first decision,
         updates incrementally thereafter. This is the reducer.
+
+        The FSM columns (migration 011) ride along when the caller applied a
+        participation-FSM event this turn; COALESCE keeps the existing values
+        when they didn't, so older call sites can't clobber the machine.
         """
         now = datetime.now(timezone.utc)
         spoke = decision.should_interject
@@ -170,12 +199,14 @@ class SelfModel:
                    (room_id, last_spoke_at, last_spoke_message_id,
                     turns_since_last_spoke, total_messages_sent, total_silences,
                     primary_count, provoker_count, protocol_count,
-                    last_mode, recent_confidences, updated_at)
+                    last_mode, recent_confidences, updated_at,
+                    fsm_state, state_entered_at, state_source)
                    VALUES ($1, $2, $3, 0, 1, 0,
                            CASE WHEN $4 = 'primary' THEN 1 ELSE 0 END,
                            CASE WHEN $4 = 'provoker' THEN 1 ELSE 0 END,
                            CASE WHEN $4 = 'protocol' THEN 1 ELSE 0 END,
-                           $4, ARRAY[$5::REAL], $2)
+                           $4, ARRAY[$5::REAL], $2,
+                           COALESCE($6, 'engaged'), COALESCE($7, $2), COALESCE($8, 'observed'))
                    ON CONFLICT (room_id) DO UPDATE SET
                        last_spoke_at = $2,
                        last_spoke_message_id = $3,
@@ -191,16 +222,22 @@ class SelfModel:
                            ELSE llm_participation_state.recent_confidences || ARRAY[$5::REAL]
                            END
                        ),
+                       fsm_state = COALESCE($6, llm_participation_state.fsm_state),
+                       state_entered_at = COALESCE($7, llm_participation_state.state_entered_at),
+                       state_source = COALESCE($8, llm_participation_state.state_source),
                        updated_at = $2""",
                 room_id, now, response_message_id, mode, decision.confidence,
+                fsm_state, state_entered_at, state_source,
             )
         else:
             # Silence: increment turns and silence count
             await self.db.execute(
                 """INSERT INTO llm_participation_state
                    (room_id, turns_since_last_spoke, total_silences,
-                    recent_confidences, updated_at)
-                   VALUES ($1, 1, 1, ARRAY[$2::REAL], $3)
+                    recent_confidences, updated_at,
+                    fsm_state, state_entered_at, state_source)
+                   VALUES ($1, 1, 1, ARRAY[$2::REAL], $3,
+                           COALESCE($4, 'engaged'), COALESCE($5, $3), COALESCE($6, 'observed'))
                    ON CONFLICT (room_id) DO UPDATE SET
                        turns_since_last_spoke = llm_participation_state.turns_since_last_spoke + 1,
                        total_silences = llm_participation_state.total_silences + 1,
@@ -210,12 +247,47 @@ class SelfModel:
                            ELSE llm_participation_state.recent_confidences || ARRAY[$2::REAL]
                            END
                        ),
+                       fsm_state = COALESCE($4, llm_participation_state.fsm_state),
+                       state_entered_at = COALESCE($5, llm_participation_state.state_entered_at),
+                       state_source = COALESCE($6, llm_participation_state.state_source),
                        updated_at = $3""",
                 room_id, decision.confidence, now,
+                fsm_state, state_entered_at, state_source,
             )
 
         # Update derived metrics
         await self._update_derived_metrics(room_id)
+
+    async def update_fsm_state(
+        self,
+        room_id: UUID,
+        *,
+        fsm_state: str,
+        state_entered_at: datetime,
+        state_source: str,
+    ) -> None:
+        """
+        Persist just the participation-FSM columns.
+
+        WHY a separate writer: the silence sweep applies FSM events
+        (FollowUpSent, mark_dormant) outside any orchestrator decision, so
+        there is no log_decision call for the reducer columns to ride on.
+        """
+        try:
+            await self.db.execute(
+                """INSERT INTO llm_participation_state
+                   (room_id, fsm_state, state_entered_at, state_source, updated_at)
+                   VALUES ($1, $2, $3, $4, $5)
+                   ON CONFLICT (room_id) DO UPDATE SET
+                       fsm_state = $2,
+                       state_entered_at = $3,
+                       state_source = $4,
+                       updated_at = $5""",
+                room_id, fsm_state, state_entered_at, state_source,
+                datetime.now(timezone.utc),
+            )
+        except Exception as e:
+            logger.debug("Failed to persist FSM state: %s", e)
 
     async def _update_derived_metrics(self, room_id: UUID) -> None:
         """
@@ -289,6 +361,16 @@ class SelfModel:
             )
             silence_reasons = [r["reason"] for r in silence_rows]
 
+            # FSM columns (migration 011) — read tolerantly so a row shape
+            # from before the migration degrades to None instead of losing
+            # the whole snapshot.
+            try:
+                fsm_state = row["fsm_state"]
+                state_entered_at = row["state_entered_at"]
+                state_source = row["state_source"]
+            except (KeyError, IndexError, TypeError):
+                fsm_state = state_entered_at = state_source = None
+
             return ParticipationSnapshot(
                 last_spoke_at=row["last_spoke_at"],
                 turns_since_last_spoke=row["turns_since_last_spoke"] or 0,
@@ -309,6 +391,9 @@ class SelfModel:
                 session_count=row["session_count"] or 0,
                 days_since_last_session=row["days_since_last_session"],
                 recent_silence_reasons=silence_reasons,
+                fsm_state=fsm_state,
+                state_entered_at=state_entered_at,
+                state_source=state_source,
             )
 
         except Exception as e:
@@ -423,6 +508,21 @@ class SelfModel:
             f"- You've sent {snapshot.total_messages_sent} message(s) total, "
             f"chose silence {snapshot.total_silences} time(s)"
         )
+
+        # Participation FSM (W6): what the current moment means + how much
+        # the machine trusts its own read of it.
+        if snapshot.fsm_state:
+            state_blurb = _FSM_STATE_BLURBS.get(snapshot.fsm_state, "")
+            lines.append(
+                f"- Participation state: {snapshot.fsm_state}"
+                + (f" — {state_blurb}" if state_blurb else "")
+            )
+        if snapshot.state_source:
+            lines.append(
+                f"- State confidence: {snapshot.state_source} "
+                "(observed = grounded in real events, reconciled = rebuilt "
+                "after context truncation, inferred = timer-derived guess)"
+            )
 
         # Mode
         if snapshot.total_messages_sent > 0:

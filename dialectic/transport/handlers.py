@@ -604,6 +604,11 @@ class MessageHandler:
             mentioned=mentioned,
             semantic_novelty=semantic_novelty,
             protocol=protocol,
+            # The auto_interjection_enabled toggle, wired at last: when off,
+            # the heuristic path still runs so the silence decision is logged
+            # and the participation FSM sees the message — but the LLM never
+            # speaks. Protocol sessions are exempt (not auto-interjection).
+            force_silence=not room.auto_interjection_enabled and protocol is None,
         )
 
         if result.triggered and result.response:
