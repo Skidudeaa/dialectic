@@ -540,6 +540,22 @@
       "closesRequired": 3,
       "additionalCondition": "pboc-response AND fiscal-stimulus both fired",
       "action": "Cut JJC/SCCO 1/3, EEM 1/2, hold TLT/GLD, restore EM equity exposure via EEM long-tail."
+    },
+    {
+      "id": "default-rhetoric",
+      "label": "Default Headlines (GDELT)",
+      "type": "indicator",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "Live GDELT article-volume for developer-default coverage (query: Vanke/Country Garden/LGFV/Evergrande AND default/restructuring, English). Watch-only news pulse (no causal edge by design): declaring the feed here is what lights up the desk's bridge news endpoint, so Dialectic's get_thesis_news tool gets real headlines for this book instead of 'no gdelt config'. Headline volume is the earliest visible edge of the lgfv-default event node, which otherwise has no live feed at all.",
+      "feeds": [
+        {
+          "source": "gdelt",
+          "standardQuery": "china-property-default"
+        }
+      ],
+      "_builderX": 60.0,
+      "_builderY": 60.0
     }
   ],
   "edges": [

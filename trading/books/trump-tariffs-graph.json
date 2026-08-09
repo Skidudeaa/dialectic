@@ -715,6 +715,20 @@
       ],
       "context": "Polymarket: 38% recession by end-2026. Goldman: 25% (raised from baseline after Feb jobs + oil). JPM: 'no recession but material headwinds.' Bloomberg consensus: 1.5% GDP growth. The tariff tax ($1,500/household) + oil shock + geopolitical uncertainty create a triple drag. Stagflation — inflation above target with slowing growth — is the central risk.",
       "probability": 0.26
+    },
+    {
+      "id": "tariff-rhetoric",
+      "label": "Tariff Escalation Rhetoric (GDELT)",
+      "type": "indicator",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "Live GDELT article-volume for tariff escalation coverage (query: \"tariff\" AND China/Section 122/IEEPA, English). Watch-only news pulse (no causal edge by design): declaring the feed here is what lights up the desk's bridge news endpoint, so Dialectic's get_thesis_news tool gets real headlines for this book instead of 'no gdelt config'. Rhetoric spiking while USD/CNY and input costs stay flat = political noise; rhetoric plus market confirmation = escalation transmitting.",
+      "feeds": [
+        {
+          "source": "gdelt",
+          "standardQuery": "trump-tariff-escalation"
+        }
+      ]
     }
   ],
   "edges": [

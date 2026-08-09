@@ -551,6 +551,22 @@
       "closesRequired": 5,
       "additionalCondition": "USD/JPY 4-week range < 4 figures",
       "action": "Cut FXY 1/2, close TLT short, trim VIX calls, rebuild SGOV"
+    },
+    {
+      "id": "boj-rhetoric",
+      "label": "BoJ Policy Rhetoric (GDELT)",
+      "type": "indicator",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "Live GDELT article-volume for BoJ policy coverage (query: \"BOJ\" AND yield/rate hike/JGB, English). Watch-only news pulse (no causal edge by design): declaring the feed here is what lights up the desk's bridge news endpoint, so Dialectic's get_thesis_news tool gets real headlines for this book instead of 'no gdelt config'. Rhetoric surging into a boj-decision date is the qualitative companion to the JGB 10Y and USD/JPY feeds.",
+      "feeds": [
+        {
+          "source": "gdelt",
+          "standardQuery": "japan-rate-shock"
+        }
+      ],
+      "_builderX": 60.0,
+      "_builderY": 60.0
     }
   ],
   "edges": [
