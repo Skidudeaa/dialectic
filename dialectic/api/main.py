@@ -19,6 +19,7 @@ from models import (
 )
 from memory.manager import MemoryManager
 from llm.orchestrator import LLMOrchestrator
+from llm.briefing import BriefingHighlight, BriefingResponse, build_briefing
 from transport.websocket import ConnectionManager, InboundMessage, OutboundMessage, MessageTypes
 from transport.handlers import MessageHandler
 from api.auth.routes import router as auth_router, set_db_pool as set_auth_db_pool
@@ -224,14 +225,17 @@ async def lifespan(app: FastAPI):
     if db_pool:
         from scheduler import Scheduler, SchedulerContext
         from trading_watch import register_bloodstream_jobs
+        from llm.night_shift import register_brief_jobs
 
         async def _scheduler_broadcast(room_id, message):
             await connection_manager.broadcast(room_id, message)
 
         scheduler_instance = Scheduler(SchedulerContext(
             pool=db_pool, broadcast=_scheduler_broadcast,
+            connection_manager=connection_manager,
         ))
         register_bloodstream_jobs(scheduler_instance)
+        register_brief_jobs(scheduler_instance)
         scheduler_instance.start()
 
     yield
@@ -2156,24 +2160,8 @@ async def get_room_presence(
 # ASYNC DIALOGUE / BRIEFING
 # ============================================================
 
-class BriefingHighlight(BaseModel):
-    """A single highlight from missed activity."""
-    speaker: str
-    content_preview: str
-    message_type: str
-    timestamp: datetime
-
-
-class BriefingResponse(BaseModel):
-    """Morning briefing summarizing what happened while user was offline."""
-    summary: str
-    messages_missed: int
-    memories_created: int
-    threads_forked: int
-    highlights: List[BriefingHighlight]
-    last_seen: Optional[datetime]
-    generated_at: datetime
-
+# BriefingHighlight/BriefingResponse live in llm/briefing.py — the models and
+# the builder are shared with the night-shift morning_brief job.
 
 @app.get("/rooms/{room_id}/briefing", response_model=BriefingResponse)
 async def get_morning_briefing(
@@ -2185,7 +2173,9 @@ async def get_morning_briefing(
     """
     Generate a briefing of what happened since the user was last online.
 
-    ARCHITECTURE: On-demand summarization of missed activity.
+    ARCHITECTURE: On-demand summarization of missed activity. The body lives
+    in llm/briefing.build_briefing; this endpoint keeps auth, derives `since`
+    from presence (user_presence.last_heartbeat), and logs the request event.
     WHY: Async dialogue needs a "catch-up" mechanism, not raw message history.
     TRADEOFF: LLM call per briefing request vs pre-computed summaries.
     """
@@ -2205,85 +2195,9 @@ async def get_morning_briefing(
 
     # If no last_seen, use 24 hours ago as default
     if not last_seen:
-        from datetime import timedelta
         last_seen = now - timedelta(hours=24)
 
-    # Fetch messages since last_seen (capped at 100 to prevent OOM on long absences)
-    message_rows = await db.fetch(
-        """SELECT m.*, COALESCE(u.display_name, m.speaker_type) as sender_name
-           FROM messages m
-           JOIN threads t ON m.thread_id = t.id
-           LEFT JOIN users u ON m.user_id = u.id
-           WHERE t.room_id = $1
-             AND m.created_at > $2
-             AND NOT m.is_deleted
-             AND (m.user_id IS NULL OR m.user_id != $3)
-           ORDER BY m.created_at DESC
-           LIMIT 100""",
-        room_id, last_seen, user_id
-    )
-    # Reverse to chronological order after LIMIT
-    message_rows = list(reversed(message_rows))
-
-    messages_missed = len(message_rows)
-
-    # Count memories created since last_seen
-    memories_created = await db.fetchval(
-        """SELECT COUNT(*) FROM memories
-           WHERE room_id = $1 AND created_at > $2""",
-        room_id, last_seen
-    ) or 0
-
-    # Count threads forked since last_seen
-    threads_forked = await db.fetchval(
-        """SELECT COUNT(*) FROM threads
-           WHERE room_id = $1 AND created_at > $2
-           AND parent_thread_id IS NOT NULL""",
-        room_id, last_seen
-    ) or 0
-
-    # Build highlights from messages (up to 10 most significant)
-    highlights = []
-    for row in message_rows[:10]:
-        highlights.append(BriefingHighlight(
-            speaker=row['sender_name'],
-            content_preview=row['content'][:200],
-            message_type=row['message_type'] if row['message_type'] else 'text',
-            timestamp=row['created_at'],
-        ))
-
-    # Generate LLM summary if there are messages to summarize
-    summary = "Nothing happened while you were away."
-    if message_rows:
-        try:
-            from llm.providers import get_provider, ProviderName, LLMRequest
-
-            messages_text = "\n".join(
-                f"[{row['sender_name']}] {row['content'][:300]}"
-                for row in message_rows[:30]  # Cap at 30 messages for context
-            )
-
-            provider = get_provider(ProviderName.ANTHROPIC)
-            request = LLMRequest(
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        f"Summarize what happened in this conversation. "
-                        f"Be concise (2-4 sentences). Focus on: who said what, "
-                        f"key claims made, questions raised, and any tensions.\n\n"
-                        f"{messages_text}"
-                    ),
-                }],
-                system="You are summarizing missed conversation activity for a returning user. Be brief and informative.",
-                model="claude-haiku-4-5-20251001",
-                max_tokens=256,
-                temperature=0.2,
-            )
-            response = await provider.complete(request)
-            summary = response.content
-        except Exception as e:
-            logger.warning(f"Briefing LLM summary failed: {e}")
-            summary = f"{messages_missed} messages were exchanged while you were away."
+    briefing = await build_briefing(db, room_id, last_seen, exclude_user_id=user_id)
 
     # Log briefing event
     await db.execute(
@@ -2291,18 +2205,10 @@ async def get_morning_briefing(
            VALUES ($1, $2, $3, $4, $5, $6)""",
         uuid4(), now, EventType.BRIEFING_REQUESTED.value,
         room_id, user_id,
-        {"messages_missed": messages_missed, "last_seen": last_seen.isoformat()},
+        {"messages_missed": briefing.messages_missed, "last_seen": last_seen.isoformat()},
     )
 
-    return BriefingResponse(
-        summary=summary,
-        messages_missed=messages_missed,
-        memories_created=memories_created,
-        threads_forked=threads_forked,
-        highlights=highlights,
-        last_seen=last_seen,
-        generated_at=now,
-    )
+    return briefing
 
 
 @app.get("/rooms/{room_id}/events")

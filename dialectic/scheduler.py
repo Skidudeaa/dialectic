@@ -17,6 +17,12 @@ for a whole bucket runs at most once when it comes back (Persistent
 semantics via the current bucket only — we deliberately do NOT backfill
 missed buckets; for watch-style jobs, running the latest is correct and
 replaying the past is noise).
+
+DAILY JOBS: a Job with daily_at/daily_tz ignores interval buckets; the tick
+computes today's wall-clock slot via stdlib zoneinfo (DST-correct) and uses
+it as the ledger key — the same UNIQUE(job_name, scheduled_for) row gives
+exactly-once-per-day across restarts, and a server down through the slot
+runs it once when it comes back.
 """
 
 import asyncio
@@ -26,6 +32,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Awaitable, Callable, Optional
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +49,9 @@ class SchedulerContext:
     """
     pool: object  # asyncpg.Pool
     broadcast: Optional[Callable[..., Awaitable[None]]] = None
+    # Optional connection manager for push-recipient filtering (jobs that
+    # web-push skip users with an active WS to the room). None = push all.
+    connection_manager: Optional[object] = None
 
 
 @dataclass
@@ -51,6 +61,10 @@ class Job:
     func: Callable[[SchedulerContext], Awaitable[Optional[dict]]]
     # Optional env var that must not be "0"/"false" for the job to run.
     enabled_env: Optional[str] = None
+    # Wall-clock daily jobs: "07:00" in daily_tz (e.g. "America/Chicago")
+    # instead of interval buckets. interval_s is unused when daily_at is set.
+    daily_at: Optional[str] = None
+    daily_tz: Optional[str] = None
 
     def enabled(self) -> bool:
         if not self.enabled_env:
@@ -64,6 +78,27 @@ def bucket_for(interval_s: int, now_epoch: Optional[float] = None) -> datetime:
     epoch = time.time() if now_epoch is None else now_epoch
     aligned = int(epoch) // interval_s * interval_s
     return datetime.fromtimestamp(aligned, tz=timezone.utc)
+
+
+def daily_for(
+    daily_at: str,
+    daily_tz: str,
+    now: Optional[datetime] = None,
+) -> Optional[datetime]:
+    """Today's slot for a wall-clock daily job (UTC), or None if not due yet.
+
+    Pure given `now` — unit tested, including across DST boundaries. The
+    returned instant is the ledger key: stable for the whole day once the
+    slot has passed, so restarts cannot double-run the job.
+    """
+    tz = ZoneInfo(daily_tz)
+    now_utc = now or datetime.now(timezone.utc)
+    local_now = now_utc.astimezone(tz)
+    hour, minute = (int(part) for part in daily_at.split(":"))
+    slot = local_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if local_now < slot:
+        return None
+    return slot.astimezone(timezone.utc)
 
 
 class Scheduler:
@@ -135,7 +170,13 @@ class Scheduler:
         for job in self.jobs:
             if not job.enabled():
                 continue
-            bucket = bucket_for(job.interval_s)
+            if job.daily_at:
+                slot = daily_for(job.daily_at, job.daily_tz or "UTC")
+                if slot is None:
+                    continue  # today's slot hasn't arrived yet
+                bucket = slot
+            else:
+                bucket = bucket_for(job.interval_s)
             try:
                 won = await conn.fetchval(
                     """INSERT INTO scheduled_job_runs (job_name, scheduled_for)
