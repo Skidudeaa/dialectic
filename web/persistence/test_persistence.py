@@ -36,9 +36,10 @@ class TestMigrations:
         from web.persistence.migrations import run_migrations
         count = run_migrations(conn)
         # 001 (initial schema) + 002 (audit_log + confirm_tokens) + 003
-        # (message kind+meta) + 004 (drop outbox). Bump this when a new
-        # numbered migration lands in web/persistence/sql/.
-        assert count == 4
+        # (message kind+meta) + 004 (drop outbox) + 005 (maintenance_state).
+        # Bump this when a new numbered migration lands in
+        # web/persistence/sql/.
+        assert count == 5
         tables = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         )}
@@ -47,7 +48,7 @@ class TestMigrations:
             "journal_entries", "predictions", "tv_events",
             "thesis_snapshots", "alert_events", "manual_overrides",
             "close_observations", "fetch_runs",
-            "audit_log", "confirm_tokens",
+            "audit_log", "confirm_tokens", "maintenance_state",
         }
         assert expected.issubset(tables)
         conn.close()

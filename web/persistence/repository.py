@@ -1122,3 +1122,160 @@ class Repository:
             return cur.rowcount
         finally:
             conn.close()
+
+    # ════════════════════════════════════════════════════════════════
+    # RETENTION + MAINTENANCE
+    #
+    # WHY this lives here and not in a script: thesis_snapshots grows by one
+    # full snapshot per book per 300s tick — 1,440 rows/day, ~3.4 KB each,
+    # forever. Left alone it is the whole growth curve of the database.
+    # ════════════════════════════════════════════════════════════════
+
+    def prune_thesis_snapshots(self, keep_recent: int = 2016) -> int:
+        """Delete snapshots outside the retention set. Returns rows deleted.
+
+        Survivors, per thesis:
+          1. the newest `keep_recent` revisions (7 days at a 300s tick), and
+          2. the FIRST snapshot of each UTC day among everything older —
+             kept forever, so the long-range history stays walkable at daily
+             resolution instead of vanishing at the 7-day cliff.
+
+        WHY ordered by revision rather than generated_at: revision is the PK
+        half and is monotonic per thesis by construction, so it is the only
+        ordering that cannot be perturbed by a clock step. The day bucket
+        still comes from generated_at, which is written by _now_iso() and is
+        therefore always UTC.
+        """
+        if keep_recent < 0:
+            raise ValueError("keep_recent must be non-negative")
+        conn = self._conn()
+        try:
+            # WHY total_changes and not cur.rowcount: Python's sqlite3 decides
+            # whether to populate rowcount by sniffing the statement's leading
+            # keyword, and a CTE starts with WITH — so this DELETE reports -1
+            # no matter how many rows it removed. The delta is the real count.
+            before = conn.total_changes
+            conn.execute(
+                """
+                WITH ranked AS (
+                    SELECT thesis_id, revision, generated_at,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY thesis_id ORDER BY revision DESC
+                           ) AS recency_rank
+                      FROM thesis_snapshots
+                ),
+                older AS (
+                    SELECT * FROM ranked WHERE recency_rank > ?
+                ),
+                daily_keep AS (
+                    SELECT thesis_id, MIN(revision) AS revision
+                      FROM older
+                     GROUP BY thesis_id, substr(generated_at, 1, 10)
+                )
+                DELETE FROM thesis_snapshots
+                 WHERE (thesis_id, revision) IN (
+                       SELECT o.thesis_id, o.revision
+                         FROM older o
+                         LEFT JOIN daily_keep d
+                                ON d.thesis_id = o.thesis_id
+                               AND d.revision  = o.revision
+                        WHERE d.revision IS NULL
+                 )
+                """,
+                (keep_recent,),
+            )
+            deleted = conn.total_changes - before
+            conn.commit()
+            return deleted
+        finally:
+            conn.close()
+
+    def prune_fetch_runs(self, days: int = 14) -> int:
+        """Delete fetch_runs older than `days`. Returns rows deleted.
+
+        WHY a flat cutoff (no downsample): a fetch_run is per-cycle
+        provenance — which provider values produced which revision. It is
+        read by restart recovery and by scenario replay, both of which only
+        ever look at recent revisions. Beyond a fortnight it is 155 bytes of
+        JSON nobody queries.
+        """
+        if days < 0:
+            raise ValueError("days must be non-negative")
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        conn = self._conn()
+        try:
+            # WHY a Python-computed ISO cutoff instead of datetime('now', ...):
+            # started_at is written by _now_iso() ('2026-08-09T05:43:56+00:00')
+            # and SQLite's datetime() emits '2026-08-09 05:43:56'. A space
+            # sorts BELOW 'T', so comparing the two string forms silently
+            # mis-buckets every row inside the boundary day.
+            cur = conn.execute(
+                "DELETE FROM fetch_runs WHERE started_at < ?", (cutoff,),
+            )
+            conn.commit()
+            return cur.rowcount
+        finally:
+            conn.close()
+
+    def get_maintenance_state(self, key: str) -> Optional[str]:
+        """Read one maintenance fact, or None if never written."""
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                "SELECT value FROM maintenance_state WHERE key = ?", (key,),
+            ).fetchone()
+            return row["value"] if row else None
+        finally:
+            conn.close()
+
+    def set_maintenance_state(self, key: str, value: str) -> None:
+        """Write one maintenance fact (upsert)."""
+        conn = self._conn()
+        try:
+            conn.execute(
+                """INSERT INTO maintenance_state (key, value, updated_at)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(key) DO UPDATE
+                      SET value = excluded.value,
+                          updated_at = excluded.updated_at""",
+                (key, value, _now_iso()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_page_stats(self) -> Dict[str, int]:
+        """Return {'freelist_count', 'page_count', 'page_size'} for this DB.
+
+        WHY exposed as data rather than a bool: the vacuum decision belongs
+        to the maintenance task, which also weighs how long it has been since
+        the last one. The repository just reports what SQLite says.
+        """
+        conn = self._conn()
+        try:
+            def _pragma(name: str) -> int:
+                row = conn.execute(f"PRAGMA {name}").fetchone()
+                return int(row[0]) if row else 0
+            return {
+                "freelist_count": _pragma("freelist_count"),
+                "page_count": _pragma("page_count"),
+                "page_size": _pragma("page_size"),
+            }
+        finally:
+            conn.close()
+
+    def vacuum(self) -> None:
+        """Rewrite the database file, reclaiming free pages.
+
+        BLOCKS every reader and writer for the duration and needs free disk
+        equal to the finished file. The caller is responsible for choosing a
+        moment where that is acceptable.
+        """
+        conn = self._conn()
+        try:
+            # VACUUM cannot run inside a transaction, and the sqlite3 module
+            # opens one implicitly around DML unless autocommit is forced.
+            conn.isolation_level = None
+            conn.execute("VACUUM")
+        finally:
+            conn.close()

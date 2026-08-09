@@ -73,8 +73,17 @@ async def lifespan(app: FastAPI):
     await coordinator.start()
     log.info("RuntimeCoordinator started (tick=%.0fs)", tick_interval)
 
+    # WHY here: thesis_snapshots grows by one row per book per tick and the
+    # coordinator above is what writes them. The retention task is the other
+    # half of that loop, so it lives and dies with it.
+    from web.runtime.maintenance import MaintenanceTask
+    maintenance = MaintenanceTask(repo)
+    app.state.maintenance = maintenance
+    await maintenance.start()
+
     yield
 
+    await maintenance.stop()
     await coordinator.stop()
     log.info("tradingDesk web shutting down")
 

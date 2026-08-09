@@ -29,6 +29,7 @@ from tools.thesis_graph import thesisgraph  # type: ignore[import-untyped]
 from web.observability import thesis_context
 from web.persistence.repository import Repository
 from web.runtime.live_bus import get_live_bus
+from web.runtime.slow_feeds import SlowFeedRefresher
 from web.schemas.snapshots import snapshot_from_export
 
 log = logging.getLogger(__name__)
@@ -83,10 +84,16 @@ class RuntimeCoordinator:
         repo: Repository,
         ws_manager: Any,
         tick_interval: float = 300.0,
+        slow_feeds: Optional[SlowFeedRefresher] = None,
     ) -> None:
         self._repo = repo
         self._ws = ws_manager
         self._tick_interval = tick_interval
+
+        # Per-source TTL cache over the slow feeds (treasury, gdelt, fred,
+        # eia, econ-calendar). Coordinator-lifetime because the cfg is
+        # deep-copied every tick and cannot remember its own last pull.
+        self._slow_feeds = slow_feeds if slow_feeds is not None else SlowFeedRefresher()
 
         # Immutable thesis definitions, loaded once at startup
         self._definitions: Dict[str, dict] = {}
@@ -445,6 +452,21 @@ class RuntimeCoordinator:
                 )
             except Exception as e:
                 log.warning("derived_indicators failed for %s: %s", thesis_id, e)
+
+            # 2b. Slow feeds — treasury / gdelt / fred / eia / econ-calendar,
+            # each on its own TTL, patched from cache on the ticks in between.
+            # MUST run before the provider_values sweep below so their values
+            # ride into fetch_runs and survive a restart, and before
+            # _apply_overrides so a manual override still wins.
+            #
+            # WHY wrapped despite refresh() promising never to raise: the
+            # dormant feeds are the least-exercised code in the cycle, and
+            # the cycle holds the per-thesis lock. A treasury outage must not
+            # be able to stop the desk pricing oil.
+            try:
+                await self._slow_feeds.refresh(thesis_id, effective)
+            except Exception as e:  # noqa: BLE001
+                log.warning("slow_feeds failed for %s: %s", thesis_id, e)
 
             # Collect provider values for restart recovery
             for node in effective.get("nodes", []):
