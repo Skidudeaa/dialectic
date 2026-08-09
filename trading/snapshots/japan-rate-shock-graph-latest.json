@@ -1,0 +1,178 @@
+{
+  "v": 2,
+  "timestamp": "2026-08-09T08:01:05Z",
+  "title": "Japan Rate Normalization Shock Thesis — April 2026",
+  "nodeStates": {
+    "boj-decision": "fired",
+    "boj-intervention": "monitoring",
+    "jgb-10y": "approaching",
+    "usd-jpy": "fired",
+    "carry-unwind": "monitoring",
+    "nikkei-stress": "stable",
+    "lifer-repatriation": "approaching",
+    "us-10y": "approaching",
+    "move-index": "approaching",
+    "tech-breakdown": "stable",
+    "margin-calls": "monitoring",
+    "vix-spike": "approaching",
+    "fed-reaction": "monitoring",
+    "resolution": "approaching"
+  },
+  "confluenceScores": {
+    "lifer-repatriation": 0.4,
+    "margin-calls": 0.42,
+    "vix-spike": 0.3,
+    "resolution": 0.25
+  },
+  "cascadePhase": {
+    "number": 1,
+    "key": "shock",
+    "status": "APPROACHING"
+  },
+  "countdowns": [
+    {
+      "nodeId": "boj-decision",
+      "label": "BoJ Policy Decision",
+      "deadline": "2026-05-01",
+      "daysRemaining": 0
+    }
+  ],
+  "marketSnapshot": {
+    "usdJpy": 152.4,
+    "jgb10y": 1.45,
+    "us10y": 4.35,
+    "move": 95,
+    "xlk": 245.0,
+    "vix": 17,
+    "fedRate": 3.625
+  },
+  "scenarioImpacts": {
+    "controlled-exit": {
+      "probability": 0.45,
+      "netImpact": 0.0
+    },
+    "boj-surprise-hike": {
+      "probability": 0.2,
+      "netImpact": -2.0
+    },
+    "carry-flash-unwind": {
+      "probability": 0.15,
+      "netImpact": -5.9
+    },
+    "fed-cuts-absorb": {
+      "probability": 0.2,
+      "netImpact": -9.6
+    }
+  },
+  "feedFreshness": {
+    "yahoo": {
+      "source": "yahoo",
+      "fetchedAt": "2026-08-09T08:01:03Z",
+      "ttlSeconds": 300,
+      "detail": "17/17 symbols"
+    },
+    "derived": {
+      "source": "derived",
+      "fetchedAt": "2026-08-09T08:01:04Z",
+      "ttlSeconds": 86400,
+      "detail": "3 node(s)"
+    }
+  },
+  "portfolioSummary": {
+    "monthlyBudget": 10000,
+    "topPositions": [
+      "FXY $1800/mo",
+      "TLT $1500/mo",
+      "XLK $1500/mo",
+      "VXX $1200/mo",
+      "DXJ $1000/mo",
+      "QQQ $1000/mo"
+    ],
+    "sgovAvailable": 1000
+  },
+  "horizonTrace": {
+    "T+7d": {
+      "states": {
+        "boj-decision": "fired",
+        "carry-unwind": "monitoring",
+        "lifer-repatriation": "monitoring",
+        "us-10y": "approaching",
+        "move-index": "monitoring",
+        "tech-breakdown": "stable",
+        "vix-spike": "monitoring",
+        "margin-calls": "monitoring",
+        "fed-reaction": "monitoring",
+        "boj-intervention": "monitoring",
+        "nikkei-stress": "monitoring",
+        "resolution": "approaching",
+        "jgb-10y": "approaching",
+        "usd-jpy": "fired"
+      },
+      "confluence": {}
+    },
+    "T+28d": {
+      "states": {
+        "boj-decision": "fired",
+        "carry-unwind": "monitoring",
+        "lifer-repatriation": "monitoring",
+        "us-10y": "approaching",
+        "tech-breakdown": "stable",
+        "fed-reaction": "monitoring",
+        "boj-intervention": "monitoring",
+        "nikkei-stress": "monitoring",
+        "resolution": "approaching",
+        "jgb-10y": "approaching",
+        "usd-jpy": "fired",
+        "move-index": "approaching",
+        "margin-calls": "monitoring",
+        "vix-spike": "stable"
+      },
+      "confluence": {}
+    },
+    "T+90d": {
+      "states": {
+        "boj-decision": "fired",
+        "us-10y": "approaching",
+        "boj-intervention": "monitoring",
+        "jgb-10y": "approaching",
+        "usd-jpy": "fired",
+        "move-index": "approaching",
+        "tech-breakdown": "stable",
+        "carry-unwind": "monitoring",
+        "nikkei-stress": "stable",
+        "lifer-repatriation": "approaching",
+        "margin-calls": "monitoring",
+        "vix-spike": "approaching",
+        "fed-reaction": "monitoring",
+        "resolution": "approaching"
+      },
+      "confluence": {
+        "lifer-repatriation": 0.4,
+        "margin-calls": 0.42,
+        "vix-spike": 0.3
+      }
+    }
+  },
+  "tvIndicators": {
+    "usd-jpy": {
+      "rsi14": 30.49,
+      "atr14": 1.44,
+      "sma50": 161.2,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-08-09T08:01:04Z"
+    },
+    "us-10y": {
+      "rsi14": 55.73,
+      "sma50": 4.54,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-08-09T08:01:04Z"
+    },
+    "tech-breakdown": {
+      "rsi14": 58.99,
+      "atr14": 5.52,
+      "sma50": 183.34,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-08-09T08:01:04Z"
+    }
+  }
+}

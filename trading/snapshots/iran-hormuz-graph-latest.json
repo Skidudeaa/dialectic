@@ -1,0 +1,207 @@
+{
+  "v": 2,
+  "timestamp": "2026-08-09T08:01:00Z",
+  "title": "Iran/Hormuz Thesis — June 2026",
+  "nodeStates": {
+    "hormuz": "fired",
+    "curve": "stable",
+    "rig-confirm": "monitoring",
+    "services": "gated",
+    "reopening-pressure": "monitoring",
+    "brent": "stable",
+    "fert-shortage": "approaching",
+    "dxy-stress": "fired",
+    "diesel": "fired",
+    "rates-term-premium": "approaching",
+    "planting-miss": "fired",
+    "em-currency": "fired",
+    "freight": "fired",
+    "food-spike": "fired",
+    "employment": "fired",
+    "em-stress": "fired",
+    "demand-destruction": "fired",
+    "de-escalation": "stable",
+    "growth-scare-yields-fall": "stable"
+  },
+  "confluenceScores": {
+    "em-stress": 2.05
+  },
+  "cascadePhase": {
+    "number": 3,
+    "key": "amplification",
+    "status": "STARTING"
+  },
+  "countdowns": [
+    {
+      "nodeId": "planting-miss",
+      "label": "Planting Cycle Miss",
+      "deadline": "2026-04-15",
+      "daysRemaining": 0
+    }
+  ],
+  "marketSnapshot": {
+    "brent": 99.78,
+    "wti": 99.64,
+    "goldSpot": 4492,
+    "usRigs": 543,
+    "nolaFert": 683,
+    "usDiesel": 5.38,
+    "curveSpread": 15,
+    "dxy": 98.87,
+    "us10y": 4.47
+  },
+  "scenarioImpacts": {
+    "reopen-apr1": {
+      "probability": 0.18,
+      "netImpact": 1.8
+    },
+    "closed-may": {
+      "probability": 0.42,
+      "netImpact": 5.4
+    },
+    "kharg-strike": {
+      "probability": 0.12,
+      "netImpact": 5.4
+    },
+    "selective-reopen": {
+      "probability": 0.28,
+      "netImpact": 9.0
+    }
+  },
+  "feedFreshness": {
+    "yahoo": {
+      "source": "yahoo",
+      "fetchedAt": "2026-08-09T08:00:15Z",
+      "ttlSeconds": 300,
+      "detail": "12/21 symbols"
+    },
+    "treasury": {
+      "source": "treasury",
+      "fetchedAt": "2026-08-09T08:00:25Z",
+      "ttlSeconds": 172800,
+      "detail": "curve 2026-08-07"
+    },
+    "derived": {
+      "source": "derived",
+      "fetchedAt": "2026-08-09T08:01:00Z",
+      "ttlSeconds": 86400,
+      "detail": "4 node(s)"
+    }
+  },
+  "portfolioSummary": {
+    "monthlyBudget": 8000,
+    "topPositions": [
+      "XOP $1400/mo",
+      "XLE $1200/mo",
+      "SGOV $1200/mo",
+      "GLD $1000/mo",
+      "IXC $800/mo",
+      "CF $800/mo"
+    ],
+    "sgovAvailable": 1200
+  },
+  "horizonTrace": {
+    "T+7d": {
+      "states": {
+        "hormuz": "fired",
+        "diesel": "fired",
+        "freight": "monitoring",
+        "employment": "monitoring",
+        "planting-miss": "fired",
+        "food-spike": "monitoring",
+        "dxy-stress": "monitoring",
+        "em-currency": "monitoring",
+        "em-stress": "monitoring",
+        "demand-destruction": "monitoring",
+        "curve": "stable",
+        "rig-confirm": "monitoring",
+        "services": "gated",
+        "de-escalation": "stable",
+        "reopening-pressure": "monitoring",
+        "rates-term-premium": "approaching",
+        "growth-scare-yields-fall": "stable",
+        "brent": "stable",
+        "fert-shortage": "approaching"
+      },
+      "confluence": {}
+    },
+    "T+28d": {
+      "states": {
+        "hormuz": "fired",
+        "employment": "monitoring",
+        "planting-miss": "fired",
+        "food-spike": "monitoring",
+        "em-currency": "monitoring",
+        "em-stress": "monitoring",
+        "demand-destruction": "monitoring",
+        "curve": "stable",
+        "rig-confirm": "monitoring",
+        "services": "gated",
+        "de-escalation": "stable",
+        "reopening-pressure": "monitoring",
+        "rates-term-premium": "approaching",
+        "growth-scare-yields-fall": "stable",
+        "brent": "stable",
+        "fert-shortage": "approaching",
+        "dxy-stress": "fired",
+        "diesel": "fired",
+        "freight": "fired"
+      },
+      "confluence": {}
+    },
+    "T+90d": {
+      "states": {
+        "hormuz": "fired",
+        "planting-miss": "fired",
+        "food-spike": "monitoring",
+        "demand-destruction": "monitoring",
+        "curve": "stable",
+        "rig-confirm": "monitoring",
+        "services": "gated",
+        "de-escalation": "stable",
+        "reopening-pressure": "monitoring",
+        "growth-scare-yields-fall": "stable",
+        "brent": "stable",
+        "fert-shortage": "approaching",
+        "dxy-stress": "fired",
+        "diesel": "fired",
+        "rates-term-premium": "approaching",
+        "em-currency": "fired",
+        "freight": "fired",
+        "em-stress": "fired",
+        "employment": "fired"
+      },
+      "confluence": {}
+    }
+  },
+  "tvIndicators": {
+    "brent": {
+      "rsi14": 47.63,
+      "atr14": 4.95,
+      "sma50": 84.61,
+      "curveSpread": {
+        "spread": 3.56,
+        "shape": "backwardation",
+        "front": 83.55,
+        "back": 79.99
+      },
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-08-09T08:01:00Z"
+    },
+    "food-spike": {
+      "rsi14": 48.61,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-08-09T08:01:00Z"
+    },
+    "dxy-stress": {
+      "rsi14": 36.56,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-08-09T08:01:00Z"
+    },
+    "demand-destruction": {
+      "rsi14": 46.59,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-08-09T08:01:00Z"
+    }
+  }
+}

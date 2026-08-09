@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.env
+.DS_Store
+.planning/
+.claude/
+.mcp.json
+.playwright-mcp/
+pytest-of-root/
+venv/
+web/data/
+frontend/node_modules/
+frontend/dist/
+*.png
+
+# dialectic outbox spool files (runtime state, not source)
+snapshots/outbox/*
+!snapshots/outbox/.gitkeep

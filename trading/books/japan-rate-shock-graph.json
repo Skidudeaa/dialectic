@@ -1,0 +1,1342 @@
+{
+  "meta": {
+    "title": "Japan Rate Normalization Shock Thesis \u2014 April 2026",
+    "claim": "BoJ exits ZIRP/YCC \u2192 USD/JPY-funded carry collapses \u2192 JGB yields spike \u2192 Japanese lifers repatriate ~$1.1T of US duration \u2192 long-end Treasuries sell off \u2192 equity multiples compress \u2192 mega-cap tech (the carry beneficiaries) leads down. Trade the unwind, not the headline.",
+    "monthlyBudget": 10000,
+    "asOf": "2026-04-17",
+    "version": "1.0.0",
+    "type": "thesis-graph",
+    "dialecticRoomId": "b9f3b9d2-1d00-4179-957b-284b7cd4a8ad",
+    "dialecticRoomToken": "702c1cf81c6a43a18ca9800c1f0a3b20"
+  },
+  "nodes": [
+    {
+      "id": "boj-decision",
+      "label": "BoJ Policy Decision",
+      "type": "deadline",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "BoJ ended NIRP March 2024 and dismantled YCC formally July 2024; policy rate currently 0.50% (Jan 2026 hike). Next MPM Apr 30\u2013May 1, 2026. Ueda has signaled policy normalization continues if wage-inflation spiral confirms. A 25bp hike to 0.75% is the catalyst the carry trade is positioned against.",
+      "countdown": true,
+      "deadline": "2026-05-01",
+      "_calendarFeedComment": "calendarFeed pins this deadline node to a specific upcoming event in the econ calendar connector (tools/data_fetch/econ_calendar.py). When the connector runs, it overlays the live event date onto countdown math \u2014 keeping the node fresh without manual edits. event_id format follows the connector's stable slug scheme; rotate to the next BoJ MPM after each meeting.",
+      "calendarFeed": {
+        "event_id": "boj-2026-05",
+        "source": "static"
+      },
+      "irreversible": false,
+      "logic": "any",
+      "conditions": [],
+      "_builderX": 100.0,
+      "_builderY": 60.0
+    },
+    {
+      "id": "jgb-10y",
+      "label": "JGB 10Y Yield",
+      "type": "price",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "JGB 10Y at ~1.45%, the highest since 2009 and a 35-year regime break. 1.50% is the psychological line; 1.75% is where lifer ALM models flip from 'extend duration overseas' to 'repatriate'. Calibration TBD beyond 2.00% \u2014 no modern data.",
+      "current": 1.45,
+      "feeds": [
+        {
+          "source": "fred",
+          "series": "IRLTLT01JPM156N",
+          "label": "Japan 10Y govt bond yield (OECD monthly)"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 1.5,
+          "label": "regime break confirmed"
+        },
+        {
+          "level": 1.75,
+          "label": "lifer repatriation trigger",
+          "closesRequired": 5
+        },
+        {
+          "level": 2.0,
+          "label": "structural shift (calibration TBD)"
+        }
+      ],
+      "_builderX": 100.0,
+      "_builderY": 200.0,
+      "regimes": {
+        "compressed": {
+          "max": 1.49,
+          "color": "#6E8FAD"
+        },
+        "breakout": {
+          "min": 1.5,
+          "max": 1.74,
+          "color": "#E69A4C"
+        },
+        "repatriation": {
+          "min": 1.75,
+          "max": 1.99,
+          "color": "#E05555"
+        },
+        "structural": {
+          "min": 2.0,
+          "color": "#D32F2F"
+        }
+      }
+    },
+    {
+      "id": "usd-jpy",
+      "label": "USD/JPY Carry Pair",
+      "type": "price",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "USD/JPY at 152.4. The pair IS the carry trade \u2014 short JPY funded longs in everything from EM equity to BTC to 7 Mag-7 names. Below 145 = carry IRR turns negative for most reset-quarterly books. Aug 2024 unwind happened in 3 sessions when the pair dropped from 162 \u2192 142.",
+      "current": 159.33,
+      "feeds": [
+        {
+          "source": "fred",
+          "series": "DEXJPUS",
+          "label": "USD/JPY noon buying rate (FRED daily)"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "JPY=X",
+          "label": "USD/JPY spot (intraday fallback)"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 145,
+          "label": "carry IRR turns negative"
+        },
+        {
+          "level": 140,
+          "label": "forced unwind threshold"
+        },
+        {
+          "level": 135,
+          "label": "Aug-2024 analog repeat",
+          "closesRequired": 2
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 200.0,
+      "regimes": {
+        "carry-comfortable": {
+          "min": 150,
+          "color": "#6E8FAD"
+        },
+        "carry-pressured": {
+          "min": 145,
+          "max": 149.99,
+          "color": "#E69A4C"
+        },
+        "carry-unwinding": {
+          "min": 140,
+          "max": 144.99,
+          "color": "#E05555"
+        },
+        "carry-blown": {
+          "max": 139.99,
+          "color": "#D32F2F"
+        }
+      },
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "JPY=X",
+          "overlay": true
+        },
+        {
+          "kind": "atr",
+          "period": 14,
+          "symbol": "JPY=X",
+          "overlay": true
+        },
+        {
+          "kind": "sma",
+          "period": 50,
+          "symbol": "JPY=X",
+          "overlay": true
+        }
+      ],
+      "tvIndicators": {
+        "rsi14": 53.31,
+        "atr14": 0.91,
+        "sma50": 158.15,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-24T23:35:14Z"
+      }
+    },
+    {
+      "id": "carry-unwind",
+      "label": "JPY Carry Unwind",
+      "type": "event",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "BIS estimates the global JPY carry book at ~$1T notional, with another ~$3T in JPY-denominated cross-border bank claims that behave similarly. The 'event' fires when USD/JPY breaks the carry-IRR line and prime brokers issue first margin calls. Aug 5, 2024 was the warning shot \u2014 Nikkei -12% in one session.",
+      "probability": 0.35,
+      "indicators": [
+        {
+          "label": "Estimated carry notional",
+          "feed": "manual",
+          "value": "~$1T (BIS)",
+          "status": "amber"
+        },
+        {
+          "label": "CFTC JPY non-comm net short",
+          "feed": "manual",
+          "value": "near 5Y high",
+          "status": "red"
+        },
+        {
+          "label": "Aug-2024 precedent",
+          "feed": "manual",
+          "value": "Nikkei -12% / 1 session",
+          "status": "amber"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 360.0
+    },
+    {
+      "id": "lifer-repatriation",
+      "label": "Japan Lifer Repatriation",
+      "type": "indicator",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "Japanese life insurers + GPIF hold ~$1.1T in foreign bonds, ~70% USTs. Once domestic JGB yields > FX-hedged UST yield (currency-hedged 10Y UST currently ~0.8%), ALM mandates flip to net repatriation. The unwind is mechanical, not discretionary \u2014 it happens at fiscal-year boundaries (March, September).",
+      "feeds": [
+        {
+          "source": "manual",
+          "label": "MoF weekly capital flow report"
+        }
+      ],
+      "indicators": [
+        {
+          "label": "Foreign bond holdings",
+          "feed": "manual",
+          "value": "~$1.1T (lifers + GPIF)",
+          "status": "amber"
+        },
+        {
+          "label": "Hedged UST 10Y yield",
+          "feed": "manual",
+          "value": "~0.8%",
+          "status": "red"
+        },
+        {
+          "label": "Fiscal-year boundary",
+          "feed": "manual",
+          "value": "next: 2026-09-30",
+          "status": "monitoring"
+        }
+      ],
+      "_builderX": 660.0,
+      "_builderY": 360.0
+    },
+    {
+      "id": "us-10y",
+      "label": "US 10Y Treasury Yield",
+      "type": "price",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "US 10Y at 4.35%. Lifer repatriation removes a structural bid that has compressed term premium for a decade. Estimated +30 to +60bps shock to 10Y if even 10% of the $1.1T book rotates home. Above 5% breaks every duration-sensitive trade in the system.",
+      "current": 4.31,
+      "feeds": [
+        {
+          "source": "fred",
+          "series": "DGS10",
+          "label": "US 10Y Treasury constant maturity (FRED daily)"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "^TNX",
+          "label": "CBOE 10Y yield index (intraday fallback)"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 4.75,
+          "label": "term premium re-pricing"
+        },
+        {
+          "level": 5.0,
+          "label": "duration trade breaks",
+          "closesRequired": 3
+        },
+        {
+          "level": 5.5,
+          "label": "fiscal stress"
+        }
+      ],
+      "_builderX": 660.0,
+      "_builderY": 520.0,
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "^TNX",
+          "overlay": true
+        },
+        {
+          "kind": "sma",
+          "period": 50,
+          "symbol": "^TNX",
+          "overlay": true
+        }
+      ],
+      "tvIndicators": {
+        "rsi14": 53.19,
+        "sma50": 4.22,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-24T23:35:14Z"
+      }
+    },
+    {
+      "id": "move-index",
+      "label": "MOVE (Rates Vol)",
+      "type": "indicator",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "MOVE at 95. Rates vol is the canary. Above 130 = prime brokers double haircuts on duration collateral; above 150 = forced de-grossing. MOVE > 130 has preceded every credit event since 2020 (SVB, gilts, regional banks).",
+      "feeds": [
+        {
+          "source": "manual",
+          "label": "ICE BofA MOVE Index"
+        }
+      ],
+      "indicators": [
+        {
+          "label": "MOVE current",
+          "feed": "manual",
+          "value": "~95",
+          "status": "monitoring"
+        },
+        {
+          "label": "Margin-call threshold",
+          "feed": "manual",
+          "value": "130",
+          "status": "amber"
+        }
+      ],
+      "_builderX": 940.0,
+      "_builderY": 520.0
+    },
+    {
+      "id": "tech-breakdown",
+      "label": "Mega-Cap Tech Breakdown",
+      "type": "price",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "XLK at 245. Mega-cap tech is the single biggest carry beneficiary \u2014 long-duration cash flows discounted at compressed real rates, plus passive flow buoyancy from carry-funded EM allocations. A 10Y move from 4.35% to 5.00% mathematically compresses NDX multiples 8\u201312%.",
+      "current": 160.22,
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "XLK",
+          "label": "Tech Select Sector"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 230,
+          "label": "first support (50dma)"
+        },
+        {
+          "level": 215,
+          "label": "multiple compression confirmed"
+        },
+        {
+          "level": 200,
+          "label": "carry-unwind base case"
+        }
+      ],
+      "_builderX": 940.0,
+      "_builderY": 680.0,
+      "regimes": {
+        "expansion": {
+          "min": 240,
+          "color": "#6E8FAD"
+        },
+        "wobble": {
+          "min": 220,
+          "max": 239.99,
+          "color": "#E69A4C"
+        },
+        "compression": {
+          "min": 200,
+          "max": 219.99,
+          "color": "#E05555"
+        },
+        "broken": {
+          "max": 199.99,
+          "color": "#D32F2F"
+        }
+      },
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "XLK",
+          "overlay": true
+        },
+        {
+          "kind": "atr",
+          "period": 14,
+          "symbol": "XLK",
+          "overlay": true
+        },
+        {
+          "kind": "sma",
+          "period": 50,
+          "symbol": "XLK",
+          "overlay": true
+        }
+      ],
+      "tvIndicators": {
+        "rsi14": 75.86,
+        "atr14": 3.17,
+        "sma50": 141.17,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-24T23:35:14Z"
+      }
+    },
+    {
+      "id": "vix-spike",
+      "label": "Equity Vol Spike",
+      "type": "indicator",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "VIX at 17. A real carry unwind drives VIX > 30 (Aug-2024 spiked to 65 intraday). Confluence node: requires both rates-vol AND tech breakdown to confirm \u2014 either alone can be a head-fake.",
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "^VIX",
+          "label": "VIX"
+        }
+      ],
+      "_builderX": 1220.0,
+      "_builderY": 680.0,
+      "confluence": [
+        "move-index",
+        "tech-breakdown",
+        "us-10y"
+      ],
+      "indicators": [
+        {
+          "label": "VIX current",
+          "feed": "manual",
+          "value": "~17",
+          "status": "stable"
+        },
+        {
+          "label": "Aug-2024 peak",
+          "feed": "manual",
+          "value": "65 intraday",
+          "status": "monitoring"
+        }
+      ]
+    },
+    {
+      "id": "margin-calls",
+      "label": "Prime Broker Margin Calls",
+      "type": "event",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "Once MOVE > 130 AND USD/JPY < 145, prime brokers raise haircuts on JPY-funded books. Multi-strat pods with VaR breaches must de-gross same-day. This is the amplification channel \u2014 forced sellers create the air pocket the thesis trades.",
+      "probability": 0.2,
+      "indicators": [
+        {
+          "label": "Estimated multi-strat AUM at risk",
+          "feed": "manual",
+          "value": "~$300B (Citadel/Millennium/P72 carry sleeves)",
+          "status": "monitoring"
+        }
+      ],
+      "_builderX": 1220.0,
+      "_builderY": 520.0
+    },
+    {
+      "id": "fed-reaction",
+      "label": "Fed Reaction Function",
+      "type": "gate",
+      "phase": 4,
+      "state": "monitoring",
+      "context": "If Fed cuts to absorb the duration sell-off, the trade caps. If Fed stays restrictive (current dot plot: 1 cut 2026), the unwind runs unchecked. Powell's reaction function vs. financial stability is the binary that separates 'controlled exit' from 'flash unwind'. Calibration TBD on Fed put strike.",
+      "current": 96.36,
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "ZQ=F",
+          "label": "Fed Funds futures front"
+        }
+      ],
+      "_builderX": 940.0,
+      "_builderY": 360.0,
+      "condition": "Fed signals emergency cut OR maintains restrictive stance",
+      "gates": [
+        "us-10y",
+        "tech-breakdown"
+      ]
+    },
+    {
+      "id": "boj-intervention",
+      "label": "BoJ Slows Normalization",
+      "type": "gate",
+      "phase": 4,
+      "state": "monitoring",
+      "context": "If BoJ pauses hikes or signals YCC-redux to calm JGB market, the entire chain stalls. MoF FX intervention is the secondary lever \u2014 they bought ~9.8T yen defending USD/JPY in 2024. Watch Kanda/Mimura statements for verbal intervention warnings.",
+      "_builderX": 380.0,
+      "_builderY": 520.0,
+      "condition": "BoJ pauses hikes OR MoF intervenes in FX market",
+      "gates": [
+        "carry-unwind",
+        "lifer-repatriation"
+      ]
+    },
+    {
+      "id": "nikkei-stress",
+      "label": "Nikkei / Hedged Japan Equity Divergence",
+      "type": "indicator",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "Nikkei is short-yen-correlated: USD/JPY rallies = Nikkei rallies (export earnings translation). Carry unwind reverses this. DXJ (currency-hedged) underperforms unhedged EWJ by 8\u201315pp in a yen-rally regime. The pair trade is short DXJ / long FXY.",
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "DXJ",
+          "label": "WisdomTree Hedged Japan"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "EWJ",
+          "label": "iShares Japan"
+        }
+      ],
+      "_builderX": 660.0,
+      "_builderY": 200.0,
+      "indicators": [
+        {
+          "label": "DXJ vs EWJ 30d spread",
+          "feed": "manual",
+          "value": "+1.2% (carry regime)",
+          "status": "monitoring"
+        },
+        {
+          "label": "Nikkei foreign holding %",
+          "feed": "manual",
+          "value": "~31% (record)",
+          "status": "amber"
+        }
+      ]
+    },
+    {
+      "id": "resolution",
+      "label": "New \u00a5\u00a5\u00a5 Equilibrium",
+      "type": "reversal",
+      "phase": 5,
+      "state": "monitoring",
+      "context": "Two resolution paths: (a) 'controlled' \u2014 USD/JPY stabilizes 138\u2013145, JGB 10Y settles 1.5\u20131.75%, US 10Y at 4.5%, tech rebases lower with new multiples. (b) 'persistent risk-off' \u2014 carry book takes 12+ months to fully unwind, vol regime change. Trigger: VIX < 18 for 5 closes AND USD/JPY range-bound for 4 weeks.",
+      "current": 17.0,
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "^VIX"
+        }
+      ],
+      "_builderX": 660.0,
+      "_builderY": 840.0,
+      "threshold": 18,
+      "closesRequired": 5,
+      "additionalCondition": "USD/JPY 4-week range < 4 figures",
+      "action": "Cut FXY 1/2, close TLT short, trim VIX calls, rebuild SGOV"
+    }
+  ],
+  "edges": [
+    {
+      "from": "boj-decision",
+      "to": "jgb-10y",
+      "mechanism": "25bp hike repriced across the JGB curve; 5Y\u201310Y segment most sensitive (duration ~7y * 25bp \u2248 +1.7% price impact propagates as +20\u201330bp yield)",
+      "lag": "immediate",
+      "strength": 0.9
+    },
+    {
+      "from": "boj-decision",
+      "to": "usd-jpy",
+      "mechanism": "Rate differential narrows: each 25bp BoJ hike with no Fed move shrinks UST-JGB 10Y spread ~25bp, mechanically pulling USD/JPY ~3 figures lower at full pass-through",
+      "lag": "immediate",
+      "strength": 0.85
+    },
+    {
+      "from": "jgb-10y",
+      "to": "lifer-repatriation",
+      "mechanism": "Once JGB 10Y > FX-hedged UST 10Y (~0.8% currently), lifer ALM mandates flip from net foreign accumulation to net repatriation \u2014 the threshold is roughly 1.75% on JGB 10Y",
+      "lag": "1-3 months",
+      "strength": 0.8
+    },
+    {
+      "from": "usd-jpy",
+      "to": "carry-unwind",
+      "mechanism": "Sub-145 pushes carry-IRR negative for quarterly-reset books; sub-140 triggers programmatic unwind as VaR limits breach across funds running 5x+ leverage on the trade",
+      "lag": "immediate to 2 weeks",
+      "strength": 0.85,
+      "amplification": 1.4
+    },
+    {
+      "from": "carry-unwind",
+      "to": "nikkei-stress",
+      "mechanism": "Yen rally crushes Nikkei translation earnings; foreign holders (record 31%) exit JPY-hedged share classes first \u2014 DXJ underperforms EWJ by 8\u201315pp in unwind regimes",
+      "lag": "immediate",
+      "strength": 0.8
+    },
+    {
+      "from": "carry-unwind",
+      "to": "lifer-repatriation",
+      "mechanism": "Carry collapse forces lifer hedging desks to roll FX hedges at worse levels, accelerating the math on currency-hedged UST holdings being unprofitable",
+      "lag": "2-4 weeks",
+      "strength": 0.6
+    },
+    {
+      "from": "lifer-repatriation",
+      "to": "us-10y",
+      "mechanism": "$1.1T foreign bond book; even 10% rotation = $110B of UST selling concentrated in 10Y\u201330Y. Term premium estimated to repric\u0435 +30 to +60bps",
+      "lag": "1-3 months",
+      "strength": 0.75,
+      "amplification": 1.3
+    },
+    {
+      "from": "us-10y",
+      "to": "move-index",
+      "mechanism": "Sustained UST sell-off drives realized vol higher; MOVE tracks 1m at-the-money straddle on 5Y/10Y/30Y \u2014 a +50bp 10Y move in 4 weeks pushes MOVE from 95 \u2192 130+",
+      "lag": "1-4 weeks",
+      "strength": 0.85
+    },
+    {
+      "from": "us-10y",
+      "to": "tech-breakdown",
+      "mechanism": "DCF math: 10Y at 5.0% vs. 4.35% compresses NDX terminal-value multiples 8\u201312% holding earnings constant; long-duration cash flows (Mag-7) hit hardest",
+      "lag": "immediate to 2 weeks",
+      "strength": 0.8
+    },
+    {
+      "from": "move-index",
+      "to": "margin-calls",
+      "mechanism": "MOVE > 130 triggers prime broker collateral haircut increases; multi-strat pods with VaR breaches must de-gross same-day \u2014 forced selling cascades",
+      "lag": "immediate",
+      "strength": 0.85
+    },
+    {
+      "from": "carry-unwind",
+      "to": "margin-calls",
+      "mechanism": "JPY-funded books across multi-strats face VaR breaches as the funding-leg rallies; haircuts reset and forced de-grossing follows within sessions",
+      "lag": "immediate",
+      "strength": 0.7
+    },
+    {
+      "from": "tech-breakdown",
+      "to": "vix-spike",
+      "mechanism": "Mega-cap tech is ~30% of S&P; a 10% drawdown in XLK mathematically pushes SPX -3% which historically pushes VIX from 17 \u2192 28+",
+      "lag": "immediate",
+      "strength": 0.75
+    },
+    {
+      "from": "move-index",
+      "to": "vix-spike",
+      "mechanism": "Cross-asset vol contagion: rates vol leads equity vol in carry-unwind regimes (2018, Aug 2024)",
+      "lag": "immediate to 1 week",
+      "strength": 0.6
+    },
+    {
+      "from": "margin-calls",
+      "to": "vix-spike",
+      "mechanism": "Forced de-grossing across multi-strat books realizes vol; gamma-short dealer hedging amplifies into closing prints",
+      "lag": "immediate",
+      "strength": 0.7
+    },
+    {
+      "from": "vix-spike",
+      "to": "fed-reaction",
+      "mechanism": "VIX > 30 sustained AND credit spreads widening forces Fed to balance financial stability vs inflation mandate; emergency cut or facility extension becomes plausible",
+      "lag": "1-4 weeks",
+      "strength": 0.5
+    },
+    {
+      "from": "vix-spike",
+      "to": "resolution",
+      "mechanism": "Vol mean-reversion is the resolution signal; VIX < 18 for 5 closes AND a stable USD/JPY range marks new equilibrium",
+      "lag": "1-3 months",
+      "strength": 0.5
+    },
+    {
+      "from": "fed-reaction",
+      "to": "resolution",
+      "mechanism": "Fed put activation caps the unwind; without it, the chain runs to natural carry-book exhaustion (12+ months)",
+      "lag": "1-3 months",
+      "strength": 0.45
+    }
+  ],
+  "instruments": {
+    "usd-jpy": [
+      {
+        "id": "FXY",
+        "monthly": 1800,
+        "role": "long yen \u2014 direct expression of carry unwind",
+        "beta": 0.8,
+        "ref": 57.57,
+        "targetLow": 68,
+        "targetHigh": 74,
+        "stop": 56
+      }
+    ],
+    "us-10y": [
+      {
+        "id": "TLT",
+        "monthly": 1500,
+        "role": "short US duration via inverse exposure (sized as conceptual short, expressed via TBT)",
+        "beta": -1.0,
+        "ref": 86.71,
+        "targetLow": 78,
+        "targetHigh": 72,
+        "stop": 92
+      },
+      {
+        "id": "TBT",
+        "monthly": 800,
+        "role": "2x inverse long bond \u2014 leveraged short duration",
+        "beta": 2.0,
+        "ref": 34.99,
+        "targetLow": 44,
+        "targetHigh": 50,
+        "stop": 32
+      }
+    ],
+    "nikkei-stress": [
+      {
+        "id": "DXJ",
+        "monthly": 1000,
+        "role": "short hedged Japan \u2014 underperforms unhedged in yen rally",
+        "beta": -0.7,
+        "ref": 160.2,
+        "targetLow": 84,
+        "targetHigh": 78,
+        "stop": 102
+      }
+    ],
+    "tech-breakdown": [
+      {
+        "id": "XLK",
+        "monthly": 1500,
+        "role": "short mega-cap tech via puts/inverse \u2014 multiple compression trade",
+        "beta": -1.0,
+        "ref": 160.22,
+        "targetLow": 215,
+        "targetHigh": 200,
+        "stop": 258
+      },
+      {
+        "id": "QQQ",
+        "monthly": 1000,
+        "role": "short NDX overlay \u2014 broader carry-beneficiary basket",
+        "beta": -1.0,
+        "ref": 663.88,
+        "targetLow": 470,
+        "targetHigh": 440,
+        "stop": 545
+      }
+    ],
+    "vix-spike": [
+      {
+        "id": "VXX",
+        "monthly": 1200,
+        "role": "long vol \u2014 tactical, decay-aware",
+        "beta": 1.5,
+        "ref": 29.79,
+        "targetLow": 70,
+        "targetHigh": 95,
+        "stop": 41
+      }
+    ],
+    "fed-reaction": [
+      {
+        "id": "GLD",
+        "monthly": 800,
+        "role": "tail hedge \u2014 stagflation / Fed put hedge",
+        "beta": -0.4,
+        "ref": 433.25,
+        "targetLow": 460,
+        "targetHigh": 490,
+        "stop": 405
+      }
+    ],
+    "reserve": [
+      {
+        "id": "SGOV",
+        "monthly": 1000,
+        "role": "deployment ammo \u2014 add into MOVE>130 print",
+        "isReserve": true,
+        "ref": 100.64
+      },
+      {
+        "id": "TIPS",
+        "monthly": 400,
+        "role": "near-term inflation hedge",
+        "ref": 0.0
+      }
+    ],
+    "overlays": {
+      "flash-unwind": {
+        "condition": "USD/JPY < 140 AND MOVE > 130",
+        "gatedBy": [
+          "carry-unwind",
+          "move-index"
+        ],
+        "instruments": [
+          {
+            "id": "VXX",
+            "ref": 48.2,
+            "targetLow": 95,
+            "targetHigh": 130,
+            "stop": 41,
+            "note": "Aug-2024 analog: VIX 17 \u2192 65 in 3 sessions"
+          },
+          {
+            "id": "TBT",
+            "ref": 36.4,
+            "targetLow": 50,
+            "targetHigh": 58,
+            "stop": 32,
+            "note": "Leveraged duration short on disorderly UST sell-off"
+          }
+        ]
+      },
+      "fed-cut-absorb": {
+        "condition": "Fed signals emergency cut OR balance sheet expansion",
+        "gatedBy": [
+          "fed-reaction"
+        ],
+        "instruments": [
+          {
+            "id": "GLD",
+            "ref": 437.1,
+            "targetLow": 490,
+            "targetHigh": 520,
+            "stop": 405,
+            "note": "Real rates collapse \u2014 gold breaks higher"
+          },
+          {
+            "id": "SLV",
+            "ref": 31.4,
+            "targetLow": 38,
+            "targetHigh": 44,
+            "stop": 27,
+            "note": "Higher beta to gold breakout"
+          }
+        ]
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "id": "controlled-exit",
+      "name": "Controlled BoJ exit",
+      "probability": 0.45,
+      "notes": "BoJ hikes 25bp on schedule, signals 'gradual'. JGB 10Y settles 1.50\u20131.65%. USD/JPY drifts to 145\u2013148. Carry unwinds in slow motion over 6 months. US 10Y rises modestly to 4.50\u20134.65%. Tech wobbles -5\u20138% then stabilizes.",
+      "overrides": {
+        "boj-decision": "active",
+        "jgb-10y": 1.6,
+        "usd-jpy": 146,
+        "us-10y": 4.55
+      },
+      "portfolioImpact": {
+        "FXY": {
+          "direction": "up",
+          "estimate": "+5%",
+          "action": "hold"
+        },
+        "TLT": {
+          "direction": "down",
+          "estimate": "-4%",
+          "action": "hold short"
+        },
+        "DXJ": {
+          "direction": "down",
+          "estimate": "-6%",
+          "action": "hold"
+        },
+        "XLK": {
+          "direction": "down",
+          "estimate": "-7%",
+          "action": "hold"
+        },
+        "VXX": {
+          "direction": "flat",
+          "estimate": "-5%",
+          "action": "trim 1/2 \u2014 vol drag"
+        },
+        "GLD": {
+          "direction": "flat",
+          "estimate": "+2%",
+          "action": "hold"
+        }
+      }
+    },
+    {
+      "id": "boj-surprise-hike",
+      "name": "BoJ surprise hike (50bp)",
+      "probability": 0.2,
+      "notes": "BoJ delivers 50bp hike citing wage-spiral confirmation. JGB 10Y > 1.85%. USD/JPY breaks 142. Lifer repatriation triggered immediately. US 10Y to 4.85%. Tech drawdown 12\u201318%. MOVE breaks 130.",
+      "overrides": {
+        "boj-decision": "active",
+        "jgb-10y": 1.9,
+        "usd-jpy": 141,
+        "us-10y": 4.85,
+        "tech-breakdown": 218,
+        "lifer-repatriation": "fired"
+      },
+      "portfolioImpact": {
+        "FXY": {
+          "direction": "up",
+          "estimate": "+12%",
+          "action": "hold full"
+        },
+        "TBT": {
+          "direction": "up",
+          "estimate": "+18%",
+          "action": "hold, add overlay"
+        },
+        "DXJ": {
+          "direction": "down",
+          "estimate": "-14%",
+          "action": "hold"
+        },
+        "XLK": {
+          "direction": "down",
+          "estimate": "-12%",
+          "action": "hold short"
+        },
+        "VXX": {
+          "direction": "up",
+          "estimate": "+25%",
+          "action": "hold, deploy SGOV tranche"
+        },
+        "GLD": {
+          "direction": "up",
+          "estimate": "+5%",
+          "action": "hold"
+        }
+      }
+    },
+    {
+      "id": "carry-flash-unwind",
+      "name": "Carry flash unwind (Aug-2024 redux)",
+      "probability": 0.15,
+      "notes": "USD/JPY drops 10+ figures in <5 sessions. Margin calls cascade. MOVE > 150. VIX spikes through 50. Tech -25%+. Multi-strat de-grossing peaks. The thesis-defining tail event.",
+      "overrides": {
+        "boj-decision": "active",
+        "usd-jpy": 138,
+        "carry-unwind": "fired",
+        "margin-calls": "fired",
+        "us-10y": 5.1,
+        "tech-breakdown": 198,
+        "vix-spike": "fired"
+      },
+      "portfolioImpact": {
+        "FXY": {
+          "direction": "up",
+          "estimate": "+22%",
+          "action": "hold, take half profit"
+        },
+        "TBT": {
+          "direction": "up",
+          "estimate": "+30%",
+          "action": "trim 1/3"
+        },
+        "DXJ": {
+          "direction": "down",
+          "estimate": "-22%",
+          "action": "hold"
+        },
+        "XLK": {
+          "direction": "down",
+          "estimate": "-25%",
+          "action": "trim 1/3 \u2014 take profit on tail"
+        },
+        "VXX": {
+          "direction": "up",
+          "estimate": "+85%",
+          "action": "trim aggressively \u2014 sell into spike"
+        },
+        "GLD": {
+          "direction": "up",
+          "estimate": "+10%",
+          "action": "hold, add GDX"
+        }
+      }
+    },
+    {
+      "id": "fed-cuts-absorb",
+      "name": "Fed cuts to absorb",
+      "probability": 0.2,
+      "notes": "Powell pivots: 50bp emergency cut + balance sheet expansion to absorb UST supply shock. Trade caps. USD/JPY rebounds to 148. Tech multiple expansion resumes. Real rates collapse \u2014 gold breaks out.",
+      "overrides": {
+        "fed-reaction": "fired",
+        "us-10y": 4.2,
+        "usd-jpy": 148,
+        "tech-breakdown": 252
+      },
+      "portfolioImpact": {
+        "FXY": {
+          "direction": "down",
+          "estimate": "-6%",
+          "action": "trim 1/2"
+        },
+        "TLT": {
+          "direction": "up",
+          "estimate": "+8%",
+          "action": "close short \u2014 thesis violated"
+        },
+        "DXJ": {
+          "direction": "up",
+          "estimate": "+5%",
+          "action": "close short"
+        },
+        "XLK": {
+          "direction": "up",
+          "estimate": "+6%",
+          "action": "close short, flip to long via overlay"
+        },
+        "VXX": {
+          "direction": "down",
+          "estimate": "-30%",
+          "action": "close \u2014 vol crush"
+        },
+        "GLD": {
+          "direction": "up",
+          "estimate": "+15%",
+          "action": "add SLV overlay \u2014 real rates trade"
+        }
+      }
+    }
+  ],
+  "cascadePhases": {
+    "shock": {
+      "label": "Phase 1: BoJ Shock",
+      "status": "APPROACHING",
+      "signposts": [
+        {
+          "text": "BoJ ends NIRP",
+          "status": "fired",
+          "value": "March 2024"
+        },
+        {
+          "text": "BoJ formally dismantles YCC",
+          "status": "fired",
+          "value": "July 2024"
+        },
+        {
+          "text": "BoJ hikes to 0.50%",
+          "status": "fired",
+          "value": "January 2026"
+        },
+        {
+          "text": "Next MPM hike to 0.75%",
+          "status": "approaching",
+          "value": "Apr 30 \u2013 May 1, 2026"
+        },
+        {
+          "text": "JGB 10Y > 1.50%",
+          "status": "approaching",
+          "value": "1.45% current"
+        }
+      ]
+    },
+    "transmission": {
+      "label": "Phase 2: Carry Unwind Transmission",
+      "status": "WATCHING",
+      "signposts": [
+        {
+          "text": "USD/JPY breaks 145",
+          "status": "monitoring",
+          "value": "152.4 current"
+        },
+        {
+          "text": "CFTC JPY net short normalizing",
+          "status": "monitoring",
+          "value": "near 5Y high"
+        },
+        {
+          "text": "Lifer ALM crossover (JGB > hedged UST)",
+          "status": "approaching",
+          "value": "JGB 1.45% vs hedged UST ~0.8%"
+        },
+        {
+          "text": "DXJ underperforming EWJ",
+          "status": "monitoring",
+          "value": "+1.2% spread (carry regime)"
+        },
+        {
+          "text": "Aug-2024 analog precedent",
+          "status": "fired",
+          "value": "Nikkei -12% / 1 session"
+        }
+      ]
+    },
+    "amplification": {
+      "label": "Phase 3: US Duration & Tech Amplification",
+      "status": "NOT YET",
+      "signposts": [
+        {
+          "text": "US 10Y > 4.75%",
+          "status": "monitoring",
+          "value": "4.35% current"
+        },
+        {
+          "text": "MOVE > 130",
+          "status": "monitoring",
+          "value": "~95 current"
+        },
+        {
+          "text": "XLK breaks 50dma",
+          "status": "monitoring",
+          "value": "245 vs ~239 50dma"
+        },
+        {
+          "text": "VIX > 25 sustained",
+          "status": "monitoring",
+          "value": "~17 current"
+        },
+        {
+          "text": "Multi-strat de-grossing reports",
+          "status": "not yet"
+        }
+      ],
+      "estimatedTiming": "1\u20133 months post BoJ trigger \u2014 2024 analog ran in 5 sessions, 2025 was structural over 4 months"
+    },
+    "policyResponse": {
+      "label": "Phase 4: Policy Response",
+      "status": "NOT YET",
+      "signposts": [
+        {
+          "text": "BoJ pauses or signals YCC-redux",
+          "status": "not yet"
+        },
+        {
+          "text": "MoF FX intervention (verbal or actual)",
+          "status": "monitoring",
+          "value": "watching Kanda/Mimura statements"
+        },
+        {
+          "text": "Fed emergency cut or facility extension",
+          "status": "not yet"
+        },
+        {
+          "text": "Treasury buyback acceleration",
+          "status": "monitoring",
+          "value": "current programmatic pace"
+        },
+        {
+          "text": "G7 coordinated FX action",
+          "status": "not yet"
+        }
+      ]
+    },
+    "resolution": {
+      "label": "Phase 5: New Equilibrium",
+      "status": "NOT YET",
+      "signposts": [
+        {
+          "text": "USD/JPY range-bound 4 weeks",
+          "status": "not yet"
+        },
+        {
+          "text": "JGB 10Y stable in 1.50\u20131.75% range",
+          "status": "not yet"
+        },
+        {
+          "text": "VIX < 18 for 5 closes",
+          "status": "not yet"
+        },
+        {
+          "text": "Lifer flow data shows new steady state",
+          "status": "not yet"
+        },
+        {
+          "text": "Tech multiples re-rate at new real rate",
+          "status": "not yet"
+        }
+      ]
+    }
+  },
+  "rules": [
+    "<strong>Review 3x/week:</strong> Tuesday close (post-MoF flow data), Friday close (CFTC COT), Sunday evening (Asia open prep).",
+    "<strong>Never deploy > 1/3 SGOV</strong> on a single signal. Reserve budget: $1,000/month.",
+    "<strong>VXX is a tactical sleeve, not a hold:</strong> Trim aggressively into spikes (sell vol when others are panicking). Decay is the enemy.",
+    "<strong>BoJ MPM dates are the only fixed catalysts:</strong> April 30 \u2013 May 1, June 16-17, July 30-31. Don't add risk in the 48h before MPM \u2014 wait for the print.",
+    "<strong>Asymmetric kill-switch:</strong> If Fed signals emergency cut, close TLT/TBT short same session \u2014 thesis violated.",
+    "<strong>Don't fight MoF FX intervention:</strong> Verbal warnings (Kanda/Mimura) reduce FXY size 1/3 immediately; actual intervention \u2014 close half.",
+    "<strong>Confluence rule:</strong> vix-spike fires only when MOVE>130 AND tech-breakdown<220 \u2014 either alone is a head-fake.",
+    "<strong>Graph propagation:</strong> When USD/JPY breaks 145, expect lifer-repatriation to lag 4\u20138 weeks before US 10Y feels it.",
+    "<strong>Analog calibration:</strong> Aug 2024 unwind ran in 5 sessions and reversed in 3 weeks \u2014 the 2026 setup is structurally larger because rate diff is now narrowing not just stable.",
+    "<strong>Resolution discipline:</strong> Don't reverse the trade until VIX<18 for 5 closes AND USD/JPY 4-week range <4 figures. Premature exit = re-entry at worse levels."
+  ],
+  "provenance": {
+    "sources": [
+      "Bank of Japan (MPM statements, Outlook Reports, JGB operations data)",
+      "BIS Quarterly Review (JPY carry trade estimates, cross-border bank claims)",
+      "Japan Ministry of Finance (weekly capital flows, lifer foreign bond holdings, FX intervention disclosures)",
+      "GPIF (asset allocation reports)",
+      "CFTC (Commitment of Traders \u2014 JPY non-commercial positioning)",
+      "ICE BofA (MOVE Index daily prints)",
+      "CBOE (VIX, ^TNX 10Y yield index)",
+      "Yahoo Finance v8 chart API (JPY=X, ^TNX, XLK, QQQ, DXJ, EWJ, FXY, TLT, ^VIX, GLD)",
+      "Federal Reserve (FOMC dot plot, balance sheet operations)",
+      "Aug 2024 carry unwind post-mortems (BIS December 2024 review, JPMorgan FX research)"
+    ],
+    "methodology": "Causal DAG modeling the BoJ-normalization \u2192 carry-unwind \u2192 US-duration \u2192 tech-multiple-compression chain. Edge strengths are subjective conditional probabilities calibrated against the August 2024 mini-unwind (full pass-through observed in 5 sessions) and the 2018 VIXmageddon precedent (rate-vol \u2192 equity-vol contagion). Lifer repatriation modeled as a structural ALM threshold rather than a discretionary flow \u2014 the trigger is JGB 10Y > FX-hedged UST 10Y, currently calibrated at ~1.75% on JGB 10Y. Multi-strat margin-call channel is the primary amplifier; without it the unwind is slow-motion, with it it is the August-2024 redux.",
+    "limitations": [
+      "BoJ reaction function below NIRP-exit is largely untested \u2014 Ueda regime has limited public history on hike pacing.",
+      "Lifer foreign-bond holdings reported with 4\u20138 week lag (MoF); actual repatriation may be observable only after the fact.",
+      "Aug 2024 analog ran 5 sessions; structural unwind could run quarters \u2014 lag estimates are wide.",
+      "MoF FX intervention is undeclared until after-the-fact \u2014 always a tape-watching trade not a data-driven one.",
+      "Edge strengths calibrated against single-precedent (Aug 2024) \u2014 sample size = 1.",
+      "Fed reaction function vs financial stability is the unknown \u2014 Powell has not been tested in a yen-led shock.",
+      "Tech multiple-compression math assumes earnings constant \u2014 actual print may show simultaneous EPS hits.",
+      "No Polymarket prediction market currently mapped to BoJ-specific events \u2014 monitoring for emergence."
+    ],
+    "disclaimer": "Research framework for structured expert judgment, not financial advice. The math enforces consistency \u2014 it does not generate predictions. This thesis runs alongside Iran/Hormuz and Trump-tariffs \u2014 a simultaneous yen-led carry unwind during an oil shock or tariff escalation would create stagflation tail risk not modeled here."
+  },
+  "fetchSymbols": {
+    "currencies": {
+      "JPY=X": "usdJpy"
+    },
+    "rates": {
+      "^TNX": "us10y",
+      "^IRX": "us3m"
+    },
+    "instruments": [
+      "FXY",
+      "TLT",
+      "TBT",
+      "TLH",
+      "DXJ",
+      "EWJ",
+      "XLK",
+      "QQQ",
+      "VXX",
+      "GLD",
+      "SLV",
+      "GDX",
+      "SGOV",
+      "TIPS"
+    ],
+    "indices": {
+      "^VIX": "vix",
+      "^N225": "nikkei"
+    }
+  },
+  "marketFields": [
+    {
+      "key": "usdJpy",
+      "label": "USD/JPY",
+      "value": 152.4,
+      "step": 0.01,
+      "nodeId": "usd-jpy"
+    },
+    {
+      "key": "jgb10y",
+      "label": "JGB 10Y %",
+      "value": 1.45,
+      "step": 0.01,
+      "nodeId": "jgb-10y"
+    },
+    {
+      "key": "us10y",
+      "label": "US 10Y %",
+      "value": 4.35,
+      "step": 0.01,
+      "nodeId": "us-10y"
+    },
+    {
+      "key": "move",
+      "label": "MOVE",
+      "value": 95,
+      "step": 1,
+      "nodeId": "move-index"
+    },
+    {
+      "key": "xlk",
+      "label": "XLK",
+      "value": 245.0,
+      "step": 0.01,
+      "nodeId": "tech-breakdown"
+    },
+    {
+      "key": "vix",
+      "label": "VIX",
+      "value": 17,
+      "step": 0.01,
+      "nodeId": "vix-spike"
+    },
+    {
+      "key": "fedRate",
+      "label": "FED RATE %",
+      "value": 3.625,
+      "step": 0.25,
+      "nodeId": "fed-reaction"
+    }
+  ],
+  "analogs": [
+    {
+      "id": "aug-2024-unwind",
+      "name": "August 2024 Carry Unwind",
+      "similarity": "very high (direct precedent)",
+      "startDate": "2024-07-31",
+      "peakDate": "2024-08-05",
+      "keyLags": {
+        "boj-hike-to-jpy-rally": "1 session",
+        "jpy-rally-to-nikkei-crash": "1 session",
+        "shock-to-vix-peak": "5 sessions",
+        "shock-to-vix-mean-reversion": "3 weeks"
+      },
+      "priceAction": {
+        "usdJpyStart": 162,
+        "usdJpyTrough": 142,
+        "nikkeiDrop": "-12% (Aug 5 single session)",
+        "vixPeak": "65 intraday",
+        "spxDrop": "-6.7% (3 sessions)"
+      },
+      "lessons": [
+        "Carry unwinds happen in sessions, not months \u2014 5 sessions cleared most of the disorderly de-grossing.",
+        "VIX mean-reverted in 3 weeks \u2014 vol shorts caught the bid back.",
+        "Multi-strat de-grossing was the amplifier, not the cause \u2014 the cause was BoJ hike + FX intervention combo.",
+        "Fed verbal intervention (no actual cut) was sufficient to backstop \u2014 Fed put exists at lower strike than people think.",
+        "Tech (NDX -6.4%) recovered fastest \u2014 the 'multiple compression' trade was a head-fake without sustained UST sell-off."
+      ],
+      "notes": "Aug 5 2024: BoJ surprise hike + MoF FX intervention combo broke USD/JPY from 162 \u2192 142 in 5 sessions. Nikkei -12% in one day. VIX 17 \u2192 65. Multi-strat de-grossing was visible. The 2026 setup differs: rate differential is structurally narrowing (not stable), so the equilibrium reset is larger."
+    },
+    {
+      "id": "vixmageddon-2018",
+      "name": "February 2018 Volmageddon",
+      "similarity": "moderate (vol mechanics analog)",
+      "startDate": "2018-02-05",
+      "keyLags": {
+        "vix-spike-to-fund-blowups": "1 session",
+        "shock-to-mean-reversion": "6 weeks"
+      },
+      "priceAction": {
+        "vixStart": 17,
+        "vixPeak": 50,
+        "spxDrop": "-10% in 9 sessions",
+        "xivBlowup": "-96% / 1 session"
+      },
+      "lessons": [
+        "Short-vol structures fail nonlinearly \u2014 VXX inverse products died in one session.",
+        "Cross-asset vol contagion: rates vol (which rose first) led equity vol.",
+        "Recovery was slow (6 weeks) \u2014 vol regime change persisted longer than the price action.",
+        "The trade was to be long vol BEFORE the spike, not chase it after."
+      ],
+      "notes": "Cross-asset vol mechanics analog. Rates vol rising first foreshadowed the equity event. The 2026 thesis MOVE>130 trigger is calibrated against this template."
+    }
+  ]
+}

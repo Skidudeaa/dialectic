@@ -1,0 +1,161 @@
+@import "tailwindcss";
+
+@theme {
+  --color-void: #0a0a0a;
+  --color-surface: #111111;
+  --color-elevated: #1a1a1a;
+  --color-border: #262626;
+  --color-border-emphasis: #333333;
+  --color-amber: #d4a843;
+  --color-amber-dim: #a07c2e;
+  --color-teal: #2dd4bf;
+  --color-teal-dim: #1a9e8f;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-green: #22c55e;
+  --color-green-dim: #16a34a;
+  --color-purple: #a78bfa;
+  --color-blue: #60a5fa;
+  --color-text-primary: #e5e5e5;
+  --color-text-muted: #737373;
+  /* WHY #7a7a7a: #525252 measured 2.48:1 on void background — fails WCAG AA
+     (4.5:1 body text, 3:1 non-text UI). #7a7a7a hits ~4.7:1 on void, preserving
+     "dim" intent while clearing the threshold. Used by timestamps, countdown
+     chips, keyboard hints — all text a trader needs to read. */
+  --color-text-dim: #7a7a7a;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-void text-text-primary font-sans antialiased;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  /* Accessible focus ring — keyboard users only, never on mouse-click */
+  *:focus {
+    outline: none;
+  }
+  *:focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 1px;
+    border-radius: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-text-dim;
+  }
+
+  /* Reduced-motion: disable our custom animations and any tailwind animate-* */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@utility btn {
+  @apply px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer;
+}
+@utility btn-primary {
+  @apply px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer bg-amber text-void hover:bg-amber-dim disabled:opacity-50 disabled:cursor-not-allowed;
+}
+@utility btn-secondary {
+  @apply px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer bg-elevated text-text-primary border border-border hover:border-text-dim disabled:opacity-50 disabled:cursor-not-allowed;
+}
+@utility btn-danger {
+  @apply px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer bg-danger/20 text-danger border border-danger/30 hover:bg-danger/30 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+@utility btn-warning {
+  @apply px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer bg-warning/20 text-warning border border-warning/30 hover:bg-warning/30 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+@utility btn-success {
+  @apply px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer bg-green/20 text-green border border-green/30 hover:bg-green/30 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+@utility btn-ghost {
+  @apply px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer text-text-muted hover:text-text-primary hover:bg-elevated disabled:opacity-50 disabled:cursor-not-allowed;
+}
+@utility btn-icon {
+  @apply inline-flex items-center justify-center p-1 rounded text-text-muted hover:text-text-primary hover:bg-elevated transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
+}
+@utility input {
+  @apply bg-elevated border border-border rounded px-2.5 py-1 text-xs text-text-primary placeholder-text-dim focus:outline-none focus:border-amber/50 transition-colors font-mono;
+}
+@utility card {
+  @apply bg-surface border border-border rounded p-2;
+}
+@utility kbd {
+  @apply inline-block px-1 py-px rounded bg-elevated border border-border text-[9px] font-mono text-text-muted;
+}
+@utility badge {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide;
+}
+@utility badge-fired {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-danger/20 text-danger;
+}
+@utility badge-approaching {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-amber/20 text-amber;
+}
+@utility badge-stable {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-teal/20 text-teal;
+}
+@utility badge-monitoring {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-elevated text-text-muted;
+}
+@utility badge-gated {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-purple/20 text-purple;
+}
+@utility badge-high {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-danger/20 text-danger;
+}
+@utility badge-medium {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-amber/20 text-amber;
+}
+@utility badge-low {
+  @apply inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wide bg-teal/20 text-teal;
+}
+
+/* Subtle pulse for "approaching" / live signal indicators.
+   Used opt-in, e.g. on connection-status dots when reconnecting. */
+@utility animate-pulse-amber {
+  animation: pulse-amber 1.6s ease-in-out infinite;
+}
+@utility animate-pulse-danger {
+  animation: pulse-danger 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-amber {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(212, 168, 67, 0.5); }
+  50% { opacity: 0.6; box-shadow: 0 0 0 4px rgba(212, 168, 67, 0); }
+}
+@keyframes pulse-danger {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+  50% { opacity: 0.6; box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+}
+
+/* Fade-in for toast/popover entry */
+@utility animate-fade-in {
+  animation: fade-in 140ms ease-out;
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}

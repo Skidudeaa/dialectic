@@ -1,0 +1,355 @@
+"""
+Tests for the service-token read endpoints on /api/bridge.
+
+WHY these exist: Dialectic's scheduler pulls GET /api/bridge/snapshot/{book}
+every 15 minutes to repair a room that missed a push, and its LLM tools read
+GET /api/bridge/news/{book}. Both are machine callers with no JWT, gated by
+the TD_SERVICE_TOKEN shared secret instead.
+
+WHY content-type is asserted explicitly: this app answers unknown paths with
+200 + index.html from the SPA catch-all, so Dialectic's reconcile job treats
+"200 but not application/json" as endpoint-missing. A regression that shadowed
+these routes would look like a passing 200 to a naive test.
+"""
+
+import json
+import os
+
+import pytest
+from fastapi.testclient import TestClient
+
+# Same env-var trick as test_bridge.py — deterministic JWT secret per run.
+os.environ.setdefault("JWT_SECRET", "test-secret-for-ci")
+os.environ.setdefault("DEV_USER_PASSWORD", "testpass")
+
+from web.main import app
+from web.deps import get_repo
+from web.persistence.repository import Repository
+from web.routes import bridge as bridge_mod
+
+
+SERVICE_TOKEN = "test-service-token-abc123"
+THESIS_ID = "iran-hormuz-graph"
+
+SNAPSHOT_BODY = {
+    "v": 2,
+    "timestamp": "2026-08-09T05:07:15Z",
+    "title": "Iran/Hormuz Thesis",
+    "nodeStates": {"hormuz_closure": "approaching", "brent_spike": "stable"},
+    "confluenceScores": {"oil_supply_shock": 0.61},
+    "cascadePhase": {"number": 2, "key": "escalation", "status": "active"},
+    "thesisId": THESIS_ID,
+    "revision": 4211,
+    "generatedAt": "2026-08-09T05:07:15.775368+00:00",
+}
+
+
+@pytest.fixture
+def repo():
+    """In-memory repository seeded with one committed snapshot."""
+    r = Repository(":memory:")
+    r.initialize()
+    r.save_snapshot(
+        THESIS_ID, 4211, json.dumps(SNAPSHOT_BODY),
+        definition_hash="sha256:deadbeef",
+    )
+    return r
+
+
+@pytest.fixture
+def client(repo, monkeypatch):
+    """TestClient with the repo dependency overridden and the secret set."""
+    monkeypatch.setenv(bridge_mod.SERVICE_TOKEN_ENV, SERVICE_TOKEN)
+    app.dependency_overrides[get_repo] = lambda: repo
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(get_repo, None)
+
+
+@pytest.fixture(autouse=True)
+def clear_news_cache():
+    """The news TTL cache is module-global — never leak between tests."""
+    bridge_mod._news_cache.clear()
+    yield
+    bridge_mod._news_cache.clear()
+
+
+def svc_headers(token: str = SERVICE_TOKEN) -> dict:
+    return {"X-Service-Token": token}
+
+
+# =========================================================================
+# SERVICE TOKEN AUTH
+# =========================================================================
+
+
+class TestServiceTokenAuth:
+    def test_missing_header_is_401(self, client):
+        resp = client.get(f"/api/bridge/snapshot/{THESIS_ID}")
+        assert resp.status_code == 401
+
+    def test_wrong_token_is_401(self, client):
+        resp = client.get(
+            f"/api/bridge/snapshot/{THESIS_ID}",
+            headers=svc_headers("not-the-token"),
+        )
+        assert resp.status_code == 401
+
+    def test_empty_token_is_401(self, client):
+        resp = client.get(
+            f"/api/bridge/snapshot/{THESIS_ID}", headers=svc_headers(""),
+        )
+        assert resp.status_code == 401
+
+    def test_correct_token_is_200(self, client):
+        resp = client.get(
+            f"/api/bridge/snapshot/{THESIS_ID}", headers=svc_headers(),
+        )
+        assert resp.status_code == 200
+
+    def test_news_is_gated_too(self, client):
+        """Both service endpoints share the gate — not just the snapshot one."""
+        resp = client.get(f"/api/bridge/news/{THESIS_ID}")
+        assert resp.status_code == 401
+
+    def test_unconfigured_secret_is_503_not_401(self, client, monkeypatch):
+        """An unset secret is a broken server, not a rejected caller.
+
+        A 401 here would send Dialectic hunting for a bad token that does
+        not exist; 503 says the fault is on this side.
+        """
+        monkeypatch.delenv(bridge_mod.SERVICE_TOKEN_ENV, raising=False)
+        resp = client.get(
+            f"/api/bridge/snapshot/{THESIS_ID}", headers=svc_headers(),
+        )
+        assert resp.status_code == 503
+        assert bridge_mod.SERVICE_TOKEN_ENV in resp.json()["detail"]
+
+    def test_blank_secret_is_503(self, client, monkeypatch):
+        """Whitespace-only env value must not become a guessable secret."""
+        monkeypatch.setenv(bridge_mod.SERVICE_TOKEN_ENV, "   ")
+        resp = client.get(
+            f"/api/bridge/snapshot/{THESIS_ID}", headers=svc_headers("   "),
+        )
+        assert resp.status_code == 503
+
+
+# =========================================================================
+# GET /api/bridge/snapshot/{thesis_id}
+# =========================================================================
+
+
+class TestSnapshotEndpoint:
+    def test_content_type_is_json(self, client):
+        """The SPA catch-all answers 200 + HTML; Dialectic reads content-type
+        to tell a real endpoint from a shadowed one."""
+        resp = client.get(
+            f"/api/bridge/snapshot/{THESIS_ID}", headers=svc_headers(),
+        )
+        assert resp.headers["content-type"].startswith("application/json")
+
+    def test_returns_v3_contract(self, client):
+        resp = client.get(
+            f"/api/bridge/snapshot/{THESIS_ID}", headers=svc_headers(),
+        )
+        body = resp.json()
+        assert body["v"] == 3
+        assert body["alertEvents"] == []
+        assert body["thesisId"] == THESIS_ID
+        assert body["revision"] == 4211
+        assert body["generatedAt"] == SNAPSHOT_BODY["generatedAt"]
+
+    def test_preserves_v2_fields(self, client):
+        """v3 is additive — every v2 field survives untouched."""
+        resp = client.get(
+            f"/api/bridge/snapshot/{THESIS_ID}", headers=svc_headers(),
+        )
+        body = resp.json()
+        assert body["timestamp"] == SNAPSHOT_BODY["timestamp"]
+        assert body["title"] == SNAPSHOT_BODY["title"]
+        assert body["nodeStates"] == SNAPSHOT_BODY["nodeStates"]
+        assert body["confluenceScores"] == SNAPSHOT_BODY["confluenceScores"]
+        assert body["cascadePhase"] == SNAPSHOT_BODY["cascadePhase"]
+
+    def test_internal_revision_marker_not_leaked(self, client):
+        """get_latest_snapshot stamps `_revision`; it must not reach the wire."""
+        resp = client.get(
+            f"/api/bridge/snapshot/{THESIS_ID}", headers=svc_headers(),
+        )
+        assert "_revision" not in resp.json()
+
+    def test_revision_falls_back_to_row_when_body_lacks_it(self, client, repo):
+        """Snapshots stored before the coordinator stamped `revision` inline
+        still answer with a revision — read off the row."""
+        legacy = {k: v for k, v in SNAPSHOT_BODY.items()
+                  if k not in ("revision", "thesisId", "generatedAt")}
+        repo.save_snapshot("legacy-book", 7, json.dumps(legacy))
+        resp = client.get(
+            "/api/bridge/snapshot/legacy-book", headers=svc_headers(),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["revision"] == 7
+
+    def test_unknown_thesis_is_404(self, client):
+        resp = client.get(
+            "/api/bridge/snapshot/no-such-book", headers=svc_headers(),
+        )
+        assert resp.status_code == 404
+
+    def test_unknown_thesis_404_beats_the_spa_catchall(self, client):
+        """A 404 here must be this route's 404, not the SPA's HTML fallback."""
+        resp = client.get(
+            "/api/bridge/snapshot/no-such-book", headers=svc_headers(),
+        )
+        assert resp.headers["content-type"].startswith("application/json")
+        assert "no-such-book" in resp.json()["detail"]
+
+
+# =========================================================================
+# GET /api/bridge/news/{thesis_id}
+# =========================================================================
+
+
+class TestBookPathContainment:
+    """_book_path is the guard; test it where it lives.
+
+    Going through HTTP cannot exercise it: Starlette's default path converter
+    refuses to match `/` into a single segment, so an encoded `../../x` never
+    reaches the handler at all — it falls through to the SPA catch-all and
+    answers 200 + HTML. A route-level 'traversal' assertion would therefore
+    pass without the guard existing.
+    """
+
+    def test_escaping_ids_resolve_to_none(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(bridge_mod, "_BOOKS_DIR", tmp_path / "books")
+        (tmp_path / "books").mkdir()
+        (tmp_path / "secret.json").write_text('{"a": 1}')
+        assert bridge_mod._book_path("../secret") is None
+        assert bridge_mod._book_path("..") is None
+
+    def test_real_book_resolves(self, tmp_path, monkeypatch):
+        books = tmp_path / "books"
+        books.mkdir()
+        (books / "real.json").write_text('{"nodes": []}')
+        monkeypatch.setattr(bridge_mod, "_BOOKS_DIR", books)
+        assert bridge_mod._book_path("real") == (books / "real.json").resolve()
+
+    def test_missing_book_resolves_to_none(self, tmp_path, monkeypatch):
+        books = tmp_path / "books"
+        books.mkdir()
+        monkeypatch.setattr(bridge_mod, "_BOOKS_DIR", books)
+        assert bridge_mod._book_path("absent") is None
+
+
+class TestNewsEndpoint:
+    def test_unknown_book_is_404(self, client):
+        resp = client.get("/api/bridge/news/no-such-book", headers=svc_headers())
+        assert resp.status_code == 404
+
+    # WHY no route-level traversal test: neither an encoded nor a literal
+    # `..` can reach this handler — httpx normalizes the literal form out of
+    # the URL, and Starlette's path converter refuses to match `/` into one
+    # segment, so both land on the SPA catch-all's 200 + HTML. Such a test
+    # would pass with the guard deleted. See TestBookPathContainment.
+
+    def test_returns_headlines_capped_at_15(self, client, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        made = [
+            gdelt.Article(
+                url=f"https://example.test/{i}",
+                title=f"Headline {i}",
+                seendate="20260809T050000Z",
+                domain="example.test",
+                language="English",
+                sourcecountry="US",
+            )
+            for i in range(30)
+        ]
+        monkeypatch.setattr(gdelt, "fetch_articles", lambda *a, **k: made)
+
+        resp = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        )
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("application/json")
+        articles = resp.json()["articles"]
+        assert len(articles) == 15
+        assert articles[0] == {
+            "title": "Headline 0",
+            "url": "https://example.test/0",
+            "seendate": "20260809T050000Z",
+            "domain": "example.test",
+        }
+
+    def test_book_query_is_resolved_from_standard_query(self, client, monkeypatch):
+        """iran-hormuz-graph declares standardQuery 'iran-hormuz-event' — the
+        fetcher must receive the RESOLVED query string, not the name."""
+        from tools.data_fetch import gdelt
+
+        seen = {}
+
+        def _capture(query, **kwargs):
+            seen["query"] = query
+            return []
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _capture)
+        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
+        assert seen["query"] == gdelt.get_standard_query("iran-hormuz-event")
+        assert "Hormuz" in seen["query"]
+
+    def test_book_without_gdelt_feed_returns_note(self, client, monkeypatch, tmp_path):
+        book = tmp_path / "quiet-book.json"
+        book.write_text(json.dumps({"meta": {}, "nodes": [{"id": "a"}]}))
+        monkeypatch.setattr(bridge_mod, "_BOOKS_DIR", tmp_path)
+
+        resp = client.get("/api/bridge/news/quiet-book", headers=svc_headers())
+        assert resp.status_code == 200
+        assert resp.json() == {"articles": [], "note": "no gdelt config"}
+
+    def test_gdelt_failure_is_not_a_500(self, client, monkeypatch):
+        """A dark upstream feed degrades to an empty list with a note."""
+        from tools.data_fetch import gdelt
+
+        def _boom(*a, **k):
+            raise gdelt.GdeltRateLimitError("429")
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _boom)
+        resp = client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["articles"] == []
+        assert "gdelt unavailable" in body["note"]
+
+    def test_second_request_is_served_from_cache(self, client, monkeypatch):
+        """GDELT asks for ~1 req/sec; a chatty room must not hammer it."""
+        from tools.data_fetch import gdelt
+
+        calls = []
+
+        def _count(query, **kwargs):
+            calls.append(query)
+            return []
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _count)
+        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
+        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
+        assert len(calls) == 1
+
+    def test_expired_cache_refetches(self, client, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        calls = []
+
+        def _count(query, **kwargs):
+            calls.append(query)
+            return []
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _count)
+        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
+        # Expire the entry rather than sleeping 15 minutes.
+        expires, payload = bridge_mod._news_cache[THESIS_ID]
+        bridge_mod._news_cache[THESIS_ID] = (0.0, payload)
+        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
+        assert len(calls) == 2

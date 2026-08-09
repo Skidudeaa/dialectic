@@ -1,0 +1,27 @@
+[Unit]
+Description=tradingDesk backend (FastAPI + uvicorn)
+Documentation=file:///root/tradingDesk/CLAUDE.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/tradingDesk
+EnvironmentFile=/root/tradingDesk/.env
+ExecStart=/root/tradingDesk/venv/bin/uvicorn web.main:app --host 0.0.0.0 --port 8006
+# Restart on crash AND on kill; 5s backoff to avoid tight loops on broken configs
+Restart=always
+RestartSec=5
+# Graceful shutdown window — lets uvicorn drain in-flight requests before SIGKILL
+TimeoutStopSec=15
+# Structured logging to journalctl -u tradingdesk
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tradingdesk
+# Leave a crash breadcrumb if the loop flaps
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

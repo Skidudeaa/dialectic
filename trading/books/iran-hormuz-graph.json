@@ -1,0 +1,1470 @@
+{
+  "meta": {
+    "title": "Iran/Hormuz Thesis — June 2026",
+    "claim": "Oil shock transmitted through diesel→freight→employment (Layer 2) and fertilizer→food→EM (Layer 3). Now ~3 months in: watch the commercial-vs-political reopening gap (not headlines), the cost-of-capital/rates leg, and demand-destruction. Services still lag. Don't front-run.",
+    "monthlyBudget": 8000,
+    "asOf": "2026-06-03",
+    "version": "1.1.0",
+    "type": "thesis-graph",
+    "dialecticRoomId": "56ba2f1e-5c70-4290-a77d-52404f0095da",
+    "dialecticRoomToken": "a28b98fa6a74425c927fa64e4f614817"
+  },
+  "nodes": [
+    {
+      "id": "hormuz",
+      "label": "Hormuz Closure",
+      "type": "event",
+      "phase": 1,
+      "state": "active",
+      "context": "Strait effectively closed ~3 months since the late-Feb strikes. Running ~10 transits/day vs a ~95/day peacetime norm. IEA: largest oil supply disruption in market history; EIA est. ~10.5 mbpd Gulf shut-in in April. UAE left OPEC May 1 (cuts usable spare capacity); QatarEnergy declared LNG force majeure. Reopening talks ongoing but unresolved — political 'on the path to reopening' statements have NOT brought carriers/insurers back. The gap between political optimism and commercial reality is the #1 watch signal (see reopening-pressure).",
+      "probability": 0.685,
+      "feeds": [
+        {
+          "source": "polymarket",
+          "market": "us-iran-april-30"
+        }
+      ],
+      "indicators": [
+        {
+          "label": "Tanker transit",
+          "feed": "manual",
+          "value": "~10/day vs 95 norm (-89%)",
+          "status": "red"
+        },
+        {
+          "label": "Gulf shut-in (EIA, Apr)",
+          "feed": "manual",
+          "value": "~10.5 mbpd",
+          "status": "red"
+        },
+        {
+          "label": "LNG (Qatar)",
+          "feed": "manual",
+          "value": "force majeure",
+          "status": "red"
+        },
+        {
+          "label": "Reopening: political vs commercial",
+          "feed": "manual",
+          "value": "talks ongoing; carriers/insurers NOT back",
+          "status": "amber"
+        }
+      ],
+      "_builderX": 100.0,
+      "_builderY": 60.0,
+      "tvAlertBindings": [
+        {
+          "bindingId": "hormuz-reopen-announced",
+          "nodeId": "hormuz",
+          "op": "setNodeState",
+          "targetState": "partial",
+          "expectedPineAlertName": "hormuz_reopen_manual",
+          "description": "Stage 1 (POLITICAL). Manual Pine alert the operator fires on a diplomatic reopening statement ('on the path to reopening'). Sets hormuz to 'partial' → downstream amplification PARTIALLY decays but the thesis does NOT collapse. Per the doc's #1 insight, a headline is not commercial reality — full exit requires the commercial confirmation below. Do not unwind the energy long on this alone.",
+          "fireCount": 0,
+          "lastFiredAt": null
+        },
+        {
+          "bindingId": "hormuz-commercial-reopen-confirmed",
+          "nodeId": "hormuz",
+          "op": "setNodeState",
+          "targetState": "resolved",
+          "expectedPineAlertName": "hormuz_commercial_reopen_manual",
+          "description": "Stage 2 (COMMERCIAL). The real kill-switch. Operator fires this only when carriers + insurers are returning AND transit count is recovering toward the ~95/day norm — the doc's commercial-reality confirmation, not a political statement. Sets hormuz to 'resolved' and collapses all downstream amplification. This is the trade exit.",
+          "fireCount": 0,
+          "lastFiredAt": null
+        }
+      ]
+    },
+    {
+      "id": "brent",
+      "label": "Brent Persistence",
+      "type": "price",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "Brent ran from a Jan low in the low-$60s to a mid-May peak ~$116-117, then retraced ~15% to ~$97-101 (Jun 3) as the market actively reprices resolution odds — up ~50% YoY but NOT a one-way line. Energy equities have caught up: XLE top holdings (XOM/CVX/COP/WMB) +23-28% YTD, so the 'equities not responding' framing no longer holds. Live debate: does the geopolitical premium persist? XOM/CVX flag $150-160 if inventories draw to record lows. Goldman base $130, bear $155; Dallas Fed Hormuz model $115-135 sustained.",
+      "current": 99.78,
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "BZ=F"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 115,
+          "label": "persistence",
+          "closesRequired": 3
+        },
+        {
+          "level": 135,
+          "label": "escalation"
+        },
+        {
+          "level": 155,
+          "label": "extreme"
+        }
+      ],
+      "_builderX": 100.0,
+      "_builderY": 180.0,
+      "regimes": {
+        "base": {
+          "max": 114.99,
+          "color": "#6E8FAD"
+        },
+        "elevated": {
+          "min": 115,
+          "max": 134.99,
+          "color": "#E69A4C"
+        },
+        "escalation": {
+          "min": 135,
+          "max": 154.99,
+          "color": "#E05555"
+        },
+        "extreme": {
+          "min": 155,
+          "color": "#D32F2F"
+        }
+      },
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "BZ=F",
+          "overlay": true
+        },
+        {
+          "kind": "atr",
+          "period": 14,
+          "symbol": "BZ=F",
+          "overlay": true
+        },
+        {
+          "kind": "sma",
+          "period": 50,
+          "symbol": "BZ=F",
+          "overlay": true
+        },
+        {
+          "kind": "curveSpread",
+          "frontSymbol": "BZ=F",
+          "backSymbol": "BZZ26.NYM",
+          "overlay": true
+        }
+      ],
+      "tvAlertBindings": [
+        {
+          "bindingId": "brent-persistence-close-above-115",
+          "nodeId": "brent",
+          "op": "incrementClosesObserved",
+          "thresholdLevel": 115,
+          "expectedSymbol": "BZ=F",
+          "expectedPineAlertName": "brent_persistence_close_115",
+          "description": "Pine alert fires on each daily close >= $115 on the brent chart. Increments the closesObserved counter that drives the closesRequired=3 persistence gate — 3 consecutive closes promote brent from approaching to fired.",
+          "fireCount": 0,
+          "lastFiredAt": null
+        }
+      ],
+      "tvIndicators": {
+        "rsi14": 51.03,
+        "atr14": 7.98,
+        "sma50": 93.17,
+        "curveSpread": {
+          "spread": 14.53,
+          "shape": "backwardation",
+          "front": 99.78,
+          "back": 85.25
+        },
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-24T23:34:58Z"
+      }
+    },
+    {
+      "id": "diesel",
+      "label": "Diesel Stress",
+      "type": "price",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "Second time in history diesel crossed $5. Crack spread doubled: $30→$70/bbl. Up 44.6% from February ($3.72). West Coast above $6/gal.",
+      "current": 5.38,
+      "feeds": [
+        {
+          "source": "eia",
+          "series": "EMD_EPD2D_PTE_NUS_DPG"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 4.75,
+          "label": "GDP drag begins"
+        },
+        {
+          "level": 5,
+          "label": "demand destruction"
+        },
+        {
+          "level": 5.25,
+          "label": "recession probability >40%"
+        },
+        {
+          "level": 5.5,
+          "label": "sustained stress",
+          "durationRequired": "2 weeks"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 300.0
+    },
+    {
+      "id": "freight",
+      "label": "Freight Crush",
+      "type": "indicator",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "CDL Life: $5.38 diesel is 'the nail in the coffin' for owner-operators. Freight costs slowing West African crude flows. Vessels stranded.",
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "BDRY",
+          "label": "Baltic Dry"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "BWET",
+          "label": "Tanker ETF"
+        }
+      ],
+      "indicators": [
+        {
+          "label": "Owner-op margin",
+          "feed": "manual",
+          "value": "-$0.20/mile",
+          "status": "red"
+        },
+        {
+          "label": "Fuel surcharge recovery",
+          "feed": "manual",
+          "value": "60-70%",
+          "status": "amber"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 420.0
+    },
+    {
+      "id": "employment",
+      "label": "Employment Destruction",
+      "type": "indicator",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "Hamilton: oil shocks are paid in employment. 2008 template: -712K/month by Oct-Mar.",
+      "feeds": [
+        {
+          "source": "fred",
+          "series": "ICSA",
+          "label": "Initial Claims"
+        },
+        {
+          "source": "bls",
+          "series": "CES0000000001",
+          "label": "NFP"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "^PMI",
+          "label": "PMI"
+        }
+      ],
+      "indicators": [
+        {
+          "label": "PMI employment",
+          "value": "negative (first time in 12mo)",
+          "status": "red"
+        },
+        {
+          "label": "Australia PMI",
+          "value": "47.0 (from 52.4)",
+          "status": "red"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 540.0,
+      "historicalLag": "3 months from oil peak (2008 template)"
+    },
+    {
+      "id": "fert-shortage",
+      "label": "Fertilizer Stress",
+      "type": "price",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "Hormuz handles ~30% of traded fertilizer. Urea up 28-50%. CF is #1 S&P performer in March. NOLA urea $677-690+/st. Retail hit $822.50/t.",
+      "current": 683.0,
+      "feeds": [
+        {
+          "source": "usda",
+          "dataset": "nola-urea"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 700,
+          "label": "stress threshold"
+        },
+        {
+          "level": 822,
+          "label": "retail already here (Mar 25 USDA)"
+        }
+      ],
+      "_builderX": 100.0,
+      "_builderY": 660.0,
+      "tvAlertBindings": [
+        {
+          "bindingId": "fert-close-above-700",
+          "nodeId": "fert-shortage",
+          "op": "setCurrent",
+          "thresholdLevel": 700,
+          "expectedPineAlertName": "fert_close_above_700",
+          "description": "Pine alert on NOLA urea close >= $700/ton (proxied via CF price as visible chart symbol). Webhook body must carry 'value' with the actual close. Once current crosses 700 the fert-shortage node fires on next propagate() — feeds the planting-miss deadline edge.",
+          "fireCount": 0,
+          "lastFiredAt": null
+        }
+      ]
+    },
+    {
+      "id": "planting-miss",
+      "label": "Planting Cycle Miss",
+      "type": "deadline",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "US corn belt planting window (mid-April to mid-May) has CLOSED — the Apr 15 nitrogen-availability gate passed. 93M acres; nitrogen was the limiting nutrient. Node is fired/irreversible; the consequence now flows into the H2-2026 food-CPI pipeline (food-spike) rather than being a live countdown.",
+      "countdown": true,
+      "deadline": "2026-04-15",
+      "irreversible": true,
+      "logic": "any",
+      "_builderX": 660.0,
+      "_builderY": 780.0,
+      "conditions": [
+        "fert-shortage.active",
+        "diesel.above_5.50"
+      ]
+    },
+    {
+      "id": "food-spike",
+      "label": "Food Price Spike",
+      "type": "indicator",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "Downstream of planting miss. Yield loss 10-30% on corn. Food CPI acceleration begins Q4 2026.",
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "ZW=F",
+          "label": "Wheat"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "ZC=F",
+          "label": "Corn"
+        },
+        {
+          "source": "fred",
+          "series": "CPIUFDSL",
+          "label": "Food CPI"
+        }
+      ],
+      "_builderX": 660.0,
+      "_builderY": 900.0,
+      "lag": "6-12 months from fertilizer spike",
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "ZW=F",
+          "overlay": true
+        }
+      ],
+      "tvIndicators": {
+        "rsi14": 61.25,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-24T23:34:58Z"
+      }
+    },
+    {
+      "id": "dxy-stress",
+      "label": "Dollar Funding Stress",
+      "type": "indicator",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "DXY strengthening from oil-import dollar demand, not US strength. Classic petrodollar squeeze.",
+      "current": 98.51,
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "DX-Y.NYB",
+          "label": "DXY"
+        },
+        {
+          "source": "fred",
+          "series": "DTWEXBGS",
+          "label": "Trade-Weighted USD"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 102,
+          "label": "squeeze intensifies"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 1020.0,
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "DX-Y.NYB",
+          "overlay": true
+        }
+      ],
+      "tvIndicators": {
+        "rsi14": 46.14,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-24T23:34:58Z"
+      }
+    },
+    {
+      "id": "em-currency",
+      "label": "EM Currency Collapse",
+      "type": "indicator",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "Dollar squeeze on oil importers. EM currencies under pressure from twin deficit widening.",
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "USDZAR=X",
+          "label": "USD/ZAR"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "USDINR=X",
+          "label": "USD/INR"
+        },
+        {
+          "source": "yahoo",
+          "symbol": "USDEGP=X",
+          "label": "USD/EGP"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 1140.0
+    },
+    {
+      "id": "em-stress",
+      "label": "EM Sovereign Stress",
+      "type": "indicator",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "3 independent paths converge here. Signal confluence = high confidence downstream.",
+      "feeds": [
+        {
+          "source": "fred",
+          "series": "BAMLHE00EHYIOAS",
+          "label": "EM HY OAS"
+        }
+      ],
+      "indicators": [
+        {
+          "label": "Egypt CDS",
+          "value": "~314 bps (+44 from pre-war)",
+          "status": "amber"
+        },
+        {
+          "label": "EM bond issuance",
+          "value": "frozen",
+          "status": "red"
+        },
+        {
+          "label": "Hot money flight",
+          "value": "$1.4B in 8 days (Egypt)",
+          "status": "red"
+        }
+      ],
+      "_builderX": 660.0,
+      "_builderY": 1260.0,
+      "confluence": [
+        "food-spike",
+        "em-currency",
+        "employment"
+      ]
+    },
+    {
+      "id": "demand-destruction",
+      "label": "Demand Destruction",
+      "type": "indicator",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "2008 template: oil collapsed from $147→$32 in 5 months as demand was destroyed. The cure for high prices is high prices.",
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "CL=F",
+          "label": "WTI (collapse signal)"
+        },
+        {
+          "source": "fred",
+          "series": "VIXCLS",
+          "label": "VIX"
+        }
+      ],
+      "_builderX": 660.0,
+      "_builderY": 1380.0,
+      "derivedIndicators": [
+        {
+          "kind": "rsi",
+          "period": 14,
+          "symbol": "CL=F",
+          "overlay": true
+        }
+      ],
+      "tvIndicators": {
+        "rsi14": 51.61,
+        "source": "derived_from_yahoo",
+        "computedAt": "2026-04-24T23:34:58Z"
+      }
+    },
+    {
+      "id": "curve",
+      "label": "Curve Shape",
+      "type": "constraint",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "Front > 20% over 6m deferred = prompt tightness, not capex recovery. Blocks services.",
+      "current": 15.0,
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbols": [
+            "BZK26.NYM",
+            "BZV26.NYM"
+          ]
+        }
+      ],
+      "_builderX": 100.0,
+      "_builderY": 1500.0,
+      "threshold": 20,
+      "constrains": [
+        "services"
+      ]
+    },
+    {
+      "id": "rig-confirm",
+      "label": "Rig Confirmation",
+      "type": "gate",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "Gulf offshore at 11 rigs, down 8 YoY (39%). SLB and HAL both guiding U.S. land activity lower for 2026. Second consecutive weekly decline. Do NOT force this trade.",
+      "current": 543.0,
+      "feeds": [
+        {
+          "source": "manual",
+          "label": "Baker Hughes (Fridays)"
+        }
+      ],
+      "_builderX": 100.0,
+      "_builderY": 1620.0,
+      "condition": "flat or rising 2 consecutive weeks",
+      "gates": [
+        "services"
+      ]
+    },
+    {
+      "id": "services",
+      "label": "Services Recovery",
+      "type": "conditional",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "The single biggest error in the original exchange: front-running a services boom that the operating data don't support.",
+      "gatedBy": [
+        "rig-confirm"
+      ],
+      "_builderX": 100.0,
+      "_builderY": 1740.0,
+      "constrainedBy": [
+        "curve"
+      ]
+    },
+    {
+      "id": "de-escalation",
+      "label": "De-escalation",
+      "type": "reversal",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "Don't buy the dip in services. Add IXC/XLE first, then XOP, only restore OIH after activity data.",
+      "feeds": [
+        {
+          "source": "yahoo",
+          "symbol": "BZ=F"
+        }
+      ],
+      "_builderX": 100.0,
+      "_builderY": 1860.0,
+      "threshold": 95,
+      "closesRequired": 5,
+      "additionalCondition": "restored Hormuz traffic",
+      "action": "Cut XOP 1/3, CF/NTR 1/4, close tankers, rebuild VXUS + SGOV"
+    },
+    {
+      "id": "reopening-pressure",
+      "label": "Reopening Rhetoric (GDELT)",
+      "type": "indicator",
+      "phase": 1,
+      "state": "monitoring",
+      "context": "Live GDELT article-volume for Hormuz closure/reopening coverage (query: \"Hormuz\" AND blockade/closure/tanker, English). The doc's #1 watch signal: when reopening RHETORIC rises while transit counts stay flat near ~10/day, that divergence is political optimism running ahead of commercial reality — a caution against front-running de-escalation or firing the Stage-2 commercial kill-switch. Watch-only (no causal edge by design). CALIBRATION TODO: promote to a firing constraint once one clean --fetch establishes the GDELT volume baseline (was rate-limited at authoring time).",
+      "feeds": [
+        {
+          "source": "gdelt",
+          "standardQuery": "iran-hormuz-event"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 60.0
+    },
+    {
+      "id": "rates-term-premium",
+      "label": "Rates / Term Premium",
+      "type": "price",
+      "phase": 2,
+      "state": "monitoring",
+      "context": "Doc Sec 4 cost-of-capital channel. Durable energy premium → inflation + term premium → higher long rates → compressed PV of long-duration growth, making 'here-and-now' cash flow (dividends, producers) relatively more attractive. US 10Y is the anchor (live ~4.47%, Jun 4). Conditional, not certain: if the disruption resolves into a growth scare, yields FALL instead — see growth-scare-yields-fall.",
+      "current": 4.47,
+      "feeds": [
+        {
+          "source": "treasury",
+          "tenor": "10Y"
+        }
+      ],
+      "thresholds": [
+        {
+          "level": 4.75,
+          "label": "term-premium repricing"
+        },
+        {
+          "level": 5.0,
+          "label": "cost-of-capital shock"
+        }
+      ],
+      "_builderX": 380.0,
+      "_builderY": 180.0
+    },
+    {
+      "id": "growth-scare-yields-fall",
+      "label": "Growth-Scare / Yields Fall",
+      "type": "reversal",
+      "phase": 3,
+      "state": "monitoring",
+      "context": "Doc Sec 9 invalidation #3: if demand destruction resolves into a deflationary growth scare, the 10Y falls and the 'higher rates → value over growth' leg reverses even as oil stays disrupted. Fires when the 10Y closes <= 3.75% (below the pre-shock anchor) for 3 closes.",
+      "current": 4.47,
+      "feeds": [
+        {
+          "source": "treasury",
+          "tenor": "10Y"
+        }
+      ],
+      "threshold": 3.75,
+      "closesRequired": 3,
+      "action": "Unwind the rates leg of the value-over-growth tilt; the cost-of-capital thesis is invalidated even if oil stays bid.",
+      "_builderX": 660.0,
+      "_builderY": 1500.0
+    }
+  ],
+  "edges": [
+    {
+      "from": "hormuz",
+      "to": "brent",
+      "mechanism": "20% global seaborne oil disrupted",
+      "lag": "immediate",
+      "strength": 0.95
+    },
+    {
+      "from": "hormuz",
+      "to": "fert-shortage",
+      "mechanism": "30% of traded fertilizer, 50% of urea+sulfur",
+      "lag": "1 week",
+      "strength": 0.9
+    },
+    {
+      "from": "hormuz",
+      "to": "dxy-stress",
+      "mechanism": "oil-import dollar demand surge",
+      "lag": "1-2 weeks",
+      "strength": 0.7
+    },
+    {
+      "from": "brent",
+      "to": "diesel",
+      "mechanism": "crack spread transmission",
+      "lag": "1-2 weeks",
+      "strength": 0.85,
+      "amplification": 1.2
+    },
+    {
+      "from": "diesel",
+      "to": "freight",
+      "mechanism": "fuel = 20-30% of carrier opex",
+      "lag": "2-4 weeks",
+      "strength": 0.8
+    },
+    {
+      "from": "freight",
+      "to": "employment",
+      "mechanism": "margin destruction → capacity exits → layoffs",
+      "lag": "1-3 months",
+      "strength": 0.75
+    },
+    {
+      "from": "fert-shortage",
+      "to": "planting-miss",
+      "mechanism": "nitrogen unavailable for corn belt",
+      "lag": "date-gated Apr 15",
+      "strength": 0.85
+    },
+    {
+      "from": "planting-miss",
+      "to": "food-spike",
+      "mechanism": "yield loss 10-30% on corn",
+      "lag": "3-6 months",
+      "strength": 0.8
+    },
+    {
+      "from": "food-spike",
+      "to": "em-stress",
+      "mechanism": "food = 30-50% of CPI in vulnerable EMs",
+      "lag": "1-3 months",
+      "strength": 0.75
+    },
+    {
+      "from": "dxy-stress",
+      "to": "em-currency",
+      "mechanism": "dollar squeeze on oil importers",
+      "lag": "2-4 weeks",
+      "strength": 0.8
+    },
+    {
+      "from": "em-currency",
+      "to": "em-stress",
+      "mechanism": "FX depreciation + dollar debt amplification",
+      "lag": "1-2 months",
+      "strength": 0.7
+    },
+    {
+      "from": "employment",
+      "to": "em-stress",
+      "mechanism": "global demand contraction hits EM exports",
+      "lag": "2-3 months",
+      "strength": 0.6
+    },
+    {
+      "from": "employment",
+      "to": "demand-destruction",
+      "mechanism": "Hamilton: oil shocks paid in employment",
+      "lag": "2-4 months",
+      "strength": 0.7
+    },
+    {
+      "from": "demand-destruction",
+      "to": "de-escalation",
+      "mechanism": "the cure for high prices is high prices",
+      "lag": "1-3 months",
+      "strength": 0.5
+    },
+    {
+      "from": "brent",
+      "to": "rates-term-premium",
+      "mechanism": "durable energy premium → inflation + term premium → higher 10Y",
+      "lag": "1-3 months",
+      "strength": 0.55
+    },
+    {
+      "from": "demand-destruction",
+      "to": "growth-scare-yields-fall",
+      "mechanism": "demand destruction → deflationary growth scare → yields fall → rates leg reverses",
+      "lag": "1-3 months",
+      "strength": 0.5
+    }
+  ],
+  "instruments": {
+    "brent": [
+      {
+        "id": "XOP",
+        "monthly": 1400,
+        "role": "high-beta E&P",
+        "beta": 0.7,
+        "ref": 168.05,
+        "targetLow": 210,
+        "targetHigh": 225,
+        "stop": 171
+      },
+      {
+        "id": "XLE",
+        "monthly": 1200,
+        "role": "large-cap energy",
+        "beta": 0.5,
+        "ref": 56.87,
+        "targetLow": 68,
+        "targetHigh": 72,
+        "stop": 56
+      },
+      {
+        "id": "IXC",
+        "monthly": 800,
+        "role": "global energy",
+        "beta": 0.4,
+        "ref": 54.26,
+        "targetLow": 64,
+        "targetHigh": 68,
+        "stop": 53
+      }
+    ],
+    "fert-shortage": [
+      {
+        "id": "CF",
+        "monthly": 800,
+        "role": "nitrogen/fertilizer torque",
+        "beta": 0.6,
+        "ref": 120.93,
+        "targetLow": 150,
+        "targetHigh": 160,
+        "stop": 124
+      },
+      {
+        "id": "NTR",
+        "monthly": 600,
+        "role": "potash/nitrogen/phosphate",
+        "beta": 0.5,
+        "ref": 71.57,
+        "targetLow": 82,
+        "targetHigh": 88,
+        "stop": 69
+      }
+    ],
+    "dxy-stress": [
+      {
+        "id": "GLD",
+        "monthly": 1000,
+        "role": "gold hedge (anti-dollar)",
+        "beta": -0.5,
+        "ref": 433.25,
+        "targetLow": 445,
+        "targetHigh": 460,
+        "stop": 395
+      }
+    ],
+    "em-stress": [
+      {
+        "id": "VXUS",
+        "monthly": 600,
+        "role": "small ex-US (vulnerable)",
+        "beta": -0.3,
+        "ref": 82.49,
+        "targetLow": 78,
+        "targetHigh": 81,
+        "stop": 71
+      }
+    ],
+    "reserve": [
+      {
+        "id": "SGOV",
+        "monthly": 1200,
+        "role": "deployment ammo",
+        "isReserve": true,
+        "ref": 100.64
+      },
+      {
+        "id": "STIP",
+        "monthly": 400,
+        "role": "near-term inflation hedge",
+        "ref": 104.05
+      }
+    ],
+    "services": [
+      {
+        "id": "OIH",
+        "overlay": true,
+        "condition": "rig-confirm AND NOT curve-constraint",
+        "ref": 437.24,
+        "targetLow": 460,
+        "targetHigh": 500,
+        "stop": 378
+      }
+    ],
+    "overlays": {
+      "oil-escalation": {
+        "condition": "Brent > $115 for 3 closes",
+        "gatedBy": [
+          "brent"
+        ],
+        "instruments": [
+          {
+            "id": "OXY",
+            "ref": 65.32,
+            "targetLow": 72,
+            "targetHigh": 76,
+            "stop": 60
+          },
+          {
+            "id": "FANG",
+            "ref": 201.84,
+            "targetLow": 220,
+            "targetHigh": 230,
+            "stop": 188
+          }
+        ]
+      },
+      "services-rebuild": {
+        "condition": "Rig count flat/up 2 weeks AND curve < 20%",
+        "gatedBy": [
+          "rig-confirm"
+        ],
+        "constrainedBy": [
+          "curve"
+        ],
+        "instruments": [
+          {
+            "id": "OIH",
+            "ref": 416.2,
+            "targetLow": 460,
+            "targetHigh": 500,
+            "stop": 378
+          },
+          {
+            "id": "HAL",
+            "ref": 40.42,
+            "targetLow": 45,
+            "targetHigh": 48,
+            "stop": 37
+          },
+          {
+            "id": "SLB",
+            "ref": 53.5,
+            "targetLow": 60,
+            "targetHigh": 64,
+            "stop": 49
+          },
+          {
+            "id": "RIG",
+            "ref": 6.93,
+            "targetLow": 8.25,
+            "targetHigh": 9,
+            "stop": 6.1,
+            "maxWeight": 0.02,
+            "note": "Loss-making. Max 1-2%."
+          }
+        ]
+      },
+      "shipping-stress": {
+        "condition": "Worsening reroutes / stranding",
+        "gatedBy": [
+          "freight"
+        ],
+        "instruments": [
+          {
+            "id": "STNG",
+            "ref": 75.71,
+            "targetLow": 82,
+            "targetHigh": 88,
+            "stop": 69.5
+          },
+          {
+            "id": "FRO",
+            "ref": 33.65,
+            "targetLow": 37,
+            "targetHigh": 40,
+            "stop": 30.5
+          }
+        ]
+      },
+      "gold-breakout": {
+        "condition": "GLD > $425 or spot > $4,600",
+        "gatedBy": [
+          "dxy-stress"
+        ],
+        "instruments": [
+          {
+            "id": "GDX",
+            "ref": 85.79,
+            "targetLow": 95,
+            "targetHigh": 102,
+            "stop": 79,
+            "note": "More beta than GLD."
+          }
+        ]
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "id": "reopen-apr1",
+      "name": "Near-term commercial reopening",
+      "probability": 0.18,
+      "notes": "Carriers + insurers return and commercial traffic resumes within 4-6 weeks (the doc's invalidation #1 — requires COMMERCIAL confirmation, not just a political statement). Oil normalizes toward the $80s; fertilizer stays elevated short-term. Market has been actively repricing these odds up since the mid-May peak.",
+      "overrides": {
+        "hormuz": "resolved",
+        "brent": 85
+      },
+      "portfolioImpact": {
+        "XOP": {
+          "direction": "down",
+          "estimate": "-12%",
+          "action": "trim 1/3"
+        },
+        "CF": {
+          "direction": "down",
+          "estimate": "-8%",
+          "action": "hold (fert lag)"
+        },
+        "GLD": {
+          "direction": "down",
+          "estimate": "-5%",
+          "action": "hold"
+        },
+        "VXUS": {
+          "direction": "up",
+          "estimate": "+6%",
+          "action": "add"
+        },
+        "SGOV": {
+          "direction": "flat",
+          "action": "rebuild to full"
+        }
+      }
+    },
+    {
+      "id": "closed-may",
+      "name": "Prolonged closure (Wood Mackenzie base case)",
+      "probability": 0.42,
+      "notes": "Independent base case (Wood Mackenzie): supply tightness persists through Q3 and a shallow global recession develops in H2 2026. Layer 3 (food/EM) active, corn planting already missed, rates/term-premium leg engaged. The bullish-energy continuation.",
+      "overrides": {
+        "hormuz": "active",
+        "brent": 130,
+        "planting-miss": "fired",
+        "diesel": 6.5
+      },
+      "portfolioImpact": {
+        "XOP": {
+          "direction": "up",
+          "estimate": "+22%",
+          "action": "hold, deploy SGOV tranche"
+        },
+        "CF": {
+          "direction": "up",
+          "estimate": "+18%",
+          "action": "hold"
+        },
+        "NTR": {
+          "direction": "up",
+          "estimate": "+15%",
+          "action": "hold"
+        },
+        "GLD": {
+          "direction": "up",
+          "estimate": "+10%",
+          "action": "add GDX overlay"
+        },
+        "VXUS": {
+          "direction": "down",
+          "estimate": "-12%",
+          "action": "trim if EM stress fires"
+        }
+      }
+    },
+    {
+      "id": "kharg-strike",
+      "name": "Kharg Island attacked",
+      "probability": 0.12,
+      "notes": "Extreme scenario. Goldman peak case. All nodes fire. Full deployment.",
+      "overrides": {
+        "hormuz": "active",
+        "brent": 155,
+        "fert-shortage": 900
+      },
+      "portfolioImpact": {
+        "XOP": {
+          "direction": "up",
+          "estimate": "+35%",
+          "action": "full SGOV deployment"
+        },
+        "XLE": {
+          "direction": "up",
+          "estimate": "+25%",
+          "action": "hold"
+        },
+        "CF": {
+          "direction": "up",
+          "estimate": "+30%",
+          "action": "hold, add if possible"
+        },
+        "GLD": {
+          "direction": "up",
+          "estimate": "+18%",
+          "action": "add GDX"
+        },
+        "VXUS": {
+          "direction": "down",
+          "estimate": "-20%",
+          "action": "cut to minimum"
+        }
+      }
+    },
+    {
+      "id": "selective-reopen",
+      "name": "Selective transit continues",
+      "probability": 0.28,
+      "notes": "Current state through Q2. China/India/Russia get access; the West doesn't. Yuan tolls. Slow bleed — nominally 'open' yet far below capacity, the Red Sea pattern.",
+      "overrides": {
+        "hormuz": "partial",
+        "brent": 115,
+        "fert-shortage": 720
+      },
+      "portfolioImpact": {
+        "XOP": {
+          "direction": "up",
+          "estimate": "+8%",
+          "action": "hold"
+        },
+        "CF": {
+          "direction": "up",
+          "estimate": "+10%",
+          "action": "hold"
+        },
+        "GLD": {
+          "direction": "up",
+          "estimate": "+5%",
+          "action": "hold"
+        },
+        "VXUS": {
+          "direction": "flat",
+          "estimate": "-3%",
+          "action": "hold"
+        },
+        "IXC": {
+          "direction": "up",
+          "estimate": "+7%",
+          "action": "hold (global diversification)"
+        }
+      }
+    }
+  ],
+  "cascadePhases": {
+    "shock": {
+      "label": "Phase 1: Shock",
+      "status": "COMPLETE",
+      "signposts": [
+        {
+          "text": "VIX > 30",
+          "status": "fired",
+          "value": 31.05
+        },
+        {
+          "text": "Oil +40% from pre-crisis",
+          "status": "fired",
+          "value": "+53%"
+        },
+        {
+          "text": "Physical shortages reported",
+          "status": "fired",
+          "value": "608 AU stations, PH emergency, India panic"
+        },
+        {
+          "text": "Safe haven flows (gold, USD)",
+          "status": "fired"
+        }
+      ]
+    },
+    "transmission": {
+      "label": "Phase 2: Transmission",
+      "status": "ACTIVE",
+      "signposts": [
+        {
+          "text": "PMI employment declining",
+          "status": "fired",
+          "value": "negative, sustained"
+        },
+        {
+          "text": "Diesel above demand destruction threshold",
+          "status": "fired",
+          "value": "$5.38 > $5.00"
+        },
+        {
+          "text": "Australia PMI contraction",
+          "status": "fired",
+          "value": "47.0"
+        },
+        {
+          "text": "Consumer confidence declining",
+          "status": "fired"
+        },
+        {
+          "text": "Initial claims rising",
+          "status": "approaching"
+        },
+        {
+          "text": "Freight indices deteriorating",
+          "status": "fired",
+          "value": "owner-ops losing money"
+        }
+      ]
+    },
+    "amplification": {
+      "label": "Phase 3: Amplification",
+      "status": "STARTING",
+      "signposts": [
+        {
+          "text": "Unemployment claims rising sustained",
+          "status": "approaching"
+        },
+        {
+          "text": "Bank lending standards tightening",
+          "status": "approaching"
+        },
+        {
+          "text": "EM currencies breaking",
+          "status": "fired"
+        },
+        {
+          "text": "Corporate earnings warnings",
+          "status": "monitoring"
+        },
+        {
+          "text": "Credit spreads blow out",
+          "status": "approaching",
+          "value": "private-credit redemption gates (CCLFX, Partners Group)"
+        }
+      ],
+      "estimatedTiming": "H2 2026 based on 2008 template (3-month lag from oil peak); Wood Mackenzie flags shallow recession"
+    },
+    "policyResponse": {
+      "label": "Phase 4: Policy Response",
+      "status": "WATCHING",
+      "signposts": [
+        {
+          "text": "Emergency rate cuts",
+          "status": "not yet"
+        },
+        {
+          "text": "SPR releases",
+          "status": "fired",
+          "value": "Japan 80M bbl record release"
+        },
+        {
+          "text": "International coordination",
+          "status": "partial"
+        },
+        {
+          "text": "Fiscal stimulus",
+          "status": "not yet"
+        }
+      ]
+    },
+    "resolution": {
+      "label": "Phase 5: Resolution",
+      "status": "NOT YET",
+      "signposts": [
+        {
+          "text": "PMI bottoms and turns",
+          "status": "not yet"
+        },
+        {
+          "text": "Credit growth resumes",
+          "status": "not yet"
+        },
+        {
+          "text": "Commodity prices stabilize at new level",
+          "status": "not yet"
+        }
+      ]
+    }
+  },
+  "rules": [
+    "<strong>Review 3x/week:</strong> Monday close, Wednesday close, Friday close. Friday = Baker Hughes rig data.",
+    "<strong>Never deploy > 1/3 SGOV</strong> on one signal. Budget: $1,200/month.",
+    "<strong>No single stock > 10%</strong> of total book. No overlay > 2.5% except OIH at 5%.",
+    "<strong>No naked calls.</strong> 90-120 DTE spreads only. 2% premium cap.",
+    "<strong>De-escalation protocol:</strong> Brent < $95 for 5 closes + restored traffic → cut XOP 1/3, CF/NTR 1/4, close tankers, rebuild VXUS + SGOV.",
+    "<strong>Don't force services.</strong> Rigs falling = no OIH/HAL/SLB, even if oil is high.",
+    "<strong>Graph propagation:</strong> When upstream node fires, check all downstream edges. Estimated lags are planning windows, not execution triggers.",
+    "<strong>Confluence rule:</strong> Nodes with 3+ incoming fired edges get highest conviction. em-stress is the primary confluence node.",
+    "<strong>Analog calibration:</strong> Use 2008 template lags as planning baseline. Current crisis is 4 weeks in — employment impact expected by late June 2026.",
+    "<strong>Scenario discipline:</strong> Trade the probability-weighted portfolio, not any single scenario. Reopen-apr1 (10%) means maintain positions."
+  ],
+  "provenance": [],
+  "fetchSymbols": {
+    "commodities": {
+      "BZ=F": "brent",
+      "CL=F": "wti",
+      "GC=F": "goldSpot",
+      "ZW=F": "wheat",
+      "ZC=F": "corn"
+    },
+    "currencies": {
+      "DX-Y.NYB": "dxy",
+      "USDZAR=X": "usdZar",
+      "USDINR=X": "usdInr",
+      "USDEGP=X": "usdEgp"
+    },
+    "instruments": [
+      "XOP",
+      "XLE",
+      "IXC",
+      "GLD",
+      "VXUS",
+      "STIP",
+      "SGOV",
+      "CF",
+      "NTR",
+      "OXY",
+      "FANG",
+      "HAL",
+      "SLB",
+      "RIG",
+      "STNG",
+      "FRO",
+      "GDX",
+      "OIH",
+      "BWET"
+    ],
+    "indices": {
+      "BDRY": "balticDry",
+      "^VIX": "vix",
+      "^PMI": "pmi"
+    },
+    "curveCalc": {
+      "front": "BZK26.NYM",
+      "deferred": "BZV26.NYM",
+      "targetKey": "curveSpread",
+      "_note": "Auto-calculates (front-deferred)/deferred*100 as the curve spread %"
+    },
+    "fedFunds": {
+      "symbols": [
+        "ZQ=F",
+        "ZQM26.CBT",
+        "ZQU26.CBT",
+        "ZQZ26.CBT"
+      ],
+      "_note": "Fed funds futures. Price = 100 - implied rate. ZQ=F=front month."
+    }
+  },
+  "marketFields": [
+    {
+      "key": "brent",
+      "label": "BRENT $/bbl",
+      "value": 99.78,
+      "step": 0.01,
+      "nodeId": "brent"
+    },
+    {
+      "key": "wti",
+      "label": "WTI $/bbl",
+      "value": 99.64,
+      "step": 0.01,
+      "nodeId": "demand-destruction"
+    },
+    {
+      "key": "goldSpot",
+      "label": "GOLD $/oz",
+      "value": 4492,
+      "step": 1,
+      "nodeId": "dxy-stress"
+    },
+    {
+      "key": "usRigs",
+      "label": "U.S. RIGS",
+      "value": 543,
+      "step": 1,
+      "nodeId": "rig-confirm"
+    },
+    {
+      "key": "nolaFert",
+      "label": "NOLA FERT $/mt",
+      "value": 683,
+      "step": 1,
+      "nodeId": "fert-shortage"
+    },
+    {
+      "key": "usDiesel",
+      "label": "DIESEL $/gal",
+      "value": 5.38,
+      "step": 0.01,
+      "nodeId": "diesel"
+    },
+    {
+      "key": "curveSpread",
+      "label": "CURVE %",
+      "value": 15,
+      "step": 0.1,
+      "nodeId": "curve"
+    },
+    {
+      "key": "dxy",
+      "label": "DXY INDEX",
+      "value": 98.87,
+      "step": 0.01,
+      "nodeId": "dxy-stress"
+    },
+    {
+      "key": "us10y",
+      "label": "US 10Y %",
+      "value": 4.47,
+      "step": 0.01,
+      "nodeId": "rates-term-premium"
+    }
+  ],
+  "analogs": [
+    {
+      "id": "2008",
+      "name": "2008 Oil Spike",
+      "similarity": "high",
+      "startDate": "2008-01-01",
+      "peakDate": "2008-07-11",
+      "keyLags": {
+        "peak-to-employment": "3 months",
+        "peak-to-oil-collapse": "5 months",
+        "peak-to-recession-declaration": "5 months"
+      },
+      "priceAction": {
+        "oilStart": 90,
+        "oilPeak": 147,
+        "oilTrough": 32,
+        "employmentLag": "Oct 2008 (-240K) to Mar 2009 (-712K)"
+      },
+      "lessons": [
+        "Oil shocks are paid in employment, not immediately in GDP.",
+        "Demand destruction is the cure — $147 created the conditions for $32.",
+        "Services lagged the commodity cycle by 6+ months.",
+        "Gold rallied through the oil spike, then corrected with everything else."
+      ],
+      "notes": "Oil $90→$147→$32. Employment -712K/month by Oct-Mar. Demand destruction was the cure."
+    },
+    {
+      "id": "1979",
+      "name": "1979 Iranian Revolution",
+      "similarity": "very high",
+      "startDate": "1979-01-01",
+      "keyLags": {
+        "revolution-to-price-peak": "18 months",
+        "price-peak-to-recession": "6 months"
+      },
+      "priceAction": {
+        "oilStart": 14,
+        "oilPeak": 39,
+        "multiplier": "2.5x"
+      },
+      "lessons": [
+        "Gulf disruption + panic = nonlinear price response.",
+        "Physical supply disruption more severe than financial contagion.",
+        "Stagflation: inflation + recession simultaneously.",
+        "Fertilizer and food supply chains most vulnerable to Gulf disruption."
+      ],
+      "notes": "Gulf disruption + panic. 2.5x price increase. Deep recession + high inflation. Most direct analog."
+    }
+  ]
+}

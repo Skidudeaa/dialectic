@@ -1,0 +1,153 @@
+[
+  {
+    "trade_id": "TRD-XOP-HORMUZ",
+    "ticker": "XOP",
+    "predicates": [
+      {
+        "kind": "state",
+        "node_id": "em-stress",
+        "expected": "fired",
+        "allowed": [],
+        "path": "",
+        "op": "",
+        "value": 0.0,
+        "days": 0,
+        "load_bearing": true
+      },
+      {
+        "kind": "threshold",
+        "node_id": "",
+        "expected": "",
+        "allowed": [],
+        "path": "confluenceScores.em-stress",
+        "op": ">=",
+        "value": 1.6,
+        "days": 0,
+        "load_bearing": true
+      },
+      {
+        "kind": "state_set",
+        "node_id": "brent",
+        "expected": "",
+        "allowed": [
+          "approaching",
+          "fired"
+        ],
+        "path": "",
+        "op": "",
+        "value": 0.0,
+        "days": 0,
+        "load_bearing": true
+      },
+      {
+        "kind": "countdown",
+        "node_id": "planting-miss",
+        "expected": "",
+        "allowed": [],
+        "path": "",
+        "op": "<=",
+        "value": 0.0,
+        "days": 14,
+        "load_bearing": false
+      }
+    ],
+    "ref_price": 188.18,
+    "book": "iran-hormuz-graph"
+  },
+  {
+    "trade_id": "TRD-CF-PLANTING",
+    "ticker": "CF",
+    "predicates": [
+      {
+        "kind": "state",
+        "node_id": "planting-miss",
+        "expected": "approaching",
+        "allowed": [],
+        "path": "",
+        "op": "",
+        "value": 0.0,
+        "days": 0,
+        "load_bearing": true
+      },
+      {
+        "kind": "countdown",
+        "node_id": "planting-miss",
+        "expected": "",
+        "allowed": [],
+        "path": "",
+        "op": "<=",
+        "value": 0.0,
+        "days": 12,
+        "load_bearing": true
+      },
+      {
+        "kind": "threshold",
+        "node_id": "",
+        "expected": "",
+        "allowed": [],
+        "path": "scenarioImpacts.closed-may.netImpact",
+        "op": ">=",
+        "value": 5.0,
+        "days": 0,
+        "load_bearing": true
+      }
+    ],
+    "ref_price": 136.45,
+    "book": "iran-hormuz-graph"
+  },
+  {
+    "trade_id": "TRD-SH-RECESSION",
+    "ticker": "SH",
+    "predicates": [
+      {
+        "kind": "threshold",
+        "node_id": "",
+        "expected": "",
+        "allowed": [],
+        "path": "confluenceScores.earnings-compression",
+        "op": ">=",
+        "value": 2.0,
+        "days": 0,
+        "load_bearing": true
+      },
+      {
+        "kind": "threshold",
+        "node_id": "",
+        "expected": "",
+        "allowed": [],
+        "path": "confluenceScores.consumer-confidence",
+        "op": ">=",
+        "value": 1.8,
+        "days": 0,
+        "load_bearing": true
+      },
+      {
+        "kind": "threshold",
+        "node_id": "",
+        "expected": "",
+        "allowed": [],
+        "path": "confluenceScores.recession-risk",
+        "op": ">=",
+        "value": 1.2,
+        "days": 0,
+        "load_bearing": true
+      },
+      {
+        "kind": "state_set",
+        "node_id": "fed-response",
+        "expected": "",
+        "allowed": [
+          "monitoring",
+          "stable"
+        ],
+        "path": "",
+        "op": "",
+        "value": 0.0,
+        "days": 0,
+        "load_bearing": true
+      }
+    ],
+    "ref_price": 15.5,
+    "book": "trump-tariffs-graph"
+  }
+]

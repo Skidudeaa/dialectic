@@ -1,0 +1,661 @@
+<!--
+  CLAIM: The corrected commodity book stays overweight producers, fertilizer, and gold —
+  do not front-run a services boom that the operating data still do not support.
+  EVIDENCE: Brent +53%, 10+ mbpd disrupted, rigs falling (543), fertilizer surging,
+  Fed inflation-vigilant (held 3.5-3.75%, PCE 2.7%). Services data contradict bullish narrative.
+  SO WHAT: Deploy on confirmed triggers, not narrative. Track every position and decision.
+  DECISION RULE: SGOV reserves deploy only on specific triggers. Services capped until rigs confirm.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Active Commodity Book — $8,000/mo</title>
+<meta name="description" content="Active deployment dashboard with position tracking, P&L, trigger state machine, and auditable journal.">
+<meta property="og:title" content="Active Commodity Book — $8,000/mo">
+<meta property="og:description" content="Track positions. Follow triggers. Deploy on data, not narrative.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg0:#120C06;--bg1:#160E08;--s0:rgba(255,255,255,.04);--s1:rgba(255,255,255,.06);--s2:rgba(255,255,255,.09);--b0:rgba(255,255,255,.05);--b1:rgba(255,255,255,.085);--r-sm:6px;--r-md:14px;--r-pill:20px;--sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-6:24px;--sp-8:32px;--e-out:cubic-bezier(.22,1,.36,1);--dur-fast:.2s;--dur-med:.35s;--t1:#FFF7EE;--t2:rgba(255,247,238,.72);--t3:rgba(255,247,238,.50);--t4:rgba(255,247,238,.38);--font-display:'Outfit',system-ui,sans-serif;--font-mono:'JetBrains Mono','Fira Code',monospace;--c-prod:#E69A4C;--c-fert:#8AAC6B;--c-gold:#DAA520;--c-def:#6E8FAD;--c-intl:#4CC4B4;--c-up:#4CC4B4;--c-dn:#C44C4C;--c-warn:#E69A4C;--c-cstr:#AD7FA8}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:linear-gradient(180deg,var(--bg0),var(--bg1));background-attachment:fixed;color:var(--t1);font-family:var(--font-display);font-size:14px;line-height:1.5;min-height:100vh;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--b1);border-radius:3px}
+a.skip-link{position:absolute;top:-60px;left:var(--sp-4);background:var(--bg1);color:var(--t1);padding:var(--sp-2) var(--sp-4);border-radius:var(--r-sm);font-family:var(--font-mono);font-size:12px;z-index:999;text-decoration:none;border:1px solid var(--b1);transition:top var(--dur-fast) var(--e-out)}
+a.skip-link:focus{top:var(--sp-2);outline:2px solid var(--c-prod)}
+.page{max-width:1200px;margin:0 auto;padding:0 var(--sp-4) var(--sp-8)}
+/* Header */
+.app-hdr{position:sticky;top:0;z-index:100;background:var(--bg0);border-bottom:1px solid var(--b0);padding:var(--sp-3) var(--sp-4) 0;max-width:1200px;margin:0 auto}
+.hdr-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--sp-2)}
+.hdr-title{font-size:18px;font-weight:800}
+.hdr-title .mono{font-family:var(--font-mono);color:var(--c-prod)}
+.hdr-regime{font-family:var(--font-mono);font-size:12px;display:flex;align-items:center;gap:var(--sp-2)}
+.regime-tag{padding:2px 10px;border-radius:var(--r-pill);font-weight:700;font-size:11px;letter-spacing:1px}
+.hdr-export{display:flex;gap:var(--sp-2);align-items:center}
+.btn-sm{font-family:var(--font-mono);font-size:11px;padding:4px 10px;border:1px solid var(--b1);border-radius:var(--r-sm);background:var(--s0);color:var(--t3);cursor:pointer;transition:all var(--dur-fast)}
+.btn-sm:hover{background:var(--s2);color:var(--t1)}
+/* Tabs */
+.tab-bar{display:flex;gap:var(--sp-1);padding-bottom:var(--sp-2)}
+.tab-btn{font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:1px;padding:var(--sp-2) var(--sp-4);border:none;border-bottom:2px solid transparent;background:none;color:var(--t4);cursor:pointer;transition:all var(--dur-fast)}
+.tab-btn:hover{color:var(--t2)}
+.tab-btn.active{color:var(--t1);border-bottom-color:var(--c-prod)}
+.tab-pane{display:none;padding-top:var(--sp-6)}
+.tab-pane.active{display:block}
+/* Section labels */
+.sec-label{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--t4);margin-bottom:var(--sp-4);display:flex;align-items:center;gap:var(--sp-2)}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--b0)}
+/* Grids */
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-4)}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--sp-4)}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-3)}
+/* Stats bar */
+.stats-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:var(--sp-3);margin-bottom:var(--sp-6)}
+.stat-card{background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-md);padding:var(--sp-3) var(--sp-4);text-align:center}
+.stat-val{font-family:var(--font-mono);font-size:22px;font-weight:700;line-height:1.2}
+.stat-lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:1.5px;color:var(--t4);margin-top:2px}
+.pl-up{color:var(--c-up)}.pl-dn{color:var(--c-dn)}.pl-flat{color:var(--t3)}
+/* Action panel */
+.action-panel{background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-md);padding:var(--sp-4) var(--sp-6);margin-bottom:var(--sp-6)}
+.ap-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:var(--sp-3)}
+.ap-title{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--t3)}
+.ap-date{font-family:var(--font-mono);font-size:11px;color:var(--t4)}
+.act-list{list-style:none}
+.act-item{display:flex;align-items:flex-start;gap:var(--sp-3);padding:var(--sp-2) 0;border-bottom:1px solid var(--b0);font-size:13px}
+.act-item:last-child{border-bottom:none}
+.act-badge{font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:var(--r-sm);white-space:nowrap;min-width:60px;text-align:center;flex-shrink:0}
+.b-act{background:rgba(76,196,180,.15);color:var(--c-up)}
+.b-watch{background:rgba(230,154,76,.15);color:var(--c-warn)}
+.b-hold{background:rgba(255,247,238,.06);color:var(--t3)}
+.b-block{background:rgba(196,76,76,.12);color:var(--c-dn)}
+.act-text{color:var(--t2)}.act-text strong{color:var(--t1);font-weight:600}
+.act-next{font-family:var(--font-mono);font-size:11px;color:var(--t4);padding-top:var(--sp-3);margin-top:var(--sp-2);border-top:1px solid var(--b0)}
+/* Metrics bar */
+.metrics-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:var(--sp-3);padding:var(--sp-4);background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-md);margin-bottom:var(--sp-6)}
+.m-item{text-align:center}
+.m-lbl{font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:1px;color:var(--t4);display:block;margin-bottom:2px}
+.m-inp{font-family:var(--font-mono);font-size:15px;font-weight:700;color:var(--t1);background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-sm);padding:3px var(--sp-2);width:100%;max-width:110px;text-align:center}
+.m-inp:focus{outline:none;border-color:var(--c-prod);background:var(--s1)}
+/* Instrument cards */
+.i-card{background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-md);padding:var(--sp-4);position:relative;overflow:hidden;transition:border-color var(--dur-fast)}
+.i-card:hover{border-color:var(--b1)}
+.i-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:var(--r-md) var(--r-md) 0 0}
+.i-card[data-c="producers"]::before{background:var(--c-prod)}
+.i-card[data-c="fertilizer"]::before{background:var(--c-fert)}
+.i-card[data-c="gold"]::before{background:var(--c-gold)}
+.i-card[data-c="defense"]::before{background:var(--c-def)}
+.i-card[data-c="international"]::before{background:var(--c-intl)}
+.i-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px}
+.i-ticker{font-family:var(--font-mono);font-size:17px;font-weight:700}
+.i-alloc{font-family:var(--font-mono);font-size:12px;color:var(--t2)}
+.i-alloc .pct{font-size:11px;color:var(--t4);margin-left:var(--sp-1)}
+.i-role{font-size:12px;color:var(--t3);margin-bottom:var(--sp-2)}
+/* Position summary */
+.pos-summary{font-family:var(--font-mono);font-size:12px;padding:var(--sp-2) var(--sp-3);background:var(--s1);border-radius:var(--r-sm);margin-bottom:var(--sp-3)}
+.pos-row{display:flex;justify-content:space-between;padding:1px 0}
+.pos-row .lbl{color:var(--t3)}.pos-row .val{font-weight:600}
+.pos-empty{font-size:12px;color:var(--t4);font-style:italic;margin-bottom:var(--sp-3)}
+/* Price + range */
+.price-row{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-2)}
+.p-lbl{font-family:var(--font-mono);font-size:11px;color:var(--t4)}
+.p-inp{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--t1);background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-sm);padding:2px var(--sp-2);width:85px;text-align:right}
+.p-inp:focus{outline:none;border-color:var(--c-prod);background:var(--s1)}
+.p-adj{font-family:var(--font-mono);font-size:11px;color:var(--c-warn);margin-left:auto}
+.range-bar{margin-bottom:var(--sp-1)}
+.r-track{position:relative;height:5px;background:rgba(255,255,255,.06);border-radius:3px}
+.r-fill{position:absolute;top:0;left:0;bottom:0;border-radius:3px;transition:width var(--dur-med) var(--e-out)}
+.r-mark{position:absolute;top:50%;width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid var(--t1);z-index:2;transition:left var(--dur-med) var(--e-out)}
+.r-labels{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:11px;margin-top:2px}
+.r-labels .stp{color:var(--c-dn)}.r-labels .tgt{color:var(--c-up)}
+.r-metrics{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:11px;margin-top:1px}
+.r-metrics .up{color:var(--c-up)}.r-metrics .rr{color:var(--t3)}.r-metrics .dn{color:var(--t4)}
+/* SGOV meter */
+.sgov-meter{margin-top:var(--sp-2)}.sgov-track{height:7px;background:rgba(110,143,173,.15);border-radius:4px;overflow:hidden}
+.sgov-fill{height:100%;background:var(--c-def);border-radius:4px;transition:width var(--dur-med) var(--e-out)}
+.sgov-labels{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:11px;color:var(--t3);margin-top:2px}
+/* Position form */
+.pos-form{display:none;padding:var(--sp-3);background:var(--s1);border-radius:var(--r-sm);margin-top:var(--sp-2)}
+.pos-form.open{display:block}
+.pf-row{display:flex;gap:var(--sp-2);margin-bottom:var(--sp-2);flex-wrap:wrap}
+.pf-inp{font-family:var(--font-mono);font-size:12px;padding:4px var(--sp-2);background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-sm);color:var(--t1);min-width:0}
+.pf-inp:focus{outline:none;border-color:var(--c-prod)}
+.pf-inp.w-date{width:120px}.pf-inp.w-num{width:80px}.pf-inp.w-note{flex:1;min-width:120px}
+select.pf-inp{appearance:none;padding-right:20px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23FFF7EE' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center}
+.pf-btns{display:flex;gap:var(--sp-2)}
+.btn-add{font-family:var(--font-mono);font-size:11px;font-weight:700;padding:4px 12px;border:none;border-radius:var(--r-sm);cursor:pointer;transition:all var(--dur-fast)}
+.btn-add.primary{background:var(--c-up);color:var(--bg0)}.btn-add.primary:hover{filter:brightness(1.1)}
+.btn-add.ghost{background:transparent;border:1px solid var(--b1);color:var(--t3)}.btn-add.ghost:hover{color:var(--t1)}
+.btn-open-form{font-family:var(--font-mono);font-size:11px;color:var(--t4);background:none;border:1px dashed var(--b0);border-radius:var(--r-sm);padding:4px 10px;cursor:pointer;margin-top:var(--sp-2);width:100%;transition:all var(--dur-fast)}
+.btn-open-form:hover{border-color:var(--b1);color:var(--t2)}
+/* Lot table */
+.lot-list{margin-top:var(--sp-2)}.lot-row{display:grid;grid-template-columns:72px 1fr 1fr auto;gap:var(--sp-1);padding:2px 0;border-bottom:1px solid var(--b0);font-family:var(--font-mono);font-size:11px;color:var(--t3);align-items:center}
+.lot-row:last-child{border-bottom:none}.lot-date{color:var(--t4)}.lot-buy{color:var(--c-up)}.lot-sell{color:var(--c-dn)}
+/* Trigger cards */
+.t-card{background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-md);padding:var(--sp-4);border-left:3px solid var(--t4);transition:all var(--dur-fast)}
+.t-card:hover{background:var(--s1)}
+.t-card.st-appr{border-left-color:var(--c-warn)}
+.t-card.st-trig{border-left-color:var(--c-up);background:rgba(76,196,180,.03)}
+.t-card.st-cstr{border-left-color:var(--c-cstr)}
+.t-card.st-rev{border-left-color:var(--c-dn)}
+.t-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--sp-2)}
+.t-name{font-weight:700;font-size:14px}
+.t-badge{font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:var(--r-sm)}
+.bg-mon{background:rgba(255,247,238,.06);color:var(--t4)}
+.bg-appr{background:rgba(230,154,76,.15);color:var(--c-warn)}
+.bg-trig{background:rgba(76,196,180,.15);color:var(--c-up)}
+.bg-cstr{background:rgba(173,127,168,.12);color:var(--c-cstr)}
+.t-metric{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-2);font-family:var(--font-mono);font-size:12px}
+.t-metric .lbl{color:var(--t3)}.t-metric .val{font-weight:600;font-size:14px}.t-metric .thr{color:var(--t4);margin-left:auto}
+.prog-wrap{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-2)}
+.prog-track{flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;border-radius:2px;transition:width var(--dur-med) var(--e-out)}
+.prog-pct{font-family:var(--font-mono);font-size:11px;color:var(--t3);min-width:42px;text-align:right}
+/* Close log */
+.close-log{margin-bottom:var(--sp-2)}
+.cl-head{display:flex;align-items:center;gap:var(--sp-2);margin-bottom:var(--sp-1)}
+.cl-count{font-family:var(--font-mono);font-size:12px;font-weight:600}
+.cl-req{font-family:var(--font-mono);font-size:11px;color:var(--t4)}
+.btn-log-close{font-family:var(--font-mono);font-size:11px;padding:3px 8px;border:1px solid var(--c-up);border-radius:var(--r-sm);background:transparent;color:var(--c-up);cursor:pointer;margin-left:auto;transition:all var(--dur-fast)}
+.btn-log-close:hover{background:rgba(76,196,180,.1)}
+.cl-dates{font-family:var(--font-mono);font-size:11px;color:var(--t4)}
+/* Toggle */
+.toggle-row{display:flex;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-2)}
+.tgl{position:relative;width:40px;height:22px;flex-shrink:0}
+.tgl input{opacity:0;width:0;height:0;position:absolute}
+.tgl-trk{position:absolute;inset:0;background:rgba(255,255,255,.08);border-radius:11px;cursor:pointer;transition:background var(--dur-fast)}
+.tgl-trk::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;background:var(--t3);border-radius:50%;transition:transform var(--dur-fast) var(--e-out),background var(--dur-fast)}
+.tgl input:checked+.tgl-trk{background:rgba(76,196,180,.3)}
+.tgl input:checked+.tgl-trk::after{transform:translateX(18px);background:var(--c-up)}
+.tgl input:focus-visible+.tgl-trk{outline:2px solid var(--c-prod);outline-offset:2px}
+.tgl-txt{font-size:12px;color:var(--t3)}
+/* Trigger action */
+.t-action{margin-top:var(--sp-2);padding:var(--sp-3);border-radius:var(--r-sm);display:none}
+.t-action.vis{display:block;background:rgba(76,196,180,.05);border:1px solid rgba(76,196,180,.15)}
+.t-action.vis-c{display:block;background:rgba(173,127,168,.05);border:1px solid rgba(173,127,168,.15)}
+.t-action.vis-r{display:block;background:rgba(196,76,76,.05);border:1px solid rgba(196,76,76,.15)}
+.ta-label{font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:1.5px;display:block;margin-bottom:2px}
+.ta-label.act{color:var(--c-up)}.ta-label.cst{color:var(--c-cstr)}.ta-label.rev{color:var(--c-dn)}
+.ta-text{font-size:13px;font-weight:600;display:block;margin-bottom:2px}
+.ta-detail{font-size:12px;color:var(--t3)}
+.htr-btn{font-family:var(--font-mono);font-size:11px;color:var(--t4);background:none;border:none;cursor:pointer;padding:var(--sp-1) 0;margin-top:var(--sp-1)}
+.htr-btn:hover{color:var(--t2)}
+.htr{font-size:12px;color:var(--t3);line-height:1.5;padding-top:var(--sp-2);display:none}
+.htr.open{display:block}
+/* Overlay cards */
+.o-card{background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-md);padding:var(--sp-4);position:relative;transition:all var(--dur-med) var(--e-out)}
+.o-card.locked{opacity:.5}.o-card.unlocked{opacity:1;border-color:var(--b1)}
+.o-lock{font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:1px;padding:2px 8px;border-radius:var(--r-sm);position:absolute;top:var(--sp-3);right:var(--sp-3)}
+.lk-on{background:rgba(255,247,238,.06);color:var(--t4)}.lk-off{background:rgba(76,196,180,.15);color:var(--c-up)}
+.o-name{font-weight:700;font-size:15px;margin-bottom:var(--sp-1)}
+.o-trig{font-size:12px;color:var(--t3);margin-bottom:var(--sp-3)}
+.oi-row{display:grid;grid-template-columns:55px 1fr 1fr 1fr;gap:var(--sp-2);padding:var(--sp-2) 0;border-bottom:1px solid var(--b0);font-family:var(--font-mono);font-size:12px;align-items:center}
+.oi-row:last-child{border-bottom:none}
+.oi-tk{font-weight:700}.oi-tgt{color:var(--c-up)}.oi-stp{color:var(--c-dn)}
+.o-note{font-size:11px;color:var(--t4);margin-top:var(--sp-2);font-style:italic}
+/* Journal */
+.j-form{display:flex;gap:var(--sp-2);padding:var(--sp-4);background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-md);margin-bottom:var(--sp-4);flex-wrap:wrap;align-items:flex-end}
+.j-form label{display:flex;flex-direction:column;gap:2px;font-family:var(--font-mono);font-size:11px;color:var(--t4)}
+.j-inp{font-family:var(--font-mono);font-size:12px;padding:4px var(--sp-2);background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-sm);color:var(--t1)}
+.j-inp:focus{outline:none;border-color:var(--c-prod)}
+.j-note{flex:1;min-width:200px}
+.j-filters{display:flex;gap:var(--sp-2);margin-bottom:var(--sp-4);flex-wrap:wrap}
+.j-filt{font-family:var(--font-mono);font-size:11px;padding:4px 10px;border:1px solid var(--b0);border-radius:var(--r-pill);background:none;color:var(--t4);cursor:pointer;transition:all var(--dur-fast)}
+.j-filt:hover{color:var(--t2)}.j-filt.active{border-color:var(--c-prod);color:var(--t1);background:rgba(230,154,76,.08)}
+.j-entry{display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-bottom:1px solid var(--b0)}
+.j-entry:last-child{border-bottom:none}
+.j-date{font-family:var(--font-mono);font-size:11px;color:var(--t4);min-width:68px;flex-shrink:0}
+.j-type{font-family:var(--font-mono);font-size:11px;font-weight:700;min-width:56px;flex-shrink:0;text-transform:uppercase;letter-spacing:.5px}
+.j-type.trade{color:var(--c-prod)}.j-type.review{color:var(--c-def)}.j-type.trigger{color:var(--c-up)}.j-type.note{color:var(--t3)}.j-type.setup{color:var(--c-cstr)}
+.j-text{font-size:13px;color:var(--t2);flex:1}
+.j-empty{font-size:13px;color:var(--t4);text-align:center;padding:var(--sp-8)}
+/* Provenance */
+.prov{background:var(--s0);border:1px solid var(--b0);border-radius:var(--r-md);padding:var(--sp-4) var(--sp-6);font-size:12px;color:var(--t3);line-height:1.6;margin-top:var(--sp-8)}
+.prov h3{font-family:var(--font-mono);font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--t4);margin:var(--sp-3) 0 var(--sp-2)}.prov h3:first-child{margin-top:0}
+.prov p{margin-bottom:var(--sp-2)}
+.prov .disc{margin-top:var(--sp-4);padding-top:var(--sp-3);border-top:1px solid var(--b0);font-weight:600;color:var(--t4)}
+/* Execution rules */
+.rules{list-style:none;counter-reset:rule}.rule{counter-increment:rule;display:flex;gap:var(--sp-3);padding:var(--sp-3) 0;border-bottom:1px solid var(--b0);font-size:13px;color:var(--t2)}
+.rule:last-child{border-bottom:none}.rule-n{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--t4);min-width:24px;flex-shrink:0}
+.rule strong{color:var(--t1);font-weight:600}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}
+/* Print */
+@media print{body{background:#fff;color:#1a1a1a}.page{max-width:100%;padding:0}.app-hdr{position:static}.i-card,.t-card,.o-card,.action-panel,.prov,.stat-card{background:#f8f6f4;border-color:#ddd;break-inside:avoid}.t-action{display:block!important;background:#f0f8f6;border-color:#ccc}.htr{display:block!important}.o-card.locked{opacity:.7}.btn-sm,.btn-open-form,.btn-log-close,.tgl,.htr-btn,.j-form,.j-filters,.tab-bar{display:none!important}.tab-pane{display:block!important}.p-inp,.m-inp{border:1px solid #ccc;color:#1a1a1a;background:#fff}.r-fill{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}html{scroll-behavior:auto}}
+@media(max-width:900px){.g3{grid-template-columns:repeat(2,1fr)}.stats-bar{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.page{padding:0 var(--sp-3) var(--sp-8)}.g3,.g2{grid-template-columns:1fr}.stats-bar{grid-template-columns:1fr}.hdr-row{flex-wrap:wrap;gap:var(--sp-2)}.tab-bar{overflow-x:auto}.metrics-bar{grid-template-columns:repeat(2,1fr)}.j-form{flex-direction:column}.oi-row{grid-template-columns:50px 1fr 1fr}.oi-stp{display:none}}
+</style>
+</head>
+<body>
+<a href="#dash" class="skip-link">Skip to dashboard</a>
+
+<!-- Sticky header + tabs -->
+<header class="app-hdr">
+  <div class="hdr-row">
+    <div class="hdr-title">Active Commodity Book <span class="mono">$8K</span>/mo</div>
+    <div class="hdr-regime" id="regime-display"></div>
+    <div class="hdr-export">
+      <button class="btn-sm" id="btn-fetch" style="border-color:var(--c-up);color:var(--c-up)">Fetch Live</button>
+      <button class="btn-sm" id="btn-export">Export</button>
+      <button class="btn-sm" id="btn-reset">Reset</button>
+      <label class="btn-sm" style="cursor:pointer">Import<input type="file" accept=".json" id="btn-import" style="display:none"></label>
+    </div>
+  </div>
+  <nav class="tab-bar" role="tablist">
+    <button class="tab-btn active" data-tab="dash" role="tab">Dashboard</button>
+    <button class="tab-btn" data-tab="book" role="tab">Book</button>
+    <button class="tab-btn" data-tab="triggers" role="tab">Triggers</button>
+    <button class="tab-btn" data-tab="journal" role="tab">Journal</button>
+  </nav>
+</header>
+
+<div class="page">
+
+<!-- ===== DASHBOARD TAB ===== -->
+<section class="tab-pane active" id="dash">
+  <div class="stats-bar" id="stats-bar"></div>
+  <div class="action-panel" id="action-panel"></div>
+  <div class="sec-label">Market Data</div>
+  <div class="metrics-bar" id="metrics-bar"></div>
+  <div class="sec-label">Execution Rules</div>
+  <ol class="rules" id="rules-list"></ol>
+</section>
+
+<!-- ===== BOOK TAB ===== -->
+<section class="tab-pane" id="book">
+  <div class="sec-label">Core Portfolio &mdash; $8,000/month</div>
+  <div class="g3" id="inst-grid"></div>
+  <div class="sec-label" style="margin-top:var(--sp-8)">Triggered Overlays &mdash; deploy on signal only</div>
+  <div class="g2" id="overlay-grid"></div>
+</section>
+
+<!-- ===== TRIGGERS TAB ===== -->
+<section class="tab-pane" id="triggers">
+  <div class="sec-label">Escalation Dashboard</div>
+  <div class="g2" id="trigger-grid"></div>
+</section>
+
+<!-- ===== JOURNAL TAB ===== -->
+<section class="tab-pane" id="journal">
+  <div class="j-form" id="j-form">
+    <label>Type<select class="j-inp" id="j-type"><option value="note">Note</option><option value="trade">Trade</option><option value="review">Review</option><option value="trigger">Trigger</option></select></label>
+    <label>Date<input type="date" class="j-inp" id="j-date"></label>
+    <label class="j-note">Entry<input type="text" class="j-inp" id="j-note" placeholder="What happened?"></label>
+    <button class="btn-add primary" id="j-add">Log</button>
+  </div>
+  <div class="j-filters" id="j-filters"></div>
+  <div id="j-list"></div>
+</section>
+
+<!-- Provenance (always visible) -->
+<footer class="prov">
+  <h3>Situation Update (March 29, 2026)</h3>
+  <p><strong>Hormuz:</strong> Strait effectively closed since Feb 28. Supply disruption: 10+ mbpd. Iran allowing selective transit for China, Russia, India, Iraq, Pakistan (Mar 26) and humanitarian/fertilizer shipments (Mar 27). U.S. military campaign to reopen since Mar 19. Trump paused energy infrastructure strikes through Apr 6. Analysts warn strait must reopen by mid-April or disruptions get significantly worse.</p>
+  <p><strong>Rigs:</strong> Baker Hughes total 543 (Mar 27), down 9 from 552. Second consecutive weekly decline. Gulf offshore at 11 rigs, down 8 YoY. SLB and HAL both guiding U.S. land activity lower for 2026. SLB guidance assumes WTI "high fifties to low sixties." HAL expects North America revenue to decline high single digits.</p>
+  <p><strong>Fertilizer:</strong> NOLA urea $677-690+/st. Nitrogen up 28-50%+ since conflict. CF Industries named #1 S&P 500 performer for March (UBS target raised to $140). Nutrien received Jefferies Buy upgrade ($96 target). Urea FOB US Gulf futures up 50%+ per CME Group.</p>
+  <p><strong>Diesel:</strong> National average $5.375/gal (EIA, Mar 24). Up 44.6% from February ($3.72). West Coast above $6/gal. CNN: small trucking companies may not survive.</p>
+  <p><strong>Fed:</strong> Held at 3.5-3.75% (Mar 18, 11-1 vote). PCE forecast raised to 2.7%. Dot plot: 1 cut in 2026. Powell cited "substantial rise in oil prices" lifting inflation expectations. No imminent cuts.</p>
+  <h3>Sources</h3>
+  <p>Reuters, Baker Hughes (rig count Mar 27), IEA (decline-rate study), Dallas Fed (Hormuz model Mar 20), Goldman Sachs (oil scenarios), CNBC, Federal Reserve (FOMC Mar 18), EIA (diesel Mar 24), CME Group (urea futures), DTN (fertilizer surveys), company filings (CF Industries, Nutrien, SLB, Halliburton, Transocean/Valaris). Live fetch: allorigins.win proxy to Yahoo Finance v7 spark API.</p>
+  <h3>Methodology</h3>
+  <p>Targets are 3-6 month tactical ranges. Stops are weekly-closing (not intraday). Gap rule: if price drifts &gt;2% from reference, targets/stops shift proportionally. Reference: March 27 close.</p>
+  <h3>Limitations</h3>
+  <p>Dallas Fed model excludes gas/fertilizer disruptions. Trigger thresholds are heuristic. Monthly rebalancing assumed. Iran's selective transit policy (Mar 26) may moderate supply disruption estimates — framework does not yet model partial reopening.</p>
+  <p class="disc">Research framework, not financial advice. All instruments carry risk of loss.</p>
+</footer>
+</div>
+
+<script>
+/* ========================================================================
+   DATA
+   ======================================================================== */
+const TOTAL=8000;
+const CATS={producers:'var(--c-prod)',fertilizer:'var(--c-fert)',gold:'var(--c-gold)',defense:'var(--c-def)',international:'var(--c-intl)'};
+const INSTS=[
+  {id:'XOP',mo:1400,role:'High-beta U.S. E&P',cat:'producers',ref:188.18,tL:210,tH:225,stp:171},
+  {id:'XLE',mo:1200,role:'Large-cap energy cash flow',cat:'producers',ref:61.52,tL:68,tH:72,stp:56},
+  {id:'SGOV',mo:1200,role:'Tactical reserve / deployment ammo',cat:'defense',ref:100.65,tL:null,tH:null,stp:null,rsv:1},
+  {id:'GLD',mo:1000,role:'Gold hedge',cat:'gold',ref:414.70,tL:445,tH:460,stp:395},
+  {id:'IXC',mo:800,role:'Global energy',cat:'producers',ref:58.26,tL:64,tH:68,stp:53},
+  {id:'CF',mo:800,role:'Nitrogen / fertilizer torque',cat:'fertilizer',ref:136.45,tL:150,tH:160,stp:124},
+  {id:'NTR',mo:600,role:'Potash / nitrogen / phosphate',cat:'fertilizer',ref:75.65,tL:82,tH:88,stp:69},
+  {id:'VXUS',mo:600,role:'Small ex-U.S. sleeve',cat:'international',ref:74.69,tL:78,tH:81,stp:71},
+  {id:'STIP',mo:400,role:'Near-term inflation hedge',cat:'defense',ref:103.12,tL:null,tH:null,stp:null},
+];
+const TRIGS=[
+  {id:'brent-per',nm:'Brent Persistence',mk:'brent',op:'>',th:115,cls:3,act:'Deploy $400 SGOV → XOP',det:'One-third of SGOV first. Never the whole reserve at once.',htr:'Brent > $115 for 3 closes = shock → persistence.'},
+  {id:'supply',nm:'Supply Loss / Kharg',bin:'supplyLoss',act:'Deploy $400 → XLE + CF',det:'Split evenly. Second and final standard SGOV deployment.',htr:'> 13 mbpd loss or Kharg escalation = structural disruption.'},
+  {id:'curve',nm:'Curve Durability',mk:'curveSpread',op:'>',th:20,cstr:1,act:'Keep services CAPPED',det:'Front > 20% over 6m deferred = prompt tightness, not capex recovery.',htr:'Backwardation above 20% means services need sustained flat curves.'},
+  {id:'rigs',nm:'Rig Confirmation',bin:'rigsFlat',act:'Open OIH or HAL/SLB',det:'Rigs flat/up 2 weeks. Baker Hughes Fridays. Do not force this.',htr:'Services valid only when rigs stop falling.'},
+  {id:'fert',nm:'Fertilizer Stress',mk:'nolaFert',op:'>',th:700,act:'Add CF + NTR',det:'NOLA > $700/mt or +10% w/w. First-class indicator.',htr:'Hormuz handles ~30% of traded fertilizers. Already up 30-40%.'},
+  {id:'gold',nm:'Gold Regime',mk:'goldSpot',op:'>',th:4600,alt:{mk:'gld',th:425},act:'Add GLD or GDX',det:'GLD > $425 or spot > $4,600. Hedge, not hero.',htr:'Gold driven by rates + dollar + liquidity, not just war.'},
+  {id:'diesel',nm:'Diesel Stress',mk:'usDiesel',op:'>',th:5.50,cls:10,act:'Trim VXUS, add XLE/CF',det:'Diesel > $5.50 for 2 weeks. Transport cost transmission.',htr:'$5.38 now. Trucking already under pressure.'},
+  {id:'ship',nm:'Shipping Stress',bin:'shipWorse',act:'Open STNG or FRO',det:'Worsening reroutes/stranding. Tactical, not core.',htr:'Freight costs slowing West African crude flows. Some Indian vessels stranded.'},
+  {id:'de-esc',nm:'De-escalation',mk:'brent',op:'<',th:95,cls:5,rvs:1,act:'REVERSE: Cut XOP/CF/tankers',det:'Cut XOP 1/3, CF/NTR 1/4, close tankers. Rebuild VXUS + SGOV first.',htr:'Brent < $95 for 5 closes + restored Hormuz traffic = unwind.'},
+];
+const OVERLAYS=[
+  {id:'oil-esc',nm:'Oil Escalation',trig:['brent-per'],cond:'Brent > $115 for 3 closes',insts:[
+    {id:'OXY',ref:65.32,tL:72,tH:76,stp:60,note:'After Brent > $115 for 3 closes'},
+    {id:'FANG',ref:201.84,tL:220,tH:230,stp:188,note:'After XOP weekly close > 195'}]},
+  {id:'svc',nm:'Services / Rebuild',trig:['rigs'],cond:'Rig count flat/up 2 weeks',insts:[
+    {id:'OIH',ref:416.20,tL:460,tH:500,stp:378,note:'ETF over single names'},
+    {id:'HAL',ref:40.42,tL:45,tH:48,stp:37},{id:'SLB',ref:53.50,tL:60,tH:64,stp:49},
+    {id:'RIG',ref:6.93,tL:8.25,tH:9.00,stp:6.10,note:'Max 1-2%. Loss-making.'}]},
+  {id:'ship',nm:'Shipping Stress',trig:['ship'],cond:'Worsening reroutes / stranding',insts:[
+    {id:'STNG',ref:75.71,tL:82,tH:88,stp:69.50},{id:'FRO',ref:33.65,tL:37,tH:40,stp:30.50}]},
+  {id:'gold-b',nm:'Gold Breakout',trig:['gold'],cond:'GLD > $425 or spot > $4,600',insts:[
+    {id:'GDX',ref:85.79,tL:95,tH:102,stp:79,note:'More beta than GLD.'}]},
+];
+const RULES=[
+  '<strong>Review 3x/week:</strong> Monday close, Wednesday close, Friday close. Friday = Baker Hughes rig data.',
+  '<strong>Never deploy > 1/3 SGOV</strong> on one signal. Budget: $1,200/month.',
+  '<strong>No single stock > 10%</strong> of total book. No overlay > 2.5% except OIH at 5%.',
+  '<strong>No naked calls.</strong> 90-120 DTE spreads only. 2% premium cap.',
+  '<strong>De-escalation protocol:</strong> Brent < $95 for 5 closes + restored traffic → cut XOP 1/3, CF/NTR 1/4, close tankers, rebuild VXUS + SGOV.',
+  '<strong>Don\'t force services.</strong> Rigs falling = no OIH/HAL/SLB, even if oil is high.',
+];
+const MKT_FIELDS=[
+  {k:'brent',lbl:'BRENT $/bbl',v:112.57,step:.01},
+  {k:'wti',lbl:'WTI $/bbl',v:99.64,step:.01},
+  {k:'goldSpot',lbl:'GOLD $/oz',v:4492,step:1},
+  {k:'usRigs',lbl:'U.S. RIGS',v:543,step:1},
+  {k:'nolaFert',lbl:'NOLA FERT $/mt',v:683,step:1},
+  {k:'usDiesel',lbl:'DIESEL $/gal',v:5.38,step:.01},
+  {k:'curveSpread',lbl:'CURVE %',v:15,step:.1},
+];
+
+/* ========================================================================
+   BOOK STATE
+   ======================================================================== */
+const DEFAULTS={
+  v:2,market:{brent:112.57,wti:99.64,goldSpot:4492,usRigs:543,nolaFert:683,usDiesel:5.38,curveSpread:15},
+  prices:{},positions:{},trigSt:{},
+  sgov:{budget:1200,ledger:[]},
+  journal:[{id:1,date:'2026-03-29',type:'setup',text:'Book initialized. Brent $112.57 (pre-persistence). Rigs 543, falling. Fed held 3.5-3.75%. Iran allowing selective Hormuz transit (Mar 26) + fertilizer shipments (Mar 27). Trump energy strike pause through Apr 6.'}],
+  binary:{supplyLoss:false,rigsFlat:false,shipWorse:false},
+  ui:{tab:'dash',jFilt:'all',expanded:[]},
+};
+let B;
+function initPrices(b){INSTS.forEach(i=>{if(!b.prices[i.id])b.prices[i.id]=i.ref});OVERLAYS.forEach(o=>o.insts.forEach(i=>{if(!b.prices[i.id])b.prices[i.id]=i.ref}))}
+function load(){try{const r=localStorage.getItem('acb2');if(r){B=JSON.parse(r);if(!B.v||B.v<2){B=JSON.parse(JSON.stringify(DEFAULTS))}}else{B=JSON.parse(JSON.stringify(DEFAULTS))}}catch(e){B=JSON.parse(JSON.stringify(DEFAULTS))}initPrices(B);if(!B.trigSt)B.trigSt={};if(!B.binary)B.binary={supplyLoss:false,rigsFlat:false,shipWorse:false};if(!B.ui)B.ui={tab:'dash',jFilt:'all',expanded:[]}}
+function save(){B.modified=new Date().toISOString();try{localStorage.setItem('acb2',JSON.stringify(B))}catch(e){}}
+function exportBook(){const j=JSON.stringify(B,null,2);const b=new Blob([j],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`commodity-book-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)}
+function importBook(file){const r=new FileReader();r.onload=e=>{try{const d=JSON.parse(e.target.result);if(d.v===2){B=d;initPrices(B);save();renderAll()}}catch(err){alert('Invalid file')}};r.readAsText(file)}
+function resetBook(){if(!confirm('Reset all data? This clears positions, journal, and trigger state.'))return;B=JSON.parse(JSON.stringify(DEFAULTS));initPrices(B);save();renderAll()}
+
+/* ========================================================================
+   CALCULATIONS
+   ======================================================================== */
+function regime(b){if(b>=155)return{id:'extreme',lbl:'EXTREME',c:'#9C27B0'};if(b>=135)return{id:'escalation',lbl:'ESCALATION',c:'#ef5350'};if(b>=115)return{id:'elevated',lbl:'ELEVATED',c:'var(--c-prod)'};return{id:'base',lbl:'PRE-PERSISTENCE',c:'var(--t3)'}}
+function adjLvl(inst){const c=B.prices[inst.id];const p=(c-inst.ref)/inst.ref;if(!inst.tL)return{tL:null,tH:null,stp:null,adj:false,p:0};if(Math.abs(p)>.02)return{tL:+(inst.tL*(1+p)).toFixed(2),tH:+(inst.tH*(1+p)).toFixed(2),stp:+(inst.stp*(1+p)).toFixed(2),adj:true,p};return{tL:inst.tL,tH:inst.tH,stp:inst.stp,adj:false,p:0}}
+function rngPos(c,s,t){if(!s||!t)return 50;const r=t-s;return r===0?50:Math.max(0,Math.min(100,((c-s)/r)*100))}
+function evalTrig(t){
+  if(t.bin){return{lv:B.binary[t.bin]?'trig':'mon',lb:B.binary[t.bin]?'TRIGGERED':'MONITORING'}}
+  const v=B.market[t.mk];
+  if(t.rvs){const cd=closeDates(t.id);if(v<=t.th&&cd.length>=t.cls)return{lv:'trig',lb:'TRIGGERED'};if(v/t.th<1.12)return{lv:'appr',lb:'APPROACHING'};return{lv:'mon',lb:'MONITORING'}}
+  if(t.cstr){return v>t.th?{lv:'cstr',lb:'ACTIVE'}:{lv:'mon',lb:'INACTIVE'}}
+  if(t.alt){const gld=B.prices['GLD']||414.70;if(gld>t.alt.th||v>t.th)return{lv:'trig',lb:'TRIGGERED'};if(Math.max(v/t.th,gld/t.alt.th)>.95)return{lv:'appr',lb:'APPROACHING'};return{lv:'mon',lb:'MONITORING'}}
+  if(t.op==='>'){const cd=closeDates(t.id);const r=v/t.th;if(v>t.th){if(t.cls&&cd.length<t.cls)return{lv:'appr',lb:`ABOVE ${cd.length}/${t.cls}`};return{lv:'trig',lb:'TRIGGERED'}}if(r>.95)return{lv:'appr',lb:'APPROACHING'};return{lv:'mon',lb:'MONITORING'}}
+  return{lv:'mon',lb:'MONITORING'}
+}
+function closeDates(tid){return(B.trigSt[tid]&&B.trigSt[tid].closes)||[]}
+function overlayUnlocked(o){return o.trig.some(tid=>{const t=TRIGS.find(x=>x.id===tid);return t&&evalTrig(t).lv==='trig'})}
+function sgovAvail(){return B.sgov.budget-B.sgov.ledger.reduce((s,d)=>s+d.amount,0)}
+function posVal(id){const pos=B.positions[id];if(!pos||!pos.lots.length)return{shares:0,cost:0,mktVal:0,pl:0,plPct:0};let sh=0,cost=0;pos.lots.forEach(l=>{if(l.type==='buy'){sh+=l.shares;cost+=l.shares*l.price}else{const avg=sh>0?cost/sh:0;sh-=l.shares;cost-=l.shares*avg}});const price=B.prices[id]||0;const mv=sh*price;return{shares:sh,cost,mktVal:mv,pl:mv-cost,plPct:cost>0?((mv-cost)/cost*100):0}}
+function bookTotals(){let tv=0,tc=0;[...INSTS,...OVERLAYS.flatMap(o=>o.insts)].forEach(i=>{const p=posVal(i.id);tv+=p.mktVal;tc+=p.cost});return{val:tv,cost:tc,pl:tv-tc,plPct:tc>0?((tv-tc)/tc*100):0}}
+function fmt(n,d){if(n==null)return'--';d=d!=null?d:2;return n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d})}
+function fPct(n){return(n>=0?'+':'')+n.toFixed(1)+'%'}
+function fDate(d){if(!d)return'--';return new Date(d+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+function today(){return new Date().toISOString().slice(0,10)}
+
+/* ========================================================================
+   JOURNAL OPS
+   ======================================================================== */
+function addJ(type,text){B.journal.unshift({id:Date.now(),date:today(),type,text});save()}
+
+/* ========================================================================
+   POSITION OPS
+   ======================================================================== */
+function addPos(instId,date,shares,price,type,note){
+  if(!B.positions[instId])B.positions[instId]={lots:[]};
+  B.positions[instId].lots.push({date,shares:+shares,price:+price,type,note:note||''});
+  addJ('trade',`${type==='buy'?'Bought':'Sold'} ${shares} ${instId} @ $${fmt(price)}${note?'. '+note:''}`);
+  save();renderAll();
+}
+
+/* ========================================================================
+   TRIGGER OPS
+   ======================================================================== */
+function logClose(tid){
+  const t=TRIGS.find(x=>x.id===tid);if(!t)return;
+  if(!B.trigSt[tid])B.trigSt[tid]={closes:[]};
+  const v=B.market[t.mk];
+  B.trigSt[tid].closes.push({date:today(),value:v});
+  const cd=B.trigSt[tid].closes;
+  if(t.cls&&cd.length>=t.cls){addJ('trigger',`${t.nm} TRIGGERED after ${t.cls} closes. Value: ${v}`)}
+  save();renderAll();
+}
+function clearCloses(tid){if(!B.trigSt[tid])B.trigSt[tid]={closes:[]};B.trigSt[tid].closes=[];save();renderAll()}
+
+/* ========================================================================
+   RENDER ALL
+   ======================================================================== */
+function renderAll(){renderRegime();renderStats();renderActions();renderMetrics();renderRules();renderInsts();renderOverlays();renderTriggers();renderJournal()}
+
+function renderRegime(){
+  const r=regime(B.market.brent);
+  document.getElementById('regime-display').innerHTML=
+    `<span style="font-family:var(--font-mono);font-weight:700">$${fmt(B.market.brent)}</span>`+
+    `<span class="regime-tag" style="background:${r.c}22;color:${r.c};border:1px solid ${r.c}44">${r.lbl}</span>`;
+}
+
+function renderStats(){
+  const bt=bookTotals();const sa=sgovAvail();
+  const plCls=bt.pl>0?'pl-up':bt.pl<0?'pl-dn':'pl-flat';
+  document.getElementById('stats-bar').innerHTML=
+    `<div class="stat-card"><div class="stat-val">$${fmt(bt.val,0)}</div><div class="stat-lbl">BOOK VALUE</div></div>`+
+    `<div class="stat-card"><div class="stat-val ${plCls}">${bt.pl>=0?'+':''}$${fmt(bt.pl,0)}</div><div class="stat-lbl">UNREALIZED P&L</div></div>`+
+    `<div class="stat-card"><div class="stat-val ${plCls}">${fPct(bt.plPct)}</div><div class="stat-lbl">RETURN</div></div>`+
+    `<div class="stat-card"><div class="stat-val">$${fmt(sa,0)}</div><div class="stat-lbl">SGOV AVAILABLE</div></div>`+
+    `<div class="stat-card"><div class="stat-val">$${fmt(bt.cost,0)}</div><div class="stat-lbl">TOTAL DEPLOYED</div></div>`;
+}
+
+function renderActions(){
+  const items=[];const rd=[1,3,5];let nr=new Date();
+  for(let i=1;i<=7;i++){nr=new Date(Date.now()+i*864e5);if(rd.includes(nr.getDay()))break}
+  const ns=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][nr.getDay()]+' '+nr.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  TRIGS.forEach(t=>{const e=evalTrig(t);
+    if(e.lv==='trig'&&!t.cstr){items.push(`<li class="act-item"><span class="act-badge ${t.rvs?'b-block':'b-act'}">${t.rvs?'REVERSE':'ACT'}</span><span class="act-text"><strong>${t.nm}:</strong> ${t.act}</span></li>`)}
+    else if(e.lv==='cstr'){items.push(`<li class="act-item"><span class="act-badge b-block">BLOCK</span><span class="act-text"><strong>${t.nm}:</strong> ${t.act}</span></li>`)}
+    else if(e.lv==='appr'||e.lb.includes('ABOVE')){items.push(`<li class="act-item"><span class="act-badge b-watch">WATCH</span><span class="act-text"><strong>${t.nm}:</strong> ${t.mk?B.market[t.mk]:''} — threshold ${t.th||'binary'}</span></li>`)}
+  });
+  const re=evalTrig(TRIGS.find(t=>t.id==='rigs'));
+  if(re.lv!=='trig')items.push(`<li class="act-item"><span class="act-badge b-block">BLOCK</span><span class="act-text"><strong>Services locked.</strong> Rigs ${B.market.usRigs}, still falling.</span></li>`);
+  if(!items.length)items.push(`<li class="act-item"><span class="act-badge b-hold">HOLD</span><span class="act-text">All triggers monitoring. Continue monthly DCA.</span></li>`);
+  document.getElementById('action-panel').innerHTML=
+    `<div class="ap-head"><span class="ap-title">What To Do Now</span><span class="ap-date">SGOV ammo: $${sgovAvail()}</span></div>`+
+    `<ul class="act-list">${items.join('')}</ul>`+
+    `<div class="act-next">Next review: <strong>${ns}</strong>${nr.getDay()===5?' — Baker Hughes':''}</div>`;
+}
+
+function renderMetrics(){
+  let h='';MKT_FIELDS.forEach(f=>{
+    h+=`<div class="m-item"><label class="m-lbl" for="m-${f.k}">${f.lbl}</label><input class="m-inp" type="number" step="${f.step}" id="m-${f.k}" data-k="${f.k}" value="${B.market[f.k]}"></div>`;
+  });
+  document.getElementById('metrics-bar').innerHTML=h;
+}
+
+function renderRules(){
+  document.getElementById('rules-list').innerHTML=RULES.map((r,i)=>`<li class="rule"><span class="rule-n">${i+1}.</span><span>${r}</span></li>`).join('');
+}
+
+function renderInsts(){
+  let h='';INSTS.forEach(inst=>{
+    const c=B.prices[inst.id];const pv=posVal(inst.id);const a=adjLvl(inst);const col=CATS[inst.cat];const pct=(inst.mo/TOTAL*100).toFixed(1);
+    let rangeH='',posH='';
+    // Position summary
+    if(pv.shares>0){
+      const plc=pv.pl>=0?'pl-up':'pl-dn';
+      posH=`<div class="pos-summary"><div class="pos-row"><span class="lbl">Shares</span><span class="val">${fmt(pv.shares,2)}</span></div>`+
+        `<div class="pos-row"><span class="lbl">Avg Cost</span><span class="val">$${fmt(pv.cost/pv.shares)}</span></div>`+
+        `<div class="pos-row"><span class="lbl">Mkt Value</span><span class="val">$${fmt(pv.mktVal)}</span></div>`+
+        `<div class="pos-row"><span class="lbl">P&L</span><span class="val ${plc}">${pv.pl>=0?'+':''}$${fmt(pv.pl)} (${fPct(pv.plPct)})</span></div></div>`;
+    } else { posH='<div class="pos-empty">No position yet</div>' }
+    // Range bar
+    if(inst.rsv){
+      const sa=sgovAvail();const ap=(sa/1200*100).toFixed(0);
+      rangeH=`<div class="sgov-meter"><div class="sgov-track"><div class="sgov-fill" style="width:${ap}%"></div></div>`+
+        `<div class="sgov-labels"><span>Deployed: $${1200-sa}</span><span>Available: $${sa}</span></div></div>`;
+      if(B.sgov.ledger.length){rangeH+=`<div style="margin-top:6px;font-family:var(--font-mono);font-size:11px;color:var(--t3)">`;
+        B.sgov.ledger.forEach(d=>{rangeH+=`<div>${fDate(d.date)} | ${d.trigger} | $${d.amount} → ${d.target}</div>`});rangeH+='</div>'}
+    } else if(a.tL!=null){
+      const pos=rngPos(c,a.stp,a.tL);const up=((a.tL-c)/c*100);const dn=((c-a.stp)/c*100);const rr=dn>0?(up/dn).toFixed(1):'--';
+      const fc=pos<30?'var(--c-dn)':col;
+      rangeH=`<div class="range-bar"><div class="r-track"><div class="r-fill" style="width:${pos}%;background:${fc};opacity:.3"></div><div class="r-mark" style="left:${pos}%;background:${col}"></div></div>`+
+        `<div class="r-labels"><span class="stp">${fmt(a.stp)}</span><span>${fmt(c)}</span><span class="tgt">${fmt(a.tL)}-${fmt(a.tH)}</span></div>`+
+        `<div class="r-metrics"><span class="up">${fPct(up)} target</span><span class="rr">${rr}:1</span><span class="dn">${fPct(-dn)} stop</span></div></div>`;
+    }
+    const adjB=a.adj?`<span class="p-adj">Adj ${fPct(a.p*100)}</span>`:'';
+    // Lot history
+    let lotsH='';const lots=(B.positions[inst.id]&&B.positions[inst.id].lots)||[];
+    if(lots.length){lotsH='<div class="lot-list">';lots.forEach(l=>{lotsH+=`<div class="lot-row"><span class="lot-date">${fDate(l.date)}</span><span class="${l.type==='buy'?'lot-buy':'lot-sell'}">${l.type==='buy'?'+':'-'}${l.shares}</span><span>$${fmt(l.price)}</span><span style="color:var(--t4)">${l.note||''}</span></div>`});lotsH+='</div>'}
+    h+=`<div class="i-card" data-c="${inst.cat}" data-id="${inst.id}"><div class="i-head"><span class="i-ticker" style="color:${col}">${inst.id}</span><span class="i-alloc">$${inst.mo.toLocaleString()}/mo <span class="pct">${pct}%</span></span></div>`+
+      `<div class="i-role">${inst.role}</div>${posH}`+
+      `<div class="price-row"><span class="p-lbl">Price</span><input type="number" step=".01" class="p-inp" value="${c}" data-inst="${inst.id}">${adjB}</div>`+
+      `${rangeH}${lotsH}`+
+      `<button class="btn-open-form" data-pf="${inst.id}">+ Add Position</button>`+
+      `<div class="pos-form" id="pf-${inst.id}"><div class="pf-row"><input type="date" class="pf-inp w-date" value="${today()}" data-f="date"><input type="number" class="pf-inp w-num" placeholder="Shares" step=".01" data-f="shares"><input type="number" class="pf-inp w-num" placeholder="Price" step=".01" value="${c}" data-f="price"><select class="pf-inp" data-f="type"><option value="buy">Buy</option><option value="sell">Sell</option></select></div>`+
+      `<div class="pf-row"><input type="text" class="pf-inp w-note" placeholder="Note (e.g. Monthly DCA)" data-f="note"><div class="pf-btns"><button class="btn-add primary" data-pf-add="${inst.id}">Add</button><button class="btn-add ghost" data-pf-cancel="${inst.id}">Cancel</button></div></div></div></div>`;
+  });
+  document.getElementById('inst-grid').innerHTML=h;
+}
+
+function renderOverlays(){
+  let h='';OVERLAYS.forEach(o=>{
+    const ul=overlayUnlocked(o);
+    let ih='<div class="oi-row" style="font-weight:600;color:var(--t3);font-size:11px"><span>Ticker</span><span>Current</span><span>Target</span><span>Stop</span></div>';
+    o.insts.forEach(i=>{const c=B.prices[i.id]||i.ref;ih+=`<div class="oi-row"><span class="oi-tk">${i.id}</span><span>$${fmt(c)}</span><span class="oi-tgt">$${fmt(i.tL)}-${fmt(i.tH)}</span><span class="oi-stp">$${fmt(i.stp)}</span></div>`;if(i.note)ih+=`<div class="o-note">${i.note}</div>`});
+    h+=`<div class="o-card ${ul?'unlocked':'locked'}"><span class="o-lock ${ul?'lk-off':'lk-on'}">${ul?'UNLOCKED':'LOCKED'}</span><div class="o-name">${o.nm}</div><div class="o-trig">Trigger: ${o.cond}</div>${ih}</div>`;
+  });
+  document.getElementById('overlay-grid').innerHTML=h;
+}
+
+function renderTriggers(){
+  let h='';TRIGS.forEach(t=>{
+    const e=evalTrig(t);const sc=t.cstr?(e.lv==='cstr'?'st-cstr':''):(t.rvs&&e.lv==='trig'?'st-rev':e.lv==='trig'?'st-trig':e.lv==='appr'||e.lb.includes('ABOVE')?'st-appr':'');
+    const bc=t.cstr?(e.lv==='cstr'?'bg-cstr':'bg-mon'):e.lv==='trig'?'bg-trig':(e.lv==='appr'||e.lb.includes('ABOVE'))?'bg-appr':'bg-mon';
+    let inp='';
+    if(t.bin){const ck=B.binary[t.bin]?'checked':'';
+      const desc=t.id==='supply'?'> 13 mbpd loss or Kharg escalation':t.id==='rigs'?'Rigs flat/up 2 consecutive weeks':'Rerouting / stranding worsened';
+      inp=`<div class="toggle-row"><label class="tgl"><input type="checkbox" ${ck} data-bin="${t.bin}"><span class="tgl-trk"></span></label><span class="tgl-txt">${desc}</span></div>`;
+    } else {
+      const v=B.market[t.mk];let prog;
+      if(t.rvs)prog=Math.max(0,Math.min(100,(t.th/v)*100));else prog=Math.max(0,Math.min(100,(v/t.th)*100));
+      const pc=prog>=100?'var(--c-up)':prog>=95?'var(--c-warn)':'var(--t4)';
+      const tl=t.mk==='curveSpread'?`${t.op} ${t.th}%`:`${t.op} $${fmt(t.th,t.th<10?2:0)}`;
+      inp=`<div class="t-metric"><span class="lbl">${t.mk}</span><span class="val">${t.mk==='curveSpread'?v+'%':'$'+fmt(v)}</span><span class="thr">${tl}</span></div>`+
+        `<div class="prog-wrap"><div class="prog-track"><div class="prog-fill" style="width:${Math.min(prog,100)}%;background:${pc}"></div></div><span class="prog-pct">${prog.toFixed(1)}%</span></div>`;
+      if(t.alt){const gld=B.prices['GLD']||414.70;const gp=Math.min(100,(gld/t.alt.th)*100);const gc=gp>=100?'var(--c-up)':gp>=95?'var(--c-warn)':'var(--t4)';
+        inp+=`<div class="t-metric" style="margin-top:2px"><span class="lbl">GLD</span><span class="val">$${fmt(gld)}</span><span class="thr">> $${fmt(t.alt.th,0)}</span></div>`+
+        `<div class="prog-wrap"><div class="prog-track"><div class="prog-fill" style="width:${gp}%;background:${gc}"></div></div><span class="prog-pct">${gp.toFixed(1)}%</span></div>`;
+      }
+    }
+    // Close log
+    let clH='';if(t.cls){const cd=closeDates(t.id);
+      clH=`<div class="close-log"><div class="cl-head"><span class="cl-count">${cd.length} / ${t.cls}</span><span class="cl-req">closes</span><button class="btn-log-close" data-cl="${t.id}">Log Close</button></div>`;
+      if(cd.length){clH+=`<div class="cl-dates">${cd.map(c=>`${fDate(c.date)}: ${c.value}`).join(' · ')}</div>`}
+      clH+=`</div>`;
+    }
+    // Action reveal
+    const vis=e.lv==='trig'||e.lv==='cstr'||e.lb.includes('ABOVE');
+    const acls=t.cstr?'vis-c':t.rvs?'vis-r':'vis';
+    const alcls=t.cstr?'cst':t.rvs?'rev':'act';
+    const altxt=t.cstr?'CONSTRAINT':t.rvs?'REVERSAL':'ACTION';
+    const exp=B.ui.expanded.includes(t.id);
+    h+=`<div class="t-card ${sc}" data-tid="${t.id}"><div class="t-head"><span class="t-name">${t.nm}</span><span class="t-badge ${bc}">${e.lb}</span></div>`+
+      `${inp}${clH}`+
+      `<div class="t-action ${vis?acls:''}"><span class="ta-label ${alcls}">${altxt}</span><span class="ta-text">${t.act}</span><span class="ta-detail">${t.det}</span></div>`+
+      `<button class="htr-btn" data-htr="${t.id}">${exp?'- Hide':'+ Context'}</button><div class="htr ${exp?'open':''}" id="htr-${t.id}">${t.htr}</div></div>`;
+  });
+  document.getElementById('trigger-grid').innerHTML=h;
+}
+
+function renderJournal(){
+  const filt=B.ui.jFilt||'all';
+  const types=['all','trade','review','trigger','note','setup'];
+  let fh='';types.forEach(t=>{fh+=`<button class="j-filt ${t===filt?'active':''}" data-jf="${t}">${t==='all'?'All':t.charAt(0).toUpperCase()+t.slice(1)}</button>`});
+  document.getElementById('j-filters').innerHTML=fh;
+  const entries=filt==='all'?B.journal:B.journal.filter(e=>e.type===filt);
+  if(!entries.length){document.getElementById('j-list').innerHTML='<div class="j-empty">No entries yet. Use the form above to log trades, reviews, and notes.</div>';return}
+  let eh='';entries.forEach(e=>{eh+=`<div class="j-entry"><span class="j-date">${fDate(e.date)}</span><span class="j-type ${e.type}">${e.type}</span><span class="j-text">${e.text}</span></div>`});
+  document.getElementById('j-list').innerHTML=eh;
+}
+
+/* ========================================================================
+   EVENTS
+   ======================================================================== */
+// Tabs
+document.querySelector('.tab-bar').addEventListener('click',e=>{const b=e.target.closest('.tab-btn');if(!b)return;document.querySelectorAll('.tab-btn,.tab-pane').forEach(el=>el.classList.remove('active'));b.classList.add('active');document.getElementById(b.dataset.tab).classList.add('active');B.ui.tab=b.dataset.tab;save()});
+// Metrics
+document.getElementById('dash').addEventListener('input',e=>{if(e.target.classList.contains('m-inp')){const k=e.target.dataset.k;const v=parseFloat(e.target.value);if(!isNaN(v)){B.market[k]=v;save();renderAll()}}});
+// Inst prices
+document.getElementById('book').addEventListener('input',e=>{if(e.target.classList.contains('p-inp')){const id=e.target.dataset.inst;const v=parseFloat(e.target.value);if(!isNaN(v)){B.prices[id]=v;save();renderAll()}}});
+// Position form open/close
+document.getElementById('book').addEventListener('click',e=>{
+  const ob=e.target.closest('[data-pf]');if(ob&&!e.target.dataset.pfAdd&&!e.target.dataset.pfCancel){const f=document.getElementById('pf-'+ob.dataset.pf);f.classList.toggle('open');return}
+  const ab=e.target.closest('[data-pf-add]');if(ab){const id=ab.dataset.pfAdd;const f=document.getElementById('pf-'+id);const d=f.querySelector('[data-f="date"]').value;const s=f.querySelector('[data-f="shares"]').value;const p=f.querySelector('[data-f="price"]').value;const t=f.querySelector('[data-f="type"]').value;const n=f.querySelector('[data-f="note"]').value;if(s&&p){addPos(id,d||today(),s,p,t,n);f.classList.remove('open')}return}
+  const cb=e.target.closest('[data-pf-cancel]');if(cb){document.getElementById('pf-'+cb.dataset.pfCancel).classList.remove('open');return}
+});
+// Trigger toggles + close logs + context
+document.getElementById('triggers').addEventListener('change',e=>{if(e.target.dataset.bin){B.binary[e.target.dataset.bin]=e.target.checked;const nm=TRIGS.find(t=>t.bin===e.target.dataset.bin)?.nm||'';if(e.target.checked)addJ('trigger',`${nm} toggled ON`);save();renderAll()}});
+document.getElementById('triggers').addEventListener('click',e=>{
+  const cl=e.target.closest('.btn-log-close');if(cl){logClose(cl.dataset.cl);return}
+  const ht=e.target.closest('.htr-btn');if(ht){const id=ht.dataset.htr;const idx=B.ui.expanded.indexOf(id);if(idx>=0)B.ui.expanded.splice(idx,1);else B.ui.expanded.push(id);save();renderAll()}
+});
+// Journal form
+document.getElementById('j-add').addEventListener('click',()=>{
+  const t=document.getElementById('j-type').value;const d=document.getElementById('j-date').value||today();const n=document.getElementById('j-note').value.trim();
+  if(!n)return;B.journal.unshift({id:Date.now(),date:d,type:t,text:n});save();document.getElementById('j-note').value='';renderJournal()});
+document.getElementById('j-note').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.getElementById('j-add').click()}});
+// Journal filters
+document.getElementById('journal').addEventListener('click',e=>{const f=e.target.closest('.j-filt');if(f){B.ui.jFilt=f.dataset.jf;save();renderJournal()}});
+// Export / Import / Reset
+document.getElementById('btn-export').addEventListener('click',exportBook);
+/* WHY: allorigins.win proxies Yahoo Finance v7 spark API, which provides real-time
+   quotes for stocks, ETFs, and commodity futures — no API key needed. This makes
+   the book genuinely active: one click updates all 20+ instruments. */
+document.getElementById('btn-fetch').addEventListener('click',async()=>{
+  const btn=document.getElementById('btn-fetch');btn.textContent='Fetching...';btn.disabled=true;
+  try{
+    const syms=['BZ=F','CL=F','GC=F','XOP','XLE','IXC','GLD','VXUS','STIP','SGOV','CF','NTR','OXY','FANG','HAL','SLB','RIG','STNG','FRO','GDX','OIH'].join(',');
+    const yUrl=`https://query2.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(syms)}&range=1d&interval=1d`;
+    const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(yUrl)}`);
+    const d=JSON.parse((await r.json()).contents);
+    const map={'BZ=F':'brent','CL=F':'wti'};const goldKey='GC=F';
+    d.spark.result.forEach(item=>{
+      const s=item.symbol;const p=item.response[0]?.meta?.regularMarketPrice;if(!p)return;
+      if(map[s])B.market[map[s]]=+p.toFixed(2);
+      else if(s===goldKey)B.market.goldSpot=+p.toFixed(0);
+      else if(B.prices[s]!==undefined)B.prices[s]=+p.toFixed(2);
+    });
+    B.market.lastFetch=new Date().toISOString();
+    addJ('note',`Live fetch: Brent $${B.market.brent}, Gold $${B.market.goldSpot}, XOP $${B.prices.XOP}, CF $${B.prices.CF}`);
+    save();renderAll();
+    btn.textContent='Fetched';setTimeout(()=>{btn.textContent='Fetch Live';btn.disabled=false},2000);
+  }catch(e){btn.textContent='Failed';setTimeout(()=>{btn.textContent='Fetch Live';btn.disabled=false},2000);console.error('Fetch error:',e)}
+});
+document.getElementById('btn-import').addEventListener('change',e=>{if(e.target.files[0])importBook(e.target.files[0])});
+document.getElementById('btn-reset').addEventListener('click',resetBook);
+
+/* ========================================================================
+   INIT
+   ======================================================================== */
+load();
+document.getElementById('j-date').value=today();
+// Restore tab
+if(B.ui.tab){const tb=document.querySelector(`.tab-btn[data-tab="${B.ui.tab}"]`);if(tb){document.querySelectorAll('.tab-btn,.tab-pane').forEach(el=>el.classList.remove('active'));tb.classList.add('active');document.getElementById(B.ui.tab).classList.add('active')}}
+renderAll();
+</script>
+</body>
+</html>

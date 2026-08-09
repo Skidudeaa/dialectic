@@ -1,0 +1,173 @@
+{
+  "v": 2,
+  "timestamp": "2026-08-09T07:30:10Z",
+  "title": "China Property + EM Cascade — April 2026",
+  "nodeStates": {
+    "property-sales": "fired",
+    "pboc-response": "monitoring",
+    "fiscal-stimulus": "monitoring",
+    "fed-reaction": "monitoring",
+    "property-bottom": "stable",
+    "developer-tail": "fired",
+    "lgfv-default": "monitoring",
+    "bank-capital": "fired",
+    "cny-break": "stable",
+    "china-imports": "stable",
+    "dxy-stress": "stable",
+    "iron-copper": "fired",
+    "aud-cad-weak": "fired",
+    "em-currency": "fired",
+    "em-stress": "fired",
+    "recession-risk": "fired"
+  },
+  "confluenceScores": {
+    "bank-capital": 0.9,
+    "cny-break": 1.05,
+    "em-currency": 0.75,
+    "em-stress": 2.05,
+    "recession-risk": 1.35
+  },
+  "cascadePhase": {
+    "number": 1,
+    "key": "shock",
+    "status": "STARTING"
+  },
+  "countdowns": [],
+  "marketSnapshot": {
+    "usdCny": 7.34,
+    "audUsd": 0.66,
+    "fcxPrice": 42.0,
+    "valePrice": 11.5,
+    "propYoY": -6.8,
+    "bankT1": 11.5,
+    "dxy": 104.5
+  },
+  "scenarioImpacts": {
+    "managed-deleveraging": {
+      "probability": 0.45,
+      "netImpact": 2.5
+    },
+    "second-lgfv-wave": {
+      "probability": 0.3,
+      "netImpact": 4.2
+    },
+    "cny-break-flight": {
+      "probability": 0.15,
+      "netImpact": 0.8
+    },
+    "fiscal-bazooka": {
+      "probability": 0.1,
+      "netImpact": 0.6
+    }
+  },
+  "feedFreshness": {
+    "yahoo": {
+      "source": "yahoo",
+      "fetchedAt": "2026-08-09T07:30:09Z",
+      "ttlSeconds": 300,
+      "detail": "28/30 symbols"
+    },
+    "derived": {
+      "source": "derived",
+      "fetchedAt": "2026-08-09T07:30:10Z",
+      "ttlSeconds": 86400,
+      "detail": "2 node(s)"
+    }
+  },
+  "portfolioSummary": {
+    "monthlyBudget": 9000,
+    "topPositions": [
+      "JJC $1200/mo",
+      "TLT $1000/mo",
+      "EEM $900/mo",
+      "SCCO $800/mo",
+      "VALE $800/mo",
+      "GLD $800/mo"
+    ],
+    "sgovAvailable": 800
+  },
+  "horizonTrace": {
+    "T+7d": {
+      "states": {
+        "lgfv-default": "monitoring",
+        "property-sales": "fired",
+        "developer-tail": "monitoring",
+        "bank-capital": "fired",
+        "cny-break": "stable",
+        "china-imports": "monitoring",
+        "iron-copper": "fired",
+        "aud-cad-weak": "monitoring",
+        "dxy-stress": "monitoring",
+        "em-currency": "monitoring",
+        "em-stress": "monitoring",
+        "recession-risk": "monitoring",
+        "pboc-response": "monitoring",
+        "fiscal-stimulus": "monitoring",
+        "fed-reaction": "monitoring",
+        "property-bottom": "stable"
+      },
+      "confluence": {}
+    },
+    "T+28d": {
+      "states": {
+        "lgfv-default": "monitoring",
+        "property-sales": "fired",
+        "developer-tail": "monitoring",
+        "bank-capital": "fired",
+        "cny-break": "stable",
+        "china-imports": "monitoring",
+        "iron-copper": "fired",
+        "dxy-stress": "monitoring",
+        "em-currency": "monitoring",
+        "em-stress": "monitoring",
+        "recession-risk": "monitoring",
+        "pboc-response": "monitoring",
+        "fiscal-stimulus": "monitoring",
+        "fed-reaction": "monitoring",
+        "property-bottom": "stable",
+        "aud-cad-weak": "fired"
+      },
+      "confluence": {}
+    },
+    "T+90d": {
+      "states": {
+        "property-sales": "fired",
+        "iron-copper": "fired",
+        "pboc-response": "monitoring",
+        "fiscal-stimulus": "monitoring",
+        "fed-reaction": "monitoring",
+        "property-bottom": "stable",
+        "developer-tail": "fired",
+        "lgfv-default": "monitoring",
+        "aud-cad-weak": "fired",
+        "bank-capital": "fired",
+        "cny-break": "stable",
+        "recession-risk": "fired",
+        "china-imports": "stable",
+        "dxy-stress": "stable",
+        "em-currency": "fired",
+        "em-stress": "fired"
+      },
+      "confluence": {
+        "bank-capital": 0.9,
+        "cny-break": 1.05,
+        "em-currency": 0.75,
+        "em-stress": 2.05
+      }
+    }
+  },
+  "tvIndicators": {
+    "cny-break": {
+      "rsi14": 32.35,
+      "sma50": 6.77,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-08-09T07:30:10Z"
+    },
+    "iron-copper": {
+      "rsi14": 63.31,
+      "atr14": 2.85,
+      "source": "derived_from_yahoo",
+      "computedAt": "2026-08-09T07:30:10Z"
+    }
+  }
+}
