@@ -229,7 +229,7 @@ class TestFailureIsNeverAnException:
     @pytest.mark.asyncio
     async def test_unknown_tool_becomes_is_error_and_loop_continues(self, registry):
         router = FakeRouter(results=[
-            ok(tool_use_response([("draft_prediction", {"x": 1})])),
+            ok(tool_use_response([("nonexistent_tool", {"x": 1})])),
             ok(text_response("I do not have that tool")),
         ])
         result = await ToolLoop(router, registry).run(make_request())

@@ -296,6 +296,12 @@ class LLMOrchestrator:
             use_provoker=decision.use_provoker, protocol=protocol,
         )
 
+        # Same gate as the streaming path: provoker/protocol turns stay plain,
+        # and DIALECTIC_TOOLS_ENABLED can pull the whole feature in one restart.
+        registry = self._tool_registry_for(
+            room, use_provoker=decision.use_provoker, protocol=protocol,
+        )
+
         prompt = self.prompt_builder.build(
             room=room,
             users=users,
@@ -307,6 +313,7 @@ class LLMOrchestrator:
             evolved_identity=evolved_identity,
             user_models=user_models,
             self_awareness=self_awareness_section,
+            tools_enabled=registry is not None,
             message_images=message_images,
         )
 
@@ -318,7 +325,24 @@ class LLMOrchestrator:
             model=room.provoker_model if decision.use_provoker else room.primary_model,
         )
 
-        routing = await router.route(request)
+        tool_metadata: Optional[dict] = None
+        if registry is not None:
+            labels = registry.labels()
+            loop_result = await ToolLoop(router, registry).run(request)
+            routing = loop_result.routing
+            if loop_result.tool_trace:
+                tool_metadata = {"tools": {
+                    "iterations": loop_result.iterations,
+                    "degraded": loop_result.degraded,
+                    # Stamp the human-facing label at write time, same as the
+                    # streaming path — tools.py stays the one source.
+                    "calls": [
+                        {**entry, "label": labels.get(entry.get("name"), "")}
+                        for entry in loop_result.tool_trace
+                    ],
+                }}
+        else:
+            routing = await router.route(request)
 
         if not routing.success:
             error_message = await self._emit_system_error(thread, routing)
@@ -346,6 +370,7 @@ class LLMOrchestrator:
             prompt_hash=routing.prompt_hash,
             token_count=routing.response.input_tokens + routing.response.output_tokens,
             protocol=protocol,
+            metadata=tool_metadata,
         )
 
         # Fire-and-forget: extract LLM self-memories in background
@@ -368,6 +393,7 @@ class LLMOrchestrator:
             message_count=len(messages),
             response_message_id=response_message.id,
             mode=mode,
+            tool_calls=tool_metadata["tools"]["calls"] if tool_metadata else None,
         )
 
         # Schedule effectiveness measurement (~30s later)
@@ -396,9 +422,17 @@ class LLMOrchestrator:
         memories: list[Memory],
         use_provoker: bool = False,
         protocol: Optional[ProtocolState] = None,
+        reason: Optional[str] = None,
     ) -> OrchestrationResult:
-        """Force LLM response regardless of heuristics."""
-        reason = "protocol_active" if protocol else "forced"
+        """Force LLM response regardless of heuristics.
+
+        `reason` overrides the decision's recorded why (default keeps the
+        historic "protocol_active"/"forced"); the participation sweep uses it
+        to mark follow-ups it triggered itself. Tools are deliberately NOT
+        wired here — the gate in _tool_registry_for excludes every mode that
+        calls this path, so there is nothing to route through a loop.
+        """
+        reason = reason or ("protocol_active" if protocol else "forced")
         decision = InterjectionDecision(
             should_interject=True,
             reason=reason,
@@ -422,6 +456,16 @@ class LLMOrchestrator:
             thread.room_id, users
         )
 
+        # Fetch self-awareness context (the LLM's own participation state) —
+        # a forced turn is still a turn the LLM should know itself inside of.
+        self_awareness_section = None
+        try:
+            snapshot = await self._self_model.get_participation_snapshot(room.id)
+            if snapshot:
+                self_awareness_section = self._self_model.render_self_awareness(snapshot)
+        except Exception as e:
+            logger.debug("Self-awareness context unavailable: %s", e)
+
         message_images = await self._load_message_images(
             thread.room_id, truncated_messages,
             use_provoker=use_provoker, protocol=protocol,
@@ -437,6 +481,7 @@ class LLMOrchestrator:
             protocol=protocol,
             evolved_identity=evolved_identity,
             user_models=user_models,
+            self_awareness=self_awareness_section,
             message_images=message_images,
         )
 
@@ -479,6 +524,32 @@ class LLMOrchestrator:
 
         # Fire-and-forget: extract LLM self-memories in background
         self._schedule_self_memory_extraction(response_message, thread.room_id, messages)
+
+        # WHY: A forced turn was previously invisible to the self-model — the
+        # LLM spoke but never logged having spoken, so its participation
+        # state (and the sweep's follow-up bookkeeping) drifted from reality.
+        triggered_msg = next(
+            (m for m in reversed(messages) if m.speaker_type == SpeakerType.HUMAN),
+            None,
+        )
+        mode = "provoker" if use_provoker else ("protocol" if protocol else "primary")
+        decision_id = await self._self_model.log_decision(
+            room_id=room.id,
+            thread_id=thread.id,
+            triggered_by_message_id=triggered_msg.id if triggered_msg else None,
+            decision=decision,
+            message_count=len(messages),
+            response_message_id=response_message.id,
+            mode=mode,
+        )
+
+        # Schedule effectiveness measurement (~30s later)
+        if decision_id:
+            self._schedule_effectiveness_measurement(
+                room_id=room.id,
+                llm_message_id=response_message.id,
+                decision_id=decision_id,
+            )
 
         return OrchestrationResult(
             triggered=True,

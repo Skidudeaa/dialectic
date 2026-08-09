@@ -98,6 +98,7 @@ class SelfModel:
         message_count: Optional[int] = None,
         response_message_id: Optional[UUID] = None,
         mode: str = "silence",
+        tool_calls: Optional[list[dict]] = None,
     ) -> Optional[int]:
         """
         Persist a decision to the llm_decisions log.
@@ -108,6 +109,7 @@ class SelfModel:
         try:
             import json
             balance_json = json.dumps(speaker_balance) if speaker_balance else None
+            tool_calls_json = json.dumps(tool_calls) if tool_calls else None
             considered = decision.considered_reasons if hasattr(decision, 'considered_reasons') else []
 
             row = await self.db.fetchrow(
@@ -116,15 +118,15 @@ class SelfModel:
                     should_interject, reason, confidence, use_provoker,
                     considered_reasons, human_turn_count, semantic_novelty,
                     unsurfaced_memory_count, speaker_balance, message_count_in_thread,
-                    response_message_id, mode)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                    response_message_id, mode, tool_calls)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
                    RETURNING id""",
                 room_id, thread_id, triggered_by_message_id,
                 decision.should_interject, decision.reason, decision.confidence,
                 decision.use_provoker, considered, human_turn_count,
                 semantic_novelty, unsurfaced_memory_count,
                 balance_json, message_count,
-                response_message_id, mode,
+                response_message_id, mode, tool_calls_json,
             )
             decision_id = row["id"] if row else None
 

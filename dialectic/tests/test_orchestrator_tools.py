@@ -15,11 +15,20 @@ import pytest
 
 import llm.orchestrator as orchestrator_mod
 import operations as operations_mod
+from llm.heuristics import InterjectionDecision
 from llm.orchestrator import LLMOrchestrator
 from llm.prompts import AssembledPrompt
 from llm.tools import Tool, ToolRegistry
 from models import Message, MessageType, SpeakerType
 from tests.conftest import make_room, make_thread
+# The non-streaming loop path is exercised with the ToolLoop-layer router
+# fixture (scripted route() calls), not the streaming one defined below.
+from tests.test_tool_loop import (
+    FakeRouter as LoopRouter,
+    ok as loop_ok,
+    text_response,
+    tool_use_response,
+)
 from transport.handlers import MessageHandler
 from transport.websocket import Connection, MessageTypes
 
@@ -126,6 +135,26 @@ async def run_stream(orch, thread, use_provoker=False):
     ]
 
 
+# ── on_message (non-streaming) helpers ───────────────────────────────
+
+
+def interject(use_provoker=False):
+    return InterjectionDecision(
+        should_interject=True, reason="mentioned", confidence=1.0,
+        use_provoker=use_provoker,
+    )
+
+
+async def run_on_message(orch, thread, use_provoker=False, protocol=None):
+    """Drive on_message with heuristics pinned to 'speak' so the only
+    variable under test is the tool wiring."""
+    orch.heuristics.decide = MagicMock(return_value=interject(use_provoker))
+    return await orch.on_message(
+        room=make_room(), thread=thread, users=[], messages=[], memories=[],
+        mentioned=True, protocol=protocol,
+    )
+
+
 # ── which turns get tools ────────────────────────────────────────────
 
 
@@ -202,6 +231,67 @@ class TestToolGate:
 
         assert router.stream_calls == 1
         assert router.stream_event_calls == 0
+
+    # ── on_message: the same gate on the non-streaming path ─────────
+
+    @pytest.mark.asyncio
+    async def test_on_message_primary_turn_routes_through_the_tool_loop(self, monkeypatch):
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = LoopRouter(results=[loop_ok(text_response("thinking out loud"))])
+        orch = make_orchestrator(router, monkeypatch)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+
+        await run_on_message(orch, thread)
+
+        assert len(router.requests) == 1
+        assert router.requests[0].tools is not None
+        assert orch.prompt_builder.build.call_args.kwargs["tools_enabled"] is True
+
+    @pytest.mark.asyncio
+    async def test_on_message_provoker_turn_stays_plain(self, monkeypatch):
+        """The gate is mode-based, not path-based: provoker heuristics still
+        get no tools when the turn comes through on_message."""
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = LoopRouter(results=[loop_ok(text_response("a quick jab"))])
+        orch = make_orchestrator(router, monkeypatch)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+
+        await run_on_message(orch, thread, use_provoker=True)
+
+        assert len(router.requests) == 1
+        assert router.requests[0].tools is None
+        assert orch.prompt_builder.build.call_args.kwargs["tools_enabled"] is False
+
+    @pytest.mark.asyncio
+    async def test_on_message_protocol_turn_stays_plain(self, monkeypatch):
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = LoopRouter(results=[loop_ok(text_response("phase one opens"))])
+        orch = make_orchestrator(router, monkeypatch)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        protocol = SimpleNamespace(id=uuid4(), current_phase=1)
+
+        await run_on_message(orch, thread, protocol=protocol)
+
+        assert len(router.requests) == 1
+        assert router.requests[0].tools is None
+        assert orch.prompt_builder.build.call_args.kwargs["tools_enabled"] is False
+
+    @pytest.mark.asyncio
+    async def test_on_message_kill_switch_takes_the_plain_path(self, monkeypatch):
+        monkeypatch.setenv("DIALECTIC_TOOLS_ENABLED", "off")
+        thread = make_thread()
+        router = LoopRouter(results=[loop_ok(text_response("plain answer"))])
+        orch = make_orchestrator(router, monkeypatch)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+
+        await run_on_message(orch, thread)
+
+        assert len(router.requests) == 1
+        assert router.requests[0].tools is None
+        assert orch.prompt_builder.build.call_args.kwargs["tools_enabled"] is False
 
 
 # ── events and trace ─────────────────────────────────────────────────
@@ -395,6 +485,59 @@ class TestTracePersistence:
         assert recorded["args"][-1] is None
 
 
+class TestNonStreamingTracePersistence:
+    """on_message must persist the same trace shape the streaming path does,
+    and hand it to the self-model's decision log."""
+
+    @pytest.mark.asyncio
+    async def test_trace_is_persisted_and_logged_with_the_decision(self, monkeypatch):
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = LoopRouter(results=[
+            loop_ok(tool_use_response([("get_live_quotes", {"symbol": "XOP"})],
+                                      text="let me look")),
+            loop_ok(text_response("XOP is 41.2")),
+        ])
+        orch = make_orchestrator(router, monkeypatch)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        orch._self_model.log_decision = AsyncMock(return_value=42)
+
+        result = await run_on_message(orch, thread)
+
+        metadata = orch._persist_response.call_args.kwargs["metadata"]
+        assert set(metadata) == {"tools"}
+        tools = metadata["tools"]
+        assert tools["iterations"] == 2
+        assert tools["degraded"] is False
+        assert len(tools["calls"]) == 1
+        call = tools["calls"][0]
+        assert call["name"] == "get_live_quotes"
+        assert call["ok"] is True
+        assert call["input"] == {"symbol": "XOP"}
+        assert call["label"] == "checking live prices"
+        assert isinstance(call["latency_ms"], int)
+
+        # The self-model sees the same label-stamped trace on the decision row.
+        assert orch._self_model.log_decision.call_args.kwargs["tool_calls"] == tools["calls"]
+        assert result.routing.response.content == "XOP is 41.2"
+
+    @pytest.mark.asyncio
+    async def test_no_metadata_and_no_tool_calls_when_no_tool_ran(self, monkeypatch):
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = LoopRouter(results=[loop_ok(text_response("no check needed"))])
+        orch = make_orchestrator(router, monkeypatch)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        orch._self_model.log_decision = AsyncMock(return_value=42)
+
+        await run_on_message(orch, thread)
+
+        # The loop ran (tools were offered) but the model never asked for one.
+        assert router.requests[0].tools is not None
+        assert orch._persist_response.call_args.kwargs["metadata"] is None
+        assert orch._self_model.log_decision.call_args.kwargs["tool_calls"] is None
+
+
 # ── transport forwarding ─────────────────────────────────────────────
 
 
@@ -548,3 +691,53 @@ class TestMentionCallSiteForwarding:
             MessageTypes.LLM_DONE,
         ]
         assert connections.broadcasts[-1].payload["metadata"] == TRACE
+
+
+# ── force_response: self-aware + logged, no tools ────────────────────
+
+
+class TestForceResponseSelfModel:
+    """The sweep (W6) calls force_response for its follow-ups, so a forced
+    turn must know itself and land in the decision log — but the gate still
+    keeps tools off every mode that comes through here."""
+
+    @pytest.mark.asyncio
+    async def test_forced_turn_is_self_aware_and_logged(self, monkeypatch):
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = LoopRouter(results=[loop_ok(text_response("following up"))])
+        orch = make_orchestrator(router, monkeypatch)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        orch._self_model.get_participation_snapshot = AsyncMock(return_value=object())
+        orch._self_model.render_self_awareness = MagicMock(
+            return_value="YOU HAVE SPOKEN 3 TIMES")
+        orch._self_model.log_decision = AsyncMock(return_value=7)
+
+        result = await orch.force_response(
+            room=make_room(), thread=thread, users=[], messages=[], memories=[],
+            reason="silence_follow_up",
+        )
+
+        assert result.decision.reason == "silence_follow_up"
+        build_kwargs = orch.prompt_builder.build.call_args.kwargs
+        assert build_kwargs["self_awareness"] == "YOU HAVE SPOKEN 3 TIMES"
+        log_kwargs = orch._self_model.log_decision.call_args.kwargs
+        assert log_kwargs["decision"].reason == "silence_follow_up"
+        assert log_kwargs["mode"] == "primary"
+        assert log_kwargs["response_message_id"] == result.response.id
+        # No tools on this path — the request went out plain.
+        assert router.requests[0].tools is None
+
+    @pytest.mark.asyncio
+    async def test_reason_defaults_to_forced(self, monkeypatch):
+        thread = make_thread()
+        router = LoopRouter(results=[loop_ok(text_response("you rang?"))])
+        orch = make_orchestrator(router, monkeypatch)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        orch._self_model.log_decision = AsyncMock(return_value=None)
+
+        result = await orch.force_response(
+            room=make_room(), thread=thread, users=[], messages=[], memories=[],
+        )
+
+        assert result.decision.reason == "forced"
