@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-08-09T06:31:01Z",
+  "timestamp": "2026-08-09T08:01:00Z",
   "title": "Iran/Hormuz Thesis — June 2026",
   "nodeStates": {
     "hormuz": "fired",
@@ -71,19 +71,19 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-08-09T06:30:14Z",
+      "fetchedAt": "2026-08-09T08:00:15Z",
       "ttlSeconds": 300,
       "detail": "12/21 symbols"
     },
     "treasury": {
       "source": "treasury",
-      "fetchedAt": "2026-08-09T06:30:24Z",
+      "fetchedAt": "2026-08-09T08:00:25Z",
       "ttlSeconds": 172800,
       "detail": "curve 2026-08-07"
     },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-08-09T06:31:01Z",
+      "fetchedAt": "2026-08-09T08:01:00Z",
       "ttlSeconds": 86400,
       "detail": "4 node(s)"
     }
@@ -186,22 +186,22 @@
         "back": 79.99
       },
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T06:31:01Z"
+      "computedAt": "2026-08-09T08:01:00Z"
     },
     "food-spike": {
       "rsi14": 48.61,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T06:31:01Z"
+      "computedAt": "2026-08-09T08:01:00Z"
     },
     "dxy-stress": {
       "rsi14": 36.56,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T06:31:01Z"
+      "computedAt": "2026-08-09T08:01:00Z"
     },
     "demand-destruction": {
       "rsi14": 46.59,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T06:31:01Z"
+      "computedAt": "2026-08-09T08:01:00Z"
     }
   }
 }
