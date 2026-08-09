@@ -101,8 +101,11 @@ async def trading_reconcile(ctx: SchedulerContext) -> dict:
 
             # Self-ingest through the real endpoint so ALL receipt semantics
             # (memory upsert, event, broadcast, curator gating) apply.
+            # ?source=reconcile: a 15-min-old repair is not an event — the
+            # ingest path suppresses the curator for reconcile pulls even if
+            # the payload ever starts carrying alertEvents (defence in depth).
             ingest = await client.post(
-                f"{SELF_URL}/rooms/{room['id']}/trading/snapshot",
+                f"{SELF_URL}/rooms/{room['id']}/trading/snapshot?source=reconcile",
                 headers={"X-Room-Token": room["token"]},
                 json=snapshot,
             )

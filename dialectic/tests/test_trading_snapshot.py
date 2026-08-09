@@ -133,29 +133,77 @@ class TestTradingSnapshotValidation:
         assert snap.title is None
 
     def test_v2_accepted_at_model_layer(self):
-        """v=2 is the current shape (added tvIndicators overlay block).
-        Both v=1 and v=2 must validate; only other values fail."""
+        """v=2 added the tvIndicators overlay block."""
         data = make_snapshot(v=2)
         snap = TradingSnapshotRequest(**data)
         assert snap.v == 2
 
-    def test_v3_rejected_at_model_layer(self):
-        """v=3 (or any unknown future value) should fail Literal[1, 2] validation."""
+    def test_v3_accepted_at_model_layer(self):
+        """v=3 is the coordinator push shape (adds alertEvents + identity)."""
         data = make_snapshot(v=3)
+        snap = TradingSnapshotRequest(**data)
+        assert snap.v == 3
+
+    def test_v4_rejected_at_model_layer(self):
+        """Any unknown future value should fail Literal[1, 2, 3] validation."""
+        data = make_snapshot(v=4)
         with pytest.raises(ValidationError) as exc_info:
             TradingSnapshotRequest(**data)
         assert "v" in str(exc_info.value).lower() or "literal" in str(exc_info.value).lower()
 
 
+class TestV3Fields:
+    """v3 is additive — v1/v2 bodies must validate byte-identically."""
+
+    def test_alert_events_parsed(self):
+        events = [
+            {"event_type": "node.state_changed", "severity": "critical",
+             "node_id": "hormuz_closure", "old_value": "approaching",
+             "new_value": "fired"},
+        ]
+        snap = TradingSnapshotRequest(**make_snapshot(v=3, alertEvents=events))
+        assert snap.alertEvents == events
+
+    def test_identity_fields_parsed(self):
+        snap = TradingSnapshotRequest(**make_snapshot(
+            v=3, thesisId="iran-hormuz-graph", revision=4211,
+            generatedAt="2026-08-09T05:07:15.775368+00:00",
+        ))
+        assert snap.thesisId == "iran-hormuz-graph"
+        assert snap.revision == 4211
+        assert snap.generatedAt == "2026-08-09T05:07:15.775368+00:00"
+
+    def test_v3_without_alert_events_defaults_to_empty_list(self):
+        snap = TradingSnapshotRequest(**make_snapshot(v=3))
+        assert snap.alertEvents == []
+
+    def test_v1_body_still_has_no_identity_fields(self):
+        """A v1 payload must not silently acquire v3 semantics."""
+        snap = TradingSnapshotRequest(**make_snapshot(v=1))
+        assert snap.alertEvents == []
+        assert snap.thesisId is None
+        assert snap.revision is None
+        assert snap.generatedAt is None
+
+    def test_v2_dump_is_unchanged_apart_from_the_new_optional_keys(self):
+        """Regression guard: adding v3 fields must not alter any v2 value."""
+        data = make_snapshot(v=2)
+        dumped = TradingSnapshotRequest(**data).model_dump()
+        for key, value in data.items():
+            assert dumped[key] == value
+
+
 class TestSnapshotEndpointVersioning:
-    """Endpoint-level test that v not in {1, 2} returns HTTP 400 with spec message.
+    """Endpoint-level test that v not in {1, 2, 3} returns HTTP 400.
 
     NOTE: Uses a thin TestClient that monkeypatches verify_room_token + db so
-    no live Postgres is required.
+    no live Postgres is required. The stub db has no fetchrow, so anything
+    that gets PAST the version check fails loudly — which is what makes this
+    a real check of where the rejection happens.
     """
 
-    def test_v3_returns_400_from_endpoint(self):
-        """Unknown future version → 400 with the 'expected 1 or 2' message."""
+    def test_v4_returns_400_from_endpoint(self):
+        """Unknown future version → 400 with the 'expected 1, 2 or 3' message."""
         from fastapi.testclient import TestClient
         import api.main as main_mod
 
@@ -171,7 +219,7 @@ class TestSnapshotEndpointVersioning:
 
         try:
             client = TestClient(app)
-            payload = make_snapshot(v=3)
+            payload = make_snapshot(v=4)
             response = client.post(
                 "/rooms/00000000-0000-0000-0000-000000000001/trading/snapshot",
                 json=payload,
@@ -180,7 +228,7 @@ class TestSnapshotEndpointVersioning:
             assert response.status_code == 400
             body = response.json()
             assert "Unsupported snapshot version" in body["detail"]
-            assert "expected 1 or 2" in body["detail"]
+            assert "expected 1, 2 or 3" in body["detail"]
         finally:
             app.dependency_overrides.clear()
 

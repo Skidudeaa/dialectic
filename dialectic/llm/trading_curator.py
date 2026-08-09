@@ -96,25 +96,72 @@ class TradingCuratorEngine:
         )
         return count > 0
 
+    async def count_today(self, room_id: UUID) -> int:
+        """Curator messages posted into this room so far today (UTC).
+
+        WHY UTC-day rather than a rolling 24h window: the cap exists so a
+        thrashing thesis cannot turn the room into a firehose, and a day
+        boundary is something a human can reason about ("it has used 6 of
+        its 8"). A rolling window would make the same room silent at
+        unpredictable times.
+        """
+        start_of_day = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0,
+        )
+        count = await self.db.fetchval(
+            """SELECT COUNT(*) FROM messages m
+               JOIN threads t ON m.thread_id = t.id
+               WHERE t.room_id = $1
+               AND m.speaker_type = $2
+               AND m.created_at >= $3
+               AND m.metadata->>'source' = 'trading_curator'""",
+            room_id,
+            SpeakerType.LLM_ANNOTATOR.value,
+            start_of_day,
+        )
+        return count or 0
+
     async def generate_alert(
         self,
         room_id: UUID,
         thread_id: UUID,
         snapshot: dict,
+        *,
+        dedup_window_minutes: int = 5,
+        daily_cap: Optional[int] = None,
     ) -> Optional[Message]:
         """
         Generate a trading curator alert if conditions are met.
 
         ARCHITECTURE: Uses cheap LLM (Haiku) with curator identity to produce
         a brief alert. Returns None if no alert is needed (everyone online,
-        or duplicate within window).
+        duplicate within window, or the room's daily budget is spent).
         WHY: Alerts should be fast and inexpensive — one paragraph, not an essay.
         TRADEOFF: Haiku quality vs cost; alerts are supplementary, not core.
+
+        `dedup_window_minutes` is parameterized because severity should set
+        it: a critical event repeating within 5 minutes is genuinely new
+        information, a warning repeating within 5 minutes is noise. The
+        caller (api/trading_ingest) picks the window from the payload's
+        highest severity.
+
+        `daily_cap` — when given, refuse once the room has already had that
+        many curator messages today. Callers pass None for events that must
+        never be suppressed by budget.
         """
         if not await self.should_alert(room_id):
             return None
 
-        if await self.is_duplicate(room_id, thread_id):
+        if await self.is_duplicate(
+            room_id, thread_id, window_minutes=dedup_window_minutes,
+        ):
+            return None
+
+        if daily_cap is not None and await self.count_today(room_id) >= daily_cap:
+            logger.info(
+                "Trading curator daily cap (%d) reached for room %s — skipping",
+                daily_cap, room_id,
+            )
             return None
 
         # Build snapshot summary for prompt context

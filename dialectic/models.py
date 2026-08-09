@@ -479,12 +479,15 @@ class TradingSnapshotRequest(BaseModel):
     WHY: Bridges the Trading Desk's cascade/confluence engine into Dialectic rooms.
     TRADEOFF: Stores full node state per snapshot vs deltas — simpler, larger payload.
     """
-    # WHY Literal[1, 2]: v=1 is the original snapshot shape per INTEGRATION.md;
-    # v=2 added the non-causal `tvIndicators` overlay block (RSI/ATR/SMA from
-    # tradingDesk's TradingView integration) without changing any v=1 field.
-    # Dialectic stores the whole payload as JSONB so v=2 doesn't need new
-    # handling — just accept it. Reject any other value loudly.
-    v: Literal[1, 2]
+    # WHY Literal[1, 2, 3]: v=1 is the original snapshot shape per
+    # INTEGRATION.md; v=2 added the non-causal `tvIndicators` overlay block
+    # (RSI/ATR/SMA from tradingDesk's TradingView integration) without
+    # changing any v=1 field; v=3 added `alertEvents` plus the producing
+    # cycle's identity (thesisId / revision / generatedAt), again without
+    # touching an earlier field. Every added field is Optional with a
+    # default, so a v=1 or v=2 body validates exactly as it did before.
+    # Reject any other value loudly.
+    v: Literal[1, 2, 3]
     timestamp: str
     title: Optional[str] = None
     nodeStates: dict[str, str]
@@ -495,6 +498,17 @@ class TradingSnapshotRequest(BaseModel):
     scenarioImpacts: Optional[dict] = None
     portfolioSummary: Optional[dict] = None
     tvIndicators: Optional[dict] = None  # v=2 non-causal indicator overlays
+
+    # ── v=3 ──────────────────────────────────────────────────────────
+    # WHY alertEvents defaults to [] but is distinguished from "absent":
+    # an EMPTY list on a v3 payload is a positive statement — "this cycle
+    # changed nothing" — and gates the curator OFF. A v1/v2 payload makes no
+    # such statement, so it keeps the legacy every-receipt behavior. The
+    # ingest path tells them apart by version, not by emptiness.
+    alertEvents: list[dict] = Field(default_factory=list)
+    thesisId: Optional[str] = None
+    revision: Optional[int] = None
+    generatedAt: Optional[str] = None
 
     @model_validator(mode="after")
     def sanitize_and_validate(self) -> "TradingSnapshotRequest":

@@ -489,6 +489,7 @@ class RoomSettingsResponse(BaseModel):
 
 
 from api.trading import TradingSnapshotResponse, format_thesis_summary
+from api.trading_ingest import ingest_snapshot
 from llm.trading_curator import TradingCuratorEngine
 
 
@@ -1225,19 +1226,29 @@ async def search_memories(
 async def receive_trading_snapshot(
     room_id: UUID,
     raw_request: Request,
+    source: Optional[str] = Query(
+        None,
+        description="'reconcile' marks a repair read — stored, but no alerts.",
+    ),
     token: str = Depends(extract_room_token),
     db=Depends(get_db),
 ):
     """
     Accept a thesis graph snapshot from the trading desk bridge.
 
-    ARCHITECTURE: Stores raw JSON in rooms.trading_config, formatted summary
-    as a room-scoped memory (upsert by stable key), logs event, broadcasts.
+    ARCHITECTURE: Auth, body parse and version validation live here; every
+    receipt side-effect lives in api/trading_ingest.ingest_snapshot so the
+    scheduler and the tests can drive the same semantics without HTTP.
     WHY: Bridges Trading Desk cascade/confluence state into Dialectic rooms.
     TRADEOFF: Full snapshot per push (larger payload) vs deltas (complex diffing).
 
-    SCHEMA VERSIONING: The `v` field is pinned to Literal[1, 2]. Other values
-    fail fast with HTTP 400 — schema drift surfaces loudly, not silently.
+    SCHEMA VERSIONING: The `v` field is pinned to Literal[1, 2, 3]. Other
+    values fail fast with HTTP 400 — schema drift surfaces loudly, not
+    silently.
+
+    ?source=reconcile suppresses the curator and the critical web push. The
+    scheduler's repair job re-reads a snapshot the room may already hold;
+    re-announcing it would page a human about old news.
     """
     # Parse body manually so we can return a clean 400 on version drift
     # before Pydantic raises a generic 422 ValidationError.
@@ -1250,10 +1261,10 @@ async def receive_trading_snapshot(
         raise HTTPException(status_code=400, detail="Body must be a JSON object")
 
     body_v = body.get("v")
-    if body_v not in (1, 2):
+    if body_v not in (1, 2, 3):
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported snapshot version: got {body_v!r}, expected 1 or 2",
+            detail=f"Unsupported snapshot version: got {body_v!r}, expected 1, 2 or 3",
         )
 
     try:
@@ -1263,98 +1274,9 @@ async def receive_trading_snapshot(
 
     await verify_room_token(room_id, token, db)
 
-    now = datetime.now(timezone.utc)
-    snapshot_data = request.model_dump()
-
-    # Store raw snapshot in rooms.trading_config
-    # WHY: Pass dict directly — the pool's JSONB codec (registered in lifespan
-    # with UUID/datetime support) serializes it correctly. Avoids double-encoding
-    # that json.dumps() + ::jsonb cast would produce.
-    await db.execute(
-        """UPDATE rooms
-           SET trading_config = $2,
-               last_trading_push_at = $3,
-               trading_push_count = trading_push_count + 1
-           WHERE id = $1""",
-        room_id, snapshot_data, now
-    )
-
-    # Format human-readable summary for memory
-    summary = format_thesis_summary(request)
-
-    # Upsert memory: check for existing key, update if found, create if not
-    memory_manager = MemoryManager(db)
-    memory_key = "thesis_state_current"
-
-    existing = await db.fetchrow(
-        "SELECT id FROM memories WHERE room_id = $1 AND key = $2 AND status = 'active'",
-        room_id, memory_key
-    )
-
-    if existing:
-        memory = await memory_manager.edit_memory(
-            memory_id=existing['id'],
-            new_content=summary,
-            edit_reason="Trading snapshot updated",
-        )
-        memory_id = memory.id
-    else:
-        memory = await memory_manager.add_memory(
-            room_id=room_id,
-            key=memory_key,
-            content=summary,
-            scope=MemoryScope.ROOM,
-            # thesis_state_current is a deterministic-key slot upserted above.
-            dedup=False,
-        )
-        memory_id = memory.id
-
-    # Log TRADING_SNAPSHOT_RECEIVED event
-    node_count = len(request.nodeStates)
-    phase_key = None
-    if request.cascadePhase:
-        phase_key = request.cascadePhase.get("key")
-
-    await db.execute(
-        """INSERT INTO events (id, timestamp, event_type, room_id, payload)
-           VALUES ($1, $2, $3, $4, $5)""",
-        uuid4(), now, EventType.TRADING_SNAPSHOT_RECEIVED.value,
-        room_id,
-        {
-            "timestamp": request.timestamp,
-            "node_count": node_count,
-            "phase": phase_key,
-            "memory_id": str(memory_id),
-        }
-    )
-
-    # Broadcast to connected WebSocket clients
-    await connection_manager.broadcast(room_id, OutboundMessage(
-        type=MessageTypes.TRADING_UPDATE,
-        payload=snapshot_data,
-    ))
-
-    # Trigger Trading Curator for offline users
-    try:
-        curator = TradingCuratorEngine(db, memory_manager, None)
-        # Find the default thread for this room
-        thread_row = await db.fetchrow(
-            "SELECT id FROM threads WHERE room_id = $1 ORDER BY created_at ASC LIMIT 1",
-            room_id
-        )
-        if thread_row:
-            alert = await curator.generate_alert(room_id, thread_row["id"], snapshot_data)
-            if alert:
-                await connection_manager.broadcast(room_id, OutboundMessage(
-                    type=MessageTypes.TRADING_UPDATE,
-                    payload={"message": alert.model_dump(mode="json")},
-                ))
-    except Exception as e:
-        logger.warning(f"Trading curator alert failed (non-critical): {e}")
-
-    return TradingSnapshotResponse(
-        stored_at=now.isoformat(),
-        memory_id=memory_id,
+    return await ingest_snapshot(
+        db, connection_manager, room_id, request,
+        fire_curator=(source != "reconcile"),
     )
 
 

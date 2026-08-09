@@ -342,6 +342,131 @@ class TestGenerateAlert:
 
 
 # ============================================================
+# count_today + the daily cap
+# ============================================================
+
+
+class TestCountToday:
+    @pytest.mark.asyncio
+    async def test_counts_curator_messages_in_this_room_today(self):
+        db = make_mock_db()
+        db.fetchval = AsyncMock(return_value=6)
+
+        curator = TradingCuratorEngine(db, make_mock_memory(), None)
+        assert await curator.count_today(ROOM_ID) == 6
+
+    @pytest.mark.asyncio
+    async def test_null_count_reads_as_zero(self):
+        db = make_mock_db()
+        db.fetchval = AsyncMock(return_value=None)
+
+        curator = TradingCuratorEngine(db, make_mock_memory(), None)
+        assert await curator.count_today(ROOM_ID) == 0
+
+    @pytest.mark.asyncio
+    async def test_query_is_room_scoped_and_source_filtered(self):
+        """Counting per THREAD would let a forked room blow past the cap."""
+        db = make_mock_db()
+        db.fetchval = AsyncMock(return_value=0)
+
+        curator = TradingCuratorEngine(db, make_mock_memory(), None)
+        await curator.count_today(ROOM_ID)
+
+        query, *args = db.fetchval.call_args[0]
+        assert "t.room_id = $1" in query
+        assert "trading_curator" in query
+        assert args[0] == ROOM_ID
+        assert args[1] == SpeakerType.LLM_ANNOTATOR.value
+
+    @pytest.mark.asyncio
+    async def test_cutoff_is_start_of_utc_day(self):
+        db = make_mock_db()
+        db.fetchval = AsyncMock(return_value=0)
+
+        curator = TradingCuratorEngine(db, make_mock_memory(), None)
+        await curator.count_today(ROOM_ID)
+
+        cutoff = db.fetchval.call_args[0][3]
+        assert cutoff.tzinfo is not None
+        assert (cutoff.hour, cutoff.minute, cutoff.second) == (0, 0, 0)
+        assert cutoff.date() == datetime.now(timezone.utc).date()
+
+
+class TestDailyCap:
+    @pytest.mark.asyncio
+    async def test_alert_refused_once_the_cap_is_reached(self):
+        """8 curator messages today → the 9th warning stays quiet."""
+        db = make_mock_db()
+        # should_alert (1 offline) → is_duplicate (0) → count_today (8)
+        db.fetchval = AsyncMock(side_effect=[1, 0, 8])
+
+        curator = TradingCuratorEngine(db, make_mock_memory(), None)
+        result = await curator.generate_alert(
+            ROOM_ID, THREAD_ID, make_snapshot_dict(), daily_cap=8,
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_cap_of_none_never_consults_the_count(self):
+        """Criticals pass daily_cap=None — the budget must not apply, and the
+        count query must not even run."""
+        db = make_mock_db()
+        db.fetchval = AsyncMock(side_effect=[1, 0])  # only should_alert + dedup
+
+        curator = TradingCuratorEngine(db, make_mock_memory(), None)
+        with patch("llm.providers.get_provider") as get_provider, \
+                patch("operations.get_thread_messages",
+                      AsyncMock(return_value=[])):
+            provider = AsyncMock()
+            provider.complete = AsyncMock(
+                return_value=MagicMock(content="Hormuz fired.")
+            )
+            get_provider.return_value = provider
+            result = await curator.generate_alert(
+                ROOM_ID, THREAD_ID, make_snapshot_dict(), daily_cap=None,
+            )
+        assert result is not None
+        assert db.fetchval.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_under_the_cap_still_alerts(self):
+        db = make_mock_db()
+        # should_alert (1) → is_duplicate (0) → count_today (3)
+        db.fetchval = AsyncMock(side_effect=[1, 0, 3])
+
+        curator = TradingCuratorEngine(db, make_mock_memory(), None)
+        with patch("llm.providers.get_provider") as get_provider, \
+                patch("operations.get_thread_messages",
+                      AsyncMock(return_value=[])):
+            provider = AsyncMock()
+            provider.complete = AsyncMock(
+                return_value=MagicMock(content="Brent slipping.")
+            )
+            get_provider.return_value = provider
+            result = await curator.generate_alert(
+                ROOM_ID, THREAD_ID, make_snapshot_dict(), daily_cap=8,
+            )
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_dedup_window_is_honoured(self):
+        """A warning's 30-minute window must reach the dedup query."""
+        db = make_mock_db()
+        db.fetchval = AsyncMock(side_effect=[1, 1])
+
+        curator = TradingCuratorEngine(db, make_mock_memory(), None)
+        before = datetime.now(timezone.utc)
+        result = await curator.generate_alert(
+            ROOM_ID, THREAD_ID, make_snapshot_dict(),
+            dedup_window_minutes=30, daily_cap=8,
+        )
+        assert result is None
+        # Second fetchval is is_duplicate; its 3rd arg is the cutoff.
+        cutoff = db.fetchval.call_args_list[1][0][3]
+        assert (before - cutoff) >= timedelta(minutes=29, seconds=30)
+
+
+# ============================================================
 # _format_snapshot_for_prompt
 # ============================================================
 

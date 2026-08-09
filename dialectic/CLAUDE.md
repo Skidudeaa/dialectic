@@ -67,12 +67,16 @@ tradingDesk pushes thesis graph state to `POST /rooms/{room_id}/trading/snapshot
 
 The thesis state is injected into every LLM system prompt via `_build_trading_context()` in `llm/prompts.py`. The LLM sees: cascade phase, fired/approaching nodes, confluence scores, countdowns, scenario probabilities, and portfolio summary.
 
-**Live trading rooms:**
+**Live trading rooms** (all five thesis books bound as of 2026-08-09; the
+binding lives in `rooms.linked_book_id` + each book's `meta.dialecticRoomId`):
 
 | Room | ID | Thesis |
 |---|---|---|
 | Iran/Hormuz Trading Room | `56ba2f1e-5c70-4290-a77d-52404f0095da` | Oil shock cascade |
 | Trump Tariffs Trading Room | `8adcabb7-817a-4802-87c6-3bfd42e6a9eb` | Tariff escalation |
+| AI Capex Unwind Trading Room | `6805ad0f-0d72-441d-ac1c-2cd9dc63bca3` | AI capex unwind |
+| China Property Cascade Trading Room | `e1ff2cca-04ed-4b50-8c38-c0df78520e21` | Property cascade |
+| Japan Rate Shock Trading Room | `b9f3b9d2-1d00-4179-957b-284b7cd4a8ad` | Rate shock |
 
 **Push command** (from tradingDesk):
 ```bash
