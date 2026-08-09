@@ -31,12 +31,12 @@ import re
 import struct
 import tempfile
 from datetime import datetime, timezone
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
 import asyncpg
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -525,6 +525,68 @@ def _unlink_quietly(path: Optional[str]) -> None:
         pass
     except OSError:
         logger.warning("could not remove attachment temp file %s", path, exc_info=True)
+
+
+MAX_MESSAGE_IDS_PER_QUERY = 200
+
+
+@router.get("/rooms/{room_id}/attachments", response_model=List[AttachmentResponse])
+async def list_attachments(
+    room_id: UUID,
+    message_ids: str = Query(
+        ...,
+        description="Comma-separated message UUIDs to fetch attachments for",
+    ),
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db=Depends(_get_db),
+):
+    """
+    Attachments bound to the given messages, for any member of the room.
+
+    WHY this exists: upload/bind is a WRITE path, so before this endpoint a
+    client could only render attachments it had uploaded itself — the other
+    person's images were invisible, because neither GET /threads/{id}/messages
+    nor the message_created broadcast projects them.
+
+    Only BOUND attachments are returned. An unbound row is the uploader's
+    in-flight state (a file picked but not yet sent) and is nobody else's
+    business until the message lands.
+
+    message_ids is REQUIRED and capped. WHY not "all attachments in the room":
+    that grows without bound and would hand every client the room's entire
+    media history on first paint. Callers ask for the window they render.
+    """
+    await _verify_room_token(room_id, token, db)
+    await _verify_room_member(room_id, current_user.user_id, db)
+
+    raw_ids = [part.strip() for part in message_ids.split(",") if part.strip()]
+    if not raw_ids:
+        raise HTTPException(status_code=400, detail="message_ids cannot be empty")
+    if len(raw_ids) > MAX_MESSAGE_IDS_PER_QUERY:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Too many message_ids ({len(raw_ids)}); "
+                f"maximum is {MAX_MESSAGE_IDS_PER_QUERY}"
+            ),
+        )
+
+    try:
+        parsed_ids = [UUID(value) for value in raw_ids]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="message_ids must be UUIDs")
+
+    # The room_id filter is what contains this: bind already refuses to tie an
+    # attachment to a message in another room, so a caller cannot name a
+    # foreign message id and read across the boundary.
+    rows = await db.fetch(
+        """SELECT * FROM attachments
+           WHERE room_id = $1 AND message_id = ANY($2::uuid[])
+           ORDER BY created_at ASC""",
+        room_id, parsed_ids,
+    )
+    return [_to_response(row) for row in rows]
 
 
 @router.get("/attachments/{attachment_id}")

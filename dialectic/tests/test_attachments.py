@@ -187,6 +187,20 @@ class FakeDB:
             return self.messages.get(args[0])
         raise AssertionError(f"FakeDB got an unrouted fetchval: {q}")
 
+    async def fetch(self, query, *args):
+        q = self._flat(query)
+        self.queries.append(q)
+        if "FROM attachments WHERE room_id = $1 AND message_id = ANY" in q:
+            room_id, message_ids = args
+            wanted = set(message_ids)
+            hits = [
+                r for r in self.attachments.values()
+                if r["room_id"] == room_id and r["message_id"] in wanted
+            ]
+            hits.sort(key=lambda r: r["created_at"])
+            return hits
+        raise AssertionError(f"FakeDB got an unrouted fetch: {q}")
+
 
 # =========================================================================
 # FIXTURES
@@ -640,6 +654,169 @@ class TestBind:
         resp = self._bind(ctx, body["id"], message_id)
         assert resp.status_code == 403
         assert ctx.db.attachments[UUID(body["id"])]["message_id"] is None
+
+
+# =========================================================================
+# LIST BY MESSAGE
+# =========================================================================
+
+
+class TestListByMessage:
+    def _bound_upload(self, ctx, filename, message_id, png=None):
+        body = upload(ctx, png or make_png(), filename, "image/png").json()
+        ctx.db.messages[message_id] = ROOM_ID
+        ctx.client.post(
+            f"/rooms/{ROOM_ID}/attachments/{body['id']}/bind",
+            json={"message_id": str(message_id)},
+            headers=auth_headers(),
+        )
+        return body
+
+    def _list(self, ctx, message_ids, room_id=ROOM_ID, token=ROOM_TOKEN):
+        joined = ",".join(str(m) for m in message_ids)
+        return ctx.client.get(
+            f"/rooms/{room_id}/attachments",
+            params={"message_ids": joined},
+            headers=auth_headers(token),
+        )
+
+    def test_returns_attachments_for_the_requested_messages(self, ctx):
+        message_a, message_b = uuid4(), uuid4()
+        first = self._bound_upload(ctx, "a.png", message_a, make_png(3, 2))
+        second = self._bound_upload(ctx, "b.png", message_b, make_png(4, 2))
+
+        resp = self._list(ctx, [message_a, message_b])
+        assert resp.status_code == 200
+        ids = {row["id"] for row in resp.json()}
+        assert ids == {first["id"], second["id"]}
+        by_message = {row["message_id"] for row in resp.json()}
+        assert by_message == {str(message_a), str(message_b)}
+
+    def test_another_members_upload_is_visible(self, ctx):
+        """The whole point: I must be able to render what the other person sent."""
+        message_id = uuid4()
+        uploaded = self._bound_upload(ctx, "dan.png", message_id)
+
+        ctx.db.members.add((ROOM_ID, OUTSIDER_ID))
+        ctx.acting["user_id"] = OUTSIDER_ID
+        resp = self._list(ctx, [message_id])
+        assert resp.status_code == 200
+        assert [row["id"] for row in resp.json()] == [uploaded["id"]]
+
+    def test_unbound_attachments_are_not_returned(self, ctx):
+        """A picked-but-unsent file is the uploader's private in-flight state."""
+        upload(ctx, make_png(), "draft.png", "image/png")
+        message_id = uuid4()
+        ctx.db.messages[message_id] = ROOM_ID
+        assert self._list(ctx, [message_id]).json() == []
+
+    def test_unrequested_messages_are_not_returned(self, ctx):
+        message_a, message_b = uuid4(), uuid4()
+        self._bound_upload(ctx, "a.png", message_a, make_png(3, 2))
+        wanted = self._bound_upload(ctx, "b.png", message_b, make_png(4, 2))
+
+        rows = self._list(ctx, [message_b]).json()
+        assert [row["id"] for row in rows] == [wanted["id"]]
+
+    def test_several_attachments_on_one_message_come_back_in_upload_order(self, ctx):
+        message_id = uuid4()
+        first = self._bound_upload(ctx, "1.png", message_id, make_png(3, 2))
+        second = self._bound_upload(ctx, "2.png", message_id, make_png(4, 2))
+        # Pin the ordering key so the assertion cannot pass on insertion luck.
+        ctx.db.attachments[UUID(first["id"])]["created_at"] = datetime(
+            2026, 8, 9, 1, 0, tzinfo=timezone.utc
+        )
+        ctx.db.attachments[UUID(second["id"])]["created_at"] = datetime(
+            2026, 8, 9, 2, 0, tzinfo=timezone.utc
+        )
+        rows = self._list(ctx, [message_id]).json()
+        assert [row["id"] for row in rows] == [first["id"], second["id"]]
+
+    def test_a_foreign_message_id_reads_nothing(self, ctx):
+        """Naming another room's message must not read across the boundary."""
+        ctx.db.members.add((OTHER_ROOM_ID, MEMBER_ID))
+        foreign_message = uuid4()
+        foreign = upload(ctx, make_png(), "secret.png", "image/png",
+                         room_id=OTHER_ROOM_ID, token="other-token").json()
+        ctx.db.messages[foreign_message] = OTHER_ROOM_ID
+        ctx.client.post(
+            f"/rooms/{OTHER_ROOM_ID}/attachments/{foreign['id']}/bind",
+            json={"message_id": str(foreign_message)},
+            headers={"X-Room-Token": "other-token"},
+        )
+        assert ctx.db.attachments[UUID(foreign["id"])]["message_id"] == foreign_message
+
+        # Ask ROOM_ID for the OTHER room's message id.
+        assert self._list(ctx, [foreign_message]).json() == []
+
+        # Pin the containment to the SQL itself. Verified against real Postgres:
+        # dropping "room_id = $1" from this query returns the other room's row.
+        query = [q for q in ctx.db.queries if "message_id = ANY" in q][-1]
+        assert "room_id = $1" in query
+
+    def test_unknown_message_ids_yield_an_empty_list(self, ctx):
+        assert self._list(ctx, [uuid4()]).json() == []
+
+    def test_non_member_is_403(self, ctx):
+        ctx.acting["user_id"] = OUTSIDER_ID
+        assert self._list(ctx, [uuid4()]).status_code == 403
+
+    def test_wrong_room_token_is_401(self, ctx):
+        assert self._list(ctx, [uuid4()], token="nope").status_code == 401
+
+    def test_message_ids_is_required(self, ctx):
+        resp = ctx.client.get(
+            f"/rooms/{ROOM_ID}/attachments", headers=auth_headers()
+        )
+        assert resp.status_code == 422
+
+    def test_blank_message_ids_is_400(self, ctx):
+        resp = ctx.client.get(
+            f"/rooms/{ROOM_ID}/attachments",
+            params={"message_ids": " , , "},
+            headers=auth_headers(),
+        )
+        assert resp.status_code == 400
+        assert "cannot be empty" in resp.json()["detail"]
+
+    def test_non_uuid_message_id_is_400(self, ctx):
+        resp = ctx.client.get(
+            f"/rooms/{ROOM_ID}/attachments",
+            params={"message_ids": f"{uuid4()},not-a-uuid"},
+            headers=auth_headers(),
+        )
+        assert resp.status_code == 400
+        assert "must be UUIDs" in resp.json()["detail"]
+
+    def test_too_many_message_ids_is_400(self, ctx):
+        too_many = ",".join(str(uuid4()) for _ in range(201))
+        resp = ctx.client.get(
+            f"/rooms/{ROOM_ID}/attachments",
+            params={"message_ids": too_many},
+            headers=auth_headers(),
+        )
+        assert resp.status_code == 400
+        assert "Too many message_ids" in resp.json()["detail"]
+
+    def test_the_cap_boundary_is_inclusive(self, ctx):
+        at_cap = ",".join(str(uuid4()) for _ in range(200))
+        resp = ctx.client.get(
+            f"/rooms/{ROOM_ID}/attachments",
+            params={"message_ids": at_cap},
+            headers=auth_headers(),
+        )
+        assert resp.status_code == 200
+
+    def test_records_carry_everything_needed_to_render(self, ctx):
+        message_id = uuid4()
+        self._bound_upload(ctx, "chart.png", message_id, make_png(13, 7))
+        row = self._list(ctx, [message_id]).json()[0]
+        assert row["url"] == f"/attachments/{row['id']}"
+        assert row["kind"] == "image"
+        assert row["mime"] == "image/png"
+        assert (row["width"], row["height"]) == (13, 7)
+        assert row["original_name"] == "chart.png"
+        assert row["message_id"] == str(message_id)
 
 
 # =========================================================================
