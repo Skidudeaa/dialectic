@@ -1,6 +1,29 @@
 # tradingDesk × Dialectic Integration
 
-> **STATUS: FULLY IMPLEMENTED** (2026-04-01)
+> ### ⚠ CORRECTION (2026-08-09) — read this before the status block below
+>
+> The banner underneath is preserved as written on 2026-04-01 and is **stale in
+> four specific ways**. Recording the correction rather than overwriting it, so
+> the drift is legible.
+>
+> | Claim below | Actual, verified 2026-08-09 |
+> |---|---|
+> | "Both thesis rooms are wired" | **Five.** Every book in `books/` carries `meta.dialecticRoomId` + `meta.dialecticRoomToken` — ai-capex-unwind, china-property-cascade, iran-hormuz, japan-rate-shock, trump-tariffs. |
+> | "Run `run-all.py` from tradingDesk" | The bridge is **superseded**. `tradingdesk-bridge.service` is `static` and inactive; its own unit description calls it an "interim clock until coordinator inline push ships", and it has. The desk now pushes the moment a node fires (`a91fc85`). `run-all.py` still works as a manual kick. |
+> | "from tradingDesk" | That repo no longer exists. This is `trading/` inside the DwoodAmo monorepo as of 2026-08-09; the old tree is archived at `/root/_archive-tradingDesk-pre-fusion`. |
+> | "**STATUS: FULLY IMPLEMENTED**" | True of the *snapshot-push* path described in this document. It is not a statement about the fused product — see `docs/plans/2026-08-09-fusion-master-plan.md` for what is actually outstanding. |
+>
+> **Unchanged and still correct:** the Dialectic server path
+> (`/root/DwoodAmo/dialectic`, `PORT=8002`) and the two room IDs listed below,
+> which are now two of five.
+>
+> **Security note:** `books/*.json` carry live `dialecticRoomToken` values in
+> tracked files. That predates the move and is unresolved — settle it before
+> this repo is pushed anywhere.
+
+---
+
+> **STATUS: FULLY IMPLEMENTED** (2026-04-01) — *superseded, see correction above*
 >
 > Both sides are built and live. Both thesis rooms are wired. Run `python3 tools/bridge/run-all.py` from tradingDesk to push fresh thesis state into both Dialectic rooms. The LLM in each room sees the full thesis state (node states, confluence, countdowns, scenarios, portfolio) on every message.
 >

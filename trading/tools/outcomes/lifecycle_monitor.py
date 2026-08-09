@@ -22,6 +22,14 @@ from pathlib import Path
 from datetime import datetime, timezone, date
 from typing import Dict, List, Optional, Union, Tuple, Any
 
+# WHY package-relative: this file moved from /root/tradingDesk to the monorepo's
+# trading/ prefix, and the old absolute default silently survived the move —
+# __init__ mkdir(parents=True)s its ledger dir, so a CLI run would have
+# recreated /root/tradingDesk/outcomes/trades and written trades to a path
+# nothing reads. Derive it the way web/adapters/outcomes.py already does.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_LEDGER_DIR = str(_REPO_ROOT / "outcomes" / "trades")
+
 
 # =============================================================================
 # Layer 1: PROVENANCE
@@ -515,7 +523,7 @@ class LedgerAnalyzer:
 class PredicateLifecycleMonitor:
     """WHAT: The synthesis layer. Evaluates predicates, tags provenance, captures outcomes."""
 
-    def __init__(self, ledger_dir: str = "/root/tradingDesk/outcomes/trades"):
+    def __init__(self, ledger_dir: str = DEFAULT_LEDGER_DIR):
         self.ledger_dir = Path(ledger_dir)
         self.ledger_dir.mkdir(parents=True, exist_ok=True)
         self.analyzer = LedgerAnalyzer(self.ledger_dir)
@@ -722,7 +730,7 @@ def step7_evaluate_open_trades(
     open_trades_path: Path,
     book_id: str = "",
     book_path: Optional[Path] = None,
-    ledger_dir: str = "/root/tradingDesk/outcomes/trades",
+    ledger_dir: str = DEFAULT_LEDGER_DIR,
     max_snapshot_age_seconds: Optional[float] = MAX_SNAPSHOT_AGE_SECONDS,
 ) -> Dict[str, str]:
     """WHAT: Evaluate open trades for a specific book against its fresh snapshot.

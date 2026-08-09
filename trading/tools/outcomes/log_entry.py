@@ -137,7 +137,7 @@ def main() -> None:
     parser.add_argument("--list", action="store_true", help="List available trades")
     parser.add_argument("--write-open-trades", action="store_true",
                         help="Write outcomes/open_trades.json for run-all.py")
-    parser.add_argument("--ledger-dir", default="/root/tradingDesk/outcomes/trades",
+    parser.add_argument("--ledger-dir", default=str(Path(__file__).resolve().parents[2] / "outcomes" / "trades"),
                         help="Ledger directory")
     args = parser.parse_args()
 
