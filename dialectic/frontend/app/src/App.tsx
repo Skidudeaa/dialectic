@@ -12,6 +12,7 @@ import type { Message, SearchResult, Thread, TradingSnapshot, UserRoom } from '.
 import { AppLayout } from './components/layout/AppLayout'
 import { RoomHeader } from './components/layout/RoomHeader'
 import { RoomSettingsDialog } from './components/layout/RoomSettingsDialog'
+import { HelpDialog } from './components/layout/HelpDialog'
 import { RoomList } from './components/sidebar/RoomList'
 import { RightPanel } from './components/sidebar/RightPanel'
 import { MessageList } from './components/chat/MessageList'
@@ -74,6 +75,7 @@ function ChatLayout() {
   const [rooms, setRooms] = useState<UserRoom[]>([])
   const [showProtocolPicker, setShowProtocolPicker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   const [replyToId, setReplyToId] = useState<string | null>(null)
   const [showSearch, setShowSearch] = useState(false)
   // The nonce makes a repeat jump to the same message a distinct value, so the
@@ -426,6 +428,7 @@ function ChatLayout() {
               onProtocolClick={() => setShowProtocolPicker(true)}
               onSettingsClick={() => setShowSettings(true)}
               onSearchClick={() => setShowSearch(true)}
+              onHelpClick={() => setShowHelp(true)}
               connected={isConnected}
             />
             <ParticipantsBar participants={participants} />
@@ -537,6 +540,9 @@ function ChatLayout() {
           roomId={currentRoom.id}
           onClose={() => setShowSettings(false)}
         />
+      )}
+      {showHelp && (
+        <HelpDialog onClose={() => setShowHelp(false)} />
       )}
     </>
   )
