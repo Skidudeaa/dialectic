@@ -354,7 +354,7 @@ STANDARD_QUERIES: dict = {
         'AND sourcelang:eng'
     ),
     "ai-capex-cut": (
-        '("NVIDIA" OR "TSMC" OR "datacenter") AND '
+        '("NVIDIA" OR "Taiwan Semiconductor" OR "datacenter") AND '
         '("capex" OR "guidance cut" OR "demand") AND sourcelang:eng'
     ),
 }
