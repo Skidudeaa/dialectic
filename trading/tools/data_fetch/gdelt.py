@@ -342,11 +342,13 @@ STANDARD_QUERIES: dict = {
         'AND sourcelang:eng'
     ),
     "china-property-default": (
-        '("Vanke" OR "Country Garden" OR "LGFV" OR "Evergrande") '
+        '("Vanke" OR "Country Garden" OR "Evergrande" '
+        'OR "local government financing") '
         'AND ("default" OR "restructuring") AND sourcelang:eng'
     ),
-    # WHY no "BOJ"/"JGB": GDELT rejects quoted terms under ~4 chars with
-    # "The specified phrase is too short." — the acronyms must be spelled out.
+    # WHY no "BOJ"/"JGB"/"LGFV": GDELT rejects quoted terms under 5 chars
+    # ("The specified phrase is too short." — observed live: "IEEPA" passes,
+    # "LGFV" fails). Acronyms shorter than that must be spelled out.
     "japan-rate-shock": (
         '"Bank of Japan" AND ("yield" OR "rate hike" OR "government bond") '
         'AND sourcelang:eng'
