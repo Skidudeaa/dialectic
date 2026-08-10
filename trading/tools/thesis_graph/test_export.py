@@ -1252,6 +1252,64 @@ class TestFeedValidation:
             assert errors == [], f"{os.path.basename(path)}: {errors}"
 
 
+class TestFredUnitsWiring:
+    """A percent-calibrated node must receive a percent.
+
+    WHY: enabling the FRED key on 2026-08-09 wrote CPIAUCSL's raw index
+    level (332.568) into `retail-prices`, whose thresholds are 2.5 / 3.0 /
+    3.5 because they mean CPI inflation. No node state flipped — 2.7 was
+    already over 2.5 — but the number an operator reads, and the number the
+    LLM would quote, was off by two orders of magnitude.
+    """
+
+    def test_the_books_ask_for_pc1_on_every_index_series(self):
+        """Pins the audit: these three are index levels, the rest are not."""
+        import glob
+        needs_pc1 = {"CPIAUCSL", "PCEPILFE", "PPIACO"}
+        books_dir = os.path.join(os.path.dirname(__file__), "..", "..", "books")
+        found = set()
+        for path in sorted(glob.glob(os.path.join(books_dir, "*.json"))):
+            for node in json.loads(Path(path).read_text()).get("nodes", []):
+                for feed in (node.get("feeds") or []):
+                    if not isinstance(feed, dict) or feed.get("source") != "fred":
+                        continue
+                    sid = feed.get("series")
+                    if sid in needs_pc1:
+                        found.add(sid)
+                        assert feed.get("units") == "pc1", (
+                            f"{sid} is an index level; without units=pc1 it lands "
+                            f"in {node['id']} two orders of magnitude off"
+                        )
+        assert found == needs_pc1, f"missing from the books: {needs_pc1 - found}"
+
+    def test_units_reach_the_fetcher(self, monkeypatch):
+        """Drive the real fetch_fred and read what it asked FRED for."""
+        import types
+        from tools.thesis_graph import thesisgraph as tg
+
+        asked = {}
+        fake = types.ModuleType("fred")
+        fake.FredAuthError = type("FredAuthError", (Exception,), {})
+
+        def fetch_series_batch(series_ids, units_by_series=None, **kw):
+            asked.update(units_by_series or {})
+            return {s: {"value": 3.46, "observation_date": "2026-06-01"}
+                    for s in series_ids}
+
+        fake.fetch_series_batch = fetch_series_batch
+        monkeypatch.setitem(sys.modules, "fred", fake)
+
+        cfg = {"nodes": [
+            {"id": "cpi", "type": "price", "current": 2.7,
+             "feeds": [{"source": "fred", "series": "CPIAUCSL", "units": "pc1"}]},
+            {"id": "yields", "type": "price", "current": 4.6,
+             "feeds": [{"source": "fred", "series": "DGS10"}]},
+        ]}
+        tg.fetch_fred(cfg)
+
+        assert asked == {"CPIAUCSL": "pc1"}, "a level series must not be transformed"
+
+
 class TestGdeltFetchPlanning:
     """A watch-only GDELT node must not spend a request.
 

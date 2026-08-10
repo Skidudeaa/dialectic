@@ -343,12 +343,23 @@ def _make_request(url: str, timeout: int = DEFAULT_TIMEOUT) -> bytes:
         return resp.read()
 
 
-def _build_observations_url(series_id: str, api_key: str) -> str:
+def _build_observations_url(
+    series_id: str, api_key: str, units: Optional[str] = None,
+) -> str:
     """Build the FRED observations URL for the latest data point.
 
     WHY query params: FRED uses standard query strings. urlencode handles
     escaping for series IDs that contain unusual characters (rare but
     possible — some international series IDs have parentheses).
+
+    WHY `units` matters more than it looks: most headline FRED series are
+    INDEX LEVELS, while the thesis nodes that consume them are calibrated in
+    PERCENT — `retail-prices` carries thresholds of 2.5 / 3.0 / 3.5 because
+    they mean CPI inflation, and raw CPIAUCSL is 332.568. Fetching without a
+    transform writes a number two orders of magnitude off into a node that
+    still renders as live. `units="pc1"` asks FRED for percent-change-from-
+    year-ago and hands back the figure the book was actually written
+    against. See the FRED docs for the full list (lin, chg, pch, pc1, ...).
     """
     params = {
         "series_id": series_id,
@@ -357,10 +368,15 @@ def _build_observations_url(series_id: str, api_key: str) -> str:
         "sort_order": "desc",
         "limit": "1",
     }
+    if units:
+        params["units"] = units
     return f"{FRED_API_BASE}/series/observations?{urlencode(params)}"
 
 
-def fetch_series_latest(series_id: str, *, retries: int = DEFAULT_RETRIES) -> dict:
+def fetch_series_latest(
+    series_id: str, *, units: Optional[str] = None,
+    retries: int = DEFAULT_RETRIES,
+) -> dict:
     """Fetch the most recent observation for a single FRED series.
 
     Returns:
@@ -383,7 +399,7 @@ def fetch_series_latest(series_id: str, *, retries: int = DEFAULT_RETRIES) -> di
     code. fetch_series_batch handles the partial-failure case.
     """
     api_key = _get_api_key()
-    url = _build_observations_url(series_id, api_key)
+    url = _build_observations_url(series_id, api_key, units)
 
     last_error: Optional[Exception] = None
 
@@ -476,7 +492,8 @@ def fetch_series_latest(series_id: str, *, retries: int = DEFAULT_RETRIES) -> di
 
 
 def fetch_series_batch(
-    series_ids: List[str], *, retries: int = DEFAULT_RETRIES
+    series_ids: List[str], *, units_by_series: Optional[Dict[str, str]] = None,
+    retries: int = DEFAULT_RETRIES,
 ) -> Dict[str, dict]:
     """Fetch the latest observation for multiple FRED series.
 
@@ -506,7 +523,11 @@ def fetch_series_batch(
 
     for i, series_id in enumerate(series_ids):
         try:
-            results[series_id] = fetch_series_latest(series_id, retries=retries)
+            results[series_id] = fetch_series_latest(
+                series_id,
+                units=(units_by_series or {}).get(series_id),
+                retries=retries,
+            )
         except FredNoDataError as e:
             print(f"  fred: {series_id} -> no data ({e})", file=sys.stderr)
         except FredAPIError as e:

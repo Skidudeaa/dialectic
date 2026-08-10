@@ -110,6 +110,18 @@ class TestBuildUrl:
         assert "sort_order=desc" in url
         assert "limit=1" in url
 
+    def test_no_units_param_when_none_asked_for(self):
+        """Absent means FRED's own default (lin) — do not send an empty one."""
+        assert "units=" not in _build_observations_url("DGS10", "abc123")
+
+    def test_units_is_passed_through(self):
+        """WHY this matters: CPIAUCSL is an index at 332.568 while the node
+        that consumes it carries thresholds of 2.5/3.0/3.5 because they mean
+        CPI inflation. Without pc1 the desk writes a number two orders of
+        magnitude off into a node that still renders as live."""
+        url = _build_observations_url("CPIAUCSL", "abc123", "pc1")
+        assert "units=pc1" in url
+
 
 # =========================================================================
 # Tests: fetch_series_latest happy path + observation shape

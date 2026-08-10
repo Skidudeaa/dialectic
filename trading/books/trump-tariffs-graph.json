@@ -83,7 +83,8 @@
         {
           "source": "fred",
           "series": "PPIACO",
-          "label": "PPI All Commodities"
+          "units": "pc1",
+          "label": "PPI All Commodities (YoY %)"
         }
       ],
       "current": 172.47,
@@ -300,12 +301,14 @@
         {
           "source": "fred",
           "series": "CPIAUCSL",
-          "label": "CPI"
+          "units": "pc1",
+          "label": "CPI (YoY %)"
         },
         {
           "source": "fred",
           "series": "PCEPILFE",
-          "label": "Core PCE"
+          "units": "pc1",
+          "label": "Core PCE (YoY %)"
         }
       ],
       "current": 2.7,
@@ -494,9 +497,9 @@
           "label": "Industrials"
         },
         {
-          "source": "fred",
+          "source": "manual",
           "series": "NAPM",
-          "label": "ISM Mfg PMI"
+          "label": "ISM Mfg PMI (FRED dropped NAPM on licensing — 400s; type it in)"
         }
       ],
       "indicators": [

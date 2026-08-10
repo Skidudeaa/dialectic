@@ -1285,6 +1285,12 @@ def fetch_fred(cfg: dict) -> dict:
     # Collect all FRED series IDs from node feeds. One series can map to
     # multiple nodes (e.g. DGS10 used by both us-10y and recession-risk).
     series_to_nodes: dict = {}
+    # series_id -> FRED `units` transform, when the book asks for one. A
+    # node whose thresholds are percentages needs "pc1" (percent change from
+    # a year ago); without it FRED hands back the raw index level and the
+    # node silently holds a number two orders of magnitude off its own
+    # thresholds — CPIAUCSL is 332.568 against a 2.5 "Fed comfort zone".
+    units_by_series: dict = {}
     for node in cfg.get("nodes", []):
         for feed in node.get("feeds", []):
             if feed.get("source") == "fred" and "series" in feed:
@@ -1292,6 +1298,8 @@ def fetch_fred(cfg: dict) -> dict:
                 if series_id not in series_to_nodes:
                     series_to_nodes[series_id] = []
                 series_to_nodes[series_id].append(node["id"])
+                if feed.get("units"):
+                    units_by_series[series_id] = feed["units"]
 
     if not series_to_nodes:
         return cfg
@@ -1300,7 +1308,8 @@ def fetch_fred(cfg: dict) -> dict:
     print(f"  fred: fetching {len(series_ids)} series...", file=sys.stderr)
 
     try:
-        results = fred_mod.fetch_series_batch(series_ids)
+        results = fred_mod.fetch_series_batch(
+            series_ids, units_by_series=units_by_series)
     except fred_mod.FredAuthError as e:
         # WHY silent-on-missing-key: FRED is optional. Operators running
         # the engine without a FRED key still get Yahoo + Polymarket data.
