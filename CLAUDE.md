@@ -30,7 +30,7 @@ cd dialectic && python3 -m pytest tests/ -q          # 790 tests
 cd dialectic/frontend/app && npm run dev
 
 # tradingDesk
-cd trading && python3 -m pytest --collect-only -q    # 1325 collected
+cd trading && python3 -m pytest --collect-only -q    # 1359 collected
 uvicorn web.main:app --port 8006                     # see trading/README.md
 ```
 

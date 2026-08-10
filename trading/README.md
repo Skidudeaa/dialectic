@@ -61,6 +61,8 @@ The 2026-03-30 design in [`INTEGRATION.md`](INTEGRATION.md) is superseded (its h
 
 - **Push (desk → dialectic):** the runtime coordinator POSTs a v3 snapshot on material change plus an hourly heartbeat — `web/runtime/dialectic_push.py`. Failures spool to `snapshots/outbox/` and drain on recovery. Target from `DIALECTIC_URL` (default `http://localhost:8002`).
 - **Bridge (dialectic → desk):** read-only endpoints `GET /api/bridge/snapshot/{thesis_id}` and `GET /api/bridge/news/{thesis_id}` — `web/routes/bridge.py`, authenticated by `X-Service-Token` header against `TD_SERVICE_TOKEN`. Dialectic's LLM calls 11 read-only tools against these.
+  - News: every book declares a watch-only GDELT rhetoric node, which is what makes `/news/{book}` answer with headlines instead of `"no gdelt config"`. Those nodes deliberately carry **no `current` key** — the coordinator skips fetching for a node that cannot receive a value, so the whole per-IP GDELT budget belongs to the bridge. Adding `current` to one opts it into volume fetching and starts costing a request every tick.
+  - GDELT rejects quoted terms shorter than 5 characters ("The specified phrase is too short"), which is why the catalog in `tools/data_fetch/gdelt.py` spells out `Bank of Japan`, `Taiwan Semiconductor` and `local government financing` rather than BOJ/TSMC/LGFV.
 - **Auth bridge:** dialectic-issued JWTs are accepted and mapped to local users via `DIALECTIC_USER_MAP`; a `dialectic` service user is created from `DIALECTIC_SERVICE_PASSWORD` — `web/auth.py`.
 - Master plan: `/root/DwoodAmo/docs/plans/2026-Q3-consigliere-amendment-1-fusion.md`.
 
@@ -68,7 +70,7 @@ The duplicated social tier (chat / rooms / Field Desk) still exists in `web/` bu
 
 ## Tests
 
-1325 tests collected (`python3 -m pytest --collect-only -q`). Run by area:
+1359 tests collected (`python3 -m pytest --collect-only -q`). Run by area:
 
 ```bash
 python3 -m pytest tools/ -q    # engine, bridge, data fetch, outcomes, validation
