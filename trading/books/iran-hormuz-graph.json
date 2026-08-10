@@ -265,14 +265,13 @@
           "label": "Initial Claims"
         },
         {
-          "source": "bls",
+          "source": "manual",
           "series": "CES0000000001",
-          "label": "NFP"
+          "label": "NFP (BLS monthly release — no fetcher; type it in)"
         },
         {
-          "source": "yahoo",
-          "symbol": "^PMI",
-          "label": "PMI"
+          "source": "manual",
+          "label": "ISM PMI (monthly release — '^PMI' is not a Yahoo ticker)"
         }
       ],
       "indicators": [
@@ -301,8 +300,9 @@
       "current": 683.0,
       "feeds": [
         {
-          "source": "usda",
-          "dataset": "nola-urea"
+          "source": "manual",
+          "dataset": "nola-urea",
+          "label": "NOLA urea — set automatically by TradingView binding fert-close-above-700"
         }
       ],
       "thresholds": [
@@ -542,11 +542,8 @@
       "current": 15.0,
       "feeds": [
         {
-          "source": "yahoo",
-          "symbols": [
-            "BZK26.NYM",
-            "BZV26.NYM"
-          ]
+          "source": "manual",
+          "label": "Front vs 6m deferred Brent, as a % — currently BZ=F (front) over BZJ27.NYM (Apr-27). No fetcher computes a spread, and the original BZK26.NYM leg expired; roll the deferred leg when it goes front."
         }
       ],
       "_builderX": 100.0,

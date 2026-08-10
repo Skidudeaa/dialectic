@@ -51,6 +51,15 @@ def _issue(field: str, message: str, severity: str = "error") -> dict:
     return {"field": field, "message": message, "severity": severity}
 
 
+# Feed sources this file can actually fetch. Anything else in a book's
+# `feeds[].source` is aspirational: the node renders as fed and silently
+# keeps whatever value was typed into the JSON. `manual` is the honest way
+# to say "a human maintains this" and is allowed everywhere.
+FETCHABLE_SOURCES = frozenset(
+    {"yahoo", "polymarket", "fred", "eia", "treasury", "gdelt"}
+)
+
+
 def load_config(path: str) -> dict:
     try:
         with open(path) as f:
@@ -134,13 +143,35 @@ def validate_config(cfg: dict) -> list[dict]:
                     ))
 
             # Feed schema by provider.
-            feed = n.get("feed")
-            if isinstance(feed, dict):
+            #
+            # WHY both keys: this block read only the SINGULAR `feed` until
+            # 2026-08-10, while every shipped book writes the PLURAL `feeds`
+            # list — so across five books and 71 feed-bearing nodes it had
+            # validated exactly nothing, and four permanently-dark feeds sat
+            # in iran-hormuz for months looking live in the UI. The singular
+            # form is still read so an older book keeps its coverage.
+            feeds = [f for f in (n.get("feeds") or []) if isinstance(f, dict)]
+            if isinstance(n.get("feed"), dict):
+                feeds.append(n["feed"])
+            for feed in feeds:
                 provider = feed.get("source")
-                if provider == "polymarket" and not feed.get("slug"):
-                    issues.append(_issue(f"nodes[{nid}].feed", "polymarket feed requires 'slug'"))
+                if provider == "polymarket" and not (feed.get("slug") or feed.get("market")):
+                    issues.append(_issue(f"nodes[{nid}].feed", "polymarket feed requires 'slug' or 'market'"))
                 elif provider == "yahoo" and not feed.get("symbol"):
-                    issues.append(_issue(f"nodes[{nid}].feed", "yahoo feed requires 'symbol'"))
+                    # A plural `symbols` list is the shape that hides here:
+                    # fetch_prices collects singular `symbol` only, so such a
+                    # feed is never fetched and the node keeps its book
+                    # default while rendering as live.
+                    if feed.get("symbols"):
+                        issues.append(_issue(
+                            f"nodes[{nid}].feed",
+                            "yahoo feed uses plural 'symbols', which no fetcher "
+                            "reads — this feed is dark; use 'symbol', or mark it "
+                            "'manual' if a human maintains the value",
+                            severity="warning",
+                        ))
+                    else:
+                        issues.append(_issue(f"nodes[{nid}].feed", "yahoo feed requires 'symbol'"))
                 elif provider == "fred" and not feed.get("series"):
                     issues.append(_issue(f"nodes[{nid}].feed", "fred feed requires 'series'"))
                 elif provider == "eia" and not (feed.get("series") or feed.get("route")):
@@ -149,6 +180,17 @@ def validate_config(cfg: dict) -> list[dict]:
                     issues.append(_issue(f"nodes[{nid}].feed", "treasury feed requires 'tenor' or 'spread'"))
                 elif provider == "gdelt" and not (feed.get("query") or feed.get("standardQuery")):
                     issues.append(_issue(f"nodes[{nid}].feed", "gdelt feed requires 'query' or 'standardQuery'"))
+                elif provider and provider not in FETCHABLE_SOURCES | {"manual"}:
+                    # A source nobody fetches is not a syntax error, it is a
+                    # promise the desk cannot keep. Warn rather than block:
+                    # the dashboard still generates, it just must not claim
+                    # the node is live.
+                    issues.append(_issue(
+                        f"nodes[{nid}].feed",
+                        f"unknown feed source {provider!r} — no fetcher exists, so "
+                        f"this feed is dark; use 'manual' if a human maintains it",
+                        severity="warning",
+                    ))
 
         # Reference validity for gatedBy / constrainedBy — needs full node set.
         for n in nodes:
@@ -208,15 +250,24 @@ def validate_config(cfg: dict) -> list[dict]:
             # fallback for unparseable strings. Flag those so operators notice.
             lag = e.get("lag")
             if lag and isinstance(lag, str) and lag.lower() != "immediate":
+                # WHY the trailing `.*` and no `$`: parse_lag_days uses
+                # re.match, so it happily reads "1-4 weeks (tit-for-tat)" as
+                # 17d. The old anchored pattern here warned about that edge
+                # anyway — a false alarm sitting next to 18 real ones, which
+                # is a good way to teach an operator to ignore the whole
+                # channel. This mirrors what the parser actually accepts.
                 if not re.match(
-                    r"^(date-gated\s+.+|\d+(?:\s*-\s*\d+)?\s*(day|week|month)s?)$",
+                    r"^(date-gated\s+.+"
+                    r"|(immediate\s+to\s+)?\d+(?:\s*-\s*\d+)?"
+                    r"\s*(day|week|month|quarter)s?\b.*)$",
                     lag.strip(),
                     re.IGNORECASE,
                 ):
                     issues.append(_issue(
                         f"{eid}.lag",
-                        f"unparseable lag '{lag}' — will fall back to 30d; "
-                        "use 'immediate', 'N weeks', 'N-M months', or 'date-gated <date>'",
+                        f"unparseable lag '{lag}' — will fall back to 30d; use "
+                        "'immediate', 'N weeks', 'N-M quarters', 'immediate to "
+                        "N days', or 'date-gated <date>'",
                         severity="warning",
                     ))
 
@@ -563,8 +614,17 @@ def parse_lag_days(lag_str: str, ref_date: date | None = None) -> int:
     propagate() ignores them. This parser makes them machine-readable so
     propagate_at_horizon() can filter edges by temporal reachability.
 
-    Handles: "immediate", "N week(s)", "N-M weeks", "N month(s)", "N-M months",
-    "date-gated <date_str>". Returns midpoint of the range in days.
+    Handles: "immediate", "N day/week/month/quarter(s)", "N-M <unit>s",
+    "immediate to N <unit>", "date-gated <date_str>". Returns the midpoint of
+    the range in days.
+
+    WHY quarters and "immediate to N" are here: 18 of the 84 edges across the
+    four newer books declare their lag that way, and every one of them was
+    silently collapsing to the 30d fallback — an "immediate to 1 week" edge
+    read 7x too SLOW and a "3-6 quarters" edge read 13x too FAST. Lag drives
+    arrival times, which drive the horizon filter and the countdowns, so a
+    quarter of the graph was propagating on a number nobody chose. The
+    warning in validate_config existed and was correct; nothing read it.
     """
     if ref_date is None:
         ref_date = date.today()
@@ -596,13 +656,24 @@ def parse_lag_days(lag_str: str, ref_date: date | None = None) -> int:
             return max(0, (target - ref_date).days)
         return 30  # fallback
 
-    # Range: "1-2 weeks", "2-4 months", "1 week", "3 months"
-    m = re.match(r"(\d+)(?:\s*-\s*(\d+))?\s*(day|week|month)s?", lag_str.strip(), re.IGNORECASE)
+    # "immediate to 2 weeks" — a range whose floor is now. Rewritten to
+    # "0-2 weeks" and handled by the range branch below.
+    text = re.sub(
+        r"^immediate\s+to\s+", "0-", lag_str.strip(), flags=re.IGNORECASE,
+    )
+    if text.startswith("0-") and not re.match(r"^0-\d", text):
+        text = "0-1" + text[1:]  # "immediate to weeks" -> treat as 0-1
+
+    # Range: "1-2 weeks", "2-4 months", "1 week", "3 months", "1-2 quarters"
+    m = re.match(
+        r"(\d+)(?:\s*-\s*(\d+))?\s*(day|week|month|quarter)s?",
+        text, re.IGNORECASE,
+    )
     if m:
         low = int(m.group(1))
         high = int(m.group(2)) if m.group(2) else low
         unit = m.group(3).lower()
-        multiplier = {"day": 1, "week": 7, "month": 30}[unit]
+        multiplier = {"day": 1, "week": 7, "month": 30, "quarter": 91}[unit]
         return int((low + high) / 2 * multiplier)
 
     return 30  # conservative fallback for unparseable strings

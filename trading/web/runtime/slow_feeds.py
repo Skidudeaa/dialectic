@@ -157,9 +157,16 @@ def declared_sources(cfg: dict) -> Set[str]:
     """Return the slow sources this book actually declares.
 
     WHY scan rather than try-them-all: four of the five books declare no
-    treasury feed and none declares gdelt except iran-hormuz. Invoking a
-    fetcher for a book with nothing to fetch is a wasted thread hop and a
-    misleading log line.
+    treasury feed. Invoking a fetcher for a book with nothing to fetch is a
+    wasted thread hop and a misleading log line.
+
+    WHY a node without `current` does not count: every engine fetcher writes
+    its value into `node["current"]` and skips a node that has no such key,
+    so a book whose only gdelt node is watch-only has nothing for gdelt to
+    do. Counting it declared makes the refresher call a fetcher that returns
+    empty, which then reads as a FAILURE and arms a cooldown — a permanent
+    warning about a source that is working exactly as intended. The
+    calendar is exempt: it patches `deadline`, not `current`.
     """
     found: Set[str] = set()
     for node in cfg.get("nodes", []) or []:
@@ -167,6 +174,8 @@ def declared_sources(cfg: dict) -> Set[str]:
             continue
         if node.get("type") == "deadline":
             found.add(ECON_CALENDAR)
+        if "current" not in node:
+            continue
         for feed in node.get("feeds", []) or []:
             if isinstance(feed, dict) and feed.get("source"):
                 found.add(str(feed["source"]))

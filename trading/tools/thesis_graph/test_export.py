@@ -1127,6 +1127,131 @@ class TestFeedFreshness:
         assert model.feedFreshness["yahoo"].ttlSeconds == 300
 
 
+class TestLagParsing:
+    """Lag forms the books actually use.
+
+    WHY these exist: 18 of the 84 edges across the four newer books declared
+    their lag in quarters or as "immediate to N", both of which fell through
+    to the 30d fallback. Lag drives arrival times, so china-property's
+    `lgfv-default` was propagating at 30 days against a book that says two
+    quarters — 6x too imminent, in the direction that gets a trade
+    front-run. The validator's warning was correct and nobody read it.
+    """
+
+    @pytest.mark.parametrize("text,expected", [
+        ("1 quarter", 91),
+        ("2 quarters", 182),
+        ("1-2 quarters", 136),
+        ("3-6 quarters", 409),
+        ("immediate to 1 week", 3),
+        ("immediate to 2 weeks", 7),
+        ("immediate to 1 month", 15),
+    ])
+    def test_forms_that_used_to_fall_back_to_30d(self, text, expected):
+        from tools.thesis_graph.thesisgraph import parse_lag_days
+        assert parse_lag_days(text) == expected
+
+    @pytest.mark.parametrize("text,expected", [
+        ("immediate", 1),
+        ("1-2 weeks", 10),
+        ("3 months", 90),
+        ("5 days", 5),
+        ("1-4 weeks (tit-for-tat)", 17),
+    ])
+    def test_previously_working_forms_are_unchanged(self, text, expected):
+        from tools.thesis_graph.thesisgraph import parse_lag_days
+        assert parse_lag_days(text) == expected
+
+    def test_genuinely_unparseable_still_falls_back(self):
+        from tools.thesis_graph.thesisgraph import parse_lag_days
+        assert parse_lag_days("whenever Beijing blinks") == 30
+
+    def test_no_shipped_book_silently_defaults(self):
+        """Every declared lag must be one the parser really understands."""
+        import glob
+        from tools.thesis_graph.thesisgraph import parse_lag_days
+        books_dir = os.path.join(os.path.dirname(__file__), "..", "..", "books")
+        for path in sorted(glob.glob(os.path.join(books_dir, "*.json"))):
+            book = json.loads(Path(path).read_text())
+            for i, edge in enumerate(book.get("edges", [])):
+                lag = edge.get("lag")
+                if not isinstance(lag, str) or not lag.strip():
+                    continue
+                if parse_lag_days(lag) == 30 and "month" not in lag.lower():
+                    pytest.fail(
+                        f"{os.path.basename(path)} edges[{i}] lag {lag!r} hits the "
+                        f"30d fallback — the graph propagates on a number nobody chose"
+                    )
+
+
+class TestFeedValidation:
+    """The feed validator reads the key the books actually write.
+
+    WHY: until 2026-08-10 this block read the SINGULAR `feed`, while all 71
+    feed-bearing nodes across five books use the PLURAL `feeds`. It had
+    therefore validated nothing, ever, and four permanently-dark feeds sat
+    in iran-hormuz looking live in the UI.
+    """
+
+    def _issues(self, feed, severity):
+        from tools.thesis_graph.thesisgraph import validate_config
+        cfg = {
+            "meta": {"title": "t"},
+            "nodes": [{"id": "n", "label": "N", "type": "price", "feeds": [feed]}],
+            "edges": [],
+        }
+        return [i for i in validate_config(cfg) if i["severity"] == severity]
+
+    def test_a_malformed_feed_in_the_plural_list_is_caught(self):
+        """The regression itself: this used to pass because nothing looked."""
+        errors = self._issues({"source": "fred"}, "error")
+        assert any("fred feed requires 'series'" in e["message"] for e in errors)
+
+    def test_a_source_with_no_fetcher_warns(self):
+        warnings = self._issues(
+            {"source": "bls", "series": "CES0000000001"}, "warning")
+        assert any("bls" in w["message"] and "dark" in w["message"]
+                   for w in warnings)
+
+    def test_plural_yahoo_symbols_warns_because_no_fetcher_reads_it(self):
+        warnings = self._issues(
+            {"source": "yahoo", "symbols": ["BZV26.NYM", "BZJ27.NYM"]}, "warning")
+        assert any("plural 'symbols'" in w["message"] for w in warnings)
+
+    def test_manual_is_always_accepted(self):
+        """`manual` is the honest way to say a human maintains the value."""
+        assert self._issues({"source": "manual", "label": "Baker Hughes"},
+                            "warning") == []
+        assert self._issues({"source": "manual", "label": "Baker Hughes"},
+                            "error") == []
+
+    def test_a_well_formed_feed_is_silent(self):
+        assert self._issues({"source": "yahoo", "symbol": "BZ=F"}, "error") == []
+        assert self._issues({"source": "yahoo", "symbol": "BZ=F"}, "warning") == []
+
+    def test_a_parenthetical_lag_is_not_flagged(self):
+        """The parser reads it fine; warning about it teaches operators to
+        ignore the channel that carries the 18 real findings."""
+        from tools.thesis_graph.thesisgraph import validate_config
+        cfg = {
+            "meta": {"title": "t"},
+            "nodes": [{"id": "a", "label": "A", "type": "event"},
+                      {"id": "b", "label": "B", "type": "event"}],
+            "edges": [{"from": "a", "to": "b", "lag": "1-4 weeks (tit-for-tat)"}],
+        }
+        assert [i for i in validate_config(cfg) if "lag" in i["field"]] == []
+
+    def test_no_shipped_book_hard_errors(self):
+        """Turning the validator on must not block generation of a live book."""
+        import glob
+        from tools.thesis_graph.thesisgraph import validate_config
+        books_dir = os.path.join(os.path.dirname(__file__), "..", "..", "books")
+        for path in sorted(glob.glob(os.path.join(books_dir, "*.json"))):
+            book = json.loads(Path(path).read_text())
+            errors = [i for i in validate_config(book) if i["severity"] == "error"]
+            assert errors == [], f"{os.path.basename(path)}: {errors}"
+
+
 class TestGdeltFetchPlanning:
     """A watch-only GDELT node must not spend a request.
 

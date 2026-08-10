@@ -127,7 +127,23 @@ class TestDeclaredSources:
 
         iran = json.loads((BOOKS_DIR / "iran-hormuz-graph.json").read_text())
         found = declared_sources(iran)
-        assert {"treasury", "gdelt", "fred", "eia", ECON_CALENDAR} <= found
+        assert {"treasury", "fred", "eia", ECON_CALENDAR} <= found
+        # gdelt is deliberately absent: iran's only gdelt node is the
+        # watch-only rhetoric node, which has no `current` for a value to
+        # land in. Its feed exists so the news bridge can serve headlines
+        # for this book, and the coordinator must spend no request on it.
+        assert "gdelt" not in found
+
+    def test_a_watch_only_node_does_not_declare_its_source(self):
+        cfg = {"nodes": [{"id": "watch", "type": "indicator",
+                          "feeds": [{"source": "gdelt", "query": "x"}]}]}
+        assert declared_sources(cfg) == set()
+
+    def test_the_same_node_declares_it_once_it_can_receive_a_value(self):
+        """Reverse direction — opting in with `current` turns the source on."""
+        cfg = {"nodes": [{"id": "watch", "type": "indicator", "current": 0,
+                          "feeds": [{"source": "gdelt", "query": "x"}]}]}
+        assert declared_sources(cfg) == {"gdelt"}
 
     def test_nodes_with_source_ignores_other_feeds(self):
         cfg = make_cfg("treasury")
