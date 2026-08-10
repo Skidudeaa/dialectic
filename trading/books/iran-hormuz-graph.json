@@ -619,7 +619,7 @@
       "type": "indicator",
       "phase": 1,
       "state": "monitoring",
-      "context": "Live GDELT article-volume for Hormuz closure/reopening coverage (query: \"Hormuz\" AND blockade/closure/tanker, English). The doc's #1 watch signal: when reopening RHETORIC rises while transit counts stay flat near ~10/day, that divergence is political optimism running ahead of commercial reality — a caution against front-running de-escalation or firing the Stage-2 commercial kill-switch. Watch-only (no causal edge by design). CALIBRATION TODO: promote to a firing constraint once one clean --fetch establishes the GDELT volume baseline (was rate-limited at authoring time).",
+      "context": "Live GDELT article-volume for Hormuz closure/reopening coverage (query: \"Hormuz\" AND blockade/closure/tanker, English). The doc's #1 watch signal: when reopening RHETORIC rises while transit counts stay flat near ~10/day, that divergence is political optimism running ahead of commercial reality — a caution against front-running de-escalation or firing the Stage-2 commercial kill-switch. Watch-only (no causal edge by design). CALIBRATION TODO: add \"current\": 0 to this node to opt it into volume fetching — nodes without it are skipped so a watch-only node cannot spend the shared per-IP GDELT budget the news bridge needs — then run one clean --fetch to establish the baseline and promote to a firing constraint.",
       "feeds": [
         {
           "source": "gdelt",

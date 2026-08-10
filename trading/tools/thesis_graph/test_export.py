@@ -1127,5 +1127,104 @@ class TestFeedFreshness:
         assert model.feedFreshness["yahoo"].ttlSeconds == 300
 
 
+class TestGdeltFetchPlanning:
+    """A watch-only GDELT node must not spend a request.
+
+    WHY this is worth a test: `fetch_gdelt` has always refused to WRITE into
+    a node with no `current` key, but it used to FETCH for one anyway and
+    throw the answer away. That was invisible — the log line read
+    "updated 0 node(s) from 1/1 queries", which looks like a quiet news day
+    rather than a wasted call. It stopped being invisible on 2026-08-09,
+    when all five books gained a watch-only rhetoric node so the news bridge
+    could serve headlines: five discarded fetches per tick against GDELT's
+    per-IP throttle kept the throttle warm and starved the bridge itself.
+    """
+
+    @staticmethod
+    def _stub_gdelt(monkeypatch, queries):
+        """Install a fake gdelt module that records every query it is asked for."""
+        import types
+        from tools.thesis_graph import thesisgraph as tg
+
+        fake = types.ModuleType("gdelt")
+        fake.GdeltError = type("GdeltError", (Exception,), {})
+        fake.GdeltRateLimitError = type("GdeltRateLimitError", (fake.GdeltError,), {})
+        fake.get_standard_query = lambda name: f"resolved:{name}"
+
+        def fetch_volume_latest(query, timespan="1d"):
+            queries.append((query, timespan))
+            return 42.0
+
+        fake.fetch_volume_latest = fetch_volume_latest
+        monkeypatch.setitem(sys.modules, "gdelt", fake)
+        return tg
+
+    def test_watch_only_node_costs_no_request(self, monkeypatch):
+        queries = []
+        tg = self._stub_gdelt(monkeypatch, queries)
+        cfg = {"nodes": [{
+            "id": "rhetoric", "type": "indicator",
+            "feeds": [{"source": "gdelt", "standardQuery": "iran-hormuz-event"}],
+        }]}
+
+        tg.fetch_gdelt(cfg)
+
+        assert queries == [], "a node with no `current` must not be fetched for"
+
+    def test_a_node_that_declares_current_is_still_fetched(self, monkeypatch):
+        """The reverse direction — the guard must not mute the whole source."""
+        queries = []
+        tg = self._stub_gdelt(monkeypatch, queries)
+        cfg = {"nodes": [{
+            "id": "rhetoric", "type": "indicator", "current": 0,
+            "feeds": [{"source": "gdelt", "standardQuery": "iran-hormuz-event"}],
+        }]}
+
+        tg.fetch_gdelt(cfg)
+
+        assert queries == [("resolved:iran-hormuz-event", "1d")]
+        assert cfg["nodes"][0]["current"] == 42.0
+
+    def test_a_mixed_query_still_runs_for_the_consumer(self, monkeypatch):
+        """One watch-only node must not suppress a sibling that wants the value."""
+        queries = []
+        tg = self._stub_gdelt(monkeypatch, queries)
+        cfg = {"nodes": [
+            {"id": "watch", "type": "indicator",
+             "feeds": [{"source": "gdelt", "standardQuery": "shared"}]},
+            {"id": "consumer", "type": "indicator", "current": 1,
+             "feeds": [{"source": "gdelt", "standardQuery": "shared"}]},
+        ]}
+
+        tg.fetch_gdelt(cfg)
+
+        assert queries == [("resolved:shared", "1d")]
+        assert cfg["nodes"][0].get("current") is None
+        assert cfg["nodes"][1]["current"] == 42.0
+
+    def test_every_shipped_book_is_watch_only_today(self):
+        """The books as shipped must cost GDELT nothing on the coordinator tick.
+
+        Pins the wiring decision from 2026-08-09: the rhetoric nodes exist to
+        light up `/api/bridge/news/{book}`, not to feed volume into the graph.
+        Adding `current` to one is a deliberate calibration step, and this
+        test is where that decision gets re-read.
+        """
+        import glob
+        books_dir = os.path.join(os.path.dirname(__file__), "..", "..", "books")
+        checked = 0
+        for path in sorted(glob.glob(os.path.join(books_dir, "*.json"))):
+            book = json.loads(Path(path).read_text())
+            for node in book.get("nodes", []):
+                if any(f.get("source") == "gdelt"
+                       for f in (node.get("feeds") or []) if isinstance(f, dict)):
+                    checked += 1
+                    assert "current" not in node, (
+                        f"{os.path.basename(path)}:{node['id']} opted into GDELT "
+                        f"volume — intended? it now costs a request every tick"
+                    )
+        assert checked == 5, f"expected 5 gdelt nodes across the books, found {checked}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

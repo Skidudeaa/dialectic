@@ -1529,6 +1529,11 @@ def fetch_gdelt(cfg: dict) -> dict:
     Each unique query is fetched once (deduped across nodes). Latest
     bucket value is written to node['current']. No auth required.
 
+    Only nodes that ALREADY declare `current` are fetched for. A gdelt node
+    without it is watch-only: its book declares the feed so the news bridge
+    can serve headlines for that thesis, and it wants no volume number.
+    Declaring `current` is how such a node opts in.
+
     GDELT recommends ~1 req/sec; we sleep 1s between fetches to stay polite.
     """
     gdelt_dir = os.path.join(os.path.dirname(__file__), "..", "data_fetch")
@@ -1550,6 +1555,14 @@ def fetch_gdelt(cfg: dict) -> dict:
     # Build (query, timespan) -> [node_ids]. Dedup so we don't double-fetch.
     fetch_jobs: dict = {}
     for node in cfg.get("nodes", []):
+        # WHY skip a node with no `current`: the write loop below refuses to
+        # touch one, so fetching on its behalf spends a request on a value
+        # that is thrown away. GDELT is the desk's only unauthenticated
+        # source and it throttles per-IP — five watch-only rhetoric nodes
+        # re-fetching every tick starve the news bridge of the budget it
+        # needs to answer with actual headlines.
+        if "current" not in node:
+            continue
         for feed in node.get("feeds", []):
             if feed.get("source") != "gdelt":
                 continue

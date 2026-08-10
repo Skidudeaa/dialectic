@@ -54,6 +54,27 @@ ECON_CALENDAR = "econ-calendar"
 # desk keeps presenting as live is a lie the operator cannot see.
 STALE_GRACE_MULTIPLIER = 3.0
 
+# WHY a failure cooldown: a source that FAILS is re-attempted on every tick,
+# while a source that SUCCEEDS is left alone until its TTL expires. That
+# inverts the polling pressure — failing makes the desk hit an upstream 3x to
+# 72x harder than succeeding, precisely when it is least able to take it, and
+# a per-IP throttle then never gets the quiet window it needs to lift. The
+# rule this restores: a failing source is never polled more often than a
+# healthy one. Backoff doubles per consecutive failure and is capped at the
+# source's own TTL.
+#
+# WHY 600 and not one 300s tick: the retry is due at `now >= retry_at`, so a
+# cooldown of exactly one tick is a no-op — the very next tick lands on the
+# boundary and fetches anyway. Two ticks is the smallest base that provably
+# skips one, and it is still short enough that a single transient 502 costs
+# one refresh rather than an hour of them.
+FAILURE_COOLDOWN_BASE_SECONDS = 600.0
+
+# WHY cap the exponent: 2 ** streak is an int, and a source broken for a week
+# would overflow the float multiply outright. 2**20 tick-lengths is ~3.6
+# years, well past any cap a real spec carries.
+FAILURE_COOLDOWN_MAX_DOUBLINGS = 20
+
 ECON_CALENDAR_LOOKAHEAD_DAYS = 90
 
 # WHY the caller needs its own ceiling: every fetcher sets a 20s socket
@@ -222,6 +243,8 @@ class SlowFeedRefresher:
     ) -> None:
         self._specs: Tuple[SourceSpec, ...] = tuple(specs)
         self._cache: Dict[Tuple[str, str], CacheEntry] = {}
+        # (thesis_id, source) -> (earliest_retry_monotonic, consecutive_fails)
+        self._cooldowns: Dict[Tuple[str, str], Tuple[float, int]] = {}
         # WHY injectable: tests need to prove a keyless source is never
         # invoked without mutating the process environment mid-suite.
         self._env: Mapping[str, str] = env if env is not None else os.environ
@@ -235,6 +258,10 @@ class SlowFeedRefresher:
 
     def cached(self, thesis_id: str, source: str) -> Optional[CacheEntry]:
         return self._cache.get((thesis_id, source))
+
+    def cooldown(self, thesis_id: str, source: str) -> Optional[Tuple[float, int]]:
+        """(earliest_retry, consecutive_failures) for a source, if it is failing."""
+        return self._cooldowns.get((thesis_id, source))
 
     # ── main entry point ─────────────────────────────────────────────
 
@@ -291,6 +318,11 @@ class SlowFeedRefresher:
             self._apply(cfg, spec.name, entry)
             return "cached"
 
+        # A source still inside its failure cooldown is not called at all.
+        cooling = self._cooldowns.get(key)
+        if cooling is not None and now < cooling[0]:
+            return self._serve_without_fetch(cfg, spec, key, entry, now)
+
         try:
             fresh = await asyncio.wait_for(
                 self._fetch(thesis_id, cfg, spec, now), spec.timeout_seconds,
@@ -314,10 +346,44 @@ class SlowFeedRefresher:
             fresh = None
 
         if fresh is not None:
+            # One good pull clears the streak — the next failure starts over
+            # at one tick rather than inheriting an old backoff.
+            self._cooldowns.pop(key, None)
             self._cache[key] = fresh
             self._apply(cfg, spec.name, fresh)
             return "fetched"
 
+        self._arm_cooldown(key, spec, now)
+        return self._serve_without_fetch(cfg, spec, key, entry, now)
+
+    def _arm_cooldown(
+        self, key: Tuple[str, str], spec: SourceSpec, now: float,
+    ) -> None:
+        """Push the next attempt out, doubling per consecutive failure."""
+        previous = self._cooldowns.get(key)
+        streak = (previous[1] if previous is not None else 0) + 1
+        doublings = min(streak - 1, FAILURE_COOLDOWN_MAX_DOUBLINGS)
+        delay = min(
+            spec.ttl_seconds,
+            FAILURE_COOLDOWN_BASE_SECONDS * (2 ** doublings),
+        )
+        self._cooldowns[key] = (now + delay, streak)
+        log.warning(
+            "slow_feeds: %s failed for %s (streak %d) — next attempt in %.0fs",
+            spec.name, key[0], streak, delay,
+        )
+
+    def _serve_without_fetch(
+        self, cfg: dict, spec: SourceSpec, key: Tuple[str, str],
+        entry: Optional[CacheEntry], now: float,
+    ) -> str:
+        """Decide what to serve on a tick where no fetch happened.
+
+        Reached two ways — the fetch was attempted and failed, or the source
+        is in cooldown and was deliberately not called. Both mean the same
+        thing to the book: there is no new number this tick.
+        """
+        thesis_id = key[0]
         if entry is not None and entry.age(now) < spec.ttl_seconds * STALE_GRACE_MULTIPLIER:
             self._apply(cfg, spec.name, entry)
             log.warning(

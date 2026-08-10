@@ -21,6 +21,7 @@ from web.runtime import slow_feeds
 from web.runtime.coordinator import RuntimeCoordinator
 from web.runtime.slow_feeds import (
     ECON_CALENDAR,
+    FAILURE_COOLDOWN_BASE_SECONDS,
     SlowFeedRefresher,
     SourceSpec,
     declared_sources,
@@ -411,6 +412,155 @@ class TestFailureDegradation:
 
         assert outcome == {"treasury": "defaults"}
         assert "treasury" not in cfg["_feed_freshness"]
+
+
+# =========================================================================
+# FAILURE BACKOFF
+#
+# Every test above drives exactly ONE failing refresh, which is why the real
+# defect hid here for so long: a failing source was re-attempted on EVERY
+# tick while a healthy one was left alone until its TTL expired, so failure
+# made the desk poll 3x-72x harder than success. Live consequence on
+# 2026-08-09: five books' GDELT nodes retried every 300s tick against a
+# per-IP throttle, which kept the throttle warm and starved the news bridge.
+# These tests all take at least TWO ticks, in both directions.
+# =========================================================================
+
+def counting_failing_fetcher():
+    """Resolves nothing, and remembers how many times it was actually run."""
+    calls = []
+
+    def fetcher(cfg: dict) -> dict:
+        calls.append(cfg)
+        return cfg
+
+    fetcher.calls = calls  # type: ignore[attr-defined]
+    return fetcher
+
+
+class TestFailureBackoff:
+    @pytest.mark.asyncio
+    async def test_second_tick_inside_cooldown_does_not_call_the_fetcher(self, clock):
+        """The whole point: a failing source is not re-attempted next tick."""
+        r = refresher(TREASURY, clock)
+        fetcher = counting_failing_fetcher()
+
+        with patch.object(slow_feeds.thesisgraph, "fetch_treasury", fetcher):
+            assert await r.refresh("book", make_cfg()) == {"treasury": "defaults"}
+            assert len(fetcher.calls) == 1
+
+            clock.advance(300.0)  # one coordinator tick — inside the cooldown
+            assert await r.refresh("book", make_cfg()) == {"treasury": "defaults"}
+
+        assert len(fetcher.calls) == 1, "cooldown must suppress the second attempt"
+
+    @pytest.mark.asyncio
+    async def test_attempt_resumes_once_the_cooldown_expires(self, clock):
+        """Backoff must delay the retry, never cancel it."""
+        r = refresher(TREASURY, clock)
+        fetcher = counting_failing_fetcher()
+
+        with patch.object(slow_feeds.thesisgraph, "fetch_treasury", fetcher):
+            await r.refresh("book", make_cfg())
+            clock.advance(FAILURE_COOLDOWN_BASE_SECONDS)
+            await r.refresh("book", make_cfg())
+
+        assert len(fetcher.calls) == 2
+
+    @pytest.mark.asyncio
+    async def test_backoff_doubles_per_consecutive_failure(self, clock):
+        r = refresher(TREASURY, clock)
+        seen = []
+
+        with patch.object(slow_feeds.thesisgraph, "fetch_treasury", failing_fetcher):
+            for _ in range(3):
+                await r.refresh("book", make_cfg())
+                retry_at, streak = r.cooldown("book", "treasury")
+                seen.append((streak, retry_at - clock.now))
+                clock.advance(retry_at - clock.now)  # wait exactly the cooldown
+
+        assert seen == [(1, 600.0), (2, 1200.0), (3, 2400.0)]
+
+    @pytest.mark.asyncio
+    async def test_cooldown_never_exceeds_the_source_ttl(self, clock):
+        """A broken source must never be polled harder than a working one."""
+        gdelt = SourceSpec("gdelt", 900.0)
+        r = refresher(gdelt, clock)
+        delays = []
+
+        with patch.object(slow_feeds.thesisgraph, "fetch_gdelt", failing_fetcher):
+            for _ in range(5):
+                await r.refresh("book", make_cfg("gdelt"))
+                retry_at, _streak = r.cooldown("book", "gdelt")
+                delays.append(retry_at - clock.now)
+                clock.advance(retry_at - clock.now)
+
+        assert delays == [600.0, 900.0, 900.0, 900.0, 900.0]
+        assert max(delays) <= gdelt.ttl_seconds
+
+    @pytest.mark.asyncio
+    async def test_a_good_pull_clears_the_streak(self, clock):
+        """Recovery must reset the backoff, not inherit an old one."""
+        r = refresher(TREASURY, clock)
+
+        with patch.object(slow_feeds.thesisgraph, "fetch_treasury", failing_fetcher):
+            await r.refresh("book", make_cfg())
+        assert r.cooldown("book", "treasury")[1] == 1
+
+        clock.advance(FAILURE_COOLDOWN_BASE_SECONDS)
+        with patch.object(slow_feeds.thesisgraph, "fetch_treasury",
+                          make_fetcher("treasury", 4.65)):
+            assert await r.refresh("book", make_cfg()) == {"treasury": "fetched"}
+        assert r.cooldown("book", "treasury") is None
+
+        clock.advance(3601.0)  # TTL expired, so the next tick really fetches
+        with patch.object(slow_feeds.thesisgraph, "fetch_treasury", failing_fetcher):
+            await r.refresh("book", make_cfg())
+
+        retry_at, streak = r.cooldown("book", "treasury")
+        assert (streak, retry_at - clock.now) == (1, FAILURE_COOLDOWN_BASE_SECONDS)
+
+    @pytest.mark.asyncio
+    async def test_a_marathon_outage_does_not_overflow_the_delay(self, clock):
+        """2 ** streak is an int, and a long enough outage blows the multiply.
+
+        WHY the streak is seeded rather than looped up to: the overflow only
+        bites past ~1015 consecutive failures, so a loop long enough to reach
+        it would hide the guard behind its own runtime — and a shorter loop
+        proves nothing, because the TTL cap returns a correct answer either
+        way. Seeding removes exactly that shadow, and the refresh below is
+        still the real public path.
+        """
+        r = refresher(TREASURY, clock)
+        r._cooldowns[("book", "treasury")] = (clock.now, 5_000)
+
+        with patch.object(slow_feeds.thesisgraph, "fetch_treasury", failing_fetcher):
+            await r.refresh("book", make_cfg())
+
+        retry_at, streak = r.cooldown("book", "treasury")
+        assert streak == 5_001, "the arm must have completed, not raised"
+        assert retry_at - clock.now == TREASURY.ttl_seconds
+
+    @pytest.mark.asyncio
+    async def test_cooldown_still_serves_the_last_good_value(self, clock):
+        """Backoff must cost upstream requests, never the operator's number."""
+        r = refresher(TREASURY, clock)
+        with patch.object(slow_feeds.thesisgraph, "fetch_treasury",
+                          make_fetcher("treasury", 4.65)):
+            await r.refresh("book", make_cfg())
+
+        clock.advance(3600 * 2)  # TTL expired, inside the grace window
+        fetcher = counting_failing_fetcher()
+        with patch.object(slow_feeds.thesisgraph, "fetch_treasury", fetcher):
+            assert await r.refresh("book", make_cfg(current=1.0)) == {
+                "treasury": "stale-cached"}
+
+            clock.advance(60.0)  # inside cooldown
+            cfg = make_cfg(current=1.0)
+            assert await r.refresh("book", cfg) == {"treasury": "stale-cached"}
+
+        assert len(fetcher.calls) == 1, "cooldown must suppress the second attempt"
+        assert next(n for n in cfg["nodes"] if n["id"] == "yields")["current"] == 4.65
 
 
 # =========================================================================
