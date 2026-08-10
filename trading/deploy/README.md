@@ -33,7 +33,9 @@ chmod 600 .env
 #   - DEV_USER_PASSWORD (password for the amo/dan logins)
 #   - TV_WEBHOOK_SECRET (generate same way)
 #   - OPENROUTER_API_KEY (optional, enables @claude/@gpt/@compare in chat)
-#   - DIALECTIC_ROOM_TOKEN (optional, for tools/bridge/push_to_dialectic.py)
+#   - DIALECTIC_ROOM_TOKENS ("<room-uuid>:<token>,..." — REQUIRED for the
+#     snapshot push; the books no longer carry these, see room_tokens.py)
+#   - DIALECTIC_ROOM_TOKEN (legacy single-room fallback, optional)
 
 # 5. Install the systemd unit
 cp deploy/tradingdesk.service /etc/systemd/system/
@@ -118,7 +120,15 @@ systemctl daemon-reload && systemctl restart tradingdesk
 
 ## Rotating a secret
 
-Any secret lives in `.env` — `JWT_SECRET`, `DEV_USER_PASSWORD`, `TV_WEBHOOK_SECRET`, `OPENROUTER_API_KEY`, `DIALECTIC_ROOM_TOKEN`. Procedure:
+Any secret lives in `.env` — `JWT_SECRET`, `DEV_USER_PASSWORD`, `TV_WEBHOOK_SECRET`, `OPENROUTER_API_KEY`, `DIALECTIC_ROOM_TOKENS`. Procedure:
+
+> **Room tokens have a second half.** `DIALECTIC_ROOM_TOKENS` is compared
+> against `rooms.token` in dialectic's Postgres, so rotating one means
+> changing it in BOTH places or that room's push goes quiet. Verify with a
+> read-only call per room — `GET /stakes/rooms/{id}/commitments` with the
+> token as a Bearer header should return 200, and a wrong token 401. Do not
+> verify via `tradingdesk-bridge.timer`: it only pushes when a snapshot
+> changed, so a clean run proves nothing about auth.
 
 ```bash
 # 1. Edit .env with the new value

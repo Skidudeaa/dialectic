@@ -72,28 +72,57 @@ Treat any single news probe as a request that itself extends the hold.
 
 ## Still open
 
-1. **Room tokens are now PUBLIC — rotate them, and get them out of git.**
+1. **Room tokens: moved out of git 2026-08-10 ~17:55 CDT. NOT rotated —
+   they remain valid and remain in pushed history.**
+
+   > **Update 2026-08-10 ~17:55 CDT (`4944009`).** The owner's call was
+   > move, not rotate. `DIALECTIC_ROOM_TOKENS` in `trading/.env` (gitignored,
+   > mode 600) now carries `<room-uuid>:<token>` for all five rooms, the
+   > books are scrubbed, and every reader goes through one resolver,
+   > `tools/bridge/room_tokens.py`. Verified against the live dialectic
+   > service: all five rooms return **200** on a read-only token-gated
+   > endpoint, with a wrong token and a missing token both returning 401 as
+   > the negative control. Zero deprecation warnings and zero auth failures
+   > on the running desk.
+   >
+   > **What this does and does not buy.** It stops the NEXT commit from
+   > leaking, and it means a fresh clone of the public repo carries no
+   > credential. It does NOT un-publish yesterday's push: the five values
+   > are in pushed history and are still live. Anyone who pulled or scraped
+   > between ~12:05 and now holds working room tokens. Rotation is still
+   > the only thing that closes that, and it is now a one-line change per
+   > room (`UPDATE rooms SET token = ...` plus the env value) precisely
+   > because the books no longer have an opinion.
 
    > **Superseded 2026-08-10 ~12:05 CDT: the push happened, on the owner's
    > explicit second instruction.** `origin/master` is at `4bc859a`; the
    > `trading/` tree (308 files) is live on the public repo and the five
-   > `meta.dialecticRoomToken` values went with it. This is no longer a
-   > risk to weigh — it is an exposure to close. The paragraphs below record
-   > the pre-push state for the record.
+   > `meta.dialecticRoomToken` values went with it. The paragraphs below
+   > record the pre-push state.
 
    Pre-push pre-flight was otherwise clean: no `.env` with secrets in the
    142 commits (`packages/mobile/.env` holds only `EXPO_PUBLIC_API_URL`,
    which Expo bundles client-side by design), no committed key VALUES, no
    blob over 50 MB.
 
-   **The rotation and the migration are ONE job, not two.** `rooms.token` is
-   plaintext in Postgres and compared directly (`stakes/routes.py:32`), so
-   rotating is a per-room `UPDATE` — but a new token written back into
-   `trading/books/*.json` lands in the same tracked file that is now public,
-   which recreates the exposure on the next commit. Rotate and move to env
-   in the same pass, in this order: new tokens into env + `rooms.token` →
-   books scrubbed → commit → restart the desk (its WorkingDirectory IS the
-   git tree) → verify one push round-trip per room.
+   **The migration half is done; rotation is what remains.** `rooms.token`
+   is plaintext in Postgres and compared directly (`stakes/routes.py:32`),
+   so rotating is now genuinely a per-room two-liner — the books no longer
+   carry a value that could undo it:
+
+   ```bash
+   # per room: new secret in both places, then restart
+   psql -c "UPDATE rooms SET token = '<new>' WHERE id = '<room-uuid>';"
+   #   ...and edit the matching pair in DIALECTIC_ROOM_TOKENS in trading/.env
+   sudo systemctl restart tradingdesk
+   ```
+
+   Do all five in one pass, then re-run the auth check that verified this
+   migration (all five rooms 200 on `GET /stakes/rooms/{id}/commitments`
+   with a wrong-token 401 as the control). `tradingdesk-bridge.timer` reads
+   the same `.env`, so it needs no separate change — but it only pushes when
+   a snapshot CHANGED, so a green run showing `pushed=-` proves nothing
+   about auth. Use the read-only check, not the timer.
 
    `Skidudeaa/dialectic` is **PUBLIC**. `master` was 142 commits ahead of
    `origin/master` and 0 behind, so the push fast-forwarded cleanly — and
