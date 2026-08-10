@@ -18,6 +18,21 @@ from web.runtime import dialectic_push
 from web.runtime.coordinator import RuntimeCoordinator
 
 
+# WHY a real UUID and an env-supplied token: these cases are about the PUSH
+# path, not about where the secret comes from. Carrying it in `meta` still
+# works (back-compat) but emits the deprecation warning on every run, and a
+# recurring false alarm is how an operator learns to skim past the channel
+# that carries the real ones. This routes them through the production
+# source instead — see tools/bridge/room_tokens.py.
+ROOM_ID = "56ba2f1e-5c70-4290-a77d-52404f0095da"
+ROOM_META = {"meta": {"dialecticRoomId": ROOM_ID}}
+
+
+@pytest.fixture(autouse=True)
+def _room_token_env(monkeypatch):
+    monkeypatch.setenv("DIALECTIC_ROOM_TOKENS", f"{ROOM_ID}:t")
+
+
 V2_EXPORT = {
     "v": 2,
     "timestamp": "2026-08-09T05:07:15Z",
@@ -367,7 +382,7 @@ class TestMaybePushDialectic:
 
         monkeypatch.setattr(dialectic_push, "push_snapshot", _ok)
         await coordinator._maybe_push_dialectic(
-            "b", {"meta": {"dialecticRoomId": "r", "dialecticRoomToken": "t"}},
+            "b", ROOM_META,
             V2_EXPORT, EVENTS,
         )
         assert "b" in coordinator._last_dialectic_push
@@ -382,7 +397,7 @@ class TestMaybePushDialectic:
 
         monkeypatch.setattr(dialectic_push, "push_snapshot", _fail)
         await coordinator._maybe_push_dialectic(
-            "b", {"meta": {"dialecticRoomId": "r", "dialecticRoomToken": "t"}},
+            "b", ROOM_META,
             V2_EXPORT, EVENTS,
         )
         assert "b" not in coordinator._last_dialectic_push
@@ -398,7 +413,7 @@ class TestMaybePushDialectic:
 
         monkeypatch.setattr(dialectic_push, "push_snapshot", _boom)
         await coordinator._maybe_push_dialectic(
-            "b", {"meta": {"dialecticRoomId": "r", "dialecticRoomToken": "t"}},
+            "b", ROOM_META,
             V2_EXPORT, EVENTS,
         )
         assert "b" not in coordinator._last_dialectic_push
@@ -414,7 +429,7 @@ class TestMaybePushDialectic:
             return True
 
         monkeypatch.setattr(dialectic_push, "push_snapshot", _capture)
-        meta = {"meta": {"dialecticRoomId": "r", "dialecticRoomToken": "t"}}
+        meta = ROOM_META
 
         await coordinator._maybe_push_dialectic("b", meta, V2_EXPORT, EVENTS)
         assert seen["reason"] == "events"

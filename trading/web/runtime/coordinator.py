@@ -24,6 +24,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from tools.bridge.room_tokens import resolve_room_token  # type: ignore[import-untyped]
 from tools.thesis_graph import thesisgraph  # type: ignore[import-untyped]
 
 from web.observability import thesis_context
@@ -617,7 +618,7 @@ class RuntimeCoordinator:
         """
         meta = cfg.get("meta", {}) or {}
         room_id = meta.get("dialecticRoomId")
-        room_token = meta.get("dialecticRoomToken")
+        room_token = resolve_room_token(meta)
         if not room_id or not room_token:
             return
         if not self._should_push_dialectic(thesis_id, events):

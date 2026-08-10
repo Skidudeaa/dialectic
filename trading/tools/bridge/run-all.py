@@ -54,6 +54,17 @@ from typing import Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+# WHY two ways in: this script is run standalone (`python3 tools/bridge/
+# run-all.py`, where sys.path[0] is its own directory) AND loaded by the
+# test suite through the installed package. The rest of the file reaches
+# siblings via spec_from_file_location because of the hyphen in its own
+# name; room_tokens has no hyphen, so a plain import is enough — it just
+# needs to work from both entry points.
+try:
+    from tools.bridge.room_tokens import resolve_room_token
+except ImportError:  # pragma: no cover — standalone invocation
+    from room_tokens import resolve_room_token
+
 
 # =========================================================================
 # SCRIPT PATHS
@@ -266,11 +277,11 @@ def run_book(
     # WHY: treat falsy values ("", None) as absent — Unit 1 inserts "" as a
     # placeholder until the real room UUID is available from Dialectic admin.
     room_id: str = meta.get("dialecticRoomId") or ""
-    # Per-book token takes precedence over DIALECTIC_ROOM_TOKEN env var.
-    # WHY: Each Dialectic room has its own token; storing it alongside the
-    # room ID in the book JSON avoids per-book env var proliferation.
-    # Falls back to the env var so single-room setups need no JSON change.
-    room_token: str = meta.get("dialecticRoomToken") or os.environ.get("DIALECTIC_ROOM_TOKEN", "")
+    # WHY the env now wins over the book (it used to be the other way): each
+    # room has its own token, and keeping them in the book JSON put five live
+    # credentials in a tracked file that reached a public repo on 2026-08-10.
+    # DIALECTIC_ROOM_TOKENS carries the per-room map; see room_tokens.py.
+    room_token: str = resolve_room_token(meta) or ""
 
     latest: Path = snapshots_dir / f"{book_id}-latest.json"
     prev: Path = snapshots_dir / f"{book_id}-prev.json"

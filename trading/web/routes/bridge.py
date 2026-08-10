@@ -30,6 +30,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from tools.bridge.room_tokens import resolve_room_token  # type: ignore[import-untyped]
 from web.auth import get_current_user
 from web.deps import get_repo
 from web.models import User
@@ -181,11 +182,15 @@ def _resolve_dialectic_url() -> str:
 
 
 def _load_book_tokens() -> dict[str, str]:
-    """Map dialecticRoomId -> dialecticRoomToken from books/*.json.
+    """Map dialecticRoomId -> room token for every book that declares a room.
 
-    WHY lazy + per-call: there are only 2 books today and operators rarely
-    drain (this fires on a button click, not in a hot loop). Caching would
-    add stale-token risk for negligible payoff.
+    The books supply the room IDs; `resolve_room_token` supplies the secret,
+    which since 2026-08-10 lives in DIALECTIC_ROOM_TOKENS rather than in the
+    book (the books are on a public repo).
+
+    WHY lazy + per-call: this fires on a button click, not in a hot loop, and
+    reading the env each time means an operator who fixes a token does not
+    have to restart the desk to be believed.
     """
     tokens: dict[str, str] = {}
     if not _BOOKS_DIR.is_dir():
@@ -200,7 +205,7 @@ def _load_book_tokens() -> dict[str, str]:
             continue
         meta = data.get("meta", {}) or {}
         room_id = meta.get("dialecticRoomId")
-        room_tok = meta.get("dialecticRoomToken")
+        room_tok = resolve_room_token(meta)
         if room_id and room_tok:
             tokens[room_id] = room_tok
     return tokens
