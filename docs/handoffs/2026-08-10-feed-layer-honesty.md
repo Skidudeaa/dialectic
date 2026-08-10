@@ -91,6 +91,28 @@ Treat any single news probe as a request that itself extends the hold.
    (a) do the tokens move out of git, and how;
    (b) does the trading engine become public at all.
    **Nothing is exposed today. Do not push until both are settled.**
+
+   Asked for a ruling 2026-08-10 ~01:00 CDT; no answer (owner away), so the
+   push was left unfired with everything committed behind it. Pick one:
+
+   ```bash
+   # A — private first, then push everything (reversible; 0 forks, 0 stars)
+   gh repo edit Skidudeaa/dialectic --visibility private
+   git push origin master
+
+   # B — back the work up without touching the public repo
+   gh repo create dialectic-private --private
+   git remote add backup git@github.com:Skidudeaa/dialectic-private.git
+   git push backup master
+
+   # C — publish as-is, then rotate all five tokens IMMEDIATELY
+   git push origin master        # irreversible: caches and scrapers index it
+
+   # D — do the env migration first (see (a) above), then push public
+   ```
+
+   A is the cheapest safe move and undoes itself later. C is the only one
+   that cannot be walked back.
 2. **A live curve spread has no implementation.** `curve` wanted front-vs-6m
    Brent as a percent; no fetcher computes a spread, and its `symbols` list
    was never read by anything. Marked `manual` and pointed at the live
