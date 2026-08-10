@@ -14,6 +14,7 @@ these routes would look like a passing 200 to a naive test.
 
 import json
 import os
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -71,8 +72,10 @@ def client(repo, monkeypatch):
 def clear_news_cache():
     """The news TTL cache is module-global — never leak between tests."""
     bridge_mod._news_cache.clear()
+    bridge_mod._news_rate_limit_streak.clear()
     yield
     bridge_mod._news_cache.clear()
+    bridge_mod._news_rate_limit_streak.clear()
 
 
 def svc_headers(token: str = SERVICE_TOKEN) -> dict:
@@ -321,6 +324,68 @@ class TestNewsEndpoint:
         body = resp.json()
         assert body["articles"] == []
         assert "gdelt unavailable" in body["note"]
+
+    def test_consecutive_rate_limits_back_off(self, client, monkeypatch):
+        """A 429 is the upstream saying we ask too often — hold the miss longer.
+
+        WHY this is not the same as any other failure: on the flat 120s error
+        TTL, five books re-attempt roughly every 24s between them, which is
+        what keeps a per-IP throttle warm. Observed 2026-08-10: four of five
+        books sat rate-limited for hours and the retries were the reason.
+        """
+        from tools.data_fetch import gdelt
+
+        def _boom(*a, **k):
+            raise gdelt.GdeltRateLimitError("429")
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _boom)
+
+        holds = []
+        for _ in range(4):
+            client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
+            expires_at, _payload = bridge_mod._news_cache[THESIS_ID]
+            holds.append(round(expires_at - time.monotonic()))
+            bridge_mod._news_cache.clear()  # simulate the hold elapsing
+
+        assert holds == [120, 240, 480, 900]
+        assert max(holds) <= bridge_mod.NEWS_TTL_SECONDS, \
+            "a throttled feed must never be polled harder than a healthy one"
+
+    def test_a_non_rate_limit_error_keeps_the_short_ttl(self, client, monkeypatch):
+        """Only a 429 earns the long hold — other errors are still guesses."""
+        from tools.data_fetch import gdelt
+
+        def _boom(*a, **k):
+            raise gdelt.GdeltAPIError("malformed body")
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _boom)
+        for _ in range(3):
+            client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
+            expires_at, _payload = bridge_mod._news_cache[THESIS_ID]
+            assert round(expires_at - time.monotonic()) == 120
+            bridge_mod._news_cache.clear()
+
+    def test_one_good_fetch_clears_the_streak(self, client, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        def _boom(*a, **k):
+            raise gdelt.GdeltRateLimitError("429")
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _boom)
+        for _ in range(3):
+            client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
+            bridge_mod._news_cache.clear()
+        assert bridge_mod._news_rate_limit_streak[THESIS_ID] == 3
+
+        monkeypatch.setattr(gdelt, "fetch_articles", lambda *a, **k: [])
+        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
+        assert THESIS_ID not in bridge_mod._news_rate_limit_streak
+
+        bridge_mod._news_cache.clear()
+        monkeypatch.setattr(gdelt, "fetch_articles", _boom)
+        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
+        expires_at, _payload = bridge_mod._news_cache[THESIS_ID]
+        assert round(expires_at - time.monotonic()) == 120, "back to the base hold"
 
     def test_second_request_is_served_from_cache(self, client, monkeypatch):
         """GDELT asks for ~1 req/sec; a chatty room must not hammer it."""

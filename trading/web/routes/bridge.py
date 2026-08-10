@@ -414,6 +414,22 @@ NEWS_TTL_SECONDS = 900.0
 # either.
 NEWS_ERROR_TTL_SECONDS = 120.0
 
+# WHY a 429 backs off harder than any other failure: every other error is a
+# guess about whether the upstream has recovered, but a rate limit is the
+# upstream telling us in words that we are asking too often. Retrying it on
+# the flat 120s error TTL means five books re-attempt roughly every 24s
+# between them, which is what keeps a per-IP throttle warm — the feed then
+# stays dark for hours and the retries are the reason. Consecutive rate
+# limits double the hold, capped at NEWS_TTL_SECONDS, so a throttled feed is
+# never polled harder than a healthy one. One good fetch clears the streak.
+#
+# Observed 2026-08-10: with the flat TTL, four of five books sat on
+# GdeltRateLimitError for hours while each probe drew a fresh 429.
+NEWS_RATE_LIMIT_MAX_DOUBLINGS = 8
+
+# thesis_id -> consecutive rate-limited fetches
+_news_rate_limit_streak: dict[str, int] = {}
+
 NEWS_MAX_HEADLINES = 15
 
 # thesis_id -> (expires_at_monotonic, payload)
@@ -473,6 +489,23 @@ def _fetch_news_sync(thesis_id: str, book: dict) -> tuple[dict, float]:
 
     try:
         articles = gdelt.fetch_articles(query, max_records=NEWS_MAX_HEADLINES)
+    except gdelt.GdeltRateLimitError as exc:
+        streak = _news_rate_limit_streak.get(thesis_id, 0) + 1
+        _news_rate_limit_streak[thesis_id] = streak
+        ttl = min(
+            NEWS_TTL_SECONDS,
+            NEWS_ERROR_TTL_SECONDS
+            * (2 ** min(streak - 1, NEWS_RATE_LIMIT_MAX_DOUBLINGS)),
+        )
+        log.warning(
+            "GDELT rate-limited for %s (streak %d) — holding the empty "
+            "answer %.0fs so the throttle can lift: %s",
+            thesis_id, streak, ttl, exc,
+        )
+        return (
+            {"articles": [], "note": f"gdelt unavailable: {type(exc).__name__}"},
+            ttl,
+        )
     except Exception as exc:  # noqa: BLE001 — a dark feed is not a 500
         log.warning("GDELT fetch failed for %s: %s: %s",
                     thesis_id, type(exc).__name__, exc)
@@ -480,6 +513,8 @@ def _fetch_news_sync(thesis_id: str, book: dict) -> tuple[dict, float]:
             {"articles": [], "note": f"gdelt unavailable: {type(exc).__name__}"},
             NEWS_ERROR_TTL_SECONDS,
         )
+
+    _news_rate_limit_streak.pop(thesis_id, None)
 
     headlines: list[dict[str, Any]] = [
         {

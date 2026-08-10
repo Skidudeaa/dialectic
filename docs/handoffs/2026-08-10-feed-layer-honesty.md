@@ -34,10 +34,15 @@ Suite 1323 → 1359 collected, all green. Desk restarted onto `13d1a2a` at
   = five real HTTP calls per tick, all thrown away, all against the only
   unauthenticated per-IP-throttled source on the desk. The log read
   `updated 0 node(s) from 1/1 queries`, which looks like a quiet news day.
-- **Failure inverted the polling pressure.** `slow_feeds` re-attempted a
-  failing source every 300s tick while leaving a healthy one alone until its
-  TTL — so failing made the desk poll 3×–72× *harder* than succeeding, and a
-  per-IP throttle never got the quiet window it needed to lift.
+- **Failure inverted the polling pressure — in two places.** `slow_feeds`
+  re-attempted a failing source every 300s tick while leaving a healthy one
+  alone until its TTL, so failing made the desk poll 3×–72× *harder* than
+  succeeding. The news bridge had the same shape one layer up: its flat 120s
+  error TTL treated a 429 like any other failure, so five books re-attempted
+  roughly every 24s between them and kept the throttle warm for hours. A
+  rate limit is not a guess about recovery — it is the upstream saying in
+  words that we ask too often, and it is the only error that should back off
+  on its own count.
 - **A cooldown of exactly one tick is a no-op.** The retry is due at
   `now >= retry_at`, so the very next tick lands on the boundary and fetches
   anyway. Base is two ticks (600s) for that reason.
