@@ -72,11 +72,33 @@ Treat any single news probe as a request that itself extends the hold.
 
 ## Still open
 
-1. **Room tokens vs a public repo — BLOCKS `git push`.**
-   `Skidudeaa/dialectic` is **PUBLIC**. `master` is 142 commits ahead of
-   `origin/master` and 0 behind, so a push fast-forwards cleanly — and adds
-   the **entire `trading/` tree (355 files)**, which the public remote does
-   not carry at all today. Inside it, five live `meta.dialecticRoomToken`
+1. **Room tokens are now PUBLIC — rotate them, and get them out of git.**
+
+   > **Superseded 2026-08-10 ~12:05 CDT: the push happened, on the owner's
+   > explicit second instruction.** `origin/master` is at `4bc859a`; the
+   > `trading/` tree (308 files) is live on the public repo and the five
+   > `meta.dialecticRoomToken` values went with it. This is no longer a
+   > risk to weigh — it is an exposure to close. The paragraphs below record
+   > the pre-push state for the record.
+
+   Pre-push pre-flight was otherwise clean: no `.env` with secrets in the
+   142 commits (`packages/mobile/.env` holds only `EXPO_PUBLIC_API_URL`,
+   which Expo bundles client-side by design), no committed key VALUES, no
+   blob over 50 MB.
+
+   **The rotation and the migration are ONE job, not two.** `rooms.token` is
+   plaintext in Postgres and compared directly (`stakes/routes.py:32`), so
+   rotating is a per-room `UPDATE` — but a new token written back into
+   `trading/books/*.json` lands in the same tracked file that is now public,
+   which recreates the exposure on the next commit. Rotate and move to env
+   in the same pass, in this order: new tokens into env + `rooms.token` →
+   books scrubbed → commit → restart the desk (its WorkingDirectory IS the
+   git tree) → verify one push round-trip per room.
+
+   `Skidudeaa/dialectic` is **PUBLIC**. `master` was 142 commits ahead of
+   `origin/master` and 0 behind, so the push fast-forwarded cleanly — and
+   added the **entire `trading/` tree**, which the public remote did not
+   carry at all. Inside it, five live `meta.dialecticRoomToken`
    values in `trading/books/*.json`.
 
    They are **load-bearing, not vestigial**: `web/routes/bridge.py:184` maps
@@ -87,32 +109,35 @@ Treat any single news probe as a request that itself extends the hold.
    cannot hold five distinct per-room values, so the migration needs a real
    per-room mapping, not a one-line swap.
 
-   Two separate decisions, and the second is the bigger one:
-   (a) do the tokens move out of git, and how;
-   (b) does the trading engine become public at all.
-   **Nothing is exposed today. Do not push until both are settled.**
+   Two decisions were on the table; the owner took path C (publish as-is)
+   after being shown the consequence twice. A ruling was requested at
+   ~01:00 CDT and went unanswered overnight, so the push was staged and
+   left unfired; the instruction came at ~12:05 CDT.
 
-   Asked for a ruling 2026-08-10 ~01:00 CDT; no answer (owner away), so the
-   push was left unfired with everything committed behind it. Pick one:
+   **`git rm --cached` will not undo this.** The blobs are in pushed
+   history and public commits get cached and scraped, so scrubbing history
+   is a separate exercise from rotating — and rotation is what actually
+   closes the hole. What remains open:
 
    ```bash
-   # A — private first, then push everything (reversible; 0 forks, 0 stars)
-   gh repo edit Skidudeaa/dialectic --visibility private
-   git push origin master
+   # 1. rotate — per room, tokens live plaintext in rooms.token
+   psql -c "UPDATE rooms SET token = '<new>' WHERE id = '<room-uuid>';"
 
-   # B — back the work up without touching the public repo
-   gh repo create dialectic-private --private
-   git remote add backup git@github.com:Skidudeaa/dialectic-private.git
-   git push backup master
+   # 2. get them out of git in the SAME pass, or step 1 is undone by the
+   #    next commit. One DIALECTIC_ROOM_TOKEN cannot hold five values, so
+   #    this needs a per-room mapping in env (see bridge.py:184).
 
-   # C — publish as-is, then rotate all five tokens IMMEDIATELY
-   git push origin master        # irreversible: caches and scrapers index it
+   # 3. commit scrubbed books -> restart the desk (WorkingDirectory IS the
+   #    git tree) -> verify one push round-trip per room.
 
-   # D — do the env migration first (see (a) above), then push public
+   # optional, separate: purge the blobs from history
+   #   git bundle create ../backup.bundle --all   # FIRST
+   #   git filter-repo --path trading/books --invert-paths   # then re-add clean
    ```
 
-   A is the cheapest safe move and undoes itself later. C is the only one
-   that cannot be walked back.
+   Also still true: `tradingdesk-bridge.timer` fires every 30 minutes on
+   the old push path, so a rotation that misses it will surface as a
+   half-hourly auth failure rather than immediately.
 2. **A live curve spread has no implementation.** `curve` wanted front-vs-6m
    Brent as a percent; no fetcher computes a spread, and its `symbols` list
    was never read by anything. Marked `manual` and pointed at the live
