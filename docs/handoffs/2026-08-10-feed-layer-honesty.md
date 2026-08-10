@@ -17,9 +17,19 @@ right next to it.
 | The feed validator validates feeds | `13d1a2a` — it had read the singular `feed` key while all 71 nodes use plural `feeds` |
 | 18 edges propagate on their declared lag | `13d1a2a` — quarters and `immediate to N` no longer collapse to 30d |
 | Docs match reality | test count 1325 → 1359; README documents the watch-only contract and the 5-char rule |
+| FRED writes percent into percent-calibrated nodes | `0e2d997` — `units=pc1` on the three index series; `retail-prices` 332.568 → 3.287, `input-costs` 286.827 → 10.110 |
+| The news bridge backs off a 429 instead of feeding it | `c5a1884` — consecutive rate limits double the hold, 120 → 900s cap, cleared by one good fetch |
 
-Suite 1323 → 1359 collected, all green. Desk restarted onto `13d1a2a` at
-23:58 CDT and healthy.
+Suite 1323 → 1364 passed, 2 skipped. Desk on `c5a1884`, healthy.
+
+**Final verification (00:39, after a deliberate 20-minute window with zero
+probes):** coordinator GDELT requests = **0**. `trump-tariffs` returned 15
+live headlines, `japan-rate-shock` 4 earlier. `iran`, `ai-capex` and
+`china` were still rate-limited — GDELT's per-IP penalty on this host
+outlasts 20 minutes, and hours of the old every-tick behaviour plus my own
+verification probing are what earned it. Nothing in the desk is feeding it
+now, so it heals on its own; the remaining 429s are residue, not a defect.
+Treat any single news probe as a request that itself extends the hold.
 
 ## Traps worth remembering
 
@@ -62,14 +72,25 @@ Suite 1323 → 1359 collected, all green. Desk restarted onto `13d1a2a` at
 
 ## Still open
 
-1. **Room tokens vs a public repo.** `Skidudeaa/dialectic` is **PUBLIC**.
-   Five live `meta.dialecticRoomToken` values sit in tracked
-   `trading/books/*.json` at HEAD. Nothing is exposed today — the remote is
-   139 commits behind and carries no `trading/` path at all — but one
-   `git push` publishes all five. `push_to_dialectic.py` already prefers the
-   `DIALECTIC_ROOM_TOKEN` env var over the per-book value, so the migration
-   path exists. Owner call: rotate, move to env, or scrub. **Do not push
-   until this is settled.**
+1. **Room tokens vs a public repo — BLOCKS `git push`.**
+   `Skidudeaa/dialectic` is **PUBLIC**. `master` is 142 commits ahead of
+   `origin/master` and 0 behind, so a push fast-forwards cleanly — and adds
+   the **entire `trading/` tree (355 files)**, which the public remote does
+   not carry at all today. Inside it, five live `meta.dialecticRoomToken`
+   values in `trading/books/*.json`.
+
+   They are **load-bearing, not vestigial**: `web/routes/bridge.py:184` maps
+   `dialecticRoomId → dialecticRoomToken` at runtime, the coordinator push
+   reads them, and `tradingdesk-bridge.timer` is still enabled and firing
+   every 30 minutes. Removing them from the books without an env-backed
+   replacement breaks the push path — and a single `DIALECTIC_ROOM_TOKEN`
+   cannot hold five distinct per-room values, so the migration needs a real
+   per-room mapping, not a one-line swap.
+
+   Two separate decisions, and the second is the bigger one:
+   (a) do the tokens move out of git, and how;
+   (b) does the trading engine become public at all.
+   **Nothing is exposed today. Do not push until both are settled.**
 2. **A live curve spread has no implementation.** `curve` wanted front-vs-6m
    Brent as a percent; no fetcher computes a spread, and its `symbols` list
    was never read by anything. Marked `manual` and pointed at the live
