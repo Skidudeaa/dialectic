@@ -1,9 +1,21 @@
-# Handoff — The night the feed layer stopped lying (2026-08-10, ~04:00–06:00 UTC)
+# Handoff — The night the feed layer stopped lying (2026-08-09 → 08-11)
 
 **What happened:** started as "fix the newsfeed", became a sweep of the whole
-feed layer. Six commits. Every defect found had the same shape: *something
-that looked live and wasn't*, with a warning nobody could act on sitting
-right next to it.
+feed layer, then a public-repo push and a credential migration. **14 commits**
+across two days, all pushed (`8d07672`).
+
+Almost every defect had the same shape: *something that looked live and
+wasn't*, with a warning nobody could act on sitting right next to it. A dark
+GDELT query, a validator reading a key no file writes, a lag parser silently
+defaulting a quarter of the graph, an index level in a percent node, a retry
+loop feeding the throttle it was retrying against. None of them raised.
+
+The second theme is about me rather than the code, and it is the one worth
+carrying forward: **three times this session a conclusion ran ahead of the
+evidence** — a "0 requests" reading from an empty log window, a mutation test
+that errored instead of failing, and a "the throttle has lifted" drawn from
+the first book in a probe run. Each was caught by finishing the check rather
+than by a new idea. The traps section below is mostly that.
 
 ## What is LIVE and verified
 
@@ -16,20 +28,44 @@ right next to it.
 | A failing slow source backs off | `6433640` — cooldown doubles from 600s, capped at the source's TTL |
 | The feed validator validates feeds | `13d1a2a` — it had read the singular `feed` key while all 71 nodes use plural `feeds` |
 | 18 edges propagate on their declared lag | `13d1a2a` — quarters and `immediate to N` no longer collapse to 30d |
-| Docs match reality | test count 1325 → 1359; README documents the watch-only contract and the 5-char rule |
+| Docs match reality | test count 1325 → 1379; README documents the watch-only contract and the 5-char rule; `.env.example` + deploy runbook carry `DIALECTIC_ROOM_TOKENS` |
+| Room tokens out of the books, into env | `4944009` — same secrets, new home; all five rooms 200 on a read-only auth check, 401 negative control |
 | FRED writes percent into percent-calibrated nodes | `0e2d997` — `units=pc1` on the three index series; `retail-prices` 332.568 → 3.287, `input-costs` 286.827 → 10.110 |
 | The news bridge backs off a 429 instead of feeding it | `c5a1884` — consecutive rate limits double the hold, 120 → 900s cap, cleared by one good fetch |
 
-Suite 1323 → 1364 passed, 2 skipped. Desk on `c5a1884`, healthy.
+Suite 1323 → 1379 passed, 3 skipped. Desk on `8d07672`, healthy.
 
-**Final verification (00:39, after a deliberate 20-minute window with zero
-probes):** coordinator GDELT requests = **0**. `trump-tariffs` returned 15
-live headlines, `japan-rate-shock` 4 earlier. `iran`, `ai-capex` and
-`china` were still rate-limited — GDELT's per-IP penalty on this host
-outlasts 20 minutes, and hours of the old every-tick behaviour plus my own
-verification probing are what earned it. Nothing in the desk is feeding it
-now, so it heals on its own; the remaining 429s are residue, not a defect.
-Treat any single news probe as a request that itself extends the hold.
+### What GDELT is actually doing — read this before diagnosing the feed
+
+Two spaced runs, ~18 hours apart, produced the SAME shape:
+
+| | 00:39, after 20 min quiet | 18:48, after ~18 h quiet |
+|---|---|---|
+| 1st book probed | **15 articles** | **15 articles** |
+| every book after, ~40s apart | 429 | 429 (all four) |
+
+**One request per quiet window. The length of the preceding silence buys
+nothing.** Twenty minutes and eighteen hours performed identically, which
+kills the theory the 00:39 line in this file used to assert — that we had
+earned a lingering penalty through the old every-tick behaviour and it
+would "heal on its own". It does not heal, because there is nothing to
+heal: the constraint is spacing between requests, not accumulated debt.
+
+> That earlier claim was written from the 00:39 run and stood in this file
+> for a day. It was drawn from one success plus three failures and read
+> the failures as decay. Corrected 2026-08-11 once the 18-hour run showed
+> an identical 1-of-5. Recorded rather than deleted because the wrong
+> version is the more instructive one: a single success at the head of a
+> probe run is not evidence that a throttle lifted.
+
+Consequences for whoever is next:
+
+- **Coordinator GDELT requests are 0** and stay 0 — that fix holds.
+- The desk is CORRECT but serves **one book at a time**. Ask Claude about
+  two theses in one conversation and the second reliably eats a 429.
+- **A single news probe is itself a request.** Any check you run is
+  competing with the feature. Prefer reading `journalctl` over probing.
+- Do not conclude anything from one book. Probe the set or nothing.
 
 ## Traps worth remembering
 
@@ -143,46 +179,56 @@ Treat any single news probe as a request that itself extends the hold.
    ~01:00 CDT and went unanswered overnight, so the push was staged and
    left unfired; the instruction came at ~12:05 CDT.
 
-   **`git rm --cached` will not undo this.** The blobs are in pushed
-   history and public commits get cached and scraped, so scrubbing history
-   is a separate exercise from rotating — and rotation is what actually
-   closes the hole. What remains open:
+   **`git rm --cached` will not undo this**, and neither did the migration.
+   The blobs are in pushed history and public commits get cached and
+   scraped. Only two things are left, and they are independent:
 
    ```bash
-   # 1. rotate — per room, tokens live plaintext in rooms.token
+   # ROTATION — the one that actually closes the hole. Per room:
    psql -c "UPDATE rooms SET token = '<new>' WHERE id = '<room-uuid>';"
+   #   ...and the matching pair in DIALECTIC_ROOM_TOKENS in trading/.env
+   sudo systemctl restart tradingdesk
 
-   # 2. get them out of git in the SAME pass, or step 1 is undone by the
-   #    next commit. One DIALECTIC_ROOM_TOKEN cannot hold five values, so
-   #    this needs a per-room mapping in env (see bridge.py:184).
-
-   # 3. commit scrubbed books -> restart the desk (WorkingDirectory IS the
-   #    git tree) -> verify one push round-trip per room.
-
-   # optional, separate: purge the blobs from history
-   #   git bundle create ../backup.bundle --all   # FIRST
-   #   git filter-repo --path trading/books --invert-paths   # then re-add clean
+   # HISTORY PURGE — optional, separate, and does NOT substitute for above
+   #   git bundle create ../backup.bundle --all      # FIRST
+   #   git filter-repo --path trading/books --invert-paths
    ```
 
-   Also still true: `tradingdesk-bridge.timer` fires every 30 minutes on
-   the old push path, so a rotation that misses it will surface as a
-   half-hourly auth failure rather than immediately.
-2. **A live curve spread has no implementation.** `curve` wanted front-vs-6m
+   `tradingdesk-bridge.timer` reads the same `.env`, so it needs no
+   separate change — but it only pushes when a snapshot CHANGED, so a green
+   run showing `pushed=-` proves nothing about auth. Verify with the
+   read-only per-room check instead.
+2. **Nothing serialises GDELT across books — the last gap in the news feed.**
+   Each book's `/api/bridge/news/{id}` fetches independently, so with one
+   request allowed per quiet window (see the table above), asking Claude
+   about two theses in one conversation reliably 429s the second. The
+   per-book backoff shipped in `c5a1884` handles the refusal gracefully; it
+   does not stop five books racing each other into it.
+
+   Shape of the fix: a module-level last-request timestamp in `bridge.py`
+   shared by ALL books, and when a call arrives inside the floor, serve the
+   cached miss rather than spend a doomed request. **Derive the interval
+   from passive `journalctl` observation over a day, not from probing** —
+   every probe spends exactly the request the feature needs, which is what
+   made every reading in this session partly self-inflicted. 60–90s is the
+   guess; it should not ship as a guess.
+
+3. **A live curve spread has no implementation.** `curve` wanted front-vs-6m
    Brent as a percent; no fetcher computes a spread, and its `symbols` list
    was never read by anything. Marked `manual` and pointed at the live
    contracts (`BZ=F` over `BZJ27.NYM`) — the original `BZK26.NYM` leg had
    expired months ago. Building real spread support would make it live.
-3. **CommitmentDetector as proposals** — still imported, never called
+4. **CommitmentDetector as proposals** — still imported, never called
    (`stakes/detector.py`). Bigger than wiring: `draft_prediction`'s Accept
    card rides on an *LLM* message's `metadata.proposal`, but a detected
    commitment comes from a *human's own* message, so where the card lives is
    a design decision. Also needs a per-room cap — it fires a Haiku call per
    triggered message.
-4. **Cross-room memory write path** — routes + WS handlers + promote-to-global
+5. **Cross-room memory write path** — routes + WS handlers + promote-to-global
    UI. Read path is live. The remaining P2 item.
-5. **Owner rulings, unchanged:** knowledge graph wire-or-delete, replay
+6. **Owner rulings, unchanged:** knowledge graph wire-or-delete, replay
    `getState`, personas, frozen `packages/*`.
-6. **Ops:** `tradingdesk-bridge.timer` still enabled (disable after a clean
+7. **Ops:** `tradingdesk-bridge.timer` still enabled (disable after a clean
    week); `trading/snapshots/*-latest.json` + `outcomes/trades/*.jsonl` churn
    dirty in the worktree on every restart — commit-vs-gitignore still pending.
 
