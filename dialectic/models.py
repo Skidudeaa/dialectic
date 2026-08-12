@@ -129,6 +129,10 @@ class Room(BaseModel):
     # resolve_book_id could never see the room's binding. Found live
     # 2026-08-09 ("tool needs explicit book ID" in the bound Iran room).
     linked_book_id: Optional[str] = None
+    # Migration 013: the one real Home room. The partial unique index
+    # idx_rooms_single_home enforces the singleton; one additive boolean
+    # (no room-kind enum) keeps every existing Room consumer unchanged.
+    is_home: bool = False
 
     @field_validator("trading_config", mode="before")
     @classmethod
@@ -163,6 +167,9 @@ class RoomMembership(BaseModel):
     room_id: UUID
     user_id: UUID
     joined_at: datetime
+    # Migration 013: nondelegable Home administration. Held only by the
+    # founder-activated members; added members participate but cannot add.
+    can_manage_home: bool = False
 
 
 class Thread(BaseModel):

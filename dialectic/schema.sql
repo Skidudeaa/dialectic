@@ -754,3 +754,20 @@ CREATE TABLE IF NOT EXISTS llm_participation_state (
     -- Meta
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ============================================================
+-- HOME BASE (migration 013)
+-- ============================================================
+-- One real Home room: is_home marks it and the partial unique index
+-- enforces the singleton in PostgreSQL. The baseline stays data-free —
+-- every environment (including a fresh database) runs idempotent
+-- migrations/013_home_base.sql to create Home, its 'Main' thread, and
+-- their bootstrap events. Memberships come only from the separately
+-- reviewed deploy/activate_home_founders.sql transaction.
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_home BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_rooms_single_home
+    ON rooms (is_home)
+    WHERE is_home;
+
+ALTER TABLE room_memberships ADD COLUMN IF NOT EXISTS can_manage_home BOOLEAN NOT NULL DEFAULT FALSE;
