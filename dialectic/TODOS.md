@@ -72,10 +72,13 @@
       `auto_interjection_enabled` toggle
 - [ ] **P3 residue**: device-level acceptance — three consecutive mornings,
       one brief per active room, push received by both users
-- [ ] **P4 residue**: CommitmentDetector wired as proposals
-      (`stakes/detector.py` — imported, still never called); device-level
-      acceptance of the sweep (question + 10min silence → exactly one
-      follow-up, and push)
+- [ ] **P4 residue**: device-level acceptance of the sweep (question +
+      10min silence → exactly one follow-up, and push). Done 2026-08-11:
+      CommitmentDetector wired as proposals — fire-and-forget on human
+      messages, hits land as metadata.commitment_proposals + live
+      MESSAGE_METADATA push, "Put it on record" card sends an ordinary
+      create_commitment with proposal_index and the server stamps
+      accepted (COMMITMENT_DETECTION_ENABLED gates it)
 - [ ] **P5 (wk 9–10)**: night research job; scheme state generalized beyond
       trading (rooms.scheme_state + scheme_curator)
 - [ ] **P6 (wk 11–12)**: LongMemEval-S three-arm benchmark; cleanup execution;
