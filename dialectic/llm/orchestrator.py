@@ -22,6 +22,14 @@ from .router import ModelRouter, RoutingResult
 from .heuristics import InterjectionEngine, InterjectionDecision
 from .participation_fsm import ParticipationFSM, decision_event
 from .prompts import PromptBuilder, AssembledPrompt
+from home_activity import HomeActivityService
+
+# What the Home prompt carries instead of a failed or slow projection —
+# never a stale digest presented as current.
+HOME_ACTIVITY_UNAVAILABLE = (
+    "[HOME ACTIVITY UNAVAILABLE — do not claim this digest is current]"
+)
+HOME_ACTIVITY_TIMEOUT_SECONDS = 2.0
 from .context import assemble_context
 from .cross_session_context import CrossSessionContextBuilder, CrossSessionContext
 from .self_memory import LLMSelfMemory
@@ -125,6 +133,53 @@ class LLMOrchestrator:
             CrossSessionMemoryManager(db)
         )
         self._self_model = SelfModel(db)
+
+    async def _get_home_activity_context(
+        self,
+        room: Room,
+        messages: list[Message],
+        *,
+        include: bool,
+    ) -> Optional[str]:
+        """Bounded shared-room activity context for Home turns only.
+
+        WHY the viewer is the last human speaker: the projection is
+        viewer-relative (receipts, boundaries), and the person Claude is
+        answering is the perspective the digest should share. Provoker and
+        protocol turns pass include=False and stay plain.
+        """
+        if not getattr(room, "is_home", False) or not include:
+            return None
+        viewer_id = next(
+            (
+                message.user_id
+                for message in reversed(messages)
+                if message.speaker_type == SpeakerType.HUMAN and message.user_id
+            ),
+            None,
+        )
+        if viewer_id is None:
+            return HOME_ACTIVITY_UNAVAILABLE
+        try:
+            # Amendment 2026-08-12: with a pool available the budgeted query
+            # runs on a FRESH connection — the timeout below may cancel it
+            # mid-flight, and a racy cancel must never land on the
+            # connection the rest of the turn is using.
+            if self.db_pool is not None:
+                async with self.db_pool.acquire() as conn:
+                    projection = await asyncio.wait_for(
+                        HomeActivityService(conn).build(viewer_id),
+                        timeout=HOME_ACTIVITY_TIMEOUT_SECONDS,
+                    )
+            else:
+                projection = await asyncio.wait_for(
+                    HomeActivityService(self.db).build(viewer_id),
+                    timeout=HOME_ACTIVITY_TIMEOUT_SECONDS,
+                )
+            return projection.to_prompt_section()
+        except Exception:
+            logger.exception("Home activity context unavailable")
+            return HOME_ACTIVITY_UNAVAILABLE
 
     async def _get_cross_session_context(
         self, messages: list[Message], room_id: UUID,
@@ -369,6 +424,11 @@ class LLMOrchestrator:
             room, use_provoker=decision.use_provoker, protocol=protocol,
         )
 
+        home_activity_context = await self._get_home_activity_context(
+            room, truncated_messages,
+            include=not decision.use_provoker and protocol is None,
+        )
+
         prompt = self.prompt_builder.build(
             room=room,
             users=users,
@@ -382,6 +442,7 @@ class LLMOrchestrator:
             self_awareness=self_awareness_section,
             tools_enabled=registry is not None,
             message_images=message_images,
+            home_activity_context=home_activity_context,
         )
 
         router = self._get_router(room)
@@ -614,6 +675,11 @@ class LLMOrchestrator:
             use_provoker=use_provoker, protocol=protocol,
         )
 
+        home_activity_context = await self._get_home_activity_context(
+            room, truncated_messages,
+            include=not use_provoker and protocol is None,
+        )
+
         prompt = self.prompt_builder.build(
             room=room,
             users=users,
@@ -626,6 +692,7 @@ class LLMOrchestrator:
             user_models=user_models,
             self_awareness=self_awareness_section,
             message_images=message_images,
+            home_activity_context=home_activity_context,
         )
 
         router = self._get_router(room)
@@ -750,6 +817,10 @@ class LLMOrchestrator:
             thread.room_id, truncated_messages, use_provoker=use_provoker,
         )
 
+        home_activity_context = await self._get_home_activity_context(
+            room, truncated_messages, include=not use_provoker,
+        )
+
         # Build prompt with truncated messages
         prompt = self.prompt_builder.build(
             room=room,
@@ -762,6 +833,7 @@ class LLMOrchestrator:
             user_models=user_models,
             tools_enabled=registry is not None,
             message_images=message_images,
+            home_activity_context=home_activity_context,
         )
 
         # Create request for streaming

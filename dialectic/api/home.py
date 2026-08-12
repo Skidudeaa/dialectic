@@ -19,6 +19,11 @@ from pydantic import BaseModel, Field
 
 from api.auth.dependencies import AuthenticatedUser, get_current_user
 from api.token_utils import extract_room_token
+from home_activity import (
+    HomeActivityProjection,
+    HomeActivityService,
+    HomeUnavailable,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -155,3 +160,25 @@ async def add_home_member(
         display_name=row["display_name"],
         status="added" if row["added"] else "already_member",
     )
+
+
+@router.get(
+    "/users/me/home/activity",
+    response_model=HomeActivityProjection,
+)
+async def get_home_activity(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db=Depends(get_db),
+) -> HomeActivityProjection:
+    """
+    The shared cross-room activity projection for the caller's Home.
+
+    WHY no room token: authorization is the JWT identity plus current Home
+    membership, enforced inside the service. Missing Home and
+    authenticated nonmembership are deliberately the same 404 — the
+    response must not reveal whether Home exists.
+    """
+    try:
+        return await HomeActivityService(db).build(current_user.user_id)
+    except HomeUnavailable:
+        raise HTTPException(status_code=404, detail="Home unavailable")

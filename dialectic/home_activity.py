@@ -26,8 +26,6 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from llm.briefing import unanswered_questions
-
 
 class HomeUnavailable(Exception):
     """No Home exists, or the caller is not currently a Home member."""
@@ -340,6 +338,11 @@ class HomeActivityService:
             branches_by_room[rid].sort(
                 key=lambda b: b.last_message_at or _EPOCH, reverse=True
             )
+
+        # WHY the deferred import: llm/__init__ imports the orchestrator,
+        # which imports this module — a top-level briefing import would be
+        # circular. By the time a projection is built, llm is fully loaded.
+        from llm.briefing import unanswered_questions
 
         window_by_room: dict[UUID, list] = {rid: [] for rid in room_ids}
         for row in window_rows:

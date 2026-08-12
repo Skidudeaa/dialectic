@@ -107,6 +107,7 @@ would have gone."""
         self_awareness: Optional[str] = None,
         tools_enabled: bool = False,
         message_images: Optional[dict[UUID, list[dict]]] = None,
+        home_activity_context: Optional[str] = None,
     ) -> AssembledPrompt:
         """
         Assemble full prompt from components.
@@ -196,6 +197,13 @@ would have gone."""
             system_parts.append(f"\n\n## Participant Preferences\n{user_context}")
         if memory_context:
             system_parts.append(f"\n\n## Shared Memory (This Room)\n{memory_context}")
+        # Home only: the bounded cross-room digest (or its unavailable
+        # marker) sits between this-room shared memory and personal
+        # cross-session memory. The orchestrator decides WHEN to pass it.
+        if home_activity_context:
+            system_parts.append(
+                f"\n\n## Shared Home Activity\n{home_activity_context}"
+            )
         if cross_session_section:
             system_parts.append(f"\n\n{cross_session_section}")
 
