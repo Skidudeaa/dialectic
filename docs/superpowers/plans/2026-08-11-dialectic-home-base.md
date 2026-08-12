@@ -524,7 +524,7 @@ git commit -m "feat: administer Home membership -- keep authority nondelegable"
 - Consumes: `Room.is_home` from Task 1.
 - Produces: identical `409` guards on thesis create/draft and a failed `propose_thesis` tool trace in Home.
 
-- [ ] **Step 1: Write failing create, draft, and tool tests**
+- [x] **Step 1: Write failing create, draft, and tool tests**
 
 Extend the thesis-relay fake room row with `is_home`. Add:
 
@@ -555,13 +555,13 @@ In `TestProposeThesis`, make `_tool` accept `is_home` and assert Home raises
 `ValueError` matching `Propose it in the scheme's room.` Ordinary unbound room
 proposal tests must remain unchanged.
 
-- [ ] **Step 2: Run the guards and verify RED**
+- [x] **Step 2: Run the guards and verify RED**
 
 Run: `cd dialectic && python3 -m pytest tests/test_thesis_relay_endpoint.py tests/test_tools_registry.py -q`
 
 Expected: the new Home cases FAIL.
 
-- [ ] **Step 3: Implement the guards at the first authorized boundary**
+- [x] **Step 3: Implement the guards at the first authorized boundary**
 
 Both relay queries must select `is_home`. Preserve existing token and
 membership checks, then run this before the linked-book and title checks:
@@ -582,13 +582,13 @@ if getattr(room, "is_home", False):
     raise ValueError("Propose it in the scheme's room.")
 ```
 
-- [ ] **Step 4: Run focused GREEN**
+- [x] **Step 4: Run focused GREEN**
 
 Run: `cd dialectic && python3 -m pytest tests/test_thesis_relay_endpoint.py tests/test_tools_registry.py tests/test_orchestrator_tools.py -q`
 
 Expected: PASS, including the existing ordinary-room create/draft/proposal contracts.
 
-- [ ] **Step 5: Commit the lifecycle boundary**
+- [x] **Step 5: Commit the lifecycle boundary**
 
 ```bash
 git add dialectic/api/thesis_relay.py dialectic/llm/tools.py dialectic/tests/test_thesis_relay_endpoint.py dialectic/tests/test_tools_registry.py
