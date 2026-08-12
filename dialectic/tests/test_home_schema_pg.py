@@ -246,3 +246,54 @@ async def test_remove_home_member_script_rehearsal(db) -> None:
             """SELECT count(*) FROM room_memberships rm
                JOIN rooms r ON r.id = rm.room_id WHERE r.is_home"""
         ) == 0
+
+
+@pytest.mark.asyncio
+async def test_add_member_statement_binds_the_routes_real_types(db) -> None:
+    """
+    Execute api.home's actual add statement with the exact parameter types
+    the route passes (UUIDs, not strings). The mocked API tests assert this
+    SQL's text; only real Postgres can prove its bindings — the gate run
+    caught $3::text refusing the route's UUID (asyncpg DataError).
+    """
+    from api.home import _ADD_MEMBER_SQL
+
+    tx = db.transaction()
+    await tx.start()
+    try:
+        home_id = await db.fetchval("SELECT id FROM rooms WHERE is_home")
+        caller_id, target_id = uuid4(), uuid4()
+        email = f"add-binding-{uuid4().hex[:10]}@test.local"
+        for uid, name in ((caller_id, "Binding Caller"), (target_id, "Binding Target")):
+            await db.execute(
+                "INSERT INTO users (id, created_at, display_name) VALUES ($1, NOW(), $2)",
+                uid, name,
+            )
+        await db.execute(
+            "INSERT INTO user_credentials (user_id, email, password_hash) VALUES ($1, $2, 'x')",
+            target_id, email,
+        )
+
+        row = await db.fetchrow(_ADD_MEMBER_SQL, home_id, email, caller_id, target_id)
+        assert row is not None and row["added"] is True
+
+        assert await db.fetchval(
+            "SELECT count(*) FROM room_memberships WHERE room_id = $1 AND user_id = $2 AND NOT can_manage_home",
+            home_id, target_id,
+        ) == 1
+        payload = await db.fetchval(
+            """SELECT payload FROM events
+               WHERE room_id = $1 AND user_id = $2 AND event_type = 'user_joined'""",
+            home_id, target_id,
+        )
+        assert str(caller_id) in str(payload)
+
+        # Idempotent repeat: no second membership, no second event.
+        again = await db.fetchrow(_ADD_MEMBER_SQL, home_id, email, caller_id, target_id)
+        assert again["added"] is False
+        assert await db.fetchval(
+            "SELECT count(*) FROM events WHERE room_id = $1 AND user_id = $2 AND event_type = 'user_joined'",
+            home_id, target_id,
+        ) == 1
+    finally:
+        await tx.rollback()

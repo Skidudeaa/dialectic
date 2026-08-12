@@ -131,7 +131,7 @@ WITH target AS (
     INSERT INTO events
         (id, timestamp, event_type, room_id, user_id, payload)
     SELECT gen_random_uuid(), NOW(), 'user_joined', $1, added.user_id,
-           jsonb_build_object('added_by_user_id', $3::text)
+           jsonb_build_object('added_by_user_id', ($3::uuid)::text)
     FROM added
 )
 SELECT target.user_id, target.display_name,
