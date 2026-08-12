@@ -30,9 +30,15 @@
     transition: all 0.15s;
 }
 .sidebar-tab-btn:hover { color: var(--color-faint); }
-.sidebar-tab-btn.active {
-    color: var(--color-amber);
-    border-bottom-color: var(--color-amber);
+.sidebar-tab-slot {
+    display: contents;
+}
+.sidebar-tab-break {
+    flex: 0 0 auto;
+    width: 1px;
+    align-self: stretch;
+    margin: 6px 4px;
+    background: var(--color-bean);
 }
 .sidebar-panel {
     flex: 1;

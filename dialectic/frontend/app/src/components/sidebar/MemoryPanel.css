@@ -1,10 +1,46 @@
-/* Memory panel — dossier card style */
+/* Memory as a dossier: facts first, papers last, capture on demand. */
+
+.memory-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+
+.memory-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+}
+
+.memory-head h3 {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--color-bone);
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.memory-count {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    color: var(--color-faint);
+}
+
+.memory-remember {
+    margin-left: auto;
+}
+
 .memory-form {
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.75rem;
+    padding-bottom: 0.7rem;
     border-bottom: 1px solid var(--color-bean);
 }
-.memory-form input, .memory-form textarea {
+
+.memory-form input,
+.memory-form textarea,
+.memory-find {
     width: 100%;
     padding: 6px 9px;
     background: var(--color-void);
@@ -15,34 +51,83 @@
     font-size: 11px;
     margin-bottom: 0.35rem;
     outline: none;
-    transition: border-color 0.15s;
 }
-.memory-form input:focus, .memory-form textarea:focus {
+
+.memory-form input:focus,
+.memory-form textarea:focus,
+.memory-find:focus {
     border-color: var(--amber-30);
 }
-/* Memory card — espresso with paper shadow */
+
+.memory-form-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.memory-find {
+    margin-bottom: 0;
+}
+
+.memory-empty {
+    margin: 0;
+    color: var(--color-faint);
+    font-size: 0.78rem;
+}
+
 .memory-card {
-    padding: 7px 9px;
-    background: var(--color-espresso);
+    padding: 8px 10px 7px;
+    background: var(--color-obsidian);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
-    margin-bottom: 0.4rem;
-    box-shadow: var(--shadow-md);
+    margin-bottom: 0.45rem;
 }
+
+.memory-card-main {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+}
+
 .memory-key {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    color: var(--color-amber);
-    margin-bottom: 0.2rem;
-    text-transform: uppercase;
-    letter-spacing: .1em;
+    font-family: var(--font-serif);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-bone);
+    margin-bottom: 0.25rem;
+    text-transform: none;
+    letter-spacing: 0;
 }
+
 .memory-value {
     font-family: var(--font-serif);
-    font-size: 12.5px;
+    font-size: 0.8rem;
     line-height: 1.45;
-    color: var(--color-secondary);
+    color: var(--color-ink);
+    white-space: pre-wrap;
 }
+
+.memory-value.is-clamped {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: normal;
+}
+
+.memory-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: 0.45rem;
+}
+
 .memory-version {
     font-family: var(--font-mono);
     font-size: 8.5px;
@@ -50,19 +135,12 @@
     text-transform: uppercase;
     letter-spacing: .1em;
 }
-.memory-meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    margin-top: 0.4rem;
-}
+
 .memory-promotion {
     flex: 0 0 auto;
-    padding: 3px 6px;
+    padding: 2px 0;
     background: transparent;
-    border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border: none;
     color: var(--color-ghost);
     font-family: var(--font-mono);
     font-size: 8.5px;
@@ -70,21 +148,73 @@
     text-transform: uppercase;
     cursor: pointer;
 }
+
 .memory-promotion:hover:not(:disabled),
 .memory-promotion.is-promoted {
-    border-color: var(--amber-30);
     color: var(--color-amber);
 }
+
 .memory-promotion:disabled {
     cursor: wait;
     opacity: 0.55;
 }
+
 .memory-error {
-    margin-bottom: 0.5rem;
     padding: 6px 8px;
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
     color: var(--color-bone);
     font-family: var(--font-mono);
     font-size: 9px;
+}
+
+.memory-papers {
+    margin-top: 0.4rem;
+    padding-top: 0.7rem;
+    border-top: 1px solid var(--color-bean);
+}
+
+.memory-papers h4 {
+    margin: 0 0 0.45rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: normal;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-secondary);
+}
+
+.memory-paper {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.2rem 0.6rem;
+    width: 100%;
+    background: none;
+    border: none;
+    border-left: 2px solid var(--color-bean);
+    padding: 5px 8px;
+    margin-bottom: 4px;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+}
+
+.memory-paper:hover { background: var(--amber-08); }
+
+.memory-paper-title {
+    font-family: var(--font-serif);
+    font-size: 0.82rem;
+    color: var(--color-bone);
+}
+
+.memory-paper-meta {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--color-faint);
+}
+
+.memory-paper-preview {
+    grid-column: 1 / -1;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--color-secondary);
 }

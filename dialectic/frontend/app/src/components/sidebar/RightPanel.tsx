@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Memory, ThreadNode } from '../../types'
 import { useAppStore } from '../../stores/appStore.ts'
 import { MemoryPanel } from './MemoryPanel'
@@ -77,19 +77,18 @@ export function RightPanel({
   // able to open the Trading tab from outside this component.
   const storedTab = useAppStore((s) => s.rightPanelTab) as TabId
   const setActiveTab = useAppStore((s) => s.setRightPanelTab)
-  const wasHome = useRef(isHome)
-  // Landing on Home from a scheme room should not dump you into the empty
-  // Memory form — that's cockpit chrome. Explicit Memory taps in Home stick.
-  useEffect(() => {
-    if (isHome && !wasHome.current && (storedTab === 'memory' || storedTab === 'share')) {
-      setActiveTab('home')
-    }
-    wasHome.current = isHome
-  }, [isHome, storedTab, setActiveTab])
-  // Home replaces Share with its nondelegable settings; a persisted
-  // 'share'/'home' selection maps to whichever exists in this room.
+  const [prevHome, setPrevHome] = useState(isHome)
+  const [picked, setPicked] = useState<TabId | null>(null)
+  if (prevHome !== isHome) {
+    setPrevHome(isHome)
+    setPicked(null)
+  }
+  const chooseTab = (tab: TabId) => {
+    if (isHome) setPicked(tab)
+    setActiveTab(tab)
+  }
   const activeTab: TabId = isHome
-    ? (storedTab === 'share' ? 'home' : storedTab)
+    ? (picked ?? (storedTab === 'memory' || storedTab === 'share' ? 'home' : storedTab))
     : (storedTab === 'home' ? 'share' : storedTab)
 
   // WHY Trading is unconditional: it used to appear only once a snapshot
@@ -113,15 +112,17 @@ export function RightPanel({
   return (
     <>
       <div className="sidebar-tabs">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            ref={tab.id === activeTab ? activeTabRef : null}
-            className={`sidebar-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            {tab.label}
-          </button>
+        {tabs.map((tab, index) => (
+          <span key={tab.id} className="sidebar-tab-slot">
+            {isHome && index === 1 && <span className="sidebar-tab-break" aria-hidden="true" />}
+            <button
+              ref={tab.id === activeTab ? activeTabRef : null}
+              className={`sidebar-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => chooseTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          </span>
         ))}
       </div>
       <div className="sidebar-panel active">
@@ -131,6 +132,7 @@ export function RightPanel({
             memories={memories}
             onAddMemory={onAddMemory}
             onSetMemoryPromotion={onSetMemoryPromotion}
+            onOpenIdentity={() => chooseTab('identity')}
           />
         )}
         {activeTab === 'threads' && (
@@ -160,10 +162,21 @@ export function RightPanel({
           <HomeSettingsPanel
             canManageHome={canManageHome}
             onMembershipChanged={onMembershipChanged}
+            residents={users}
+            facts={memories.filter((memory) => memory.status === 'active' && !isSystemPaper(memory.key))}
+            onOpenMemory={() => chooseTab('memory')}
           />
         )}
         {activeTab === 'trading' && <TradingPanel />}
       </div>
     </>
   )
+}
+
+function isSystemPaper(key: string): boolean {
+  const lower = key.toLowerCase()
+  return lower.startsWith('llm_identity:')
+    || lower.startsWith('user_model:')
+    || lower === 'thesis_state_current'
+    || lower.startsWith('thesis_state')
 }
