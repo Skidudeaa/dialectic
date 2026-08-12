@@ -18,6 +18,7 @@ from models import (
     SpeakerType, MessageType, MemoryScope, TradingSnapshotRequest
 )
 from memory.manager import MemoryManager
+from memory.cross_session import CrossSessionMemoryManager
 from llm.orchestrator import LLMOrchestrator
 from llm.briefing import BriefingHighlight, BriefingResponse, build_briefing
 from transport.websocket import ConnectionManager, InboundMessage, OutboundMessage, MessageTypes
@@ -425,6 +426,15 @@ class MemoryResponse(BaseModel):
     version: int
     created_by_user_id: Optional[UUID]  # None for LLM/system-authored memories
     status: str
+
+
+class MemoryPromotionResponse(BaseModel):
+    memory_id: UUID
+    promoted: bool
+
+
+class MemoryPromotionListResponse(BaseModel):
+    memory_ids: List[UUID]
 
 
 class MessageResponse(BaseModel):
@@ -1122,6 +1132,88 @@ async def list_memories(
         created_by_user_id=m.created_by_user_id,
         status=m.status.value if hasattr(m.status, 'value') else m.status,
     ) for m in memories]
+
+
+@app.get(
+    "/rooms/{room_id}/memory-promotions",
+    response_model=MemoryPromotionListResponse,
+)
+async def list_memory_promotions(
+    room_id: UUID,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db=Depends(get_db),
+) -> MemoryPromotionListResponse:
+    """List the caller's personal cross-room grants in one source room."""
+    await verify_room_token(room_id, token, db)
+    await verify_room_member(room_id, current_user.user_id, db)
+
+    manager = CrossSessionMemoryManager(db)
+    memory_ids = await manager.get_user_promoted_memory_ids(
+        room_id,
+        current_user.user_id,
+    )
+    return MemoryPromotionListResponse(memory_ids=memory_ids)
+
+
+@app.put(
+    "/memories/{memory_id}/promotion",
+    response_model=MemoryPromotionResponse,
+)
+async def promote_memory(
+    memory_id: UUID,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db=Depends(get_db),
+) -> MemoryPromotionResponse:
+    """Grant the caller cross-room recall of an active shared memory."""
+    row = await db.fetchrow(
+        "SELECT room_id FROM memories WHERE id = $1",
+        memory_id,
+    )
+    if not row:
+        raise HTTPException(404, "Memory not found or inaccessible")
+
+    room_id = row['room_id']
+    await verify_room_token(room_id, token, db)
+    await verify_room_member(room_id, current_user.user_id, db)
+
+    manager = CrossSessionMemoryManager(db)
+    try:
+        await manager.promote_memory_to_global(memory_id, current_user.user_id)
+    except ValueError as error:
+        raise HTTPException(404, str(error)) from error
+    return MemoryPromotionResponse(memory_id=memory_id, promoted=True)
+
+
+@app.delete(
+    "/memories/{memory_id}/promotion",
+    response_model=MemoryPromotionResponse,
+)
+async def demote_memory(
+    memory_id: UUID,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db=Depends(get_db),
+) -> MemoryPromotionResponse:
+    """Remove only the caller's cross-room recall grant."""
+    row = await db.fetchrow(
+        "SELECT room_id FROM memories WHERE id = $1",
+        memory_id,
+    )
+    if not row:
+        raise HTTPException(404, "Memory not found or inaccessible")
+
+    room_id = row['room_id']
+    await verify_room_token(room_id, token, db)
+    await verify_room_member(room_id, current_user.user_id, db)
+
+    manager = CrossSessionMemoryManager(db)
+    try:
+        await manager.demote_memory_from_global(memory_id, current_user.user_id)
+    except ValueError as error:
+        raise HTTPException(404, str(error)) from error
+    return MemoryPromotionResponse(memory_id=memory_id, promoted=False)
 
 
 @app.post("/rooms/{room_id}/memories")
