@@ -26,13 +26,14 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from tools.bridge.room_tokens import (  # type: ignore[import-untyped]
     register_room_token,
     resolve_room_token,
+    unregister_room_token,
 )
 from web.auth import get_current_user
 from web.deps import get_repo
@@ -437,6 +438,66 @@ async def register_room_token_endpoint(
             status_code=500, detail="could not persist the room token"
         )
     return {"ok": True, "room_id": req.room_id}
+
+
+class RoomUnbind(BaseModel):
+    room_id: str
+
+
+@router.post("/room-unbind")
+async def unbind_room_endpoint(
+    req: RoomUnbind,
+    request: Request,
+    _svc: None = Depends(require_service_token),
+) -> dict:
+    """Release every book bound to a Dialectic room — the retire flow.
+
+    The book SURVIVES: it stays on the desk as history, it just stops
+    claiming the room (meta.dialecticRoomId removed, atomic rewrite), stops
+    pushing (re-adopted so the in-memory cfg loses the binding too), and
+    the room's runtime token entry is dropped. Idempotent — unbinding a
+    room nothing claims returns an empty list, not an error.
+    """
+    import uuid as _uuid
+    try:
+        canonical = str(_uuid.UUID(req.room_id.strip()))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=422, detail="room_id is not a UUID")
+
+    from web.adapters import thesis as thesis_adapter
+    coordinator = getattr(request.app.state, "coordinator", None)
+
+    unbound: list[str] = []
+    for path in sorted(_BOOKS_DIR.glob("*.json")):
+        try:
+            with open(path) as f:
+                cfg = json.load(f)
+        except (OSError, ValueError):
+            continue
+        meta = cfg.get("meta") or {}
+        bound_to = meta.get("dialecticRoomId")
+        try:
+            if not bound_to or str(_uuid.UUID(str(bound_to))) != canonical:
+                continue
+        except ValueError:
+            continue
+        meta.pop("dialecticRoomId", None)
+        meta.pop("dialecticRoomToken", None)
+        cfg["meta"] = meta
+        tmp = path.with_suffix(".tmp")
+        with open(tmp, "w") as f:
+            json.dump(cfg, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(str(tmp), str(path))
+        thesis_adapter.invalidate_cache(path.stem)
+        if coordinator is not None:
+            coordinator.adopt_book(path.stem)
+        unbound.append(path.stem)
+        log.info("room-unbind: %s released from room %s", path.stem, canonical)
+
+    unregister_room_token(canonical)
+    return {"unbound": unbound}
 
 
 # ── GET /api/bridge/news/{thesis_id} ────────────────────────────────────

@@ -306,3 +306,58 @@ class TestRestartRecovery:
         coord2._hydrate_from_db()
         assert coord2._revisions["iran-hormuz-graph"] == 1
         assert coord2._latest_snapshots["iran-hormuz-graph"] is not None
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# RUNTIME ADOPTION — the create-thesis path
+# ═══════════════════════════════════════════════════════════════════════
+
+MINIMAL_BOOK = {
+    "meta": {"title": "Adopted", "type": "thesis-graph", "version": "1.0.0"},
+    "nodes": [], "edges": [], "instruments": {}, "scenarios": [],
+    "cascadePhases": {}, "rules": [], "provenance": [],
+}
+
+
+class TestRuntimeAdoption:
+    """adopt_book must give a snapshotless book its first cycle NOW — the
+    human who just created it is staring at an empty panel — while a book
+    that already has a snapshot (builder re-saves) stays on the tick."""
+
+    def _write_book(self, tmp_path, thesis_id="adopted-graph"):
+        (tmp_path / f"{thesis_id}.json").write_text(json.dumps(MINIMAL_BOOK))
+        return thesis_id
+
+    @pytest.mark.asyncio
+    async def test_new_book_gets_an_immediate_cycle(self, coordinator, tmp_path):
+        thesis_id = self._write_book(tmp_path)
+        coordinator._run_cycle = AsyncMock(return_value={})
+        with patch("web.runtime.coordinator.BOOKS_DIR", tmp_path):
+            assert coordinator.adopt_book(thesis_id) is True
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        coordinator._run_cycle.assert_awaited_once_with(thesis_id)
+
+    @pytest.mark.asyncio
+    async def test_resave_of_a_living_book_stays_on_the_tick(
+        self, coordinator, tmp_path
+    ):
+        thesis_id = self._write_book(tmp_path)
+        coordinator._latest_snapshots[thesis_id] = {"v": 2}
+        coordinator._run_cycle = AsyncMock(return_value={})
+        with patch("web.runtime.coordinator.BOOKS_DIR", tmp_path):
+            assert coordinator.adopt_book(thesis_id) is True
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        coordinator._run_cycle.assert_not_awaited()
+
+    def test_adoption_outside_a_loop_still_adopts(self, coordinator, tmp_path):
+        """Sync contexts (scripts, tests) adopt without the rush cycle."""
+        thesis_id = self._write_book(tmp_path)
+        with patch("web.runtime.coordinator.BOOKS_DIR", tmp_path):
+            assert coordinator.adopt_book(thesis_id) is True
+        assert thesis_id in coordinator.definitions
+
+    def test_missing_book_is_a_calm_false(self, coordinator, tmp_path):
+        with patch("web.runtime.coordinator.BOOKS_DIR", tmp_path):
+            assert coordinator.adopt_book("no-such-graph") is False

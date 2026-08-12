@@ -24,6 +24,7 @@ from tools.bridge.room_tokens import (
     parse_room_tokens,
     register_room_token,
     resolve_room_token,
+    unregister_room_token,
 )
 
 BOOKS_DIR = Path(__file__).resolve().parent.parent.parent / "books"
@@ -155,6 +156,25 @@ class TestFileTier:
         env = self._env(tmp_path)
         register_room_token(ROOM_A.upper(), "tok", env=env)
         assert resolve_room_token({"dialecticRoomId": ROOM_A}, env=env) == "tok"
+
+    def test_unregister_removes_only_that_room(self, tmp_path):
+        env = self._env(tmp_path)
+        register_room_token(ROOM_A, "tok-a", env=env)
+        register_room_token(ROOM_B, "tok-b", env=env)
+        assert unregister_room_token(ROOM_A, env=env) is True
+        assert load_file_tokens(env) == {ROOM_B: "tok-b"}
+
+    def test_unregistering_the_last_entry_removes_the_file(self, tmp_path):
+        """A zero-entry credential file is a lie waiting to be trusted."""
+        env = self._env(tmp_path)
+        path = register_room_token(ROOM_A, "tok", env=env)
+        assert unregister_room_token(ROOM_A, env=env) is True
+        assert not os.path.exists(path)
+
+    def test_unregistering_the_unknown_is_a_calm_false(self, tmp_path):
+        env = self._env(tmp_path)
+        assert unregister_room_token(ROOM_A, env=env) is False
+        assert unregister_room_token("not-a-uuid", env=env) is False
 
 
 class TestShippedBooks:

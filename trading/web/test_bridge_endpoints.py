@@ -475,3 +475,88 @@ class TestRoomTokenRegistration:
             headers=svc_headers(),
         )
         assert resp.status_code == 422
+
+
+# =========================================================================
+# ROOM UNBIND — the retire flow's td half
+# =========================================================================
+
+
+class TestRoomUnbind:
+    """The book survives retirement: it loses its room claim and its push
+    path, nothing else."""
+
+    ROOM = "0f9b8f9c-1111-4222-8333-444455556666"
+
+    @pytest.fixture(autouse=True)
+    def tokens_file(self, tmp_path, monkeypatch):
+        from tools.bridge.room_tokens import ENV_ROOM_TOKENS_FILE
+        monkeypatch.setenv(ENV_ROOM_TOKENS_FILE, str(tmp_path / "tokens.env"))
+
+    @pytest.fixture
+    def books_dir(self, tmp_path, monkeypatch):
+        books = tmp_path / "books"
+        books.mkdir()
+        book = {
+            "meta": {"title": "Bound", "type": "thesis-graph",
+                     "dialecticRoomId": self.ROOM},
+            "nodes": [{"id": "a", "label": "A", "type": "event", "phase": 1,
+                       "state": "monitoring"}],
+            "edges": [],
+        }
+        (books / "bound-graph.json").write_text(json.dumps(book))
+        other = {"meta": {"title": "Other", "type": "thesis-graph"},
+                 "nodes": [], "edges": []}
+        (books / "other-graph.json").write_text(json.dumps(other))
+        monkeypatch.setattr(bridge_mod, "_BOOKS_DIR", books)
+        return books
+
+    def test_gated_by_service_token(self, client, books_dir):
+        resp = client.post("/api/bridge/room-unbind",
+                           json={"room_id": self.ROOM})
+        assert resp.status_code == 401
+
+    def test_unbind_strips_the_claim_and_the_token(self, client, books_dir):
+        from tools.bridge.room_tokens import (
+            load_file_tokens, register_room_token,
+        )
+        register_room_token(self.ROOM, "tok")
+        resp = client.post("/api/bridge/room-unbind",
+                           json={"room_id": self.ROOM},
+                           headers=svc_headers())
+        assert resp.status_code == 200
+        assert resp.json()["unbound"] == ["bound-graph"]
+        saved = json.loads((books_dir / "bound-graph.json").read_text())
+        assert "dialecticRoomId" not in saved["meta"]
+        # The book itself survives, nodes intact.
+        assert saved["nodes"][0]["id"] == "a"
+        # The other book was never touched.
+        other = json.loads((books_dir / "other-graph.json").read_text())
+        assert other["meta"]["title"] == "Other"
+        assert load_file_tokens() == {}
+
+    def test_unbind_readopts_into_the_runtime(self, client, books_dir):
+        adopted = []
+        app.state.coordinator = type(
+            "Stub", (), {"adopt_book": lambda self, b: adopted.append(b)}
+        )()
+        try:
+            client.post("/api/bridge/room-unbind",
+                        json={"room_id": self.ROOM}, headers=svc_headers())
+        finally:
+            del app.state.coordinator
+        assert adopted == ["bound-graph"]
+
+    def test_unbinding_an_unclaimed_room_is_calm(self, client, books_dir):
+        resp = client.post(
+            "/api/bridge/room-unbind",
+            json={"room_id": "99999999-9999-4999-8999-999999999999"},
+            headers=svc_headers(),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["unbound"] == []
+
+    def test_non_uuid_room_is_422(self, client, books_dir):
+        resp = client.post("/api/bridge/room-unbind",
+                           json={"room_id": "nope"}, headers=svc_headers())
+        assert resp.status_code == 422

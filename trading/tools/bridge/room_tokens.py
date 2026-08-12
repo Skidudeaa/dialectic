@@ -156,6 +156,41 @@ def register_room_token(
     return path
 
 
+def unregister_room_token(
+    room_id: str, *, env: Optional[Mapping[str, str]] = None,
+) -> bool:
+    """Drop a room's entry from the runtime token file; True if one existed.
+
+    The retire flow calls this — a room that no longer has a thesis has no
+    business holding a live push credential in the file. Env entries are
+    the operator's and are never touched. An empty file is removed rather
+    than left as a zero-entry credential file.
+    """
+    env = os.environ if env is None else env
+    canonical = _canonical(room_id)
+    if not canonical:
+        return False
+    mapping = load_file_tokens(env)
+    if canonical not in mapping:
+        return False
+    del mapping[canonical]
+    path = _tokens_file_path(env)
+    if not mapping:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        return True
+    tmp = f"{path}.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write("\n".join(f"{k}:{v}" for k, v in sorted(mapping.items())) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+    return True
+
+
 def resolve_room_token(
     meta: Optional[Mapping], *, env: Optional[Mapping[str, str]] = None,
 ) -> Optional[str]:

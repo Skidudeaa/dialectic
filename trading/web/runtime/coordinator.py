@@ -368,10 +368,14 @@ class RuntimeCoordinator:
         run", not an error, mirroring _load_definitions' tolerance.
         """
         path = BOOKS_DIR / f"{thesis_id}.json"
+        # WHY not thesisgraph.load_config: that is a CLI helper that
+        # sys.exit()s on a missing or corrupt file — an escape no `except
+        # Exception` catches, and a web process must not die for one book.
         try:
-            cfg = thesisgraph.load_config(str(path))
-        except Exception:
-            log.exception("adopt_book: failed to load %s", path.name)
+            with open(path) as f:
+                cfg = json.load(f)
+        except (OSError, ValueError):
+            log.warning("adopt_book: cannot read %s", path.name)
             return False
         if not isinstance(cfg, dict) or "nodes" not in cfg:
             return False
@@ -379,7 +383,31 @@ class RuntimeCoordinator:
         self._definition_hashes[thesis_id] = self._compute_hash(cfg)
         log.info("Adopted thesis at runtime: %s (%d nodes, %d edges)",
                  thesis_id, len(cfg.get("nodes", [])), len(cfg.get("edges", [])))
+        # WHY the immediate cycle: a newly adopted book has no snapshot, and
+        # the human who just created it is looking at an empty panel — the
+        # tick interval (300s) of blankness reads as failure. Only the
+        # no-snapshot case gets it; builder re-saves of a living book stay
+        # on the tick, so a canvas edit-save loop cannot hammer the fetch
+        # path. No running loop (sync tests, scripts) means no rush either.
+        if thesis_id not in self._latest_snapshots:
+            try:
+                asyncio.get_running_loop().create_task(
+                    self._run_adopted_cycle(thesis_id)
+                )
+            except RuntimeError:
+                pass
         return True
+
+    async def _run_adopted_cycle(self, thesis_id: str) -> None:
+        """First cycle for a just-adopted book, under the tick's own lock."""
+        lock = self._get_lock(thesis_id)
+        if lock.locked():
+            return
+        async with lock:
+            try:
+                await self._run_cycle(thesis_id)
+            except Exception:
+                log.exception("adoption cycle failed for %s", thesis_id)
 
     def _hydrate_from_db(self) -> None:
         """Restore revisions and latest snapshots from SQLite on startup.
