@@ -64,9 +64,12 @@ uvicorn web.main:app --port 8006                     # see trading/README.md
 - **Memory**: `memory/manager.py` — three-lane RRF recall (dense + FTS +
   speaker), write-path dedup, supersession with history.
 - **The seam**: tradingDesk's coordinator pushes v3 snapshots on change +
-  hourly heartbeat; dialectic pulls on a 15-min reconcile and calls read-only
-  bridge endpoints (`X-Service-Token`) for tools. Auth bridge: shared HS256
-  secret; td maps dialectic JWTs via `DIALECTIC_USER_MAP`.
+  hourly heartbeat; dialectic pulls on a 15-min reconcile and calls bridge
+  endpoints (`X-Service-Token`) for tools — read-only except two lifecycle
+  writes: `POST /api/bridge/room-token` (create-thesis registers the push
+  credential into `/var/lib/tradingdesk/room-tokens.env`, no restart) and
+  `POST /api/bridge/room-unbind` (retire; the book survives). Auth bridge:
+  shared HS256 secret; td maps dialectic JWTs via `DIALECTIC_USER_MAP`.
 - **Key tables**: `events`, `rooms` (+`linked_book_id`, `trading_config`),
   `threads`, `messages` (+`metadata`), `memories`, `attachments`,
   `llm_decisions`, `llm_participation_state`, `scheduled_job_runs`,

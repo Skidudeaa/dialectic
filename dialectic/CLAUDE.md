@@ -40,7 +40,8 @@ These can live in `dialectic/.env` (auto-loaded by `run.py` via python-dotenv). 
 
 Feature flags (optional, all default ON): `SCHEDULER_ENABLED`,
 `NIGHT_SHIFT_ENABLED` (7am CT brief), `PARTICIPATION_SWEEP_ENABLED` (60s
-silence follow-ups), `DIALECTIC_TOOLS_ENABLED`, `DIALECTIC_VISION_ENABLED`.
+silence follow-ups), `DIALECTIC_TOOLS_ENABLED`, `DIALECTIC_VISION_ENABLED`,
+`COMMITMENT_DETECTION_ENABLED` (implicit "I bet…" → proposal cards).
 `SIGNUPS_ENABLED` must stay `0` — invite-only since the auth bridge.
 
 ## Architecture

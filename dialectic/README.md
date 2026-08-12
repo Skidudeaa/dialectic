@@ -48,9 +48,26 @@ A room is you, Dan, and Claude. One room per durable scheme or thinking stream.
 - **It follows up on silence.** Ask Claude something and walk away: after ten
   quiet minutes it follows up — once. Hard limits: 3 per room per day, silent
   11pm–7am CT, off entirely if the room's interjection toggle is off.
-- **It drafts, you dispose.** If Claude proposes a prediction, the message carries
-  an **Accept** card. Your tap posts it to tradingDesk. Claude never writes to
-  the desk itself. Order placement is not a thing and won't be.
+- **It drafts, you dispose.** Claude proposes; only your tap creates. Three
+  surfaces, one trust shape:
+  - a proposed **prediction** carries an Accept card — your tap posts it to
+    tradingDesk;
+  - a proposed **thesis** ("we should book this") carries a card that opens the
+    Create Thesis panel pre-filled, where Claude drafts the causal cascade for
+    your review and Accept & Create mints the book, born bound to the room;
+  - a heard **commitment** ("I bet…", "mark my words") gets a card under your
+    own message — "Put it on record" logs it to the room's stakes, and the card
+    disarms for both of you.
+  Claude never writes to the desk itself. Order placement is not a thing and
+  won't be.
+- **Rooms birth their theses.** The Trading tab's empty state IS the create
+  surface: title + claim in, Claude-drafted DAG for review, first snapshot in
+  the panel within seconds, deep link into the desk's Builder to refine.
+  Retire from the panel footer when a thesis resolves — the book survives on
+  the desk, and the room can birth its successor.
+- **The whole cockpit works on your phone.** Below 1024px the room list and the
+  right-rail cockpit are slide-over drawers (☰ and ▦ in the header) — memory,
+  trading, stakes, everything, with the same behavior as desktop.
 
 ## The five trading rooms
 
@@ -105,6 +122,7 @@ python3 -m pytest tests/ -q                   # 790 tests
 | `PARTICIPATION_SWEEP_ENABLED` | The 60s silence-follow-up sweep |
 | `DIALECTIC_TOOLS_ENABLED` | All LLM tool use |
 | `DIALECTIC_VISION_ENABLED` | Image blocks to Claude |
+| `COMMITMENT_DETECTION_ENABLED` | "I bet…" → put-it-on-record cards |
 | `SIGNUPS_ENABLED` | Open signup (keep `0` — invite-only) |
 
 ## How it's built (one paragraph + map)
