@@ -1,6 +1,7 @@
 # transport/handlers.py — WebSocket message handlers
 
 import asyncio
+import os
 from asyncio import Task, CancelledError
 from datetime import datetime, timezone
 from typing import Optional
@@ -53,6 +54,16 @@ logger = logging.getLogger(__name__)
 # explicit summons; mention detection must accept the same set or
 # "@claude" messages silently fall back to heuristic gating.
 LLM_MENTION_RE = re.compile(r"@(llm|claude)\b", re.IGNORECASE)
+
+_DETECTION_OFF_VALUES = {"0", "false", "no", "off"}
+
+
+def commitment_detection_enabled() -> bool:
+    """Whether human messages get implicit-commitment detection (default on)."""
+    return (
+        os.getenv("COMMITMENT_DETECTION_ENABLED", "").strip().lower()
+        not in _DETECTION_OFF_VALUES
+    )
 
 
 def _message_type_from_payload(payload: dict) -> MessageType:
@@ -403,6 +414,15 @@ class MessageHandler:
                 ],
             }
         ))
+
+        # P4: implicit-commitment detection — proposal-shaped, fire-and-forget.
+        # The human said "I bet…" / "mark my words…"; a card on their own
+        # message offers to put it on record. Nothing is created until the
+        # Accept tap sends an ordinary create_commitment.
+        if commitment_detection_enabled():
+            asyncio.create_task(
+                self._detect_commitment_proposals(conn.room_id, message)
+            )
 
         # Annotator mode: when the other user is offline, generate a context annotation
         # for when they return. This runs IN ADDITION TO the normal primary LLM path so
@@ -2030,6 +2050,55 @@ class MessageHandler:
     # STAKES / COMMITMENTS HANDLERS
     # ============================================================
 
+    async def _detect_commitment_proposals(self, room_id: UUID, message) -> None:
+        """P4: run the CommitmentDetector on a human message, hoist hits.
+
+        Fire-and-forget from the send path — a Haiku extraction must never
+        add latency to the message itself. Hits land as
+        metadata.commitment_proposals on the SOURCE message and are pushed
+        to the room over MESSAGE_METADATA; the card's Accept sends an
+        ordinary create_commitment carrying proposal_index, which stamps
+        accepted below so a reload cannot re-arm the button into a
+        duplicate. Same trust shape as every proposal here: detection
+        writes chrome, only the human tap writes a commitment.
+        """
+        try:
+            candidates = await CommitmentDetector().detect_commitments(
+                message, room_id
+            )
+            if not candidates:
+                return
+            proposals = [
+                {
+                    "claim": c.get("claim", ""),
+                    "resolution_criteria": c.get("resolution_criteria", ""),
+                    "category": c.get("category", "prediction"),
+                    "accepted": False,
+                }
+                # A message is rarely three separate bets — cap the chrome.
+                for c in candidates[:3]
+                if c.get("claim") and c.get("resolution_criteria")
+            ]
+            if not proposals:
+                return
+            await self.db.execute(
+                """UPDATE messages
+                   SET metadata = COALESCE(metadata, '{}'::jsonb) || $2
+                   WHERE id = $1""",
+                message.id, {"commitment_proposals": proposals},
+            )
+            await self.connections.broadcast(room_id, OutboundMessage(
+                type=MessageTypes.MESSAGE_METADATA,
+                payload={
+                    "message_id": str(message.id),
+                    "metadata_patch": {"commitment_proposals": proposals},
+                },
+            ))
+        except Exception:
+            logger.exception(
+                "commitment detection failed for message %s", message.id
+            )
+
     async def _handle_create_commitment(self, conn: Connection, payload: dict) -> None:
         """
         Create a new commitment via WebSocket.
@@ -2126,6 +2195,37 @@ class MessageHandler:
                 "status": "active",
             },
         ))
+
+        # An accept from a detected-proposal card: stamp the proposal so a
+        # reload cannot re-arm its button into a duplicate commitment, and
+        # push the updated array so the other member's card disarms live.
+        proposal_index = payload.get("proposal_index")
+        if source_message_id is not None and isinstance(proposal_index, int):
+            await self.db.execute(
+                """UPDATE messages
+                   SET metadata = jsonb_set(
+                       metadata,
+                       ARRAY['commitment_proposals', $2::text, 'accepted'],
+                       'true'::jsonb)
+                   WHERE id = $1
+                     AND metadata->'commitment_proposals'->$3 IS NOT NULL""",
+                source_message_id, str(proposal_index), proposal_index,
+            )
+            row = await self.db.fetchrow(
+                """SELECT metadata->'commitment_proposals' AS proposals
+                   FROM messages WHERE id = $1""",
+                source_message_id,
+            )
+            if row and row["proposals"] is not None:
+                await self.connections.broadcast(conn.room_id, OutboundMessage(
+                    type=MessageTypes.MESSAGE_METADATA,
+                    payload={
+                        "message_id": str(source_message_id),
+                        "metadata_patch": {
+                            "commitment_proposals": row["proposals"]
+                        },
+                    },
+                ))
 
     async def _handle_record_confidence(self, conn: Connection, payload: dict) -> None:
         """Record confidence level via WebSocket."""

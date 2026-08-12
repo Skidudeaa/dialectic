@@ -38,6 +38,20 @@ export interface MessageMetadata {
   proposal?: PredictionProposal;
   /** A propose_thesis card — its tap opens the Create Thesis panel. */
   thesis_proposal?: ThesisProposal;
+  /** Detected implicit commitments ("I bet…") awaiting the Accept tap. */
+  commitment_proposals?: CommitmentProposal[];
+}
+
+/**
+ * A commitment the detector heard in a human message. Detection writes
+ * only this chrome; the Accept tap sends an ordinary create_commitment
+ * (carrying proposal_index so the server stamps `accepted`).
+ */
+export interface CommitmentProposal {
+  claim: string;
+  resolution_criteria: string;
+  category: string;
+  accepted?: boolean;
 }
 
 /**

@@ -327,6 +327,9 @@ class MessageTypes:
     ANNOTATION_CREATED = "annotation_created"
     # Stakes / commitments (outbound)
     COMMITMENT_CREATED = "commitment_created"
+    # A server-side enrichment landed on an existing message's metadata
+    # (e.g. detected commitment proposals) — clients merge, not replace.
+    MESSAGE_METADATA = "message_metadata"
     COMMITMENT_CONFIDENCE_UPDATED = "commitment_confidence_updated"
     COMMITMENT_RESOLVED = "commitment_resolved"
     COMMITMENT_SURFACED = "commitment_surfaced"

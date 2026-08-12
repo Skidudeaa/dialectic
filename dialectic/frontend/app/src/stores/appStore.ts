@@ -88,6 +88,12 @@ interface AppState {
   addMessage: (message: Message) => void;
   setMessages: (messages: Message[]) => void;
   editMessage: (messageId: string, content: string, editedAt: string) => void;
+  /** Shallow-merge a server metadata patch (e.g. detected proposals). */
+  mergeMessageMetadata: (messageId: string, patch: Record<string, unknown>) => void;
+  /** The live socket's send, registered by useDialecticSocket so deep
+   *  components (proposal cards) can act without prop-drilling. */
+  wsSend: ((type: string, payload: Record<string, unknown>) => boolean) | null;
+  setWsSend: (send: ((type: string, payload: Record<string, unknown>) => boolean) | null) => void;
   removeMessage: (messageId: string) => void;
   setMessageReactions: (messageId: string, reactions: Reaction[]) => void;
   setAllReactions: (byMessageId: Record<string, Reaction[]>) => void;
@@ -138,6 +144,7 @@ const initialRoomState = {
   rightPanelTab: 'memory',
   mobileDrawer: null,
   thesisSeed: null,
+  wsSend: null,
   roomToken: null,
 }
 
@@ -215,6 +222,17 @@ export const useAppStore = create<AppState>()(
             m.id === messageId ? { ...m, content, edited_at: editedAt } : m,
           ),
         })),
+
+      mergeMessageMetadata: (messageId, patch) =>
+        set((state) => ({
+          messages: state.messages.map((m) =>
+            m.id === messageId
+              ? { ...m, metadata: { ...(m.metadata ?? {}), ...patch } }
+              : m,
+          ),
+        })),
+
+      setWsSend: (send) => set({ wsSend: send }),
 
       // Deletion is soft on the server, but the message is gone from every read
       // path — so dropping it here matches what a reload would show.

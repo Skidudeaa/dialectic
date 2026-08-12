@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import type { Attachment, Message, Reaction } from '../../types'
+import type { Attachment, CommitmentProposal, Message, Reaction } from '../../types'
 import { api } from '../../lib/api'
 import { useAppStore } from '../../stores/appStore'
 import { MessageAttachments } from './MessageAttachments'
@@ -193,6 +193,26 @@ export function MessageBubble({
     state.setMobileDrawer('panel')
   }
 
+  // Detected implicit commitments ("I bet…"). Accept sends an ordinary
+  // create_commitment over the live socket; the disarm arrives back as a
+  // MESSAGE_METADATA broadcast with accepted=true, for both members.
+  const commitmentProposals = message.metadata?.commitment_proposals ?? []
+  const [commitAccepting, setCommitAccepting] = useState<number | null>(null)
+  const acceptCommitmentProposal = (p: CommitmentProposal, index: number) => {
+    const state = useAppStore.getState()
+    if (!state.wsSend || commitAccepting !== null) return
+    setCommitAccepting(index)
+    const ok = state.wsSend('create_commitment', {
+      claim: p.claim,
+      resolution_criteria: p.resolution_criteria,
+      category: p.category,
+      source_message_id: message.id,
+      proposal_index: index,
+      thread_id: state.currentThread?.id,
+    })
+    if (!ok) setCommitAccepting(null)
+  }
+
   const acceptProposal = async () => {
     if (!currentRoomId || acceptState === 'accepting' || proposalLogged) return
     setAcceptState('accepting')
@@ -357,6 +377,31 @@ export function MessageBubble({
             <button className="msg-proposal-accept" onClick={openThesisCreate}>
               Draft the cascade →
             </button>
+          </div>
+        )}
+
+        {commitmentProposals.length > 0 && (
+          <div className="msg-proposal">
+            <div className="msg-proposal-title">Heard a commitment</div>
+            {commitmentProposals.map((p, i) => (
+              <div key={i} className="msg-commitment-item">
+                <div className="msg-proposal-statement">{p.claim}</div>
+                <div className="msg-proposal-meta">
+                  {p.category} · resolves when: {p.resolution_criteria}
+                </div>
+                {p.accepted ? (
+                  <span className="msg-proposal-logged">on the record</span>
+                ) : (
+                  <button
+                    className="msg-proposal-accept"
+                    disabled={commitAccepting !== null}
+                    onClick={() => acceptCommitmentProposal(p, i)}
+                  >
+                    {commitAccepting === i ? 'Logging…' : 'Put it on record'}
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         )}
 

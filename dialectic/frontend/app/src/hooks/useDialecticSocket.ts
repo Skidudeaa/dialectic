@@ -58,6 +58,7 @@ export function useDialecticSocket() {
   const setTradingConfig = useAppStore((s) => s.setTradingConfig);
   const editMessage = useAppStore((s) => s.editMessage);
   const removeMessage = useAppStore((s) => s.removeMessage);
+  const mergeMessageMetadata = useAppStore((s) => s.mergeMessageMetadata);
   const setMessageReactions = useAppStore((s) => s.setMessageReactions);
   const setAllReactions = useAppStore((s) => s.setAllReactions);
   const recordToolActivity = useAppStore((s) => s.recordToolActivity);
@@ -70,6 +71,14 @@ export function useDialecticSocket() {
     wsRef.current.send(JSON.stringify({ type, payload }));
     return true;
   }, []);
+
+  // Deep components (proposal cards) act through the live socket without
+  // prop-drilling — the store carries the sender while this hook is mounted.
+  const setWsSend = useAppStore((s) => s.setWsSend);
+  useEffect(() => {
+    setWsSend(send);
+    return () => setWsSend(null);
+  }, [send, setWsSend]);
 
   const refreshThreads = useCallback(async () => {
     const state = useAppStore.getState();
@@ -206,6 +215,20 @@ export function useDialecticSocket() {
 
       case 'message_deleted':
         if (typeof payload.id === 'string') removeMessage(payload.id);
+        break;
+
+      case 'message_metadata':
+        // Server-side enrichment (e.g. detected commitment proposals)
+        // landed on an existing message — merge the patch in place.
+        if (
+          typeof payload.message_id === 'string' &&
+          payload.metadata_patch && typeof payload.metadata_patch === 'object'
+        ) {
+          mergeMessageMetadata(
+            payload.message_id,
+            payload.metadata_patch as Record<string, unknown>,
+          );
+        }
         break;
 
       case 'reaction_updated':
@@ -425,6 +448,7 @@ export function useDialecticSocket() {
     refreshPresence,
     editMessage,
     removeMessage,
+    mergeMessageMetadata,
     setMessageReactions,
     recordToolActivity,
     clearToolActivity,
