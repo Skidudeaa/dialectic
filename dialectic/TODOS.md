@@ -51,9 +51,9 @@
 
 - [ ] **P1 residue**: real-device push check on all four devices (Amo + Dan)
 - [ ] **P2 (wk 3–4) residue**: persist `context_truncated` to `llm_decisions`
-      (it currently only downgrades the FSM tier). Implemented 2026-08-11 but
-      not activated: personal cross-room memory grants, membership-fenced REST
-      promote/demote transport, and PWA controls. The approved REST design
+      (it currently only downgrades the FSM tier). Activated 2026-08-11:
+      personal cross-room memory grants, membership-fenced REST promote/demote
+      transport, and PWA controls. The approved REST design
       leaves the placeholder-auth router and dormant WS handlers unmounted.
       Done 2026-08-09: self-model on all three LLM paths, schema.sql sync,
       `auto_interjection_enabled` toggle

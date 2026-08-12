@@ -14,3 +14,4 @@
 [2026-08-11] selected personal cross-room memory promotion — store per-user grants without mutating shared memory scope so one collaborator cannot alter another's LLM context
 [2026-08-11] planned personal promotion as four isolated implementation units plus verification — schema, manager recall, authenticated REST, and minimal PWA controls remain separately reviewable while activation stays deferred
 [2026-08-11] implemented personal cross-room promotion behind an unapplied migration — atomic membership-fenced grants and events isolate each collaborator; the PWA applies confirmed REST state because its generic refresh helper intentionally swallows refresh errors
+[2026-08-11] activated personal cross-room memory promotion in production — migration 012, backend PID 611263, and release 20260812T031901Z-personal-memory passed live A/B member isolation, demotion cleanup, lifecycle-event, scheduler, asset-digest, and headless-browser proof
