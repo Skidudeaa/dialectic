@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 from api.auth.dependencies import AuthenticatedUser, get_current_user
 from api.token_utils import extract_room_token
 from llm import tradingdesk_client as td
+from llm.thesis_drafter import DraftError, draft_thesis_graph
 from models import EventType
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,12 @@ class CreateThesisRequest(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     claim: str = Field(default="", max_length=2000)
     monthly_budget: int = Field(default=5000, ge=0, le=10_000_000)
+    # An accepted draft rides along here (builder format — see
+    # llm/thesis_drafter.py). Shape validation is tradingDesk's builder
+    # model's job; these caps only bound the payload. Room members hold
+    # the same trust the desk's own Builder UI grants them.
+    nodes: list[dict] = Field(default_factory=list, max_length=60)
+    edges: list[dict] = Field(default_factory=list, max_length=100)
 
 
 @router.post("/rooms/{room_id}/trading/thesis")
@@ -113,8 +120,8 @@ async def create_thesis(
                     "monthlyBudget": request.monthly_budget,
                     "dialecticRoomId": str(room_id),
                 },
-                "nodes": [],
-                "edges": [],
+                "nodes": request.nodes,
+                "edges": request.edges,
             },
         )
     except td.TradingDeskError as e:
@@ -149,3 +156,58 @@ async def create_thesis(
         "thesis created: room %s -> book %s (%s)", room_id, book_id, title
     )
     return {"book_id": book_id, "title": title}
+
+
+@router.post("/rooms/{room_id}/trading/thesis/draft")
+async def draft_thesis(
+    room_id: UUID,
+    request: CreateThesisRequest,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Claude drafts the causal DAG for review — a proposal, never a write.
+
+    Stateless on purpose: nothing is stored, nothing touches td. The human
+    reviews the returned nodes/edges in the panel and, on Accept, sends
+    them through create_thesis above — the tap is the write, exactly the
+    draft_prediction trust shape. Same auth and same already-bound gate as
+    create, so a draft can never be minted for a room that cannot take it.
+    """
+    row = await db.fetchrow(
+        """SELECT token, linked_book_id, primary_provider, primary_model
+           FROM rooms WHERE id = $1 AND token = $2""",
+        room_id, token,
+    )
+    if not row:
+        raise HTTPException(status_code=401, detail="Invalid room token")
+    await _verify_room_member(room_id, current_user.user_id, db)
+
+    if row["linked_book_id"]:
+        raise HTTPException(
+            status_code=409,
+            detail=f"This room is already bound to '{row['linked_book_id']}'",
+        )
+
+    title = request.title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="Title must not be blank")
+
+    # The room's own primary model drafts — but only when it is an
+    # Anthropic one, because the drafter speaks that provider directly.
+    kwargs = {}
+    if (row["primary_provider"] or "").lower() == "anthropic" and row["primary_model"]:
+        kwargs["model"] = row["primary_model"]
+
+    try:
+        draft = await draft_thesis_graph(
+            title, request.claim.strip(), request.monthly_budget, **kwargs
+        )
+    except DraftError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    logger.info(
+        "thesis draft for room %s: %d nodes, %d edges",
+        room_id, len(draft["nodes"]), len(draft["edges"]),
+    )
+    return draft

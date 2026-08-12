@@ -43,7 +43,9 @@ def _make_db(room_found=True, linked_book_id=None, members=None):
         if "FROM rooms" in query:
             if not room_found:
                 return None
-            return {"token": ROOM_TOKEN, "linked_book_id": linked_book_id}
+            return {"token": ROOM_TOKEN, "linked_book_id": linked_book_id,
+                    "primary_provider": "anthropic",
+                    "primary_model": "claude-sonnet-4-6"}
         if "FROM room_memberships" in query:
             _room_id, user_id = params
             return {"?column?": 1} if user_id in members else None
@@ -183,3 +185,101 @@ def test_blank_title_is_422(monkeypatch):
 
     assert resp.status_code == 422
     service_post.assert_not_awaited()
+
+
+def test_create_carries_an_accepted_draft_through(monkeypatch):
+    """The Accept tap sends the drafted nodes/edges through create — they
+    must reach td's builder verbatim."""
+    fake_db = _make_db()
+    service_post = AsyncMock(return_value={"ok": True})
+    post = AsyncMock(return_value={"id": "ai-bubble-deflation-graph"})
+    nodes = [{"id": "shock", "label": "Shock", "type": "event", "phase": 1,
+              "state": "monitoring", "x": 100, "y": 60}]
+    edges = []
+
+    resp = _create(
+        fake_db, monkeypatch, service_post=service_post, post=post,
+        body={**REQUEST_BODY, "nodes": nodes, "edges": edges},
+    )
+
+    assert resp.status_code == 200
+    td_body = post.await_args.kwargs["json_body"]
+    assert td_body["nodes"] == nodes
+    assert td_body["edges"] == edges
+
+
+# =========================================================================
+# DRAFT ENDPOINT — the proposal half of the flow
+# =========================================================================
+
+
+def _draft(fake_db, monkeypatch, *, drafter, body=None):
+    async def _fake_db_dep():
+        yield fake_db
+
+    main_mod.app.dependency_overrides[relay.get_db] = _fake_db_dep
+    main_mod.app.dependency_overrides[relay.extract_room_token] = lambda: ROOM_TOKEN
+    main_mod.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+        user_id=CALLER_ID, email="caller@test", email_verified=True, display_name="Caller",
+    )
+    monkeypatch.setattr(relay, "draft_thesis_graph", drafter)
+    try:
+        return TestClient(main_mod.app).post(
+            f"/rooms/{ROOM_ID}/trading/thesis/draft",
+            json=REQUEST_BODY if body is None else body,
+        )
+    finally:
+        main_mod.app.dependency_overrides.clear()
+
+
+DRAFT = {
+    "nodes": [{"id": "shock", "label": "Shock", "type": "event", "phase": 1,
+               "state": "monitoring", "x": 100, "y": 60}],
+    "edges": [],
+    "rationale": "The spine.",
+}
+
+
+def test_draft_returns_the_proposal_and_writes_nothing(monkeypatch):
+    fake_db = _make_db()
+    drafter = AsyncMock(return_value=dict(DRAFT))
+
+    resp = _draft(fake_db, monkeypatch, drafter=drafter)
+
+    assert resp.status_code == 200
+    assert resp.json() == DRAFT
+    # The room's own primary model drafts.
+    assert drafter.await_args.kwargs.get("model") == "claude-sonnet-4-6"
+    # Stateless: a proposal must not touch the database.
+    fake_db.execute.assert_not_awaited()
+
+
+def test_draft_on_a_bound_room_is_409(monkeypatch):
+    fake_db = _make_db(linked_book_id="iran-hormuz-graph")
+    drafter = AsyncMock()
+
+    resp = _draft(fake_db, monkeypatch, drafter=drafter)
+
+    assert resp.status_code == 409
+    drafter.assert_not_awaited()
+
+
+def test_draft_failure_is_502(monkeypatch):
+    from llm.thesis_drafter import DraftError
+    fake_db = _make_db()
+    drafter = AsyncMock(side_effect=DraftError("could not produce a cascade"))
+
+    resp = _draft(fake_db, monkeypatch, drafter=drafter)
+
+    assert resp.status_code == 502
+    assert "cascade" in resp.json()["detail"]
+
+
+def test_draft_requires_membership(monkeypatch):
+    fake_db = _make_db(members=set())
+    drafter = AsyncMock()
+
+    resp = _draft(fake_db, monkeypatch, drafter=drafter)
+
+    assert resp.status_code == 403
+    drafter.assert_not_awaited()
