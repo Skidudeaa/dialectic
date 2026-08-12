@@ -15,3 +15,6 @@ dist/
 # Browser automation artifacts
 .playwright-mcp/
 **/.playwright-mcp/
+
+# Codex feature worktrees
+.worktrees/
