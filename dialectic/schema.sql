@@ -338,6 +338,18 @@ CREATE INDEX idx_memory_refs_source ON memory_references(source_memory_id);
 CREATE INDEX idx_memory_refs_target_room ON memory_references(target_room_id);
 CREATE INDEX idx_memory_refs_target_message ON memory_references(target_message_id);
 
+-- Personal promotion grants: opt one user into cross-room recall without
+-- changing the shared source memory or another member's LLM context.
+CREATE TABLE IF NOT EXISTS user_memory_promotions (
+    memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    promoted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (memory_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_memory_promotions_user
+    ON user_memory_promotions(user_id, memory_id);
+
 -- User memory collections: organize memories across rooms
 CREATE TABLE IF NOT EXISTS user_memory_collections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -391,6 +403,7 @@ ALTER TABLE memories ADD COLUMN IF NOT EXISTS promoted_to_global_at TIMESTAMPTZ;
 ALTER TABLE memories ADD COLUMN IF NOT EXISTS promoted_by_user_id UUID REFERENCES users(id);
 
 COMMENT ON TABLE memory_references IS 'Tracks citations of memories across rooms/sessions';
+COMMENT ON TABLE user_memory_promotions IS 'Per-user grants for automatic cross-room recall of shared memories';
 COMMENT ON TABLE user_memory_collections IS 'User-defined collections of memories that persist across rooms';
 COMMENT ON TABLE collection_memories IS 'Many-to-many link between collections and memories';
 

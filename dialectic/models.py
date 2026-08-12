@@ -47,6 +47,7 @@ class EventType(str, Enum):
     USER_MODIFIER_UPDATED = "user_modifier_updated"
     # Cross-session memory events
     MEMORY_PROMOTED = "memory_promoted"
+    MEMORY_DEMOTED = "memory_demoted"
     MEMORY_REFERENCED = "memory_referenced"
     COLLECTION_CREATED = "collection_created"
     COLLECTION_MEMORY_ADDED = "collection_memory_added"
@@ -424,7 +425,7 @@ class ProtocolState(BaseModel):
 
 
 class MemoryPromotedPayload(BaseModel):
-    """Payload when a room memory is promoted to global scope."""
+    """Payload when a user grants themselves cross-room memory recall."""
     memory_id: UUID
     original_room_id: UUID
     promoted_by_user_id: UUID
