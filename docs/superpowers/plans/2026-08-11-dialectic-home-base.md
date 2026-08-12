@@ -842,7 +842,7 @@ git commit -m "feat: project shared Home activity -- intersect every membership"
 - Consumes: `HomeActivityService` from Task 4.
 - Produces: `GET /users/me/home/activity`, `HOME_ACTIVITY_UNAVAILABLE`, and a Home-only `home_activity_context` prompt layer.
 
-- [ ] **Step 1: Write failing HTTP authorization tests**
+- [x] **Step 1: Write failing HTTP authorization tests**
 
 Follow the dependency-override pattern used by other focused routers. Assert:
 
@@ -885,7 +885,7 @@ The test module imports `api.home as home_mod` and monkeypatches the constructor
 there, matching the endpoint's deliberate inline service construction. Do not
 invent a FastAPI service dependency used only by tests.
 
-- [ ] **Step 2: Add the endpoint and verify HTTP GREEN**
+- [x] **Step 2: Add the endpoint and verify HTTP GREEN**
 
 Implement:
 
@@ -908,7 +908,7 @@ Run: `cd dialectic && python3 -m pytest tests/test_home_activity_api.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 3: Write failing prompt-path tests**
+- [x] **Step 3: Write failing prompt-path tests**
 
 Test `PromptBuilder.build` directly and the orchestrator helper with mocked
 service output. Prove:
@@ -923,7 +923,7 @@ service output. Prove:
 - the marker says Claude must not claim the digest is current;
 - the most recent human message's `user_id` is passed as the viewer.
 
-- [ ] **Step 4: Add one explicit orchestrator helper**
+- [x] **Step 4: Add one explicit orchestrator helper**
 
 In `orchestrator.py`:
 
@@ -968,7 +968,7 @@ Call it before prompt assembly in all three orchestrator paths. Pass
 `include=not use_provoker and protocol is None` in `force_response`, and
 `include=not use_provoker` in `stream_response`.
 
-- [ ] **Step 5: Add the prompt layer without disturbing existing layers**
+- [x] **Step 5: Add the prompt layer without disturbing existing layers**
 
 Extend `PromptBuilder.build` with
 `home_activity_context: Optional[str] = None`. After this-room shared memory and
@@ -985,13 +985,13 @@ Pass the helper result at the three existing `prompt_builder.build` call sites.
 Do not add an `is_home` condition anywhere else in participation, protocol,
 tool, FSM, briefing, or sweep logic.
 
-- [ ] **Step 6: Run all Home/LLM focused tests**
+- [x] **Step 6: Run all Home/LLM focused tests**
 
 Run: `cd dialectic && python3 -m pytest tests/test_home_activity_api.py tests/test_home_prompt.py tests/test_prompts.py tests/test_orchestrator_tools.py tests/test_participation_fsm.py tests/test_night_shift.py tests/test_scheduler.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit the two-consumer contract**
+- [x] **Step 7: Commit the two-consumer contract**
 
 ```bash
 git add dialectic/api/home.py dialectic/llm/orchestrator.py dialectic/llm/prompts.py dialectic/tests/test_home_activity_api.py dialectic/tests/test_home_prompt.py

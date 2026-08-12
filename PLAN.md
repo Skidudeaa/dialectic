@@ -199,6 +199,12 @@ If implementation reality contradicts this plan, the builder flags the contradic
 - [2026-08-12, Task 4] BriefingHighlight gained optional `thread_id` so the
   shared unanswered-question heuristic can name the branch a question lives
   in; brief responses carry an additive null for older rows.
+- [2026-08-12, Task 5] Claude's Home projection runs on a FRESH pool
+  connection when the orchestrator has a pool (its normal shape): the
+  2-second timeout can cancel the query mid-flight, and a racy cancel must
+  not land on the connection the rest of the turn is using. Falls back to
+  the turn's connection only when no pool was provided. The timeout moved
+  to module constant HOME_ACTIVITY_TIMEOUT_SECONDS.
 - [2026-08-12, Task 4] The per-thread boundary is computed as one set-based
   receipts CTE, not a correlated probe per thread — EXPLAIN at seed 20260811
   scale showed 306 ms/398k buffer hits correlated vs 27.5 ms/7.7k set-based;
