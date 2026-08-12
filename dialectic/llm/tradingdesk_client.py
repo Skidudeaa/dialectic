@@ -198,6 +198,35 @@ async def service_get(path: str, *, timeout: Optional[float] = None) -> Any:
     return _require_json(response, f"tradingDesk {path}")
 
 
+async def service_post(
+    path: str, *, json_body: Optional[dict] = None,
+    timeout: Optional[float] = None,
+) -> Any:
+    """Service-token POST — same contract as service_get, for the one
+    bridge write (room-token registration). Static token, no re-login."""
+    token = os.environ.get("TD_SERVICE_TOKEN", "")
+    if not token:
+        raise TradingDeskError(
+            "TD_SERVICE_TOKEN is not set — tradingDesk bridge endpoints "
+            "are unavailable"
+        )
+    client = _get_client()
+    try:
+        response = await client.post(
+            f"{_base_url()}{path}",
+            json=json_body,
+            headers={"X-Service-Token": token},
+            timeout=timeout if timeout is not None else DEFAULT_TIMEOUT_S,
+        )
+    except httpx.TimeoutException as e:
+        raise TradingDeskError(f"tradingDesk {path} timed out: {e}")
+    except httpx.HTTPError as e:
+        raise TradingDeskError(
+            f"tradingDesk {path} unreachable: {type(e).__name__}: {e}"
+        )
+    return _require_json(response, f"tradingDesk {path}")
+
+
 async def get(path: str, *, params: Optional[dict] = None,
               timeout: Optional[float] = None) -> Any:
     return await request_json("GET", path, params=params, timeout=timeout)

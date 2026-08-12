@@ -35,6 +35,7 @@ from stakes.routes import router as stakes_router, set_stakes_db_pool
 from api.personas import router as personas_router, set_personas_db_pool
 from api.attachments import router as attachments_router, set_attachments_db_pool
 from api.prediction_relay import router as prediction_relay_router, set_prediction_relay_db_pool
+from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_pool
 from collections import defaultdict
 import time
 
@@ -193,6 +194,7 @@ async def lifespan(app: FastAPI):
 
         # Set db_pool for the prediction relay module
         set_prediction_relay_db_pool(db_pool)
+        set_thesis_relay_db_pool(db_pool)
 
         async with db_pool.acquire() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
@@ -318,6 +320,9 @@ app.include_router(attachments_router)
 
 # Include prediction relay router (human Accept → tradingDesk write)
 app.include_router(prediction_relay_router)
+
+# Include thesis relay router (Create Thesis → book born bound to its room)
+app.include_router(thesis_relay_router)
 
 connection_manager: ConnectionManager = ConnectionManager()
 

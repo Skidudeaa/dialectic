@@ -65,6 +65,7 @@ class EventType(str, Enum):
     COMMITMENT_RESOLVED = "commitment_resolved"
     # Trading integration events
     TRADING_SNAPSHOT_RECEIVED = "trading_snapshot_received"
+    THESIS_CREATED = "thesis_created"
 
 
 class CommitmentStatus(str, Enum):
