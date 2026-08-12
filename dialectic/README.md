@@ -34,9 +34,10 @@ appears in the pulse only while *every* Home member belongs to it — adding a
 person immediately contracts what Home shows. Home can never hold a thesis;
 its Trading tab explains where theses live instead of offering the form.
 
-*(Rollout note: the schema and code shipped 2026-08-12; founder activation
-is a separately approved production step — until it runs, accounts land on
-the room list as before.)*
+*(Live since 2026-08-12: Amo and Dan are the founding members. A room shows
+in the pulse only when every Home member belongs to it — a room nobody has
+joined, or that's missing one member, stays out until the membership catches
+up.)*
 
 ## The room
 

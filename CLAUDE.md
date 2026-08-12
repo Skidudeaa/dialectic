@@ -75,8 +75,9 @@ uvicorn web.main:app --port 8006                     # see trading/README.md
   `room_memberships` (+`can_manage_home`), `llm_decisions`,
   `llm_participation_state`, `scheduled_job_runs`, `web_push_subscriptions`.
   `dialectic/schema.sql` is the fresh-DB baseline; migrations numbered,
-  `013` current (Home Base — applied to production 2026-08-12; founder
-  activation remains a separately gated step).
+  `013` current (Home Base — live in production since 2026-08-12 with the
+  two founders activated; membership changes go through `api/home.py` or
+  the reviewed deploy scripts, never ad-hoc SQL).
 
 ## Code style
 
