@@ -8,6 +8,8 @@ interface AppLayoutProps {
   rightPanel: ReactNode
   /** Home restyles the main pane around the scheme board, not a stream. */
   isHome?: boolean
+  /** Once Home has a conversation, the table takes the column and the house caps. */
+  homeTalking?: boolean
 }
 
 /**
@@ -16,7 +18,7 @@ interface AppLayoutProps {
  * no toggle at all — the PWA is the reach strategy, and every phone user
  * was locked out of memory, trading, stakes, everything).
  */
-export function AppLayout({ sidebar, main, rightPanel, isHome = false }: AppLayoutProps) {
+export function AppLayout({ sidebar, main, rightPanel, isHome = false, homeTalking = false }: AppLayoutProps) {
   const mobileDrawer = useAppStore((s) => s.mobileDrawer)
   const setMobileDrawer = useAppStore((s) => s.setMobileDrawer)
 
@@ -34,7 +36,7 @@ export function AppLayout({ sidebar, main, rightPanel, isHome = false }: AppLayo
   return (
     <div className={`app-layout${mobileDrawer ? ` drawer-open drawer-${mobileDrawer}` : ''}`}>
       <div className="app-sidebar">{sidebar}</div>
-      <div className={`app-main${isHome ? ' app-main-home' : ''}`}>{main}</div>
+      <div className={`app-main${isHome ? ' app-main-home' : ''}${homeTalking ? ' app-main-home-talking' : ''}`}>{main}</div>
       <div className="app-right-panel">{rightPanel}</div>
       {mobileDrawer && (
         <div

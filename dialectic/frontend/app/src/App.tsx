@@ -390,6 +390,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
     <>
       <AppLayout
         isHome={isHome}
+        homeTalking={isHome && displayMessages.length > 0}
         sidebar={
           <RoomList
             rooms={rooms}

@@ -28,19 +28,23 @@
     position: relative;
 }
 
-/* Home: the house takes the column; the transcript is a capped table. */
+/* Home empty: the house takes the column; the hearth stays compact.
+   Home talking: the table is a real conversation; the house caps above it. */
 .app-main-home .participants-bar {
     border-bottom: none;
 }
-.app-main-home > .messages-viewport,
-.app-main-home > .messages-wrapper {
-    flex: 0 1 auto;
-    max-height: min(34vh, 20rem);
-    min-height: 0;
-}
 .app-main-home > .messages-wrapper-hearth {
     flex: 0 0 auto;
+}
+.app-main-home-talking .home-house {
+    flex: 0 1 auto;
+    max-height: min(36vh, 20rem);
+}
+.app-main-home-talking > .messages-viewport,
+.app-main-home-talking > .messages-wrapper {
+    flex: 1 1 auto;
     max-height: none;
+    min-height: 0;
 }
 
 /* Energy indicator — amber ambient glow */
