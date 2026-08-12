@@ -9,7 +9,7 @@ Causal-DAG thesis engine + live data service. FastAPI at :8006 (loopback), SQLit
 - `frontend/` — SPA (tailwind, react-router, vitest). Hotspots: `src/lib/types.ts`, `src/lib/api.ts` (RoomSocket, apiFetch, bridge exchange).
 
 ## Seam (provider side)
-Coordinator pushes v3 snapshots to dialectic; dialectic pulls 15-min reconcile + calls bridge endpoints with `X-Service-Token`. Shared HS256 secret; dialectic JWTs mapped via `DIALECTIC_USER_MAP`. `DIALECTIC_ROOM_TOKENS` env holds the five room tokens.
+Coordinator pushes v3 snapshots to dialectic; dialectic pulls 15-min reconcile + calls bridge endpoints with `X-Service-Token`. Shared HS256 secret; dialectic JWTs mapped via `DIALECTIC_USER_MAP`. `DIALECTIC_ROOM_TOKENS` env holds the five original room tokens; rooms whose thesis was created FROM dialectic (Create Thesis flow, 2026-08-11) register theirs at runtime into `/var/lib/tradingdesk/room-tokens.env` via the bridge's one write, `POST /api/bridge/room-token` — env wins on conflict, and the coordinator `adopt_book`s builder-saved books without a restart.
 
 ## Gotchas
 - SPA answers unknown GETs 200+HTML — check content-type when probing.
