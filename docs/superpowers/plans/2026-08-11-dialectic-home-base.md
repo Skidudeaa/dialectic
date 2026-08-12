@@ -326,7 +326,7 @@ before beginning Task 2.
   `EventType.HOME_MEMBER_REMOVED`, plus `UserRoomResponse.is_home` and
   `UserRoomResponse.can_manage_home` for the caller's own membership.
 
-- [ ] **Step 1: Write failing endpoint contracts**
+- [x] **Step 1: Write failing endpoint contracts**
 
 Use FastAPI dependency overrides and an `AsyncMock` database, following
 `tests/test_memory_promotion_api.py`. Cover:
@@ -373,13 +373,13 @@ room joining still returns its existing result. Candidate lookup requires the
 same Home token, membership, and capability as add, returns 404 for an unknown
 email, and does not write.
 
-- [ ] **Step 2: Run endpoint contracts and verify RED**
+- [x] **Step 2: Run endpoint contracts and verify RED**
 
 Run: `cd dialectic && python3 -m pytest tests/test_home_membership_api.py tests/test_user_rooms_read_state.py -q`
 
 Expected: FAIL because the router, response fields, and Home join denial do not exist.
 
-- [ ] **Step 3: Implement the focused Home router**
+- [x] **Step 3: Implement the focused Home router**
 
 Create a router with the same pool-injection pattern as `api/thesis_relay.py`:
 
@@ -455,7 +455,7 @@ FROM target
 
 No result means 404. Return `added` or `already_member` from the boolean.
 
-- [ ] **Step 4: Mount the router and reject generic Home joins**
+- [x] **Step 4: Mount the router and reject generic Home joins**
 
 Import `router as home_router, set_home_db_pool` in `api/main.py`, inject the
 pool during lifespan, and include the router beside the other focused routers.
@@ -480,7 +480,7 @@ Select `r.is_home` and `rm.can_manage_home`, and project both. Also add
 `AND NOT m.is_deleted` to the existing unread, latest-timestamp, and preview
 subqueries so the room rail follows the same soft-delete truth as Home.
 
-- [ ] **Step 5: Add the reviewed emergency removal path**
+- [x] **Step 5: Add the reviewed emergency removal path**
 
 Add `HOME_MEMBER_REMOVED = "home_member_removed"` to `EventType`. The psql
 script accepts `member_email` and `removed_by_email`, resolves exactly one Home,
@@ -499,13 +499,13 @@ would resolve to `HomeUnavailable`, assert a source room that was excluded only
 because the target lacked membership becomes eligible again for the remaining
 members, then remove the test users and their non-Home fixture data.
 
-- [ ] **Step 6: Run focused GREEN**
+- [x] **Step 6: Run focused GREEN**
 
 Run: `cd dialectic && python3 -m pytest tests/test_home_membership_api.py tests/test_user_rooms_read_state.py tests/test_signup_guard.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit membership administration**
+- [x] **Step 7: Commit membership administration**
 
 ```bash
 git add dialectic/api/home.py dialectic/deploy/remove_home_member.sql dialectic/api/main.py dialectic/models.py dialectic/tests/test_home_membership_api.py dialectic/tests/test_home_schema_pg.py dialectic/tests/test_user_rooms_read_state.py
