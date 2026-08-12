@@ -229,14 +229,6 @@ function ChatLayout() {
     navigator.serviceWorker.addEventListener('message', onMessage)
     return () => navigator.serviceWorker.removeEventListener('message', onMessage)
   }, [])
-  useEffect(() => {
-    if (rooms.length === 0) return
-    const requested = new URLSearchParams(window.location.search).get('room')
-    if (!requested) return
-    window.history.replaceState(null, '', window.location.pathname)
-    if (requested !== currentRoom?.id) switchRoomRef.current(requested)
-  }, [rooms, currentRoom?.id])
-
   const switchRoom = useCallback(async (roomId: string) => {
     const nextRoom = rooms.find((room) => room.id === roomId)
     if (!nextRoom?.token || nextRoom.id === currentRoom?.id) return
@@ -254,6 +246,15 @@ function ChatLayout() {
   useEffect(() => {
     switchRoomRef.current = (roomId: string) => { void switchRoom(roomId) }
   }, [switchRoom])
+  useEffect(() => {
+    if (rooms.length === 0) return
+    const requested = new URLSearchParams(window.location.search).get('room')
+    if (!requested) return
+    // WHY after the ref-sync effect: cold starts must call the closure from
+    // this render before consuming the one-shot room query parameter.
+    window.history.replaceState(null, '', window.location.pathname)
+    if (requested !== currentRoom?.id) switchRoomRef.current(requested)
+  }, [rooms, currentRoom?.id])
 
   // Jumping to a search hit. Done entirely in this handler rather than through
   // an effect so the whole sequence stays in one place.

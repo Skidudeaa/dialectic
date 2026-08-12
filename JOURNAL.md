@@ -6,3 +6,4 @@
 [2026-08-11] refreshed verification baseline — 790 backend tests and the frontend production build pass; frontend lint fails at App.tsx:254 for assigning a ref during render
 [2026-08-11] approved production stabilization design — recover scheduler connections at the ledger boundary, health-check the existing heartbeat, rotate all room tokens, and repair lint/systemd before separate P2 work
 [2026-08-11] found canonical tradingDesk unit drift before install — preserve the live monorepo paths and loopback bind while moving start-limit keys into Unit
+[2026-08-11] preserved cold-start room deep links during lint repair — synchronize switchRoomRef before the one-shot URL effect consumes its room target
