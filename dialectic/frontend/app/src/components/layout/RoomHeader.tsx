@@ -22,6 +22,9 @@ export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, 
   // route into the rails there, so they live on the store, not on props.
   const setMobileDrawer = useAppStore((s) => s.setMobileDrawer)
   const mobileDrawer = useAppStore((s) => s.mobileDrawer)
+  // Home's root is the place, not a branch. The crumb returns once Home
+  // actually has a fork — same control as every other room.
+  const showBranchCrumb = !isHome || threads.length > 1
   return (
     <div className="room-header">
       <div className="room-header-left">
@@ -51,24 +54,28 @@ export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, 
         {/* Room / Branch breadcrumb: the select IS the branch crumb, kept
             as the keyboard-friendly control. Both labels truncate
             independently instead of pushing the drawer toggles offscreen. */}
-        <span className="room-title">{roomName}</span>
-        <span className="crumb-sep" aria-hidden="true">/</span>
-        <div className="thread-breadcrumb">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/>
-          </svg>
-          <select
-            value={activeThreadId ?? ''}
-            onChange={e => onThreadChange(e.target.value)}
-            aria-label="Branch"
-          >
-            {threads.map(t => (
-              <option key={t.id} value={t.id}>
-                {t.title ?? `Thread ${t.id.slice(0, 6)}`} ({t.message_count})
-              </option>
-            ))}
-          </select>
-        </div>
+        <span className="room-title">{isHome ? 'Home' : roomName}</span>
+        {showBranchCrumb && (
+          <>
+            <span className="crumb-sep" aria-hidden="true">/</span>
+            <div className="thread-breadcrumb">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/>
+              </svg>
+              <select
+                value={activeThreadId ?? ''}
+                onChange={e => onThreadChange(e.target.value)}
+                aria-label="Branch"
+              >
+                {threads.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.title ?? `Thread ${t.id.slice(0, 6)}`} ({t.message_count})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
       </div>
       <div className="room-header-right">
         <button className="btn btn-secondary btn-sm" onClick={onProtocolClick} title="Start a structured reasoning protocol" aria-label="Protocol">

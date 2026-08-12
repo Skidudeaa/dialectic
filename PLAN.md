@@ -218,3 +218,10 @@ If implementation reality contradicts this plan, the builder flags the contradic
   receipts CTE, not a correlated probe per thread — EXPLAIN at seed 20260811
   scale showed 306 ms/398k buffer hits correlated vs 27.5 ms/7.7k set-based;
   build p95 51 ms against the 150 ms gate, no extra index, no cache.
+- [2026-08-12, feel] The first Home UI matched the hybrid structure (real
+  room + pulse) and failed the success-condition feel: the rail rendered
+  Home as a room card, the header kept `Home / Main (0)` chrome, and the
+  pulse was a quiet widget inside an empty chat column. Visual hierarchy
+  now treats Home as the place — distinct rail pin, no Main crumb until
+  Home is forked, pulse as a full-bleed capped scheme board, transcript as
+  the table beneath. Still a real room. Not a dashboard. No new endpoints.

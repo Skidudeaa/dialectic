@@ -389,6 +389,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   return (
     <>
       <AppLayout
+        isHome={isHome}
         sidebar={
           <RoomList
             rooms={rooms}
@@ -477,6 +478,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
               onToggleReaction={toggleReaction}
               onEditMessage={editMessageContent}
               onDeleteMessage={deleteMessage}
+              emptyKind={isHome ? 'hearth' : 'dialogue'}
             />
             <TypingIndicator typingUsers={typingDisplay} activityLabel={toolActivityLabel} />
             <MessageInput
@@ -500,6 +502,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
               disabled={!isConnected || !currentThread}
               replyTo={replyTarget}
               onCancelReply={() => setReplyToId(null)}
+              placeholder={isHome ? 'Talk at the table — @Claude sees the schemes' : undefined}
             />
           </>
         }

@@ -27,6 +27,8 @@ interface MessageListProps {
   onToggleReaction?: (messageId: string, emoji: string, isOn: boolean) => void
   onEditMessage?: (messageId: string, content: string) => void
   onDeleteMessage?: (messageId: string) => void
+  /** Home's empty state is a table, not a prompt to start a chat. */
+  emptyKind?: 'dialogue' | 'hearth'
 }
 
 /**
@@ -107,6 +109,7 @@ export function MessageList({
   onToggleReaction,
   onEditMessage,
   onDeleteMessage,
+  emptyKind = 'dialogue',
 }: MessageListProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -214,6 +217,16 @@ export function MessageList({
   }, [messages])
 
   if (messages.length === 0) {
+    if (emptyKind === 'hearth') {
+      return (
+        <div className="messages-wrapper messages-wrapper-hearth">
+          <div className="hearth-empty">
+            <p className="hearth-kicker">The table</p>
+            <p className="hearth-copy">This is where the three of you meet. The schemes above are the work.</p>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="messages-wrapper">
         <div className="messages-container">

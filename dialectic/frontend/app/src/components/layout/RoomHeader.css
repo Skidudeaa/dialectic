@@ -25,6 +25,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.app-main-home .room-title {
+    font-size: 1.15rem;
+}
 .thread-breadcrumb {
     display: flex;
     align-items: center;

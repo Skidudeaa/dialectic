@@ -11,12 +11,12 @@ interface HomeActivityPulseProps {
 }
 
 /**
- * Read-only cross-room pulse, rendered only in Home. Refreshes on
- * mount/Home entry, on visibility, on manual Retry, every 60 seconds
- * while visible, and when refreshVersion changes. A refresh that fails
- * AFTER a success retains the stale snapshot and says so; nothing here
- * marks source messages read, and there are no dismiss/archive/mute
- * controls — the source rooms own their own truth.
+ * Read-only scheme board, rendered only in Home. This is the place —
+ * doors into shared work — not a chat widget. Refreshes on mount/Home
+ * entry, on visibility, on manual Retry, every 60 seconds while visible,
+ * and when refreshVersion changes. A refresh that fails AFTER a success
+ * retains the stale snapshot and says so; nothing here marks source
+ * messages read, and there are no dismiss/archive/mute controls.
  */
 export function HomeActivityPulse({ onNavigate, refreshVersion }: HomeActivityPulseProps) {
   const [snapshot, setSnapshot] = useState<HomeActivityProjection | null>(null)
@@ -78,6 +78,8 @@ export function HomeActivityPulse({ onNavigate, refreshVersion }: HomeActivityPu
 
   if (!snapshot) return null
 
+  const unreadRooms = snapshot.rooms.filter((room) => room.unread_count > 0).length
+
   return (
     <div className="home-pulse">
       <div className="home-pulse-head">
@@ -86,8 +88,13 @@ export function HomeActivityPulse({ onNavigate, refreshVersion }: HomeActivityPu
           onClick={() => setCollapsed((value) => !value)}
           aria-expanded={!collapsed}
         >
-          {collapsed ? '▸' : '▾'} Shared activity
+          {collapsed ? '▸' : '▾'} What&rsquo;s moving
         </button>
+        {unreadRooms > 0 && (
+          <span className="home-pulse-count">
+            {unreadRooms} unread
+          </span>
+        )}
         {error && (
           <span className="home-pulse-stale">
             Stale — {error}
@@ -98,7 +105,7 @@ export function HomeActivityPulse({ onNavigate, refreshVersion }: HomeActivityPu
       {!collapsed && (
         <div className="home-pulse-rooms">
           {snapshot.rooms.length === 0 && (
-            <p className="home-pulse-note">No shared rooms yet — every Home member must belong to a room for it to appear here.</p>
+            <p className="home-pulse-empty">No shared rooms yet — every Home member must belong to a room for it to appear here.</p>
           )}
           {snapshot.rooms.map((room) => (
             <PulseRoomCard key={room.id} room={room} onNavigate={onNavigate} />
@@ -114,22 +121,28 @@ function PulseRoomCard({ room, onNavigate }: {
   onNavigate: (destination: RoomDestination) => Promise<boolean>
 }) {
   const changed = room.branches.filter((branch) => branch.unread_count > 0)
+  const preview = oneLinePreview(room.last_message_preview)
+  const speaker = displaySpeaker(room.last_speaker)
+  const ago = agoLabel(room.last_message_at)
+  const unread = room.unread_count > 0
   return (
-    <div className="home-pulse-card">
+    <div className={`home-pulse-card${unread ? ' unread' : ''}`}>
       <button
         className="home-pulse-room"
         onClick={() => void onNavigate({ roomId: room.id })}
       >
         <span className="home-pulse-room-name">{room.name ?? 'Untitled room'}</span>
-        {room.unread_count > 0 && (
+        {unread && (
           <span className="unread-badge">{room.unread_count}</span>
         )}
       </button>
-      {room.last_message_preview && (
-        <p className="home-pulse-preview">
-          {room.last_speaker ? `${room.last_speaker}: ` : ''}
-          {room.last_message_preview}
+      {(speaker || ago) && (
+        <p className="home-pulse-meta">
+          {speaker}{speaker && ago ? ' · ' : ''}{ago}
         </p>
+      )}
+      {preview && (
+        <p className="home-pulse-preview">{preview}</p>
       )}
       {changed.length > 0 && (
         <div className="home-pulse-branches">
@@ -147,7 +160,7 @@ function PulseRoomCard({ room, onNavigate }: {
       {room.unresolved_questions.length > 0 && (
         <p className="home-pulse-questions">
           {room.unresolved_questions.length === 1
-            ? `Open question — ${room.unresolved_questions[0].speaker}: ${room.unresolved_questions[0].content_preview}`
+            ? `Open question — ${displaySpeaker(room.unresolved_questions[0].speaker)}: ${oneLinePreview(room.unresolved_questions[0].content_preview)}`
             : `${room.unresolved_questions.length} open questions`}
         </p>
       )}
@@ -158,4 +171,37 @@ function PulseRoomCard({ room, onNavigate }: {
       ))}
     </div>
   )
+}
+
+/** LLM rows store speaker_type when there is no display name. */
+function displaySpeaker(raw: string | null | undefined): string {
+  if (!raw) return ''
+  if (raw === 'llm_primary' || raw === 'llm_provoker' || raw === 'llm_annotator') return 'Claude'
+  if (raw === 'system') return 'System'
+  return raw
+}
+
+/** Morning briefs arrive as markdown; the board wants one spoken line. */
+function oneLinePreview(raw: string | null | undefined): string {
+  if (!raw) return ''
+  return raw
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/[#*_`>~]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 96)
+}
+
+function agoLabel(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return null
+  const minutes = Math.floor((Date.now() - then) / 60000)
+  if (minutes < 0) return null
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return days < 7 ? `${days}d ago` : 'a while ago'
 }

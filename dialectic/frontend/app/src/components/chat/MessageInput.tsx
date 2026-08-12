@@ -37,6 +37,7 @@ interface MessageInputProps {
   disabled?: boolean
   replyTo?: { author: string; content: string } | null
   onCancelReply?: () => void
+  placeholder?: string
 }
 
 const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
@@ -46,7 +47,7 @@ const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
   { value: 'definition', label: 'Definition' },
 ]
 
-export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTypingContent, disabled, replyTo, onCancelReply }: MessageInputProps) {
+export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTypingContent, disabled, replyTo, onCancelReply, placeholder = 'Think out loud... (use @llm to summon Claude)' }: MessageInputProps) {
   const [content, setContent] = useState('')
   const [messageType, setMessageType] = useState<MessageType>('text')
   const [sendError, setSendError] = useState(false)
@@ -325,7 +326,7 @@ export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTy
           <textarea
             ref={textareaRef}
             className="msg-textarea"
-            placeholder="Think out loud... (use @llm to summon Claude)"
+            placeholder={placeholder}
             rows={1}
             value={content}
             onChange={e => handleInput(e.target.value)}

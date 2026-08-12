@@ -6,6 +6,8 @@ interface AppLayoutProps {
   sidebar: ReactNode
   main: ReactNode
   rightPanel: ReactNode
+  /** Home restyles the main pane around the scheme board, not a stream. */
+  isHome?: boolean
 }
 
 /**
@@ -14,7 +16,7 @@ interface AppLayoutProps {
  * no toggle at all — the PWA is the reach strategy, and every phone user
  * was locked out of memory, trading, stakes, everything).
  */
-export function AppLayout({ sidebar, main, rightPanel }: AppLayoutProps) {
+export function AppLayout({ sidebar, main, rightPanel, isHome = false }: AppLayoutProps) {
   const mobileDrawer = useAppStore((s) => s.mobileDrawer)
   const setMobileDrawer = useAppStore((s) => s.setMobileDrawer)
 
@@ -32,7 +34,7 @@ export function AppLayout({ sidebar, main, rightPanel }: AppLayoutProps) {
   return (
     <div className={`app-layout${mobileDrawer ? ` drawer-open drawer-${mobileDrawer}` : ''}`}>
       <div className="app-sidebar">{sidebar}</div>
-      <div className="app-main">{main}</div>
+      <div className={`app-main${isHome ? ' app-main-home' : ''}`}>{main}</div>
       <div className="app-right-panel">{rightPanel}</div>
       {mobileDrawer && (
         <div

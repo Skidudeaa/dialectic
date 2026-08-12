@@ -17,9 +17,9 @@ interface RoomListProps {
 
 /**
  * The room rail — and, unchanged, the content of the shipped mobile
- * navigation drawer. Home is pinned under its own label; ordinary rooms
- * keep their unread badges and previews; only the active room expands its
- * branch genealogy.
+ * navigation drawer. Home is a place-pin above Rooms, not a case card;
+ * ordinary rooms keep unread badges and previews; only the active room
+ * expands its branch genealogy.
  */
 export function RoomList({
   rooms,
@@ -34,6 +34,7 @@ export function RoomList({
 }: RoomListProps) {
   const home = rooms.find((room) => room.is_home)
   const ordinary = rooms.filter((room) => !room.is_home)
+  const homeActive = home != null && home.id === activeRoomId
 
   const renderRoom = (room: UserRoom) => (
     <div key={room.id}>
@@ -42,7 +43,7 @@ export function RoomList({
         onClick={() => onRoomSelect(room.id)}
       >
         <div className="room-item-name">
-          {room.is_home ? 'Home' : (room.name ?? `Room ${room.id.slice(0, 6)}`)}
+          {room.name ?? `Room ${room.id.slice(0, 6)}`}
         </div>
         {room.last_message_preview && (
           <div className="room-item-preview">{room.last_message_preview}</div>
@@ -65,14 +66,32 @@ export function RoomList({
   return (
     <>
       {home && (
-        <>
-          <div className="sidebar-rooms-header">
-            <h2>Home</h2>
-          </div>
-          <div className="room-list room-list-home">
-            {renderRoom(home)}
-          </div>
-        </>
+        <div className="home-pin-wrap">
+          <button
+            type="button"
+            className={`home-pin${homeActive ? ' active' : ''}`}
+            onClick={() => onRoomSelect(home.id)}
+            aria-current={homeActive ? 'page' : undefined}
+            aria-label="Home"
+          >
+            <svg className="home-pin-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+            <span className="home-pin-label">Home</span>
+            {home.unread_count > 0 && (
+              <span className="unread-badge">{home.unread_count}</span>
+            )}
+          </button>
+          {homeActive && (
+            <BranchTree
+              compact
+              nodes={genealogy}
+              activeThreadId={activeThreadId}
+              onSelect={onThreadSelect}
+            />
+          )}
+        </div>
       )}
       <div className="sidebar-rooms-header">
         <h2>Rooms</h2>

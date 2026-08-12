@@ -81,6 +81,32 @@
     margin-bottom: 0.5rem;
 }
 
+/* Home empty: sit the invitation near the composer, no stream hairline. */
+.messages-wrapper-hearth {
+    background-image: none;
+    display: flex;
+    align-items: flex-end;
+}
+.hearth-empty {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 1.25rem 1.5rem 0.5rem;
+}
+.hearth-kicker {
+    font-family: var(--font-serif);
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--color-bone);
+    margin: 0 0 0.35rem;
+}
+.hearth-copy {
+    font-size: 0.82rem;
+    color: var(--color-secondary);
+    margin: 0;
+    line-height: 1.4;
+}
+
 /* ── Unread boundary ─────────────────────────────────────────
    Scarlet is the events colour and is rationed; this is the one place in the
    stream where "you have not seen what follows" is worth spending it. */

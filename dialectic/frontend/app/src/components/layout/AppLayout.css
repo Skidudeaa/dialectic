@@ -28,6 +28,11 @@
     position: relative;
 }
 
+/* Home: the scheme board is the place; the transcript is the table under it. */
+.app-main-home .participants-bar {
+    border-bottom: none;
+}
+
 /* Energy indicator — amber ambient glow */
 .app-main::before {
     content: '';

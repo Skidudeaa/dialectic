@@ -107,7 +107,38 @@
     text-overflow: ellipsis;
 }
 
-/* Pinned Home section sits above the ordinary room list and never grows. */
-.room-list-home {
+/* Home is a place-mark, not a room card. No preview, no case-file chrome. */
+.home-pin-wrap {
     flex: 0 0 auto;
+    padding: 8px 8px 4px;
+}
+.home-pin {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+    text-align: left;
+    color: var(--color-bone);
+}
+.home-pin:hover { color: var(--color-display); }
+.home-pin.active { color: var(--color-amber); }
+.home-pin-icon {
+    flex-shrink: 0;
+    color: var(--color-secondary);
+}
+.home-pin.active .home-pin-icon { color: var(--color-amber); }
+.home-pin-label {
+    font-family: var(--font-serif);
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+.home-pin .unread-badge {
+    position: static;
+    margin-left: auto;
 }
