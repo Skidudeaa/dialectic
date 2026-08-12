@@ -625,3 +625,20 @@
 .thesis-draft-node-extra {
     white-space: nowrap;
 }
+
+/* Home's explanatory Trading state — informative, never actionable. */
+.trading-panel-home {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    text-align: left;
+}
+.trading-panel-home strong {
+    color: var(--color-display);
+    font-family: var(--font-serif);
+    font-size: 0.9rem;
+}
+.trading-panel-home p {
+    color: var(--color-faint);
+    font-size: 0.78rem;
+}

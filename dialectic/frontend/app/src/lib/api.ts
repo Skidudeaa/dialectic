@@ -1,4 +1,4 @@
-import type { Attachment, Memory, Thread, ThreadNode, UserRoom } from '../types/index.ts';
+import type { Attachment, HomeActivityProjection, Memory, Thread, ThreadNode, UserRoom } from '../types/index.ts';
 
 const BASE = '';  // Same origin via Vite proxy
 
@@ -81,6 +81,38 @@ class DialecticAPI {
   async getThreads(roomId: string): Promise<Thread[]> { return this.fetch(`/rooms/${roomId}/threads`); }
   async getGenealogy(roomId: string): Promise<ThreadNode[]> {
     return this.fetch(`/rooms/${roomId}/genealogy`);
+  }
+
+  // Home — the activity call authorizes from JWT plus Home membership
+  // (the server ignores any room token); member administration carries
+  // the current Home room token through the normal header path.
+  async getHomeActivity(): Promise<HomeActivityProjection> {
+    return this.fetch('/users/me/home/activity');
+  }
+  async resolveHomeMember(email: string): Promise<{
+    user_id: string;
+    display_name: string;
+  }> {
+    return this.fetch('/users/me/home/member-candidate', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+  async addHomeMember(
+    email: string,
+    confirmedUserId: string,
+  ): Promise<{
+    user_id: string;
+    display_name: string;
+    status: 'added' | 'already_member';
+  }> {
+    return this.fetch('/users/me/home/members', {
+      method: 'POST',
+      body: JSON.stringify({
+        email,
+        confirmed_user_id: confirmedUserId,
+      }),
+    });
   }
   async getMessages(threadId: string, limit = 50) { return this.fetch(`/threads/${threadId}/messages?limit=${limit}`); }
   async getMemories(roomId: string): Promise<Memory[]> {

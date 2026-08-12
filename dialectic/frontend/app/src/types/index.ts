@@ -168,6 +168,48 @@ export interface Thread {
   message_count: number;
 }
 
+/** Mirrors home_activity.py's response models (GET /users/me/home/activity). */
+export interface HomeActivityBranch {
+  id: string;
+  parent_thread_id: string | null;
+  title: string | null;
+  depth: number;
+  message_count: number;
+  unread_count: number;
+  last_message_at: string | null;
+}
+
+export interface HomeActivityQuestion {
+  thread_id: string;
+  speaker: string;
+  content_preview: string;
+  timestamp: string;
+}
+
+export interface HomeActivityCommitment {
+  id: string;
+  claim: string;
+  deadline: string;
+  category: string;
+}
+
+export interface HomeActivityRoom {
+  id: string;
+  name: string | null;
+  last_message_at: string | null;
+  last_speaker: string | null;
+  last_message_preview: string | null;
+  unread_count: number;
+  branches: HomeActivityBranch[];
+  unresolved_questions: HomeActivityQuestion[];
+  commitments_due: HomeActivityCommitment[];
+}
+
+export interface HomeActivityProjection {
+  generated_at: string;
+  rooms: HomeActivityRoom[];
+}
+
 /** One node of GET /rooms/{id}/genealogy — the fork tree with lineage. */
 export interface ThreadNode {
   id: string;

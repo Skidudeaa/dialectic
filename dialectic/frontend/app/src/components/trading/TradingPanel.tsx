@@ -523,6 +523,18 @@ export function TradingPanel() {
     }
   }
 
+  // Home connects the schemes; it can never hold a thesis of its own
+  // (backend and tool guards are authoritative — this is explanation,
+  // not enforcement). The tab stays present, the create form does not.
+  if (currentRoom?.is_home && !tradingConfig) {
+    return (
+      <div className="trading-panel-empty trading-panel-home">
+        <strong>Home connects the schemes.</strong>
+        <p>Propose and create a thesis in the scheme&apos;s own room.</p>
+      </div>
+    )
+  }
+
   if (!tradingConfig) {
     return (
       <div className="trading-panel-empty">

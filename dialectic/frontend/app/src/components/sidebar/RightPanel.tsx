@@ -10,9 +10,10 @@ import { AnalyticsPanel } from '../analytics/AnalyticsPanel'
 import { IdentityViewer } from '../analytics/IdentityViewer'
 import { ReplayTimeline } from '../replay/ReplayTimeline'
 import { CommitmentDashboard } from '../stakes/CommitmentDashboard'
+import { HomeSettingsPanel } from '../home/HomeSettingsPanel'
 import './RightPanel.css'
 
-type TabId = 'users' | 'memory' | 'threads' | 'analytics' | 'stakes' | 'history' | 'identity' | 'share' | 'trading'
+type TabId = 'users' | 'memory' | 'threads' | 'analytics' | 'stakes' | 'history' | 'identity' | 'share' | 'home' | 'trading'
 
 interface RightPanelProps {
   memories: Memory[]
@@ -36,6 +37,9 @@ interface RightPanelProps {
   ) => void
   onUpdateConfidence: (commitmentId: string, confidence: number) => void
   onResolveCommitment: (commitmentId: string) => void
+  isHome: boolean
+  canManageHome: boolean
+  onMembershipChanged: () => void
 }
 
 const BASE_TABS: { id: TabId; label: string }[] = [
@@ -65,16 +69,27 @@ export function RightPanel({
   onCreateCommitment,
   onUpdateConfidence,
   onResolveCommitment,
+  isHome,
+  canManageHome,
+  onMembershipChanged,
 }: RightPanelProps) {
   // WHY the tab lives in the store: a chat card (propose_thesis) has to be
   // able to open the Trading tab from outside this component.
-  const activeTab = useAppStore((s) => s.rightPanelTab) as TabId
+  const storedTab = useAppStore((s) => s.rightPanelTab) as TabId
   const setActiveTab = useAppStore((s) => s.setRightPanelTab)
+  // Home replaces Share with its nondelegable settings; a persisted
+  // 'share'/'home' selection maps to whichever exists in this room.
+  const activeTab: TabId = isHome
+    ? (storedTab === 'share' ? 'home' : storedTab)
+    : (storedTab === 'home' ? 'share' : storedTab)
 
   // WHY Trading is unconditional: it used to appear only once a snapshot
   // existed, which made the Create Thesis flow unreachable in exactly the
   // rooms that needed it — the panel's empty state IS the create surface.
-  const tabs = [...BASE_TABS, { id: 'trading' as TabId, label: 'Trading' }]
+  const roomTabs = BASE_TABS.map((tab) =>
+    isHome && tab.id === 'share' ? { id: 'home' as TabId, label: 'Home' } : tab,
+  )
+  const tabs = [...roomTabs, { id: 'trading' as TabId, label: 'Trading' }]
 
   // Nine tabs overflow the rail, and the active one can sit clipped out of
   // sight (a card can select Trading from outside). Keep it in view.
@@ -128,7 +143,13 @@ export function RightPanel({
         )}
         {activeTab === 'history' && <ReplayTimeline key={roomId} roomId={roomId} />}
         {activeTab === 'identity' && <IdentityViewer key={roomId} roomId={roomId} />}
-        {activeTab === 'share' && <SharePanel roomId={roomId} roomToken={roomToken} />}
+        {activeTab === 'share' && !isHome && <SharePanel roomId={roomId} roomToken={roomToken} />}
+        {activeTab === 'home' && isHome && (
+          <HomeSettingsPanel
+            canManageHome={canManageHome}
+            onMembershipChanged={onMembershipChanged}
+          />
+        )}
         {activeTab === 'trading' && <TradingPanel />}
       </div>
     </>

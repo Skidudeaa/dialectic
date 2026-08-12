@@ -24,6 +24,7 @@ import { ParticipantsBar } from './components/chat/ParticipantsBar'
 import { TypingIndicator } from './components/chat/TypingIndicator'
 import { ProtocolPicker } from './components/protocols/ProtocolPicker'
 import { ProtocolBanner } from './components/protocols/ProtocolBanner'
+import { HomeActivityPulse } from './components/home/HomeActivityPulse'
 import { BriefingPanel } from './components/analytics/BriefingPanel'
 import { CommitmentSurface } from './components/stakes/CommitmentSurface'
 
@@ -80,6 +81,9 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // panel. A failed read keeps the previous tree and offers Retry.
   const [genealogy, setGenealogy] = useState<ThreadNode[]>([])
   const [genealogyError, setGenealogyError] = useState(false)
+  // Bumped when Home settings adds a member, so the pulse's displayed
+  // intersection contracts immediately instead of on the next interval.
+  const [homeRefreshVersion, setHomeRefreshVersion] = useState(0)
   const [showSettings, setShowSettings] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
   const [replyToId, setReplyToId] = useState<string | null>(null)
@@ -345,6 +349,8 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // the messages under it have been read anyway.
   const roomMeta = rooms.find((room) => room.id === currentRoom?.id)
   const unreadSince = roomMeta?.last_read_at ?? roomMeta?.joined_at ?? null
+  // Home derives from the saved-room descriptor, never from name or URL.
+  const isHome = roomMeta?.is_home ?? currentRoom?.is_home === true
 
   useAwayAlerts({
     messages,
@@ -412,7 +418,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
               onSearchClick={() => setShowSearch(true)}
               onHelpClick={() => setShowHelp(true)}
               connected={isConnected}
-              isHome={currentRoom.is_home === true}
+              isHome={isHome}
               onHomeClick={() => void navigate({ roomId: null }, 'push')}
             />
             <ParticipantsBar participants={participants} />
@@ -432,6 +438,12 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
                   ×
                 </button>
               </div>
+            )}
+            {isHome && (
+              <HomeActivityPulse
+                onNavigate={(destination) => navigate(destination, 'push')}
+                refreshVersion={homeRefreshVersion}
+              />
             )}
             <RoomBriefing key={currentRoom.id} roomId={currentRoom.id} />
             {activeProtocol && (
@@ -525,6 +537,9 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
             onCreateCommitment={createCommitment}
             onUpdateConfidence={(commitmentId, confidence) => recordConfidence(commitmentId, confidence)}
             onResolveCommitment={handleResolveCommitment}
+            isHome={isHome}
+            canManageHome={roomMeta?.can_manage_home ?? false}
+            onMembershipChanged={() => setHomeRefreshVersion((version) => version + 1)}
           />
         }
       />
