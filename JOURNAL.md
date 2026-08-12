@@ -10,3 +10,4 @@
 [2026-08-11] aligned tradingDesk deployment docs with the canonical unit — port 8006 is loopback-only and nginx is the public entry point
 [2026-08-11] token rotation guard rolled back two incomplete activations — the five-thesis first tick needs more than 30 seconds and Cloudflare returns 403 to urllib while curl succeeds
 [2026-08-11] rotated all five published room tokens and activated the corrected tradingDesk unit — old tokens are 401, new tokens are 200, env/database/process match 5/5, and local/public readiness pass
+[2026-08-11] deployed scheduler recovery and the lint-clean frontend — health reports a fresh heartbeat, the ledger advances, and the served versioned asset digest matches the committed build

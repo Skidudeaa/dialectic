@@ -76,7 +76,7 @@ class ReleasedConn(FakeConn):
 
 
 class AcquireContext:
-    def __init__(self, conn: FakeConn):
+    def __init__(self, conn: FakeConn) -> None:
         self.conn = conn
 
     async def __aenter__(self) -> FakeConn:
@@ -87,7 +87,7 @@ class AcquireContext:
 
 
 class SequentialPool:
-    def __init__(self, connections: list[FakeConn]):
+    def __init__(self, connections: list[FakeConn]) -> None:
         self.connections = connections
         self.acquire_count = 0
 
