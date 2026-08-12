@@ -225,3 +225,8 @@ If implementation reality contradicts this plan, the builder flags the contradic
   now treats Home as the place — distinct rail pin, no Main crumb until
   Home is forked, pulse as a full-bleed capped scheme board, transcript as
   the table beneath. Still a real room. Not a dashboard. No new endpoints.
+- [2026-08-12, feel 2] Home inverts the column: the activity projection
+  becomes the house (who is here, what needs a body, doors into schemes);
+  the Home transcript is a capped table under it; morning-brief markdown
+  is no longer the door headline. Same endpoint, still a real room, still
+  no activity table. Composer on Home is speech, not claim/question chrome.

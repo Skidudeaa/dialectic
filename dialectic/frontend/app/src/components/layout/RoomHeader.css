@@ -26,7 +26,10 @@
     text-overflow: ellipsis;
 }
 .app-main-home .room-title {
-    font-size: 1.15rem;
+    font-size: 1.35rem;
+}
+.room-header-home {
+    border-bottom: none;
 }
 .thread-breadcrumb {
     display: flex;

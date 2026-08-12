@@ -35,6 +35,7 @@ export function RoomList({
   const home = rooms.find((room) => room.is_home)
   const ordinary = rooms.filter((room) => !room.is_home)
   const homeActive = home != null && home.id === activeRoomId
+  const homeHasForks = homeActive && genealogyHasForks(genealogy)
 
   const renderRoom = (room: UserRoom) => (
     <div key={room.id}>
@@ -83,7 +84,7 @@ export function RoomList({
               <span className="unread-badge">{home.unread_count}</span>
             )}
           </button>
-          {homeActive && (
+          {homeHasForks && (
             <BranchTree
               compact
               nodes={genealogy}
@@ -119,4 +120,8 @@ export function RoomList({
       </div>
     </>
   )
+}
+
+function genealogyHasForks(nodes: ThreadNode[]): boolean {
+  return nodes.some((node) => node.parent_thread_id !== null || node.children.length > 0)
 }

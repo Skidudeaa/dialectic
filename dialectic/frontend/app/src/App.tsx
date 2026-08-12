@@ -422,7 +422,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
               isHome={isHome}
               onHomeClick={() => void navigate({ roomId: null }, 'push')}
             />
-            <ParticipantsBar participants={participants} />
+            {!isHome && <ParticipantsBar participants={participants} />}
             {pushState === 'prompt' && typeof Notification !== 'undefined' && Notification.permission === 'default' && (
               <button className="push-enable-chip" onClick={enablePush}>
                 🔔 Enable notifications — get buzzed when {participants.length > 2 ? 'the others' : 'the other person'} writes
@@ -444,6 +444,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
               <HomeActivityPulse
                 onNavigate={(destination) => navigate(destination, 'push')}
                 refreshVersion={homeRefreshVersion}
+                residents={participants}
               />
             )}
             <RoomBriefing key={currentRoom.id} roomId={currentRoom.id} />
@@ -502,7 +503,8 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
               disabled={!isConnected || !currentThread}
               replyTo={replyTarget}
               onCancelReply={() => setReplyToId(null)}
-              placeholder={isHome ? 'Talk at the table — @Claude sees the schemes' : undefined}
+              placeholder={isHome ? 'Sit down — Claude is already here' : undefined}
+              quiet={isHome}
             />
           </>
         }

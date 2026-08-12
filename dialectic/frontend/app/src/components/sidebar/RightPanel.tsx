@@ -77,6 +77,15 @@ export function RightPanel({
   // able to open the Trading tab from outside this component.
   const storedTab = useAppStore((s) => s.rightPanelTab) as TabId
   const setActiveTab = useAppStore((s) => s.setRightPanelTab)
+  const wasHome = useRef(isHome)
+  // Landing on Home from a scheme room should not dump you into the empty
+  // Memory form — that's cockpit chrome. Explicit Memory taps in Home stick.
+  useEffect(() => {
+    if (isHome && !wasHome.current && (storedTab === 'memory' || storedTab === 'share')) {
+      setActiveTab('home')
+    }
+    wasHome.current = isHome
+  }, [isHome, storedTab, setActiveTab])
   // Home replaces Share with its nondelegable settings; a persisted
   // 'share'/'home' selection maps to whichever exists in this room.
   const activeTab: TabId = isHome
@@ -86,9 +95,12 @@ export function RightPanel({
   // WHY Trading is unconditional: it used to appear only once a snapshot
   // existed, which made the Create Thesis flow unreachable in exactly the
   // rooms that needed it — the panel's empty state IS the create surface.
-  const roomTabs = BASE_TABS.map((tab) =>
-    isHome && tab.id === 'share' ? { id: 'home' as TabId, label: 'Home' } : tab,
-  )
+  const roomTabs = isHome
+    ? [
+        { id: 'home' as TabId, label: 'House' },
+        ...BASE_TABS.filter((tab) => tab.id !== 'share'),
+      ]
+    : BASE_TABS
   const tabs = [...roomTabs, { id: 'trading' as TabId, label: 'Trading' }]
 
   // Nine tabs overflow the rail, and the active one can sit clipped out of

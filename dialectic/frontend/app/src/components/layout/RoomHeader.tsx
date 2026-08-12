@@ -26,7 +26,7 @@ export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, 
   // actually has a fork — same control as every other room.
   const showBranchCrumb = !isHome || threads.length > 1
   return (
-    <div className="room-header">
+    <div className={`room-header${isHome ? ' room-header-home' : ''}`}>
       <div className="room-header-left">
         <button
           className="btn btn-ghost btn-sm drawer-toggle"

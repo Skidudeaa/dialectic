@@ -1,147 +1,247 @@
-/* Home's scheme board — full-bleed between header and table, capped so
-   it cannot push the composer off a short viewport. */
+/* Home is the house. This pane takes the column; the transcript below
+   is the table. Composer stays pinned. */
 
-.home-pulse {
-    flex-shrink: 0;
-    margin: 0;
-    padding: 10px 16px 12px;
-    border-bottom: 1px solid var(--color-bean);
-    background: var(--color-cacao);
+.home-house {
+    flex: 1 1 auto;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--color-cacao);
+    border-bottom: 1px solid var(--color-bean);
 }
 
-.home-pulse-head {
+.home-house-note {
+    flex: 0 0 auto;
+    color: var(--color-faint);
+    padding: 12px 20px;
+    font-size: 0.78rem;
     display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-cacao);
+    border-bottom: 1px solid var(--color-bean);
+}
+
+.home-lintel {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 10px 20px 8px;
+}
+
+.home-residents {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.65rem;
 }
 
-.home-pulse-toggle {
-    background: none;
-    border: none;
-    color: var(--color-bone);
-    font-family: var(--font-serif);
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    padding: 2px 0;
-}
-
-.home-pulse-count {
+.home-resident {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--color-secondary);
     font-family: var(--font-mono);
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--color-amber);
 }
 
-.home-pulse-stale {
+.home-resident.is-claude { color: var(--color-amber); }
+
+.home-resident .presence-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+.home-resident .presence-dot.online  { background: var(--sev-stable); }
+.home-resident .presence-dot.away    { background: var(--color-warning); }
+.home-resident .presence-dot.offline { background: var(--color-ghost); }
+
+.home-resident-ago {
+    color: var(--color-faint);
+    letter-spacing: 0.12em;
+}
+
+.home-house-stale {
+    margin-left: auto;
     color: var(--color-faint);
     font-size: 0.72rem;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    margin-left: auto;
 }
 
-.home-pulse-note {
-    color: var(--color-faint);
-    padding: 10px 16px;
-    font-size: 0.76rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    border-bottom: 1px solid var(--color-bean);
-    background: var(--color-cacao);
+.home-needs,
+.home-wings {
+    padding: 0 20px;
 }
 
-.home-pulse-empty {
-    color: var(--color-faint);
-    font-size: 0.76rem;
-    margin: 0;
-    grid-column: 1 / -1;
+.home-needs {
+    flex-shrink: 0;
+    padding-bottom: 12px;
 }
 
-.home-pulse-rooms {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 8px;
-    margin-top: 10px;
-    max-height: min(36vh, 18rem);
+.home-wings {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    padding-bottom: 16px;
 }
 
-.home-pulse-card {
+.home-needs h2,
+.home-wings h2 {
+    margin: 0 0 8px;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: normal;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-secondary);
+}
+
+.home-needs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.home-need {
+    display: grid;
+    grid-template-columns: 7.5rem 8.5rem 1fr;
+    gap: 0.75rem;
+    align-items: baseline;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    border-left: 2px solid var(--color-bean);
+    padding: 6px 10px;
+    cursor: pointer;
+    color: inherit;
+}
+
+.home-need.due { border-left-color: var(--color-amber); }
+.home-need.question { border-left-color: var(--color-teal); }
+.home-need.unread { border-left-color: var(--amber-30); }
+
+.home-need:hover { background: var(--amber-08); }
+
+.home-need-kicker {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.home-need-room {
+    font-family: var(--font-serif);
+    font-size: 0.88rem;
+    color: var(--color-bone);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.home-need-body {
+    font-size: 0.8rem;
+    color: var(--color-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.home-house-empty {
+    color: var(--color-faint);
+    font-size: 0.78rem;
+    margin: 0;
+}
+
+.home-doors {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+}
+
+.home-door {
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     background: var(--color-obsidian);
-    padding: 8px 10px 9px;
-    position: relative;
+    padding: 12px 14px 13px;
+    min-height: 7.5rem;
+    display: flex;
+    flex-direction: column;
 }
 
-.home-pulse-card.unread {
-    border-color: var(--amber-30);
-}
+.home-door.unread { border-color: var(--amber-30); }
 
-.home-pulse-room {
+.home-door-open {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 0.5rem;
     width: 100%;
     background: none;
     border: none;
-    cursor: pointer;
     padding: 0;
-    color: var(--color-display);
-    font-family: var(--font-serif);
-    font-size: 0.92rem;
+    cursor: pointer;
     text-align: left;
-    gap: 0.5rem;
+    color: var(--color-display);
 }
 
-.home-pulse-room-name {
+.home-door-name {
+    font-family: var(--font-serif);
+    font-size: 1.2rem;
+    font-weight: 600;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.home-pulse-room:hover .home-pulse-room-name { text-decoration: underline; }
+.home-door-open:hover .home-door-name { text-decoration: underline; }
 
-.home-pulse-card .unread-badge {
+.home-door .unread-badge {
     position: static;
     flex-shrink: 0;
 }
 
-.home-pulse-meta {
-    color: var(--color-secondary);
-    margin: 3px 0 0;
+.home-door-kicker {
+    margin: 6px 0 0;
     font-family: var(--font-mono);
     font-size: 0.68rem;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
+    color: var(--color-secondary);
 }
 
-.home-pulse-preview {
+.home-door-body {
+    margin: 6px 0 0;
+    font-size: 0.82rem;
+    line-height: 1.4;
     color: var(--color-ink);
-    margin: 4px 0 0;
-    font-size: 0.78rem;
-    line-height: 1.35;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    flex: 1;
 }
 
-.home-pulse-branches {
+.home-door-branches {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    margin-top: 6px;
+    margin-top: 10px;
 }
 
-.home-pulse-branch {
+.home-door-branch {
     background: var(--color-espresso);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
@@ -152,21 +252,14 @@
     cursor: pointer;
 }
 
-.home-pulse-branch:hover { border-color: var(--amber-30); }
+.home-door-branch:hover { border-color: var(--amber-30); }
 
-.home-pulse-questions,
-.home-pulse-commitment {
-    color: var(--color-secondary);
-    margin: 5px 0 0;
-    font-size: 0.72rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-@media (max-width: 600px) {
-    .home-pulse-rooms {
+@media (max-width: 700px) {
+    .home-need {
         grid-template-columns: 1fr;
-        max-height: min(32vh, 14rem);
+        gap: 2px;
+        padding: 8px 10px;
     }
+    .home-doors { grid-template-columns: 1fr; }
+    .home-door { min-height: 0; }
 }

@@ -222,7 +222,7 @@ export function MessageList({
         <div className="messages-wrapper messages-wrapper-hearth">
           <div className="hearth-empty">
             <p className="hearth-kicker">The table</p>
-            <p className="hearth-copy">This is where the three of you meet. The schemes above are the work.</p>
+            <p className="hearth-copy">Sit down when you want to talk. The house is above.</p>
           </div>
         </div>
       )

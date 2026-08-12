@@ -28,9 +28,19 @@
     position: relative;
 }
 
-/* Home: the scheme board is the place; the transcript is the table under it. */
+/* Home: the house takes the column; the transcript is a capped table. */
 .app-main-home .participants-bar {
     border-bottom: none;
+}
+.app-main-home > .messages-viewport,
+.app-main-home > .messages-wrapper {
+    flex: 0 1 auto;
+    max-height: min(34vh, 20rem);
+    min-height: 0;
+}
+.app-main-home > .messages-wrapper-hearth {
+    flex: 0 0 auto;
+    max-height: none;
 }
 
 /* Energy indicator — amber ambient glow */

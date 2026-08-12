@@ -38,6 +38,8 @@ interface MessageInputProps {
   replyTo?: { author: string; content: string } | null
   onCancelReply?: () => void
   placeholder?: string
+  /** Home hides claim/question/definition — those are scheme-room speech acts. */
+  quiet?: boolean
 }
 
 const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
@@ -47,7 +49,7 @@ const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
   { value: 'definition', label: 'Definition' },
 ]
 
-export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTypingContent, disabled, replyTo, onCancelReply, placeholder = 'Think out loud... (use @llm to summon Claude)' }: MessageInputProps) {
+export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTypingContent, disabled, replyTo, onCancelReply, placeholder = 'Think out loud... (use @llm to summon Claude)', quiet = false }: MessageInputProps) {
   const [content, setContent] = useState('')
   const [messageType, setMessageType] = useState<MessageType>('text')
   const [sendError, setSendError] = useState(false)
@@ -288,17 +290,19 @@ export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTy
             ))}
           </div>
         )}
-        <div className="msg-type-selector">
-          {MESSAGE_TYPES.map(t => (
-            <button
-              key={t.value}
-              className={`type-btn ${messageType === t.value ? 'active' : ''}`}
-              onClick={() => setMessageType(t.value)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        {!quiet && (
+          <div className="msg-type-selector">
+            {MESSAGE_TYPES.map(t => (
+              <button
+                key={t.value}
+                className={`type-btn ${messageType === t.value ? 'active' : ''}`}
+                onClick={() => setMessageType(t.value)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="input-row">
           <input
             ref={fileInputRef}
