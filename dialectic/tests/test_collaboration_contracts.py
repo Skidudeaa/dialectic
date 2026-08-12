@@ -596,7 +596,7 @@ async def test_handshake_thread_must_belong_to_room():
 
 
 @pytest.mark.asyncio
-async def test_automatic_cross_room_search_requires_global_scope():
+async def test_automatic_cross_room_search_requires_personal_promotion():
     db = SimpleNamespace(fetch=AsyncMock(return_value=[]))
     manager = CrossSessionMemoryManager(db)
     manager._embedder = SimpleNamespace(
@@ -612,7 +612,9 @@ async def test_automatic_cross_room_search_requires_global_scope():
     )
 
     query = db.fetch.await_args.args[0]
-    assert "m.scope = 'global'" in query
+    assert "user_memory_promotions" in query
+    assert "ump.user_id = $1" in query
+    assert "m.scope = 'global'" not in query
     assert db.fetch.await_args.args[-1] is True
 
     search_mock = AsyncMock(return_value=[])
@@ -626,8 +628,13 @@ async def test_automatic_cross_room_search_requires_global_scope():
 
 
 @pytest.mark.asyncio
-async def test_auto_inject_collections_exclude_room_scoped_memories():
+async def test_auto_inject_collections_require_personal_promotion():
     db = SimpleNamespace(fetch=AsyncMock(return_value=[]))
     manager = CrossSessionMemoryManager(db)
     assert await manager.get_auto_inject_memories(uuid4()) == []
-    assert "m.scope = 'global'" in db.fetch.await_args.args[0]
+    query = db.fetch.await_args.args[0]
+    assert "user_memory_promotions" in query
+    assert "ump.user_id = $1" in query
+    assert "JOIN room_memberships" in query
+    assert "rm.user_id = $1" in query
+    assert "m.scope = 'global'" not in query
