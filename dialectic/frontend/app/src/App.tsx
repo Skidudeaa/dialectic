@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './styles/global.css'
 import { useAppStore } from './stores/appStore.ts'
-import { api, ApiError } from './lib/api.ts'
+import { api } from './lib/api.ts'
 import { AuthScreen } from './components/auth/AuthScreen.tsx'
 import { RoomSelector } from './components/auth/RoomSelector.tsx'
+import { RoomAccess } from './components/auth/RoomAccess.tsx'
 import { useDialecticSocket } from './hooks/useDialecticSocket.ts'
+import { useRoomNavigation, type RoomNavigation } from './hooks/useRoomNavigation.ts'
 import { useDocumentVisibility } from './hooks/useDocumentVisibility.ts'
 import { useAwayAlerts } from './hooks/useAwayAlerts.ts'
 import { usePushSubscription } from './hooks/usePushSubscription.ts'
-import type { Message, SearchResult, Thread, TradingSnapshot, UserRoom } from './types/index.ts'
+import type { Message, SearchResult, Thread, TradingSnapshot } from './types/index.ts'
 import { AppLayout } from './components/layout/AppLayout'
 import { RoomHeader } from './components/layout/RoomHeader'
 import { RoomSettingsDialog } from './components/layout/RoomSettingsDialog'
@@ -45,7 +47,7 @@ function accessTokenExpiry(token: string | null): number {
   }
 }
 
-function ChatLayout() {
+function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const user = useAppStore((s) => s.user)
   const accessToken = useAppStore((s) => s.accessToken)
   const refreshToken = useAppStore((s) => s.refreshToken)
@@ -64,16 +66,15 @@ function ChatLayout() {
   const streamingContent = useAppStore((s) => s.streamingContent)
   const activeProtocol = useAppStore((s) => s.activeProtocol)
   const roomToken = useAppStore((s) => s.roomToken)
-  const setRoom = useAppStore((s) => s.setRoom)
-  const setThread = useAppStore((s) => s.setThread)
-  const setThreads = useAppStore((s) => s.setThreads)
   const setMessages = useAppStore((s) => s.setMessages)
   const setMemories = useAppStore((s) => s.setMemories)
-  const leaveRoom = useAppStore((s) => s.leaveRoom)
   const logout = useAppStore((s) => s.logout)
   const setTradingConfig = useAppStore((s) => s.setTradingConfig)
 
-  const [rooms, setRooms] = useState<UserRoom[]>([])
+  // Every destination change goes through nav.navigate — no setRoom,
+  // setThread, or leaveRoom call expresses a destination in this file.
+  const { rooms, navigate } = nav
+  const [showRoomAccess, setShowRoomAccess] = useState(false)
   const [showProtocolPicker, setShowProtocolPicker] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
@@ -91,6 +92,15 @@ function ChatLayout() {
   // Restore the persisted JWT into the API singleton after a page reload.
   api.setAccessToken(accessToken ?? '')
   if (roomToken) api.setRoomToken(roomToken)
+
+  // The collaborator who created a branch lands in it immediately — via the
+  // same navigation transaction as every other destination (push history).
+  const handleOwnFork = useCallback((thread: Thread) => {
+    const state = useAppStore.getState()
+    if (state.currentRoom) {
+      void navigate({ roomId: state.currentRoom.id, threadId: thread.id }, 'push')
+    }
+  }, [navigate])
 
   const {
     isConnected,
@@ -114,7 +124,7 @@ function ChatLayout() {
     toggleReaction,
     refreshReactions,
     refreshAttachments,
-  } = useDialecticSocket()
+  } = useDialecticSocket({ onOwnFork: handleOwnFork })
 
   const isVisible = useDocumentVisibility()
   const { state: pushState, enable: enablePush } = usePushSubscription(true)
@@ -150,38 +160,16 @@ function ChatLayout() {
     reportedReadRef.current.add(messageId)
   }, [markMessageRead])
 
-  // Hydrate collaboration state that is not delivered by the socket handshake.
-  // Threads are fetched directly (not via refreshThreads) so a rehydrated room
-  // whose token or membership has been revoked server-side lands back on the
-  // room list instead of a dead chat. A network blip must NOT eject the user —
-  // fetch throws TypeError for those, and only definitive HTTP rejections leave.
+  // Hydrate collaboration state that is not delivered by the socket
+  // handshake. Threads, room list, revocation fallback, and branch
+  // selection all belong to useRoomNavigation now — navigate has already
+  // installed a definitive room, token, and thread before this mounts.
   useEffect(() => {
     if (!currentRoom || !roomToken) return
     api.setRoomToken(roomToken)
-    api.getThreads(currentRoom.id)
-      .then((data) => setThreads(data as Thread[]))
-      .catch((error) => {
-        if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
-          leaveRoom()
-        } else {
-          console.error('Failed to load threads:', error)
-        }
-      })
     void refreshMemories()
     void refreshPresence()
-
-    if (accessToken) {
-      api.getRooms()
-        .then((data) => setRooms(data as UserRoom[]))
-        .catch((error) => console.error('Failed to load rooms:', error))
-    }
-  }, [currentRoom, roomToken, accessToken, setThreads, leaveRoom, refreshMemories, refreshPresence])
-
-  // A rehydrated or freshly loaded room has threads but no selection yet —
-  // without one, history never loads and the composer stays disabled.
-  useEffect(() => {
-    if (!currentThread && threads.length > 0) setThread(threads[0])
-  }, [currentThread, threads, setThread])
+  }, [currentRoom, roomToken, refreshMemories, refreshPresence])
 
   // Load the selected branch's persisted history. Socket events then append live
   // messages, while the store deduplicates by message ID.
@@ -217,46 +205,6 @@ function ChatLayout() {
     }).catch(() => setTradingConfig(null))
   }, [currentRoom, roomToken, setTradingConfig])
 
-  // A tapped push notification lands you in the room it came from: the
-  // service worker either posts open-room into a live window, or opens
-  // /?room=<id> for a cold start. Both resolve here once the room list exists.
-  const switchRoomRef = useRef<(roomId: string) => void>(() => undefined)
-  useEffect(() => {
-    if (!('serviceWorker' in navigator)) return
-    const onMessage = (event: MessageEvent) => {
-      const data = event.data as { type?: string; roomId?: string } | null
-      if (data?.type === 'open-room' && data.roomId) switchRoomRef.current(data.roomId)
-    }
-    navigator.serviceWorker.addEventListener('message', onMessage)
-    return () => navigator.serviceWorker.removeEventListener('message', onMessage)
-  }, [])
-  const switchRoom = useCallback(async (roomId: string) => {
-    const nextRoom = rooms.find((room) => room.id === roomId)
-    if (!nextRoom?.token || nextRoom.id === currentRoom?.id) return
-    try {
-      api.setRoomToken(nextRoom.token)
-      const nextThreads = await api.getThreads(nextRoom.id) as Thread[]
-      setRoom({ id: nextRoom.id, name: nextRoom.name, token: nextRoom.token }, nextRoom.token)
-      setThreads(nextThreads)
-      if (nextThreads.length > 0) setThread(nextThreads[0])
-    } catch (error) {
-      console.error('Failed to switch rooms:', error)
-      window.alert(error instanceof Error ? error.message : 'Could not open that room')
-    }
-  }, [rooms, currentRoom?.id, setRoom, setThreads, setThread])
-  useEffect(() => {
-    switchRoomRef.current = (roomId: string) => { void switchRoom(roomId) }
-  }, [switchRoom])
-  useEffect(() => {
-    if (rooms.length === 0) return
-    const requested = new URLSearchParams(window.location.search).get('room')
-    if (!requested) return
-    // WHY after the ref-sync effect: cold starts must call the closure from
-    // this render before consuming the one-shot room query parameter.
-    window.history.replaceState(null, '', window.location.pathname)
-    if (requested !== currentRoom?.id) switchRoomRef.current(requested)
-  }, [rooms, currentRoom?.id])
-
   // Jumping to a search hit. Done entirely in this handler rather than through
   // an effect so the whole sequence stays in one place.
   //
@@ -267,11 +215,14 @@ function ChatLayout() {
   // same message list, which is why the two paths are kept apart.
   const handleJumpToResult = useCallback(async (result: SearchResult) => {
     setShowSearch(false)
-    const targetThread = threads.find((thread) => thread.id === result.thread_id)
     const isCurrentThread = currentThread?.id === result.thread_id
 
     if (!isCurrentThread) {
-      if (targetThread) setThread(targetThread)
+      if (currentRoom) {
+        await navigate(
+          { roomId: currentRoom.id, threadId: result.thread_id }, 'push',
+        )
+      }
     } else if (!messages.some((message) => message.id === result.id)) {
       try {
         api.setRoomToken(roomToken ?? '')
@@ -288,7 +239,7 @@ function ChatLayout() {
     }
 
     setJumpTarget({ id: result.id, nonce: Date.now() })
-  }, [threads, currentThread?.id, messages, roomToken, setThread, setMessages, refreshAttachments])
+  }, [currentRoom, currentThread?.id, messages, roomToken, navigate, setMessages, refreshAttachments])
 
   const forkFromMessage = useCallback((messageId: string) => {
     if (!currentThread) return
@@ -413,8 +364,8 @@ function ChatLayout() {
           <RoomList
             rooms={rooms}
             activeRoomId={currentRoom.id}
-            onRoomSelect={(id) => void switchRoom(id)}
-            onCreateRoom={leaveRoom}
+            onRoomSelect={(id) => void navigate({ roomId: id }, 'push')}
+            onCreateRoom={() => setShowRoomAccess(true)}
             userName={user.display_name}
             onLogout={handleLogout}
           />
@@ -426,8 +377,7 @@ function ChatLayout() {
               threads={threads}
               activeThreadId={currentThread?.id ?? ''}
               onThreadChange={(id) => {
-                const thread = threads.find((candidate) => candidate.id === id)
-                if (thread) setThread(thread)
+                void navigate({ roomId: currentRoom.id, threadId: id }, 'push')
               }}
               onProtocolClick={() => setShowProtocolPicker(true)}
               onSettingsClick={() => setShowSettings(true)}
@@ -440,6 +390,18 @@ function ChatLayout() {
               <button className="push-enable-chip" onClick={enablePush}>
                 🔔 Enable notifications — get buzzed when {participants.length > 2 ? 'the others' : 'the other person'} writes
               </button>
+            )}
+            {nav.accessError && (
+              <div className="room-error">
+                {nav.accessError}
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={nav.clearAccessError}
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
+              </div>
             )}
             <RoomBriefing key={currentRoom.id} roomId={currentRoom.id} />
             {activeProtocol && (
@@ -505,8 +467,7 @@ function ChatLayout() {
             threads={threads}
             activeThreadId={currentThread?.id ?? null}
             onThreadSelect={(id) => {
-              const thread = threads.find((candidate) => candidate.id === id)
-              if (thread) setThread(thread)
+              void navigate({ roomId: currentRoom.id, threadId: id }, 'push')
             }}
             onForkThread={forkLatest}
             onAddMemory={(key, content) => {
@@ -558,13 +519,55 @@ function ChatLayout() {
       {showHelp && (
         <HelpDialog onClose={() => setShowHelp(false)} />
       )}
+      {showRoomAccess && (
+        <RoomAccess
+          mode="dialog"
+          rooms={rooms}
+          onRoomSelect={async (destination) => {
+            const entered = await navigate(destination, 'push')
+            if (entered) setShowRoomAccess(false)
+            return entered
+          }}
+          onRoomGranted={async (granted) => {
+            const entered = await nav.enterGrantedRoom(granted)
+            if (entered) setShowRoomAccess(false)
+            return entered
+          }}
+          onClose={() => setShowRoomAccess(false)}
+        />
+      )}
     </>
   )
 }
 
+/**
+ * Owns the navigation hook. ChatLayout — and with it the socket and every
+ * room-scoped hydration effect — does not mount until navigate has
+ * installed a definitive room, token, and thread, so a bare URL resolving
+ * to Home can never open a socket for the persisted room. The guest
+ * invite path (no access token, no room) lands on the full selector and
+ * never calls the Home activity endpoint.
+ */
+function AuthenticatedWorkspace() {
+  const nav = useRoomNavigation()
+  const currentRoom = useAppStore((s) => s.currentRoom)
+  const roomToken = useAppStore((s) => s.roomToken)
+
+  if (!nav.ready) {
+    return (
+      <div className="room-screen">
+        <div className="room-card">
+          <p className="room-empty">Loading your rooms…</p>
+        </div>
+      </div>
+    )
+  }
+  if (!currentRoom || !roomToken) return <RoomSelector nav={nav} />
+  return <ChatLayout nav={nav} />
+}
+
 function App() {
   const isAuthenticated = useAppStore((s) => s.isAuthenticated)
-  const currentRoom = useAppStore((s) => s.currentRoom)
   const accessToken = useAppStore((s) => s.accessToken)
   const refreshToken = useAppStore((s) => s.refreshToken)
   const user = useAppStore((s) => s.user)
@@ -605,8 +608,7 @@ function App() {
   }, [isAuthenticated, accessToken, refreshToken, user, setUser, logout])
 
   if (!isAuthenticated) return <AuthScreen />
-  if (!currentRoom) return <RoomSelector />
-  return <ChatLayout />
+  return <AuthenticatedWorkspace />
 }
 
 export default App

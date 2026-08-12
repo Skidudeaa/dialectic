@@ -27,7 +27,19 @@ interface ServerMessage {
   timestamp: string;
 }
 
-export function useDialecticSocket() {
+export function useDialecticSocket(options?: {
+  /**
+   * Fired when THIS user's fork lands. Selection is the navigation hook's
+   * job — the socket hydrates the thread record and hands the destination
+   * up; it never sets a destination itself.
+   */
+  onOwnFork?: (thread: Thread) => void
+}) {
+  // Ref-held so an unstable callback identity can never churn the socket.
+  const optionsRef = useRef(options)
+  useEffect(() => {
+    optionsRef.current = options
+  }, [options])
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -47,7 +59,6 @@ export function useDialecticSocket() {
   const updateStreamingContent = useAppStore((s) => s.updateStreamingContent);
   const appendStreamingToken = useAppStore((s) => s.appendStreamingToken);
   const setThreads = useAppStore((s) => s.setThreads);
-  const setThread = useAppStore((s) => s.setThread);
   const setMemories = useAppStore((s) => s.setMemories);
   const setOnlineUsers = useAppStore((s) => s.setOnlineUsers);
   const setProtocol = useAppStore((s) => s.setProtocol);
@@ -391,7 +402,7 @@ export function useDialecticSocket() {
           typeof payload.id === 'string' &&
           typeof payload.room_id === 'string'
         ) {
-          setThread({
+          const forked: Thread = {
             id: payload.id,
             room_id: payload.room_id,
             parent_thread_id: typeof payload.parent_thread_id === 'string'
@@ -399,7 +410,14 @@ export function useDialecticSocket() {
               : null,
             title: typeof payload.title === 'string' ? payload.title : null,
             message_count: typeof payload.message_count === 'number' ? payload.message_count : 0,
-          });
+          };
+          // Hydrate the record so navigation can validate the destination
+          // before refreshThreads resolves; never select it here.
+          const state = useAppStore.getState();
+          if (!state.threads.some((thread) => thread.id === forked.id)) {
+            state.setThreads([...state.threads, forked]);
+          }
+          optionsRef.current?.onOwnFork?.(forked);
         }
         break;
       }
@@ -438,7 +456,6 @@ export function useDialecticSocket() {
     setProtocol,
     updateProtocolPhase,
     addCommitment,
-    setThread,
     refreshCommitments,
     setSurfacedCommitments,
     setTradingConfig,

@@ -1,4 +1,4 @@
-import type { Attachment, Memory } from '../types/index.ts';
+import type { Attachment, Memory, Thread, UserRoom } from '../types/index.ts';
 
 const BASE = '';  // Same origin via Vite proxy
 
@@ -78,7 +78,7 @@ class DialecticAPI {
   // Core
   async createRoom(name?: string) { return this.fetch('/rooms', { method: 'POST', body: JSON.stringify({ name }) }); }
   async joinRoom(roomId: string, userId: string) { return this.fetch(`/rooms/${roomId}/join`, { method: 'POST', body: JSON.stringify({ user_id: userId }) }); }
-  async getThreads(roomId: string) { return this.fetch(`/rooms/${roomId}/threads`); }
+  async getThreads(roomId: string): Promise<Thread[]> { return this.fetch(`/rooms/${roomId}/threads`); }
   async getMessages(threadId: string, limit = 50) { return this.fetch(`/threads/${threadId}/messages?limit=${limit}`); }
   async getMemories(roomId: string): Promise<Memory[]> {
     const [memories, promotions] = await Promise.all([
@@ -99,7 +99,7 @@ class DialecticAPI {
   }
   async getPresence(roomId: string) { return this.fetch(`/rooms/${roomId}/presence`); }
   async getSettings(roomId: string) { return this.fetch(`/rooms/${roomId}/settings`); }
-  async getRooms() { return this.fetch('/users/me/rooms'); }
+  async getRooms(): Promise<UserRoom[]> { return this.fetch('/users/me/rooms'); }
   async updateSettings(roomId: string, settings: object) {
     return this.fetch(`/rooms/${roomId}/settings`, {
       method: 'PATCH',

@@ -17,13 +17,9 @@ interface AppLayoutProps {
 export function AppLayout({ sidebar, main, rightPanel }: AppLayoutProps) {
   const mobileDrawer = useAppStore((s) => s.mobileDrawer)
   const setMobileDrawer = useAppStore((s) => s.setMobileDrawer)
-  const currentRoomId = useAppStore((s) => s.currentRoom?.id)
 
-  // Choosing a room is the drawer's purpose fulfilled — close it.
-  useEffect(() => {
-    setMobileDrawer(null)
-  }, [currentRoomId, setMobileDrawer])
-
+  // Destination-driven close lives in useRoomNavigation's successful
+  // install (including branch changes); Escape and the scrim stay here.
   useEffect(() => {
     if (!mobileDrawer) return
     const onKey = (e: KeyboardEvent) => {

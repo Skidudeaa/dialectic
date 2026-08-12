@@ -2,6 +2,17 @@ export interface Room {
   id: string;
   name: string | null;
   token: string;
+  /** The one Home room (migration 013). Copied from the saved-room
+   *  descriptor — never re-derived from name or URL. */
+  is_home: boolean;
+}
+
+export type HistoryMode = 'push' | 'replace' | 'none';
+
+/** A navigation target. roomId null is the canonical Home-root destination. */
+export interface RoomDestination {
+  roomId: string | null;
+  threadId?: string | null;
 }
 
 export interface User {
@@ -236,6 +247,9 @@ export interface UserRoom {
   /** Last read receipt in this room; null if the user has never marked one. */
   last_read_at?: string | null;
   joined_at?: string | null;
+  is_home: boolean;
+  /** The caller's OWN Home administration capability. */
+  can_manage_home: boolean;
 }
 
 export interface TradingSnapshot {
