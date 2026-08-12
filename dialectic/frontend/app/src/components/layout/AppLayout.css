@@ -57,8 +57,37 @@
 @media (max-width: 1200px) {
     .app-layout { grid-template-columns: 220px 1fr 260px; }
 }
+
+/* Small screens: the rails become slide-over drawers. WHY not display:none
+   (the old rule): the PWA is the reach strategy, and hiding the rails
+   outright locked phones out of memory, trading, stakes — the whole
+   cockpit. The ☰ / ▦ buttons in the room header drive `mobileDrawer`. */
 @media (max-width: 1024px) {
     .app-layout { grid-template-columns: 1fr; }
-    .app-sidebar { display: none; }
-    .app-right-panel { display: none; }
+    .app-sidebar,
+    .app-right-panel {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        width: min(85vw, 320px);
+        z-index: 60;
+        transition: transform 180ms ease;
+        box-shadow: 0 0 32px rgba(0, 0, 0, 0.55);
+    }
+    .app-sidebar {
+        left: 0;
+        transform: translateX(-100%);
+    }
+    .app-right-panel {
+        right: 0;
+        transform: translateX(100%);
+    }
+    .drawer-rooms .app-sidebar { transform: translateX(0); }
+    .drawer-panel .app-right-panel { transform: translateX(0); }
+    .app-drawer-scrim {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        background: rgba(0, 0, 0, 0.5);
+    }
 }

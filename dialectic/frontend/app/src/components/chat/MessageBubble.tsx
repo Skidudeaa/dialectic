@@ -188,6 +188,9 @@ export function MessageBubble({
       monthlyBudget: thesisProposal.monthly_budget ?? 5000,
     })
     state.setRightPanelTab('trading')
+    // On a phone the panel is a drawer — opening the tab without opening
+    // the drawer would make this tap a silent no-op.
+    state.setMobileDrawer('panel')
   }
 
   const acceptProposal = async () => {
@@ -347,6 +350,10 @@ export function MessageBubble({
             <div className="msg-proposal-title">Proposed thesis</div>
             <div className="msg-proposal-statement">{thesisProposal.title}</div>
             <div className="msg-proposal-meta">{thesisProposal.claim}</div>
+            <div className="msg-proposal-meta">
+              ${(thesisProposal.monthly_budget ?? 5000).toLocaleString()}/mo
+              · nothing exists until you review the draft
+            </div>
             <button className="msg-proposal-accept" onClick={openThesisCreate}>
               Draft the cascade →
             </button>

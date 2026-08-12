@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { Memory, Thread } from '../../types'
 import { useAppStore } from '../../stores/appStore.ts'
 import { MemoryPanel } from './MemoryPanel'
@@ -71,12 +72,20 @@ export function RightPanel({
   // rooms that needed it — the panel's empty state IS the create surface.
   const tabs = [...BASE_TABS, { id: 'trading' as TabId, label: 'Trading' }]
 
+  // Nine tabs overflow the rail, and the active one can sit clipped out of
+  // sight (a card can select Trading from outside). Keep it in view.
+  const activeTabRef = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+  }, [activeTab])
+
   return (
     <>
       <div className="sidebar-tabs">
         {tabs.map(tab => (
           <button
             key={tab.id}
+            ref={tab.id === activeTab ? activeTabRef : null}
             className={`sidebar-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
             onClick={() => setActiveTab(tab.id)}
           >

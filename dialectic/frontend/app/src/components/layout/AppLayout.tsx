@@ -1,4 +1,5 @@
-import { type ReactNode } from 'react'
+import { type ReactNode, useEffect } from 'react'
+import { useAppStore } from '../../stores/appStore.ts'
 import './AppLayout.css'
 
 interface AppLayoutProps {
@@ -7,12 +8,43 @@ interface AppLayoutProps {
   rightPanel: ReactNode
 }
 
+/**
+ * Three-column cockpit on desktop; on small screens the rails become
+ * slide-over drawers (WHY: below 1024px they used to be display:none with
+ * no toggle at all — the PWA is the reach strategy, and every phone user
+ * was locked out of memory, trading, stakes, everything).
+ */
 export function AppLayout({ sidebar, main, rightPanel }: AppLayoutProps) {
+  const mobileDrawer = useAppStore((s) => s.mobileDrawer)
+  const setMobileDrawer = useAppStore((s) => s.setMobileDrawer)
+  const currentRoomId = useAppStore((s) => s.currentRoom?.id)
+
+  // Choosing a room is the drawer's purpose fulfilled — close it.
+  useEffect(() => {
+    setMobileDrawer(null)
+  }, [currentRoomId, setMobileDrawer])
+
+  useEffect(() => {
+    if (!mobileDrawer) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileDrawer(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mobileDrawer, setMobileDrawer])
+
   return (
-    <div className="app-layout">
+    <div className={`app-layout${mobileDrawer ? ` drawer-open drawer-${mobileDrawer}` : ''}`}>
       <div className="app-sidebar">{sidebar}</div>
       <div className="app-main">{main}</div>
       <div className="app-right-panel">{rightPanel}</div>
+      {mobileDrawer && (
+        <div
+          className="app-drawer-scrim"
+          onClick={() => setMobileDrawer(null)}
+          aria-hidden="true"
+        />
+      )}
     </div>
   )
 }

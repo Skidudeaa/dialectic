@@ -1,4 +1,5 @@
 import type { Thread } from '../../types'
+import { useAppStore } from '../../stores/appStore.ts'
 import './RoomHeader.css'
 
 interface RoomHeaderProps {
@@ -14,9 +15,23 @@ interface RoomHeaderProps {
 }
 
 export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, onProtocolClick, onSettingsClick, onSearchClick, onHelpClick, connected }: RoomHeaderProps) {
+  // Drawer toggles only render on small screens (CSS) — they are the whole
+  // route into the rails there, so they live on the store, not on props.
+  const setMobileDrawer = useAppStore((s) => s.setMobileDrawer)
+  const mobileDrawer = useAppStore((s) => s.mobileDrawer)
   return (
     <div className="room-header">
       <div className="room-header-left">
+        <button
+          className="btn btn-ghost btn-sm drawer-toggle"
+          onClick={() => setMobileDrawer(mobileDrawer === 'rooms' ? null : 'rooms')}
+          title="Rooms"
+          aria-label="Open room list"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 6h18M3 12h18M3 18h18"/>
+          </svg>
+        </button>
         <span className="room-title">{roomName}</span>
         <div className="thread-breadcrumb">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -54,8 +69,18 @@ export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, 
         </button>
         <div className="conn-status">
           <span className={`conn-dot ${connected ? 'connected' : ''}`} />
-          <span>{connected ? 'Connected' : 'Offline'}</span>
+          <span className="conn-label">{connected ? 'Connected' : 'Offline'}</span>
         </div>
+        <button
+          className="btn btn-ghost btn-sm drawer-toggle"
+          onClick={() => setMobileDrawer(mobileDrawer === 'panel' ? null : 'panel')}
+          title="Cockpit — memory, trading, stakes"
+          aria-label="Open cockpit panel"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="3" width="18" height="18" rx="1"/><path d="M14 3v18"/>
+          </svg>
+        </button>
       </div>
     </div>
   )

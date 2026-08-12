@@ -75,6 +75,8 @@ interface AppState {
   tradingConfig: TradingSnapshot | null;
   /** Right-panel tab, lifted here so a chat card can open a specific tab. */
   rightPanelTab: string;
+  /** Which rail is slid over the stream on small screens, if any. */
+  mobileDrawer: 'rooms' | 'panel' | null;
   /** A propose_thesis card's payload, consumed by the Create Thesis form. */
   thesisSeed: { title: string; claim: string; monthlyBudget: number } | null;
 
@@ -108,6 +110,7 @@ interface AppState {
   setActiveCommitments: (commitments: Commitment[]) => void;
   setTradingConfig: (config: TradingSnapshot | null) => void;
   setRightPanelTab: (tab: string) => void;
+  setMobileDrawer: (drawer: 'rooms' | 'panel' | null) => void;
   setThesisSeed: (seed: { title: string; claim: string; monthlyBudget: number } | null) => void;
   logout: (reason?: string) => void;
   leaveRoom: () => void;
@@ -133,6 +136,7 @@ const initialRoomState = {
   surfacedCommitments: [],
   tradingConfig: null,
   rightPanelTab: 'memory',
+  mobileDrawer: null,
   thesisSeed: null,
   roomToken: null,
 }
@@ -319,6 +323,8 @@ export const useAppStore = create<AppState>()(
       setTradingConfig: (config) => set({ tradingConfig: config }),
 
       setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
+
+      setMobileDrawer: (drawer) => set({ mobileDrawer: drawer }),
 
       setThesisSeed: (seed) => set({ thesisSeed: seed }),
 

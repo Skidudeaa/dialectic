@@ -354,8 +354,14 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
         <div className="thesis-create-heading">Thesis created</div>
         <p className="thesis-create-note">
           “{created.title}” is live as <code>{created.bookId}</code>, bound to
-          this room. The first snapshot lands on the desk’s next cycle.
+          this room.
         </p>
+        <ul className="thesis-create-next">
+          <li>The first snapshot lands here within seconds</li>
+          <li>Claude now sees the thesis state in every turn</li>
+          <li>Refine the DAG in the desk’s Builder</li>
+          <li>Retire it any time from this panel’s footer</li>
+        </ul>
         {accessToken && (
           <a
             className="trading-footer-link"
@@ -371,10 +377,15 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
   }
 
   if (draft) {
+    const phases = draft.nodes.map((n) => n.phase)
     return (
       <div className="thesis-create">
         <div className="thesis-create-heading">
           Drafted cascade — review before it becomes the book
+        </div>
+        <div className="thesis-draft-summary">
+          {draft.nodes.length} nodes · {draft.edges.length} edges · phases{' '}
+          {Math.min(...phases)}–{Math.max(...phases)}
         </div>
         {draft.rationale && (
           <p className="thesis-create-note">{draft.rationale}</p>
@@ -383,7 +394,7 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
         {error && <div className="thesis-create-error">{error}</div>}
         <button
           type="button"
-          className="thesis-create-submit"
+          className="thesis-create-submit thesis-create-submit--primary"
           disabled={busy !== 'idle'}
           onClick={() => create(draft.nodes, draft.edges)}
         >
@@ -411,13 +422,17 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
     )
   }
 
+  const locked = busy !== 'idle'
+
   return (
     <form className="thesis-create" onSubmit={submit}>
       <div className="thesis-create-heading">Create a thesis</div>
-      <p className="thesis-create-note">
-        Name the thesis this room argues. Claude drafts the causal cascade
-        for your review; the Builder on the desk is where it gets refined.
-      </p>
+      <ol className="thesis-create-steps">
+        <li><em>Name it</em> — a title and the causal claim it stakes</li>
+        <li><em>Claude drafts</em> the cascade for your review</li>
+        <li><em>You accept</em> — nothing exists until your tap</li>
+        <li><em>Refine on the desk</em> — the Builder owns the canvas</li>
+      </ol>
       <label className="thesis-create-label">
         Title
         <input
@@ -425,6 +440,7 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
           onChange={(e) => setTitle(e.target.value)}
           maxLength={120}
           placeholder="e.g. Sovereign Debt Doom Loop"
+          disabled={locked}
           required
         />
       </label>
@@ -435,7 +451,8 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
           onChange={(e) => setClaim(e.target.value)}
           maxLength={2000}
           rows={3}
-          placeholder="The causal claim this thesis stakes"
+          placeholder="The shock, the transmission, the payoff"
+          disabled={locked}
         />
       </label>
       <label className="thesis-create-label">
@@ -446,6 +463,7 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
           step={500}
           value={budget}
           onChange={(e) => setBudget(e.target.value)}
+          disabled={locked}
         />
       </label>
       <label className="thesis-create-toggle">
@@ -453,14 +471,15 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
           type="checkbox"
           checked={draftEnabled}
           onChange={(e) => setDraftEnabled(e.target.checked)}
+          disabled={locked}
         />
         Draft the cascade with Claude
       </label>
       {error && <div className="thesis-create-error">{error}</div>}
       <button
         type="submit"
-        className="thesis-create-submit"
-        disabled={busy !== 'idle' || !title.trim()}
+        className="thesis-create-submit thesis-create-submit--primary"
+        disabled={locked || !title.trim()}
       >
         {busy === 'drafting'
           ? 'Drafting cascade…'
@@ -470,6 +489,12 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
               ? 'Draft Thesis'
               : 'Create Empty Thesis'}
       </button>
+      {busy === 'drafting' && (
+        <p className="thesis-create-note">
+          Claude is composing nodes, mechanisms and thresholds — usually
+          20–40 seconds.
+        </p>
+      )}
     </form>
   )
 }
@@ -501,13 +526,18 @@ export function TradingPanel() {
   if (!tradingConfig) {
     return (
       <div className="trading-panel-empty">
-        <p>No trading data available.</p>
         {currentRoom ? (
+          // The create surface IS the zero state — no "no data" apology
+          // above a form that exists precisely because there is no data.
           <CreateThesisForm roomId={currentRoom.id} />
         ) : (
-          <p className="trading-panel-hint">
-            Push a thesis graph snapshot from the Trading Desk to populate this panel.
-          </p>
+          <>
+            <p>No trading data available.</p>
+            <p className="trading-panel-hint">
+              Enter a room to create a thesis, or push a snapshot from the
+              Trading Desk.
+            </p>
+          </>
         )}
       </div>
     )
@@ -636,7 +666,7 @@ export function TradingPanel() {
                   desk; snapshots stop.
                 </span>
                 <div className="thesis-draft-actions">
-                  <button className="thesis-draft-discard" onClick={retire}>
+                  <button className="thesis-retire-confirm" onClick={retire}>
                     Confirm retire
                   </button>
                   <button

@@ -551,3 +551,73 @@
     line-height: 1.4;
     color: var(--color-warning);
 }
+
+/* Polish pass — hints, hierarchy, and states */
+.thesis-create-steps {
+    margin: 0;
+    padding-left: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 9px;
+    line-height: 1.5;
+    color: var(--color-ghost);
+}
+
+.thesis-create-steps em {
+    font-style: normal;
+    color: var(--color-secondary);
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    font-size: 8.5px;
+}
+
+.thesis-draft-summary {
+    font-size: 9px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--color-amber-mute);
+}
+
+/* The primary action earns the amber the rest of the panel reserves. */
+.thesis-create-submit--primary:not(:disabled) {
+    color: var(--color-amber);
+    border-color: var(--color-amber-mute);
+    background: color-mix(in srgb, var(--color-amber) 8%, transparent);
+}
+
+.thesis-create-next {
+    margin: 0;
+    padding-left: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 9px;
+    line-height: 1.5;
+    color: var(--color-ghost);
+    text-align: left;
+}
+
+/* Destructive confirm — scarlet, unmistakable, still quiet. */
+.thesis-retire-confirm {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--color-scarlet);
+    background: transparent;
+    border: 1px solid var(--color-scarlet);
+    border-radius: 2px;
+    padding: 0.3rem 0.5rem;
+    cursor: pointer;
+}
+
+.thesis-retire-confirm:hover {
+    background: color-mix(in srgb, var(--color-scarlet) 12%, transparent);
+}
+
+/* The preview scrolls — fade the bottom edge so it says so. */
+.thesis-draft {
+    mask-image: linear-gradient(180deg, #000 calc(100% - 14px), transparent 100%);
+    -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 14px), transparent 100%);
+}

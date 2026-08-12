@@ -67,3 +67,12 @@
     transition: background 0.3s;
 }
 .conn-dot.connected { background: var(--sev-stable); }   /* olive green for connected */
+
+/* Drawer toggles — the only route into the rails on small screens */
+.drawer-toggle { display: none; }
+
+@media (max-width: 1024px) {
+    .drawer-toggle { display: inline-flex; }
+    /* The dot alone says connected; the word costs room the toggles need. */
+    .conn-label { display: none; }
+}
