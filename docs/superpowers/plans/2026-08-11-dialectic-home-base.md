@@ -1249,7 +1249,7 @@ git commit -m "feat: make room navigation singular -- preserve URL destinations"
 - Consumes: existing `GET /rooms/{room_id}/genealogy`, Task 6's `navigate`, and current `ThreadNodeResponse` JSON.
 - Produces: one recursive `BranchTree` used in both the room rail/drawer and Branches panel.
 
-- [ ] **Step 1: Align thread counts with soft-delete truth**
+- [x] **Step 1: Align thread counts with soft-delete truth**
 
 Add `AND NOT m.is_deleted` to the `message_count` subqueries in both
 `list_threads` and `get_thread_genealogy`. Extend the Postgres fixture to
@@ -1257,7 +1257,7 @@ soft-delete one message in a fork, call the genealogy endpoint and
 `HomeActivityService.build`, and assert both surfaces return the same branch
 count.
 
-- [ ] **Step 2: Add the genealogy contract**
+- [x] **Step 2: Add the genealogy contract**
 
 ```typescript
 export interface ThreadNode {
@@ -1284,7 +1284,7 @@ Fetch genealogy when the current room changes and after `threads` gains a new
 fork. Preserve the active transcript and expose a retry state if the genealogy
 read fails.
 
-- [ ] **Step 3: Build one recursive tree component**
+- [x] **Step 3: Build one recursive tree component**
 
 ```typescript
 interface BranchTreeProps {
@@ -1299,7 +1299,7 @@ Render a semantic nested list. Each row shows title, fork marker for nonroots,
 and message count. Use `node.depth` for a bounded indentation custom property;
 do not flatten `children`. A row click calls the supplied navigation callback.
 
-- [ ] **Step 4: Pin Home and expand only the active room**
+- [x] **Step 4: Pin Home and expand only the active room**
 
 `RoomList` receives `genealogy` and `onThreadSelect`. Partition rooms into the
 single `is_home` row and ordinary rooms; render Home under a `Home` label, then
@@ -1310,13 +1310,13 @@ Because the same `RoomList` is already the content of the shipped mobile
 navigation drawer, this change extends that drawer automatically; do not add a
 second drawer.
 
-- [ ] **Step 5: Replace flat Branches rendering**
+- [x] **Step 5: Replace flat Branches rendering**
 
 Change `ThreadPanel` to accept `ThreadNode[]` and render the same `BranchTree`
 above its existing “Fork from last message” action. Keep the active branch and
 fork action behavior.
 
-- [ ] **Step 6: Make the header a real breadcrumb and collapse labeled icons**
+- [x] **Step 6: Make the header a real breadcrumb and collapse labeled icons**
 
 Render `Room / Branch` using the selected thread title, while retaining the
 select as the keyboard-friendly fallback. Route select changes through Task
@@ -1333,7 +1333,7 @@ its house icon remains with `aria-label="Go Home"`. It calls Task 6's navigator
 with Home's root destination and default push history. Hide the action while
 already on Home.
 
-- [ ] **Step 7: Run backend and frontend gates**
+- [x] **Step 7: Run backend and frontend gates**
 
 Run: `cd dialectic && python3 -m pytest tests/test_home_activity_pg.py -q`
 
@@ -1341,7 +1341,7 @@ Run: `cd dialectic/frontend/app && npm run lint && npm run build`
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit genealogy and responsive navigation**
+- [x] **Step 8: Commit genealogy and responsive navigation**
 
 ```bash
 git add dialectic/api/main.py dialectic/tests/test_home_activity_pg.py dialectic/frontend/app/src/components/sidebar/BranchTree.tsx dialectic/frontend/app/src/components/sidebar/BranchTree.css dialectic/frontend/app/src/types/index.ts dialectic/frontend/app/src/lib/api.ts dialectic/frontend/app/src/App.tsx dialectic/frontend/app/src/components/sidebar/RoomList.tsx dialectic/frontend/app/src/components/sidebar/RoomList.css dialectic/frontend/app/src/components/sidebar/ThreadPanel.tsx dialectic/frontend/app/src/components/layout/RoomHeader.tsx dialectic/frontend/app/src/components/layout/RoomHeader.css
