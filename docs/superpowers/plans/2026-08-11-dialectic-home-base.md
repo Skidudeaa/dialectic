@@ -50,7 +50,7 @@ a service restart, or a frontend release.
 - Consumes: existing `rooms`, `threads`, `room_memberships`, `events`, `user_credentials`, and existing event strings `room_created`, `thread_created`, and `user_joined`.
 - Produces: `rooms.is_home: bool`, `room_memberships.can_manage_home: bool`, one unique Home row, one Home root thread titled `Main`, and a parameterized founder-activation transaction.
 
-- [ ] **Step 1: Write the failing schema contract**
+- [x] **Step 1: Write the failing schema contract**
 
 ```python
 from pathlib import Path
@@ -81,13 +81,13 @@ def test_home_schema_contract() -> None:
     assert RoomMembership.model_fields["can_manage_home"].default is False
 ```
 
-- [ ] **Step 2: Run the contract and verify RED**
+- [x] **Step 2: Run the contract and verify RED**
 
 Run: `cd dialectic && python3 -m pytest tests/test_home_schema_pg.py::test_home_schema_contract -q`
 
 Expected: FAIL because migration `013`, the activation script, and model fields do not exist.
 
-- [ ] **Step 3: Add the additive columns, unique index, and idempotent Home bootstrap**
+- [x] **Step 3: Add the additive columns, unique index, and idempotent Home bootstrap**
 
 Use this DDL in `013_home_base.sql`, and mirror only the resulting DDL shape in
 `schema.sql`. `schema.sql` remains data-free: a database created from it alone
@@ -158,7 +158,7 @@ Add `is_home: bool = False` to `Room` and
 `can_manage_home: bool = False` to `RoomMembership`. Do not add a room-kind
 enum.
 
-- [ ] **Step 4: Add the founder activation transaction**
+- [x] **Step 4: Add the founder activation transaction**
 
 `activate_home_founders.sql` must require two psql variables and abort unless
 each normalized email resolves to exactly one distinct credential identity:
@@ -222,7 +222,7 @@ form, split existing-founder elevation and missing-membership insertion into
 two explicit statements while preserving one event only for newly inserted
 memberships. Do not weaken the exact-two-identity guard.
 
-- [ ] **Step 5: Add real-Postgres idempotency coverage**
+- [x] **Step 5: Add real-Postgres idempotency coverage**
 
 Use `DIALECTIC_TEST_DATABASE_URL` and the existing clean-skip convention. Start
 an explicit transaction, execute the migration twice, assert exactly one Home,
@@ -261,13 +261,13 @@ async def test_migration_013_is_idempotent(db) -> None:
         await tx.rollback()
 ```
 
-- [ ] **Step 6: Run schema and migration GREEN**
+- [x] **Step 6: Run schema and migration GREEN**
 
 Run: `cd dialectic && python3 -m pytest tests/test_home_schema_pg.py -q`
 
 Expected: PASS, or the real-Postgres case cleanly skips only when the documented test database is unavailable.
 
-- [ ] **Step 7: Persist migration 013 in the local test database**
+- [x] **Step 7: Persist migration 013 in the local test database**
 
 Run: `cd dialectic && psql postgresql://root@localhost/dialectic_test -v ON_ERROR_STOP=1 -f migrations/013_home_base.sql`
 
@@ -278,14 +278,14 @@ real-Postgres fixture selects that committed Home row and adds its test
 memberships/data inside a rollback transaction; no fixture inserts a second
 `is_home = TRUE` row.
 
-- [ ] **Step 8: Commit the foundation**
+- [x] **Step 8: Commit the foundation**
 
 ```bash
 git add dialectic/migrations/013_home_base.sql dialectic/deploy/activate_home_founders.sql dialectic/schema.sql dialectic/models.py dialectic/tests/test_home_schema_pg.py
 git commit -m "feat: establish Dialectic Home -- keep founder activation explicit"
 ```
 
-- [ ] **Step 9: Cross the schema-only production migration gate**
+- [x] **Step 9: Cross the schema-only production migration gate**
 
 This step is authorized immediately after Step 8 passes and the foundation
 commit is verified. Before applying anything, confirm the deployed backend is
