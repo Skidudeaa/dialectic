@@ -175,3 +175,45 @@ class TestDetectionGate:
         for v in ("0", "false", "off", "no"):
             monkeypatch.setenv("COMMITMENT_DETECTION_ENABLED", v)
             assert handlers_mod.commitment_detection_enabled() is False
+
+
+@pytest.mark.asyncio
+class TestPoolPath:
+    async def test_task_acquires_its_own_connection(self, monkeypatch):
+        """The production branch: the detached task must NOT use the
+        per-message connection (it is already back in the pool by then —
+        the exact InterfaceError this shipped with on 2026-08-11)."""
+        pool_conn = SimpleNamespace(execute=AsyncMock())
+
+        class FakeAcquire:
+            async def __aenter__(self):
+                return pool_conn
+
+            async def __aexit__(self, *exc):
+                return False
+
+        pool = SimpleNamespace(acquire=lambda: FakeAcquire())
+        stale_conn = SimpleNamespace(
+            execute=AsyncMock(side_effect=AssertionError(
+                "detached task used the released per-message connection"))
+        )
+        connections = RecordingConnections()
+        handler = MessageHandler(
+            db=stale_conn,
+            connection_manager=connections,
+            memory_manager=SimpleNamespace(),
+            llm_orchestrator=SimpleNamespace(),
+            db_pool=pool,
+        )
+        monkeypatch.setattr(
+            handlers_mod.CommitmentDetector, "detect_commitments",
+            AsyncMock(return_value=[{
+                "claim": "X", "resolution_criteria": "Y", "category": "bet",
+            }]),
+        )
+
+        await handler._detect_commitment_proposals(ROOM_ID, make_message())
+
+        pool_conn.execute.assert_awaited_once()
+        stale_conn.execute.assert_not_awaited()
+        assert len(connections.broadcasts) == 1

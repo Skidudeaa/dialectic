@@ -2029,6 +2029,7 @@ async def websocket_endpoint(
                     connection_manager=connection_manager,
                     memory_manager=memory_manager,
                     llm_orchestrator=llm_orchestrator,
+                    db_pool=db_pool,
                 )
                 await handler.handle(conn, message)
 

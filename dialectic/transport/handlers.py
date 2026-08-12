@@ -135,8 +135,14 @@ class MessageHandler:
         connection_manager: ConnectionManager,
         memory_manager: MemoryManager,
         llm_orchestrator: LLMOrchestrator,
+        db_pool=None,
     ):
         self.db = db
+        # WHY the pool too: fire-and-forget tasks (commitment detection)
+        # outlive the per-message connection `db` was acquired as — using
+        # self.db from a detached task raises InterfaceError once the
+        # message's `async with pool.acquire()` scope closes.
+        self.db_pool = db_pool
         self.connections = connection_manager
         self.memory = memory_manager
         self.llm = llm_orchestrator
@@ -2081,12 +2087,15 @@ class MessageHandler:
             ]
             if not proposals:
                 return
-            await self.db.execute(
-                """UPDATE messages
-                   SET metadata = COALESCE(metadata, '{}'::jsonb) || $2
-                   WHERE id = $1""",
-                message.id, {"commitment_proposals": proposals},
-            )
+            # WHY a fresh acquisition: by the time detection finishes, the
+            # per-message connection this handler was built with has been
+            # released back to the pool (caught live on the first real
+            # message, 2026-08-11). Tests without a pool use self.db.
+            if self.db_pool is not None:
+                async with self.db_pool.acquire() as db:
+                    await self._write_proposals(db, message.id, proposals)
+            else:
+                await self._write_proposals(self.db, message.id, proposals)
             await self.connections.broadcast(room_id, OutboundMessage(
                 type=MessageTypes.MESSAGE_METADATA,
                 payload={
@@ -2098,6 +2107,15 @@ class MessageHandler:
             logger.exception(
                 "commitment detection failed for message %s", message.id
             )
+
+    @staticmethod
+    async def _write_proposals(db, message_id, proposals) -> None:
+        await db.execute(
+            """UPDATE messages
+               SET metadata = COALESCE(metadata, '{}'::jsonb) || $2
+               WHERE id = $1""",
+            message_id, {"commitment_proposals": proposals},
+        )
 
     async def _handle_create_commitment(self, conn: Connection, payload: dict) -> None:
         """
