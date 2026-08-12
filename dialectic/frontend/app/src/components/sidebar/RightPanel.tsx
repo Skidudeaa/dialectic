@@ -21,6 +21,7 @@ interface RightPanelProps {
   onThreadSelect: (threadId: string) => void
   onForkThread: () => void
   onAddMemory: (key: string, content: string) => void
+  onSetMemoryPromotion: (memoryId: string, promoted: boolean) => Promise<void>
   roomId: string
   roomToken: string
   users: { id: string; name: string; status: string }[]
@@ -53,6 +54,7 @@ export function RightPanel({
   onThreadSelect,
   onForkThread,
   onAddMemory,
+  onSetMemoryPromotion,
   roomId,
   roomToken,
   users,
@@ -85,7 +87,13 @@ export function RightPanel({
       </div>
       <div className="sidebar-panel active">
         {activeTab === 'users' && <UsersPanel users={users} />}
-        {activeTab === 'memory' && <MemoryPanel memories={memories} onAddMemory={onAddMemory} />}
+        {activeTab === 'memory' && (
+          <MemoryPanel
+            memories={memories}
+            onAddMemory={onAddMemory}
+            onSetMemoryPromotion={onSetMemoryPromotion}
+          />
+        )}
         {activeTab === 'threads' && <ThreadPanel threads={threads} activeThreadId={activeThreadId} onThreadSelect={onThreadSelect} onForkThread={onForkThread} />}
         {activeTab === 'analytics' && activeThreadId && <AnalyticsPanel key={activeThreadId} threadId={activeThreadId} roomId={roomId} />}
         {activeTab === 'stakes' && (
