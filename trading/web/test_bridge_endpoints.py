@@ -560,3 +560,40 @@ class TestRoomUnbind:
         resp = client.post("/api/bridge/room-unbind",
                            json={"room_id": "nope"}, headers=svc_headers())
         assert resp.status_code == 422
+
+
+class TestCorruptBookSurvival:
+    """One corrupt book file must not sys.exit the web process — load_config
+    is a CLI helper whose exits no `except Exception` catches. The safe
+    loader converts them to None and every surface skips."""
+
+    def test_load_book_config_returns_none_on_corrupt(self, tmp_path):
+        from web.adapters.thesis import load_book_config
+        bad = tmp_path / "corrupt-graph.json"
+        bad.write_text("{not json")
+        assert load_book_config(bad) is None
+        assert load_book_config(tmp_path / "missing-graph.json") is None
+
+    def test_list_books_skips_the_corrupt_one(self, tmp_path, monkeypatch):
+        import web.adapters.thesis as thesis_mod
+        good = {"meta": {"title": "Good"}, "nodes": [], "edges": []}
+        (tmp_path / "good-graph.json").write_text(json.dumps(good))
+        (tmp_path / "corrupt-graph.json").write_text("{not json")
+        monkeypatch.setattr(thesis_mod, "BOOKS_DIR", tmp_path)
+        books = thesis_mod.list_books()
+        assert [b["id"] for b in books] == ["good-graph"]
+
+    def test_definition_scan_survives_a_corrupt_book(self, tmp_path, monkeypatch):
+        from unittest.mock import MagicMock
+        import web.runtime.coordinator as coord_mod
+        from web.persistence.repository import Repository
+        good = {"meta": {"title": "Good"}, "nodes": [], "edges": []}
+        (tmp_path / "good-graph.json").write_text(json.dumps(good))
+        (tmp_path / "corrupt-graph.json").write_text("{not json")
+        monkeypatch.setattr(coord_mod, "BOOKS_DIR", tmp_path)
+        r = Repository(":memory:")
+        r.initialize()
+        c = coord_mod.RuntimeCoordinator(repo=r, ws_manager=MagicMock(),
+                                         tick_interval=9999)
+        c._load_definitions()  # would previously sys.exit here
+        assert set(c.definitions) == {"good-graph"}

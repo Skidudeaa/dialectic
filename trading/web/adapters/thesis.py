@@ -45,6 +45,23 @@ SNAPSHOTS_DIR = _ROOT / "snapshots"
 from tools.thesis_graph import thesisgraph  # type: ignore[import-untyped]
 
 
+def load_book_config(path) -> Optional[Dict[str, Any]]:
+    """thesisgraph.load_config, minus the CLI's exits.
+
+    WHY: load_config is a CLI helper that sys.exit()s on a missing or
+    corrupt file — an escape that no `except Exception` catches, so one
+    bad book file could take down service BOOT (definition scan) or any
+    request that touches books. The web tree reads books through this
+    instead; None means "unreadable", and each caller already knows what
+    skipping a book means on its own surface.
+    """
+    try:
+        return thesisgraph.load_config(str(path))
+    except SystemExit:
+        log.warning("unreadable book config: %s", path)
+        return None
+
+
 def list_books() -> List[Dict[str, Any]]:
     """List available thesis-graph book configs."""
     books: List[Dict[str, Any]] = []
@@ -52,7 +69,9 @@ def list_books() -> List[Dict[str, Any]]:
         return books
     for path in sorted(BOOKS_DIR.glob("*-graph.json")):
         try:
-            cfg = thesisgraph.load_config(str(path))
+            cfg = load_book_config(path)
+            if cfg is None:
+                continue
             meta = cfg.get("meta", {})
             books.append({
                 "id": path.stem,
@@ -80,7 +99,12 @@ def _load_cfg(book_id: str) -> dict:
     path = BOOKS_DIR / f"{book_id}.json"
     if not path.exists():
         raise FileNotFoundError(f"Book not found: {book_id}")
-    return thesisgraph.load_config(str(path))
+    cfg = load_book_config(path)
+    if cfg is None:
+        # Unreadable travels the same 404 path as missing — the caller's
+        # question was "give me this book" and the honest answer is no.
+        raise FileNotFoundError(f"Book unreadable: {book_id}")
+    return cfg
 
 
 def get_state(book_id: str) -> Dict[str, Any]:
@@ -159,7 +183,9 @@ def fetch_prices_for_book(book_id: str) -> Dict[str, Any]:
     """
     _validate_book_id(book_id)
     config_path = BOOKS_DIR / f"{book_id}.json"
-    cfg = thesisgraph.load_config(str(config_path))
+    cfg = load_book_config(config_path)
+    if cfg is None:
+        raise FileNotFoundError(f"Book unreadable: {book_id}")
 
     # Fetch live prices — mutates cfg.nodes[].current and cfg.instruments[].ref
     thesisgraph.fetch_prices(cfg)

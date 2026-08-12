@@ -338,7 +338,11 @@ class RuntimeCoordinator:
         # in agreement. Non-thesis files get rejected by load_config.
         for path in sorted(BOOKS_DIR.glob("*.json")):
             try:
-                cfg = thesisgraph.load_config(str(path))
+                # WHY not thesisgraph.load_config: it sys.exit()s on a
+                # corrupt file, which `except Exception` cannot catch — one
+                # bad book must not kill service boot (see adopt_book).
+                with open(path) as f:
+                    cfg = json.load(f)
                 if not isinstance(cfg, dict) or "nodes" not in cfg:
                     continue  # Not a thesis file
                 thesis_id = path.stem  # e.g., "iran-hormuz-graph"

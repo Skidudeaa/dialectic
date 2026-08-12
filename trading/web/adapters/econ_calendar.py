@@ -133,7 +133,8 @@ async def for_book(book_id: str, *, lookahead_days: int = 90) -> Dict[str, dict]
     if not path.exists():
         raise FileNotFoundError(f"Book not found: {book_id}")
 
-    cfg = await asyncio.to_thread(thesisgraph.load_config, str(path))
+    from web.adapters.thesis import load_book_config
+    cfg = await asyncio.to_thread(load_book_config, path) or {}
     events = await get_calendar(lookahead_days=lookahead_days)
     by_id = {e.get("event_id"): e for e in events if e.get("event_id")}
 

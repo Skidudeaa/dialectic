@@ -24,6 +24,7 @@ BOOKS_DIR = _ROOT / "books"
 
 from tools.thesis_graph import thesisgraph  # type: ignore[import-untyped]
 from tools.data_fetch import polymarket as polymarket_mod  # type: ignore[import-untyped]
+from web.adapters.thesis import load_book_config
 
 
 def _iter_instruments(cfg: dict):
@@ -52,8 +53,10 @@ def _collect_symbols_from_books() -> tuple[Set[str], List[str]]:
 
     for path in sorted(BOOKS_DIR.glob("*-graph.json")):
         try:
-            cfg = thesisgraph.load_config(str(path))
+            cfg = load_book_config(path)
         except Exception:
+            continue
+        if cfg is None:
             continue
 
         for ticker, _ in _iter_instruments(cfg):
@@ -128,7 +131,9 @@ def fetch_quotes(force_refresh: bool = False) -> List[Dict[str, Any]]:
     seen: Set[str] = set()
     for path in sorted(BOOKS_DIR.glob("*-graph.json")):
         try:
-            cfg = thesisgraph.load_config(str(path))
+            cfg = load_book_config(path)
+            if cfg is None:
+                continue
             thesisgraph.fetch_prices(cfg)
             for quote in _extract_quotes_from_cfg(cfg):
                 if quote["symbol"] not in seen:
@@ -164,8 +169,10 @@ def get_watchlist() -> List[Dict[str, Any]]:
 
     for path in sorted(BOOKS_DIR.glob("*-graph.json")):
         try:
-            cfg = thesisgraph.load_config(str(path))
+            cfg = load_book_config(path)
         except Exception:
+            continue
+        if cfg is None:
             continue
 
         for ticker, label in _iter_instruments(cfg):

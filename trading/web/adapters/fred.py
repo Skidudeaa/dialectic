@@ -59,7 +59,10 @@ def _collect_book_series(book_id: str) -> Dict[str, list[str]]:
     if not path.is_file():
         raise FileNotFoundError(f"book not found: {book_id}")
 
-    cfg = thesisgraph.load_config(str(path))
+    from web.adapters.thesis import load_book_config
+    cfg = load_book_config(path)
+    if cfg is None:
+        return {}
     series_to_nodes: Dict[str, list[str]] = {}
     for node in cfg.get("nodes", []):
         for feed in node.get("feeds", []) or []:
