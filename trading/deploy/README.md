@@ -47,11 +47,14 @@ systemctl status tradingdesk
 curl http://127.0.0.1:8006/api/health
 ```
 
-The service binds to `0.0.0.0:8006`. Front it with nginx/cloudflared for TLS termination before exposing publicly (see below).
+The service binds to loopback at `127.0.0.1:8006`; nginx is its only public
+entry point.
 
 ## Public HTTPS (nginx + Cloudflare)
 
-Live at **`https://td.somacura.org`** (also reachable directly at `http://167.99.113.232:8006`). The droplet is **shared** with other sites, so the Trading Desk vhost is kept in its own isolated file and never edits the others.
+Live at **`https://td.somacura.org`**. The droplet is **shared** with other sites,
+so the Trading Desk vhost is kept in its own isolated file and never edits the
+others.
 
 **The vhost** — `/etc/nginx/sites-available/td.somacura.org` (symlinked into `sites-enabled/`) reverse-proxies to `127.0.0.1:8006`, with WebSocket upgrade handling on `/ws/` for live chat/streaming. It listens on **both `:80` and `:443`**:
 - `:80` — what Cloudflare actually hits today, because the `somacura.org` zone runs in Cloudflare **"Flexible"** SSL mode (shared with `feb8.somacura.org`, whose origin is `:80`-only).
