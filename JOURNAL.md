@@ -8,3 +8,5 @@
 [2026-08-11] found canonical tradingDesk unit drift before install — preserve the live monorepo paths and loopback bind while moving start-limit keys into Unit
 [2026-08-11] preserved cold-start room deep links during lint repair — synchronize switchRoomRef before the one-shot URL effect consumes its room target
 [2026-08-11] aligned tradingDesk deployment docs with the canonical unit — port 8006 is loopback-only and nginx is the public entry point
+[2026-08-11] token rotation guard rolled back two incomplete activations — the five-thesis first tick needs more than 30 seconds and Cloudflare returns 403 to urllib while curl succeeds
+[2026-08-11] rotated all five published room tokens and activated the corrected tradingDesk unit — old tokens are 401, new tokens are 200, env/database/process match 5/5, and local/public readiness pass
