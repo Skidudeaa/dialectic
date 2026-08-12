@@ -106,3 +106,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
+/* Pinned Home section sits above the ordinary room list and never grows. */
+.room-list-home {
+    flex: 0 0 auto;
+}

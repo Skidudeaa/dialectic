@@ -1,4 +1,4 @@
-import type { Attachment, Memory, Thread, UserRoom } from '../types/index.ts';
+import type { Attachment, Memory, Thread, ThreadNode, UserRoom } from '../types/index.ts';
 
 const BASE = '';  // Same origin via Vite proxy
 
@@ -79,6 +79,9 @@ class DialecticAPI {
   async createRoom(name?: string) { return this.fetch('/rooms', { method: 'POST', body: JSON.stringify({ name }) }); }
   async joinRoom(roomId: string, userId: string) { return this.fetch(`/rooms/${roomId}/join`, { method: 'POST', body: JSON.stringify({ user_id: userId }) }); }
   async getThreads(roomId: string): Promise<Thread[]> { return this.fetch(`/rooms/${roomId}/threads`); }
+  async getGenealogy(roomId: string): Promise<ThreadNode[]> {
+    return this.fetch(`/rooms/${roomId}/genealogy`);
+  }
   async getMessages(threadId: string, limit = 50) { return this.fetch(`/threads/${threadId}/messages?limit=${limit}`); }
   async getMemories(roomId: string): Promise<Memory[]> {
     const [memories, promotions] = await Promise.all([

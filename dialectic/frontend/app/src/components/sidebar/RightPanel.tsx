@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { Memory, Thread } from '../../types'
+import type { Memory, ThreadNode } from '../../types'
 import { useAppStore } from '../../stores/appStore.ts'
 import { MemoryPanel } from './MemoryPanel'
 import { ThreadPanel } from './ThreadPanel'
@@ -16,7 +16,9 @@ type TabId = 'users' | 'memory' | 'threads' | 'analytics' | 'stakes' | 'history'
 
 interface RightPanelProps {
   memories: Memory[]
-  threads: Thread[]
+  genealogy: ThreadNode[]
+  genealogyError: boolean
+  onRetryGenealogy: () => void
   activeThreadId: string | null
   onThreadSelect: (threadId: string) => void
   onForkThread: () => void
@@ -49,7 +51,9 @@ const BASE_TABS: { id: TabId; label: string }[] = [
 
 export function RightPanel({
   memories,
-  threads,
+  genealogy,
+  genealogyError,
+  onRetryGenealogy,
   activeThreadId,
   onThreadSelect,
   onForkThread,
@@ -102,7 +106,16 @@ export function RightPanel({
             onSetMemoryPromotion={onSetMemoryPromotion}
           />
         )}
-        {activeTab === 'threads' && <ThreadPanel threads={threads} activeThreadId={activeThreadId} onThreadSelect={onThreadSelect} onForkThread={onForkThread} />}
+        {activeTab === 'threads' && (
+          <ThreadPanel
+            genealogy={genealogy}
+            genealogyError={genealogyError}
+            onRetryGenealogy={onRetryGenealogy}
+            activeThreadId={activeThreadId}
+            onThreadSelect={onThreadSelect}
+            onForkThread={onForkThread}
+          />
+        )}
         {activeTab === 'analytics' && activeThreadId && <AnalyticsPanel key={activeThreadId} threadId={activeThreadId} roomId={roomId} />}
         {activeTab === 'stakes' && (
           <CommitmentDashboard

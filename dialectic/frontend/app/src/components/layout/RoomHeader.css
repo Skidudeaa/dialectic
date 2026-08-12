@@ -76,3 +76,33 @@
     /* The dot alone says connected; the word costs room the toggles need. */
     .conn-label { display: none; }
 }
+
+/* Go Home action — compact, hidden while already on Home (not rendered). */
+.home-action {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.crumb-sep {
+    color: var(--color-faint);
+    flex-shrink: 0;
+}
+
+/* Room and branch labels truncate independently. */
+.room-title { max-width: 12rem; }
+.thread-breadcrumb { min-width: 0; }
+.thread-breadcrumb select {
+    max-width: 11rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Below 600px the labeled actions collapse to icons — icon, title and
+   aria-label remain; the drawer toggles keep their full hit area. */
+@media (max-width: 600px) {
+    .room-header .btn-label { display: none; }
+    .room-title { max-width: 6.5rem; }
+    .thread-breadcrumb select { max-width: 7rem; }
+}

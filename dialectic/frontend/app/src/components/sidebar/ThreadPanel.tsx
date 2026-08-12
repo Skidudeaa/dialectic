@@ -1,31 +1,44 @@
-import type { Thread } from '../../types'
+import type { ThreadNode } from '../../types'
+import { BranchTree } from './BranchTree'
 import './ThreadPanel.css'
 
 interface ThreadPanelProps {
-  threads: Thread[]
+  genealogy: ThreadNode[]
+  genealogyError: boolean
+  onRetryGenealogy: () => void
   activeThreadId: string | null
   onThreadSelect: (threadId: string) => void
   onForkThread: () => void
 }
 
-export function ThreadPanel({ threads, activeThreadId, onThreadSelect, onForkThread }: ThreadPanelProps) {
+/**
+ * The Branches panel — the same recursive BranchTree the rail renders,
+ * full-size, above the existing fork action. A failed genealogy read
+ * keeps the transcript untouched and offers a retry.
+ */
+export function ThreadPanel({
+  genealogy,
+  genealogyError,
+  onRetryGenealogy,
+  activeThreadId,
+  onThreadSelect,
+  onForkThread,
+}: ThreadPanelProps) {
   return (
     <div>
-      <div className="thread-list">
-        {threads.map(t => (
-          <div
-            key={t.id}
-            className={`thread-card ${t.id === activeThreadId ? 'active' : ''}`}
-            onClick={() => onThreadSelect(t.id)}
-          >
-            <div className="thread-card-title">{t.title ?? `Thread ${t.id.slice(0, 6)}`}</div>
-            <div className="thread-card-meta">
-              <span>{t.message_count} messages</span>
-              {t.parent_thread_id && <span className="thread-card-fork-badge">fork</span>}
-            </div>
-          </div>
-        ))}
-      </div>
+      {genealogyError && (
+        <div className="thread-panel-error">
+          Could not load the branch tree.
+          <button className="btn btn-ghost btn-sm" onClick={onRetryGenealogy}>
+            Retry
+          </button>
+        </div>
+      )}
+      <BranchTree
+        nodes={genealogy}
+        activeThreadId={activeThreadId}
+        onSelect={onThreadSelect}
+      />
       <button className="btn btn-secondary btn-full btn-sm" onClick={onForkThread} style={{ marginTop: '0.5rem' }}>
         Fork from last message
       </button>

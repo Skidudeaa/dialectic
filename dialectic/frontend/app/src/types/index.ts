@@ -168,6 +168,18 @@ export interface Thread {
   message_count: number;
 }
 
+/** One node of GET /rooms/{id}/genealogy — the fork tree with lineage. */
+export interface ThreadNode {
+  id: string;
+  parent_thread_id: string | null;
+  fork_point_message_id: string | null;
+  title: string | null;
+  message_count: number;
+  created_at: string;
+  depth: number;
+  children: ThreadNode[];
+}
+
 export interface Memory {
   id: string;
   key: string;

@@ -10,7 +10,7 @@ import { useRoomNavigation, type RoomNavigation } from './hooks/useRoomNavigatio
 import { useDocumentVisibility } from './hooks/useDocumentVisibility.ts'
 import { useAwayAlerts } from './hooks/useAwayAlerts.ts'
 import { usePushSubscription } from './hooks/usePushSubscription.ts'
-import type { Message, SearchResult, Thread, TradingSnapshot } from './types/index.ts'
+import type { Message, SearchResult, Thread, ThreadNode, TradingSnapshot } from './types/index.ts'
 import { AppLayout } from './components/layout/AppLayout'
 import { RoomHeader } from './components/layout/RoomHeader'
 import { RoomSettingsDialog } from './components/layout/RoomSettingsDialog'
@@ -76,6 +76,10 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const { rooms, navigate } = nav
   const [showRoomAccess, setShowRoomAccess] = useState(false)
   const [showProtocolPicker, setShowProtocolPicker] = useState(false)
+  // The fork tree behind both the rail's compact view and the Branches
+  // panel. A failed read keeps the previous tree and offers Retry.
+  const [genealogy, setGenealogy] = useState<ThreadNode[]>([])
+  const [genealogyError, setGenealogyError] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
   const [replyToId, setReplyToId] = useState<string | null>(null)
@@ -191,6 +195,25 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
     // the existing set has to be fetched alongside the history.
     void refreshReactions()
   }, [currentThread, roomToken, setMessages, refreshReactions, refreshAttachments])
+
+  // Genealogy refreshes when the room changes and when `threads` gains a
+  // fork (refreshThreads updates it on every thread_created/forked event).
+  const loadGenealogy = useCallback(() => {
+    if (!currentRoom || !roomToken) return
+    api.setRoomToken(roomToken)
+    api.getGenealogy(currentRoom.id)
+      .then((tree) => {
+        setGenealogy(tree)
+        setGenealogyError(false)
+      })
+      .catch((error) => {
+        console.error('Failed to load genealogy:', error)
+        setGenealogyError(true)
+      })
+  }, [currentRoom, roomToken])
+  useEffect(() => {
+    loadGenealogy()
+  }, [loadGenealogy, threads])
 
   // Trading is an optional room extension.
   useEffect(() => {
@@ -368,6 +391,11 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
             onCreateRoom={() => setShowRoomAccess(true)}
             userName={user.display_name}
             onLogout={handleLogout}
+            genealogy={genealogy}
+            activeThreadId={currentThread?.id ?? null}
+            onThreadSelect={(id) => {
+              void navigate({ roomId: currentRoom.id, threadId: id }, 'push')
+            }}
           />
         }
         main={
@@ -384,6 +412,8 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
               onSearchClick={() => setShowSearch(true)}
               onHelpClick={() => setShowHelp(true)}
               connected={isConnected}
+              isHome={currentRoom.is_home === true}
+              onHomeClick={() => void navigate({ roomId: null }, 'push')}
             />
             <ParticipantsBar participants={participants} />
             {pushState === 'prompt' && typeof Notification !== 'undefined' && Notification.permission === 'default' && (
@@ -464,7 +494,9 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
         rightPanel={
           <RightPanel
             memories={memories}
-            threads={threads}
+            genealogy={genealogy}
+            genealogyError={genealogyError}
+            onRetryGenealogy={loadGenealogy}
             activeThreadId={currentThread?.id ?? null}
             onThreadSelect={(id) => {
               void navigate({ roomId: currentRoom.id, threadId: id }, 'push')

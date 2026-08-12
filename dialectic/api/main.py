@@ -661,7 +661,8 @@ async def list_threads(
 
     rows = await db.fetch(
         """SELECT t.*,
-                  (SELECT COUNT(*) FROM messages m WHERE m.thread_id = t.id) as message_count
+                  (SELECT COUNT(*) FROM messages m
+                   WHERE m.thread_id = t.id AND NOT m.is_deleted) as message_count
            FROM threads t
            WHERE t.room_id = $1
            ORDER BY t.created_at""",
@@ -724,7 +725,8 @@ async def get_thread_genealogy(
         )
         SELECT
             tt.*,
-            (SELECT COUNT(*) FROM messages m WHERE m.thread_id = tt.id) as message_count
+            (SELECT COUNT(*) FROM messages m
+             WHERE m.thread_id = tt.id AND NOT m.is_deleted) as message_count
         FROM thread_tree tt
         ORDER BY tt.depth, tt.created_at
         """,

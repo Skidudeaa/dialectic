@@ -42,3 +42,17 @@
     font-size: 7px;
     letter-spacing: .04em;
 }
+
+/* Genealogy read failure — transcript stays, retry offered. */
+.thread-panel-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    font-size: 0.74rem;
+    color: var(--color-faint);
+}

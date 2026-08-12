@@ -455,3 +455,37 @@ async def test_explain_captures_each_service_query(production_scale):
             f"read {plan['Plan'].get('Shared Read Blocks')}"
         )
     assert set(plans) == {"eligible", "branches", "window", "latest", "commitments"}
+
+
+@pytest.mark.asyncio
+async def test_thread_counts_share_soft_delete_truth_with_projection(scenario):
+    """
+    list_threads, the genealogy tree, and the Home projection must agree on
+    a branch's message count — the deleted newest message is invisible to
+    all three (Task 7 Step 1).
+    """
+    import api.main as main_mod
+
+    threads = await main_mod.list_threads(
+        SHARED, token="scenario-shared-room", db=scenario.db
+    )
+    by_id = {t.id: t for t in threads}
+    assert by_id[T2].message_count == 1  # M4 only; M_DEL is soft-deleted
+
+    genealogy = await main_mod.get_thread_genealogy(
+        SHARED, token="scenario-shared-room", max_depth=20, db=scenario.db
+    )
+
+    def flatten(nodes):
+        collected = []
+        for node in nodes:
+            collected.append(node)
+            collected.extend(flatten(node.children))
+        return collected
+
+    gen_by_id = {n.id: n for n in flatten(genealogy)}
+    assert gen_by_id[T2].message_count == 1
+
+    room = _room(await HomeActivityService(scenario.db).build(AMO), SHARED)
+    branch = {b.id: b for b in room.branches}[T2]
+    assert branch.message_count == gen_by_id[T2].message_count == by_id[T2].message_count

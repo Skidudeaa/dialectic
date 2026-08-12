@@ -1,0 +1,64 @@
+/* The shared fork tree — semantic nested lists, depth-driven indent. */
+
+.branch-tree,
+.branch-tree ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.branch-node {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+    text-align: left;
+    padding: 4px 8px;
+    /* Bounded indentation: depth is capped at 6 by the component. */
+    padding-left: calc(8px + var(--branch-depth, 0) * 12px);
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    cursor: pointer;
+    min-width: 0;
+}
+
+.branch-node:hover { background: var(--color-espresso); }
+
+.branch-node.active {
+    background: var(--color-espresso);
+    color: var(--color-display);
+}
+
+.branch-fork-marker {
+    flex-shrink: 0;
+    color: var(--color-faint);
+}
+
+.branch-node-title {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.branch-node-count {
+    flex-shrink: 0;
+    font-size: 0.68rem;
+    color: var(--color-faint);
+}
+
+/* Compact form under the active room card in the rail/drawer. */
+.branch-tree-compact {
+    margin: 2px 4px 6px;
+}
+
+.branch-tree-compact .branch-node {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    font-size: 0.72rem;
+}
