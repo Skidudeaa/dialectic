@@ -1501,7 +1501,7 @@ git commit -m "feat: make Home the shared cockpit -- keep schemes in rooms"
 - Consumes: all previous tasks.
 - Produces: a reviewable local implementation with current docs and explicit separation between code, migration, runtime, and device proof.
 
-- [ ] **Step 1: Run focused backend contracts together**
+- [x] **Step 1: Run focused backend contracts together**
 
 Run:
 
@@ -1520,7 +1520,7 @@ cd dialectic && python3 -m pytest \
 Expected: PASS, with real-Postgres projection tests explicitly reported as run
 or skipped.
 
-- [ ] **Step 2: Confirm the Task 4 performance gate after integration**
+- [x] **Step 2: Confirm the Task 4 performance gate after integration**
 
 Re-run Task 4's deterministic seed `20260811`, `EXPLAIN (ANALYZE, BUFFERS,
 FORMAT JSON)`, and 20 warm service calls against the integrated code. Record
@@ -1529,19 +1529,19 @@ in `JOURNAL.md`. The acceptance target remains p95 <= 150 ms. A failure returns
 work to Task 4 query/index design before browser verification; do not add a
 late cache or index after both consumers have been accepted.
 
-- [ ] **Step 3: Run the full backend suite**
+- [x] **Step 3: Run the full backend suite**
 
 Run: `cd dialectic && python3 -m pytest tests/ -q`
 
 Expected: all non-environment-skipped tests PASS.
 
-- [ ] **Step 4: Run frontend static gates**
+- [x] **Step 4: Run frontend static gates**
 
 Run: `cd dialectic/frontend/app && npm run lint && npm run build`
 
 Expected: both PASS.
 
-- [ ] **Step 5: Prepare an isolated browser-acceptance database**
+- [x] **Step 5: Prepare an isolated browser-acceptance database**
 
 Point both the backend and every psql command explicitly at
 `DIALECTIC_TEST_DATABASE_URL`; do not source the production `.env`. Apply
@@ -1556,7 +1556,7 @@ Before opening the PWA, assert the first founder's authenticated
 `404 {"detail":"Home unavailable"}` response. This fixture is test data in the
 isolated database only; never use production emails, tokens, or room IDs.
 
-- [ ] **Step 6: Run repeatable desktop and mobile browser acceptance**
+- [x] **Step 6: Run repeatable desktop and mobile browser acceptance**
 
 Against the local backend and Vite production preview, use the installed
 headless browser tooling to exercise, not merely screenshot:
@@ -1586,7 +1586,7 @@ Save screenshots only for failures or final device evidence; the pass/fail
 record must come from asserted destinations, visible labels, drawer state, and
 history length.
 
-- [ ] **Step 7: Update current-state documentation**
+- [x] **Step 7: Update current-state documentation**
 
 Update the two READMEs so bare launch, Home, branch navigation, and Home member
 administration match the shipped UI. Update both `CLAUDE.md` files to name
@@ -1595,7 +1595,7 @@ the completed task and remaining production activation/device gate in
 `dialectic/TODOS.md`. Append one `JOURNAL.md` line for each meaningful measured
 or behavioral decision; do not paste test noise.
 
-- [ ] **Step 8: Run repository hygiene checks**
+- [x] **Step 8: Run repository hygiene checks**
 
 Run: `git diff --check`
 
@@ -1606,7 +1606,7 @@ Run: `git diff --name-only $(git merge-base HEAD master)..HEAD`
 Confirm no trading snapshots, credentials, generated releases, browser
 profiles, or unrelated dirty files are staged.
 
-- [ ] **Step 9: Commit current-state records**
+- [x] **Step 9: Commit current-state records**
 
 ```bash
 git add README.md dialectic/README.md CLAUDE.md dialectic/CLAUDE.md dialectic/TODOS.md JOURNAL.md

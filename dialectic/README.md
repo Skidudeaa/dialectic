@@ -18,6 +18,26 @@ This file is the complete tour.
 4. The green **Connected** dot means real-time sync is live. If it drops, reload
    before writing — unsent text stays in the composer.
 
+## Home
+
+Opening the app on a bare URL lands in **Home** — one real room shared by the
+founders, where the three of you actually live. Home is a normal conversation
+(memory, protocols, stakes, Claude participation all work), plus a **shared
+activity pulse**: every scheme room that ALL current Home members belong to
+shows its unread count, latest line, changed branches, open questions, and
+commitments coming due. Tap a room or branch card to land exactly there.
+Claude sees the same digest (and only the same digest) when it speaks in Home.
+
+Membership is deliberately narrow: only Amo and Dan can add someone (Home
+tab in the right rail), added members cannot add anyone else, and a room
+appears in the pulse only while *every* Home member belongs to it — adding a
+person immediately contracts what Home shows. Home can never hold a thesis;
+its Trading tab explains where theses live instead of offering the form.
+
+*(Rollout note: the schema and code shipped 2026-08-12; founder activation
+is a separately approved production step — until it runs, accounts land on
+the room list as before.)*
+
 ## The room
 
 A room is you, Dan, and Claude. One room per durable scheme or thinking stream.
@@ -107,7 +127,7 @@ createdb dialectic && psql dialectic < schema.sql
 cp .env.example .env   # DATABASE_URL, ANTHROPIC_API_KEY, JWT_SECRET_KEY required
 PORT=8002 python3 run.py                      # backend on :8002
 cd frontend/app && npm install && npm run dev # frontend on :3000
-python3 -m pytest tests/ -q                   # 790 tests
+python3 -m pytest tests/ -q                   # 913 tests
 ```
 
 `frontend/app` (React/Vite/TS) is the only live frontend; the legacy
@@ -146,7 +166,7 @@ analytics/   conversation DNA, briefings, knowledge graph
 replay/      event replay + state materialization
 frontend/app React PWA
 migrations/  011 current; schema.sql = fresh-DB baseline
-tests/       pytest (790) incl. real-Postgres integration tests
+tests/       pytest (913) incl. real-Postgres integration tests
 ```
 
 Task board: [`TODOS.md`](TODOS.md) · Quarter plan + Amendment 1: `../docs/plans/`

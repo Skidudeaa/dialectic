@@ -189,6 +189,15 @@ If implementation reality contradicts this plan, the builder flags the contradic
 
 ## AMENDMENTS
 
+- [2026-08-12, Task 9] The drawer breakpoint became exclusive of 1024px
+  (`max-width: 1023.98px` in AppLayout.css/RoomHeader.css): the shipped
+  `max-width: 1024px` put exactly-1024 in drawer mode while acceptance case
+  11 requires 1024 to preserve desktop navigation. Verified 1024 desktop /
+  1023 drawers in the browser run.
+- [2026-08-12, Task 9] vite.config.ts gained DIALECTIC_BACKEND_URL and a
+  preview proxy block so browser acceptance drives the production build
+  against an isolated backend (dialectic_browser DB on :8013) without
+  touching production .env. Default behavior unchanged (:8002).
 - [2026-08-12, Task 4] Unread boundaries are PER-THREAD (latest viewer read
   receipt in that thread, fallback room join time) — the room rail's exact
   semantics — not the design doc's room-scoped boundary. Reason: the rail

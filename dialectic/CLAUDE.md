@@ -153,7 +153,23 @@ explicitly — e.g. `psql dialectic < migrations/004_session_revoked_reason.sql`
 (adds `user_sessions.revoked_reason`; applied to the live DB 2026-07-25).
 Migration 006 (`006_memory_recall_lanes.sql`: pg_trgm, `speaker_user_id`,
 FTS/trigram indexes, supersession columns) applied to the live DB 2026-08-08;
-the `schema.sql` baseline includes it.
+the `schema.sql` baseline includes it. Migrations 012 (personal memory
+promotions) and 013 (Home Base: `rooms.is_home`, `can_manage_home`, the
+singleton Home bootstrap) are applied to the live DB; `013` is current.
+
+**Home Base (2026-08-12)**: one real `is_home` room is every founder's
+default landing. `home_activity.py` builds the membership-intersection
+activity projection (one service feeds `GET /users/me/home/activity` AND
+Claude's `## Shared Home Activity` prompt layer, 2s budget, explicit
+unavailable marker). `api/home.py` is the only membership door
+(candidate→confirm add, nondelegable `can_manage_home`); the generic join
+refuses Home; thesis create/draft/propose return 409 in Home. Frontend:
+`hooks/useRoomNavigation.ts` is the ONE URL-authoritative navigation
+transaction (bare `/` = Home root; explicit `?room=`/`&thread=` URLs win;
+popstate is history-neutral), `components/home/` holds the pulse + settings,
+`BranchTree` renders genealogy in rail and Branches panel alike. Founder
+activation (`deploy/activate_home_founders.sql`) and member removal
+(`deploy/remove_home_member.sql`) are reviewed operator scripts — never UI.
 
 ## File Structure
 
@@ -188,7 +204,7 @@ dialectic/
 │   ├── app/                # React (Vite + TS) SPA — the live frontend (PWA)
 │   └── app.html            # RETIRED single-file SPA (kept for history only)
 ├── migrations/             # incremental DB changes
-└── tests/                  # pytest test suite (790 tests)
+└── tests/                  # pytest test suite (913 tests)
 ```
 
 ## Project Conventions
@@ -198,4 +214,4 @@ dialectic/
 - All LLM calls through `ModelRouter` (retry, fallback, provider abstraction)
 - JSONB columns: pass dict directly to asyncpg — pool codec handles serialization
 - Message role alternation: Anthropic API requires last message to be `user` role — `prompts.py` strips trailing assistant messages before API call
-- Tests: pytest + pytest-asyncio, 790 tests, incl. real-Postgres integration tests (test_memory_recall_pg.py needs `createdb dialectic_test && psql dialectic_test -f schema.sql`; skips cleanly without it)
+- Tests: pytest + pytest-asyncio, 913 tests, incl. real-Postgres integration tests (test_memory_recall_pg.py needs `createdb dialectic_test && psql dialectic_test -f schema.sql`; skips cleanly without it)

@@ -70,11 +70,13 @@ uvicorn web.main:app --port 8006                     # see trading/README.md
   credential into `/var/lib/tradingdesk/room-tokens.env`, no restart) and
   `POST /api/bridge/room-unbind` (retire; the book survives). Auth bridge:
   shared HS256 secret; td maps dialectic JWTs via `DIALECTIC_USER_MAP`.
-- **Key tables**: `events`, `rooms` (+`linked_book_id`, `trading_config`),
-  `threads`, `messages` (+`metadata`), `memories`, `attachments`,
-  `llm_decisions`, `llm_participation_state`, `scheduled_job_runs`,
-  `web_push_subscriptions`. `dialectic/schema.sql` is the fresh-DB baseline;
-  migrations numbered, `011` current.
+- **Key tables**: `events`, `rooms` (+`linked_book_id`, `trading_config`,
+  `is_home`), `threads`, `messages` (+`metadata`), `memories`, `attachments`,
+  `room_memberships` (+`can_manage_home`), `llm_decisions`,
+  `llm_participation_state`, `scheduled_job_runs`, `web_push_subscriptions`.
+  `dialectic/schema.sql` is the fresh-DB baseline; migrations numbered,
+  `013` current (Home Base — applied to production 2026-08-12; founder
+  activation remains a separately gated step).
 
 ## Code style
 
