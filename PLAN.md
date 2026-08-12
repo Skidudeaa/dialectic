@@ -188,3 +188,18 @@ Execute that detailed plan in order and update its checkboxes as work lands.
 If implementation reality contradicts this plan, the builder flags the contradiction and stops — no silent improvisation, no quiet re-planning.
 
 ## AMENDMENTS
+
+- [2026-08-12, Task 4] Unread boundaries are PER-THREAD (latest viewer read
+  receipt in that thread, fallback room join time) — the room rail's exact
+  semantics — not the design doc's room-scoped boundary. Reason: the rail
+  badge and the Home pulse sit one panel apart and must agree, and branch
+  unread needs per-thread boundaries regardless. The 100-message activity
+  window feeding question resolution keys on the room-scoped boundary as
+  designed.
+- [2026-08-12, Task 4] BriefingHighlight gained optional `thread_id` so the
+  shared unanswered-question heuristic can name the branch a question lives
+  in; brief responses carry an additive null for older rows.
+- [2026-08-12, Task 4] The per-thread boundary is computed as one set-based
+  receipts CTE, not a correlated probe per thread — EXPLAIN at seed 20260811
+  scale showed 306 ms/398k buffer hits correlated vs 27.5 ms/7.7k set-based;
+  build p95 51 ms against the 150 ms gate, no extra index, no cache.

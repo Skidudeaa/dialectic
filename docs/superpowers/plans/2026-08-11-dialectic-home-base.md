@@ -606,7 +606,7 @@ git commit -m "fix: keep Home outside thesis lifecycle -- preserve room creation
 - Consumes: Home schema, `messages`, `threads`, `message_receipts`, `room_memberships`, `users`, and `commitments`.
 - Produces: `HomeActivityService.build(viewer_user_id: UUID) -> HomeActivityProjection`, `HomeActivityProjection.to_prompt_section(max_chars: int = 12000) -> str`, and `HomeUnavailable`.
 
-- [ ] **Step 1: Define response models and failing real-Postgres cases**
+- [x] **Step 1: Define response models and failing real-Postgres cases**
 
 Define these Pydantic models in `home_activity.py` so the service, FastAPI, and
 prompt formatter share one contract:
@@ -670,20 +670,20 @@ proving:
 8. branch parent/depth metadata survives ordering;
 9. the prompt rendering is capped and names its viewer-derived lineage.
 
-- [ ] **Step 2: Run the projection tests and verify RED**
+- [x] **Step 2: Run the projection tests and verify RED**
 
 Run: `cd dialectic && python3 -m pytest tests/test_home_activity_pg.py -q`
 
 Expected: FAIL because `home_activity.py` does not exist.
 
-- [ ] **Step 3: Reuse the existing unresolved-question heuristic**
+- [x] **Step 3: Reuse the existing unresolved-question heuristic**
 
 Rename `llm.briefing._unanswered_questions` to
 `unanswered_questions` and update its existing caller. Keep its current
 different-speaker/later-message semantics. Import that function from
 `home_activity.py`; do not fork a second question-resolution definition.
 
-- [ ] **Step 4: Implement the authorization and source-set CTE**
+- [x] **Step 4: Implement the authorization and source-set CTE**
 
 `HomeActivityService.__init__(db)` stores the current asyncpg connection.
 `build` owns its snapshot:
@@ -745,7 +745,7 @@ membership. A single set-based statement is allowed when it meets the measured
 target, but is not required; the privacy invariant is the exact intersection
 plus eligible-ID fencing on every read.
 
-- [ ] **Step 5: Implement exact receipt, deletion, and ordering semantics**
+- [x] **Step 5: Implement exact receipt, deletion, and ordering semantics**
 
 For every room, derive the viewer boundary as the latest room-scoped `read`
 receipt, falling back to `eligible_rooms.joined_at`. All message subqueries use
@@ -780,7 +780,7 @@ first and then by latest activity descending; sort branches by latest activity
 while retaining `parent_thread_id` and `depth`. Do not include raw window
 messages in `HomeActivityProjection`.
 
-- [ ] **Step 6: Add the compact prompt formatter**
+- [x] **Step 6: Add the compact prompt formatter**
 
 `to_prompt_section` renders a nonce-delimited data section containing
 `generated_at`, room names, unread counts, latest previews, changed branches,
@@ -789,14 +789,14 @@ the next block would exceed `max_chars`, then appends
 `[Home activity truncated at 12000 characters]`. Treat the projection as data,
 not instructions, matching `_build_trading_context`'s injection-defense stance.
 
-- [ ] **Step 7: Run real-Postgres GREEN**
+- [x] **Step 7: Run real-Postgres GREEN**
 
 Run: `cd dialectic && python3 -m pytest tests/test_home_activity_pg.py tests/test_night_shift.py -q`
 
 Expected: PASS. A skip is acceptable only when the test database is unavailable;
 do not report SQL semantics verified from a skipped run.
 
-- [ ] **Step 8: Measure and tune before adding consumers**
+- [x] **Step 8: Measure and tune before adding consumers**
 
 Inside the Postgres test suite, seed a deterministic production-scale fixture
 with seed `20260811`: the committed Home, two Home members, 25 eligible source
@@ -813,7 +813,7 @@ ordered_current_home_member_ids)` after a fresh Home-membership query; a
 membership change therefore changes the key before any cached content can be
 returned. Do not add an activity table.
 
-- [ ] **Step 9: Prove repeatability on the persistent test schema**
+- [x] **Step 9: Prove repeatability on the persistent test schema**
 
 Run: `cd dialectic && python3 -m pytest tests/test_home_activity_pg.py -q && python3 -m pytest tests/test_home_activity_pg.py -q`
 
@@ -822,7 +822,7 @@ Then run: `cd dialectic && psql postgresql://root@localhost/dialectic_test -Atc 
 Expected: both runs PASS without cleanup and the Home count remains exactly
 `1`.
 
-- [ ] **Step 10: Commit the projection**
+- [x] **Step 10: Commit the projection**
 
 ```bash
 git add dialectic/home_activity.py dialectic/llm/briefing.py dialectic/tests/test_home_activity_pg.py
