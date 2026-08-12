@@ -46,6 +46,11 @@
       (`meta.dialecticRoomId`, `*-graph` naming), links `linked_book_id`,
       logs `THESIS_CREATED`; coordinator adopts builder-saved books at
       runtime; success state deep-links into the desk's Builder
+- [x] **Claude drafts the DAG**: `llm/thesis_drafter.py` — the room's
+      primary model proposes the causal cascade (builder-format nodes/edges,
+      validated: acyclic, typed, capped; one correction retry); stateless
+      `POST .../trading/thesis/draft`, panel preview, human Accept carries
+      the draft through create — draft_prediction trust shape
 
 ## The quarter (see the plan for full detail + acceptance checks)
 

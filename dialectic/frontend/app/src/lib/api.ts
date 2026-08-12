@@ -273,9 +273,26 @@ class DialecticAPI {
    */
   async createThesis(
     roomId: string,
-    body: { title: string; claim?: string; monthly_budget?: number },
+    body: {
+      title: string; claim?: string; monthly_budget?: number;
+      nodes?: unknown[]; edges?: unknown[];
+    },
   ): Promise<{ book_id: string; title: string }> {
     return this.fetch(`/rooms/${roomId}/trading/thesis`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
+   * Claude drafts the causal DAG — a proposal, nothing is written anywhere.
+   * The human reviews it in the panel; Accept sends it through createThesis.
+   */
+  async draftThesis(
+    roomId: string,
+    body: { title: string; claim?: string; monthly_budget?: number },
+  ): Promise<{ nodes: unknown[]; edges: unknown[]; rationale: string }> {
+    return this.fetch(`/rooms/${roomId}/trading/thesis/draft`, {
       method: 'POST',
       body: JSON.stringify(body),
     });

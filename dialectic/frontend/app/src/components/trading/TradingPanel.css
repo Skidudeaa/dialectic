@@ -432,3 +432,107 @@
     display: inline-block;
     margin-top: 0.2rem;
 }
+
+/* Draft preview — the review step between Claude's proposal and the book */
+.thesis-draft {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    max-height: 42vh;
+    overflow-y: auto;
+    border: 1px solid var(--color-bean);
+    border-radius: 2px;
+    padding: 0.5rem;
+}
+
+.thesis-draft-phase {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.thesis-draft-phase-label {
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: .16em;
+    color: var(--color-ghost);
+    margin-top: 0.35rem;
+}
+
+.thesis-draft-node {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    font-size: 10px;
+}
+
+.thesis-draft-node-type {
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--color-amber-mute);
+    min-width: 52px;
+}
+
+.thesis-draft-node-label {
+    color: var(--color-bone);
+}
+
+.thesis-draft-node-extra {
+    font-size: 8px;
+    color: var(--color-teal);
+    border: 1px solid var(--color-bean);
+    border-radius: 2px;
+    padding: 0 0.25rem;
+}
+
+.thesis-draft-edge {
+    display: flex;
+    flex-direction: column;
+    font-size: 9px;
+    padding: 0.15rem 0;
+}
+
+.thesis-draft-edge-route {
+    color: var(--color-bone);
+}
+
+.thesis-draft-edge-mech {
+    color: var(--color-ghost);
+}
+
+.thesis-create-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--color-secondary);
+    cursor: pointer;
+}
+
+.thesis-create-toggle input {
+    accent-color: var(--color-amber-mute);
+}
+
+.thesis-draft-actions {
+    display: flex;
+    justify-content: space-between;
+}
+
+.thesis-draft-discard {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--color-ghost);
+    background: transparent;
+    border: none;
+    padding: 0.2rem 0;
+    cursor: pointer;
+}
+
+.thesis-draft-discard:hover:not(:disabled) {
+    color: var(--color-bone);
+}

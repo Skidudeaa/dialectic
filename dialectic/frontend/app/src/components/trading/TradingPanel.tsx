@@ -203,6 +203,79 @@ function buildTradingDeskUrl(
 
 // --- Create Thesis (empty-state flow) ---
 
+type DraftNode = {
+  id: string
+  label: string
+  type: string
+  phase: number
+  context?: string
+  thresholds?: { level: number; label?: string }[]
+  feeds?: { source: string; symbol?: string; series?: string; label?: string }[]
+}
+type DraftEdge = {
+  source: string
+  target: string
+  mechanism: string
+  lag: string
+  strength: number
+}
+type ThesisDraft = { nodes: DraftNode[]; edges: DraftEdge[]; rationale: string }
+
+const PHASE_NAMES: Record<number, string> = {
+  1: 'Shock',
+  2: 'Transmission',
+  3: 'Amplification',
+  4: 'Policy Response',
+  5: 'Resolution',
+}
+
+/** Compact review rendering: nodes grouped by cascade phase, then edges. */
+function DraftPreview({ draft }: { draft: ThesisDraft }) {
+  const phases = [...new Set(draft.nodes.map((n) => n.phase))].sort()
+  const labelOf = (id: string) =>
+    draft.nodes.find((n) => n.id === id)?.label ?? id
+  return (
+    <div className="thesis-draft">
+      {phases.map((phase) => (
+        <div key={phase} className="thesis-draft-phase">
+          <div className="thesis-draft-phase-label">
+            {phase} · {PHASE_NAMES[phase] ?? 'Phase'}
+          </div>
+          {draft.nodes
+            .filter((n) => n.phase === phase)
+            .map((n) => (
+              <div key={n.id} className="thesis-draft-node" title={n.context}>
+                <span className="thesis-draft-node-type">{n.type}</span>
+                <span className="thesis-draft-node-label">{sanitize(n.label)}</span>
+                {(n.thresholds?.length ?? 0) > 0 && (
+                  <span className="thesis-draft-node-extra">
+                    {n.thresholds!.length} lvl
+                  </span>
+                )}
+                {(n.feeds?.length ?? 0) > 0 && (
+                  <span className="thesis-draft-node-extra">live</span>
+                )}
+              </div>
+            ))}
+        </div>
+      ))}
+      <div className="thesis-draft-phase-label">
+        Edges ({draft.edges.length})
+      </div>
+      {draft.edges.map((e, i) => (
+        <div key={i} className="thesis-draft-edge">
+          <span className="thesis-draft-edge-route">
+            {sanitize(labelOf(e.source))} → {sanitize(labelOf(e.target))}
+          </span>
+          <span className="thesis-draft-edge-mech">
+            {sanitize(e.mechanism)} · {sanitize(e.lag)} · {e.strength}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /**
  * The room births its book. Dialectic deliberately has no DAG-authoring
  * surface — the Builder lives on the desk — so this form only establishes
@@ -214,26 +287,52 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
   const [title, setTitle] = useState('')
   const [claim, setClaim] = useState('')
   const [budget, setBudget] = useState('5000')
-  const [busy, setBusy] = useState(false)
+  const [draftEnabled, setDraftEnabled] = useState(true)
+  const [busy, setBusy] = useState<'idle' | 'drafting' | 'creating'>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [draft, setDraft] = useState<ThesisDraft | null>(null)
   const [created, setCreated] = useState<{ bookId: string; title: string } | null>(null)
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault()
-    if (busy || !title.trim()) return
-    setBusy(true)
+  const requestBody = () => ({
+    title: title.trim(),
+    claim: claim.trim(),
+    monthly_budget: Math.max(0, Math.round(Number(budget) || 0)),
+  })
+
+  const create = async (nodes: unknown[], edges: unknown[]) => {
+    setBusy('creating')
     setError(null)
     try {
-      const res = await api.createThesis(roomId, {
-        title: title.trim(),
-        claim: claim.trim(),
-        monthly_budget: Math.max(0, Math.round(Number(budget) || 0)),
-      })
+      const res = await api.createThesis(roomId, { ...requestBody(), nodes, edges })
       setCreated({ bookId: res.book_id, title: res.title })
+      setDraft(null)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not reach the server')
     } finally {
-      setBusy(false)
+      setBusy('idle')
+    }
+  }
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (busy !== 'idle' || !title.trim()) return
+    if (!draftEnabled) {
+      await create([], [])
+      return
+    }
+    setBusy('drafting')
+    setError(null)
+    try {
+      const res = await api.draftThesis(roomId, requestBody())
+      setDraft({
+        nodes: res.nodes as DraftNode[],
+        edges: res.edges as DraftEdge[],
+        rationale: res.rationale,
+      })
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not reach the server')
+    } finally {
+      setBusy('idle')
     }
   }
 
@@ -252,9 +351,50 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Open Thesis Builder — draw the DAG →
+            Open Thesis Builder — refine the DAG →
           </a>
         )}
+      </div>
+    )
+  }
+
+  if (draft) {
+    return (
+      <div className="thesis-create">
+        <div className="thesis-create-heading">
+          Drafted cascade — review before it becomes the book
+        </div>
+        {draft.rationale && (
+          <p className="thesis-create-note">{draft.rationale}</p>
+        )}
+        <DraftPreview draft={draft} />
+        {error && <div className="thesis-create-error">{error}</div>}
+        <button
+          type="button"
+          className="thesis-create-submit"
+          disabled={busy !== 'idle'}
+          onClick={() => create(draft.nodes, draft.edges)}
+        >
+          {busy === 'creating' ? 'Creating…' : 'Accept & Create'}
+        </button>
+        <div className="thesis-draft-actions">
+          <button
+            type="button"
+            className="thesis-draft-discard"
+            disabled={busy !== 'idle'}
+            onClick={() => { setDraft(null); setError(null) }}
+          >
+            ← Discard draft
+          </button>
+          <button
+            type="button"
+            className="thesis-draft-discard"
+            disabled={busy !== 'idle'}
+            onClick={() => create([], [])}
+          >
+            Create empty instead
+          </button>
+        </div>
       </div>
     )
   }
@@ -263,8 +403,8 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
     <form className="thesis-create" onSubmit={submit}>
       <div className="thesis-create-heading">Create a thesis</div>
       <p className="thesis-create-note">
-        Name the thesis this room argues. The DAG gets drawn later, in the
-        desk’s Builder.
+        Name the thesis this room argues. Claude drafts the causal cascade
+        for your review; the Builder on the desk is where it gets refined.
       </p>
       <label className="thesis-create-label">
         Title
@@ -296,13 +436,27 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
           onChange={(e) => setBudget(e.target.value)}
         />
       </label>
+      <label className="thesis-create-toggle">
+        <input
+          type="checkbox"
+          checked={draftEnabled}
+          onChange={(e) => setDraftEnabled(e.target.checked)}
+        />
+        Draft the cascade with Claude
+      </label>
       {error && <div className="thesis-create-error">{error}</div>}
       <button
         type="submit"
         className="thesis-create-submit"
-        disabled={busy || !title.trim()}
+        disabled={busy !== 'idle' || !title.trim()}
       >
-        {busy ? 'Creating…' : 'Create Thesis'}
+        {busy === 'drafting'
+          ? 'Drafting cascade…'
+          : busy === 'creating'
+            ? 'Creating…'
+            : draftEnabled
+              ? 'Draft Thesis'
+              : 'Create Empty Thesis'}
       </button>
     </form>
   )
