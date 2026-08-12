@@ -29,8 +29,10 @@ The existing implementation explains the poor flow:
   different entry code.
 - Branches appear in a header select and a right-panel tab, both as flat lists.
   The existing genealogy endpoint is unused.
-- Below 1024px both navigation rails disappear, including every path to rooms,
-  branches, memory, stakes, history, and sharing.
+- At the initial audit, both navigation rails disappeared below 1024px. Commit
+  `273a42b` subsequently shipped room and context drawers with a scrim, Escape
+  close, and automatic close after a room change. Home Base extends those
+  drawers; it does not replace or duplicate them.
 - A notification deep link can open a room, but normal navigation erases the
   room query parameter, so the URL does not preserve location on refresh.
 - The room list already has reliable unread counts, previews, and read
@@ -163,6 +165,12 @@ previews, counts, and tokens never enter the Home projection.
 The activity response never carries room tokens. Navigation resolves the
 target through the caller's existing token-bearing saved-room response.
 
+`GET /users/me/home/activity` requires a valid access JWT and current Home
+membership. A missing or invalid JWT returns the existing authentication
+failure. After authentication, both a missing Home and a caller without current
+Home membership return the same generic `404 Home unavailable` response; the
+response must not reveal whether Home exists, its ID, its name, or its members.
+
 ## Activity projection
 
 Do not add an activity table, dismissal state, or new activity event types.
@@ -180,6 +188,11 @@ One focused projection service has two consumers:
 1. `GET /users/me/home/activity`;
 2. Home LLM context assembly.
 
+Every message-derived field excludes rows where `messages.is_deleted` is true.
+This includes latest-message selection, previews, room and branch message and
+unread counts, and unresolved-question extraction. A soft-deleted message
+cannot reappear through either the HTTP projection or Claude's Home digest.
+
 For the HTTP response, the activity window begins at the requesting viewer's
 existing source-room read boundary (`last_read_at`, falling back to
 `joined_at`) and is capped to the 100 most recent messages per room. For a Home
@@ -187,6 +200,11 @@ LLM turn, the most recent human speaker is the requesting viewer, matching the
 existing personal cross-room-memory path. Unresolved questions are calculated
 inside that explicit window. Commitments due within 72 hours are included
 regardless of unread state.
+
+Because the LLM activity window follows the most recent human speaker, the
+unresolved-question set may legitimately differ between Amo's and Dan's Home
+turns. That viewer lineage is intentional and remains visible in tests and
+debugging rather than being presented as a room-global digest.
 
 The projection returns a generated timestamp and room entries containing:
 
@@ -290,8 +308,11 @@ Ordinary rooms continue to show their transcript without the Home pulse.
 ### Right rail
 
 Home retains Users, Memory, Branches, Insights, Stakes, History, AI, and its
-Home settings. Trading remains conditional on the existing trading binding;
-there is no additional Home-specific protocol or LLM gate.
+Home settings. Trading remains an unconditional tab, matching the shipped
+reachability fix: the empty trading state is how an ordinary room reaches
+Create Thesis. Home does not hide the tab, but its panel explains that a thesis
+must be proposed and created in the scheme's own room. There is no additional
+Home-specific protocol or LLM gate.
 
 The Branches panel renders the existing genealogy endpoint as an indented tree
 with fork markers, activity, and counts. The active branch is also exposed in
@@ -299,16 +320,18 @@ the left rail so branches are discoverable before the user opens the panel.
 
 ## Mobile information architecture
 
-Below 1024px, navigation must remain functional rather than disappear.
+Commit `273a42b` already provides the below-1024px navigation and context
+drawers, including their toggles, scrim, Escape close, and automatic close when
+the active room changes. Home Base preserves that implementation and extends
+it with the shared navigation model:
 
-- A navigation button opens a slide-over containing Home, rooms, and the active
-  room's branch tree. It reuses the desktop room/branch navigation component.
-- A context button opens a second slide-over containing the right-rail tabs:
-  Memory, Stakes, History, Users, Share or Home settings, and the other existing
-  tools.
+- Add Home and the active room's branch tree to the existing navigation drawer,
+  reusing the desktop room/branch navigation component.
+- Keep the existing context drawer as the mobile route to all right-rail tabs.
 - The Home title acts as a direct Home action when the user is elsewhere.
-- Header text actions collapse to labeled icons where space requires it.
-- Neither drawer remains open after selecting a destination.
+- Collapse header text actions to labeled icons where space requires it.
+- Fold destination-driven drawer close into the single navigation hook while
+  retaining the shipped scrim and Escape behavior.
 - The composer stays fixed and usable with the software keyboard open.
 - No persistent bottom bar consumes vertical conversation space.
 
@@ -328,7 +351,9 @@ messages use the same navigation function and URL shape.
 
 In-app room and branch selections call `history.pushState`. Initial resolution
 and canonical corrections use `replaceState`. A `popstate` listener re-enters
-the destination through the same function, so browser back/forward works.
+the destination through the same function, so browser back/forward works. A
+valid popstate-driven re-entry is history-neutral: it neither pushes nor
+replaces a history entry.
 
 The existing one-shot behavior that consumes and erases `?room=` is removed.
 The ordering regression it previously fixed remains covered: navigation cannot
@@ -369,6 +394,24 @@ The full-screen selector remains only for:
 - terminal recovery when Home cannot be resolved.
 
 Home membership is never granted by the ordinary invite-code form.
+
+## Home and the thesis lifecycle
+
+Home is a real room but never a trading thesis room. Its purpose is to connect
+work while durable schemes keep their own rooms, so no action may set Home's
+`linked_book_id`.
+
+After the existing token and membership checks, both
+`POST /rooms/{room_id}/trading/thesis` and
+`POST /rooms/{room_id}/trading/thesis/draft` check `rooms.is_home` and return a
+`409` before registering a tradingDesk token, drafting, creating a book, or
+writing any local event or binding. The response says, `Propose it in the
+scheme's room.` Ordinary-room behavior is unchanged.
+
+The `propose_thesis` tool applies the same boundary before shaping a proposal.
+In Home it declines with `Propose it in the scheme's room.`, so Claude cannot
+emit an actionable Home thesis card. The unconditional Trading tab remains
+reachable; UI affordances do not substitute for these server and tool guards.
 
 ## Refresh and staleness
 
@@ -434,12 +477,20 @@ Tests must prove:
 - adding a Home member immediately removes source rooms they cannot access;
 - a source room returns only after every Home member belongs to it;
 - no activity response contains a room token;
+- Home activity requires a valid JWT and current Home membership, while a
+  valid non-member receives the same nonrevealing result as a missing Home;
 - room and branch unread counts use the existing receipt boundary;
+- previews, latest-message selection, message counts, unread counts, unresolved
+  questions, and Claude's digest exclude soft-deleted messages;
 - viewing Home does not write source receipts;
 - Home prompt context contains shared activity and excludes every unshared
   source room;
 - normal-room prompts contain no Home digest;
 - activity failure produces the explicit prompt marker;
+- Home thesis create and draft requests fail before any tradingDesk or database
+  side effect, while ordinary-room requests retain their current behavior;
+- `propose_thesis` declines in Home with the scheme-room instruction and emits
+  no proposal card;
 - Home retains normal interjection, protocol, FSM, and silence-sweep behavior.
 
 Shared-activity and migration tests use real Postgres where query semantics or
@@ -454,7 +505,7 @@ browser checks for:
 - bare launch to Home;
 - explicit room and thread launch;
 - refresh preserving an explicit destination;
-- browser back/forward;
+- browser back/forward without a popstate-driven push or replace;
 - open- and closed-app notification navigation;
 - room and branch selection from Home;
 - Create/Join overlay success and cancellation;
@@ -462,6 +513,8 @@ browser checks for:
 - Home activity stale/error rendering;
 - desktop navigation at 1440, 1200, and 1024 pixels;
 - mobile drawers at 768 and 390 pixels.
+- the shipped scrim, Escape close, and destination-close behavior after branch
+  navigation is folded into the shared hook rather than duplicated.
 
 ### Device acceptance
 
@@ -482,10 +535,13 @@ Release requires the installed PWA on the actual iPhone and Android devices:
 
 Implementation should be delivered in independently reviewable stages:
 
-1. migration, Home membership administration, and shared-activity projection;
+1. migration, Home membership administration, shared-activity projection, and
+   Home guards in thesis create, draft, and `propose_thesis`;
 2. URL-authoritative navigation and Home room bootstrap;
 3. Home pulse, Claude digest, and genealogy rendering;
-4. mobile navigation/context drawers and final responsive work.
+4. extend the shipped mobile drawers with the branch tree and Home navigation,
+   collapse header actions to labeled icons, and fold drawer close into the
+   single navigation hook.
 
 Production activation preserves the documented order:
 

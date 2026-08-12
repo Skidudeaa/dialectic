@@ -23,3 +23,4 @@
 [2026-08-11] approved full Claude participation in Home — the Home plan must preserve protocols and every normal participant path, then add a membership-fenced cross-room activity read path shared by the UI and Claude
 [2026-08-11] approved the Home membership foundation — migration 013 creates one Home; verified Amo and Dan memberships alone carry management authority; Home additions target existing credentialed accounts by email and cannot delegate
 [2026-08-11] approved and documented the Dialectic Home Base design — a real default Home conversation, shared-safe activity projection for humans and Claude, visible branch genealogy, URL-authoritative navigation, and mobile drawers replace the siloed room flow
+[2026-08-11] incorporated Home Base spec review against current HEAD — preserved unconditional Trading reachability and shipped mobile drawers while adding Home thesis guards, explicit activity auth, neutral popstate, and soft-delete projection contracts
