@@ -72,6 +72,23 @@ def _hoisted_prediction_proposal(calls: list[dict]) -> Optional[dict]:
     return None
 
 
+def _hoisted_thesis_proposal(calls: list[dict]) -> Optional[dict]:
+    """The propose_thesis proposal from a tool trace, if this turn made one.
+
+    Same hoist as predictions, different key: the card renders off
+    metadata.thesis_proposal and opens the Create Thesis panel pre-filled.
+    Unlike a prediction there is no accepted flag to carry — creation runs
+    through the panel's own draft→review→create flow, not a message tap.
+    """
+    for entry in calls:
+        if not entry.get("ok"):
+            continue
+        if (entry.get("provenance") or {}).get("kind") != "thesis_proposal":
+            continue
+        return dict(entry.get("input") or {})
+    return None
+
+
 @dataclass
 class OrchestrationResult:
     """
@@ -394,6 +411,9 @@ class LLMOrchestrator:
                 proposal = _hoisted_prediction_proposal(loop_result.tool_trace)
                 if proposal is not None:
                     tool_metadata["proposal"] = proposal
+                thesis = _hoisted_thesis_proposal(loop_result.tool_trace)
+                if thesis is not None:
+                    tool_metadata["thesis_proposal"] = thesis
         else:
             routing = await router.route(request)
 
@@ -812,6 +832,9 @@ class LLMOrchestrator:
                             proposal = _hoisted_prediction_proposal(trace)
                             if proposal is not None:
                                 tool_metadata["proposal"] = proposal
+                            thesis = _hoisted_thesis_proposal(trace)
+                            if thesis is not None:
+                                tool_metadata["thesis_proposal"] = thesis
             else:
                 async for event_type, data in router.stream(request):
                     if event_type == "attempt":

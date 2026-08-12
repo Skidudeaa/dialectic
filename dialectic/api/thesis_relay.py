@@ -211,3 +211,78 @@ async def draft_thesis(
         room_id, len(draft["nodes"]), len(draft["edges"]),
     )
     return draft
+
+
+@router.delete("/rooms/{room_id}/trading/thesis")
+async def retire_thesis(
+    room_id: UUID,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Retire the room's thesis — the book survives, the binding dies.
+
+    Order mirrors create, td first: the desk strips the book's room claim
+    and drops the push token (POST /api/bridge/room-unbind), and only then
+    does Dialectic clear its own side — linked_book_id, the cached
+    snapshot, and the thesis_state_current memory that would otherwise
+    keep haunting every LLM prompt. A td failure therefore leaves the
+    binding intact and the retry is a fresh retire; the reverse order
+    could leave a book pushing at a room that no longer claims it.
+    """
+    row = await db.fetchrow(
+        "SELECT token, linked_book_id FROM rooms WHERE id = $1 AND token = $2",
+        room_id, token,
+    )
+    if not row:
+        raise HTTPException(status_code=401, detail="Invalid room token")
+    await _verify_room_member(room_id, current_user.user_id, db)
+
+    book_id = row["linked_book_id"]
+    if not book_id:
+        raise HTTPException(status_code=404, detail="This room has no thesis to retire")
+
+    try:
+        await td.service_post(
+            "/api/bridge/room-unbind", json_body={"room_id": str(room_id)},
+        )
+    except td.TradingDeskError as e:
+        logger.warning("thesis retire: td unbind failed: %s", e)
+        raise HTTPException(
+            status_code=502,
+            detail=f"tradingDesk refused the unbind: {e}",
+        )
+
+    await db.execute(
+        "UPDATE rooms SET linked_book_id = NULL, trading_config = NULL WHERE id = $1",
+        room_id,
+    )
+
+    memory_row = await db.fetchrow(
+        """SELECT id FROM memories
+           WHERE room_id = $1 AND key = 'thesis_state_current' AND status = 'active'""",
+        room_id,
+    )
+    if memory_row:
+        from memory.manager import MemoryManager
+        try:
+            await MemoryManager(db).invalidate_memory(
+                memory_id=memory_row["id"],
+                invalidated_by_user_id=current_user.user_id,
+                reason=f"thesis '{book_id}' retired",
+            )
+        except Exception:
+            # The retirement stands either way — a stale memory is a prompt
+            # nuisance, not a reason to fail the human's explicit retire.
+            logger.exception("thesis retire: memory invalidation failed")
+
+    await db.execute(
+        """INSERT INTO events (id, timestamp, event_type, room_id, user_id, payload)
+           VALUES ($1, $2, $3, $4, $5, $6)""",
+        uuid4(), datetime.now(timezone.utc), EventType.THESIS_RETIRED.value,
+        room_id, current_user.user_id,
+        {"book_id": book_id},
+    )
+
+    logger.info("thesis retired: room %s released book %s", room_id, book_id)
+    return {"retired_book_id": book_id}

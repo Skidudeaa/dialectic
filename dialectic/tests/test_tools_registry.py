@@ -28,6 +28,7 @@ EXPECTED_TOOLS = {
     "search_memories",
     "search_transcript",
     "draft_prediction",
+    "propose_thesis",
 }
 
 
@@ -59,9 +60,9 @@ def registry(room, db):
 
 
 class TestRegistryContract:
-    def test_registers_all_eleven_tools(self, registry):
+    def test_registers_all_twelve_tools(self, registry):
         assert set(registry.names()) == EXPECTED_TOOLS
-        assert len(registry.tools) == 11
+        assert len(registry.tools) == 12
 
     def test_names_match_anthropic_pattern(self, registry):
         for tool in registry.tools:
@@ -879,3 +880,87 @@ class TestToolRegistryConstruction:
         assert reg.labels() == {"t": "doing a thing"}
         assert reg.schemas() == [{"name": "t", "description": "d",
                                   "input_schema": {"type": "object", "properties": {}}}]
+
+
+# ── propose_thesis — the conversation-born thesis proposal ───────────
+
+
+class TestProposeThesis:
+    """Proposal-only, same shape as draft_prediction: validate, hoist,
+    never write. The one extra rule is one-thesis-per-room — the executor
+    refuses in a bound room so the model explains instead of proposing."""
+
+    def _tool(self, linked_book_id=None):
+        from types import SimpleNamespace
+        room = SimpleNamespace(id="room-1", linked_book_id=linked_book_id,
+                               trading_config=None)
+        return build_registry(room, FakeDB()).get("propose_thesis")
+
+    @pytest.mark.asyncio
+    async def test_shapes_a_proposal_with_provenance(self):
+        out = await self._tool().execute({
+            "title": "Sovereign Debt Doom Loop",
+            "claim": "JGB auction failure forces BOJ retreat",
+            "monthly_budget": 3000,
+        })
+        assert out["provenance"] == {"kind": "thesis_proposal"}
+        assert out["proposal"] == {
+            "title": "Sovereign Debt Doom Loop",
+            "claim": "JGB auction failure forces BOJ retreat",
+            "monthly_budget": 3000,
+        }
+
+    @pytest.mark.asyncio
+    async def test_budget_defaults_when_omitted(self):
+        out = await self._tool().execute({"title": "T", "claim": "C"})
+        assert out["proposal"]["monthly_budget"] == 5000
+
+    @pytest.mark.asyncio
+    async def test_refuses_in_a_bound_room(self):
+        tool = self._tool(linked_book_id="iran-hormuz-graph")
+        with pytest.raises(ValueError, match="iran-hormuz-graph"):
+            await tool.execute({"title": "T", "claim": "C"})
+
+    @pytest.mark.asyncio
+    async def test_requires_title_and_claim(self):
+        with pytest.raises(ValueError, match="title"):
+            await self._tool().execute({"claim": "C"})
+        with pytest.raises(ValueError, match="claim"):
+            await self._tool().execute({"title": "T"})
+
+    @pytest.mark.asyncio
+    async def test_bounds_the_budget(self):
+        with pytest.raises(ValueError, match="monthly_budget"):
+            await self._tool().execute(
+                {"title": "T", "claim": "C", "monthly_budget": -1}
+            )
+        with pytest.raises(ValueError, match="monthly_budget"):
+            await self._tool().execute(
+                {"title": "T", "claim": "C", "monthly_budget": "lots"}
+            )
+
+
+class TestThesisProposalHoist:
+    """The orchestrator scan that lifts the proposal to metadata."""
+
+    def test_hoists_the_first_ok_thesis_proposal(self):
+        from llm.orchestrator import _hoisted_thesis_proposal
+        trace = [
+            {"ok": True, "provenance": {"kind": "prediction_draft"},
+             "input": {"statement": "not this one"}},
+            {"ok": False, "provenance": {"kind": "thesis_proposal"},
+             "input": {"title": "failed — skipped"}},
+            {"ok": True, "provenance": {"kind": "thesis_proposal"},
+             "input": {"title": "T", "claim": "C", "monthly_budget": 5000}},
+        ]
+        assert _hoisted_thesis_proposal(trace) == {
+            "title": "T", "claim": "C", "monthly_budget": 5000,
+        }
+
+    def test_no_proposal_is_none(self):
+        from llm.orchestrator import _hoisted_thesis_proposal
+        assert _hoisted_thesis_proposal([]) is None
+        assert _hoisted_thesis_proposal(
+            [{"ok": True, "provenance": {"kind": "prediction_draft"},
+              "input": {}}]
+        ) is None

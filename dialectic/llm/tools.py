@@ -687,6 +687,47 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
             "provenance": {"kind": "prediction_draft"},
         }
 
+    async def propose_thesis(args: dict) -> dict:
+        """Shape a thesis proposal from the conversation. NO write — ever.
+
+        Same trust shape as draft_prediction: the proposal is hoisted to
+        metadata.thesis_proposal, the room renders it as a card, and the
+        card's tap opens the Create Thesis panel pre-filled — where the
+        cascade is drafted, reviewed and, only then, created by the human.
+        """
+        if getattr(room, "linked_book_id", None):
+            raise ValueError(
+                f"this room already argues '{room.linked_book_id}' — one "
+                "thesis per room. The humans must retire the current one "
+                "(trading panel) before a new one can be proposed."
+            )
+        title = str(args.get("title") or "").strip()
+        if not title:
+            raise ValueError("title is required — the thesis needs a name.")
+        if len(title) > 120:
+            raise ValueError("title must be 120 characters or fewer.")
+        claim = str(args.get("claim") or "").strip()
+        if not claim:
+            raise ValueError(
+                "claim is required — one causal statement distilling what "
+                "the conversation is actually staking."
+            )
+        if len(claim) > 2000:
+            raise ValueError("claim must be 2000 characters or fewer.")
+        budget = args.get("monthly_budget", 5000)
+        try:
+            budget = int(budget)
+        except (TypeError, ValueError):
+            raise ValueError("monthly_budget must be a whole dollar amount.")
+        if not 0 <= budget <= 10_000_000:
+            raise ValueError("monthly_budget must be between 0 and 10,000,000.")
+
+        return {
+            "proposal": {"title": title, "claim": claim,
+                         "monthly_budget": budget},
+            "provenance": {"kind": "thesis_proposal"},
+        }
+
     return [
         Tool(
             name="search_memories",
@@ -784,6 +825,45 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
             },
             execute=draft_prediction,
             label="drafting a prediction",
+        ),
+        Tool(
+            name="propose_thesis",
+            description=(
+                "Propose that this conversation becomes a tracked thesis — "
+                "a titled causal claim the desk will model as a DAG and "
+                "trade against. Calling this creates NOTHING: the proposal "
+                "is shown to the humans as a card that opens the Create "
+                "Thesis panel pre-filled, where Claude drafts the cascade "
+                "for their review and only their tap creates it. Use it "
+                "when the argument has crystallized into a distinct, "
+                "falsifiable macro thesis this room is not already "
+                "tracking — 'we should book this' moments — never for "
+                "passing scenarios or a thesis the room already argues. "
+                "Distill the claim from what was actually said."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Short thesis name, e.g. 'Sovereign Debt Doom Loop'.",
+                    },
+                    "claim": {
+                        "type": "string",
+                        "description": (
+                            "One causal statement distilling the conversation's "
+                            "thesis — the shock, the transmission, the payoff."
+                        ),
+                    },
+                    "monthly_budget": {
+                        "type": "integer",
+                        "description": "Optional monthly budget in dollars. Default 5000.",
+                    },
+                },
+                "required": ["title", "claim"],
+            },
+            execute=propose_thesis,
+            label="proposing a thesis",
         ),
     ]
 

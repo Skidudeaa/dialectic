@@ -283,3 +283,99 @@ def test_draft_requires_membership(monkeypatch):
 
     assert resp.status_code == 403
     drafter.assert_not_awaited()
+
+
+# =========================================================================
+# RETIRE — the lifecycle exit
+# =========================================================================
+
+
+def _retire(fake_db, monkeypatch, *, service_post, memory_manager=None):
+    async def _fake_db_dep():
+        yield fake_db
+
+    main_mod.app.dependency_overrides[relay.get_db] = _fake_db_dep
+    main_mod.app.dependency_overrides[relay.extract_room_token] = lambda: ROOM_TOKEN
+    main_mod.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+        user_id=CALLER_ID, email="caller@test", email_verified=True, display_name="Caller",
+    )
+    monkeypatch.setattr(relay.td, "service_post", service_post)
+    if memory_manager is not None:
+        monkeypatch.setattr("memory.manager.MemoryManager", memory_manager)
+    try:
+        return TestClient(main_mod.app).delete(f"/rooms/{ROOM_ID}/trading/thesis")
+    finally:
+        main_mod.app.dependency_overrides.clear()
+
+
+def test_retire_unbinds_td_first_then_clears_locally(monkeypatch):
+    fake_db = _make_db(linked_book_id="sovereign-debt-doom-loop-graph")
+    service_post = AsyncMock(return_value={"unbound": ["sovereign-debt-doom-loop-graph"]})
+
+    resp = _retire(fake_db, monkeypatch, service_post=service_post)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"retired_book_id": "sovereign-debt-doom-loop-graph"}
+    service_post.assert_awaited_once_with(
+        "/api/bridge/room-unbind", json_body={"room_id": str(ROOM_ID)},
+    )
+    sqls = [c.args[0] for c in fake_db.execute.await_args_list]
+    assert any("linked_book_id = NULL" in s and "trading_config = NULL" in s
+               for s in sqls)
+    assert any("INSERT INTO events" in s for s in sqls)
+
+
+def test_retire_without_a_thesis_is_404(monkeypatch):
+    fake_db = _make_db(linked_book_id=None)
+    service_post = AsyncMock()
+
+    resp = _retire(fake_db, monkeypatch, service_post=service_post)
+
+    assert resp.status_code == 404
+    service_post.assert_not_awaited()
+    fake_db.execute.assert_not_awaited()
+
+
+def test_retire_survives_td_refusal_with_binding_intact(monkeypatch):
+    """td-first ordering: a failed unbind must leave Dialectic's binding
+    alone so the retry is a fresh retire."""
+    fake_db = _make_db(linked_book_id="some-graph")
+    service_post = AsyncMock(side_effect=TradingDeskError("desk down"))
+
+    resp = _retire(fake_db, monkeypatch, service_post=service_post)
+
+    assert resp.status_code == 502
+    fake_db.execute.assert_not_awaited()
+
+
+def test_retire_invalidates_the_thesis_state_memory(monkeypatch):
+    from uuid import uuid4 as _uuid4
+    memory_id = _uuid4()
+    fake_db = _make_db(linked_book_id="some-graph")
+
+    orig_side_effect = fake_db.fetchrow.side_effect
+
+    async def fetchrow(query, *params):
+        if "thesis_state_current" in query:
+            return {"id": memory_id}
+        return await orig_side_effect(query, *params)
+
+    fake_db.fetchrow = AsyncMock(side_effect=fetchrow)
+
+    invalidations = []
+
+    class StubManager:
+        def __init__(self, db):
+            pass
+
+        async def invalidate_memory(self, **kwargs):
+            invalidations.append(kwargs)
+
+    service_post = AsyncMock(return_value={"unbound": ["some-graph"]})
+    resp = _retire(fake_db, monkeypatch, service_post=service_post,
+                   memory_manager=StubManager)
+
+    assert resp.status_code == 200
+    assert len(invalidations) == 1
+    assert invalidations[0]["memory_id"] == memory_id
+    assert "retired" in invalidations[0]["reason"]
