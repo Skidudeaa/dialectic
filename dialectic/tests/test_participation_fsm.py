@@ -492,6 +492,22 @@ def fsm_upserts(db):
 
 @pytest.mark.asyncio
 class TestParticipationSweep:
+    @pytest.fixture(autouse=True)
+    def daytime(self, monkeypatch):
+        """Pin the sweep outside quiet hours.
+
+        WHY: participation_sweep() reads the REAL clock through
+        in_quiet_hours(), so without this pin the whole class went red
+        every night between 23:00 and 07:00 America/Chicago — six
+        failures that had nothing to do with the code under test (first
+        bitten 2026-08-11, 23:07 CDT). The quiet-hours test below
+        overrides this with its own monkeypatch, which runs after the
+        fixture and therefore wins.
+        """
+        monkeypatch.setattr(
+            silence_sweep, "in_quiet_hours", lambda now=None: False
+        )
+
     def _ctx(self, db):
         broadcast = AsyncMock()
         return SchedulerContext(pool=FakePool(db), broadcast=broadcast), broadcast
