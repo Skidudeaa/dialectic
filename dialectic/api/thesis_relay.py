@@ -258,23 +258,27 @@ async def retire_thesis(
         room_id,
     )
 
-    memory_row = await db.fetchrow(
+    # ALL active rows, not one: a racing pair of pushes can twin the slot
+    # (see trading_ingest's heal), and a retire must silence every copy.
+    memory_rows = await db.fetch(
         """SELECT id FROM memories
            WHERE room_id = $1 AND key = 'thesis_state_current' AND status = 'active'""",
         room_id,
     )
-    if memory_row:
+    if memory_rows:
         from memory.manager import MemoryManager
-        try:
-            await MemoryManager(db).invalidate_memory(
-                memory_id=memory_row["id"],
-                invalidated_by_user_id=current_user.user_id,
-                reason=f"thesis '{book_id}' retired",
-            )
-        except Exception:
-            # The retirement stands either way — a stale memory is a prompt
-            # nuisance, not a reason to fail the human's explicit retire.
-            logger.exception("thesis retire: memory invalidation failed")
+        manager = MemoryManager(db)
+        for memory_row in memory_rows:
+            try:
+                await manager.invalidate_memory(
+                    memory_id=memory_row["id"],
+                    invalidated_by_user_id=current_user.user_id,
+                    reason=f"thesis '{book_id}' retired",
+                )
+            except Exception:
+                # The retirement stands either way — a stale memory is a
+                # prompt nuisance, not a reason to fail the explicit retire.
+                logger.exception("thesis retire: memory invalidation failed")
 
     await db.execute(
         """INSERT INTO events (id, timestamp, event_type, room_id, user_id, payload)

@@ -481,3 +481,64 @@ class TestIngestBroadcast:
         payload = inserts[0].args[-1]
         assert payload["severity"] == "critical"
         assert payload["alert_events"] == 1
+
+
+@pytest.mark.asyncio
+class TestSlotHealing:
+    """The thesis_state_current slot's invariant is ONE active row. Two
+    ingests racing (instant adoption push + tick; live push + reconcile)
+    can twin it — observed live 2026-08-12, two actives 115ms apart — so
+    the upsert edits the NEWEST row and flips the twins."""
+
+    async def test_twinned_slot_is_healed_on_the_next_push(
+        self, stub_memory, curator_calls, push_calls,
+    ):
+        newest, stale = uuid4(), uuid4()
+        db = make_db()
+        orig_fetch = db.fetch.side_effect
+
+        async def _fetch(sql, *args):
+            if "FROM memories" in sql:
+                return [{"id": newest}, {"id": stale}]  # newest first
+            return await orig_fetch(sql, *args)
+
+        db.fetch = AsyncMock(side_effect=_fetch)
+
+        await ingest_snapshot(
+            db, make_connection_manager(), ROOM_ID,
+            make_request(v=3, alert_events=[]),
+        )
+
+        stub_memory.edit_memory.assert_awaited_once()
+        assert stub_memory.edit_memory.await_args.kwargs["memory_id"] == newest
+        heal_sqls = [
+            c for c in db.execute.await_args_list
+            if "status = 'invalidated'" in c.args[0]
+        ]
+        assert len(heal_sqls) == 1
+        assert heal_sqls[0].args[1] == [stale]
+
+    async def test_single_active_row_is_left_alone(
+        self, stub_memory, curator_calls, push_calls,
+    ):
+        only = uuid4()
+        db = make_db()
+        orig_fetch = db.fetch.side_effect
+
+        async def _fetch(sql, *args):
+            if "FROM memories" in sql:
+                return [{"id": only}]
+            return await orig_fetch(sql, *args)
+
+        db.fetch = AsyncMock(side_effect=_fetch)
+
+        await ingest_snapshot(
+            db, make_connection_manager(), ROOM_ID,
+            make_request(v=3, alert_events=[]),
+        )
+
+        assert stub_memory.edit_memory.await_args.kwargs["memory_id"] == only
+        assert not any(
+            "status = 'invalidated'" in c.args[0]
+            for c in db.execute.await_args_list
+        )

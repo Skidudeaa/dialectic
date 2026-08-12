@@ -348,19 +348,19 @@ def test_retire_survives_td_refusal_with_binding_intact(monkeypatch):
     fake_db.execute.assert_not_awaited()
 
 
-def test_retire_invalidates_the_thesis_state_memory(monkeypatch):
+def test_retire_invalidates_every_active_thesis_state_row(monkeypatch):
+    """Plural on purpose: a racing pair of pushes can twin the slot, and a
+    retire must silence every copy."""
     from uuid import uuid4 as _uuid4
-    memory_id = _uuid4()
+    memory_id, twin_id = _uuid4(), _uuid4()
     fake_db = _make_db(linked_book_id="some-graph")
 
-    orig_side_effect = fake_db.fetchrow.side_effect
-
-    async def fetchrow(query, *params):
+    async def fetch(query, *params):
         if "thesis_state_current" in query:
-            return {"id": memory_id}
-        return await orig_side_effect(query, *params)
+            return [{"id": memory_id}, {"id": twin_id}]
+        return []
 
-    fake_db.fetchrow = AsyncMock(side_effect=fetchrow)
+    fake_db.fetch = AsyncMock(side_effect=fetch)
 
     invalidations = []
 
@@ -376,6 +376,5 @@ def test_retire_invalidates_the_thesis_state_memory(monkeypatch):
                    memory_manager=StubManager)
 
     assert resp.status_code == 200
-    assert len(invalidations) == 1
-    assert invalidations[0]["memory_id"] == memory_id
-    assert "retired" in invalidations[0]["reason"]
+    assert {i["memory_id"] for i in invalidations} == {memory_id, twin_id}
+    assert all("retired" in i["reason"] for i in invalidations)

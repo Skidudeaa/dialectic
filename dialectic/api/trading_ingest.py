@@ -218,10 +218,29 @@ async def ingest_snapshot(
     memory_manager = MemoryManager(db)
     memory_key = "thesis_state_current"
 
-    existing = await db.fetchrow(
-        "SELECT id FROM memories WHERE room_id = $1 AND key = $2 AND status = 'active'",
+    # WHY fetch (plural) and heal: the slot's invariant is ONE active row,
+    # but the check-then-insert below has no DB constraint behind it, so two
+    # ingests racing (instant adoption push + tick, live push + reconcile)
+    # can twin the slot — observed live 2026-08-12, two actives 115ms apart.
+    # Editing the NEWEST and flipping the twins keeps the slot self-healing:
+    # a duplicate survives at most until the next push.
+    existing_rows = await db.fetch(
+        """SELECT id FROM memories
+           WHERE room_id = $1 AND key = $2 AND status = 'active'
+           ORDER BY created_at DESC""",
         room_id, memory_key
     )
+    existing = existing_rows[0] if existing_rows else None
+    if len(existing_rows) > 1:
+        stale_ids = [r["id"] for r in existing_rows[1:]]
+        logger.warning(
+            "thesis_state_current slot had %d active rows in room %s — healing",
+            len(existing_rows), room_id,
+        )
+        await db.execute(
+            "UPDATE memories SET status = 'invalidated' WHERE id = ANY($1)",
+            stale_ids,
+        )
 
     if existing:
         memory = await memory_manager.edit_memory(
