@@ -1,6 +1,40 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type ProxyOptions } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+
+// WHY parameterized: browser acceptance runs the built app against an
+// ISOLATED backend (test database, spare port) — never production .env.
+// Default stays the dev backend on 8002.
+const backend = process.env.DIALECTIC_BACKEND_URL ?? 'http://localhost:8002'
+const backendWs = backend.replace(/^http/, 'ws')
+
+// WHY this list exists twice in the repo: nginx proxies the same set in
+// production (see the location regex in sites-available/dialectic), but dev
+// was missing entries — so /messages/search returned index.html here and
+// JSON in production. Keep the two lists in step.
+function proxyMap(): Record<string, ProxyOptions> {
+  return {
+    '/api': { target: backend, changeOrigin: true, rewrite: (path) => path.replace(/^\/api/, '') },
+    // Attachments stream through the backend with auth headers; without
+    // this line `npm run dev` serves the SPA fallback for them (media
+    // broken in dev only — prod routes via nginx).
+    '/attachments': { target: backend, changeOrigin: true },
+    '/ws': { target: backendWs, ws: true },
+    '/auth': { target: backend, changeOrigin: true },
+    '/rooms': { target: backend, changeOrigin: true },
+    '/threads': { target: backend, changeOrigin: true },
+    '/users': { target: backend, changeOrigin: true },
+    '/health': { target: backend, changeOrigin: true },
+    '/analytics': { target: backend, changeOrigin: true },
+    '/graph': { target: backend, changeOrigin: true },
+    '/replay': { target: backend, changeOrigin: true },
+    '/stakes': { target: backend, changeOrigin: true },
+    '/messages': { target: backend, changeOrigin: true },
+    '/memories': { target: backend, changeOrigin: true },
+    '/personas': { target: backend, changeOrigin: true },
+    '/notifications': { target: backend, changeOrigin: true },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -32,30 +66,12 @@ export default defineConfig({
   ],
   server: {
     port: 3000,
-    proxy: {
-      '/api': { target: 'http://localhost:8002', changeOrigin: true, rewrite: (path) => path.replace(/^\/api/, '') },
-      // Attachments stream through the backend with auth headers; without
-      // this line `npm run dev` serves the SPA fallback for them (media
-      // broken in dev only — prod routes via nginx).
-      '/attachments': { target: 'http://localhost:8002', changeOrigin: true },
-      '/ws': { target: 'ws://localhost:8002', ws: true },
-      '/auth': { target: 'http://localhost:8002', changeOrigin: true },
-      '/rooms': { target: 'http://localhost:8002', changeOrigin: true },
-      '/threads': { target: 'http://localhost:8002', changeOrigin: true },
-      '/users': { target: 'http://localhost:8002', changeOrigin: true },
-      '/health': { target: 'http://localhost:8002', changeOrigin: true },
-      '/analytics': { target: 'http://localhost:8002', changeOrigin: true },
-      '/graph': { target: 'http://localhost:8002', changeOrigin: true },
-      '/replay': { target: 'http://localhost:8002', changeOrigin: true },
-      '/stakes': { target: 'http://localhost:8002', changeOrigin: true },
-      // WHY these were added: nginx proxies this whole set in production
-      // (see the location regex in sites-available/dialectic), but dev was
-      // missing them — so /messages/search returned index.html here and JSON in
-      // production. Keep the two lists in step.
-      '/messages': { target: 'http://localhost:8002', changeOrigin: true },
-      '/memories': { target: 'http://localhost:8002', changeOrigin: true },
-      '/personas': { target: 'http://localhost:8002', changeOrigin: true },
-      '/notifications': { target: 'http://localhost:8002', changeOrigin: true },
-    },
+    proxy: proxyMap(),
+  },
+  // Browser acceptance drives the PRODUCTION build through vite preview,
+  // pointed at the isolated backend via DIALECTIC_BACKEND_URL.
+  preview: {
+    port: 4173,
+    proxy: proxyMap(),
   },
 })

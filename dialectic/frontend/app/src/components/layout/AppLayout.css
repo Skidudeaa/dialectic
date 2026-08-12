@@ -61,8 +61,10 @@
 /* Small screens: the rails become slide-over drawers. WHY not display:none
    (the old rule): the PWA is the reach strategy, and hiding the rails
    outright locked phones out of memory, trading, stakes — the whole
-   cockpit. The ☰ / ▦ buttons in the room header drive `mobileDrawer`. */
-@media (max-width: 1024px) {
+   cockpit. The ☰ / ▦ buttons in the room header drive `mobileDrawer`.
+   Boundary is EXCLUSIVE of 1024: the Home Base acceptance contract keeps
+   1024 itself on desktop navigation (spec: 1440/1200/1024 are desktop). */
+@media (max-width: 1023.98px) {
     .app-layout { grid-template-columns: 1fr; }
     .app-sidebar,
     .app-right-panel {

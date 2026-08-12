@@ -71,7 +71,7 @@
 /* Drawer toggles — the only route into the rails on small screens */
 .drawer-toggle { display: none; }
 
-@media (max-width: 1024px) {
+@media (max-width: 1023.98px) {
     .drawer-toggle { display: inline-flex; }
     /* The dot alone says connected; the word costs room the toggles need. */
     .conn-label { display: none; }
