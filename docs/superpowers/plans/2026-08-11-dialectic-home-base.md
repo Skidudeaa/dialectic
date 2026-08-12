@@ -1366,7 +1366,7 @@ git commit -m "feat: expose room genealogy -- extend the shipped drawers"
 - Consumes: Task 5's activity endpoint, Task 2's membership endpoint, Task 6's `navigate`, and `UserRoom.is_home/can_manage_home`.
 - Produces: a read-only Home pulse, Home member-add settings, and an explanatory Home Trading empty state.
 
-- [ ] **Step 1: Add exact frontend activity types and API methods**
+- [x] **Step 1: Add exact frontend activity types and API methods**
 
 Mirror Task 4's JSON models as `HomeActivityProjection`,
 `HomeActivityRoom`, `HomeActivityBranch`, `HomeActivityQuestion`, and
@@ -1409,7 +1409,7 @@ The existing auth helper carries the current Home room token for member-add;
 the activity call ignores room token server-side and authorizes from JWT plus
 Home membership.
 
-- [ ] **Step 2: Implement the pulse's refresh state machine**
+- [x] **Step 2: Implement the pulse's refresh state machine**
 
 `HomeActivityPulse` receives:
 
@@ -1434,13 +1434,13 @@ Render capped room cards ordered as received. A room-card tap navigates to its
 root; a changed-branch tap navigates to `{roomId, threadId}`. Do not mark source
 messages read and do not add dismiss/archive/mute controls.
 
-- [ ] **Step 3: Render the pulse only in Home**
+- [x] **Step 3: Render the pulse only in Home**
 
 In `ChatLayout`, derive `currentRoomMeta` from the saved-room list. Insert
 `HomeActivityPulse` above `RoomBriefing` only when
 `currentRoomMeta.is_home`. Ordinary room center columns remain unchanged.
 
-- [ ] **Step 4: Replace Home Share with nondelegable settings**
+- [x] **Step 4: Replace Home Share with nondelegable settings**
 
 `HomeSettingsPanel` accepts `canManageHome` and
 `onMembershipChanged: () => void`. When true, render one normalized email field
@@ -1456,7 +1456,7 @@ In `RightPanel`, keep Trading unconditionally appended. For Home only, replace
 the Share tab with a Home tab that renders `HomeSettingsPanel`; ordinary rooms
 retain Share unchanged.
 
-- [ ] **Step 5: Make Trading's Home empty state explanatory, not actionable**
+- [x] **Step 5: Make Trading's Home empty state explanatory, not actionable**
 
 Before the generic unbound-room `CreateThesisForm`, add:
 
@@ -1474,13 +1474,13 @@ if (currentRoom?.is_home && !tradingConfig) {
 Keep the Trading tab present in Home and every ordinary room. The backend and
 tool guards from Task 3 remain authoritative.
 
-- [ ] **Step 6: Run frontend gates**
+- [x] **Step 6: Run frontend gates**
 
 Run: `cd dialectic/frontend/app && npm run lint && npm run build`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit Home surfaces**
+- [x] **Step 7: Commit Home surfaces**
 
 ```bash
 git add dialectic/frontend/app/src/components/home/HomeActivityPulse.tsx dialectic/frontend/app/src/components/home/HomeActivityPulse.css dialectic/frontend/app/src/components/home/HomeSettingsPanel.tsx dialectic/frontend/app/src/components/home/HomeSettingsPanel.css dialectic/frontend/app/src/types/index.ts dialectic/frontend/app/src/lib/api.ts dialectic/frontend/app/src/App.tsx dialectic/frontend/app/src/components/sidebar/RightPanel.tsx dialectic/frontend/app/src/components/trading/TradingPanel.tsx dialectic/frontend/app/src/components/trading/TradingPanel.css
