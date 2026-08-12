@@ -31,6 +31,10 @@ class BriefingHighlight(BaseModel):
     content_preview: str
     message_type: str
     timestamp: datetime
+    # WHY: home_activity.py reuses the unanswered-question heuristic and
+    # must navigate to the branch a question lives in. Optional so callers
+    # whose rows carry no thread_id (older fixtures) stay valid.
+    thread_id: Optional[UUID] = None
 
 
 class BriefingResponse(BaseModel):
@@ -54,12 +58,15 @@ def _speaker_key(row) -> str:
     return str(row['user_id']) if row['user_id'] else row['speaker_type']
 
 
-def _unanswered_questions(message_rows) -> List[BriefingHighlight]:
+def unanswered_questions(message_rows) -> List[BriefingHighlight]:
     """Questions with no later reply from a different speaker.
 
     ARCHITECTURE: Heuristic mirror of analyzer._compute_question_resolution —
     a question counts as answered if ANY later message in the window comes
-    from a different speaker.
+    from a different speaker. THE one question-resolution definition:
+    home_activity.py imports this rather than forking a second one, so the
+    brief and the Home pulse can never disagree about what is open.
+    Callers pass rows in CHRONOLOGICAL order.
     TRADEOFF: Over-counts "unanswered" for questions answered after the
     window; a brief that nudges is the safe direction to be wrong in.
     """
@@ -73,11 +80,16 @@ def _unanswered_questions(message_rows) -> List[BriefingHighlight]:
             for r in message_rows[idx + 1:]
         )
         if not answered:
+            try:
+                thread_id = q['thread_id']
+            except KeyError:
+                thread_id = None
             unanswered.append(BriefingHighlight(
                 speaker=q['sender_name'],
                 content_preview=q['content'][:200],
                 message_type='question',
                 timestamp=q['created_at'],
+                thread_id=thread_id,
             ))
     return unanswered
 
@@ -205,7 +217,7 @@ async def build_briefing(
     # Deterministic content sections
     commitments_due = await _commitments_due(db, room_id)
     thesis_staleness = await _thesis_staleness(db, room_id, now)
-    unanswered = _unanswered_questions(message_rows)
+    unanswered = unanswered_questions(message_rows)
 
     # Generate LLM summary if there are messages to summarize
     summary = "Nothing happened while you were away."
