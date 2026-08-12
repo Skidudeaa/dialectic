@@ -18,6 +18,8 @@ remain separate upgrades.
   history.
 - Frontend build passed, but lint rejected a ref assignment during render.
 - systemd ignored both start-limit keys because they were under `[Service]`.
+- The tracked unit still referenced the retired `/root/tradingDesk` checkout and
+  a public bind, while the live unit uses this monorepo and loopback.
 
 ## Design
 
@@ -72,8 +74,9 @@ Update `switchRoomRef.current` in a `useEffect` keyed by `switchRoom`; callers
 continue using the stable ref and room-switch behavior is unchanged.
 
 Move `StartLimitIntervalSec` and `StartLimitBurst` to `[Unit]` in the canonical
-unit, validate it, install the exact file, reload systemd, and restart only as
-part of token activation.
+unit. Normalize its paths and bind address to the already-live
+`/root/DwoodAmo/trading` and `127.0.0.1` values, validate it, install the exact
+file, reload systemd, and restart only as part of token activation.
 
 ## Deployment
 

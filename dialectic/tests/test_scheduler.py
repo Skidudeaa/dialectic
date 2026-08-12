@@ -5,6 +5,7 @@ import os
 
 import pytest
 
+import scheduler as scheduler_mod
 from scheduler import Job, Scheduler, SchedulerContext, bucket_for
 
 
@@ -65,6 +66,37 @@ class FakeConn:
         self.updates.append(args)
 
 
+class ReleasedConn(FakeConn):
+    """Connection proxy invalidated by a database restart."""
+
+    async def fetchval(self, query: str, *args: object) -> object:
+        if "INSERT INTO scheduled_job_runs" in query:
+            raise RuntimeError("connection has been released back to the pool")
+        return await super().fetchval(query, *args)
+
+
+class AcquireContext:
+    def __init__(self, conn: FakeConn):
+        self.conn = conn
+
+    async def __aenter__(self) -> FakeConn:
+        return self.conn
+
+    async def __aexit__(self, *_args: object) -> bool:
+        return False
+
+
+class SequentialPool:
+    def __init__(self, connections: list[FakeConn]):
+        self.connections = connections
+        self.acquire_count = 0
+
+    def acquire(self) -> AcquireContext:
+        conn = self.connections[self.acquire_count]
+        self.acquire_count += 1
+        return AcquireContext(conn)
+
+
 class TestTickIdempotency:
     @pytest.mark.asyncio
     async def test_job_runs_once_per_bucket(self):
@@ -110,3 +142,36 @@ class TestTickIdempotency:
         await sched._tick(conn)
         assert runs == []
         assert conn.ledger == {}
+
+
+class TestSchedulerRecovery:
+    @pytest.mark.asyncio
+    async def test_reacquires_after_ledger_connection_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        healthy_conn = FakeConn()
+        pool = SequentialPool([ReleasedConn(), healthy_conn])
+        runs: list[int] = []
+
+        async def job_fn(_ctx: SchedulerContext) -> dict[str, bool]:
+            runs.append(1)
+            return {"ok": True}
+
+        async def fake_sleep(delay: float) -> None:
+            if delay == 60:
+                return
+            raise asyncio.CancelledError
+
+        monkeypatch.setenv("SCHEDULER_ENABLED", "1")
+        monkeypatch.setattr(scheduler_mod.asyncio, "sleep", fake_sleep)
+
+        sched = Scheduler(SchedulerContext(pool=pool))
+        sched.register(Job("recoverable", 60, job_fn))
+
+        with pytest.raises(asyncio.CancelledError):
+            await sched.run()
+
+        assert pool.acquire_count == 2
+        assert runs == [1]
+        assert len(healthy_conn.updates) == 1

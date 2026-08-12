@@ -251,7 +251,9 @@ function ChatLayout() {
       window.alert(error instanceof Error ? error.message : 'Could not open that room')
     }
   }, [rooms, currentRoom?.id, setRoom, setThreads, setThread])
-  switchRoomRef.current = (roomId: string) => { void switchRoom(roomId) }
+  useEffect(() => {
+    switchRoomRef.current = (roomId: string) => { void switchRoom(roomId) }
+  }, [switchRoom])
 
   // Jumping to a search hit. Done entirely in this handler rather than through
   // an effect so the whole sequence stays in one place.

@@ -79,6 +79,8 @@ Vite, ESLint, systemd, nginx.
 
 - [ ] Add the two start-limit keys under `[Unit]` and remove them from
   `[Service]`.
+- [ ] Match the live monorepo paths and loopback bind; do not reinstall the
+  retired `/root/tradingDesk` or public-bind values from the tracked drift.
 - [ ] Run `systemd-analyze verify` against the canonical file.
 - [ ] Confirm the warning is gone before installation.
 

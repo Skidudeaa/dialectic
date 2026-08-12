@@ -1,15 +1,18 @@
 [Unit]
 Description=tradingDesk backend (FastAPI + uvicorn)
-Documentation=file:///root/tradingDesk/CLAUDE.md
+Documentation=file:///root/DwoodAmo/trading/CLAUDE.md
 After=network-online.target
 Wants=network-online.target
+# Leave a crash breadcrumb if the loop flaps
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/tradingDesk
-EnvironmentFile=/root/tradingDesk/.env
-ExecStart=/root/tradingDesk/venv/bin/uvicorn web.main:app --host 0.0.0.0 --port 8006
+WorkingDirectory=/root/DwoodAmo/trading
+EnvironmentFile=/root/DwoodAmo/trading/.env
+ExecStart=/root/DwoodAmo/trading/venv/bin/uvicorn web.main:app --host 127.0.0.1 --port 8006
 # Restart on crash AND on kill; 5s backoff to avoid tight loops on broken configs
 Restart=always
 RestartSec=5
@@ -19,9 +22,6 @@ TimeoutStopSec=15
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=tradingdesk
-# Leave a crash breadcrumb if the loop flaps
-StartLimitIntervalSec=300
-StartLimitBurst=5
 
 [Install]
 WantedBy=multi-user.target

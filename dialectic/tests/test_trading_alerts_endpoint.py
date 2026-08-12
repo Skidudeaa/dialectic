@@ -181,3 +181,71 @@ class TestHealthEndpoint:
         assert body["status"] == "degraded"
         assert body["checks"]["db"] == "down"
         assert "connection refused" in body["checks"].get("db_error", "")
+
+    @pytest.mark.parametrize(
+        ("heartbeat_age", "expected_code", "expected_state"),
+        [
+            (60.0, 200, "fresh"),
+            (1201.0, 503, "stale"),
+            (None, 503, "missing"),
+        ],
+    )
+    def test_health_reports_scheduler_freshness(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        heartbeat_age: float | None,
+        expected_code: int,
+        expected_state: str,
+    ) -> None:
+        class _FakeConn:
+            async def fetchval(self, query: str, *_args: object) -> float | int | None:
+                if query == "SELECT 1":
+                    return 1
+                if "scheduled_job_runs" in query:
+                    return heartbeat_age
+                raise AssertionError(f"Unexpected health query: {query}")
+
+        class _AcquireCtx:
+            async def __aenter__(self) -> _FakeConn:
+                return _FakeConn()
+
+            async def __aexit__(self, *_args: object) -> bool:
+                return False
+
+        class _FakePool:
+            def acquire(self) -> _AcquireCtx:
+                return _AcquireCtx()
+
+        monkeypatch.setenv("SCHEDULER_ENABLED", "1")
+        with patch.object(main_mod, "db_pool", _FakePool()):
+            resp = TestClient(main_mod.app).get("/health")
+
+        assert resp.status_code == expected_code
+        assert resp.json()["checks"]["scheduler"] == expected_state
+
+    def test_health_reports_explicitly_disabled_scheduler(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        class _FakeConn:
+            async def fetchval(self, query: str, *_args: object) -> int:
+                assert query == "SELECT 1"
+                return 1
+
+        class _AcquireCtx:
+            async def __aenter__(self) -> _FakeConn:
+                return _FakeConn()
+
+            async def __aexit__(self, *_args: object) -> bool:
+                return False
+
+        class _FakePool:
+            def acquire(self) -> _AcquireCtx:
+                return _AcquireCtx()
+
+        monkeypatch.setenv("SCHEDULER_ENABLED", "0")
+        with patch.object(main_mod, "db_pool", _FakePool()):
+            resp = TestClient(main_mod.app).get("/health")
+
+        assert resp.status_code == 200
+        assert resp.json()["checks"]["scheduler"] == "disabled"

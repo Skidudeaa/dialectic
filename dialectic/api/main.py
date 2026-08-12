@@ -101,6 +101,7 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql://localhost/dialectic"
 )
+SCHEDULER_HEARTBEAT_MAX_AGE_SECONDS = 1200
 
 db_pool: Optional[asyncpg.Pool] = None
 
@@ -1955,24 +1956,57 @@ async def health():
     """
     Health check with database connectivity verification.
 
-    CONTRACT: 200 + status="ok" means the DB pool is initialised and a
-    SELECT 1 succeeded. 503 + status="degraded" means either no pool exists
-    or SELECT 1 failed. Load balancers should route 503s away.
+    CONTRACT: 200 + status="ok" means the DB and enabled scheduler are fresh.
+    503 + status="degraded" means a required dependency is unavailable or the
+    scheduler heartbeat is missing/stale. Load balancers should route 503s away.
     """
     status = {"status": "ok", "checks": {}}
+    scheduler_enabled = os.environ.get("SCHEDULER_ENABLED", "1").strip().lower()
+    scheduler_enabled = scheduler_enabled not in ("0", "false", "no", "off")
+
+    if not scheduler_enabled:
+        status["checks"]["scheduler"] = "disabled"
 
     if db_pool is None:
         status["status"] = "degraded"
         status["checks"]["db"] = "down"
+        if scheduler_enabled:
+            status["checks"]["scheduler"] = "unknown"
     else:
         try:
             async with db_pool.acquire() as conn:
                 await conn.fetchval("SELECT 1")
-            status["checks"]["db"] = "connected"
+                status["checks"]["db"] = "connected"
+                if scheduler_enabled:
+                    try:
+                        heartbeat_age = await conn.fetchval(
+                            """SELECT EXTRACT(EPOCH FROM (now() - MAX(finished_at)))
+                               FROM scheduled_job_runs
+                               WHERE job_name = 'scheduler_heartbeat'
+                                 AND status = 'success'"""
+                        )
+                    except Exception:
+                        logger.exception("Scheduler heartbeat health query failed")
+                        status["status"] = "degraded"
+                        status["checks"]["scheduler"] = "unavailable"
+                    else:
+                        if heartbeat_age is None:
+                            status["status"] = "degraded"
+                            status["checks"]["scheduler"] = "missing"
+                        else:
+                            age_seconds = max(0, int(float(heartbeat_age)))
+                            status["checks"]["scheduler_age_seconds"] = age_seconds
+                            if age_seconds > SCHEDULER_HEARTBEAT_MAX_AGE_SECONDS:
+                                status["status"] = "degraded"
+                                status["checks"]["scheduler"] = "stale"
+                            else:
+                                status["checks"]["scheduler"] = "fresh"
         except Exception as e:
             status["status"] = "degraded"
             status["checks"]["db"] = "down"
             status["checks"]["db_error"] = str(e)
+            if scheduler_enabled:
+                status["checks"]["scheduler"] = "unknown"
 
     # Redis health check (informational — does not gate "ok" status)
     from transport.redis_manager import RedisConnectionManager

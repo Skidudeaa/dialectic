@@ -31,7 +31,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
@@ -166,7 +166,7 @@ class Scheduler:
                 logger.exception("Scheduler loop error; restarting in 60s")
                 await asyncio.sleep(60)
 
-    async def _tick(self, conn) -> None:
+    async def _tick(self, conn: Any) -> None:
         for job in self.jobs:
             if not job.enabled():
                 continue
@@ -177,17 +177,15 @@ class Scheduler:
                 bucket = slot
             else:
                 bucket = bucket_for(job.interval_s)
-            try:
-                won = await conn.fetchval(
-                    """INSERT INTO scheduled_job_runs (job_name, scheduled_for)
-                       VALUES ($1, $2)
-                       ON CONFLICT (job_name, scheduled_for) DO NOTHING
-                       RETURNING id""",
-                    job.name, bucket,
-                )
-            except Exception:
-                logger.exception("Ledger insert failed for %s", job.name)
-                continue
+            # Ledger I/O uses the scheduler's held connection. A failure here
+            # means run() must release that proxy and acquire a fresh one.
+            won = await conn.fetchval(
+                """INSERT INTO scheduled_job_runs (job_name, scheduled_for)
+                   VALUES ($1, $2)
+                   ON CONFLICT (job_name, scheduled_for) DO NOTHING
+                   RETURNING id""",
+                job.name, bucket,
+            )
             if won is None:
                 continue  # this bucket already ran (or is running) somewhere
 
@@ -197,12 +195,9 @@ class Scheduler:
             except Exception as e:
                 logger.exception("Job %s failed", job.name)
                 status, detail = "error", {"error": str(e)[:500]}
-            try:
-                await conn.execute(
-                    """UPDATE scheduled_job_runs
-                       SET finished_at = now(), status = $2, detail = $3
-                       WHERE id = $1""",
-                    won, status, detail,
-                )
-            except Exception:
-                logger.exception("Ledger update failed for %s", job.name)
+            await conn.execute(
+                """UPDATE scheduled_job_runs
+                   SET finished_at = now(), status = $2, detail = $3
+                   WHERE id = $1""",
+                won, status, detail,
+            )
