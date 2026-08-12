@@ -1015,7 +1015,7 @@ git commit -m "feat: share Home pulse with Claude -- mark unavailable context"
 - Consumes: `GET /users/me/rooms`, existing room tokens, `GET /rooms/{id}/threads`, Zustand room actions, and the shipped `mobileDrawer` state.
 - Produces: `navigate(destination: RoomDestination, historyMode?: HistoryMode) -> Promise<boolean>` and one shared Create/Join surface.
 
-- [ ] **Step 1: Add exact frontend navigation types and API calls**
+- [x] **Step 1: Add exact frontend navigation types and API calls**
 
 ```typescript
 export interface UserRoom {
@@ -1041,7 +1041,7 @@ Type `api.getRooms(): Promise<UserRoom[]>` and
 `api.getThreads(roomId): Promise<Thread[]>`. Keep room tokens confined to the
 saved-room result and request header path.
 
-- [ ] **Step 2: Implement URL parsing and formatting as pure functions**
+- [x] **Step 2: Implement URL parsing and formatting as pure functions**
 
 In `useRoomNavigation.ts`:
 
@@ -1073,7 +1073,7 @@ A null `roomId` is not an error: it is the canonical Home-root destination and
 resolves to the one `is_home` descriptor after saved rooms have loaded. A
 non-null unknown room is not classified as denied until that load has completed.
 
-- [ ] **Step 3: Implement the single navigation transaction**
+- [x] **Step 3: Implement the single navigation transaction**
 
 The hook owns `rooms`, `loading`, `error`, `refreshRooms`, and `navigate`. Use a
 monotonic attempt ref so a slower earlier fetch cannot overwrite a later tap.
@@ -1122,7 +1122,7 @@ and the granted token, then calls the same `navigate` transaction. This
 preserves guest invite/create without giving the navigation hook an alternate
 state-installation path.
 
-- [ ] **Step 4: Centralize initial, notification, and popstate entry**
+- [x] **Step 4: Centralize initial, notification, and popstate entry**
 
 After the saved-room list loads:
 
@@ -1169,7 +1169,7 @@ Convert every existing competing state writer as part of this step:
   through `navigate`; no component calls `setRoom`, `setThread`, or `leaveRoom`
   to express a destination.
 
-- [ ] **Step 5: Extract one Create/Join surface**
+- [x] **Step 5: Extract one Create/Join surface**
 
 Move the existing create and invite-code join forms into `RoomAccess.tsx` with:
 
@@ -1193,14 +1193,14 @@ Zustand room/thread state inside the form.
 opens `mode="dialog"` from the rail `+` action without calling `leaveRoom()`.
 Retain the existing full-screen selector for no-Home/no-room recovery.
 
-- [ ] **Step 6: Fold drawer close into navigation**
+- [x] **Step 6: Fold drawer close into navigation**
 
 Remove only the `currentRoomId` close effect from `AppLayout.tsx`. Keep its
 Escape listener and scrim unchanged. The hook's successful destination path is
 now the sole destination-driven drawer close, including branch changes within
 the same room.
 
-- [ ] **Step 7: Run compile and lint**
+- [x] **Step 7: Run compile and lint**
 
 Run: `cd dialectic/frontend/app && npm run build`
 
@@ -1222,7 +1222,7 @@ Review every match. Destination changes may remain only in
 `useRoomNavigation`; socket state hydration may add thread records but may not
 select a destination. Store action definitions are not call sites.
 
-- [ ] **Step 8: Commit navigation consolidation**
+- [x] **Step 8: Commit navigation consolidation**
 
 ```bash
 git add dialectic/frontend/app/src/hooks/useRoomNavigation.ts dialectic/frontend/app/src/components/auth/RoomAccess.tsx dialectic/frontend/app/src/components/auth/RoomAccess.css dialectic/frontend/app/src/types/index.ts dialectic/frontend/app/src/lib/api.ts dialectic/frontend/app/src/components/auth/RoomSelector.tsx dialectic/frontend/app/src/App.tsx dialectic/frontend/app/src/hooks/useDialecticSocket.ts dialectic/frontend/app/src/components/layout/AppLayout.tsx
