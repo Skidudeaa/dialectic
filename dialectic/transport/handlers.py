@@ -2226,7 +2226,7 @@ class MessageHandler:
                        ARRAY['commitment_proposals', $2::text, 'accepted'],
                        'true'::jsonb)
                    WHERE id = $1
-                     AND metadata->'commitment_proposals'->$3 IS NOT NULL""",
+                     AND metadata->'commitment_proposals'->$3::int IS NOT NULL""",
                 source_message_id, str(proposal_index), proposal_index,
             )
             row = await self.db.fetchrow(
