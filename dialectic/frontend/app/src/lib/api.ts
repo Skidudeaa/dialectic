@@ -1,9 +1,18 @@
-import type { Attachment } from '../types/index.ts';
+import type { Attachment, Memory } from '../types/index.ts';
 
 const BASE = '';  // Same origin via Vite proxy
 
 /** Message ids per attachment-list request — see listAttachments. */
 const ATTACHMENT_QUERY_BATCH = 100;
+
+interface MemoryPromotionResponse {
+  memory_id: string;
+  promoted: boolean;
+}
+
+interface MemoryPromotionListResponse {
+  memory_ids: string[];
+}
 
 /**
  * WHY a typed error: callers deciding between "this token is dead, leave the
@@ -71,7 +80,23 @@ class DialecticAPI {
   async joinRoom(roomId: string, userId: string) { return this.fetch(`/rooms/${roomId}/join`, { method: 'POST', body: JSON.stringify({ user_id: userId }) }); }
   async getThreads(roomId: string) { return this.fetch(`/rooms/${roomId}/threads`); }
   async getMessages(threadId: string, limit = 50) { return this.fetch(`/threads/${threadId}/messages?limit=${limit}`); }
-  async getMemories(roomId: string) { return this.fetch(`/rooms/${roomId}/memories`); }
+  async getMemories(roomId: string): Promise<Memory[]> {
+    const [memories, promotions] = await Promise.all([
+      this.fetch<Omit<Memory, 'personally_promoted'>[]>(`/rooms/${roomId}/memories`),
+      this.fetch<MemoryPromotionListResponse>(`/rooms/${roomId}/memory-promotions`),
+    ]);
+    const promotedIds = new Set(promotions.memory_ids);
+    return memories.map((memory) => ({
+      ...memory,
+      personally_promoted: promotedIds.has(memory.id),
+    }));
+  }
+  async promoteMemory(memoryId: string): Promise<MemoryPromotionResponse> {
+    return this.fetch(`/memories/${memoryId}/promotion`, { method: 'PUT' });
+  }
+  async demoteMemory(memoryId: string): Promise<MemoryPromotionResponse> {
+    return this.fetch(`/memories/${memoryId}/promotion`, { method: 'DELETE' });
+  }
   async getPresence(roomId: string) { return this.fetch(`/rooms/${roomId}/presence`); }
   async getSettings(roomId: string) { return this.fetch(`/rooms/${roomId}/settings`); }
   async getRooms() { return this.fetch('/users/me/rooms'); }

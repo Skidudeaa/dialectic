@@ -13,9 +13,9 @@ from uuid import UUID, uuid4
 import logging
 
 from models import (
-    Memory, MemoryScope, MemoryStatus, MemoryReference,
+    Memory, MemoryReference,
     UserMemoryCollection, CollectionMembership, CrossRoomMemoryResult,
-    Event, EventType, MemoryPromotedPayload, MemoryReferencedPayload
+    EventType, MemoryReferencedPayload
 )
 from .embeddings import EmbeddingProvider, get_embedding_provider
 from .vector_store import VectorStore
@@ -101,7 +101,14 @@ class CrossSessionMemoryManager:
           AND m.status = 'active'
           AND m.embedding IS NOT NULL
           AND ($4 OR m.room_id != $3)  -- Optionally exclude current room
-          AND (NOT $6::boolean OR m.scope = 'global')
+          AND (
+              NOT $6::boolean
+              OR EXISTS (
+                  SELECT 1
+                  FROM user_memory_promotions ump
+                  WHERE ump.memory_id = m.id AND ump.user_id = $1
+              )
+          )
         ORDER BY similarity DESC
         LIMIT $5
         """
@@ -180,7 +187,7 @@ class CrossSessionMemoryManager:
         ]
 
     # ================================================================
-    # MEMORY PROMOTION (Room -> Global)
+    # PERSONAL CROSS-ROOM PROMOTION
     # ================================================================
 
     async def promote_memory_to_global(
@@ -189,43 +196,53 @@ class CrossSessionMemoryManager:
         user_id: UUID,
     ) -> Memory:
         """
-        Promote a room-scoped memory to global scope.
-        The memory becomes accessible in all rooms the user participates in.
-        """
-        now = datetime.now(timezone.utc)
+        Grant one member cross-room recall of a shared active memory.
 
-        # Update the memory
+        The authorization, grant, and lifecycle event are one SQL statement so
+        a failed event append cannot leave an unrecorded visibility change.
+        """
         row = await self.db.fetchrow(
             """
-            UPDATE memories
-            SET scope = 'global',
-                promoted_to_global_at = $1,
-                promoted_by_user_id = $2,
-                updated_at = $1
-            WHERE id = $3
-            RETURNING *
+            WITH authorized_memory AS (
+                SELECT m.*
+                FROM memories m
+                JOIN room_memberships rm
+                  ON rm.room_id = m.room_id AND rm.user_id = $2
+                WHERE m.id = $1 AND m.status = 'active'
+            ), inserted_promotion AS (
+                INSERT INTO user_memory_promotions (memory_id, user_id)
+                SELECT id, $2 FROM authorized_memory
+                ON CONFLICT (memory_id, user_id) DO NOTHING
+                RETURNING memory_id
+            ), inserted_event AS (
+                INSERT INTO events (
+                    id, timestamp, event_type, room_id, user_id, payload
+                )
+                SELECT
+                    gen_random_uuid(),
+                    NOW(),
+                    'memory_promoted',
+                    room_id,
+                    $2,
+                    jsonb_build_object(
+                        'memory_id', id,
+                        'original_room_id', room_id,
+                        'promoted_by_user_id', $2
+                    )
+                FROM authorized_memory
+                WHERE EXISTS (SELECT 1 FROM inserted_promotion)
+            )
+            SELECT * FROM authorized_memory
             """,
-            now, user_id, memory_id
+            memory_id,
+            user_id,
         )
 
         if not row:
-            raise ValueError(f"Memory {memory_id} not found")
+            raise ValueError("Memory not found or inaccessible")
 
         memory = Memory(**dict(row))
-
-        # Record event
-        await self._record_event(
-            EventType.MEMORY_PROMOTED,
-            room_id=memory.room_id,
-            user_id=user_id,
-            payload=MemoryPromotedPayload(
-                memory_id=memory_id,
-                original_room_id=memory.room_id,
-                promoted_by_user_id=user_id
-            ).model_dump()
-        )
-
-        logger.info(f"Memory {memory_id} promoted to global by user {user_id}")
+        logger.info("Memory %s personally promoted by user %s", memory_id, user_id)
         return memory
 
     async def demote_memory_from_global(
@@ -233,26 +250,71 @@ class CrossSessionMemoryManager:
         memory_id: UUID,
         user_id: UUID,
     ) -> Memory:
-        """Demote a global memory back to room scope."""
-        now = datetime.now(timezone.utc)
-
+        """Remove only the requesting member's cross-room recall grant."""
         row = await self.db.fetchrow(
             """
-            UPDATE memories
-            SET scope = 'room',
-                promoted_to_global_at = NULL,
-                promoted_by_user_id = NULL,
-                updated_at = $1
-            WHERE id = $2
-            RETURNING *
+            WITH authorized_memory AS (
+                SELECT m.*
+                FROM memories m
+                JOIN room_memberships rm
+                  ON rm.room_id = m.room_id AND rm.user_id = $2
+                WHERE m.id = $1 AND m.status = 'active'
+            ), deleted_promotion AS (
+                DELETE FROM user_memory_promotions ump
+                USING authorized_memory m
+                WHERE ump.memory_id = m.id AND ump.user_id = $2
+                RETURNING ump.memory_id
+            ), inserted_event AS (
+                INSERT INTO events (
+                    id, timestamp, event_type, room_id, user_id, payload
+                )
+                SELECT
+                    gen_random_uuid(),
+                    NOW(),
+                    'memory_demoted',
+                    room_id,
+                    $2,
+                    jsonb_build_object(
+                        'memory_id', id,
+                        'original_room_id', room_id,
+                        'demoted_by_user_id', $2
+                    )
+                FROM authorized_memory
+                WHERE EXISTS (SELECT 1 FROM deleted_promotion)
+            )
+            SELECT * FROM authorized_memory
             """,
-            now, memory_id
+            memory_id,
+            user_id,
         )
 
         if not row:
-            raise ValueError(f"Memory {memory_id} not found")
+            raise ValueError("Memory not found or inaccessible")
 
         return Memory(**dict(row))
+
+    async def get_user_promoted_memory_ids(
+        self,
+        room_id: UUID,
+        user_id: UUID,
+    ) -> List[UUID]:
+        """Return the caller's active personal promotions in one source room."""
+        rows = await self.db.fetch(
+            """
+            SELECT ump.memory_id
+            FROM user_memory_promotions ump
+            JOIN memories m ON m.id = ump.memory_id
+            JOIN room_memberships rm
+              ON rm.room_id = m.room_id AND rm.user_id = $2
+            WHERE m.room_id = $1
+              AND m.status = 'active'
+              AND ump.user_id = $2
+            ORDER BY ump.promoted_at DESC
+            """,
+            room_id,
+            user_id,
+        )
+        return [row['memory_id'] for row in rows]
 
     # ================================================================
     # MEMORY REFERENCES (Citations)
@@ -468,10 +530,13 @@ class CrossSessionMemoryManager:
             SELECT DISTINCT m.* FROM memories m
             JOIN collection_memories cm ON m.id = cm.memory_id
             JOIN user_memory_collections c ON cm.collection_id = c.id
+            JOIN user_memory_promotions ump
+              ON ump.memory_id = m.id AND ump.user_id = $1
+            JOIN room_memberships rm
+              ON rm.room_id = m.room_id AND rm.user_id = $1
             WHERE c.user_id = $1 
               AND c.auto_inject = true
               AND m.status = 'active'
-              AND m.scope = 'global'
             ORDER BY m.updated_at DESC
             """,
             user_id
@@ -488,7 +553,7 @@ class CrossSessionMemoryManager:
         room_id: Optional[UUID] = None,
         thread_id: Optional[UUID] = None,
         user_id: Optional[UUID] = None,
-        payload: dict = None,
+        payload: Optional[dict] = None,
     ) -> None:
         """Record an event in the event log."""
         now = datetime.now(timezone.utc)

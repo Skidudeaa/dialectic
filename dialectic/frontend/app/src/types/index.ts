@@ -137,6 +137,7 @@ export interface Memory {
   scope: 'room' | 'user' | 'global' | 'llm';
   version: number;
   status: 'active' | 'invalidated';
+  personally_promoted: boolean;
 }
 
 export interface ConversationDNA {

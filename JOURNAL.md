@@ -11,3 +11,6 @@
 [2026-08-11] token rotation guard rolled back two incomplete activations — the five-thesis first tick needs more than 30 seconds and Cloudflare returns 403 to urllib while curl succeeds
 [2026-08-11] rotated all five published room tokens and activated the corrected tradingDesk unit — old tokens are 401, new tokens are 200, env/database/process match 5/5, and local/public readiness pass
 [2026-08-11] deployed scheduler recovery and the lint-clean frontend — health reports a fresh heartbeat, the ledger advances, and the served versioned asset digest matches the committed build
+[2026-08-11] selected personal cross-room memory promotion — store per-user grants without mutating shared memory scope so one collaborator cannot alter another's LLM context
+[2026-08-11] planned personal promotion as four isolated implementation units plus verification — schema, manager recall, authenticated REST, and minimal PWA controls remain separately reviewable while activation stays deferred
+[2026-08-11] implemented personal cross-room promotion behind an unapplied migration — atomic membership-fenced grants and events isolate each collaborator; the PWA applies confirmed REST state because its generic refresh helper intentionally swallows refresh errors

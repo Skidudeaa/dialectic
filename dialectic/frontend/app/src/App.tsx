@@ -68,6 +68,7 @@ function ChatLayout() {
   const setThread = useAppStore((s) => s.setThread)
   const setThreads = useAppStore((s) => s.setThreads)
   const setMessages = useAppStore((s) => s.setMessages)
+  const setMemories = useAppStore((s) => s.setMemories)
   const leaveRoom = useAppStore((s) => s.leaveRoom)
   const logout = useAppStore((s) => s.logout)
   const setTradingConfig = useAppStore((s) => s.setTradingConfig)
@@ -510,6 +511,16 @@ function ChatLayout() {
             onForkThread={forkLatest}
             onAddMemory={(key, content) => {
               if (!send('add_memory', { key, content })) window.alert('Reconnect before adding memory.')
+            }}
+            onSetMemoryPromotion={async (memoryId, promoted) => {
+              const result = promoted
+                ? await api.promoteMemory(memoryId)
+                : await api.demoteMemory(memoryId)
+              setMemories(memories.map((memory) => (
+                memory.id === result.memory_id
+                  ? { ...memory, personally_promoted: result.promoted }
+                  : memory
+              )))
             }}
             roomId={currentRoom.id}
             roomToken={roomToken}
