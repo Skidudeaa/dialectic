@@ -36,6 +36,19 @@ export interface MessageMetadata {
   };
   /** A draft_prediction awaiting (or granted) the human Accept tap. */
   proposal?: PredictionProposal;
+  /** A propose_thesis card — its tap opens the Create Thesis panel. */
+  thesis_proposal?: ThesisProposal;
+}
+
+/**
+ * Claude's proposal that the conversation becomes a tracked thesis.
+ * Nothing exists yet: the card seeds the Create Thesis form, where the
+ * cascade is drafted, reviewed, and — only on the human's tap — created.
+ */
+export interface ThesisProposal {
+  title: string;
+  claim: string;
+  monthly_budget?: number;
 }
 
 /**

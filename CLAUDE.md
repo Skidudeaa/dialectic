@@ -53,8 +53,8 @@ uvicorn web.main:app --port 8006                     # see trading/README.md
 - **Event sourcing**: append-only `events` table is the source of truth;
   everything else is derivable.
 - **The LLM participant**: `llm/orchestrator.py` (three paths — @Claude
-  streaming, heuristic non-streaming, forced) → `llm/tool_loop.py` over an
-  11-tool registry (`llm/tools.py`; provoker/protocol/annotator never get
+  streaming, heuristic non-streaming, forced) → `llm/tool_loop.py` over a
+  12-tool registry (`llm/tools.py`; provoker/protocol/annotator never get
   tools) → `llm/self_model.py` decision log + `llm/participation_fsm.py`
   conversation state machine with confidence tiers.
 - **The clock**: `dialectic/scheduler.py` — advisory-locked asyncio jobs on the

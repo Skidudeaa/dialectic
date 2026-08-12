@@ -1,4 +1,3 @@
-import { useState, useMemo } from 'react'
 import type { Memory, Thread } from '../../types'
 import { useAppStore } from '../../stores/appStore.ts'
 import { MemoryPanel } from './MemoryPanel'
@@ -62,15 +61,15 @@ export function RightPanel({
   onUpdateConfidence,
   onResolveCommitment,
 }: RightPanelProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('memory')
-  const tradingConfig = useAppStore((s) => s.tradingConfig)
+  // WHY the tab lives in the store: a chat card (propose_thesis) has to be
+  // able to open the Trading tab from outside this component.
+  const activeTab = useAppStore((s) => s.rightPanelTab) as TabId
+  const setActiveTab = useAppStore((s) => s.setRightPanelTab)
 
-  const tabs = useMemo(() => {
-    if (tradingConfig) {
-      return [...BASE_TABS, { id: 'trading' as TabId, label: 'Trading' }]
-    }
-    return BASE_TABS
-  }, [tradingConfig])
+  // WHY Trading is unconditional: it used to appear only once a snapshot
+  // existed, which made the Create Thesis flow unreachable in exactly the
+  // rooms that needed it — the panel's empty state IS the create surface.
+  const tabs = [...BASE_TABS, { id: 'trading' as TabId, label: 'Trading' }]
 
   return (
     <>

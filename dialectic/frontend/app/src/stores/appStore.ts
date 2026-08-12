@@ -73,6 +73,10 @@ interface AppState {
 
   // Trading
   tradingConfig: TradingSnapshot | null;
+  /** Right-panel tab, lifted here so a chat card can open a specific tab. */
+  rightPanelTab: string;
+  /** A propose_thesis card's payload, consumed by the Create Thesis form. */
+  thesisSeed: { title: string; claim: string; monthlyBudget: number } | null;
 
   // Actions
   setUser: (user: User, accessToken: string, refreshToken?: string) => void;
@@ -103,6 +107,8 @@ interface AppState {
   setSurfacedCommitments: (commitments: Commitment[]) => void;
   setActiveCommitments: (commitments: Commitment[]) => void;
   setTradingConfig: (config: TradingSnapshot | null) => void;
+  setRightPanelTab: (tab: string) => void;
+  setThesisSeed: (seed: { title: string; claim: string; monthlyBudget: number } | null) => void;
   logout: (reason?: string) => void;
   leaveRoom: () => void;
 }
@@ -126,6 +132,8 @@ const initialRoomState = {
   activeCommitments: [],
   surfacedCommitments: [],
   tradingConfig: null,
+  rightPanelTab: 'memory',
+  thesisSeed: null,
   roomToken: null,
 }
 
@@ -177,6 +185,8 @@ export const useAppStore = create<AppState>()(
           activeCommitments: [],
           surfacedCommitments: [],
           tradingConfig: null,
+          rightPanelTab: 'memory',
+          thesisSeed: null,
         })
       },
 
@@ -307,6 +317,10 @@ export const useAppStore = create<AppState>()(
         set({ activeCommitments: commitments }),
 
       setTradingConfig: (config) => set({ tradingConfig: config }),
+
+      setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
+
+      setThesisSeed: (seed) => set({ thesisSeed: seed }),
 
       logout: (reason) => {
         revokeAttachmentUrls()

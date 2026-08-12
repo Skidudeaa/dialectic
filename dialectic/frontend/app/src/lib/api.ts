@@ -298,6 +298,15 @@ class DialecticAPI {
     });
   }
 
+  /**
+   * Retire the room's thesis. The book survives on the desk as history —
+   * only the binding and the push path die, and the room can birth a
+   * successor.
+   */
+  async retireThesis(roomId: string): Promise<{ retired_book_id: string }> {
+    return this.fetch(`/rooms/${roomId}/trading/thesis`, { method: 'DELETE' });
+  }
+
   // Auth (no room token needed)
   // WHY: surfaces the backend's `detail` message (e.g. "Invalid email or password")
   // instead of returning the error body as if it were a TokenResponse — a swallowed

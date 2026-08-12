@@ -59,7 +59,8 @@ silence follow-ups), `DIALECTIC_TOOLS_ENABLED`, `DIALECTIC_VISION_ENABLED`.
 | `llm/silence_sweep.py` | 60s scheduler job: one capped follow-up when a question goes unanswered (10min, 3/day, quiet 23:00–07:00 CT) |
 | `llm/briefing.py` | Shared morning-brief builder (endpoint + night-shift job) |
 | `llm/night_shift.py` | `morning_brief` job registration — posts + pushes per room 07:00 America/Chicago |
-| `llm/tool_loop.py` + `llm/tools.py` | Anthropic tool loop + 11-tool registry (read-only + proposal-shaped `draft_prediction`); wired on streaming AND non-streaming paths (provoker/protocol/annotator never) |
+| `llm/tool_loop.py` + `llm/tools.py` | Anthropic tool loop + 12-tool registry (read-only + proposal-shaped `draft_prediction`/`propose_thesis`); wired on streaming AND non-streaming paths (provoker/protocol/annotator never) |
+| `llm/thesis_drafter.py` | Claude drafts a thesis's causal DAG (builder-format, validated, one retry); consumed by the stateless draft endpoint in `api/thesis_relay.py` |
 | `api/prediction_relay.py` | Human-Accept relay: proposal in message metadata → POST to tradingDesk on the tap |
 | `scheduler.py` | asyncio job scheduler — advisory lock, `scheduled_job_runs` ledger, interval buckets + wall-clock daily slots (`daily_at`/`daily_tz`) |
 | `memory/manager.py` | Three-lane recall (dense + FTS + entity/speaker, RRF-fused) + versioned room memories + write-path dedup |
@@ -82,8 +83,21 @@ Create Thesis form → `POST /rooms/{room_id}/trading/thesis`
 (`api/thesis_relay.py`): registers the room token on td's bridge (runtime
 file, no desk restart), creates the book on td born bound via
 `meta.dialecticRoomId` (named `*-graph` per convention), sets
-`rooms.linked_book_id`, logs `THESIS_CREATED`. The DAG itself is drawn on
-the deep surface — the success state deep-links into td's Builder.
+`rooms.linked_book_id`, logs `THESIS_CREATED`. By default the form first
+calls `POST .../trading/thesis/draft` — Claude drafts the cascade
+(`llm/thesis_drafter.py`), the human reviews it phase-grouped in the
+panel, and Accept carries it through create. The desk adopts the book at
+runtime and runs its first cycle immediately, so the panel fills within
+seconds. Refinement happens on the deep surface — the success state
+deep-links into td's Builder.
+
+**Retiring**: `DELETE /rooms/{room_id}/trading/thesis` — td unbinds first
+(book survives, loses `dialecticRoomId` + push token via
+`POST /api/bridge/room-unbind`), then dialectic clears `linked_book_id` +
+`trading_config`, invalidates the `thesis_state_current` memory, logs
+`THESIS_RETIRED`. The room can birth a successor immediately. Mid-argument,
+the LLM can call `propose_thesis` (proposal-only) — the chat card seeds the
+create form via `metadata.thesis_proposal`.
 
 The thesis state is injected into every LLM system prompt via `_build_trading_context()` in `llm/prompts.py`. The LLM sees: cascade phase, fired/approaching nodes, confluence scores, countdowns, scenario probabilities, and portfolio summary.
 

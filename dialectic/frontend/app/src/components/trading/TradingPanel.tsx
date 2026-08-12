@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import DOMPurify from 'dompurify'
 import { useAppStore } from '../../stores/appStore.ts'
 import { api, ApiError } from '../../lib/api.ts'
@@ -293,6 +293,18 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
   const [draft, setDraft] = useState<ThesisDraft | null>(null)
   const [created, setCreated] = useState<{ bookId: string; title: string } | null>(null)
 
+  // A propose_thesis chat card seeds the form through the store — consume
+  // the seed once so a later card can seed again.
+  const thesisSeed = useAppStore((s) => s.thesisSeed)
+  const setThesisSeed = useAppStore((s) => s.setThesisSeed)
+  useEffect(() => {
+    if (!thesisSeed) return
+    setTitle(thesisSeed.title)
+    setClaim(thesisSeed.claim)
+    setBudget(String(thesisSeed.monthlyBudget))
+    setThesisSeed(null)
+  }, [thesisSeed, setThesisSeed])
+
   const requestBody = () => ({
     title: title.trim(),
     claim: claim.trim(),
@@ -468,6 +480,23 @@ export function TradingPanel() {
   const tradingConfig = useAppStore((s) => s.tradingConfig)
   const accessToken = useAppStore((s) => s.accessToken)
   const currentRoom = useAppStore((s) => s.currentRoom)
+  const setTradingConfig = useAppStore((s) => s.setTradingConfig)
+  const [retireState, setRetireState] =
+    useState<'idle' | 'confirm' | 'retiring' | 'error'>('idle')
+
+  const retire = async () => {
+    if (!currentRoom || retireState === 'retiring') return
+    setRetireState('retiring')
+    try {
+      await api.retireThesis(currentRoom.id)
+      // The panel falls back to the create surface — the room can birth
+      // its successor immediately.
+      setTradingConfig(null)
+      setRetireState('idle')
+    } catch {
+      setRetireState('error')
+    }
+  }
 
   if (!tradingConfig) {
     return (
@@ -502,6 +531,26 @@ export function TradingPanel() {
         {title && <div className="trading-title">{sanitize(title)}</div>}
         {timestamp && <StalenessIndicator timestamp={timestamp} />}
       </div>
+
+      {/* Bound but undrawn — a created thesis whose DAG has no nodes yet */}
+      {(!nodeStates || Object.keys(nodeStates).length === 0) && (
+        <div className="trading-section">
+          <p className="thesis-create-note">
+            The cascade is undrawn — this thesis has no nodes yet. Draw it
+            in the Builder and the panel fills in on the next snapshot.
+          </p>
+          {accessToken && (
+            <a
+              className="trading-footer-link"
+              href={buildTradingDeskUrl(accessToken, currentRoom?.id, '/builder')}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open Thesis Builder →
+            </a>
+          )}
+        </div>
+      )}
 
       {/* Phase badge */}
       {cascadePhase && (
@@ -567,6 +616,55 @@ export function TradingPanel() {
           <span className="trading-footer-link trading-footer-link--inert">
             Open Full Dashboard (tradingDesk)
           </span>
+        )}
+        {/* Retire — two taps on purpose. The book survives on the desk;
+            only the binding and the push path die. */}
+        {currentRoom && (
+          <div className="trading-retire">
+            {retireState === 'idle' && (
+              <button
+                className="thesis-draft-discard"
+                onClick={() => setRetireState('confirm')}
+              >
+                Retire thesis…
+              </button>
+            )}
+            {retireState === 'confirm' && (
+              <>
+                <span className="trading-retire-warning">
+                  Unbind this thesis from the room? The book survives on the
+                  desk; snapshots stop.
+                </span>
+                <div className="thesis-draft-actions">
+                  <button className="thesis-draft-discard" onClick={retire}>
+                    Confirm retire
+                  </button>
+                  <button
+                    className="thesis-draft-discard"
+                    onClick={() => setRetireState('idle')}
+                  >
+                    Keep it
+                  </button>
+                </div>
+              </>
+            )}
+            {retireState === 'retiring' && (
+              <span className="trading-retire-warning">Retiring…</span>
+            )}
+            {retireState === 'error' && (
+              <>
+                <span className="thesis-create-error">
+                  could not retire — try again
+                </span>
+                <button
+                  className="thesis-draft-discard"
+                  onClick={() => setRetireState('idle')}
+                >
+                  Dismiss
+                </button>
+              </>
+            )}
+          </div>
         )}
       </div>
     </div>

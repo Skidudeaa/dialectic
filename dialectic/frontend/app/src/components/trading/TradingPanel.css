@@ -536,3 +536,18 @@
 .thesis-draft-discard:hover:not(:disabled) {
     color: var(--color-bone);
 }
+
+/* Retire — the lifecycle exit, kept quiet until asked for */
+.trading-retire {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    text-align: left;
+}
+
+.trading-retire-warning {
+    font-size: 9px;
+    line-height: 1.4;
+    color: var(--color-warning);
+}

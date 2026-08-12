@@ -175,6 +175,21 @@ export function MessageBubble({
   const proposal = message.metadata?.proposal
   const proposalLogged = Boolean(proposal?.accepted) || acceptState === 'accepted'
 
+  // A proposed thesis, if this turn made one. Nothing exists yet — the tap
+  // seeds the Create Thesis form and opens the Trading tab, where the
+  // cascade is drafted and reviewed before anything is created.
+  const thesisProposal = message.metadata?.thesis_proposal
+  const openThesisCreate = () => {
+    if (!thesisProposal) return
+    const state = useAppStore.getState()
+    state.setThesisSeed({
+      title: thesisProposal.title,
+      claim: thesisProposal.claim,
+      monthlyBudget: thesisProposal.monthly_budget ?? 5000,
+    })
+    state.setRightPanelTab('trading')
+  }
+
   const acceptProposal = async () => {
     if (!currentRoomId || acceptState === 'accepting' || proposalLogged) return
     setAcceptState('accepting')
@@ -324,6 +339,17 @@ export function MessageBubble({
             {acceptState === 'error' && !proposalLogged && (
               <span className="msg-proposal-error">could not log — try again</span>
             )}
+          </div>
+        )}
+
+        {thesisProposal && (
+          <div className="msg-proposal">
+            <div className="msg-proposal-title">Proposed thesis</div>
+            <div className="msg-proposal-statement">{thesisProposal.title}</div>
+            <div className="msg-proposal-meta">{thesisProposal.claim}</div>
+            <button className="msg-proposal-accept" onClick={openThesisCreate}>
+              Draft the cascade →
+            </button>
           </div>
         )}
 

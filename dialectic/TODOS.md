@@ -51,6 +51,14 @@
       validated: acyclic, typed, capped; one correction retry); stateless
       `POST .../trading/thesis/draft`, panel preview, human Accept carries
       the draft through create — draft_prediction trust shape
+- [x] **Thesis lifecycle, whole loop**: `propose_thesis` (12th tool) — the
+      LLM proposes a thesis mid-argument, chat card seeds the create form;
+      retire (`DELETE .../trading/thesis` + td `room-unbind` — book
+      survives, binding + push token die, `thesis_state_current` memory
+      invalidated, `THESIS_RETIRED`); desk runs an adopted book's first
+      cycle immediately (panel fills in seconds); Trading tab always
+      visible (create surface was unreachable in unbound rooms);
+      bound-but-undrawn panel state with Builder link
 
 ## The quarter (see the plan for full detail + acceptance checks)
 
