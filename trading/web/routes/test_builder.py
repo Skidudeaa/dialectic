@@ -549,3 +549,138 @@ class TestBuilderEdgeCases:
         resp2 = client.get(f"/api/thesis/builder/books/{resp.json()['id']}", headers=auth_headers)
         assert "émojis 🎯" in resp2.json()["nodes"][0]["context"]
         assert "日本語テスト" in resp2.json()["meta"]["claim"]
+
+
+class TestDialecticRoomBinding:
+    """meta.dialecticRoomId — how a Dialectic-created thesis is born bound."""
+
+    ROOM = "0f9b8f9c-1111-4222-8333-444455556666"
+
+    def test_create_with_room_id_lands_in_meta(
+        self, auth_headers, tmp_books_dir, sample_book_payload
+    ):
+        sample_book_payload["meta"]["dialecticRoomId"] = self.ROOM
+        resp = client.post(
+            "/api/thesis/builder/books", json=sample_book_payload,
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        book_id = resp.json()["id"]
+        saved = json.loads((tmp_books_dir / f"{book_id}.json").read_text())
+        assert saved["meta"]["dialecticRoomId"] == self.ROOM
+        # And never the token — that lives in the environment/runtime file.
+        assert "dialecticRoomToken" not in saved["meta"]
+
+    def test_create_without_room_id_omits_the_key(
+        self, auth_headers, tmp_books_dir, sample_book_payload
+    ):
+        resp = client.post(
+            "/api/thesis/builder/books", json=sample_book_payload,
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        book_id = resp.json()["id"]
+        saved = json.loads((tmp_books_dir / f"{book_id}.json").read_text())
+        assert "dialecticRoomId" not in saved["meta"]
+
+    def test_get_round_trips_the_binding(
+        self, auth_headers, tmp_books_dir, sample_book_payload
+    ):
+        sample_book_payload["meta"]["dialecticRoomId"] = self.ROOM
+        created = client.post(
+            "/api/thesis/builder/books", json=sample_book_payload,
+            headers=auth_headers,
+        ).json()
+        got = client.get(
+            f"/api/thesis/builder/books/{created['id']}", headers=auth_headers,
+        )
+        assert got.status_code == 200
+        assert got.json()["meta"]["dialecticRoomId"] == self.ROOM
+
+    def test_bound_books_join_the_graph_naming_convention(
+        self, auth_headers, tmp_books_dir, sample_book_payload
+    ):
+        """The dashboard list and the room→book join glob *-graph.json —
+        a room-bound book outside that pattern would be invisible to both."""
+        sample_book_payload["meta"]["dialecticRoomId"] = self.ROOM
+        resp = client.post(
+            "/api/thesis/builder/books", json=sample_book_payload,
+            headers=auth_headers,
+        )
+        assert resp.json()["id"] == "test-thesis-unit-test-graph"
+
+    def test_bound_collision_counter_stays_inside_the_convention(
+        self, auth_headers, tmp_books_dir, sample_book_payload
+    ):
+        sample_book_payload["meta"]["dialecticRoomId"] = self.ROOM
+        first = client.post(
+            "/api/thesis/builder/books", json=sample_book_payload,
+            headers=auth_headers,
+        ).json()["id"]
+        second = client.post(
+            "/api/thesis/builder/books", json=sample_book_payload,
+            headers=auth_headers,
+        ).json()["id"]
+        assert first == "test-thesis-unit-test-graph"
+        assert second == "test-thesis-unit-test-1-graph"
+
+    def test_unbound_ids_are_unchanged(
+        self, auth_headers, tmp_books_dir, sample_book_payload
+    ):
+        """The desk's own builder keeps its historical naming."""
+        resp = client.post(
+            "/api/thesis/builder/books", json=sample_book_payload,
+            headers=auth_headers,
+        )
+        assert resp.json()["id"] == "test-thesis-unit-test"
+
+
+class TestRuntimeAdoption:
+    """A book saved while the desk runs must reach the live cycle set."""
+
+    class _StubCoordinator:
+        def __init__(self):
+            self.adopted = []
+
+        def adopt_book(self, book_id):
+            self.adopted.append(book_id)
+            return True
+
+    @pytest.fixture
+    def stub_coordinator(self):
+        stub = self._StubCoordinator()
+        app.state.coordinator = stub
+        yield stub
+        del app.state.coordinator
+
+    def test_create_adopts_into_runtime(
+        self, auth_headers, tmp_books_dir, sample_book_payload, stub_coordinator
+    ):
+        resp = client.post(
+            "/api/thesis/builder/books", json=sample_book_payload,
+            headers=auth_headers,
+        )
+        assert stub_coordinator.adopted == [resp.json()["id"]]
+
+    def test_update_adopts_into_runtime(
+        self, auth_headers, tmp_books_dir, sample_book_payload, stub_coordinator
+    ):
+        book_id = client.post(
+            "/api/thesis/builder/books", json=sample_book_payload,
+            headers=auth_headers,
+        ).json()["id"]
+        client.put(
+            f"/api/thesis/builder/books/{book_id}", json=sample_book_payload,
+            headers=auth_headers,
+        )
+        assert stub_coordinator.adopted == [book_id, book_id]
+
+    def test_no_coordinator_is_fine(
+        self, auth_headers, tmp_books_dir, sample_book_payload
+    ):
+        """Lifespan-less contexts (tests, scripts) must not 500."""
+        resp = client.post(
+            "/api/thesis/builder/books", json=sample_book_payload,
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200

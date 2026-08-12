@@ -36,6 +36,11 @@ chmod 600 .env
 #   - DIALECTIC_ROOM_TOKENS ("<room-uuid>:<token>,..." — REQUIRED for the
 #     snapshot push; the books no longer carry these, see room_tokens.py)
 #   - DIALECTIC_ROOM_TOKEN (legacy single-room fallback, optional)
+#   Rooms whose thesis was created FROM Dialectic register their token at
+#   runtime instead: /var/lib/tradingdesk/room-tokens.env (0600, written by
+#   POST /api/bridge/room-token; env wins on conflict). No restart needed,
+#   and nothing to add here for those rooms — but the file must survive
+#   reprovisioning like the SQLite DB beside it.
 
 # 5. Install the systemd unit
 cp deploy/tradingdesk.service /etc/systemd/system/

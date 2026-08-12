@@ -9,7 +9,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from web.auth import get_current_user
@@ -36,6 +36,11 @@ class BookMeta(BaseModel):
     claim: str = ""
     monthlyBudget: int = 5000
     asOf: str = Field(default_factory=lambda: date.today().isoformat())
+    # WHY: a thesis created FROM Dialectic is born bound to its room — the
+    # coordinator needs meta.dialecticRoomId to know where snapshots go.
+    # Optional; the desk's own builder leaves it empty and update_book
+    # preserves an existing binding over whatever a request carries.
+    dialecticRoomId: str = ""
 class NodeData(BaseModel):
     id: str
     label: str
@@ -114,6 +119,8 @@ def _book_to_engine_format(req: SaveBookRequest, book_id: str) -> dict:
         "rules": req.rules,
         "provenance": [],
     }
+    if req.meta.dialecticRoomId:
+        cfg["meta"]["dialecticRoomId"] = req.meta.dialecticRoomId
 
     for n in req.nodes:
         node: Dict[str, Any] = {
@@ -203,6 +210,7 @@ def _engine_to_builder_format(cfg: dict, book_id: str) -> dict:
             "claim": cfg.get("meta", {}).get("claim", ""),
             "monthlyBudget": cfg.get("meta", {}).get("monthlyBudget", 5000),
             "asOf": cfg.get("meta", {}).get("asOf", date.today().isoformat()),
+            "dialecticRoomId": cfg.get("meta", {}).get("dialecticRoomId", ""),
         },
         "nodes": nodes,
         "edges": edges,
@@ -255,18 +263,47 @@ async def get_book_for_builder(book_id: str) -> dict:
     with open(config_path) as f:
         cfg = json.load(f)
     return _engine_to_builder_format(cfg, book_id)
+def _adopt_into_runtime(request: Request, book_id: str) -> None:
+    """Hand the saved book to the live coordinator, when one is running.
+
+    WHY: coordinator definitions are scanned once at startup, so without
+    this a book saved while the desk runs gets no fetch cycles (and a
+    Dialectic-born thesis never pushes its first snapshot) until a restart.
+    Tolerant of a missing coordinator — tests and lifespan-less contexts
+    have none; production always does.
+    """
+    coordinator = getattr(request.app.state, "coordinator", None)
+    if coordinator is not None:
+        coordinator.adopt_book(book_id)
+
+
 @router.post("/books")
-async def create_book(req: SaveBookRequest) -> dict:
+async def create_book(req: SaveBookRequest, request: Request) -> dict:
     """Create a new thesis book."""
-    book_id = _sanitize_id(req.meta.title)
+    slug = _sanitize_id(req.meta.title)
+    # WHY the -graph suffix for room-bound books: every shipping book is
+    # *-graph.json, and both the dashboard list (adapters/thesis.list_books)
+    # and the Dialectic room→book join glob exactly that pattern. A thesis
+    # born from a Dialectic room must land inside the convention or the
+    # deep-surface handoff cannot find it. Collision counters go BEFORE the
+    # suffix so `ai-bubble-1-graph` still matches the glob.
+    bound = bool(req.meta.dialecticRoomId)
+    if bound and slug.endswith("-graph"):
+        slug = slug[: -len("-graph")]
+
+    def _candidate(n: int) -> str:
+        stem = slug if n == 0 else f"{slug}-{n}"
+        return f"{stem}-graph" if bound else stem
+
+    counter = 0
+    book_id = _candidate(0)
     config_path = BOOKS_DIR / f"{book_id}.json"
 
     # Avoid overwriting
-    counter = 1
     while config_path.exists():
-        book_id = f"{_sanitize_id(req.meta.title)}-{counter}"
-        config_path = BOOKS_DIR / f"{book_id}.json"
         counter += 1
+        book_id = _candidate(counter)
+        config_path = BOOKS_DIR / f"{book_id}.json"
 
     cfg = _book_to_engine_format(req, book_id)
 
@@ -283,12 +320,13 @@ async def create_book(req: SaveBookRequest) -> dict:
         os.fsync(f.fileno())
     os.replace(str(tmp), str(config_path))
 
+    _adopt_into_runtime(request, book_id)
     log.info("Created book: %s", book_id)
     return {"id": book_id, "filename": f"{book_id}.json"}
 
 
 @router.put("/books/{book_id}")
-async def update_book(book_id: str, req: SaveBookRequest) -> dict:
+async def update_book(book_id: str, req: SaveBookRequest, request: Request) -> dict:
     """Update an existing thesis book."""
     try:
         thesis_adapter._validate_book_id(book_id)
@@ -344,6 +382,7 @@ async def update_book(book_id: str, req: SaveBookRequest) -> dict:
         os.fsync(f.fileno())
     os.replace(str(tmp), str(config_path))
     thesis_adapter.invalidate_cache(book_id)
+    _adopt_into_runtime(request, book_id)
     log.info("Updated book: %s", book_id)
     return {"id": book_id, "filename": f"{book_id}.json"}
 @router.delete("/books/{book_id}")

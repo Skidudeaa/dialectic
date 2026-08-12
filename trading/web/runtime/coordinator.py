@@ -351,6 +351,36 @@ class RuntimeCoordinator:
             except Exception:
                 log.exception("Failed to load %s", path.name)
 
+    def adopt_book(self, thesis_id: str) -> bool:
+        """Load (or reload) one book from disk into the live cycle set.
+
+        WHY: definitions are scanned once at startup, so a book created or
+        edited through the builder while the desk runs would otherwise get
+        no fetch cycles — and a thesis created FROM Dialectic would never
+        push its first snapshot until someone restarted the service. The
+        tick loop iterates the definitions dict afresh every tick, so a
+        plain assignment here is picked up on the next tick; a cycle
+        already in flight keeps the cfg it captured, which is the same
+        deal a restart-time edit always had.
+
+        Returns True when the book was adopted, False when the file is
+        missing or not a thesis config — callers treat that as "nothing to
+        run", not an error, mirroring _load_definitions' tolerance.
+        """
+        path = BOOKS_DIR / f"{thesis_id}.json"
+        try:
+            cfg = thesisgraph.load_config(str(path))
+        except Exception:
+            log.exception("adopt_book: failed to load %s", path.name)
+            return False
+        if not isinstance(cfg, dict) or "nodes" not in cfg:
+            return False
+        self._definitions[thesis_id] = cfg
+        self._definition_hashes[thesis_id] = self._compute_hash(cfg)
+        log.info("Adopted thesis at runtime: %s (%d nodes, %d edges)",
+                 thesis_id, len(cfg.get("nodes", [])), len(cfg.get("edges", [])))
+        return True
+
     def _hydrate_from_db(self) -> None:
         """Restore revisions and latest snapshots from SQLite on startup.
 

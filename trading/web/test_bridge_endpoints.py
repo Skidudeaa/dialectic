@@ -418,3 +418,60 @@ class TestNewsEndpoint:
         bridge_mod._news_cache[THESIS_ID] = (0.0, payload)
         client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
         assert len(calls) == 2
+
+
+# =========================================================================
+# ROOM TOKEN REGISTRATION
+# =========================================================================
+
+
+class TestRoomTokenRegistration:
+    """POST /api/bridge/room-token — the one write on the bridge.
+
+    It exists so a thesis created from Dialectic can start pushing without
+    a desk restart; the token lands in the runtime file, never in a book.
+    """
+
+    ROOM = "0f9b8f9c-1111-4222-8333-444455556666"
+
+    @pytest.fixture(autouse=True)
+    def tokens_file(self, tmp_path, monkeypatch):
+        from tools.bridge.room_tokens import ENV_ROOM_TOKENS_FILE
+        path = tmp_path / "room-tokens.env"
+        monkeypatch.setenv(ENV_ROOM_TOKENS_FILE, str(path))
+        return path
+
+    def test_gated_by_service_token(self, client):
+        resp = client.post(
+            "/api/bridge/room-token",
+            json={"room_id": self.ROOM, "token": "tok"},
+        )
+        assert resp.status_code == 401
+
+    def test_registers_and_resolves(self, client, tokens_file):
+        from tools.bridge.room_tokens import resolve_room_token
+        resp = client.post(
+            "/api/bridge/room-token",
+            json={"room_id": self.ROOM, "token": "tok-new"},
+            headers=svc_headers(),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+        assert tokens_file.exists()
+        assert resolve_room_token({"dialecticRoomId": self.ROOM}) == "tok-new"
+
+    def test_non_uuid_room_is_422(self, client):
+        resp = client.post(
+            "/api/bridge/room-token",
+            json={"room_id": "not-a-uuid", "token": "tok"},
+            headers=svc_headers(),
+        )
+        assert resp.status_code == 422
+
+    def test_empty_token_is_422(self, client):
+        resp = client.post(
+            "/api/bridge/room-token",
+            json={"room_id": self.ROOM, "token": "  "},
+            headers=svc_headers(),
+        )
+        assert resp.status_code == 422

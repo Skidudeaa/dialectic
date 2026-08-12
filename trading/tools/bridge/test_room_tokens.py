@@ -19,7 +19,10 @@ import pytest
 from tools.bridge.room_tokens import (
     ENV_ROOM_TOKEN_SINGLE,
     ENV_ROOM_TOKENS,
+    ENV_ROOM_TOKENS_FILE,
+    load_file_tokens,
     parse_room_tokens,
+    register_room_token,
     resolve_room_token,
 )
 
@@ -98,6 +101,60 @@ class TestResolve:
         meta = {"dialecticRoomId": "not-a-uuid"}
         env = {ENV_ROOM_TOKENS: f"{ROOM_A}:tok"}
         assert resolve_room_token(meta, env=env) is None
+
+
+class TestFileTier:
+    """The runtime file that lets a Dialectic-created thesis push without a
+    desk restart. Env must still win; the file must stay 0600; a missing
+    file must be silence, because that is every box before the first
+    created thesis."""
+
+    def _env(self, tmp_path):
+        return {ENV_ROOM_TOKENS_FILE: str(tmp_path / "room-tokens.env")}
+
+    def test_register_then_resolve_round_trips(self, tmp_path):
+        env = self._env(tmp_path)
+        register_room_token(ROOM_A, "tok-file", env=env)
+        assert resolve_room_token({"dialecticRoomId": ROOM_A}, env=env) == "tok-file"
+
+    def test_env_map_beats_the_file(self, tmp_path):
+        """The operator's environment remains the last word."""
+        env = self._env(tmp_path)
+        env[ENV_ROOM_TOKENS] = f"{ROOM_A}:from-env"
+        register_room_token(ROOM_A, "from-file", env=env)
+        assert resolve_room_token({"dialecticRoomId": ROOM_A}, env=env) == "from-env"
+
+    def test_reregistering_replaces_without_losing_others(self, tmp_path):
+        env = self._env(tmp_path)
+        register_room_token(ROOM_A, "tok-a", env=env)
+        register_room_token(ROOM_B, "tok-b", env=env)
+        register_room_token(ROOM_A, "tok-a2", env=env)
+        assert load_file_tokens(env) == {ROOM_A: "tok-a2", ROOM_B: "tok-b"}
+
+    def test_the_file_is_owner_only(self, tmp_path):
+        env = self._env(tmp_path)
+        path = register_room_token(ROOM_A, "tok", env=env)
+        assert os.stat(path).st_mode & 0o777 == 0o600
+
+    def test_a_missing_file_is_silence(self, tmp_path):
+        assert load_file_tokens(self._env(tmp_path)) == {}
+        assert resolve_room_token(
+            {"dialecticRoomId": ROOM_A}, env=self._env(tmp_path)
+        ) is None
+
+    def test_register_rejects_garbage(self, tmp_path):
+        env = self._env(tmp_path)
+        with pytest.raises(ValueError):
+            register_room_token("not-a-uuid", "tok", env=env)
+        with pytest.raises(ValueError):
+            register_room_token(ROOM_A, "   ", env=env)
+        with pytest.raises(ValueError):
+            register_room_token(ROOM_A, "with:delimiter", env=env)
+
+    def test_uppercase_registration_still_resolves(self, tmp_path):
+        env = self._env(tmp_path)
+        register_room_token(ROOM_A.upper(), "tok", env=env)
+        assert resolve_room_token({"dialecticRoomId": ROOM_A}, env=env) == "tok"
 
 
 class TestShippedBooks:

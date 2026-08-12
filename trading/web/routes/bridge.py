@@ -30,7 +30,10 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from tools.bridge.room_tokens import resolve_room_token  # type: ignore[import-untyped]
+from tools.bridge.room_tokens import (  # type: ignore[import-untyped]
+    register_room_token,
+    resolve_room_token,
+)
 from web.auth import get_current_user
 from web.deps import get_repo
 from web.models import User
@@ -402,6 +405,38 @@ async def get_thesis_snapshot(
     from web.runtime.dialectic_push import build_v3_payload
     payload = build_v3_payload(thesis_id, snapshot, alert_events=[])
     return JSONResponse(content=payload, media_type="application/json")
+
+
+class RoomTokenRegistration(BaseModel):
+    room_id: str
+    token: str
+
+
+@router.post("/room-token")
+async def register_room_token_endpoint(
+    req: RoomTokenRegistration,
+    _svc: None = Depends(require_service_token),
+) -> dict:
+    """Register a Dialectic room token so a newly bound book can push.
+
+    WHY this write exists on an otherwise read-only bridge: creating a
+    thesis FROM Dialectic mints a new room whose token the pushing process
+    cannot learn from its environment without a restart. Dialectic (the
+    only holder of the service token) hands the token across once, it
+    lands in the runtime file under /var/lib/tradingdesk, and the
+    coordinator's next cycle resolves it. Re-registering is a rotation,
+    not a conflict.
+    """
+    try:
+        register_room_token(req.room_id, req.token)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except OSError as e:
+        log.error("room-token registration could not persist: %s", e)
+        raise HTTPException(
+            status_code=500, detail="could not persist the room token"
+        )
+    return {"ok": True, "room_id": req.room_id}
 
 
 # ── GET /api/bridge/news/{thesis_id} ────────────────────────────────────
