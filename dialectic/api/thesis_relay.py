@@ -79,12 +79,21 @@ async def create_thesis(
 ):
     """Create a thesis book on tradingDesk, born bound to this room."""
     row = await db.fetchrow(
-        "SELECT token, linked_book_id FROM rooms WHERE id = $1 AND token = $2",
+        "SELECT token, linked_book_id, is_home FROM rooms WHERE id = $1 AND token = $2",
         room_id, token,
     )
     if not row:
         raise HTTPException(status_code=401, detail="Invalid room token")
     await _verify_room_member(room_id, current_user.user_id, db)
+
+    # Home connects the schemes; durable theses belong in their own rooms.
+    # Guarded at the first authorized boundary — before any linked-book,
+    # title, or tradingDesk side effect.
+    if row["is_home"]:
+        raise HTTPException(
+            status_code=409,
+            detail="Propose it in the scheme's room.",
+        )
 
     if row["linked_book_id"]:
         raise HTTPException(
@@ -175,13 +184,21 @@ async def draft_thesis(
     create, so a draft can never be minted for a room that cannot take it.
     """
     row = await db.fetchrow(
-        """SELECT token, linked_book_id, primary_provider, primary_model
+        """SELECT token, linked_book_id, is_home, primary_provider, primary_model
            FROM rooms WHERE id = $1 AND token = $2""",
         room_id, token,
     )
     if not row:
         raise HTTPException(status_code=401, detail="Invalid room token")
     await _verify_room_member(room_id, current_user.user_id, db)
+
+    # Same Home guard as create — a draft can never be minted for a room
+    # that could never accept it.
+    if row["is_home"]:
+        raise HTTPException(
+            status_code=409,
+            detail="Propose it in the scheme's room.",
+        )
 
     if row["linked_book_id"]:
         raise HTTPException(

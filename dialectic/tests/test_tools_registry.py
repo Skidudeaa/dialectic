@@ -890,11 +890,18 @@ class TestProposeThesis:
     never write. The one extra rule is one-thesis-per-room — the executor
     refuses in a bound room so the model explains instead of proposing."""
 
-    def _tool(self, linked_book_id=None):
+    def _tool(self, linked_book_id=None, is_home=False):
         from types import SimpleNamespace
         room = SimpleNamespace(id="room-1", linked_book_id=linked_book_id,
-                               trading_config=None)
+                               trading_config=None, is_home=is_home)
         return build_registry(room, FakeDB()).get("propose_thesis")
+
+    @pytest.mark.asyncio
+    async def test_refuses_in_home(self):
+        """Home connects the schemes; durable theses belong in their rooms."""
+        tool = self._tool(is_home=True)
+        with pytest.raises(ValueError, match="Propose it in the scheme's room."):
+            await tool.execute({"title": "T", "claim": "C"})
 
     @pytest.mark.asyncio
     async def test_shapes_a_proposal_with_provenance(self):

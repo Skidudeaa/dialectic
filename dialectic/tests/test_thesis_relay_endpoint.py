@@ -34,7 +34,7 @@ REQUEST_BODY = {
 }
 
 
-def _make_db(room_found=True, linked_book_id=None, members=None):
+def _make_db(room_found=True, linked_book_id=None, members=None, is_home=False):
     if members is None:
         members = {CALLER_ID}
     fake_db = AsyncMock()
@@ -44,6 +44,7 @@ def _make_db(room_found=True, linked_book_id=None, members=None):
             if not room_found:
                 return None
             return {"token": ROOM_TOKEN, "linked_book_id": linked_book_id,
+                    "is_home": is_home,
                     "primary_provider": "anthropic",
                     "primary_model": "claude-sonnet-4-6"}
         if "FROM room_memberships" in query:
@@ -378,3 +379,30 @@ def test_retire_invalidates_every_active_thesis_state_row(monkeypatch):
     assert resp.status_code == 200
     assert {i["memory_id"] for i in invalidations} == {memory_id, twin_id}
     assert all("retired" in i["reason"] for i in invalidations)
+
+
+# =========================================================================
+# HOME — the one room that can never enter the thesis lifecycle
+# =========================================================================
+
+
+def test_home_create_is_409_before_any_side_effect(monkeypatch):
+    fake_db = _make_db(is_home=True)
+    service_post, post = AsyncMock(), AsyncMock()
+    response = _create(
+        fake_db, monkeypatch, service_post=service_post, post=post
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Propose it in the scheme's room."
+    service_post.assert_not_awaited()
+    post.assert_not_awaited()
+    fake_db.execute.assert_not_awaited()
+
+
+def test_home_draft_is_409_before_drafter(monkeypatch):
+    fake_db = _make_db(is_home=True)
+    drafter = AsyncMock()
+    response = _draft(fake_db, monkeypatch, drafter=drafter)
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Propose it in the scheme's room."
+    drafter.assert_not_awaited()

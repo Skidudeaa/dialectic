@@ -695,6 +695,9 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
         card's tap opens the Create Thesis panel pre-filled — where the
         cascade is drafted, reviewed and, only then, created by the human.
         """
+        if getattr(room, "is_home", False):
+            # Home connects the schemes; durable theses live in their rooms.
+            raise ValueError("Propose it in the scheme's room.")
         if getattr(room, "linked_book_id", None):
             raise ValueError(
                 f"this room already argues '{room.linked_book_id}' — one "
