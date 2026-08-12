@@ -1,5 +1,7 @@
+import { useState, type FormEvent } from 'react'
 import DOMPurify from 'dompurify'
 import { useAppStore } from '../../stores/appStore.ts'
+import { api, ApiError } from '../../lib/api.ts'
 import './TradingPanel.css'
 
 // --- Staleness helpers ---
@@ -188,11 +190,122 @@ const TRADINGDESK_URL = 'https://td.somacura.org'
  * the right case on arrival. Omitted if unknown — the desk then falls back to
  * its own default case rather than following a broken pointer.
  */
-function buildTradingDeskUrl(accessToken: string, roomId?: string | null): string {
+function buildTradingDeskUrl(
+  accessToken: string, roomId?: string | null, path = '/',
+): string {
   const params = new URLSearchParams()
   params.set('dialectic_token', accessToken)
   if (roomId) params.set('dialectic_room', roomId)
-  return `${TRADINGDESK_URL}/#${params.toString()}`
+  // The desk adopts the fragment token at boot on ANY route, so a deep link
+  // straight into /builder carries the session with it.
+  return `${TRADINGDESK_URL}${path}#${params.toString()}`
+}
+
+// --- Create Thesis (empty-state flow) ---
+
+/**
+ * The room births its book. Dialectic deliberately has no DAG-authoring
+ * surface — the Builder lives on the desk — so this form only establishes
+ * the binding: title + claim + budget become a book born bound to this
+ * room, and the first snapshot arrives on the coordinator's next cycle.
+ */
+function CreateThesisForm({ roomId }: { roomId: string }) {
+  const accessToken = useAppStore((s) => s.accessToken)
+  const [title, setTitle] = useState('')
+  const [claim, setClaim] = useState('')
+  const [budget, setBudget] = useState('5000')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [created, setCreated] = useState<{ bookId: string; title: string } | null>(null)
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (busy || !title.trim()) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await api.createThesis(roomId, {
+        title: title.trim(),
+        claim: claim.trim(),
+        monthly_budget: Math.max(0, Math.round(Number(budget) || 0)),
+      })
+      setCreated({ bookId: res.book_id, title: res.title })
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not reach the server')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (created) {
+    return (
+      <div className="thesis-create thesis-create--done">
+        <div className="thesis-create-heading">Thesis created</div>
+        <p className="thesis-create-note">
+          “{created.title}” is live as <code>{created.bookId}</code>, bound to
+          this room. The first snapshot lands on the desk’s next cycle.
+        </p>
+        {accessToken && (
+          <a
+            className="trading-footer-link"
+            href={buildTradingDeskUrl(accessToken, roomId, '/builder')}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open Thesis Builder — draw the DAG →
+          </a>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <form className="thesis-create" onSubmit={submit}>
+      <div className="thesis-create-heading">Create a thesis</div>
+      <p className="thesis-create-note">
+        Name the thesis this room argues. The DAG gets drawn later, in the
+        desk’s Builder.
+      </p>
+      <label className="thesis-create-label">
+        Title
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={120}
+          placeholder="e.g. Sovereign Debt Doom Loop"
+          required
+        />
+      </label>
+      <label className="thesis-create-label">
+        Claim
+        <textarea
+          value={claim}
+          onChange={(e) => setClaim(e.target.value)}
+          maxLength={2000}
+          rows={3}
+          placeholder="The causal claim this thesis stakes"
+        />
+      </label>
+      <label className="thesis-create-label">
+        Monthly budget ($)
+        <input
+          type="number"
+          min={0}
+          step={500}
+          value={budget}
+          onChange={(e) => setBudget(e.target.value)}
+        />
+      </label>
+      {error && <div className="thesis-create-error">{error}</div>}
+      <button
+        type="submit"
+        className="thesis-create-submit"
+        disabled={busy || !title.trim()}
+      >
+        {busy ? 'Creating…' : 'Create Thesis'}
+      </button>
+    </form>
+  )
 }
 
 // --- Main component ---
@@ -206,9 +319,13 @@ export function TradingPanel() {
     return (
       <div className="trading-panel-empty">
         <p>No trading data available.</p>
-        <p className="trading-panel-hint">
-          Push a thesis graph snapshot from the Trading Desk to populate this panel.
-        </p>
+        {currentRoom ? (
+          <CreateThesisForm roomId={currentRoom.id} />
+        ) : (
+          <p className="trading-panel-hint">
+            Push a thesis graph snapshot from the Trading Desk to populate this panel.
+          </p>
+        )}
       </div>
     )
   }

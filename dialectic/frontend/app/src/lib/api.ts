@@ -241,6 +241,21 @@ class DialecticAPI {
     });
   }
 
+  /**
+   * Create Thesis — mints a book on tradingDesk born bound to this room.
+   * The DAG itself gets drawn later in the desk's Builder; this call only
+   * establishes the binding, so the room starts receiving snapshots.
+   */
+  async createThesis(
+    roomId: string,
+    body: { title: string; claim?: string; monthly_budget?: number },
+  ): Promise<{ book_id: string; title: string }> {
+    return this.fetch(`/rooms/${roomId}/trading/thesis`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
   // Auth (no room token needed)
   // WHY: surfaces the backend's `detail` message (e.g. "Invalid email or password")
   // instead of returning the error body as if it were a TokenResponse — a swallowed

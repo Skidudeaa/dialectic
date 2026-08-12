@@ -335,3 +335,100 @@
     color: var(--color-amber-mute);
     border-bottom-color: transparent;
 }
+
+/* Create Thesis — the empty-state flow. The room births its book here;
+   the DAG gets drawn on the desk. Left-aligned island inside the centered
+   empty state. */
+.thesis-create {
+    margin-top: 1.2rem;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    font-family: var(--font-mono);
+}
+
+.thesis-create-heading {
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .18em;
+    color: var(--color-secondary);
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--color-bean);
+}
+
+.thesis-create-note {
+    font-size: 9px;
+    line-height: 1.5;
+    color: var(--color-ghost);
+    margin: 0;
+}
+
+.thesis-create-note code {
+    color: var(--color-amber-mute);
+}
+
+.thesis-create-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    color: var(--color-secondary);
+}
+
+.thesis-create-label input,
+.thesis-create-label textarea {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-bone);
+    background: var(--color-void);
+    border: 1px solid var(--color-bean);
+    border-radius: 2px;
+    padding: 0.4rem 0.5rem;
+    outline: none;
+    resize: vertical;
+    transition: border-color 120ms ease;
+}
+
+.thesis-create-label input:focus-visible,
+.thesis-create-label textarea:focus-visible {
+    border-color: var(--color-amber-mute);
+}
+
+.thesis-create-error {
+    font-size: 9px;
+    line-height: 1.4;
+    color: var(--color-error);
+}
+
+.thesis-create-submit {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    color: var(--color-amber-mute);
+    background: transparent;
+    border: 1px solid var(--color-bean);
+    border-radius: 2px;
+    padding: 0.5rem 0.6rem;
+    cursor: pointer;
+    transition: color 120ms ease, border-color 120ms ease;
+}
+
+.thesis-create-submit:hover:not(:disabled),
+.thesis-create-submit:focus-visible {
+    color: var(--color-amber);
+    border-color: var(--color-amber-mute);
+}
+
+.thesis-create-submit:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.thesis-create--done .trading-footer-link {
+    display: inline-block;
+    margin-top: 0.2rem;
+}

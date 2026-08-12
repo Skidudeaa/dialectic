@@ -38,6 +38,15 @@
       `auto_interjection_enabled` toggle FINALLY gates the heuristic path;
       migration 011 (b448c70)
 
+### Shipped 2026-08-11
+
+- [x] **Create Thesis GUI**: trading panel's empty state grows a create form;
+      `POST /rooms/{id}/trading/thesis` registers the room token on td's
+      bridge (runtime file tier, no restart), mints the book born bound
+      (`meta.dialecticRoomId`, `*-graph` naming), links `linked_book_id`,
+      logs `THESIS_CREATED`; coordinator adopts builder-saved books at
+      runtime; success state deep-links into the desk's Builder
+
 ## The quarter (see the plan for full detail + acceptance checks)
 
 - [ ] **P1 residue**: real-device push check on all four devices (Amo + Dan)

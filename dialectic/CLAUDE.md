@@ -77,6 +77,14 @@ tradingDesk pushes thesis graph state to `POST /rooms/{room_id}/trading/snapshot
 4. If any member is offline: `TradingCuratorEngine` generates a context annotation
 5. Connected clients receive `trading_update` WebSocket event
 
+**Creating a thesis from a room**: the trading panel's empty state offers a
+Create Thesis form → `POST /rooms/{room_id}/trading/thesis`
+(`api/thesis_relay.py`): registers the room token on td's bridge (runtime
+file, no desk restart), creates the book on td born bound via
+`meta.dialecticRoomId` (named `*-graph` per convention), sets
+`rooms.linked_book_id`, logs `THESIS_CREATED`. The DAG itself is drawn on
+the deep surface — the success state deep-links into td's Builder.
+
 The thesis state is injected into every LLM system prompt via `_build_trading_context()` in `llm/prompts.py`. The LLM sees: cascade phase, fired/approaching nodes, confluence scores, countdowns, scenario probabilities, and portfolio summary.
 
 **Live trading rooms** (all five thesis books bound as of 2026-08-09; the
