@@ -37,6 +37,7 @@ from api.personas import router as personas_router, set_personas_db_pool
 from api.attachments import router as attachments_router, set_attachments_db_pool
 from api.prediction_relay import router as prediction_relay_router, set_prediction_relay_db_pool
 from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_pool
+from api.home import router as home_router, set_home_db_pool
 from collections import defaultdict
 import time
 
@@ -196,6 +197,7 @@ async def lifespan(app: FastAPI):
         # Set db_pool for the prediction relay module
         set_prediction_relay_db_pool(db_pool)
         set_thesis_relay_db_pool(db_pool)
+        set_home_db_pool(db_pool)
 
         async with db_pool.acquire() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
@@ -324,6 +326,10 @@ app.include_router(prediction_relay_router)
 
 # Include thesis relay router (Create Thesis → book born bound to its room)
 app.include_router(thesis_relay_router)
+
+# Home membership administration — the only door into Home (the generic
+# join path below refuses it).
+app.include_router(home_router)
 
 connection_manager: ConnectionManager = ConnectionManager()
 
@@ -618,6 +624,14 @@ async def join_room(
     )
     if existing:
         return {"status": "already_member"}
+
+    if room_row["is_home"]:
+        # Home is nondelegable — membership arrives only through a Home
+        # administrator (api/home.py) or the reviewed activation script.
+        raise HTTPException(
+            status_code=403,
+            detail="Home membership requires a Home administrator",
+        )
 
     now = datetime.now(timezone.utc)
 
@@ -2141,6 +2155,10 @@ class UserRoomResponse(BaseModel):
     # room, in which case the client falls back to their join time.
     last_read_at: Optional[datetime] = None
     joined_at: Optional[datetime] = None
+    is_home: bool = False
+    # The caller's OWN capability on this room — lets the client show Home
+    # settings only to administrators. Never another member's flag.
+    can_manage_home: bool = False
 
 
 @app.get("/users/me/rooms", response_model=List[UserRoomResponse])
@@ -2161,10 +2179,13 @@ async def get_user_rooms(
             r.id,
             r.name,
             r.token,
+            r.is_home,
+            rm.can_manage_home,
             (
                 SELECT COUNT(*) FROM messages m
                 JOIN threads t ON m.thread_id = t.id
                 WHERE t.room_id = r.id
+                  AND NOT m.is_deleted
                   AND m.created_at > COALESCE(
                       (SELECT MAX(timestamp) FROM message_receipts mr
                        WHERE mr.user_id = $1 AND mr.receipt_type = 'read'
@@ -2179,12 +2200,14 @@ async def get_user_rooms(
                 SELECT m.created_at FROM messages m
                 JOIN threads t ON m.thread_id = t.id
                 WHERE t.room_id = r.id
+                  AND NOT m.is_deleted
                 ORDER BY m.created_at DESC LIMIT 1
             ) as last_message_at,
             (
                 SELECT LEFT(m.content, 50) FROM messages m
                 JOIN threads t ON m.thread_id = t.id
                 WHERE t.room_id = r.id
+                  AND NOT m.is_deleted
                 ORDER BY m.created_at DESC LIMIT 1
             ) as last_message_preview,
             (
@@ -2212,6 +2235,8 @@ async def get_user_rooms(
         last_message_preview=row['last_message_preview'],
         last_read_at=row['last_read_at'],
         joined_at=row['joined_at'],
+        is_home=row['is_home'],
+        can_manage_home=row['can_manage_home'],
     ) for row in rows]
 
 

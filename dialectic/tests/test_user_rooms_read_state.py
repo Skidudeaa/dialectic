@@ -32,7 +32,7 @@ JOINED_AT = datetime(2026, 7, 1, 9, 0, tzinfo=timezone.utc)
 LAST_READ_AT = datetime(2026, 7, 20, 17, 30, tzinfo=timezone.utc)
 
 
-def _row(*, last_read_at, unread_count=0):
+def _row(*, last_read_at, unread_count=0, is_home=False, can_manage_home=False):
     return {
         "id": ROOM_ID,
         "name": "Trading Room",
@@ -42,6 +42,8 @@ def _row(*, last_read_at, unread_count=0):
         "last_message_preview": "hello",
         "last_read_at": last_read_at,
         "joined_at": JOINED_AT,
+        "is_home": is_home,
+        "can_manage_home": can_manage_home,
     }
 
 
@@ -104,3 +106,39 @@ def test_read_boundary_is_scoped_to_the_requesting_user():
     # the caller — so it cannot be widened to another member by accident.
     assert "mr.user_id = $1" in query
     assert params == [USER_ID]
+
+
+def test_home_flags_are_projected():
+    """The rail needs is_home to pin Home and can_manage_home for settings."""
+    client, _ = _client([_row(last_read_at=None, is_home=True, can_manage_home=True)])
+
+    body = client.get("/users/me/rooms").json()
+
+    assert body[0]["is_home"] is True
+    assert body[0]["can_manage_home"] is True
+
+
+def test_ordinary_room_flags_default_false():
+    client, _ = _client([_row(last_read_at=None)])
+
+    body = client.get("/users/me/rooms").json()
+
+    assert body[0]["is_home"] is False
+    assert body[0]["can_manage_home"] is False
+
+
+def test_derived_fields_exclude_deleted_messages():
+    """
+    Unread count, latest timestamp, and preview must all follow soft-delete
+    truth — a deleted message may not leak through any derived field. The
+    real SQL semantics are proven against Postgres in test_home_activity_pg;
+    this pins the query the endpoint actually sends.
+    """
+    client, fake_db = _client([_row(last_read_at=LAST_READ_AT)])
+
+    client.get("/users/me/rooms")
+
+    query, *_ = fake_db.fetch.call_args.args
+    assert query.count("NOT m.is_deleted") >= 3
+    assert "r.is_home" in query
+    assert "rm.can_manage_home" in query

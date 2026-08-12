@@ -68,6 +68,8 @@ class EventType(str, Enum):
     TRADING_SNAPSHOT_RECEIVED = "trading_snapshot_received"
     THESIS_CREATED = "thesis_created"
     THESIS_RETIRED = "thesis_retired"
+    # Home Base events
+    HOME_MEMBER_REMOVED = "home_member_removed"
 
 
 class CommitmentStatus(str, Enum):
