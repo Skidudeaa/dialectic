@@ -359,6 +359,12 @@ onSetMemoryPromotion={async (memoryId, promoted) => {
 }}
 ```
 
+Implementation note (2026-08-11): `refreshMemories()` catches and logs its own
+errors, which would make a failed post-write refresh appear successful. The PWA
+therefore applies the authenticated server response directly to the Zustand
+memory list; later room and WebSocket refreshes still re-read authoritative
+promotion state.
+
 Add the exact promise-returning prop to `RightPanelProps` and pass it unchanged
 to `MemoryPanel`.
 

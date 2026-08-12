@@ -553,7 +553,7 @@ class CrossSessionMemoryManager:
         room_id: Optional[UUID] = None,
         thread_id: Optional[UUID] = None,
         user_id: Optional[UUID] = None,
-        payload: dict = None,
+        payload: Optional[dict] = None,
     ) -> None:
         """Record an event in the event log."""
         now = datetime.now(timezone.utc)

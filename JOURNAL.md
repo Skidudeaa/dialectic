@@ -13,3 +13,4 @@
 [2026-08-11] deployed scheduler recovery and the lint-clean frontend — health reports a fresh heartbeat, the ledger advances, and the served versioned asset digest matches the committed build
 [2026-08-11] selected personal cross-room memory promotion — store per-user grants without mutating shared memory scope so one collaborator cannot alter another's LLM context
 [2026-08-11] planned personal promotion as four isolated implementation units plus verification — schema, manager recall, authenticated REST, and minimal PWA controls remain separately reviewable while activation stays deferred
+[2026-08-11] implemented personal cross-room promotion behind an unapplied migration — atomic membership-fenced grants and events isolate each collaborator; the PWA applies confirmed REST state because its generic refresh helper intentionally swallows refresh errors
