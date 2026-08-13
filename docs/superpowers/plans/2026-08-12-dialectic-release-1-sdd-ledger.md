@@ -290,7 +290,89 @@ kind-keyed form, which turns it red.
 
 Baseline at handoff: **1138 backend**, **49 frontend**, lint 0, build 0.
 
-## Task Group E — Current-scene local continuity — NOT STARTED
+## Task Group E — Current-scene local continuity — COMPLETE
+
+| Task | Commit | Result |
+|---|---|---|
+| E1–E3 Persistence, precedence, fallback | `a99b8b8` | 75 frontend (+26), 1138 backend. RED observed before implementation. |
+
+### Observed (this worktree, 2026-08-13 — not inherited)
+
+- Frontend **75 passed** across 10 files; backend **1138 passed**; lint 0; build 0.
+
+### E2 — the precedence, proven twice
+
+The rule lives in a pure function (`chooseEntryDestination`) so an ordering
+this consequential is provable without mounting anything, and again on the
+mounted hook, because only the wiring can show that boot actually consults it:
+
+```text
+deep link / notification  >  local restoration  >  Home → House
+```
+
+| Case | Result |
+|---|---|
+| notification entry `/?room=<id>` over stored state | the notified room wins |
+| explicit `?room=&thread=` over stored state | the URL wins |
+| `/?scene=record` over a restored House | the URL wins — a scene alone is an explicit request |
+| bare `/` with stored state | restores room + branch + scene |
+| bare `/` with nothing stored | Home → House |
+
+### E3 — the fallback is silent, and structurally so
+
+A restored room the user has lost is dropped **before** navigation is asked
+for it, by validating the candidate against the room list the caller already
+holds. This is not politeness: refusal is *visible* — the hook surfaces "that
+room is no longer available to you" — and saying that about a room nobody
+requested announces both that the room exists and that they were removed from
+it. The mirror case is asserted too: an explicitly requested lost room still
+says so out loud, because there the user asked.
+
+### The defect E found, older than this branch
+
+`denied()` set the access error **before** navigating to Home, and the
+corrective navigation ends in a successful install — which clears the error.
+So a user who followed a link to a room they had lost was bounced to Home
+with **no explanation at all**, while the code plainly intends to give one.
+The message now lands after the correction. Verified pre-existing rather than
+assumed: the E diff touches no other `accessError` line, and the wiped-message
+ordering is present at `HEAD`.
+
+### Wiring mutations — all three red
+
+| Mutation | Killed |
+|---|---|
+| Revert the access-error ordering fix | the explicit-refusal test |
+| Boot stops consulting local restoration | the bare-URL restore test |
+| Remember the REQUESTED destination, not the installed one | the ghost-branch test |
+
+The third matters most: navigating to a branch that no longer exists lands on
+the room root, and storing the *request* would re-restore into a fallback on
+every reload — a store that quietly disagrees with where the app actually is.
+
+### Design decisions worth carrying
+
+- **Continuity proposes; it never installs.** `useRoomNavigation` remains the
+  single destination writer (§5.7). A continuity module that wrote room or
+  scene state would be exactly the second writer the design forbids, and the
+  two would race at boot.
+- **Two storage tiers ARE window locality** (§15.4). `sessionStorage` is
+  per-window and survives reload, so it is the "stable window identity" the
+  spec asks for; `localStorage` holds the installation's most recent scene for
+  a window with no history of its own. Nothing synchronizes through the server,
+  and the module contains no API call by construction.
+- **A scene alone is an explicit request.** `/?scene=record` had to outrank a
+  restored House, or the one URL a user can type to override their restored
+  scene would be the one URL that silently does not work.
+- **Home root is remembered as Home, with its scene.** Home + Record is a place
+  the user chose; restoring them to Home + House would undo that choice on
+  every reload.
+- **Sign-out forgets.** On a shared device the next person gets Home and no
+  record of which rooms the last one was in — asserted by checking the stored
+  blob no longer contains the room id, not merely that the key was removed.
+
+Baseline at handoff: **1138 backend**, **75 frontend**, lint 0, build 0.
+
 ## Task Group F — Integrated Release 1 gate — NOT STARTED
 
 No PR may open until F passes.

@@ -174,8 +174,9 @@ unavailable marker). `api/home.py` is the only membership door
 (candidate→confirm add, nondelegable `can_manage_home`); the generic join
 refuses Home; thesis create/draft/propose return 409 in Home. Frontend:
 `hooks/useRoomNavigation.ts` is the ONE URL-authoritative navigation
-transaction (bare `/` = Home root; explicit `?room=`/`&thread=` URLs win;
-popstate is history-neutral), `components/home/` holds the pulse + settings,
+transaction (explicit `?room=`/`&thread=`/`?scene=` URLs win; a bare `/`
+restores the window's last room/branch/scene via `lib/sceneContinuity`, or
+opens Home when there is nothing stored; popstate is history-neutral), `components/home/` holds the pulse + settings,
 `BranchTree` renders genealogy in rail and Branches panel alike. Founder
 activation (`deploy/activate_home_founders.sql`) and member removal
 (`deploy/remove_home_member.sql`) are reviewed operator scripts — never UI.
