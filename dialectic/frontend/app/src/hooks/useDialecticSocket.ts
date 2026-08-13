@@ -56,6 +56,7 @@ export function useDialecticSocket(options?: {
   const addMessage = useAppStore((s) => s.addMessage);
   const setTypingUser = useAppStore((s) => s.setTypingUser);
   const setLLMState = useAppStore((s) => s.setLLMState);
+  const setDeepDiveActive = useAppStore((s) => s.setDeepDiveActive);
   const updateStreamingContent = useAppStore((s) => s.updateStreamingContent);
   const appendStreamingToken = useAppStore((s) => s.appendStreamingToken);
   const setThreads = useAppStore((s) => s.setThreads);
@@ -348,6 +349,17 @@ export function useDialecticSocket(options?: {
         if (typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
         break;
 
+      // Research-mode brackets: the dive between them speaks the ordinary
+      // llm_* vocabulary above, so all these two do is keep the composer's
+      // Research button disarmed while one is in flight.
+      case 'deep_dive_started':
+        setDeepDiveActive(true);
+        break;
+
+      case 'deep_dive_done':
+        setDeepDiveActive(false);
+        break;
+
       case 'annotation_created':
         if (!payloadMatchesActiveThread(payload)) break;
         addMessage(payload as unknown as Message);
@@ -470,6 +482,7 @@ export function useDialecticSocket(options?: {
     recordToolActivity,
     clearToolActivity,
     setMessageAttachments,
+    setDeepDiveActive,
   ]);
 
   const connect = useCallback(() => {
@@ -716,6 +729,18 @@ export function useDialecticSocket(options?: {
     });
   }, [send]);
 
+  // Research mode: the composer's text IS the question; the server runs the
+  // long tool loop and the brief lands as an llm_primary message.
+  const sendDeepDive = useCallback(
+    (question: string): boolean => (
+      send('deep_dive', {
+        question,
+        thread_id: useAppStore.getState().currentThread?.id,
+      })
+    ),
+    [send],
+  );
+
   const forkThread = useCallback(
     (sourceThreadId: string, forkMessageId: string, title?: string): boolean => (
       send('fork_thread', {
@@ -787,6 +812,7 @@ export function useDialecticSocket(options?: {
     abortProtocol,
     summonLLM,
     cancelLLM,
+    sendDeepDive,
     forkThread,
     createCommitment,
     recordConfidence,

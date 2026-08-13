@@ -552,3 +552,22 @@
     padding-top: 0.5rem;
     border-top: 1px solid var(--color-bean);
 }
+
+/* ── Claim check badge ─────────────────────────────────────────
+   A nudge, not an alarm: the proposal cards' quiet typography but no
+   border and no button — there is no decision here, only "read the piece
+   yourself before relying on the message". */
+.msg-claim-check {
+    align-self: flex-start;
+    margin-top: 6px;
+    padding: 6px 10px;
+    max-width: 100%;
+    background: var(--amber-10, transparent);
+}
+.msg-human-self .msg-claim-check { align-self: flex-end; }
+.msg-claim-check-link {
+    color: var(--color-secondary);
+    text-decoration: underline;
+    overflow-wrap: anywhere;
+}
+.msg-claim-check-link:hover { color: var(--color-ink); }

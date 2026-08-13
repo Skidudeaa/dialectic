@@ -302,6 +302,29 @@ class DialecticAPI {
   }
 
   /**
+   * The human tap that settles a logged prediction: relays the verdict to
+   * tradingDesk's resolve endpoint and the server flips the proposal's
+   * accepted flag, so a second tap answers 409 instead of double-resolving.
+   */
+  async acceptResolution(
+    roomId: string,
+    predictionId: string,
+    verdict: 'correct' | 'incorrect',
+  ): Promise<Record<string, unknown>> {
+    return this.fetch(`/rooms/${roomId}/predictions/${predictionId}/resolve-accept`, {
+      method: 'POST',
+      body: JSON.stringify({ verdict }),
+    });
+  }
+
+  async acceptReading(roomId: string, messageId: string): Promise<Record<string, unknown>> {
+    return this.fetch(`/rooms/${roomId}/reading/accept`, {
+      method: 'POST',
+      body: JSON.stringify({ message_id: messageId }),
+    });
+  }
+
+  /**
    * Create Thesis — mints a book on tradingDesk born bound to this room.
    * The DAG itself gets drawn later in the desk's Builder; this call only
    * establishes the binding, so the room starts receiving snapshots.

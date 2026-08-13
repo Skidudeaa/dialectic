@@ -53,6 +53,13 @@ interface AppState {
   // LLM state
   isLLMThinking: boolean;
   isLLMStreaming: boolean;
+  /**
+   * A research dive (llm/research.py) is in flight for this room, bracketed
+   * by the deep_dive_started / deep_dive_done broadcasts. The dive's own
+   * progress rides the ordinary llm_* stream events; this flag exists only
+   * to keep the composer's Research button disarmed until the brief lands.
+   */
+  isDeepDiveActive: boolean;
   streamingContent: string;
   /**
    * Tools the LLM is using right now, keyed by thread. Transient: it exists to
@@ -104,6 +111,7 @@ interface AppState {
   updateStreamingContent: (content: string) => void;
   appendStreamingToken: (token: string) => void;
   setLLMState: (thinking: boolean, streaming: boolean) => void;
+  setDeepDiveActive: (active: boolean) => void;
   recordToolActivity: (threadId: string, activity: LLMToolActivity) => void;
   clearToolActivity: (threadId: string) => void;
   setProtocol: (protocol: ProtocolState | null) => void;
@@ -134,6 +142,7 @@ const initialRoomState = {
   typingUsers: [],
   isLLMThinking: false,
   isLLMStreaming: false,
+  isDeepDiveActive: false,
   streamingContent: '',
   llmToolActivity: {},
   activeProtocol: null,
@@ -277,6 +286,8 @@ export const useAppStore = create<AppState>()(
           isLLMStreaming: streaming,
           ...((!thinking && !streaming) ? { streamingContent: '' } : {}),
         }),
+
+      setDeepDiveActive: (active) => set({ isDeepDiveActive: active }),
 
       // A finished/failed event updates the entry its start created, matched on
       // tool name — the loop never runs the same tool twice concurrently, and

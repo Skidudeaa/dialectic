@@ -117,6 +117,7 @@ export function MessageBubble({
   const [isExpanded, setIsExpanded] = useState(false)
   const [showTools, setShowTools] = useState(false)
   const [acceptState, setAcceptState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
+  const [readingAcceptState, setReadingAcceptState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
   const editRef = useRef<HTMLTextAreaElement>(null)
   const currentRoomId = useAppStore((s) => s.currentRoom?.id)
 
@@ -197,6 +198,11 @@ export function MessageBubble({
   // create_commitment over the live socket; the disarm arrives back as a
   // MESSAGE_METADATA broadcast with accepted=true, for both members.
   const commitmentProposals = message.metadata?.commitment_proposals ?? []
+
+  // The claim checker's badge, when this message's linked article isn't
+  // fairly represented. Read-only — unlike the proposal cards there is no
+  // Accept; it is a nudge, not a decision.
+  const claimCheck = message.metadata?.claim_check
   const [commitAccepting, setCommitAccepting] = useState<number | null>(null)
   const acceptCommitmentProposal = (p: CommitmentProposal, index: number) => {
     const state = useAppStore.getState()
@@ -221,6 +227,40 @@ export function MessageBubble({
       setAcceptState('accepted')
     } catch {
       setAcceptState('error')
+    }
+  }
+
+  // A drafted library entry, if this turn made one. Accept re-fetches the
+  // page through the sidecar and files it; the server flips `accepted`.
+  const readingProposal = message.metadata?.reading_proposal
+  const readingFiled = Boolean(readingProposal?.accepted) || readingAcceptState === 'accepted'
+
+  const acceptReading = async () => {
+    if (!currentRoomId || readingAcceptState === 'accepting' || readingFiled) return
+    setReadingAcceptState('accepting')
+    try {
+      await api.acceptReading(currentRoomId, message.id)
+      setReadingAcceptState('accepted')
+    } catch {
+      setReadingAcceptState('error')
+    }
+  }
+
+  // A deadline-watch resolution proposal, if this annotator note carries
+  // one. The tap relays the human's verdict to tradingDesk; an `unclear`
+  // verdict is evidence-only and renders no buttons.
+  const resolutionProposal = message.metadata?.resolution_proposal
+  const [resolutionState, setResolutionState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
+  const resolutionLogged = Boolean(resolutionProposal?.accepted) || resolutionState === 'accepted'
+
+  const acceptResolution = async (verdict: 'correct' | 'incorrect') => {
+    if (!currentRoomId || !resolutionProposal || resolutionState === 'accepting' || resolutionLogged) return
+    setResolutionState('accepting')
+    try {
+      await api.acceptResolution(currentRoomId, resolutionProposal.prediction_id, verdict)
+      setResolutionState('accepted')
+    } catch {
+      setResolutionState('error')
     }
   }
 
@@ -380,6 +420,83 @@ export function MessageBubble({
           </div>
         )}
 
+        {readingProposal && (
+          <div className="msg-proposal">
+            <div className="msg-proposal-title">File in the library</div>
+            <div className="msg-proposal-statement">
+              {readingProposal.title || readingProposal.url}
+            </div>
+            <div className="msg-proposal-meta">
+              {readingProposal.site && `${readingProposal.site} · `}
+              {readingProposal.url}
+            </div>
+            <div className="msg-proposal-meta">{readingProposal.summary}</div>
+            {readingFiled ? (
+              <span className="msg-proposal-logged">filed in the library</span>
+            ) : (
+              <button
+                className="msg-proposal-accept"
+                disabled={readingAcceptState === 'accepting'}
+                onClick={acceptReading}
+              >
+                {readingAcceptState === 'accepting' ? 'Filing…' : 'Accept'}
+              </button>
+            )}
+            {readingAcceptState === 'error' && !readingFiled && (
+              <span className="msg-proposal-error">could not file — try again</span>
+            )}
+          </div>
+        )}
+
+        {resolutionProposal && (
+          <div className="msg-proposal">
+            <div className="msg-proposal-title">Prediction resolution</div>
+            <div className="msg-proposal-statement">{resolutionProposal.statement}</div>
+            <div className="msg-proposal-meta">
+              verdict: {resolutionProposal.verdict} — {resolutionProposal.rationale}
+            </div>
+            {(resolutionProposal.evidence ?? []).length > 0 && (
+              <div className="msg-proposal-meta">
+                {(resolutionProposal.evidence ?? []).map((ev) => (
+                  <div key={ev.url}>
+                    <a
+                      className="msg-claim-check-link"
+                      href={ev.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {ev.title || ev.url}
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+            {resolutionLogged ? (
+              <span className="msg-proposal-logged">resolution logged</span>
+            ) : resolutionProposal.verdict !== 'unclear' ? (
+              <div>
+                <button
+                  className="msg-proposal-accept"
+                  disabled={resolutionState === 'accepting'}
+                  onClick={() => acceptResolution('correct')}
+                >
+                  {resolutionState === 'accepting' ? 'Logging…' : 'Mark correct'}
+                </button>
+                <button
+                  className="msg-proposal-accept"
+                  disabled={resolutionState === 'accepting'}
+                  onClick={() => acceptResolution('incorrect')}
+                >
+                  Mark incorrect
+                </button>
+              </div>
+            ) : null}
+            {resolutionState === 'error' && !resolutionLogged && (
+              <span className="msg-proposal-error">could not log — try again</span>
+            )}
+          </div>
+        )}
+
         {commitmentProposals.length > 0 && (
           <div className="msg-proposal">
             <div className="msg-proposal-title">Heard a commitment</div>
@@ -402,6 +519,29 @@ export function MessageBubble({
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {claimCheck && (
+          <div className="msg-claim-check">
+            <div className="msg-proposal-title">
+              ⚠ {claimCheck.verdict === 'misrepresented'
+                ? 'misrepresents the linked article'
+                : 'only partly matches the linked article'}
+            </div>
+            {claimCheck.note && (
+              <div className="msg-proposal-meta">{claimCheck.note}</div>
+            )}
+            <div className="msg-proposal-meta">
+              <a
+                className="msg-claim-check-link"
+                href={claimCheck.url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {claimCheck.title || claimCheck.url}
+              </a>
+            </div>
           </div>
         )}
 

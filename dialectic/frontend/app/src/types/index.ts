@@ -40,6 +40,9 @@ export interface ToolCallTrace {
  * the field, on history reloads too.
  */
 export interface MessageMetadata {
+  /** Set on research-mode briefs ('deep_dive') — the message came from the
+   *  long tool loop, not an ordinary turn. */
+  source?: string;
   tools?: {
     iterations: number;
     degraded: boolean;
@@ -49,8 +52,14 @@ export interface MessageMetadata {
   proposal?: PredictionProposal;
   /** A propose_thesis card — its tap opens the Create Thesis panel. */
   thesis_proposal?: ThesisProposal;
+  /** A save_reading card — its tap files the article into the library. */
+  reading_proposal?: ReadingProposal;
   /** Detected implicit commitments ("I bet…") awaiting the Accept tap. */
   commitment_proposals?: CommitmentProposal[];
+  /** A claim-check verdict when a linked article isn't fairly represented. */
+  claim_check?: ClaimCheck;
+  /** A deadline-watch resolution proposal awaiting the human's verdict tap. */
+  resolution_proposal?: ResolutionProposal;
 }
 
 /**
@@ -63,6 +72,18 @@ export interface CommitmentProposal {
   resolution_criteria: string;
   category: string;
   accepted?: boolean;
+}
+
+/**
+ * The claim checker's verdict on a human message linking an article.
+ * Only `mixed`/`misrepresented` ever reach the client — supported links
+ * stay silent by design, so a badge always means "read it yourself first".
+ */
+export interface ClaimCheck {
+  url: string;
+  title?: string | null;
+  verdict: 'mixed' | 'misrepresented';
+  note: string;
 }
 
 /**
@@ -88,6 +109,36 @@ export interface PredictionProposal {
   /** ISO date (YYYY-MM-DD) the prediction resolves by. */
   deadline: string;
   linked_book_id?: string;
+  accepted?: boolean;
+}
+
+/**
+ * Claude's drafted library entry. The draft writes nothing; a human tapping
+ * Accept re-fetches the page through the sidecar and files it into the
+ * room's reading library, and the server flips `accepted`.
+ */
+export interface ReadingProposal {
+  url: string;
+  title?: string | null;
+  site?: string | null;
+  published?: string | null;
+  summary: string;
+  key_claims?: string[];
+  accepted?: boolean;
+}
+
+/**
+ * The deadline watcher's proposed resolution for a logged prediction. The
+ * proposal writes nothing; a human tapping Mark correct/incorrect relays
+ * THEIR verdict to tradingDesk and the server flips `accepted`. An `unclear`
+ * verdict renders no buttons — the evidence is the whole message.
+ */
+export interface ResolutionProposal {
+  prediction_id: string;
+  statement: string;
+  verdict: 'correct' | 'incorrect' | 'unclear';
+  rationale: string;
+  evidence?: { url: string; title?: string | null }[];
   accepted?: boolean;
 }
 

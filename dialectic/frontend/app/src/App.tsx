@@ -63,6 +63,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const onlineUsers = useAppStore((s) => s.onlineUsers)
   const isLLMThinking = useAppStore((s) => s.isLLMThinking)
   const isLLMStreaming = useAppStore((s) => s.isLLMStreaming)
+  const isDeepDiveActive = useAppStore((s) => s.isDeepDiveActive)
   const llmToolActivity = useAppStore((s) => s.llmToolActivity)
   const streamingContent = useAppStore((s) => s.streamingContent)
   const activeProtocol = useAppStore((s) => s.activeProtocol)
@@ -114,6 +115,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
     isConnected,
     send,
     sendMessage,
+    sendDeepDive,
     sendTypingStart,
     sendTypingStop,
     sendTypingContent,
@@ -501,6 +503,8 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
               onTypingStart={sendTypingStart}
               onTypingStop={sendTypingStop}
               onTypingContent={sendTypingContent}
+              onResearch={sendDeepDive}
+              researchActive={isDeepDiveActive}
               disabled={!isConnected || !currentThread}
               replyTo={replyTarget}
               onCancelReply={() => setReplyToId(null)}

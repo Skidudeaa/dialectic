@@ -204,6 +204,30 @@
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .send-btn svg { width: 16px; height: 16px; }
 
+/* Research button — the attach button's text-labelled sibling: cacao
+   surface, never solid amber (that's the send button's one job) */
+.research-btn {
+    height: 42px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    color: var(--color-secondary);
+    font-family: var(--font-stencil);
+    font-size: 10px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+}
+.research-btn:hover:not(:disabled) { color: var(--color-amber); border-color: var(--amber-30); }
+.research-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* Hints line */
 .input-hints {
     display: flex;

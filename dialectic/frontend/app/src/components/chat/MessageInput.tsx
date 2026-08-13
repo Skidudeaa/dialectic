@@ -34,6 +34,11 @@ interface MessageInputProps {
   onTypingStart?: () => void
   onTypingStop?: () => void
   onTypingContent?: (content: string) => void
+  /** Research mode: sends the composer's text as a deep_dive question. When
+   *  absent, no Research button renders. */
+  onResearch?: (question: string) => boolean
+  /** A dive is in flight for this room — the server refuses a second. */
+  researchActive?: boolean
   disabled?: boolean
   replyTo?: { author: string; content: string } | null
   onCancelReply?: () => void
@@ -49,7 +54,7 @@ const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
   { value: 'definition', label: 'Definition' },
 ]
 
-export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTypingContent, disabled, replyTo, onCancelReply, placeholder = 'Think out loud... (use @llm to summon Claude)', quiet = false }: MessageInputProps) {
+export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTypingContent, onResearch, researchActive = false, disabled, replyTo, onCancelReply, placeholder = 'Think out loud... paste a link and Claude reads it', quiet = false }: MessageInputProps) {
   const [content, setContent] = useState('')
   const [messageType, setMessageType] = useState<MessageType>('text')
   const [sendError, setSendError] = useState(false)
@@ -161,6 +166,33 @@ export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTy
     onTypingStop?.()
     typingRef.current = false
   }, [content, messageType, onSend, onTypingStop, uploading, failed, ready])
+
+  // Research mode: the composer's text is the question, and the dive runs
+  // long (the server caps it at 15 iterations / 300s), so the same send
+  // guards apply — no attachments ride a question, text only.
+  const handleResearch = useCallback(() => {
+    if (!onResearch) return
+    const trimmed = content.trim()
+    if (!trimmed) {
+      setNotice('Type the question first — Research sends what is in the composer.')
+      return
+    }
+    const sent = onResearch(trimmed)
+    // Same contract as onSend: false means the socket is not open, and the
+    // text must stay put rather than read as eaten.
+    if (!sent) {
+      setSendError(true)
+      return
+    }
+    setSendError(false)
+    setNotice(null)
+    setContent('')
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
+    onTypingStop?.()
+    typingRef.current = false
+  }, [content, onResearch, onTypingStop])
 
   // Enter sends, Shift+Enter inserts a newline — the convention the hint text
   // has always claimed. Cmd/Ctrl+Enter stays supported for muscle memory.
@@ -344,6 +376,16 @@ export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTy
               <polygon points="22 2 15 22 11 13 2 9 22 2"/>
             </svg>
           </button>
+          {onResearch && (
+            <button
+              className="research-btn"
+              onClick={handleResearch}
+              disabled={disabled || researchActive || content.trim().length === 0}
+              title={researchActive ? 'A research dive is already running' : 'Deep dive — Claude reads the sources and lands a brief (runs long)'}
+            >
+              {researchActive ? '✦ Researching…' : '✦ Research'}
+            </button>
+          )}
         </div>
         <div className="input-hints">
           {sendError ? (
@@ -353,7 +395,10 @@ export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTy
           ) : notice ? (
             <span className="input-notice" role="status">{notice}</span>
           ) : (
-            <span>Enter to send &middot; Shift+Enter for newline &middot; paste or drop files</span>
+            <span>
+              Enter to send &middot; links get read &amp; fact-checked &middot;
+              {onResearch ? ' ✦ Research = deep dive with sources' : ' paste or drop files'}
+            </span>
           )}
           <span>? for shortcuts</span>
         </div>
