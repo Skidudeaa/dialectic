@@ -1,0 +1,42 @@
+.scene-switcher {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 18px;
+    min-height: 34px;
+    padding: 0 18px;
+    border-bottom: 1px solid var(--color-bean);
+    background: var(--color-void);
+}
+
+.scene-switcher-action {
+    position: relative;
+    height: 34px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-secondary);
+    font: 10px/1 var(--font-mono);
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.scene-switcher-action::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: transparent;
+}
+
+.scene-switcher-action:hover,
+.scene-switcher-action.is-active {
+    color: var(--color-bone);
+}
+
+.scene-switcher-action.is-active::after {
+    background: var(--color-amber);
+}
