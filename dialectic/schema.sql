@@ -114,7 +114,7 @@ CREATE TABLE memories (
     invalidated_by_user_id UUID REFERENCES users(id),
     invalidated_at TIMESTAMPTZ,
     invalidation_reason TEXT,
-    embedding VECTOR(1536),
+    embedding VECTOR(1024),
     -- Whose statement this memory captures (006) — distinct from created_by_user_id (who saved it)
     speaker_user_id UUID REFERENCES users(id),
     -- Supersession: valid_from = created_at, valid_until = superseded_at (006)
