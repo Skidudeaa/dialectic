@@ -5,3 +5,4 @@
 [2026-08-12] Chose fluid provisional inference with visible uncertainty and human authority over durable conclusions — structure may emerge automatically; consensus may not.
 [2026-08-12] Locked the dual-spine construction workroom — artifacts are the durable output, deliberation is the inspectable reasoning around them, and conversation coordinates both.
 [2026-08-12] Integrated Library, Night Shift, claim checking, The Wire, Research, prediction resolution, and Echo as one evidence metabolism feeding both spines — avoids shipping seven disconnected chat features.
+[2026-08-12] Made the Home Room the canonical default entry — The Table becomes its house-wide scene rather than a competing app-level front door.
