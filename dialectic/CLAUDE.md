@@ -73,6 +73,7 @@ silence follow-ups), `DIALECTIC_TOOLS_ENABLED`, `DIALECTIC_VISION_ENABLED`,
 | `scheduler.py` | asyncio job scheduler — advisory lock, `scheduled_job_runs` ledger, interval buckets + wall-clock daily slots (`daily_at`/`daily_tz`) |
 | `memory/manager.py` | Three-lane recall (dense + FTS + entity/speaker, RRF-fused) + versioned room memories + write-path dedup |
 | `api/notifications/` | Dual-channel push: Web Push/VAPID (`webpush.py`, the live channel for the installed PWA) + Expo (dormant until a native app ships) |
+| `workspace_objects.py` + `api/workspace.py` | The workspace-object projection (design v2 §8.1): seven read-only adapters — readings, research briefs, the thesis, commitments, proposals, dossier entries, the Record — plus `workspace_object_from_movement` reusing the House's own movement. **Adapters, not a table**: no new storage, no writes, and `available_actions` describes what a surface may offer without performing it. Two entities carry a memory TWIN that must fold into one object, never render twice: a reading and its `reading:<domain>-<slug>` memory (paired through `llm.reading._reading_key`, the writer's own function), and a thesis and its `THESIS_STATE_MEMORY_KEY` slot. `GET /rooms/{id}/workspace/objects` is read-only by construction — the router carries no write route, and every write stays with the entity that owns it |
 | `transport/handlers.py` | WebSocket message routing; coordinates annotator + primary LLM |
 | `transport/websocket.py` | WebSocket connection lifecycle |
 | `models.py` | Pydantic data models for all entities |
