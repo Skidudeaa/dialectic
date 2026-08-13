@@ -343,8 +343,7 @@ ORDER BY deadline
 _MOVEMENT_SQL = """
 WITH er AS (
     SELECT unnest($1::uuid[]) AS room_id
-)
-SELECT * FROM (
+), mv AS (
     SELECT 'reading_filed' AS kind, ri.room_id, NULL::uuid AS thread_id,
            ri.id AS object_id,
            COALESCE(ri.title, ri.url) AS title,
@@ -405,15 +404,30 @@ SELECT * FROM (
            e.timestamp
     FROM events e JOIN er ON er.room_id = e.room_id
     WHERE e.event_type IN ('THESIS_CREATED', 'THESIS_RETIRED')
-) mv
+),
+ranked AS (
+    -- Rank INSIDE each room before any global cut. A single global
+    -- newest-N lets one busy room consume the whole budget and silently
+    -- project zero movement for every other room.
+    SELECT mv.*, row_number() OVER (
+        PARTITION BY mv.room_id ORDER BY mv.occurred_at DESC
+    ) AS rn
+    FROM mv
+)
+SELECT kind, room_id, thread_id, object_id, title, state, occurred_at
+FROM ranked
+WHERE rn <= $2
 ORDER BY occurred_at DESC
-LIMIT $2
+LIMIT $3
 """
 
-# One bound for the whole House. The 150 ms p95 target was measured before
-# these eight arms existed, so the projection is capped rather than trusted;
-# per-room slicing happens after the fetch.
-_MOVEMENT_TOTAL_CAP = 200
+# Two bounds, and the ORDER matters. Per-room rank is the PRIMARY bound and is
+# applied inside SQL before any global cut, so a busy room cannot consume the
+# whole budget and silently blank every other room. The total is a backstop
+# against an absurd room count, sized so per-room binds first at realistic
+# scale (33 rooms x 12). The 150 ms p95 target predates these eight arms, so
+# both numbers were chosen against a fresh measurement, not inherited.
+_MOVEMENT_TOTAL_CAP = 400
 _MOVEMENT_PER_ROOM_CAP = 12
 
 
@@ -467,7 +481,8 @@ class HomeActivityService:
         # array alone. Adding a viewer filter here would make the House
         # per-person, which is exactly what the shared-projection rule forbids.
         movement_rows = await self.db.fetch(
-            _MOVEMENT_SQL, room_ids, _MOVEMENT_TOTAL_CAP
+            _MOVEMENT_SQL, room_ids,
+            _MOVEMENT_PER_ROOM_CAP, _MOVEMENT_TOTAL_CAP,
         )
 
         branches_by_room: dict[UUID, list[HomeActivityBranch]] = {

@@ -202,11 +202,65 @@ async def test_movement_sql_fences_every_arm_by_itself(moved):
     mutation that deleted the fence from one arm left every projection test
     green. This asserts the statement directly, so each arm is on the hook.
     """
-    from home_activity import _MOVEMENT_SQL, _MOVEMENT_TOTAL_CAP
+    from home_activity import (
+        _MOVEMENT_PER_ROOM_CAP, _MOVEMENT_SQL, _MOVEMENT_TOTAL_CAP,
+    )
 
-    rows = await moved.db.fetch(_MOVEMENT_SQL, [SHARED], _MOVEMENT_TOTAL_CAP)
+    rows = await moved.db.fetch(
+        _MOVEMENT_SQL, [SHARED], _MOVEMENT_PER_ROOM_CAP, _MOVEMENT_TOTAL_CAP,
+    )
     assert rows, "fixture produced no movement at all"
     foreign = [r for r in rows if r["room_id"] != SHARED]
     assert not foreign, f"unfenced rows leaked: {[r['kind'] for r in foreign]}"
     # And the solo room's content must be absent by value, not just by id.
     assert all("SOLO-LEAK-SENTINEL" not in (r["title"] or "") for r in rows)
+
+
+@pytest.mark.asyncio
+async def test_a_loud_room_cannot_starve_a_quiet_one(db):
+    """Bounding must be PER ROOM, not a global newest-N.
+
+    WHY: with one global `ORDER BY occurred_at DESC LIMIT N`, a room with N
+    recent items consumes the whole budget and every other room silently
+    projects zero movement — the House looks healthy while hiding rooms.
+    """
+    from home_activity import HomeActivityService
+
+    tx = db.transaction()
+    await tx.start()
+    try:
+        home = await db.fetchval("SELECT id FROM rooms WHERE is_home")
+        A, B = _uid(0xBA1), _uid(0xBA2)
+        for u, n in ((A, "LoudA"), (B, "LoudB")):
+            await db.execute(
+                "INSERT INTO users (id,created_at,display_name) VALUES ($1,now(),$2)", u, n)
+            await db.execute(
+                "INSERT INTO room_memberships (room_id,user_id,joined_at) VALUES ($1,$2,now())",
+                home, u)
+        LOUD, QUIET = _uid(0xBB1), _uid(0xBB2)
+        for rid, nm in ((LOUD, "Loud"), (QUIET, "Quiet")):
+            await db.execute(
+                "INSERT INTO rooms (id,created_at,token,name) VALUES ($1,now(),$2,$3)",
+                rid, f"starve-{rid}", nm)
+            for u in (A, B):
+                await db.execute(
+                    "INSERT INTO room_memberships (room_id,user_id,joined_at) VALUES ($1,$2,now())",
+                    rid, u)
+        for j in range(250):
+            await db.execute(
+                """INSERT INTO reading_items (room_id,url,title,content,summary,source,created_at)
+                   VALUES ($1,$2,'loud','b','s','proposal',now())""",
+                LOUD, f"https://loud.test/{j}")
+        await db.execute(
+            """INSERT INTO reading_items (room_id,url,title,content,summary,source,created_at)
+               VALUES ($1,'https://quiet.test/1','QUIET-ITEM','b','s','proposal',
+                       now() - interval '5 days')""",
+            QUIET)
+
+        proj = await HomeActivityService(db).build(A)
+        per_room = {r.name: len(r.movement) for r in proj.rooms}
+        assert per_room.get("Quiet", 0) == 1, (
+            f"the quiet room was starved by the loud one: {per_room}")
+        assert per_room.get("Loud", 0) > 0
+    finally:
+        await tx.rollback()
