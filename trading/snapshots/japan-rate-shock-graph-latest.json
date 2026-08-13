@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-08-13T01:02:02Z",
+  "timestamp": "2026-08-13T01:30:44Z",
   "title": "Japan Rate Normalization Shock Thesis — April 2026",
   "nodeStates": {
     "boj-decision": "fired",
@@ -68,19 +68,19 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-08-13T01:01:55Z",
+      "fetchedAt": "2026-08-13T01:30:42Z",
       "ttlSeconds": 300,
       "detail": "17/17 symbols"
     },
     "fred": {
       "source": "fred",
-      "fetchedAt": "2026-08-13T01:02:01Z",
+      "fetchedAt": "2026-08-13T01:30:43Z",
       "ttlSeconds": 3600,
       "detail": "3/3 series"
     },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-08-13T01:02:02Z",
+      "fetchedAt": "2026-08-13T01:30:44Z",
       "ttlSeconds": 86400,
       "detail": "3 node(s)"
     }
@@ -169,24 +169,24 @@
   },
   "tvIndicators": {
     "usd-jpy": {
-      "rsi14": 42.51,
+      "rsi14": 42.48,
       "atr14": 1.26,
       "sma50": 161.17,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:02:02Z"
+      "computedAt": "2026-08-13T01:30:44Z"
     },
     "us-10y": {
       "rsi14": 56.86,
       "sma50": 4.55,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:02:02Z"
+      "computedAt": "2026-08-13T01:30:44Z"
     },
     "tech-breakdown": {
       "rsi14": 59.51,
       "atr14": 5.0,
       "sma50": 183.09,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:02:02Z"
+      "computedAt": "2026-08-13T01:30:44Z"
     }
   }
 }

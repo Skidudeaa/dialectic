@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-08-13T00:30:56Z",
+  "timestamp": "2026-08-13T01:01:52Z",
   "title": "Iran/Hormuz Thesis — June 2026",
   "nodeStates": {
     "hormuz": "fired",
@@ -71,31 +71,31 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-08-13T00:30:28Z",
+      "fetchedAt": "2026-08-13T01:01:14Z",
       "ttlSeconds": 300,
       "detail": "12/20 symbols"
     },
     "fred": {
       "source": "fred",
-      "fetchedAt": "2026-08-13T00:30:42Z",
+      "fetchedAt": "2026-08-13T01:01:39Z",
       "ttlSeconds": 3600,
       "detail": "5/5 series"
     },
     "eia": {
       "source": "eia",
-      "fetchedAt": "2026-08-13T00:30:43Z",
+      "fetchedAt": "2026-08-13T01:01:40Z",
       "ttlSeconds": 691200,
       "detail": "1/1 specs"
     },
     "treasury": {
       "source": "treasury",
-      "fetchedAt": "2026-08-13T00:30:53Z",
+      "fetchedAt": "2026-08-13T01:01:49Z",
       "ttlSeconds": 172800,
       "detail": "curve 2026-08-12"
     },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-08-13T00:30:56Z",
+      "fetchedAt": "2026-08-13T01:01:52Z",
       "ttlSeconds": 86400,
       "detail": "4 node(s)"
     }
@@ -188,32 +188,32 @@
   },
   "tvIndicators": {
     "brent": {
-      "rsi14": 53.19,
+      "rsi14": 52.78,
       "atr14": 4.53,
-      "sma50": 84.3,
+      "sma50": 84.29,
       "curveSpread": {
-        "spread": 4.01,
+        "spread": 3.96,
         "shape": "backwardation",
-        "front": 88.34,
-        "back": 84.33
+        "front": 88.04,
+        "back": 84.08
       },
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T00:30:56Z"
+      "computedAt": "2026-08-13T01:01:52Z"
     },
     "food-spike": {
       "rsi14": 53.04,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T00:30:56Z"
+      "computedAt": "2026-08-13T01:01:52Z"
     },
     "dxy-stress": {
-      "rsi14": 42.92,
+      "rsi14": 43.0,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T00:30:56Z"
+      "computedAt": "2026-08-13T01:01:52Z"
     },
     "demand-destruction": {
-      "rsi14": 52.59,
+      "rsi14": 52.24,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T00:30:56Z"
+      "computedAt": "2026-08-13T01:01:52Z"
     }
   }
 }
