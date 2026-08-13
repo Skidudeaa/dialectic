@@ -7,3 +7,4 @@
 [2026-08-12] Integrated Library, Night Shift, claim checking, The Wire, Research, prediction resolution, and Echo as one evidence metabolism feeding both spines — avoids shipping seven disconnected chat features.
 [2026-08-12] Made the Home Room the canonical default entry — The Table becomes its house-wide scene rather than a competing app-level front door.
 [2026-08-12] Chose exact scene restoration across macOS, Windows, iOS, and Android, scoped per device — preserves local continuity without silently moving every device to another device's last state.
+[2026-08-12] Set the Home Room's default scene to the house-wide view — launches surface cross-room movement, pending judgment, and overnight work without restoring the conversation Record as the product center.
