@@ -1,11 +1,12 @@
 {
   "v": 2,
-  "timestamp": "2026-08-09T08:30:06Z",
+  "timestamp": "2026-08-13T01:00:21Z",
   "title": "AI Capex Unwind — April 2026",
   "nodeStates": {
     "gpu-price": "fired",
     "power-constraint": "monitoring",
     "tlt-rally": "gated",
+    "capex-rhetoric": "monitoring",
     "tsm-utilization": "fired",
     "capex-guide": "fired",
     "utilities-rerate": "fired",
@@ -66,13 +67,19 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-08-09T08:30:05Z",
+      "fetchedAt": "2026-08-13T01:00:08Z",
       "ttlSeconds": 300,
       "detail": "21/23 symbols"
     },
+    "fred": {
+      "source": "fred",
+      "fetchedAt": "2026-08-13T01:00:20Z",
+      "ttlSeconds": 3600,
+      "detail": "2/2 series"
+    },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-08-09T08:30:05Z",
+      "fetchedAt": "2026-08-13T01:00:21Z",
       "ttlSeconds": 86400,
       "detail": "2 node(s)"
     }
@@ -105,6 +112,7 @@
         "fed-reaction": "monitoring",
         "tlt-rally": "gated",
         "capex-reaccel": "stable",
+        "capex-rhetoric": "monitoring",
         "vix-spike": "approaching"
       },
       "confluence": {}
@@ -120,6 +128,7 @@
         "fed-reaction": "monitoring",
         "tlt-rally": "gated",
         "capex-reaccel": "stable",
+        "capex-rhetoric": "monitoring",
         "nvda-revenue-concentration": "monitoring",
         "semis-breakdown": "approaching",
         "vix-spike": "approaching",
@@ -135,38 +144,37 @@
         "capex-guide": "fired",
         "gpu-price": "fired",
         "power-constraint": "monitoring",
+        "datacenter-reit-leases": "monitoring",
         "utilities-rerate": "fired",
+        "fed-reaction": "monitoring",
         "tlt-rally": "gated",
-        "datacenter-reit-leases": "fired",
+        "capex-reaccel": "stable",
+        "capex-rhetoric": "monitoring",
         "nvda-revenue-concentration": "monitoring",
         "tsm-utilization": "fired",
         "semis-breakdown": "approaching",
         "vix-spike": "approaching",
-        "credit-spreads": "fired",
-        "broad-multiple-compression": "approaching",
-        "fed-reaction": "monitoring",
-        "capex-reaccel": "stable"
+        "credit-spreads": "approaching",
+        "broad-multiple-compression": "approaching"
       },
       "confluence": {
-        "nvda-revenue-concentration": 1.8,
         "semis-breakdown": 0.8,
-        "credit-spreads": 0.9,
-        "broad-multiple-compression": 1.42
+        "broad-multiple-compression": 1.1
       }
     }
   },
   "tvIndicators": {
     "tsm-utilization": {
-      "rsi14": 52.06,
-      "sma50": 425.88,
+      "rsi14": 56.17,
+      "sma50": 425.69,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T08:30:05Z"
+      "computedAt": "2026-08-13T01:00:21Z"
     },
     "semis-breakdown": {
-      "rsi14": 52.67,
-      "atr14": 25.94,
+      "rsi14": 53.29,
+      "atr14": 23.71,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T08:30:05Z"
+      "computedAt": "2026-08-13T01:00:21Z"
     }
   }
 }

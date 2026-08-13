@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-08-09T08:30:11Z",
+  "timestamp": "2026-08-13T01:01:10Z",
   "title": "China Property + EM Cascade — April 2026",
   "nodeStates": {
     "property-sales": "fired",
@@ -8,6 +8,7 @@
     "fiscal-stimulus": "monitoring",
     "fed-reaction": "monitoring",
     "property-bottom": "stable",
+    "default-rhetoric": "monitoring",
     "developer-tail": "fired",
     "lgfv-default": "monitoring",
     "bank-capital": "fired",
@@ -63,13 +64,19 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-08-09T08:30:10Z",
+      "fetchedAt": "2026-08-13T01:00:26Z",
       "ttlSeconds": 300,
       "detail": "28/30 symbols"
     },
+    "fred": {
+      "source": "fred",
+      "fetchedAt": "2026-08-13T01:01:09Z",
+      "ttlSeconds": 3600,
+      "detail": "4/4 series"
+    },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-08-09T08:30:11Z",
+      "fetchedAt": "2026-08-13T01:01:10Z",
       "ttlSeconds": 86400,
       "detail": "2 node(s)"
     }
@@ -104,7 +111,8 @@
         "pboc-response": "monitoring",
         "fiscal-stimulus": "monitoring",
         "fed-reaction": "monitoring",
-        "property-bottom": "stable"
+        "property-bottom": "stable",
+        "default-rhetoric": "monitoring"
       },
       "confluence": {}
     },
@@ -125,49 +133,48 @@
         "fiscal-stimulus": "monitoring",
         "fed-reaction": "monitoring",
         "property-bottom": "stable",
+        "default-rhetoric": "monitoring",
         "aud-cad-weak": "fired"
       },
       "confluence": {}
     },
     "T+90d": {
       "states": {
+        "lgfv-default": "monitoring",
         "property-sales": "fired",
+        "developer-tail": "monitoring",
+        "bank-capital": "fired",
+        "cny-break": "stable",
+        "china-imports": "monitoring",
         "iron-copper": "fired",
+        "dxy-stress": "monitoring",
+        "recession-risk": "monitoring",
         "pboc-response": "monitoring",
         "fiscal-stimulus": "monitoring",
         "fed-reaction": "monitoring",
         "property-bottom": "stable",
-        "developer-tail": "fired",
-        "lgfv-default": "monitoring",
+        "default-rhetoric": "monitoring",
         "aud-cad-weak": "fired",
-        "bank-capital": "fired",
-        "cny-break": "stable",
-        "recession-risk": "fired",
-        "china-imports": "stable",
-        "dxy-stress": "stable",
         "em-currency": "fired",
         "em-stress": "fired"
       },
       "confluence": {
-        "bank-capital": 0.9,
-        "cny-break": 1.05,
-        "em-currency": 0.75,
         "em-stress": 2.05
       }
     }
   },
   "tvIndicators": {
     "cny-break": {
-      "rsi14": 32.35,
+      "rsi14": 25.75,
       "sma50": 6.77,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T08:30:11Z"
+      "computedAt": "2026-08-13T01:01:10Z"
     },
     "iron-copper": {
-      "rsi14": 63.31,
-      "atr14": 2.85,
+      "rsi14": 60.41,
+      "atr14": 2.69,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T08:30:11Z"
+      "computedAt": "2026-08-13T01:01:10Z"
     }
   }
 }

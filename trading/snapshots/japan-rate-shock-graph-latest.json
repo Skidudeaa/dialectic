@@ -1,15 +1,16 @@
 {
   "v": 2,
-  "timestamp": "2026-08-09T08:31:03Z",
+  "timestamp": "2026-08-13T01:02:02Z",
   "title": "Japan Rate Normalization Shock Thesis — April 2026",
   "nodeStates": {
     "boj-decision": "fired",
     "boj-intervention": "monitoring",
-    "jgb-10y": "approaching",
+    "boj-rhetoric": "monitoring",
+    "jgb-10y": "fired",
     "usd-jpy": "fired",
     "carry-unwind": "monitoring",
     "nikkei-stress": "stable",
-    "lifer-repatriation": "approaching",
+    "lifer-repatriation": "fired",
     "us-10y": "approaching",
     "move-index": "approaching",
     "tech-breakdown": "stable",
@@ -19,7 +20,7 @@
     "resolution": "approaching"
   },
   "confluenceScores": {
-    "lifer-repatriation": 0.4,
+    "lifer-repatriation": 0.8,
     "margin-calls": 0.42,
     "vix-spike": 0.3,
     "resolution": 0.25
@@ -67,13 +68,19 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-08-09T08:31:01Z",
+      "fetchedAt": "2026-08-13T01:01:55Z",
       "ttlSeconds": 300,
       "detail": "17/17 symbols"
     },
+    "fred": {
+      "source": "fred",
+      "fetchedAt": "2026-08-13T01:02:01Z",
+      "ttlSeconds": 3600,
+      "detail": "3/3 series"
+    },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-08-09T08:31:03Z",
+      "fetchedAt": "2026-08-13T01:02:02Z",
       "ttlSeconds": 86400,
       "detail": "3 node(s)"
     }
@@ -94,85 +101,92 @@
     "T+7d": {
       "states": {
         "boj-decision": "fired",
-        "carry-unwind": "monitoring",
         "lifer-repatriation": "monitoring",
         "us-10y": "approaching",
         "move-index": "monitoring",
-        "tech-breakdown": "stable",
         "vix-spike": "monitoring",
         "margin-calls": "monitoring",
         "fed-reaction": "monitoring",
         "boj-intervention": "monitoring",
         "nikkei-stress": "monitoring",
         "resolution": "approaching",
-        "jgb-10y": "approaching",
-        "usd-jpy": "fired"
+        "boj-rhetoric": "monitoring",
+        "jgb-10y": "fired",
+        "usd-jpy": "fired",
+        "tech-breakdown": "stable",
+        "carry-unwind": "monitoring"
       },
       "confluence": {}
     },
     "T+28d": {
       "states": {
         "boj-decision": "fired",
-        "carry-unwind": "monitoring",
-        "lifer-repatriation": "monitoring",
         "us-10y": "approaching",
-        "tech-breakdown": "stable",
-        "fed-reaction": "monitoring",
         "boj-intervention": "monitoring",
-        "nikkei-stress": "monitoring",
         "resolution": "approaching",
-        "jgb-10y": "approaching",
-        "usd-jpy": "fired",
-        "move-index": "approaching",
-        "margin-calls": "monitoring",
-        "vix-spike": "stable"
-      },
-      "confluence": {}
-    },
-    "T+90d": {
-      "states": {
-        "boj-decision": "fired",
-        "us-10y": "approaching",
-        "boj-intervention": "monitoring",
-        "jgb-10y": "approaching",
+        "boj-rhetoric": "monitoring",
+        "jgb-10y": "fired",
         "usd-jpy": "fired",
         "move-index": "approaching",
         "tech-breakdown": "stable",
         "carry-unwind": "monitoring",
         "nikkei-stress": "stable",
-        "lifer-repatriation": "approaching",
+        "lifer-repatriation": "stable",
+        "margin-calls": "monitoring",
+        "vix-spike": "approaching",
+        "fed-reaction": "monitoring"
+      },
+      "confluence": {
+        "margin-calls": 0.42,
+        "vix-spike": 0.3
+      }
+    },
+    "T+90d": {
+      "states": {
+        "boj-decision": "fired",
+        "boj-intervention": "monitoring",
+        "boj-rhetoric": "monitoring",
+        "jgb-10y": "fired",
+        "usd-jpy": "fired",
+        "carry-unwind": "monitoring",
+        "nikkei-stress": "stable",
+        "lifer-repatriation": "fired",
+        "us-10y": "approaching",
+        "move-index": "approaching",
+        "tech-breakdown": "stable",
         "margin-calls": "monitoring",
         "vix-spike": "approaching",
         "fed-reaction": "monitoring",
         "resolution": "approaching"
       },
       "confluence": {
-        "lifer-repatriation": 0.4,
+        "lifer-repatriation": 0.8,
         "margin-calls": 0.42,
-        "vix-spike": 0.3
+        "vix-spike": 0.3,
+        "resolution": 0.25
       }
     }
   },
   "tvIndicators": {
     "usd-jpy": {
-      "rsi14": 30.49,
-      "atr14": 1.44,
-      "sma50": 161.2,
+      "rsi14": 42.51,
+      "atr14": 1.26,
+      "sma50": 161.17,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T08:31:03Z"
+      "computedAt": "2026-08-13T01:02:02Z"
     },
     "us-10y": {
-      "rsi14": 55.73,
-      "sma50": 4.54,
+      "rsi14": 56.86,
+      "sma50": 4.55,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T08:31:03Z"
+      "computedAt": "2026-08-13T01:02:02Z"
     },
     "tech-breakdown": {
-      "rsi14": 58.99,
-      "atr14": 5.52,
-      "sma50": 183.34,
+      "rsi14": 59.51,
+      "atr14": 5.0,
+      "sma50": 183.09,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T08:31:03Z"
+      "computedAt": "2026-08-13T01:02:02Z"
     }
   }
 }

@@ -1,10 +1,11 @@
 {
   "v": 2,
-  "timestamp": "2026-08-09T08:01:14Z",
+  "timestamp": "2026-08-13T00:31:16Z",
   "title": "Trump Tariff Escalation Thesis — March 2026",
   "nodeStates": {
     "tariff-shock": "fired",
     "section122-expiry": "fired",
+    "tariff-rhetoric": "monitoring",
     "input-costs": "fired",
     "supply-chain": "fired",
     "auto-sector": "fired",
@@ -74,19 +75,25 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-08-09T08:01:09Z",
+      "fetchedAt": "2026-08-13T00:31:09Z",
       "ttlSeconds": 300,
       "detail": "21/26 symbols"
     },
     "polymarket": {
       "source": "polymarket",
-      "fetchedAt": "2026-08-09T08:01:12Z",
+      "fetchedAt": "2026-08-13T00:31:12Z",
       "ttlSeconds": 900,
       "detail": "1/3 markets"
     },
+    "fred": {
+      "source": "fred",
+      "fetchedAt": "2026-08-13T00:31:14Z",
+      "ttlSeconds": 3600,
+      "detail": "5/5 series"
+    },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-08-09T08:01:14Z",
+      "fetchedAt": "2026-08-13T00:31:16Z",
       "ttlSeconds": 86400,
       "detail": "3 node(s)"
     }
@@ -120,6 +127,7 @@
         "fed-response": "monitoring",
         "negotiation": "stable",
         "recession-risk": "monitoring",
+        "tariff-rhetoric": "monitoring",
         "auto-sector": "fired"
       },
       "confluence": {}
@@ -127,7 +135,6 @@
     "T+28d": {
       "states": {
         "tariff-shock": "fired",
-        "input-costs": "fired",
         "supply-chain": "monitoring",
         "tech-supply": "monitoring",
         "retail-prices": "fired",
@@ -139,6 +146,8 @@
         "fed-response": "monitoring",
         "negotiation": "stable",
         "recession-risk": "monitoring",
+        "tariff-rhetoric": "monitoring",
+        "input-costs": "fired",
         "auto-sector": "fired",
         "ag-retaliation": "fired"
       },
@@ -153,6 +162,7 @@
         "fed-response": "monitoring",
         "negotiation": "stable",
         "recession-risk": "monitoring",
+        "tariff-rhetoric": "monitoring",
         "input-costs": "fired",
         "auto-sector": "fired",
         "tech-supply": "fired",
@@ -163,28 +173,27 @@
         "earnings-compression": "fired"
       },
       "confluence": {
-        "consumer-confidence": 1.45,
-        "earnings-compression": 2.05
+        "consumer-confidence": 1.45
       }
     }
   },
   "tvIndicators": {
     "input-costs": {
-      "rsi14": 58.65,
-      "atr14": 3.04,
-      "sma50": 179.73,
+      "rsi14": 58.64,
+      "atr14": 3.01,
+      "sma50": 180.1,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T08:01:14Z"
+      "computedAt": "2026-08-13T00:31:16Z"
     },
     "auto-sector": {
-      "rsi14": 52.22,
+      "rsi14": 52.96,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T08:01:14Z"
+      "computedAt": "2026-08-13T00:31:16Z"
     },
     "usd-cny": {
-      "rsi14": 32.35,
+      "rsi14": 25.75,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-09T08:01:14Z"
+      "computedAt": "2026-08-13T00:31:16Z"
     }
   }
 }
