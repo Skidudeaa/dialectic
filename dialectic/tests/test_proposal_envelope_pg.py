@@ -141,6 +141,11 @@ async def proposed(db):
     await tx.rollback()
 
 
+async def _ok(value):
+    """An awaitable stand-in for td.post — the desk is not in this test."""
+    return value
+
+
 def _by_kind(envelopes):
     return {e.proposal_kind: e for e in envelopes}
 
@@ -388,6 +393,121 @@ async def test_acceptance_preserves_the_accepting_human_where_it_is_recorded(pro
         f"commitment:{_uid(0xD51)}"
     # No row anywhere records who logged a prediction — null, never a guess.
     assert envelopes["prediction_draft"].accepted_by is None
+
+
+# ---------------------------------------------------------------------------
+# The accepting human — spec 9.3, approved by the owner 2026-08-13
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_accepting_a_prediction_records_who_did_it(proposed, monkeypatch):
+    """Spec 9.3: acceptance must preserve the accepting human.
+
+    Release 1 shipped this as null for the two tradingDesk-crossing kinds,
+    because the relay wrote only a boolean and logged no event — there was
+    nowhere to read an actor from. The owner approved the write; this is the
+    guard that it happens, driven through the REAL relay rather than a
+    hand-stamped flag.
+    """
+    import api.prediction_relay as relay
+    from api.auth.dependencies import AuthenticatedUser
+
+    monkeypatch.setattr(relay.td, "post", lambda *a, **k: _ok({"id": "p"}))
+    token = await proposed.fetchval("SELECT token FROM rooms WHERE id = $1", ROOM)
+    caller = AuthenticatedUser(
+        user_id=AMO, email="amo@test", email_verified=True, display_name="Amo")
+
+    await relay.accept_prediction(
+        room_id=ROOM,
+        request=relay.AcceptPredictionRequest(message_id=M_DRAFTS),
+        token=token, current_user=caller, db=proposed,
+    )
+
+    envelope = _by_kind(await ProposalEnvelopeService(proposed).build(ROOM))["prediction_draft"]
+    assert envelope.status == "accepted"
+    assert envelope.accepted_by == AMO
+    assert envelope.accepted_at is not None
+    # And the payload it was accepted FROM is untouched — the stamp records
+    # the decision beside the proposal, it does not rewrite it.
+    assert envelope.payload["statement"] == "Brent over 90"
+
+
+@pytest.mark.asyncio
+async def test_accepting_a_resolution_records_who_did_it(proposed, monkeypatch):
+    import api.prediction_relay as relay
+    from api.auth.dependencies import AuthenticatedUser
+
+    monkeypatch.setattr(relay.td, "post", lambda *a, **k: _ok({"resolved": True}))
+    token = await proposed.fetchval("SELECT token FROM rooms WHERE id = $1", ROOM)
+    caller = AuthenticatedUser(
+        user_id=AMO, email="amo@test", email_verified=True, display_name="Amo")
+
+    await relay.resolve_accept(
+        room_id=ROOM, prediction_id="p1",
+        request=relay.ResolveAcceptRequest(verdict="correct"),
+        token=token, current_user=caller, db=proposed,
+    )
+
+    envelope = _by_kind(await ProposalEnvelopeService(proposed).build(ROOM))["prediction_resolution"]
+    assert envelope.status == "accepted"
+    assert envelope.accepted_by == AMO
+    assert envelope.accepted_at is not None
+
+
+@pytest.mark.asyncio
+async def test_a_proposal_accepted_before_the_stamp_still_names_its_human(proposed):
+    """Backward compatibility, which is the whole reason the row join stays.
+
+    Every proposal accepted before this change carries a bare `accepted: true`
+    and no actor. Those must not regress to "nobody accepted this" — for the
+    two kinds whose acceptance writes a row, the human is still there to be
+    found, and the envelope must still find them.
+    """
+    await proposed.execute(
+        """INSERT INTO reading_items (room_id,url,title,content,summary,source,
+               source_message_id,saved_by_user_id,created_at)
+           VALUES ($1,$2,'Drafted reading','body','sum','proposal',$3,$4,now())""",
+        ROOM, DRAFT_URL, M_DRAFTS, AMO)
+    # The OLD shape: the flag alone, exactly as the relay used to write it.
+    await proposed.execute(
+        """UPDATE messages
+           SET metadata = jsonb_set(metadata, '{reading_proposal,accepted}',
+                                    'true'::jsonb)
+           WHERE id = $1""", M_DRAFTS)
+
+    envelope = _by_kind(await ProposalEnvelopeService(proposed).build(ROOM))["reading_draft"]
+    assert envelope.status == "accepted"
+    assert envelope.accepted_by == AMO, "the legacy row join stopped working"
+
+
+@pytest.mark.asyncio
+async def test_the_stamp_is_what_the_envelope_trusts(proposed):
+    """When both exist, the stamp wins — it records who pressed the button,
+    while the row records who the write was attributed to. They are the same
+    person today, and the stamp is the one that says so directly."""
+    other = _uid(0xD02)
+    await proposed.execute(
+        "INSERT INTO users (id, created_at, display_name) VALUES ($1,now(),'Dan')",
+        other)
+    await proposed.execute(
+        """INSERT INTO reading_items (room_id,url,title,content,summary,source,
+               source_message_id,saved_by_user_id,created_at)
+           VALUES ($1,$2,'Drafted reading','body','sum','proposal',$3,$4,now())""",
+        ROOM, DRAFT_URL, M_DRAFTS, other)
+    await proposed.execute(
+        """UPDATE messages
+           SET metadata = jsonb_set(metadata, '{reading_proposal}',
+                   metadata->'reading_proposal' || $2::jsonb)
+           WHERE id = $1""",
+        # A dict, not json.dumps: the connection carries the production JSONB
+        # codec, and a Python string would be encoded a SECOND time — the
+        # payload then merges as an ARRAY and the slot stops being a proposal.
+        M_DRAFTS,
+        {"accepted": True, "accepted_by": str(AMO),
+         "accepted_at": "2026-08-13T05:00:00+00:00"})
+
+    envelope = _by_kind(await ProposalEnvelopeService(proposed).build(ROOM))["reading_draft"]
+    assert envelope.accepted_by == AMO
 
 
 # ---------------------------------------------------------------------------

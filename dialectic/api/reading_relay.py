@@ -18,6 +18,7 @@ from api.auth.dependencies import AuthenticatedUser, get_current_user
 from api.token_utils import extract_room_token
 from llm import defuddle_client as dc
 from llm import reading as reading_mod
+from proposal_envelope import ACCEPT_SLOT_SQL, acceptance_stamp
 
 logger = logging.getLogger(__name__)
 
@@ -123,10 +124,11 @@ async def accept_reading(
         saved_by_user_id=current_user.user_id,
     )
 
+    # The library row already carries saved_by_user_id; the stamp says the
+    # same thing where the PROPOSAL lives, so every kind answers "who accepted
+    # this" the same way instead of four kinds answering it four ways.
     await db.execute(
-        """UPDATE messages
-           SET metadata = jsonb_set(metadata, '{reading_proposal,accepted}', 'true'::jsonb)
-           WHERE id = $1""",
-        request.message_id,
+        ACCEPT_SLOT_SQL, request.message_id, "reading_proposal",
+        acceptance_stamp(current_user.user_id),
     )
     return saved

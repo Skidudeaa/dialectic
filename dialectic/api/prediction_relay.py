@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from api.auth.dependencies import AuthenticatedUser, get_current_user
 from api.token_utils import extract_room_token
 from llm import tradingdesk_client as td
+from proposal_envelope import ACCEPT_SLOT_SQL, acceptance_stamp
 
 logger = logging.getLogger(__name__)
 
@@ -129,11 +130,12 @@ async def accept_prediction(
             status_code=502, detail=f"tradingDesk refused the prediction: {e}"
         )
 
+    # Spec §9.3: the acceptance records WHO, in the same patch that records
+    # THAT — one event, one write, so a proposal can never end up accepted by
+    # nobody. tradingDesk holds the prediction; this row holds the human.
     await db.execute(
-        """UPDATE messages
-           SET metadata = jsonb_set(metadata, '{proposal,accepted}', 'true'::jsonb)
-           WHERE id = $1""",
-        request.message_id,
+        ACCEPT_SLOT_SQL, request.message_id, "proposal",
+        acceptance_stamp(current_user.user_id),
     )
     return created
 
@@ -201,11 +203,10 @@ async def resolve_accept(
             status_code=502, detail=f"tradingDesk refused the resolution: {e}"
         )
 
+    # The verdict that was relayed is the HUMAN's, so the human is exactly
+    # what has to survive here (§9.3).
     await db.execute(
-        """UPDATE messages
-           SET metadata = jsonb_set(
-               metadata, '{resolution_proposal,accepted}', 'true'::jsonb)
-           WHERE id = $1""",
-        row["id"],
+        ACCEPT_SLOT_SQL, row["id"], "resolution_proposal",
+        acceptance_stamp(current_user.user_id),
     )
     return resolved

@@ -468,9 +468,14 @@ NEXT: Release 2 — Artifact Workroom
 
 ### Carried forward to Release 2 / owner ruling
 
-1. **§9.3's accepting human is not preserved** for `prediction_draft` and
-   `prediction_resolution` — the relays write a boolean and log no event.
-   Closing it means a write on the relay path, which Release 1 forbids.
+1. ~~**§9.3's accepting human is not preserved**~~ — **CLOSED 2026-08-13**, owner
+   approved the write. All four accept paths now stamp `accepted_by` /
+   `accepted_at` into the proposal payload through one shared
+   `acceptance_stamp()`, in the SAME patch that sets `accepted` — one event,
+   one write, so a proposal can never be accepted by nobody. The envelope
+   prefers the stamp and keeps the row joins as the fallback for everything
+   accepted before it existed. Mutation-proven: ignoring the stamp kills three
+   tests and leaves the legacy-fallback one green.
 2. **§8.2's research question is never persisted** — it travels over
    `DEEP_DIVE_STARTED` and is gone. The Brief projects what survives.
 3. **`failed` and `dismissed` have no row**, deliberately for `failed`. Both are

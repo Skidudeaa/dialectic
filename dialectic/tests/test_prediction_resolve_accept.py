@@ -98,10 +98,17 @@ def test_resolve_accept_relays_the_verdict_and_stamps_accepted(monkeypatch):
         json_body={"resolution": "correct"},
     )
     fake_db.execute.assert_awaited_once()
-    update_sql = fake_db.execute.await_args.args[0]
-    assert "jsonb_set" in update_sql
-    assert "resolution_proposal" in update_sql
-    assert fake_db.execute.await_args.args[1] == MESSAGE_ID
+    # Assert the BOUND ARGUMENTS, not the query text. The slot moved from the
+    # SQL string into a parameter when acceptance started recording its human,
+    # and a test that reads the statement cannot tell which slot it will hit.
+    args = fake_db.execute.await_args.args
+    assert "jsonb_set" in args[0]
+    assert args[1] == MESSAGE_ID
+    assert args[2] == "resolution_proposal"
+    # Spec 9.3: who accepted travels with the fact that it was accepted.
+    assert args[3]["accepted"] is True
+    assert args[3]["accepted_by"] == str(CALLER_ID)
+    assert args[3]["accepted_at"]
 
 
 def test_the_humans_verdict_is_what_gets_relayed(monkeypatch):

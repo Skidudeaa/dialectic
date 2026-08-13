@@ -21,6 +21,7 @@ from api.attachments import (
     _to_response,
 )
 from memory.manager import MemoryManager
+from proposal_envelope import ACCEPT_LIST_ITEM_SQL, acceptance_stamp
 from llm.mentions import contains_explicit_llm_mention
 from llm.orchestrator import LLMOrchestrator
 from llm.annotator import AnnotatorEngine
@@ -2329,14 +2330,9 @@ class MessageHandler:
         proposal_index = payload.get("proposal_index")
         if source_message_id is not None and isinstance(proposal_index, int):
             await self.db.execute(
-                """UPDATE messages
-                   SET metadata = jsonb_set(
-                       metadata,
-                       ARRAY['commitment_proposals', $2::text, 'accepted'],
-                       'true'::jsonb)
-                   WHERE id = $1
-                     AND metadata->'commitment_proposals'->$3::int IS NOT NULL""",
+                ACCEPT_LIST_ITEM_SQL,
                 source_message_id, str(proposal_index), proposal_index,
+                acceptance_stamp(conn.user_id),
             )
             row = await self.db.fetchrow(
                 """SELECT metadata->'commitment_proposals' AS proposals

@@ -124,6 +124,46 @@ WHERE room_id = $1 AND source_message_id = ANY($2::uuid[])
 """
 
 
+def acceptance_stamp(user_id: UUID, at: Optional[datetime] = None) -> dict:
+    """What a human's acceptance records, in one place.
+
+    Spec §9.3 asks acceptance to preserve the accepting human. It is written
+    beside the proposal, in the same patch that sets `accepted`, because the
+    two facts are one event: a second write (or a second table) could be
+    interrupted between them and leave a proposal accepted by nobody.
+
+    Four relays call this, so what an acceptance MEANS has one definition
+    rather than four that drift. The payload keys mirror the envelope fields
+    exactly, so no translation layer sits between the write and the read.
+    """
+    return {
+        "accepted": True,
+        "accepted_by": str(user_id),
+        "accepted_at": (at or datetime.now(timezone.utc)).isoformat(),
+    }
+
+
+# Merge the stamp INTO the proposal slot rather than setting one key: the rest
+# of the payload is what the human accepted and must survive untouched.
+ACCEPT_SLOT_SQL = """
+UPDATE messages
+SET metadata = jsonb_set(metadata, ARRAY[$2::text],
+                         COALESCE(metadata->$2::text, '{}'::jsonb) || $3::jsonb)
+WHERE id = $1
+"""
+
+# The list slot needs the index in the path AND in the read.
+ACCEPT_LIST_ITEM_SQL = """
+UPDATE messages
+SET metadata = jsonb_set(
+        metadata,
+        ARRAY['commitment_proposals', $2::text],
+        COALESCE(metadata->'commitment_proposals'->$3::int, '{}'::jsonb) || $4::jsonb)
+WHERE id = $1
+  AND metadata->'commitment_proposals'->$3::int IS NOT NULL
+"""
+
+
 class ProposalEnvelope(BaseModel):
     """One proposal, whatever shape it is stored in.
 
@@ -168,6 +208,26 @@ def _jsonb(value: Any) -> dict:
             return {}
         return decoded if isinstance(decoded, dict) else {}
     return {}
+
+
+def _uuid_or_none(value: Any) -> Optional[UUID]:
+    """A stamped id, or nothing. Metadata is a document, not a trust boundary:
+    a malformed value means the actor is unknown, never an exception on read."""
+    if isinstance(value, UUID):
+        return value
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _datetime_or_none(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _rationale(kind: str, payload: dict) -> str:
@@ -243,8 +303,12 @@ class ProposalEnvelopeService:
     def _envelope(self, row, room_id, field, kind, payload, *,
                   book, by_url, commitment_by) -> ProposalEnvelope:
         accepted = bool(payload.get("accepted"))
-        accepted_by: Optional[UUID] = None
-        accepted_at: Optional[datetime] = None
+        # The stamp the accept path writes (acceptance_stamp). It is the
+        # DIRECT record of who pressed the button; the row joins below stay
+        # as the fallback for everything accepted before the stamp existed,
+        # which would otherwise regress to "nobody accepted this".
+        accepted_by = _uuid_or_none(payload.get("accepted_by"))
+        accepted_at = _datetime_or_none(payload.get("accepted_at"))
         target: Optional[str] = None
         status = "accepted" if accepted else "proposed"
 
@@ -252,9 +316,10 @@ class ProposalEnvelopeService:
             filed = by_url.get(str(payload.get("url") or ""))
             if filed is not None:
                 target = f"reading:{filed['id']}"
-                if accepted:
-                    # The relay files the reading and stamps the flag in the
-                    # same request, so this row IS the acceptance record.
+                if accepted and accepted_by is None:
+                    # Pre-stamp fallback: the relay files the reading and
+                    # stamps the flag in the same request, so this row is the
+                    # only acceptance record older proposals have.
                     accepted_by = filed["saved_by_user_id"]
                     accepted_at = filed["created_at"]
                 elif status == "proposed":
@@ -264,7 +329,8 @@ class ProposalEnvelopeService:
             made = commitment_by.get((row["id"], str(payload.get("claim") or "")))
             if made is not None:
                 target = f"commitment:{made['id']}"
-                if accepted:
+                if accepted and accepted_by is None:
+                    # Pre-stamp fallback, as above.
                     accepted_by = made["created_by_user_id"]
                     accepted_at = made["created_at"]
 
