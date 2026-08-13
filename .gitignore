@@ -21,3 +21,14 @@ dist/
 
 # Local Adjudicate batch artifacts
 .adjudicate/
+
+# Machine-local agent hook wiring (sextant); not shared config
+.claude/settings.json
+**/.claude/settings.json
+
+# Compiled Go binaries (build with `go build ./cmd/...`)
+cc-sidecar/cmd/cc-sidecar-emit/cc-sidecar-emit
+
+# Browser-proof screenshots and design bundles kept out of the tree
+/*.png
+/*.zip
