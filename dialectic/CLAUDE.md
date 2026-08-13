@@ -166,6 +166,14 @@ the `schema.sql` baseline includes it. Migrations 012 (personal memory
 promotions) and 013 (Home Base: `rooms.is_home`, `can_manage_home`, the
 singleton Home bootstrap) are applied to the live DB; `013` is current.
 
+**Amended 2026-08-13:** `013` is no longer current — **`016` is.** Verified by
+querying the live DB rather than reading the migrations directory: `reading_items`
+resolves (014 `reading_library` applied) and `memories.embedding` has typmod 1024
+(016 `voyage_embeddings` applied); 015 is `room_watchlist`. Because 014 shipped
+after the baseline was cut, **`reading_items` is not in `schema.sql`** — a fresh
+DB needs the migration run, not just the baseline. The line above stays for the
+history of when 012/013 landed.
+
 **Home Base (2026-08-12)**: one real `is_home` room is every founder's
 default landing. `home_activity.py` builds the membership-intersection
 activity projection (one service feeds `GET /users/me/home/activity` AND

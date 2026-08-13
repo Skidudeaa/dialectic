@@ -89,6 +89,62 @@ uvicorn web.main:app --port 8006                     # see trading/README.md
   two founders activated; membership changes go through `api/home.py` or
   the reviewed deploy scripts, never ad-hoc SQL).
 
+## Amendment 2026-08-13 — corrections from the architecture map
+
+Drawing `docs/diagrams/dialectic-architecture.drawio` meant sourcing every
+label from the running code instead of from this file. Five claims above had
+drifted. The originals are left in place per the amend-beside rule; **prefer
+what follows.**
+
+- **The tool registry is 15 tools, not the "12-tool registry" above.** Eight
+  tradingDesk (`get_live_quotes`, `get_polymarket_odds`, `get_thesis_state`,
+  `diff_thesis_last_hour`, `evaluate_scenario`, `get_open_trades`,
+  `get_morning_brief`, `get_thesis_news`) + seven dialectic (`search_memories`,
+  `search_transcript`, `draft_prediction`, `propose_thesis`, `read_article`,
+  `save_reading`, `search_reading`). `tests/test_tools_registry.py:70` already
+  asserts `len(registry.tools) == 15`. Note also that `build_registry` adds all
+  fifteen **unconditionally** — its docstring's "room-scoped" claim is not what
+  the code does; the persona exclusion (provoker/protocol/annotator) is enforced
+  elsewhere. Kill switch: `DIALECTIC_TOOLS_ENABLED`.
+- **Nine scheduled jobs, not the four listed.** Beyond reconcile/watchdog,
+  morning brief and silence sweep: `scheduler_heartbeat` (600s),
+  `thesis_news_digest` (05:30 CT, `llm/news_night.py`), `wire_watch` (900s,
+  `llm/wire.py`), `prediction_deadline_watch` (3600s,
+  `llm/prediction_watch.py`), `reading_echo` (1800s, `llm/reading_echo.py`).
+  Each has its own `*_ENABLED` flag; all are registered in the `api/main.py`
+  lifespan (~:254-265) and only when `db_pool` exists. Tick is 30s.
+- **Migrations run to `016`, not `013`.** Verified against the live DB, not the
+  file listing: `reading_items` exists (014 applied) and `memories.embedding` is
+  1024-wide (016 applied). 015 is `room_watchlist`. `013` remains correct only
+  as "the Home Base migration", not as "the latest one". Note `reading_items`
+  (014) is therefore **absent from the `schema.sql` baseline** — a fresh DB
+  needs the migrations, not just the baseline.
+- **There is a third service: `defuddle.service` on :8010.** Node article
+  extractor (`dialectic/defuddle_service/server.mjs`), reached via
+  `llm/defuddle_client.py`, backing the `read_article` tool. Live and active;
+  missing from the co-projects table above.
+- **`dialectic/deploy/dialectic.service` is NOT what runs.** It describes an
+  `/opt/dialectic/current` release-symlink deploy; that path does not exist on
+  this host. The unit systemd actually loads is
+  `/etc/systemd/system/dialectic.service`, with
+  `WorkingDirectory=/root/DwoodAmo/dialectic` and
+  `ExecStart=/usr/bin/python3 run.py`. **The "both units run their git working
+  trees" house rule above is the accurate one** — the checked-in service file is
+  the trap, and a deploy that trusted it would target a directory that isn't
+  there. Tombstoned in place.
+
+Two things checked and found **correct**, recorded so they aren't re-litigated:
+the seam's "v3 push on change + hourly heartbeat" is exact
+(`coordinator.py:660`, `DIALECTIC_HEARTBEAT_SECONDS = 3600.0` — and only a
+*delivered* push resets the clock, so a spooled failure stays due); and
+cc-sidecar really is pattern-donor only — nothing in `dialectic/` or `trading/`
+imports it and no unit runs it.
+
+One minor inconsistency, left alone deliberately: tradingDesk's **dev** port is
+8000 (`Makefile`, `trading/CLAUDE.md`, and `dialectic/CLAUDE.md`'s "port 8000 is
+reserved"), while `trading/README.md:14` shows 8006 for dev. Production is 8006
+everywhere. The Makefile is not wrong; the README's dev line is the odd one.
+
 ## Code style
 
 ARCHITECTURE/WHY/TRADEOFF docstrings on non-obvious decisions. Match the

@@ -1,3 +1,28 @@
+# ┌──────────────────────────────────────────────────────────────────────────┐
+# │ TOMBSTONE 2026-08-13 — THIS FILE IS NOT WHAT RUNS IN PRODUCTION.         │
+# └──────────────────────────────────────────────────────────────────────────┘
+# The unit systemd actually loads is /etc/systemd/system/dialectic.service:
+#
+#     WorkingDirectory=/root/DwoodAmo/dialectic
+#     ExecStart=/usr/bin/python3 run.py
+#
+# i.e. the live service runs the git working tree directly (the CLAUDE.md house
+# rule "both systemd units run their git working trees" describes THAT unit, and
+# is correct). Everything below describes an /opt/dialectic/current release-
+# symlink deploy that was designed but never built: /opt/dialectic does not
+# exist on this host, and neither does the venv or the EnvironmentFile it names.
+#
+# WHY THIS IS DANGEROUS, not merely stale: a deploy that copied these paths would
+# point systemd at a directory that isn't there, and a reader comparing it against
+# the running service would conclude the working-tree rule had been superseded.
+# It has not been.
+#
+# Kept rather than deleted because it is the only written record of the intended
+# release-symlink design (the frontend half of which IS live — see
+# /var/www/dialectic-current). If that design is ever built, this is the starting
+# point; until then, do not install it. Verify with `systemctl cat dialectic`
+# before trusting any path in this file.
+
 [Unit]
 Description=Dialectic backend (FastAPI + dialogue engine)
 Documentation=file:///opt/dialectic/current/dialectic/README.md
