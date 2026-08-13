@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Thread, UserRoom } from '../types'
 import {
   defaultWorkspaceScene,
+  entryDestination,
   destinationFromLocation,
   destinationFromSearch,
   destinationUrl,
@@ -121,5 +122,31 @@ describe('workspace scenes', () => {
     expect(destinationUrl(home, branch, 'record')).toBe(
       '/?room=home-room&thread=branch-thread',
     )
+  })
+})
+
+describe('entryDestination', () => {
+  it('keeps an explicit room destination untouched', () => {
+    const parsed = { roomId: 'scheme-room', threadId: 'branch-thread', scene: 'record' as const }
+    expect(entryDestination(parsed)).toEqual(parsed)
+  })
+
+  it('preserves the requested scene when falling back to Home root', () => {
+    // Regression: boot and popstate rebuilt the Home-root destination as
+    // { roomId: null, threadId: null } and silently dropped the scene, so
+    // /?scene=record reloaded into House.
+    expect(entryDestination({ roomId: null, threadId: null, scene: 'record' })).toEqual({
+      roomId: null,
+      threadId: null,
+      scene: 'record',
+    })
+  })
+
+  it('carries no scene when none was requested', () => {
+    expect(entryDestination({ roomId: null, threadId: null, scene: null })).toEqual({
+      roomId: null,
+      threadId: null,
+      scene: null,
+    })
   })
 })

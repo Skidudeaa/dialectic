@@ -23,6 +23,7 @@ import type { HistoryMode, RoomDestination, Thread, UserRoom } from '../types/in
 import {
   destinationFromLocation,
   destinationUrl,
+  entryDestination,
   resolveWorkspaceScene,
 } from '../lib/workspaceRoute.ts'
 
@@ -259,7 +260,7 @@ export function useRoomNavigation(): RoomNavigation {
     const parsed = destinationFromLocation(window.location)
     void (async () => {
       const installed = await navigateRef.current(
-        parsed.roomId ? parsed : { roomId: null, threadId: null },
+        entryDestination(parsed),
         'none',
       )
       if (!installed) setReady(true)
@@ -271,7 +272,7 @@ export function useRoomNavigation(): RoomNavigation {
     const onPopState = () => {
       const parsed = destinationFromLocation(window.location)
       void navigateRef.current(
-        parsed.roomId ? parsed : { roomId: null, threadId: null },
+        entryDestination(parsed),
         'none',
       )
     }

@@ -87,3 +87,17 @@ export function destinationUrl(
   const query = params.toString()
   return query ? `/?${query}` : '/'
 }
+
+/**
+ * Normalize a parsed URL into the destination that entry paths install.
+ *
+ * WHY this exists as a named function: boot and popstate both fell back to a
+ * literal `{ roomId: null, threadId: null }` for the Home root, which silently
+ * DROPPED a requested scene — so `/?scene=record` reloaded into House and
+ * Back/Forward could not return to Record. The scene has to survive the
+ * fallback, and both call sites have to agree on that.
+ */
+export function entryDestination(parsed: RoomDestination): RoomDestination {
+  if (parsed.roomId) return parsed
+  return { roomId: null, threadId: null, scene: parsed.scene ?? null }
+}
