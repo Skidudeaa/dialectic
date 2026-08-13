@@ -10,6 +10,7 @@
 
 import logging
 from datetime import date
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -135,3 +136,76 @@ async def accept_prediction(
         request.message_id,
     )
     return created
+
+
+class ResolveAcceptRequest(BaseModel):
+    verdict: Literal["correct", "incorrect"]
+
+
+@router.post("/rooms/{room_id}/predictions/{prediction_id}/resolve-accept")
+async def resolve_accept(
+    room_id: UUID,
+    prediction_id: str,
+    request: ResolveAcceptRequest,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Relay the human's verdict on a deadline proposal to tradingDesk.
+
+    The prediction_watch job only PROPOSES (metadata.resolution_proposal);
+    this tap IS the resolution write. The card's two buttons both land here —
+    the human's verdict is what's relayed, so a human who disagrees with the
+    machine's proposed verdict still settles the prediction their way. The
+    server only requires a valid verdict literal and a live proposal.
+    """
+    await _verify_room_token(room_id, token, db)
+    await _verify_room_member(room_id, current_user.user_id, db)
+
+    row = await db.fetchrow(
+        """SELECT m.id, m.metadata
+           FROM messages m
+           JOIN threads t ON t.id = m.thread_id
+           WHERE t.room_id = $1 AND NOT m.is_deleted
+           AND m.metadata->>'source' = 'prediction_watch'
+           AND m.metadata->'resolution_proposal'->>'prediction_id' = $2
+           ORDER BY m.created_at DESC LIMIT 1""",
+        room_id, prediction_id,
+    )
+    if not row:
+        raise HTTPException(
+            status_code=404, detail="No resolution proposal for this prediction"
+        )
+
+    metadata = row["metadata"]
+    proposal = metadata.get("resolution_proposal") if isinstance(metadata, dict) else None
+    if not isinstance(proposal, dict):
+        raise HTTPException(
+            status_code=404, detail="No resolution proposal for this prediction"
+        )
+    if proposal.get("accepted"):
+        raise HTTPException(
+            status_code=409, detail="Resolution already logged to tradingDesk"
+        )
+
+    try:
+        resolved = await td.post(
+            f"/api/predictions/{prediction_id}/resolve",
+            json_body={"resolution": request.verdict},
+        )
+    except td.TradingDeskError as e:
+        # The proposal stays unaccepted, so a retry once the desk recovers is
+        # a fresh accept, not a conflict.
+        logger.warning("resolution relay to tradingDesk failed: %s", e)
+        raise HTTPException(
+            status_code=502, detail=f"tradingDesk refused the resolution: {e}"
+        )
+
+    await db.execute(
+        """UPDATE messages
+           SET metadata = jsonb_set(
+               metadata, '{resolution_proposal,accepted}', 'true'::jsonb)
+           WHERE id = $1""",
+        row["id"],
+    )
+    return resolved
