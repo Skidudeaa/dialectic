@@ -15,29 +15,17 @@ import type { HistoryMode, RoomDestination, Thread, UserRoom } from '../types/in
  * and history-order regressions.
  */
 
-export function destinationFromLocation(location: Location): {
-  roomId: string | null;
-  threadId: string | null;
-} {
-  const params = new URLSearchParams(location.search)
-  return {
-    roomId: params.get('room'),
-    threadId: params.get('thread'),
-  }
-}
+// The route grammar moved to lib/workspaceRoute so it can be unit-tested without
+// mounting this hook. Imported for internal use AND re-exported, because existing
+// call sites import these names from here; this hook remains the one destination
+// WRITER. (A bare `export ... from` would re-export without binding them locally,
+// leaving the uses below undefined.)
+import {
+  destinationFromLocation,
+  destinationUrl,
+} from '../lib/workspaceRoute.ts'
 
-export function destinationUrl(
-  room: Pick<UserRoom, 'id' | 'is_home'>,
-  thread: Pick<Thread, 'id' | 'parent_thread_id'>,
-): string {
-  // Only Home's root canonicalizes to bare `/`; a Home branch carries both
-  // ids, and an ordinary room root is `/?room=<id>`.
-  const rootHome = room.is_home && thread.parent_thread_id === null
-  if (rootHome) return '/'
-  const params = new URLSearchParams({ room: room.id })
-  if (thread.parent_thread_id !== null) params.set('thread', thread.id)
-  return `/?${params.toString()}`
-}
+export { destinationFromLocation, destinationUrl }
 
 /** Local descriptor for the guest invite path — no JWT saved-room list. */
 function guestDescriptor(room: Pick<UserRoom, 'id' | 'name' | 'token'>): UserRoom {

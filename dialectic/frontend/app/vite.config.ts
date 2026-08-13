@@ -1,4 +1,6 @@
-import { defineConfig, type ProxyOptions } from 'vite'
+/// <reference types="vitest" />
+import { defineConfig } from 'vitest/config'
+import type { ProxyOptions } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
@@ -73,5 +75,14 @@ export default defineConfig({
   preview: {
     port: 4173,
     proxy: proxyMap(),
+  },
+  // WHY here and not a separate vitest.config.ts: one Vite configuration means
+  // the test run and the dev/preview servers cannot drift apart on the proxy
+  // map above, which is the seam browser acceptance depends on.
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.ts',
+    restoreMocks: true,
   },
 })
