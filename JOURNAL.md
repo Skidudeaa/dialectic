@@ -42,3 +42,4 @@
 [2026-08-12] Made the Home Room the canonical default entry — The Table becomes its house-wide scene rather than a competing app-level front door.
 [2026-08-12] Chose exact scene restoration across macOS, Windows, iOS, and Android, scoped per device — preserves local continuity without silently moving every device to another device's last state.
 [2026-08-12] Set the Home Room's default scene to the house-wide view — launches surface cross-room movement, pending judgment, and overnight work without restoring the conversation Record as the product center.
+[2026-08-12] Reconciled the front-end identity spec against remote head 4629ec4 — Home Base, personal memory grants, thesis lifecycle, proposal grammar, and the reading stack are now immutable shipped substrate; Field, Focus, Atlas, and exact local scene restoration remain explicit targets.
