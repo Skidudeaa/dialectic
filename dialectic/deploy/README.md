@@ -20,6 +20,10 @@ does not disturb a dirty canonical checkout.
 
 - `dialectic.service` — systemd unit installed at
   `/etc/systemd/system/dialectic.service`.
+- `defuddle.service` — systemd unit for the optional article-extraction
+  sidecar (`defuddle_service/`), installed at
+  `/etc/systemd/system/defuddle.service`. The `read_article` tool degrades
+  gracefully when this unit is stopped.
 - `nginx.conf.example` — static frontend, REST proxy, WebSocket proxy, HTTP
   redirect, and TLS configuration.
 
@@ -75,6 +79,9 @@ venv/bin/python -m pytest -q
 make frontend-install
 make frontend-lint
 make frontend-build
+
+# Article-extraction sidecar (defuddle) — own lockfile, not the yarn workspace.
+(cd defuddle_service && npm ci --omit=dev)
 ```
 
 Do not activate a release unless tests, lint, and the production build all
@@ -201,6 +208,20 @@ curl --fail --silent --show-error http://127.0.0.1:8002/health
 
 The local health response must report both `db: connected` and
 `redis: connected` before nginx is switched to the release.
+
+Install the defuddle sidecar alongside it. It binds loopback only and needs
+no secrets; the backend's `read_article` tool answers "extractor unavailable"
+rather than failing the turn when the unit is stopped, so it is safe to
+install later or omit entirely.
+
+```bash
+install -m 0644 deploy/defuddle.service /etc/systemd/system/defuddle.service
+systemctl daemon-reload
+systemctl enable defuddle.service
+systemctl restart defuddle.service
+
+curl --fail --silent --show-error http://127.0.0.1:8010/health
+```
 
 ## 7. Install nginx and TLS
 
