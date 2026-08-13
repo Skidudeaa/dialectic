@@ -39,17 +39,12 @@ from typing import Optional
 from scheduler import Job, SchedulerContext
 from llm import defuddle_client as dc
 from llm import tradingdesk_client as td
-from llm.reading import save_reading, seen_urls
+from llm.reading import is_thin, save_reading, seen_urls
 
 logger = logging.getLogger(__name__)
 
 NEWS_DIGEST_PER_ROOM_CAP = 3
 NEWS_DIGEST_DAILY_LLM_CAP = 20
-
-# Bot-blocked shells and error pages ("404", cookie walls) parse as near-empty
-# content. Filing one teaches recall nothing and litters the morning brief,
-# so anything below this word count is skipped before the distill call.
-THIN_CONTENT_MIN_WORDS = 80
 # The thesis snapshot goes into the prompt truncated: a trading_config JSON
 # can carry whole orderbooks; the model needs the posture, not the ticks.
 THESIS_CONTEXT_CAP = 4000
@@ -212,8 +207,7 @@ async def thesis_news_digest(ctx: SchedulerContext) -> dict:
                         skipped.append({"url": url, "reason": "extract_failed"})
                         continue
 
-                    if (not str(article.get("content") or "").strip()
-                            or (article.get("word_count") or 0) < THIN_CONTENT_MIN_WORDS):
+                    if is_thin(article):
                         skipped.append({"url": url, "reason": "thin_content"})
                         continue
 

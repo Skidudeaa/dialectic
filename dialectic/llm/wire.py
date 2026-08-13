@@ -49,7 +49,7 @@ from models import Message, MessageType, SpeakerType
 from llm import defuddle_client as dc
 from llm import tradingdesk_client as td
 from llm.orchestrator import LLMOrchestrator
-from llm.reading import save_reading, seen_urls
+from llm.reading import is_thin, save_reading, seen_urls
 from llm.silence_sweep import (
     _broadcast_follow_up,
     _load_room_context,
@@ -288,6 +288,13 @@ async def wire_watch(ctx: SchedulerContext) -> dict:
                     except dc.DefuddleError as e:
                         logger.info("defuddle failed for %s: %s", url, e)
                         skipped.append({"url": url, "reason": "extract_failed"})
+                        continue
+
+                    # Before the scoring call, not after: a bot-blocked shell
+                    # must not cost a Haiku call, and must never reach the room
+                    # as an interjection.
+                    if is_thin(article):
+                        skipped.append({"url": url, "reason": "thin_content"})
                         continue
 
                     verdict = await _score(article, thesis_context)

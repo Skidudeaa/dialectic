@@ -24,7 +24,21 @@ logger = logging.getLogger(__name__)
 # is smaller; this is the storage ceiling.
 CONTENT_STORE_CAP = 40_000
 
+# Bot-blocked shells and error pages ("404", cookie walls) parse as near-empty
+# content. Filing one teaches recall nothing and litters the morning brief, so
+# every filing path skips them before spending an LLM call. The threshold lives
+# here, beside save_reading, because it is a property of what deserves to be in
+# the library -- not of any one job that fills it.
+THIN_CONTENT_MIN_WORDS = 80
+
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def is_thin(article: dict) -> bool:
+    """True when an extracted page is too empty to be worth filing."""
+    if not str(article.get("content") or "").strip():
+        return True
+    return (article.get("word_count") or 0) < THIN_CONTENT_MIN_WORDS
 
 
 def _reading_key(article: dict) -> str:

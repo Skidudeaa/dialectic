@@ -279,6 +279,46 @@ class TestWireWatch:
             {"url": "https://reuters.com/s1", "reason": "extract_failed"},
         ]
 
+    async def test_thin_content_never_scores_files_or_interrupts(
+        self, mocks, monkeypatch, interjection_calls,
+    ):
+        """A bot-blocked shell must not be scored, filed, or -- worst of the
+        three -- posted into the room as an interjection."""
+        async def _thin_extract(url):
+            mocks.extract_calls.append(url)
+            return {"url": url, "title": "404", "author": None,
+                    "site": "ZeroHedge", "published": None,
+                    "word_count": 12, "content": "Article not available"}
+
+        monkeypatch.setattr(wire.dc, "extract_article", _thin_extract)
+        db = make_wire_db(rooms=[make_room_row()])
+        detail = await wire.wire_watch(_ctx(db)[0])
+
+        assert mocks.score_calls == []
+        assert mocks.saved == []
+        assert interjection_calls == []
+        assert all(s["reason"] == "thin_content"
+                   for s in detail[str(ROOM_ID)]["skipped"])
+
+    async def test_empty_content_is_thin_even_with_a_word_count(
+        self, mocks, monkeypatch, interjection_calls,
+    ):
+        """word_count can be present and plausible while the body is blank --
+        the content check is not redundant with the count check."""
+        async def _blank_extract(url):
+            mocks.extract_calls.append(url)
+            return {"url": url, "title": "Cookie wall", "author": None,
+                    "site": "Reuters", "published": None,
+                    "word_count": 900, "content": "   "}
+
+        monkeypatch.setattr(wire.dc, "extract_article", _blank_extract)
+        db = make_wire_db(rooms=[make_room_row()])
+        await wire.wire_watch(_ctx(db)[0])
+
+        assert mocks.score_calls == []
+        assert mocks.saved == []
+        assert interjection_calls == []
+
     async def test_tradingdesk_error_skips_the_room(
         self, mocks, interjection_calls,
     ):
