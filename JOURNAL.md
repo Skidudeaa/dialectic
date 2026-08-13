@@ -17,7 +17,7 @@
 [2026-08-11] activated personal cross-room memory promotion in production — migration 012, backend PID 611263, and release 20260812T031901Z-personal-memory passed live A/B member isolation, demotion cleanup, lifecycle-event, scheduler, asset-digest, and headless-browser proof
 [2026-08-11] submitted Adjudicate room-UX and home-base plan run 20260811-223530-382925 — the redesign must connect room and branch activity through a shared main-thread entry point without weakening room context or membership boundaries
 [2026-08-11] fixed initial Home membership to Amo and Dan with both authorized to add members — production has other credentialed accounts, so the Home backfill must never infer membership from all users
-[2026-08-11] restricted Home membership administration to Amo and Dan — added Home members may participate but cannot invite or add further users
+[2026-08-11] restricted Home membership administration to Amo and Dan — added members may participate but cannot invite or add further users
 [2026-08-11] made Home the default bare-launch destination — notification and explicit room deep links retain priority, while room URLs must preserve an intentional refresh in place
 [2026-08-11] derived Home LLM behavior from the shipped participant architecture — Home inherits normal autonomous participation, self-model, room identity, tools, silence follow-ups, and local briefs; only cross-room activity awareness requires new design
 [2026-08-11] approved full Claude participation in Home — the Home plan must preserve protocols and every normal participant path, then add a membership-fenced cross-room activity read path shared by the UI and Claude
@@ -43,3 +43,4 @@
 [2026-08-12] Chose exact scene restoration across macOS, Windows, iOS, and Android, scoped per device — preserves local continuity without silently moving every device to another device's last state.
 [2026-08-12] Set the Home Room's default scene to the house-wide view — launches surface cross-room movement, pending judgment, and overnight work without restoring the conversation Record as the product center.
 [2026-08-12] Reconciled the front-end identity spec against remote head 4629ec4 — Home Base, personal memory grants, thesis lifecycle, proposal grammar, and the reading stack are now immutable shipped substrate; Field, Focus, Atlas, and exact local scene restoration remain explicit targets.
+[2026-08-12] Decomposed the living-workroom redesign into ten gated tranches and wrote the executable Scene Kernel + Identity Shell plan first — later plans are generated against integrated heads so file-level instructions do not go stale while preserving the shipped Home, navigation, proposal, memory, thesis, evidence, and mobile contracts.
