@@ -1,5 +1,5 @@
 import type { Attachment, HomeActivityProjection, Memory, Thread, ThreadNode, UserRoom } from '../types/index.ts';
-import type { WorkspaceObjectKind, WorkspaceObjectProjection } from '../types/workspace.ts';
+import type { ProposalEnvelopeProjection, ProposalKind, WorkspaceObjectKind, WorkspaceObjectProjection } from '../types/workspace.ts';
 
 const BASE = '';  // Same origin via Vite proxy
 
@@ -130,6 +130,20 @@ class DialecticAPI {
   ): Promise<WorkspaceObjectProjection> {
     const query = kind ? `?kind=${encodeURIComponent(kind)}` : '';
     return this.fetch(`/rooms/${roomId}/workspace/objects${query}`);
+  }
+  /**
+   * The room's proposals, normalized (design v2 §8.3–8.4).
+   *
+   * The projection knows what a message alone cannot: whether the target is
+   * already gone — a book bound, an article filed by the wire, a deadline
+   * past. Accepting still goes to the relay that owns the write.
+   */
+  async getRoomProposals(
+    roomId: string,
+    kind?: ProposalKind,
+  ): Promise<ProposalEnvelopeProjection> {
+    const query = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+    return this.fetch(`/rooms/${roomId}/workspace/proposals${query}`);
   }
   async getMessages(threadId: string, limit = 50) { return this.fetch(`/threads/${threadId}/messages?limit=${limit}`); }
   async getMemories(roomId: string): Promise<Memory[]> {

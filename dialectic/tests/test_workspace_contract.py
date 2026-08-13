@@ -17,6 +17,16 @@ from pathlib import Path
 
 import pytest
 
+from proposal_envelope import (
+    PROPOSAL_ACTIONS,
+    PROPOSAL_KINDS,
+    PROPOSAL_LIST_KIND,
+    PROPOSAL_LIST_SLOT,
+    PROPOSAL_SLOTS,
+    PROPOSAL_STATUSES,
+    ProposalEnvelope,
+    ProposalEnvelopeProjection,
+)
 from workspace_objects import (
     WORKSPACE_ACTIONS,
     WORKSPACE_OBJECT_KINDS,
@@ -121,11 +131,55 @@ def test_jsonb_reads_survive_a_connection_without_the_pool_codec():
     assert _jsonb("[1, 2]") == {}, "a JSON array is not an object"
 
 
+def test_the_proposal_envelope_matches_its_specified_field_list():
+    """Both sides carry exactly the fields the plan's D1 names."""
+    assert set(ProposalEnvelope.model_fields) == {
+        "id", "proposal_kind", "source_message_id", "room_id", "branch_id",
+        "created_by", "created_at", "rationale", "payload", "status",
+        "accepted_by", "accepted_at", "target_object", "available_actions",
+    }
+
+
+@pytest.mark.parametrize("model,interface", [
+    (ProposalEnvelope, "ProposalEnvelope"),
+    (ProposalEnvelopeProjection, "ProposalEnvelopeProjection"),
+])
+def test_the_typescript_envelope_agrees(ts_source, model, interface):
+    assert _interface_fields(ts_source, interface) == set(model.model_fields)
+
+
+def test_the_metadata_slot_table_has_one_definition(ts_source):
+    """Which metadata keys are proposals, and what each one IS.
+
+    This is the mapping most likely to drift, because both sides genuinely
+    need it: the server derives status from room state, the client renders a
+    card off the message it already has. Two copies is fine; two DIFFERENT
+    copies means a slot the client shows and the server does not.
+    """
+    match = re.search(
+        r"^export const PROPOSAL_SLOTS: Record<string, ProposalKind> = \{\n(.*?)^\}",
+        ts_source, re.MULTILINE | re.DOTALL,
+    )
+    assert match, "PROPOSAL_SLOTS not found in the TypeScript contract"
+    ts_slots = dict(re.findall(r"^\s*(\w+):\s*'([^']+)'", match.group(1),
+                               re.MULTILINE))
+    assert ts_slots == dict(PROPOSAL_SLOTS)
+
+    listed = re.search(r"PROPOSAL_LIST_SLOT = '([^']+)'", ts_source)
+    listed_kind = re.search(
+        r"PROPOSAL_LIST_KIND: ProposalKind = '([^']+)'", ts_source)
+    assert listed and listed.group(1) == PROPOSAL_LIST_SLOT
+    assert listed_kind and listed_kind.group(1) == PROPOSAL_LIST_KIND
+
+
 @pytest.mark.parametrize("python_values,ts_const", [
     (WORKSPACE_OBJECT_KINDS, "WORKSPACE_OBJECT_KINDS"),
     (WORKSPACE_REVIEW_STATES, "WORKSPACE_REVIEW_STATES"),
     (WORKSPACE_ORIGINS, "WORKSPACE_ORIGINS"),
     (WORKSPACE_ACTIONS, "WORKSPACE_ACTIONS"),
+    (PROPOSAL_KINDS, "PROPOSAL_KINDS"),
+    (PROPOSAL_STATUSES, "PROPOSAL_STATUSES"),
+    (PROPOSAL_ACTIONS, "PROPOSAL_ACTIONS"),
 ])
 def test_closed_vocabularies_agree_in_order(ts_source, python_values, ts_const):
     """Order too, not just membership: these render as switch arms and lists,

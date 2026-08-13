@@ -432,10 +432,48 @@ async def test_proposals_carry_stable_source_coordinates(workroom):
     accepted = [o for o in proposals if o.review_state == "accepted"]
     assert [o.provenance.detail for o in accepted] == ["commitment_proposal"]
     assert [o.status for o in accepted] == ["accepted"]
-    assert all(
-        o.review_state == "awaiting_human" and o.status == "proposed"
-        for o in proposals if o.provenance.detail != "commitment_proposal"
-    )
+
+    # The status is the ENVELOPE's, so the room's own state reaches the object:
+    # this fixture's room already argues `strait-risk-graph`, and one thesis per
+    # room means the outstanding thesis proposal has nowhere to land.
+    by_detail = {o.provenance.detail: o for o in proposals}
+    assert by_detail["thesis_proposal"].status == "expired"
+    assert by_detail["thesis_proposal"].review_state == "none"
+    assert "accept" not in by_detail["thesis_proposal"].available_actions
+    for kind in ("prediction_draft", "reading_draft", "prediction_resolution"):
+        assert by_detail[kind].status == "proposed", kind
+        assert by_detail[kind].review_state == "awaiting_human", kind
+
+
+@pytest.mark.asyncio
+async def test_every_relationship_id_resolves_to_a_real_object(workroom):
+    """A string shaped like an id is not an id.
+
+    WHY this exists: the Brief's link to its proposals was built from the KIND
+    while the proposal's id is built from the metadata SLOT. Four of the five
+    slots differ, so the link dangled for all but one — and nothing anywhere
+    complained, because nobody had followed one yet. Found when Task Group D
+    collapsed the two parses into one.
+    """
+    await _msg(workroom, _uid(0xC35), TH, 9, _d(1), "Brief with proposals", {
+        "source": "deep_dive",
+        "proposal": {"statement": "s", "accepted": False},
+        "reading_proposal": {"url": "https://example.test/b", "summary": "s",
+                             "accepted": False},
+    })
+    objects = await WorkspaceObjectService(workroom).build(ROOM, AMO)
+    known = {o.id for o in objects}
+    dangling = [
+        (o.kind, rel.id)
+        for o in objects for rel in o.relationships
+        if rel.entity in ("proposal", "workspace_object") and rel.id not in known
+    ]
+    assert not dangling, f"relationship ids point at nothing: {dangling}"
+    # And the guard is not vacuous: the fixture really does carry such links.
+    assert [
+        rel for o in objects for rel in o.relationships
+        if rel.entity == "proposal"
+    ], "no brief-to-proposal link in the fixture at all"
 
 
 @pytest.mark.asyncio

@@ -48,6 +48,7 @@ from pydantic import BaseModel
 from api.trading_ingest import THESIS_STATE_MEMORY_KEY
 from home_activity import COMMITMENT_DUE_WINDOW, HomeActivityMovement
 from llm.reading import _reading_key
+from proposal_envelope import ProposalEnvelopeService, proposal_slots
 
 # The kinds the adapter set produces (§8.1's adapter list). Closed vocabulary:
 # a surface switches on these, so an unlisted value is a bug, not an extension.
@@ -82,6 +83,20 @@ WORKSPACE_ACTIONS = (
     "accept", "dismiss", "resolve", "inspect",
 )
 
+# How a proposal's own lifecycle reads on the workspace object's review axis.
+# `failed` is a client-held state (see proposal_envelope) and cannot arrive
+# from a read, but it is mapped here so it can never fall through to "none" --
+# a failed write that renders as nothing to answer is the defect the status
+# exists to expose.
+_REVIEW_FOR_PROPOSAL_STATUS = {
+    "proposed": "awaiting_human",
+    "accepted": "accepted",
+    "dismissed": "dismissed",
+    "superseded": "none",
+    "expired": "none",
+    "failed": "failed",
+}
+
 # Per-kind bounds, applied inside each adapter's OWN statement.
 #
 # WHY per kind rather than one global newest-N: Task Group B shipped a single
@@ -101,17 +116,6 @@ _PER_KIND_CAP = 50
 # which is the starvation bug wearing a different hat.
 _RECORD_CAP = 100
 
-# Message metadata slots that carry a proposal, mapped to the normalized kinds
-# of §8.3. Read from the metadata the relay endpoints already write — Release 1
-# changes no stored proposal contract (§D, §19.3).
-_PROPOSAL_SLOTS = {
-    "proposal": "prediction_draft",
-    "thesis_proposal": "thesis_proposal",
-    "reading_proposal": "reading_draft",
-    "resolution_proposal": "prediction_resolution",
-}
-_PROPOSAL_LIST_SLOT = "commitment_proposals"
-_PROPOSAL_LIST_KIND = "commitment_proposal"
 
 
 class WorkspaceSourceRef(BaseModel):
@@ -226,20 +230,6 @@ SELECT id, thread_id, claim, resolution_criteria, category, status,
 FROM commitments
 WHERE room_id = $1
 ORDER BY COALESCE(deadline, created_at) DESC
-LIMIT $2
-"""
-
-_PROPOSALS_SQL = """
-SELECT m.id, m.thread_id, m.created_at, m.edited_at, m.metadata,
-       m.speaker_type, m.user_id
-FROM messages m JOIN threads t ON t.id = m.thread_id
-WHERE t.room_id = $1 AND NOT m.is_deleted
-  AND (m.metadata ? 'proposal'
-       OR m.metadata ? 'thesis_proposal'
-       OR m.metadata ? 'reading_proposal'
-       OR m.metadata ? 'resolution_proposal'
-       OR m.metadata ? 'commitment_proposals')
-ORDER BY m.created_at DESC
 LIMIT $2
 """
 
@@ -440,12 +430,16 @@ class WorkspaceObjectService:
         for row in rows:
             metadata = _jsonb(row["metadata"])
             relationships = []
-            for slot, kind in _PROPOSAL_SLOTS.items():
-                if metadata.get(slot):
-                    relationships.append(WorkspaceRelationship(
-                        relation="proposed", entity="proposal",
-                        id=f"proposal:{row['id']}:{kind}",
-                    ))
+            # The coordinate is the SLOT, which is what the envelope addresses
+            # a proposal by. Building it from the kind instead produced a link
+            # that resolved for exactly one of the five slots and dangled for
+            # the rest -- a string that looks like an id is not an id, and
+            # nothing complains until a surface follows one.
+            for field, _kind, _payload in proposal_slots(metadata):
+                relationships.append(WorkspaceRelationship(
+                    relation="proposed", entity="proposal",
+                    id=f"proposal:{row['id']}:{field}",
+                ))
             tools = metadata.get("tools") or {}
             degraded = bool(tools.get("degraded"))
             objects.append(WorkspaceObject(
@@ -572,67 +566,64 @@ class WorkspaceObjectService:
         return objects
 
     async def proposals(self, room_id: UUID) -> list[WorkspaceObject]:
-        """message metadata → Proposal, one object per slot.
+        """message metadata → Proposal, projected FROM the envelope.
 
-        Task Group D builds the full envelope over these. C's job is the
-        stable source coordinate — `source_entity[0].field` names the exact
-        metadata slot, so D never has to re-parse an id string.
+        WHY delegate rather than read the metadata again: Task Group D's
+        ProposalEnvelope is the one answer to "what is a proposal" — which
+        slots count, which kind each is, whether the target is already gone.
+        A second parse here would be a second answer, and the two would agree
+        only until one of them was edited.
+
+        The envelope's own review vocabulary maps onto the workspace object's:
+        a proposal still open is what a human owes, everything else is settled.
         """
-        rows = await self.db.fetch(_PROPOSALS_SQL, room_id, _PER_KIND_CAP)
+        envelopes = await ProposalEnvelopeService(self.db).build(room_id)
         objects = []
-        for row in rows:
-            metadata = _jsonb(row["metadata"])
-            slots: list[tuple[str, str, dict]] = []
-            for slot, kind in _PROPOSAL_SLOTS.items():
-                payload = metadata.get(slot)
-                if isinstance(payload, dict):
-                    slots.append((slot, kind, payload))
-            listed = metadata.get(_PROPOSAL_LIST_SLOT)
-            if isinstance(listed, list):
-                for index, payload in enumerate(listed):
-                    if isinstance(payload, dict):
-                        slots.append((
-                            f"{_PROPOSAL_LIST_SLOT}[{index}]",
-                            _PROPOSAL_LIST_KIND, payload,
-                        ))
-            for field, kind, payload in slots:
-                accepted = bool(payload.get("accepted"))
-                title = _clip(
-                    payload.get("statement") or payload.get("claim")
-                    or payload.get("title") or payload.get("url") or kind
-                )
-                objects.append(WorkspaceObject(
-                    id=f"proposal:{row['id']}:{field}",
-                    kind="proposal",
-                    room_id=room_id,
-                    branch_id=row["thread_id"],
-                    title=title,
-                    summary=_clip(
-                        payload.get("rationale")
-                        or payload.get("resolution_criteria")
-                        or payload.get("summary")
-                        or payload.get("claim") or "", 300
-                    ),
-                    status="accepted" if accepted else "proposed",
-                    created_at=row["created_at"],
-                    updated_at=row["edited_at"] or row["created_at"],
-                    provenance=WorkspaceProvenance(
-                        origin=_origin_for_speaker(row["speaker_type"]),
-                        actor_user_id=row["user_id"],
-                        detail=kind,
-                    ),
-                    relationships=[WorkspaceRelationship(
-                        relation="source_message", entity="messages",
-                        id=str(row["id"]),
-                    )],
-                    available_actions=(
-                        ["inspect"] if accepted else ["accept", "dismiss"]
-                    ),
-                    review_state="accepted" if accepted else "awaiting_human",
-                    source_entity=[WorkspaceSourceRef(
-                        entity="messages", id=str(row["id"]), field=field,
-                    )],
+        for envelope in envelopes:
+            payload = envelope.payload
+            title = _clip(
+                payload.get("statement") or payload.get("claim")
+                or payload.get("title") or payload.get("url")
+                or envelope.proposal_kind
+            )
+            relationships = [WorkspaceRelationship(
+                relation="source_message", entity="messages",
+                id=str(envelope.source_message_id),
+            )]
+            if envelope.target_object:
+                relationships.append(WorkspaceRelationship(
+                    relation="target_object", entity="workspace_object",
+                    id=envelope.target_object,
                 ))
+            objects.append(WorkspaceObject(
+                id=envelope.id,
+                kind="proposal",
+                room_id=envelope.room_id,
+                branch_id=envelope.branch_id,
+                title=title,
+                summary=_clip(envelope.rationale, 300),
+                status=envelope.status,
+                created_at=envelope.created_at,
+                updated_at=envelope.accepted_at or envelope.created_at,
+                provenance=WorkspaceProvenance(
+                    origin=(
+                        "human" if envelope.created_by else "dialectic"
+                    ),
+                    actor_user_id=envelope.created_by,
+                    detail=envelope.proposal_kind,
+                ),
+                relationships=relationships,
+                available_actions=envelope.available_actions,
+                review_state=(
+                    "awaiting_human" if envelope.status == "proposed"
+                    else _REVIEW_FOR_PROPOSAL_STATUS.get(
+                        envelope.status, "none")
+                ),
+                source_entity=[WorkspaceSourceRef(
+                    entity="messages", id=str(envelope.source_message_id),
+                    field=envelope.id.split(":", 2)[2],
+                )],
+            ))
         return objects
 
     async def dossier(

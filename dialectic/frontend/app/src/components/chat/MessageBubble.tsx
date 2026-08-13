@@ -3,6 +3,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import type { Attachment, CommitmentProposal, Message, Reaction } from '../../types'
 import { api } from '../../lib/api'
+import { localProposals, type LocalProposal } from '../../lib/proposalEnvelope'
 import { useAppStore } from '../../stores/appStore'
 import { MessageAttachments } from './MessageAttachments'
 import './MessageBubble.css'
@@ -118,6 +119,7 @@ export function MessageBubble({
   const [showTools, setShowTools] = useState(false)
   const [acceptState, setAcceptState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
   const [readingAcceptState, setReadingAcceptState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
+  const [resolutionState, setResolutionState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
   const editRef = useRef<HTMLTextAreaElement>(null)
   const currentRoomId = useAppStore((s) => s.currentRoom?.id)
 
@@ -170,11 +172,45 @@ export function MessageBubble({
   // number, not something to read on every turn.
   const toolCalls = message.metadata?.tools?.calls ?? []
 
+  // Every proposal this message carries, in ONE shape (design v2 §8.3–8.4).
+  //
+  // WHY derived rather than five ad-hoc reads: each card used to compute its
+  // own `Boolean(x?.accepted) || localState === 'accepted'`, which is the same
+  // rule written five times — and the slot-to-kind table was written again on
+  // the server. `lib/proposalEnvelope` holds it once, pinned to the backend's
+  // copy by a test, so a card cannot decide on its own what counts as accepted.
+  //
+  // The optimistic set is this tab's own accept returning before its
+  // MESSAGE_METADATA patch arrives; the failed set is the state no row can
+  // hold, because a relay failure leaves the stored flag false ON PURPOSE so a
+  // retry is a fresh accept rather than a conflict.
+  const proposalOverrides = useMemo(() => {
+    const accepted = new Set<string>()
+    const failed = new Set<string>()
+    const mark = (slot: string, state: string) => {
+      const id = `proposal:${message.id}:${slot}`
+      if (state === 'accepted') accepted.add(id)
+      if (state === 'error') failed.add(id)
+    }
+    mark('proposal', acceptState)
+    mark('reading_proposal', readingAcceptState)
+    mark('resolution_proposal', resolutionState)
+    return { accepted, failed }
+  }, [message.id, acceptState, readingAcceptState, resolutionState])
+
+  const proposalsBySlot = useMemo(() => {
+    const map = new Map<string, LocalProposal>()
+    for (const p of localProposals(message.id, message.metadata ?? undefined,
+                                   proposalOverrides)) {
+      map.set(p.index === null ? p.slot : `${p.slot}[${p.index}]`, p)
+    }
+    return map
+  }, [message.id, message.metadata, proposalOverrides])
+
   // A drafted prediction, if this turn made one. The Accept tap is the ONLY
-  // write — the tool itself logged nothing. Local state carries the accepted
-  // flip; on reload the server-stamped flag does.
+  // write — the tool itself logged nothing.
   const proposal = message.metadata?.proposal
-  const proposalLogged = Boolean(proposal?.accepted) || acceptState === 'accepted'
+  const proposalLogged = proposalsBySlot.get('proposal')?.status === 'accepted'
 
   // A proposed thesis, if this turn made one. Nothing exists yet — the tap
   // seeds the Create Thesis form and opens the Trading tab, where the
@@ -233,7 +269,7 @@ export function MessageBubble({
   // A drafted library entry, if this turn made one. Accept re-fetches the
   // page through the sidecar and files it; the server flips `accepted`.
   const readingProposal = message.metadata?.reading_proposal
-  const readingFiled = Boolean(readingProposal?.accepted) || readingAcceptState === 'accepted'
+  const readingFiled = proposalsBySlot.get('reading_proposal')?.status === 'accepted'
 
   const acceptReading = async () => {
     if (!currentRoomId || readingAcceptState === 'accepting' || readingFiled) return
@@ -250,8 +286,7 @@ export function MessageBubble({
   // one. The tap relays the human's verdict to tradingDesk; an `unclear`
   // verdict is evidence-only and renders no buttons.
   const resolutionProposal = message.metadata?.resolution_proposal
-  const [resolutionState, setResolutionState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
-  const resolutionLogged = Boolean(resolutionProposal?.accepted) || resolutionState === 'accepted'
+  const resolutionLogged = proposalsBySlot.get('resolution_proposal')?.status === 'accepted'
 
   const acceptResolution = async (verdict: 'correct' | 'incorrect') => {
     if (!currentRoomId || !resolutionProposal || resolutionState === 'accepting' || resolutionLogged) return
@@ -506,7 +541,8 @@ export function MessageBubble({
                 <div className="msg-proposal-meta">
                   {p.category} · resolves when: {p.resolution_criteria}
                 </div>
-                {p.accepted ? (
+                {proposalsBySlot.get(`commitment_proposals[${i}]`)?.status
+                  === 'accepted' ? (
                   <span className="msg-proposal-logged">on the record</span>
                 ) : (
                   <button

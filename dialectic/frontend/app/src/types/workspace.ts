@@ -150,3 +150,89 @@ export interface WorkspaceObjectProjection {
   room_id: string
   objects: WorkspaceObject[]
 }
+
+// ---------------------------------------------------------------------------
+// The proposal envelope (design v2 §8.3–8.4)
+//
+// Mirrors proposal_envelope.ProposalEnvelope. Five different proposal shapes
+// live in message metadata today, each with its own relay. One envelope so a
+// surface can teach the trust rule once -- "Dialectic can prepare the move, a
+// human makes it real" -- instead of five unrelated exceptions.
+//
+// READS ONLY. Accepting still goes to the relay that owns the write; the
+// envelope names the action, it never performs it.
+//
+// Pinned to the backend by dialectic/tests/test_workspace_contract.py, field
+// names and vocabularies alike.
+// ---------------------------------------------------------------------------
+
+export const PROPOSAL_KINDS = [
+  'prediction_draft',
+  'thesis_proposal',
+  'thesis_draft',
+  'commitment_proposal',
+  'reading_draft',
+  'prediction_resolution',
+] as const
+
+export type ProposalKind = (typeof PROPOSAL_KINDS)[number]
+
+/** The visible lifecycle. `failed` cannot come from a read: on a relay failure
+ *  the stored flag deliberately stays false so a retry is a fresh accept, which
+ *  makes failure a state THIS side holds. It is in the vocabulary because
+ *  dropping it is how a failed write becomes an invisible one (§5.1, §9.3). */
+export const PROPOSAL_STATUSES = [
+  'proposed',
+  'accepted',
+  'dismissed',
+  'superseded',
+  'expired',
+  'failed',
+] as const
+
+export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number]
+
+export const PROPOSAL_ACTIONS = [
+  'accept',
+  'dismiss',
+  'inspect',
+  'open_thesis',
+] as const
+
+export type ProposalAction = (typeof PROPOSAL_ACTIONS)[number]
+
+/** metadata slot → normalized kind. The one mapping: the backend reads this
+ *  same table, and the contract test fails if the two drift. */
+export const PROPOSAL_SLOTS: Record<string, ProposalKind> = {
+  proposal: 'prediction_draft',
+  thesis_proposal: 'thesis_proposal',
+  reading_proposal: 'reading_draft',
+  resolution_proposal: 'prediction_resolution',
+}
+
+/** The one slot holding a LIST — the detector may hoist up to three. */
+export const PROPOSAL_LIST_SLOT = 'commitment_proposals'
+export const PROPOSAL_LIST_KIND: ProposalKind = 'commitment_proposal'
+
+export interface ProposalEnvelope {
+  id: string
+  proposal_kind: ProposalKind
+  source_message_id: string
+  room_id: string
+  branch_id: string | null
+  created_by: string | null
+  created_at: string
+  rationale: string
+  payload: Record<string, unknown>
+  status: ProposalStatus
+  accepted_by: string | null
+  accepted_at: string | null
+  target_object: string | null
+  available_actions: ProposalAction[]
+}
+
+export interface ProposalEnvelopeProjection {
+  generated_at: string
+  room_id: string
+  proposals: ProposalEnvelope[]
+}
