@@ -7,6 +7,7 @@ from datetime import date
 from typing import Any, Awaitable, Callable, Optional
 from uuid import UUID
 
+from . import defuddle_client as dc
 from . import tradingdesk_client as td
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,13 @@ logger = logging.getLogger(__name__)
 
 THESIS_CHAR_CAP = 6000
 TOOL_RESULT_CHAR_CAP = 8000
+
+# read_article truncates the extracted body at this many characters BEFORE
+# _shrink runs. WHY not let _shrink handle it: _shrink drops whole keys, and
+# the biggest key here is "content" — dropping it would hand the model an
+# article with everything except the article. A clean cut at a character
+# boundary keeps what survives trustworthy and says where it stopped.
+ARTICLE_CONTENT_CAP = 6000
 
 # MEASURED 2026-08-09: /api/market/quotes takes ~18.5s (it re-fetches Yahoo
 # per book, uncached), while every other endpoint answers in milliseconds.
@@ -731,6 +739,114 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
             "provenance": {"kind": "thesis_proposal"},
         }
 
+    async def read_article(args: dict) -> dict:
+        """Fetch a URL via the defuddle sidecar and shape the article.
+
+        Failure shape matches the other tools: extract_article raises
+        DefuddleError and the tool loop turns it into an is_error
+        tool_result that names the reason — the turn never dies on a dead
+        sidecar or a site that refused the fetch.
+        """
+        url = str(args.get("url") or "").strip()
+        if not url:
+            raise ValueError("url is required — the page to read.")
+        if not url.startswith(("http://", "https://")):
+            raise ValueError("url must be an http(s) address.")
+
+        article = await dc.extract_article(url)
+        if not isinstance(article, dict):
+            return {"url": url, "note": "The extractor returned an unexpected shape."}
+
+        content = str(article.get("content") or "")
+        truncated = len(content) > ARTICLE_CONTENT_CAP
+        out = {
+            "url": article.get("url") or url,
+            "title": article.get("title"),
+            "author": article.get("author"),
+            "site": article.get("site"),
+            "published": article.get("published"),
+            "word_count": article.get("word_count"),
+            "content": content[:ARTICLE_CONTENT_CAP] if truncated else content,
+        }
+        if truncated:
+            out["content_note"] = (
+                f"Article body cut at {ARTICLE_CONTENT_CAP} characters to fit "
+                "the context window — what is shown is the opening, complete "
+                f"to that point, of a {article.get('word_count') or '?'}-word "
+                "piece. Do not quote from beyond the cut."
+            )
+        if not out["content"]:
+            out["note"] = (
+                "The extractor found no article body at that URL (it may be "
+                "paywalled, a JS-only app, or not an article). Say so rather "
+                "than inventing its contents."
+            )
+        return _shrink(out, TOOL_RESULT_CHAR_CAP)
+
+    async def save_reading(args: dict) -> dict:
+        """Validate and shape a library proposal. NO write — ever.
+
+        Same trust shape as draft_prediction: the proposal is hoisted to
+        metadata.reading_proposal, the room renders an Accept button, and
+        only the human's tap (api/reading_relay.py) files the article.
+        """
+        url = str(args.get("url") or "").strip()
+        if not url:
+            raise ValueError("url is required — the article to file.")
+        if not url.startswith(("http://", "https://")):
+            raise ValueError("url must be an http(s) address.")
+        summary = str(args.get("summary") or "").strip()
+        if not summary:
+            raise ValueError(
+                "summary is required — what the room should remember of this "
+                "piece, in your own words."
+            )
+        if len(summary) > 1000:
+            raise ValueError("summary must be 1000 characters or fewer.")
+        claims = args.get("key_claims") or []
+        if isinstance(claims, str):
+            claims = [claims]
+        claims = [str(c).strip() for c in claims if str(c).strip()][:10]
+
+        # WHY re-fetch: the library files the page, not the model's memory of
+        # it. If the URL yields no body, there is nothing to file — and a
+        # hallucinated article must fail here, not land in recall.
+        article = await dc.extract_article(url)
+        if not isinstance(article, dict) or not str(article.get("content") or "").strip():
+            raise ValueError(
+                "that URL did not yield a readable article — read it first "
+                "with read_article, and only file what actually came back."
+            )
+
+        return {
+            "proposal": {
+                "url": url,
+                "title": article.get("title"),
+                "site": article.get("site"),
+                "published": article.get("published"),
+                "summary": summary,
+                "key_claims": claims,
+            },
+            "provenance": {"kind": "reading_draft"},
+        }
+
+    async def search_reading(args: dict) -> dict:
+        from llm import reading as reading_mod
+
+        query = str(args.get("query") or "").strip()
+        if not query:
+            raise ValueError("query is required")
+        limit = max(1, min(int(args.get("limit") or 5), 10))
+
+        results = await reading_mod.search_reading(db, room.id, query, limit)
+        out = {"query": query, "count": len(results), "readings": results}
+        if not results:
+            out["note"] = (
+                "Nothing in the reading library matches. Say so rather than "
+                "inventing an article we never filed."
+            )
+        return _shrink(out, TOOL_RESULT_CHAR_CAP)
+
     return [
         Tool(
             name="search_memories",
@@ -867,6 +983,103 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
             },
             execute=propose_thesis,
             label="proposing a thesis",
+        ),
+        Tool(
+            name="read_article",
+            description=(
+                "Fetch a web page and return its main article content as "
+                "Markdown with metadata (title, author, site, published date, "
+                "word count); clutter like comments, sidebars and navigation "
+                "is stripped. Use it after get_thesis_news to read the full "
+                "text behind a headline — a headline alone is not evidence — "
+                "or whenever someone shares a link worth reading. Long "
+                "articles are cut at the content_note boundary; never quote "
+                "past it. If the fetch fails or returns no content, say so — "
+                "never invent an article's contents."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The http(s) URL of the page to read.",
+                    },
+                },
+                "required": ["url"],
+            },
+            execute=read_article,
+            label="reading the article",
+            # The sidecar fetches upstream (15s budget) and then parses; the
+            # client's own 20s timeout must fire before the loop's.
+            timeout_s=25.0,
+        ),
+        Tool(
+            name="save_reading",
+            description=(
+                "Propose filing an article into the room's reading library — "
+                "the durable record of what we have actually read, searchable "
+                "later with search_reading. Calling this files NOTHING: the "
+                "draft is shown to the humans with an Accept button, and only "
+                "their tap writes it. Use it when a read_article result is "
+                "worth keeping — a piece the argument keeps coming back to, "
+                "or evidence behind a thesis node — not for every link. The "
+                "page is re-fetched at filing time, so summarize what it "
+                "actually said. Never claim something is filed until a human "
+                "accepts it."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The http(s) URL of the article to file.",
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": (
+                            "What the room should remember of the piece, in "
+                            "your own words. Max 1000 characters."
+                        ),
+                    },
+                    "key_claims": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional: up to 10 load-bearing claims, one per string.",
+                    },
+                },
+                "required": ["url", "summary"],
+            },
+            execute=save_reading,
+            label="drafting a library entry",
+            # Re-fetches the page through the sidecar, like read_article.
+            timeout_s=25.0,
+        ),
+        Tool(
+            name="search_reading",
+            description=(
+                "Search the room's reading library — articles we actually "
+                "fetched and filed, with summaries and ranked extracts from "
+                "the full text. Use it when the conversation turns on "
+                "something we read before ('didn't that FT piece say the "
+                "opposite?'), or before citing an article from memory. If it "
+                "is not in the library, we did not keep it — say so."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "What to look for — topic, claim, author, outlet.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results, 1-10. Default 5.",
+                    },
+                },
+                "required": ["query"],
+            },
+            execute=search_reading,
+            label="searching what we've read",
         ),
     ]
 

@@ -51,6 +51,9 @@ class BriefingResponse(BaseModel):
     commitments_due: List[dict] = []
     thesis_staleness: Optional[dict] = None
     unanswered_questions: List[BriefingHighlight] = []
+    # What the room read overnight (reading_items via llm/reading.py) —
+    # the night-shift news digest surfaces here with no endpoint changes.
+    news_digest: List[dict] = []
 
 
 def _speaker_key(row) -> str:
@@ -109,6 +112,18 @@ async def _commitments_due(db, room_id: UUID) -> List[dict]:
     except Exception as e:
         # A stakes hiccup must not sink the whole brief.
         logger.warning(f"Briefing commitments section failed: {e}")
+        return []
+
+
+async def _news_digest(db, room_id: UUID, since: datetime) -> List[dict]:
+    """The room's recent reading_items — what the night shift filed."""
+    try:
+        from llm.reading import recent_readings
+
+        return await recent_readings(db, room_id, since, limit=5)
+    except Exception as e:
+        # A reading-library hiccup must not sink the whole brief.
+        logger.warning(f"Briefing news digest section failed: {e}")
         return []
 
 
@@ -218,6 +233,7 @@ async def build_briefing(
     commitments_due = await _commitments_due(db, room_id)
     thesis_staleness = await _thesis_staleness(db, room_id, now)
     unanswered = unanswered_questions(message_rows)
+    news_digest = await _news_digest(db, room_id, last_seen)
 
     # Generate LLM summary if there are messages to summarize
     summary = "Nothing happened while you were away."
@@ -263,4 +279,5 @@ async def build_briefing(
         commitments_due=commitments_due,
         thesis_staleness=thesis_staleness,
         unanswered_questions=unanswered,
+        news_digest=news_digest,
     )

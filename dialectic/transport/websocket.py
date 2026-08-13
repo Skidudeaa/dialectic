@@ -273,6 +273,9 @@ class MessageTypes:
     # LLM control (inbound)
     SUMMON_LLM = "summon_llm"
     CANCEL_LLM = "cancel_llm"
+    # Research mode (inbound): a human asks for the long tool loop
+    # (llm/research.py); the brief lands as an llm_primary message.
+    DEEP_DIVE = "deep_dive"
     # Cross-session memory (inbound)
     SEARCH_GLOBAL_MEMORIES = "search_global_memories"
     PROMOTE_MEMORY = "promote_memory"
@@ -307,6 +310,11 @@ class MessageTypes:
     LLM_DONE = "llm_done"
     LLM_ERROR = "llm_error"
     LLM_CANCELLED = "llm_cancelled"
+    # Research-mode brackets (outbound): the dive itself speaks the ordinary
+    # llm_* vocabulary between these two, so clients only need the brackets
+    # to keep the Research button disarmed while a dive is in flight.
+    DEEP_DIVE_STARTED = "deep_dive_started"
+    DEEP_DIVE_DONE = "deep_dive_done"
     ERROR = "error"
     PONG = "pong"
     # Presence & receipts (outbound)

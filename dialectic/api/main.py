@@ -36,6 +36,7 @@ from stakes.routes import router as stakes_router, set_stakes_db_pool
 from api.personas import router as personas_router, set_personas_db_pool
 from api.attachments import router as attachments_router, set_attachments_db_pool
 from api.prediction_relay import router as prediction_relay_router, set_prediction_relay_db_pool
+from api.reading_relay import router as reading_relay_router, set_reading_relay_db_pool
 from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_pool
 from api.home import router as home_router, set_home_db_pool
 from collections import defaultdict
@@ -196,6 +197,7 @@ async def lifespan(app: FastAPI):
 
         # Set db_pool for the prediction relay module
         set_prediction_relay_db_pool(db_pool)
+        set_reading_relay_db_pool(db_pool)
         set_thesis_relay_db_pool(db_pool)
         set_home_db_pool(db_pool)
 
@@ -236,7 +238,11 @@ async def lifespan(app: FastAPI):
         from scheduler import Scheduler, SchedulerContext
         from trading_watch import register_bloodstream_jobs
         from llm.night_shift import register_brief_jobs
+        from llm.news_night import register_news_jobs
         from llm.silence_sweep import register_sweep_jobs
+        from llm.wire import register_wire_jobs
+        from llm.prediction_watch import register_prediction_watch_jobs
+        from llm.reading_echo import register_reading_echo_jobs
 
         async def _scheduler_broadcast(room_id, message):
             await connection_manager.broadcast(room_id, message)
@@ -247,7 +253,11 @@ async def lifespan(app: FastAPI):
         ))
         register_bloodstream_jobs(scheduler_instance)
         register_brief_jobs(scheduler_instance)
+        register_news_jobs(scheduler_instance)
         register_sweep_jobs(scheduler_instance)
+        register_wire_jobs(scheduler_instance)
+        register_prediction_watch_jobs(scheduler_instance)
+        register_reading_echo_jobs(scheduler_instance)
         scheduler_instance.start()
 
     yield
@@ -323,6 +333,7 @@ app.include_router(attachments_router)
 
 # Include prediction relay router (human Accept → tradingDesk write)
 app.include_router(prediction_relay_router)
+app.include_router(reading_relay_router)
 
 # Include thesis relay router (Create Thesis → book born bound to its room)
 app.include_router(thesis_relay_router)

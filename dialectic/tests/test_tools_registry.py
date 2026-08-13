@@ -1,5 +1,6 @@
 # tests/test_tools_registry.py — tool registry contracts + tradingDesk client
 
+import json
 import re
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -8,6 +9,7 @@ from uuid import uuid4
 import httpx
 import pytest
 
+from llm import defuddle_client as dc
 from llm import tools as tools_mod
 from llm import tradingdesk_client as td
 from llm.tools import Tool, ToolRegistry, build_registry, resolve_book_id
@@ -29,6 +31,9 @@ EXPECTED_TOOLS = {
     "search_transcript",
     "draft_prediction",
     "propose_thesis",
+    "read_article",
+    "save_reading",
+    "search_reading",
 }
 
 
@@ -60,9 +65,9 @@ def registry(room, db):
 
 
 class TestRegistryContract:
-    def test_registers_all_twelve_tools(self, registry):
+    def test_registers_all_fifteen_tools(self, registry):
         assert set(registry.names()) == EXPECTED_TOOLS
-        assert len(registry.tools) == 12
+        assert len(registry.tools) == 15
 
     def test_names_match_anthropic_pattern(self, registry):
         for tool in registry.tools:
@@ -969,5 +974,242 @@ class TestThesisProposalHoist:
         assert _hoisted_thesis_proposal([]) is None
         assert _hoisted_thesis_proposal(
             [{"ok": True, "provenance": {"kind": "prediction_draft"},
+              "input": {}}]
+        ) is None
+
+
+# ── read_article (defuddle sidecar) ──────────────────────────────────
+
+
+@pytest.fixture
+def defuddle_env(monkeypatch):
+    monkeypatch.setenv("DEFUDDLE_URL", "http://defuddle.test")
+    dc.reset()
+    yield
+    dc.reset()
+
+
+def install_dc_transport(handler):
+    """Point the defuddle client's module-level client at a MockTransport."""
+    dc._client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0)
+
+
+ARTICLE = {
+    "title": "Tankers divert",
+    "author": "A. Reporter",
+    "description": "Shipping lanes shift.",
+    "site": "Example News",
+    "published": "2026-08-10T09:00:00+00:00",
+    "word_count": 900,
+    "url": "https://ex.com/1",
+    "content": "The straits narrowed overnight and the tankers turned.",
+}
+
+
+class TestReadArticleTool:
+    @pytest.mark.asyncio
+    async def test_returns_shaped_article(self, room, defuddle_env):
+        def handler(request):
+            assert request.url.path == "/extract"
+            body = json.loads(request.content)
+            assert body == {"url": "https://ex.com/1"}
+            return json_response(ARTICLE)
+
+        install_dc_transport(handler)
+        registry = build_registry(room, FakeDB())
+        tool = registry.get("read_article")
+        assert tool is not None
+        assert registry.labels()["read_article"] == "reading the article"
+
+        out = await tool.execute({"url": "https://ex.com/1"})
+        assert out["title"] == "Tankers divert"
+        assert out["author"] == "A. Reporter"
+        assert out["published"] == "2026-08-10T09:00:00+00:00"
+        assert out["word_count"] == 900
+        assert out["content"].startswith("The straits narrowed")
+        assert "content_note" not in out
+
+    @pytest.mark.asyncio
+    async def test_long_content_is_cut_with_a_named_boundary(self, room, defuddle_env):
+        def handler(request):
+            return json_response({**ARTICLE,
+                                  "content": "x" * (tools_mod.ARTICLE_CONTENT_CAP + 500)})
+
+        install_dc_transport(handler)
+        tool = build_registry(room, FakeDB()).get("read_article")
+        out = await tool.execute({"url": "https://ex.com/1"})
+
+        assert len(out["content"]) == tools_mod.ARTICLE_CONTENT_CAP
+        assert "cut at" in out["content_note"]
+        assert "900-word" in out["content_note"]
+
+    @pytest.mark.asyncio
+    async def test_sidecar_down_raises_for_the_loop(self, room, defuddle_env):
+        """Unreachable sidecar must surface as DefuddleError — the tool loop
+        turns it into an is_error result; the executor never invents a body."""
+        def handler(request):
+            raise httpx.ConnectError("connection refused")
+
+        install_dc_transport(handler)
+        tool = build_registry(room, FakeDB()).get("read_article")
+        with pytest.raises(dc.DefuddleError, match="unreachable"):
+            await tool.execute({"url": "https://ex.com/1"})
+
+    @pytest.mark.asyncio
+    async def test_upstream_refusal_names_the_reason(self, room, defuddle_env):
+        def handler(request):
+            return json_response({"error": "upstream returned HTTP 403"}, status=502)
+
+        install_dc_transport(handler)
+        tool = build_registry(room, FakeDB()).get("read_article")
+        with pytest.raises(dc.DefuddleError, match="502.*403"):
+            await tool.execute({"url": "https://ex.com/paywalled"})
+
+    @pytest.mark.asyncio
+    async def test_url_arg_is_validated_before_any_fetch(self, room, defuddle_env):
+        install_dc_transport(lambda request: json_response(ARTICLE))
+        tool = build_registry(room, FakeDB()).get("read_article")
+        with pytest.raises(ValueError, match="url is required"):
+            await tool.execute({})
+        with pytest.raises(ValueError, match="http"):
+            await tool.execute({"url": "ftp://ex.com/1"})
+
+    @pytest.mark.asyncio
+    async def test_empty_content_says_so(self, room, defuddle_env):
+        def handler(request):
+            return json_response({**ARTICLE, "content": ""})
+
+        install_dc_transport(handler)
+        tool = build_registry(room, FakeDB()).get("read_article")
+        out = await tool.execute({"url": "https://ex.com/1"})
+        assert out["content"] == ""
+        assert "no article body" in out["note"]
+
+
+# ── reading library tools (Phase 1) ──────────────────────────────────
+
+
+class TestSaveReadingTool:
+    """save_reading is a proposal: it validates and shapes, and writes
+    NOTHING — the Accept tap in api/reading_relay.py is the only write."""
+
+    @pytest.mark.asyncio
+    async def test_proposal_carries_refetched_metadata(self, room, defuddle_env):
+        def handler(request):
+            body = json.loads(request.content)
+            assert body == {"url": "https://ex.com/1"}
+            return json_response(ARTICLE)
+
+        install_dc_transport(handler)
+        tool = build_registry(room, FakeDB()).get("save_reading")
+        out = await tool.execute({
+            "url": "https://ex.com/1",
+            "summary": "Tanker diversions tightened the straits premium.",
+            "key_claims": ["Rates doubled", "Insurers withdrew"],
+        })
+
+        assert out["provenance"] == {"kind": "reading_draft"}
+        proposal = out["proposal"]
+        assert proposal["url"] == "https://ex.com/1"
+        assert proposal["title"] == "Tankers divert"
+        assert proposal["site"] == "Example News"
+        assert proposal["summary"].startswith("Tanker diversions")
+        assert proposal["key_claims"] == ["Rates doubled", "Insurers withdrew"]
+        # The body never rides the proposal — the accept re-fetches it.
+        assert "content" not in proposal
+
+    @pytest.mark.asyncio
+    async def test_unreadable_url_is_rejected_not_filed(self, room, defuddle_env):
+        """A hallucinated article must fail here, not land in recall."""
+        def handler(request):
+            return json_response({**ARTICLE, "content": ""})
+
+        install_dc_transport(handler)
+        tool = build_registry(room, FakeDB()).get("save_reading")
+        with pytest.raises(ValueError, match="readable article"):
+            await tool.execute({"url": "https://ex.com/1", "summary": "s"})
+
+    @pytest.mark.asyncio
+    async def test_args_are_validated(self, room, defuddle_env):
+        install_dc_transport(lambda request: json_response(ARTICLE))
+        tool = build_registry(room, FakeDB()).get("save_reading")
+        with pytest.raises(ValueError, match="url is required"):
+            await tool.execute({"summary": "s"})
+        with pytest.raises(ValueError, match="http"):
+            await tool.execute({"url": "ftp://ex.com/1", "summary": "s"})
+        with pytest.raises(ValueError, match="summary is required"):
+            await tool.execute({"url": "https://ex.com/1"})
+        with pytest.raises(ValueError, match="1000 characters"):
+            await tool.execute({"url": "https://ex.com/1", "summary": "x" * 1001})
+
+
+class TestSearchReadingTool:
+    @pytest.mark.asyncio
+    async def test_returns_ranked_extracts(self, room, monkeypatch):
+        from llm import reading as reading_mod
+
+        seen = {}
+
+        async def fake_search(db, room_id, query, limit):
+            seen.update(room_id=room_id, query=query, limit=limit)
+            return [{
+                "url": "https://ex.com/1", "title": "Tankers divert",
+                "author": None, "site": "Example News",
+                "published": "2026-08-10", "summary": "The straits narrowed.",
+                "snippet": "the <b>tankers</b> turned", "saved_via": "proposal",
+                "saved_at": "2026-08-11T05:30:00+00:00",
+            }]
+
+        monkeypatch.setattr(reading_mod, "search_reading", fake_search)
+        tool = build_registry(room, FakeDB()).get("search_reading")
+        out = await tool.execute({"query": "tankers"})
+
+        assert seen == {"room_id": room.id, "query": "tankers", "limit": 5}
+        assert out["count"] == 1
+        assert out["readings"][0]["snippet"].startswith("the <b>tankers</b>")
+        assert "note" not in out
+
+    @pytest.mark.asyncio
+    async def test_empty_result_says_so(self, room, monkeypatch):
+        from llm import reading as reading_mod
+
+        async def fake_search(db, room_id, query, limit):
+            return []
+
+        monkeypatch.setattr(reading_mod, "search_reading", fake_search)
+        tool = build_registry(room, FakeDB()).get("search_reading")
+        out = await tool.execute({"query": "nothing"})
+        assert out["count"] == 0
+        assert "never filed" in out["note"]
+
+    @pytest.mark.asyncio
+    async def test_query_is_required(self, room):
+        tool = build_registry(room, FakeDB()).get("search_reading")
+        with pytest.raises(ValueError, match="query is required"):
+            await tool.execute({})
+
+
+class TestReadingProposalHoist:
+    """The orchestrator scan that lifts the draft to metadata.reading_proposal."""
+
+    def test_hoists_the_first_ok_reading_draft(self):
+        from llm.orchestrator import _hoisted_reading_proposal
+        trace = [
+            {"ok": True, "provenance": {"kind": "prediction_draft"},
+             "input": {"statement": "not this one"}},
+            {"ok": False, "provenance": {"kind": "reading_draft"},
+             "input": {"url": "failed — skipped"}},
+            {"ok": True, "provenance": {"kind": "reading_draft"},
+             "input": {"url": "https://ex.com/1", "summary": "s"}},
+        ]
+        assert _hoisted_reading_proposal(trace) == {
+            "url": "https://ex.com/1", "summary": "s", "accepted": False,
+        }
+
+    def test_no_proposal_is_none(self):
+        from llm.orchestrator import _hoisted_reading_proposal
+        assert _hoisted_reading_proposal([]) is None
+        assert _hoisted_reading_proposal(
+            [{"ok": True, "provenance": {"kind": "thesis_proposal"},
               "input": {}}]
         ) is None

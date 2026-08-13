@@ -74,6 +74,16 @@ async def _briefs_posted_today(conn) -> int:
     return count or 0
 
 
+def _first_sentence(text: str) -> str:
+    """First sentence of a summary, collapsed to one line for the digest."""
+    text = " ".join(text.split())
+    for sep in (". ", "! ", "? "):
+        idx = text.find(sep)
+        if idx != -1:
+            return text[:idx + 1]
+    return text[:200]
+
+
 def _render_brief(briefing: BriefingResponse) -> str:
     """Deterministic message text: summary first, then the fact sections."""
     lines = [f"☀️ Morning brief — {briefing.summary}"]
@@ -88,6 +98,12 @@ def _render_brief(briefing: BriefingResponse) -> str:
         lines.append(f"⏳ Commitment due {when}: {c['claim'][:140]}")
     for q in briefing.unanswered_questions[:5]:
         lines.append(f"❓ Unanswered ({q.speaker}): {q.content_preview[:140]}")
+    if briefing.news_digest:
+        lines.append("📰 Read overnight:")
+        for item in briefing.news_digest[:5]:
+            title = item.get("title") or item.get("url") or "untitled"
+            site = item.get("site") or "unknown site"
+            lines.append(f"📰 {title} — {site}: {_first_sentence(item.get('summary') or '')}")
     return "\n".join(lines)
 
 

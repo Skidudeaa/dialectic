@@ -24,6 +24,8 @@ from api.attachments import (
 from memory.manager import MemoryManager
 from llm.orchestrator import LLMOrchestrator
 from llm.annotator import AnnotatorEngine
+from llm.claim_check import schedule_claim_check
+from llm import research
 from llm.protocol_manager import ProtocolManager
 from llm.protocol_library import get_protocol_definition
 from llm.multi_model import MultiModelCoordinator
@@ -172,6 +174,7 @@ class MessageHandler:
             MessageTypes.TYPING_CONTENT: self._handle_typing_content,
             MessageTypes.SUMMON_LLM: self._handle_summon_llm,
             MessageTypes.CANCEL_LLM: self._handle_cancel_llm,
+            MessageTypes.DEEP_DIVE: self._handle_deep_dive,
             MessageTypes.INVOKE_PROTOCOL: self._handle_invoke_protocol,
             MessageTypes.ADVANCE_PROTOCOL: self._handle_advance_protocol,
             MessageTypes.ABORT_PROTOCOL: self._handle_abort_protocol,
@@ -429,6 +432,19 @@ class MessageHandler:
             asyncio.create_task(
                 self._detect_commitment_proposals(conn.room_id, message)
             )
+
+        # Claim check: a human message carrying an article link gets a
+        # background fairness check against the piece itself. Only a
+        # `mixed`/`misrepresented` verdict writes anything (a
+        # metadata.claim_check badge on the source message); every failure
+        # path inside is silent, so the send path never feels it.
+        schedule_claim_check(
+            room_id=conn.room_id,
+            message=message,
+            db=self.db,
+            db_pool=self.db_pool,
+            broadcast=self.connections.broadcast,
+        )
 
         # Annotator mode: when the other user is offline, generate a context annotation
         # for when they return. This runs IN ADDITION TO the normal primary LLM path so
@@ -1613,6 +1629,100 @@ class MessageHandler:
                 ))
         else:
             await self._send_error(conn, "No thread_id provided for cancel")
+
+    async def _handle_deep_dive(self, conn: Connection, payload: dict) -> None:
+        """Research mode: a human asked for the long tool loop.
+
+        The handler itself only validates, gates, and spawns — the dive
+        runs fire-and-forget (same discipline as _detect_commitment_proposals)
+        because it outlives this socket message and must own its DB
+        connection. Every refusal here is ephemeral (an ERROR to the asker);
+        nothing about a refused or failed dive touches the send path.
+        """
+        question = str(payload.get("question") or "").strip()
+        if not question:
+            await self._send_error(
+                conn, "Type the question first — Research sends what is in the composer."
+            )
+            return
+        # Overlong is truncated, not refused: the asker's intent is in the
+        # first two thousand characters, and a hard 400 here reads as the
+        # room eating the question.
+        question = question[: research.MAX_QUESTION_CHARS]
+
+        if not research.deep_dive_enabled():
+            await self._send_error(conn, "Research mode is disabled on this server.")
+            return
+
+        raw_thread_id = payload.get("thread_id") or conn.thread_id
+        thread_id = None
+        if raw_thread_id:
+            try:
+                thread_id = (
+                    raw_thread_id
+                    if isinstance(raw_thread_id, UUID)
+                    else UUID(str(raw_thread_id))
+                )
+            except (TypeError, ValueError, AttributeError):
+                await self._send_error(conn, "Invalid thread_id")
+                return
+
+        if not await research.try_acquire_dive(conn.room_id):
+            await self._send_error(
+                conn,
+                "A research dive is already running in this room — its brief lands as a message.",
+            )
+            return
+
+        asyncio.create_task(self._run_deep_dive(conn.room_id, thread_id, question))
+
+    async def _run_deep_dive(
+        self, room_id: UUID, thread_id: Optional[UUID], question: str
+    ) -> None:
+        """Background body of a deep dive: load context, run it, always
+        release the room's dive slot.
+
+        Reaching the except means the context load died (deep_dive handles
+        its own LLM-path failures); the room still gets deep_dive_done so
+        the composer re-arms.
+        """
+        try:
+            if self.db_pool is not None:
+                # A fresh acquisition, not self.db: by the time the dive
+                # finishes, the per-message connection was released back to
+                # the pool with the socket message that spawned this.
+                async with self.db_pool.acquire() as db:
+                    await self._deep_dive_on(db, room_id, thread_id, question)
+            else:
+                await self._deep_dive_on(self.db, room_id, thread_id, question)
+        except Exception:
+            logger.exception("Deep dive task failed for room %s", room_id)
+            try:
+                await self.connections.broadcast(room_id, OutboundMessage(
+                    type=MessageTypes.DEEP_DIVE_DONE,
+                    payload={"thread_id": str(thread_id) if thread_id else None},
+                ))
+            except Exception:
+                logger.exception("Deep dive done-broadcast failed for room %s", room_id)
+        finally:
+            research.release_dive(room_id)
+
+    async def _deep_dive_on(
+        self, db, room_id: UUID, thread_id: Optional[UUID], question: str
+    ) -> None:
+        loaded = await research.load_room_context(db, room_id, thread_id=thread_id)
+        if loaded is None:
+            logger.warning("Deep dive: no room/thread context for room %s", room_id)
+            return
+        room, thread, users = loaded
+        await research.deep_dive(
+            db=db,
+            room=room,
+            thread=thread,
+            users=users,
+            question=question,
+            broadcast=self.connections.broadcast,
+        )
 
     async def _should_send_push(self, user_id: UUID, room_id: UUID) -> bool:
         """
