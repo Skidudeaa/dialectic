@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { HouseMovement } from './HouseMovement'
 import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import { api } from '../../lib/api.ts'
 import type { HomeActivityProjection, HomeActivityRoom, RoomDestination } from '../../types/index.ts'
@@ -129,6 +130,11 @@ export function HomeActivityPulse({ onNavigate, refreshVersion, residents }: Hom
           </div>
         </section>
       )}
+
+      <HouseMovement
+        movement={snapshot.rooms.flatMap((room) => room.movement ?? [])}
+        onNavigate={onNavigate}
+      />
 
       <section className="home-wings" aria-label="The house">
         <h2>The house</h2>
