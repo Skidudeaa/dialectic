@@ -68,14 +68,15 @@ at that release's integrated gate**. The canonical record of what has landed is
 `docs/superpowers/plans/2026-08-12-dialectic-release-1-sdd-ledger.md` — this
 list is a pointer, not a second copy of it.
 
-Release 1 (Workroom Foundation) runs as six task groups, `A → (B ∥ C) → D → E → F`:
+Release 1 (Workroom Foundation) is COMPLETE and gated, awaiting its single PR.
+It ran as six task groups, `A → (B ∥ C) → D → E → F`:
 
 - [x] **A** Scene and identity kernel — scene as the third destination axis
 - [x] **B** House v2 semantic movement — eight kinds, one fenced projection
 - [x] **C** Workspace-object adapters — one shape, no new table, twins folded
 - [x] **D** Unified proposal envelope — five kinds, one contract, no new writes
 - [x] **E** Current-scene local continuity — window-local, deep links win
-- [ ] **F** Integrated Release 1 gate — fresh counts, browser acceptance, the PR
+- [x] **F** Integrated Release 1 gate — 1138 backend, 77 frontend, 16/16 browser
 
 Releases 2 (Artifact Workroom) and 3 (Deliberation and Whole-House
 Intelligence) are scoped in `2026-08-12-dialectic-living-workroom-program.md`.

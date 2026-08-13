@@ -373,6 +373,108 @@ every reload — a store that quietly disagrees with where the app actually is.
 
 Baseline at handoff: **1138 backend**, **75 frontend**, lint 0, build 0.
 
-## Task Group F — Integrated Release 1 gate — NOT STARTED
+## Task Group F — Integrated Release 1 gate — PASSED
 
-No PR may open until F passes.
+| Task | Commit | Result |
+|---|---|---|
+| F3 defect found in the browser | `c3b28a2` | Restored URL now replaced; harness kept. |
+
+### F1 — fresh verification (observed 2026-08-13, America/Chicago)
+
+| | |
+|---|---|
+| Backend | **1138 passed** — exactly one summary line, no `failed`/`error`/interrupted |
+| Frontend | **77 passed** across 10 files |
+| Lint | 0 |
+| Production build | 0 |
+
+### F2 — exit-gate checklist
+
+- [x] Bare `/` opens Home → House — *browser, `data-workspace-scene="house"`, switcher `aria-current` House*
+- [x] Home → Record has a canonical URL surviving reload and Back/Forward — *browser, in-document history*
+- [x] Ordinary room and branch default URLs unchanged — *`?room=<id>`, no scene param, no switcher*
+- [x] House movement never exceeds the all-members intersection — **mutation re-proven at the gate**
+- [x] Human House and Dialectic Home context are projection-identical — one service, asserted in `test_home_movement_pg`
+- [x] Proposal types share one authority grammar without breaking existing write paths — **relay-driven disarming re-proven**
+- [x] Reading/memory twins render once — **mutation re-proven at the gate**
+- [x] Home pulse/table, messages, proposals, drawers, exactly-1024 desktop behavior operational — *browser*
+- [x] Home projection p95 **measured**: 25 rooms / 300 items, median 12.0 ms, **p95 15.2 ms** against 150 ms
+- [x] Backend, frontend, lint, build, static architecture, isolated browser acceptance
+
+### Mutation re-proofs at the gate (red, then restored green)
+
+| Guard | Mutation | Killed |
+|---|---|---|
+| Movement fence (B) | drop `JOIN er` from the `reading_filed` arm | `test_movement_sql_fences_every_arm_by_itself` |
+| Reading twin (C) | drop `key NOT LIKE 'reading:%'` | 3 tests, incl. the direct-SQL one |
+| Proposal authority (D) | stop reading the relay's accepted stamp | relay-disarming + accepting-human |
+
+### Static architecture
+
+- `ruff --select F`: **80 on master, 80 at HEAD** — this release introduced none.
+- One destination writer: `setRoom`/`setThread`/`setWorkspaceScene` and
+  `history.pushState`/`replaceState` appear in `useRoomNavigation.ts` **only**.
+  (A first pass flagged `App.tsx` — that was a local variable named `pushState`,
+  not a history call. Looked before reporting.)
+- Projections contain **zero** `INSERT`/`UPDATE`/`DELETE`.
+- **Migrations added by this release: none.** Everything projects entities that
+  already exist, so deploy is backend restart → frontend flip, with no DB step.
+
+### F3 — isolated browser acceptance: **16/16**
+
+`dialectic_browser` on :8013, preview :4173, `SCHEDULER_ENABLED=0`, five widths
+(1600 / 1200 / exactly 1024 / 820 / 390). Fixture processes were stopped by PID
+only after `/proc/<pid>/cwd` was confirmed inside the worktree — a production
+backend running from `/root/DwoodAmo/dialectic` was correctly left alone, and
+production stayed `active` and healthy throughout. Harness kept at
+`docs/superpowers/acceptance/2026-08-13-release-1-browser-acceptance.py`.
+
+**The defect the browser found (`c3b28a2`).** A bare `/` restored the room
+correctly and left the address bar reading `/`. Every unit test agreed with it,
+because they asserted state rather than the URL. In a URL-authoritative app the
+screen and the address disagreeing means a URL nobody can copy, share or reload
+into the same place. A restored destination now installs with `replace` — never
+`push`, so Back still leaves — while a deep link keeps `none`.
+
+**The harness was wrong three times before it was right**, and each correction
+is recorded beside the check it fixes:
+
+1. It guessed `[data-scene]` / `.home-pulse` and reported the House missing
+   while it was plainly on screen — the real markers are
+   `data-workspace-scene` and `.home-house`, and a bare `[aria-current]`
+   selector grabs the room rail's before the switcher's.
+2. It compared card text case-sensitively while the CSS uppercases it, so it
+   called the proposal cards absent while a button inside one was present —
+   two contradictory readings in the same check, which is the tell.
+3. It drove Back with cross-document `goto()`s, which re-boots the app and
+   exercises restoration instead of history.
+
+None of the three was a product defect. A probe that never reaches the code
+proves nothing about it.
+
+### F4 — journal
+
+One release-level entry appended to `JOURNAL.md`, dated `2026-08-13` derived in
+`America/Chicago`, carrying the observed backend integer (1138).
+
+### Handoff
+
+```text
+CHANGES: Scene/identity, House movement, workspace adapters/proposals, and current-scene continuity
+VERIFIED: Full Release 1 backend/frontend/static/browser gate with observed results
+UNVERIFIED: Real-device macOS/Windows/iOS/Android checks not performed
+NEXT: Release 2 — Artifact Workroom
+```
+
+### Carried forward to Release 2 / owner ruling
+
+1. **§9.3's accepting human is not preserved** for `prediction_draft` and
+   `prediction_resolution` — the relays write a boolean and log no event.
+   Closing it means a write on the relay path, which Release 1 forbids.
+2. **§8.2's research question is never persisted** — it travels over
+   `DEEP_DIVE_STARTED` and is gone. The Brief projects what survives.
+3. **`failed` and `dismissed` have no row**, deliberately for `failed`. Both are
+   client-held today.
+4. **Production carries zero proposals**, so D's envelope has fixture coverage
+   only until one exists.
+
