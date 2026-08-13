@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { Memory } from '../../types'
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import './MemoryPanel.css'
 
 interface MemoryPanelProps {
@@ -147,7 +148,7 @@ export function MemoryPanel({
 
       {papers.length > 0 && (
         <section className="memory-papers">
-          <h4>Claude&rsquo;s papers</h4>
+          <h4>{PARTICIPANT_NAME}&rsquo;s papers</h4>
           {papers.map((memory) => {
             const kind = paperKind(memory.key)
             const openIdentity = kind === 'identity' && onOpenIdentity
@@ -220,7 +221,7 @@ function paperKind(key: string): PaperKind | null {
 
 function memoryTitle(key: string): string {
   const lower = key.toLowerCase()
-  if (lower.startsWith('llm_identity:')) return "Claude's identity"
+  if (lower.startsWith('llm_identity:')) return `${PARTICIPANT_NAME}'s identity`
   if (lower.startsWith('user_model:')) return 'A participant model'
   if (lower === 'thesis_state_current') return 'Thesis state'
   return key.replace(/[_:]+/g, ' ').replace(/\s+/g, ' ').trim()

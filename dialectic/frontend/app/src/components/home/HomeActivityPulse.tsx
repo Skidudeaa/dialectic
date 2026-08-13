@@ -103,7 +103,7 @@ export function HomeActivityPulse({ onNavigate, refreshVersion, residents }: Hom
               <span
                 key={resident.id}
                 className={`home-resident${resident.isClaude ? ' is-claude' : ''}`}
-                title={resident.isClaude ? 'Claude lives here' : `${resident.name} — ${status}${ago ? `, last seen ${ago}` : ''}`}
+                title={resident.isClaude ? `${PARTICIPANT_NAME} lives here` : `${resident.name} — ${status}${ago ? `, last seen ${ago}` : ''}`}
               >
                 <span className={`presence-dot ${status === 'online' ? 'online' : status === 'away' ? 'away' : 'offline'}`} />
                 <span className="home-resident-name">{resident.name}</span>

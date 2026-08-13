@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
 import type { Attachment, Message } from '../../types'
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import { api } from '../../lib/api'
 import { ACCEPTED_MIME_ATTRIBUTE, formatBytes, rejectionReason } from '../../lib/attachments'
 import './MessageInput.css'
@@ -54,7 +55,7 @@ const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
   { value: 'definition', label: 'Definition' },
 ]
 
-export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTypingContent, onResearch, researchActive = false, disabled, replyTo, onCancelReply, placeholder = 'Think out loud... paste a link and Claude reads it', quiet = false }: MessageInputProps) {
+export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTypingContent, onResearch, researchActive = false, disabled, replyTo, onCancelReply, placeholder = `Think out loud... paste a link and ${PARTICIPANT_NAME} reads it`, quiet = false }: MessageInputProps) {
   const [content, setContent] = useState('')
   const [messageType, setMessageType] = useState<MessageType>('text')
   const [sendError, setSendError] = useState(false)
@@ -381,7 +382,7 @@ export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTy
               className="research-btn"
               onClick={handleResearch}
               disabled={disabled || researchActive || content.trim().length === 0}
-              title={researchActive ? 'A research dive is already running' : 'Deep dive — Claude reads the sources and lands a brief (runs long)'}
+              title={researchActive ? 'A research dive is already running' : `Deep dive — ${PARTICIPANT_NAME} reads the sources and lands a brief (runs long)`}
             >
               {researchActive ? '✦ Researching…' : '✦ Research'}
             </button>

@@ -359,7 +359,7 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
         </p>
         <ul className="thesis-create-next">
           <li>The first snapshot lands here within seconds</li>
-          <li>Claude now sees the thesis state in every turn</li>
+          <li>{PARTICIPANT_NAME} now sees the thesis state in every turn</li>
           <li>Refine the DAG in the desk’s Builder</li>
           <li>Retire it any time from this panel’s footer</li>
         </ul>
@@ -430,7 +430,7 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
       <div className="thesis-create-heading">Create a thesis</div>
       <ol className="thesis-create-steps">
         <li><em>Name it</em> — a title and the causal claim it stakes</li>
-        <li><em>Claude drafts</em> the cascade for your review</li>
+        <li><em>{PARTICIPANT_NAME} drafts</em> the cascade for your review</li>
         <li><em>You accept</em> — nothing exists until your tap</li>
         <li><em>Refine on the desk</em> — the Builder owns the canvas</li>
       </ol>
@@ -474,7 +474,7 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
           onChange={(e) => setDraftEnabled(e.target.checked)}
           disabled={locked}
         />
-        Draft the cascade with Claude
+        Draft the cascade with {PARTICIPANT_NAME}
       </label>
       {error && <div className="thesis-create-error">{error}</div>}
       <button

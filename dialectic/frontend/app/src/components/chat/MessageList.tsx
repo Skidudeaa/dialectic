@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
+import { PARTICIPANT_NAME, participantDisplayName } from '../../lib/productIdentity.ts'
 import type { Attachment, Message, Reaction } from '../../types'
 import { useDocumentVisibility } from '../../hooks/useDocumentVisibility'
 import { MessageBubble } from './MessageBubble'
@@ -56,13 +56,22 @@ function continuesPrevious(current: Message, previous: Message | undefined): boo
   return Number.isFinite(gap) && gap >= 0 && gap < GROUPING_WINDOW_MS
 }
 
+/**
+ * WHY this delegates rather than mapping speaker types itself: it used to keep
+ * a private copy of that mapping, and the copy drifted — A5 renamed the
+ * participant, the llm_primary arm here was updated, and the provoker and
+ * annotator arms kept returning a provider name into every byline. One
+ * definition, in productIdentity, is the fix; correcting the copy would only
+ * reset the clock on the next divergence.
+ */
 function getAuthorName(msg: Message, userNames: Record<string, string>): string {
-  if (msg.speaker_type === 'llm_primary') return PARTICIPANT_NAME
-  if (msg.speaker_type === 'llm_provoker') return 'Claude (Provoker)'
-  if (msg.speaker_type === 'llm_annotator') return 'Claude (Annotator)'
-  if (msg.speaker_type === 'system') return 'System'
-  if (msg.user_name) return msg.user_name
-  return (msg.user_id && userNames[msg.user_id]) || msg.user_id?.slice(0, 8) || 'Human'
+  if (msg.speaker_type === 'human') {
+    if (msg.user_name) return msg.user_name
+    return (msg.user_id && userNames[msg.user_id]) || msg.user_id?.slice(0, 8) || 'Human'
+  }
+  // persona_name matters here: the old copy had no llm_persona arm at all, so
+  // a persona turn fell through to the human branch and rendered as 'Human'.
+  return participantDisplayName(msg.speaker_type, msg.persona_name)
 }
 
 function dayLabel(iso: string): string {

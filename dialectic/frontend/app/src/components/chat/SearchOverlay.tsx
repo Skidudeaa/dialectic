@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
+import { participantDisplayName } from '../../lib/productIdentity.ts'
 import DOMPurify from 'dompurify'
 import { api } from '../../lib/api'
 import type { SearchResult } from '../../types'
@@ -13,12 +13,11 @@ interface SearchOverlayProps {
 
 const DEBOUNCE_MS = 220
 
+// Delegates for the same reason MessageList does: this was the second private
+// copy of the participant-name mapping, and it had drifted the same way.
 function speakerLabel(result: SearchResult): string {
-  if (result.speaker_type === 'llm_primary') return PARTICIPANT_NAME
-  if (result.speaker_type === 'llm_provoker') return 'Claude (Provoker)'
-  if (result.speaker_type === 'llm_annotator') return 'Claude (Annotator)'
-  if (result.speaker_type === 'system') return 'System'
-  return result.sender_name
+  if (result.speaker_type === 'human') return result.sender_name
+  return participantDisplayName(result.speaker_type)
 }
 
 /**

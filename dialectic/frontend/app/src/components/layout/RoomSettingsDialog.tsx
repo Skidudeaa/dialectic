@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import './RoomSettingsDialog.css'
 
 interface RoomSettings {
@@ -53,7 +54,7 @@ export function RoomSettingsDialog({ roomId, onClose }: RoomSettingsDialogProps)
         <div className="settings-dialog-header">
           <div>
             <h2>Room intelligence</h2>
-            <p>Choose how actively Claude joins this room.</p>
+            <p>Choose how actively {PARTICIPANT_NAME} joins this room.</p>
           </div>
           <button className="btn btn-ghost" onClick={onClose} aria-label="Close settings">&times;</button>
         </div>
@@ -71,12 +72,12 @@ export function RoomSettingsDialog({ roomId, onClose }: RoomSettingsDialogProps)
               />
               <span>
                 <strong>Automatic participation</strong>
-                <small>Claude can join without being explicitly mentioned.</small>
+                <small>{PARTICIPANT_NAME} can join without being explicitly mentioned.</small>
               </span>
             </label>
 
             <label>
-              Turns before Claude considers joining: <strong>{settings.interjection_turn_threshold}</strong>
+              Turns before {PARTICIPANT_NAME} considers joining: <strong>{settings.interjection_turn_threshold}</strong>
               <input
                 type="range"
                 min="2"

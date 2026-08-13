@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { PARTICIPANT_NAME } from '../lib/productIdentity.ts'
+import { PARTICIPANT_NAME, participantDisplayName } from '../lib/productIdentity.ts'
 import type { Message } from '../types'
 
 interface AwayAlertsOptions {
@@ -20,8 +20,8 @@ interface AwayAlertsOptions {
 
 function authorLabel(message: Message): string {
   if (message.speaker_type === 'llm_primary') return PARTICIPANT_NAME
-  if (message.speaker_type === 'llm_provoker') return 'Claude (Provoker)'
-  if (message.speaker_type === 'llm_annotator') return 'Claude (Annotator)'
+  if (message.speaker_type === 'llm_provoker') return participantDisplayName('llm_provoker')
+  if (message.speaker_type === 'llm_annotator') return participantDisplayName('llm_annotator')
   if (message.speaker_type === 'system') return 'System'
   return message.user_name ?? 'Someone'
 }
