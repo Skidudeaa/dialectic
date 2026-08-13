@@ -84,7 +84,29 @@ asserted where it lives.
   `requires_judgment` — marking arrivals as judgment turns a House into a nag.
 - The component navigates by room/branch, never by the server's `destination`
   string, so it does not become a second destination writer.
+### Post-B self-review (2026-08-12)
+
+A review of B against its own claims found one real defect, now fixed in
+`f462533`: the global `LIMIT` ran before per-room slicing, so a room with 250
+recent readings consumed the whole budget and every other room projected **zero**
+movement (measured: Loud 12, Quiet 0, with a per-room cap of 12 that had never
+bound anything). Ranking moved into SQL via `row_number() PARTITION BY room_id`;
+the total cap rose 200 → 400 so per-room binds first at realistic scale — at 200
+it still truncated 17 of 25 rooms, the same bug wearing a smaller number.
+
+Re-measured after the fix: 25/25 rooms carry movement, 300 items, median 13.7 ms,
+p95 **25.6 ms** against the 150 ms target. Fence mutation still kills.
+
+Also checked and found sound: Pydantic's `movement` default is per-instance (not
+a shared list); `movement` is in the response schema and the existing API
+fixtures still validate against the defaulted field; `to_prompt_section` renders
+movement, so human House and Dialectic context stay projection-identical; every
+UNION arm supplies a non-null `object_id`, so the React key cannot collide.
+
+Baseline at handoff: **1083 backend**, **27 frontend**, lint 0, build 0.
+
 ## Task Group C — Workspace-object adapters — NOT STARTED
+Handoff: `2026-08-12-dialectic-release-1-taskgroup-c-handoff.md`
 ## Task Group D — Unified proposal envelope — NOT STARTED
 ## Task Group E — Current-scene local continuity — NOT STARTED
 ## Task Group F — Integrated Release 1 gate — NOT STARTED
