@@ -405,7 +405,7 @@ class DialecticAPI {
    * five any more. The server owns the gate; the screen reports it.
    */
   async getCapabilities(): Promise<{ signups_enabled: boolean }> {
-    return this.fetch('/meta/capabilities');
+    return this.fetch('/auth/capabilities');
   }
 
   // Auth (no room token needed)

@@ -22,6 +22,17 @@
 # This surface is reachable without credentials, so it can never carry
 # configuration, identifiers, or secrets. tests/test_capabilities_api.py asserts
 # every value is a bool precisely so a future field cannot smuggle one out.
+#
+# WHY it lives under /auth and not a tidier /meta: the SPA is served by nginx,
+# which proxies exactly one hardcoded list of path prefixes to this backend
+# (sites-available/dialectic, and vite.config.ts mirrors it for dev/preview).
+# A path outside that list is answered by the SPA fallback with 200 + index.html
+# — so the fetch would parse HTML as JSON, throw, and leave the screen on its
+# "unknown means closed" default. That failure is INVISIBLE here, because closed
+# is the correct answer on this deployment today; it would surface only on the
+# day someone opens signups and the screen refuses to notice. Choosing an
+# already-proxied prefix buys the same semantics with no production routing
+# change. If this grows beyond auth doors, add the prefix to BOTH lists first.
 
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -37,7 +48,7 @@ class Capabilities(BaseModel):
     signups_enabled: bool
 
 
-@router.get("/meta/capabilities", response_model=Capabilities)
+@router.get("/auth/capabilities", response_model=Capabilities)
 async def get_capabilities() -> Capabilities:
     """What a caller may do here, answered before they have a credential."""
     return Capabilities(signups_enabled=_signups_enabled())

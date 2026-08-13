@@ -1,5 +1,5 @@
 """
-HTTP contract for GET /meta/capabilities (api/capabilities.py).
+HTTP contract for GET /auth/capabilities (api/capabilities.py).
 
 WHY this endpoint exists: the signed-out screen has to tell a new user which
 doors are actually open, and it renders before any credential exists. Today it
@@ -19,13 +19,34 @@ from fastapi.testclient import TestClient
 import api.main as main_mod
 from api.auth import routes as auth_routes
 
-PATH = "/meta/capabilities"
+PATH = "/auth/capabilities"
 
 
 @pytest.fixture(autouse=True)
 def _clear_overrides():
     yield
     main_mod.app.dependency_overrides.clear()
+
+
+def test_it_lives_under_a_prefix_the_edge_actually_proxies() -> None:
+    """The trap that a passing endpoint test cannot see.
+
+    nginx proxies ONE hardcoded list of prefixes to this backend, and
+    vite.config.ts mirrors it for dev/preview. A path outside that list is
+    answered by the SPA fallback with 200 + index.html, so the browser parses
+    HTML as JSON, the fetch throws, and the screen silently keeps its default.
+
+    It would look fine here forever: every test in this file drives the ASGI app
+    directly and never crosses the edge. The first tidy-looking rename to
+    /meta/capabilities reintroduces it — and on this deployment the symptom is
+    invisible, because the default the screen falls back to happens to be the
+    correct answer today.
+    """
+    assert PATH.startswith("/auth/"), (
+        "Capabilities must stay under an nginx-proxied prefix. If you move it, "
+        "add the new prefix to BOTH sites-available/dialectic and the proxyMap "
+        "in vite.config.ts in the same change."
+    )
 
 
 def test_capabilities_needs_no_credential() -> None:
