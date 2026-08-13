@@ -1,0 +1,14 @@
+{
+  "name": "dialectic-defuddle-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local article-extraction sidecar for dialectic (defuddle + linkedom).",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "defuddle": "^0.19.2",
+    "linkedom": "^0.18.13"
+  }
+}

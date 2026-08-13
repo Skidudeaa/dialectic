@@ -1,0 +1,29 @@
+[Unit]
+Description=Defuddle article extractor (Node sidecar for dialectic)
+Documentation=file:///opt/dialectic/current/dialectic/defuddle_service/server.mjs
+After=network-online.target
+Wants=network-online.target
+# Leave a crash breadcrumb if the loop flaps.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/dialectic/current/dialectic/defuddle_service
+Environment=DEFUDDLE_HOST=127.0.0.1
+Environment=DEFUDDLE_PORT=8010
+# Adjust the node path if the host installs it elsewhere (which node).
+ExecStart=/usr/bin/node server.mjs
+UMask=0077
+# Restart on crash AND on kill; 5s backoff to avoid tight loops on broken configs
+Restart=always
+RestartSec=5
+TimeoutStopSec=10
+# Structured logging to journalctl -u defuddle
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=defuddle
+
+[Install]
+WantedBy=multi-user.target
