@@ -140,7 +140,7 @@ The annotator fires even when the primary LLM fires — both produce messages. T
 - **Heuristic interjection**: LLM speaks on: `@llm` mention, 4+ turns, question detected, semantic novelty, stagnation
 - **Two LLM modes**: `llm_primary` (Sonnet, equal participant) and `llm_provoker` (Haiku, destabilizer)
 - **Self-model**: LLM extracts its own positions post-response, builds identity doc + per-user model in memories
-- **Three-lane recall**: memory search fuses dense vectors (pgvector, 1536-dim OpenAI), Postgres FTS, and an entity/speaker lane via reciprocal rank fusion — "what did Dan say about X" ranks Dan's memories. Memories carry `speaker_user_id` (whose statement, not who saved it), shown in the LLM prompt.
+- **Three-lane recall**: memory search fuses dense vectors (pgvector, 1024-dim Voyage `voyage-4-large`; OpenAI 1536 remains the fallback provider when `VOYAGE_API_KEY` is unset — changing provider means a column migration AND a full re-embed, since the two live in different vector spaces), Postgres FTS, and an entity/speaker lane via reciprocal rank fusion — "what did Dan say about X" ranks Dan's memories. Memories carry `speaker_user_id` (whose statement, not who saved it), shown in the LLM prompt.
 - **Write-path dedup**: `add_memory` runs cosine + trigram passes; a same-speaker restatement supersedes the old fact (status `superseded`, validity window closed, `MEMORY_SUPERSEDED` event), cross-speaker confirmation keeps the original. System-managed slots (identity docs, protocol synthesis, thesis state) opt out with `dedup=False`. Ported from the verified July 2026 agent-memory research (`docs/research/agent-memory-2026-07/`).
 
 ## Database
