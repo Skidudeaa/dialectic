@@ -5,42 +5,40 @@ import './WorkspaceSceneFrame.css'
 
 interface WorkspaceSceneFrameProps {
   scene: ImplementedWorkspaceScene
-  isHomeRoot: boolean
+  /**
+   * What this destination may show, in switcher order, default first — from
+   * `scenesForDestination`. It is PASSED IN rather than derived here on
+   * purpose: the frame used to hardcode its own copy of the availability rule
+   * ("only Home root has a House") while the router held a second copy, and two
+   * copies of one rule is exactly how the participant name drifted three ways.
+   */
+  scenes: readonly ImplementedWorkspaceScene[]
   onSelect: (scene: ImplementedWorkspaceScene) => void
-  house: ReactNode
-  record: ReactNode
+  /** Scene bodies, built by the caller. A missing scene renders the default. */
+  content: Partial<Record<ImplementedWorkspaceScene, ReactNode>>
 }
 
 export function WorkspaceSceneFrame({
   scene,
-  isHomeRoot,
+  scenes,
   onSelect,
-  house,
-  record,
+  content,
 }: WorkspaceSceneFrameProps) {
-  // Only Home's root has a household to show. Everywhere else the frame forces
-  // Record rather than trusting the caller, so a stale `scene` prop can never
-  // render an empty House in a scheme room.
-  const scenes: readonly ImplementedWorkspaceScene[] = isHomeRoot
-    ? ['house', 'record']
-    : ['record']
-  const effectiveScene: ImplementedWorkspaceScene = isHomeRoot
-    ? scene
-    : 'record'
+  // Defence in depth, not a second rule: the frame still refuses to render a
+  // scene this destination does not offer, so a stale prop mid-navigation can
+  // never paint a House into a scheme room. It defers to the list rather than
+  // re-deciding what the list should contain.
+  const fallback = scenes[0] ?? 'record'
+  const effectiveScene = scenes.includes(scene) ? scene : fallback
+  const body = content[effectiveScene] ?? content[fallback] ?? null
 
   return (
     <section
       className={`workspace-scene workspace-scene-${effectiveScene}`}
       data-workspace-scene={effectiveScene}
     >
-      <SceneSwitcher
-        scene={effectiveScene}
-        scenes={scenes}
-        onSelect={onSelect}
-      />
-      <div className="workspace-scene-content">
-        {effectiveScene === 'house' ? house : record}
-      </div>
+      <SceneSwitcher scene={effectiveScene} scenes={scenes} onSelect={onSelect} />
+      <div className="workspace-scene-content">{body}</div>
     </section>
   )
 }

@@ -20,7 +20,24 @@ export const WORKSPACE_SCENES = [
 
 export type WorkspaceScene = (typeof WORKSPACE_SCENES)[number]
 
-export const IMPLEMENTED_WORKSPACE_SCENES = ['house', 'record'] as const
+// Release 2 makes Bench, Library and Ledger real. Each is backed by a
+// population that actually exists in production -- 5 rooms hold a thesis, 3
+// hold readings, 8 hold memories -- and each recomposes a panel that already
+// worked rather than rebuilding a workflow beside it.
+//
+// Judgment, Brief, Field, Focus, Current and Atlas stay in the approved NAME
+// space and out of this list on purpose: production holds zero commitments,
+// zero proposals and zero research briefs, so every one of them would render an
+// empty scene in every room. WHICH scenes a given destination may show is
+// scenesForDestination() in lib/workspaceRoute.ts -- one definition, read by
+// both the router and the frame.
+export const IMPLEMENTED_WORKSPACE_SCENES = [
+  'house',
+  'record',
+  'bench',
+  'library',
+  'ledger',
+] as const
 
 export type ImplementedWorkspaceScene =
   (typeof IMPLEMENTED_WORKSPACE_SCENES)[number]

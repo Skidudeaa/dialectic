@@ -1,0 +1,53 @@
+/* The empty state is a primary surface here, not a placeholder: most rooms in
+   production hold nothing, so this is what a new user actually reads. It is set
+   to be read — serif, measured line length — rather than glanced past. */
+.scene-empty {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 3rem 1.5rem;
+    max-width: 52ch;
+    margin: 0 auto;
+    text-align: center;
+}
+.scene-empty-kicker {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .18em;
+    color: var(--color-faint);
+}
+.scene-empty-headline {
+    font-family: var(--font-serif);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--color-bone);
+    text-wrap: balance;
+}
+.scene-empty-body {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--color-secondary);
+    text-wrap: pretty;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+.scene-empty-body strong { color: var(--color-bone); font-weight: 600; }
+.scene-empty-detail {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--color-faint);
+    word-break: break-word;
+}
+.scene-empty-action { margin-top: 0.75rem; }
+
+/* Unavailable is deliberately warning-toned, never neutral: it must not read
+   as "there is nothing here". */
+.scene-unavailable .scene-empty-headline { color: var(--color-warning); }
+.scene-loading .scene-empty-body { color: var(--color-faint); }
+
+@media (max-width: 640px) {
+    .scene-empty { padding: 2rem 1rem; }
+}

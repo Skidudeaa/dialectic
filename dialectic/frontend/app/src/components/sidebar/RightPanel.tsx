@@ -5,7 +5,6 @@ import { MemoryPanel } from './MemoryPanel'
 import { ThreadPanel } from './ThreadPanel'
 import { UsersPanel } from './UsersPanel'
 import { SharePanel } from './SharePanel'
-import { TradingPanel } from '../trading/TradingPanel'
 import { AnalyticsPanel } from '../analytics/AnalyticsPanel'
 import { IdentityViewer } from '../analytics/IdentityViewer'
 import { ReplayTimeline } from '../replay/ReplayTimeline'
@@ -13,7 +12,7 @@ import { CommitmentDashboard } from '../stakes/CommitmentDashboard'
 import { HomeSettingsPanel } from '../home/HomeSettingsPanel'
 import './RightPanel.css'
 
-type TabId = 'users' | 'memory' | 'threads' | 'analytics' | 'stakes' | 'history' | 'identity' | 'share' | 'home' | 'trading'
+type TabId = 'users' | 'memory' | 'threads' | 'analytics' | 'stakes' | 'history' | 'identity' | 'share' | 'home'
 
 interface RightPanelProps {
   memories: Memory[]
@@ -87,20 +86,41 @@ export function RightPanel({
     if (isHome) setPicked(tab)
     setActiveTab(tab)
   }
-  const activeTab: TabId = isHome
+  const requestedTab: TabId = isHome
     ? (picked ?? (storedTab === 'memory' || storedTab === 'share' ? 'home' : storedTab))
     : (storedTab === 'home' ? 'share' : storedTab)
 
-  // WHY Trading is unconditional: it used to appear only once a snapshot
-  // existed, which made the Create Thesis flow unreachable in exactly the
-  // rooms that needed it — the panel's empty state IS the create surface.
+  // WHAT THE RAIL GIVES UP, and why it is not a deletion.
+  //
+  // Release 2 moved three panels into the scenes that own them: the trading
+  // panel became the Bench, memory became the Ledger, and commitments sit with
+  // the thesis on the Bench. Leaving them here as well would render each twice
+  // in one room — two trading panels, each with its own create-thesis form.
+  // Design v2 §19.2 forbids a duplicate navigation system for exactly this
+  // reason: two doors onto one thing is how the two come to disagree.
+  //
+  // Home keeps all of them, because Home has no workroom scenes to move them
+  // into. It cannot bind a thesis (the API answers 409), so Trading is not
+  // offered there at all — it never was, and a tab onto a refusal would be
+  // worse than its absence.
+  const OWNED_BY_A_SCENE: TabId[] = ['memory', 'stakes']
   const roomTabs = isHome
     ? [
         { id: 'home' as TabId, label: 'House' },
         ...BASE_TABS.filter((tab) => tab.id !== 'share'),
       ]
-    : BASE_TABS
-  const tabs = [...roomTabs, { id: 'trading' as TabId, label: 'Trading' }]
+    : BASE_TABS.filter((tab) => !OWNED_BY_A_SCENE.includes(tab.id))
+  // Trading lives on the Bench now, and the Bench exists only outside Home.
+  const tabs = roomTabs
+
+  // The selected tab is PERSISTED, so it can name a panel this room no longer
+  // offers — someone whose last tab was Memory arrives in an ordinary room
+  // where the Ledger owns memory. Without this the tab vanishes from the bar
+  // while its panel keeps rendering: a second memory panel, with no tab to
+  // leave it by. Found in a screenshot; every assertion had passed.
+  const activeTab: TabId = tabs.some((tab) => tab.id === requestedTab)
+    ? requestedTab
+    : (tabs[0]?.id ?? 'users')
 
   // Nine tabs overflow the rail, and the active one can sit clipped out of
   // sight (a card can select Trading from outside). Keep it in view.
@@ -167,7 +187,6 @@ export function RightPanel({
             onOpenMemory={() => chooseTab('memory')}
           />
         )}
-        {activeTab === 'trading' && <TradingPanel />}
       </div>
     </>
   )

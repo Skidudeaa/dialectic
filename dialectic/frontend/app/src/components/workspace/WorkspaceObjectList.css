@@ -1,0 +1,89 @@
+.object-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    list-style: none;
+    background: var(--color-bean);
+    border-top: 1px solid var(--color-bean);
+    border-bottom: 1px solid var(--color-bean);
+}
+.object-card {
+    background: var(--color-cacao);
+    padding: 0.7rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+/* The whole card is the target when there is somewhere to go — a small link
+   inside a large row is a tap-target failure on a phone (§17.4). */
+.object-card.is-navigable { padding: 0; }
+.object-card-open {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 0.7rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+}
+.object-card-open:hover { background: var(--color-espresso); }
+.object-card-open:focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: -2px;
+}
+.object-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.6rem;
+}
+.object-card-title {
+    font-family: var(--font-serif);
+    font-size: 13.5px;
+    color: var(--color-bone);
+    line-height: 1.35;
+}
+.object-card-summary {
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--color-secondary);
+    text-wrap: pretty;
+}
+.object-card-foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--color-faint);
+}
+.object-card-origin { overflow-wrap: anywhere; }
+.object-card-when { flex: 0 0 auto; }
+
+/* Review state is a word, never colour alone. */
+.object-card-review {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-bean);
+    color: var(--color-faint);
+}
+.object-card-review.is-awaiting_human {
+    color: var(--color-warning);
+    border-color: rgba(191,161,98,.35);
+}
+.object-card-review.is-failed {
+    color: var(--color-error);
+    border-color: rgba(199,91,57,.35);
+}

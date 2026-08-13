@@ -3,9 +3,18 @@ import type {
 } from '../../types'
 import './SceneSwitcher.css'
 
+// A total Record over the union on purpose: adding a scene to
+// IMPLEMENTED_WORKSPACE_SCENES without naming it here is a build error, not a
+// blank tab discovered in the browser.
+//
+// The names are places, not features — the room is a workroom and these are
+// parts of it. "Library" says what it holds; "Evidence Management" would not.
 const SCENE_LABELS: Record<ImplementedWorkspaceScene, string> = {
   house: 'House',
   record: 'Record',
+  bench: 'Bench',
+  library: 'Library',
+  ledger: 'Ledger',
 }
 
 interface SceneSwitcherProps {

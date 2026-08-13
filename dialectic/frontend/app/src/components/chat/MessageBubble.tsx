@@ -47,6 +47,16 @@ interface MessageBubbleProps {
   isContinuation?: boolean
   /** Media carried by this message, if any. */
   attachments?: Attachment[]
+  /**
+   * Opens the Bench, where the thesis is drafted and reviewed.
+   *
+   * WHY a callback and not a store write: the Bench is a SCENE now, and a
+   * scene is a destination axis. Design v2 §5.7 gives navigation exactly one
+   * owner (useRoomNavigation), so a card deep in the transcript must ask for
+   * the destination rather than install one — otherwise the URL, the history
+   * entry and the rendered scene can disagree.
+   */
+  onOpenBench?: () => void
 }
 
 /** Quoted parents are a glance, not a re-read. */
@@ -111,6 +121,7 @@ export function MessageBubble({
   onDelete,
   isContinuation,
   attachments = [],
+  onOpenBench,
 }: MessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState(message.content)
@@ -224,10 +235,9 @@ export function MessageBubble({
       claim: thesisProposal.claim,
       monthlyBudget: thesisProposal.monthly_budget ?? 5000,
     })
-    state.setRightPanelTab('trading')
-    // On a phone the panel is a drawer — opening the tab without opening
-    // the drawer would make this tap a silent no-op.
-    state.setMobileDrawer('panel')
+    // The Bench is a scene now, not a rail tab. Navigation owns the move;
+    // this only asks for it.
+    onOpenBench?.()
   }
 
   // Detected implicit commitments ("I bet…"). Accept sends an ordinary

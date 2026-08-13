@@ -46,12 +46,44 @@ export function defaultWorkspaceScene(
 }
 
 /**
+ * Every scene this destination may show, in switcher order, default first.
+ *
+ * THE ONE DEFINITION. The router (resolveWorkspaceScene) and the frame
+ * (WorkspaceSceneFrame) both read it, because they used to answer the same
+ * question separately -- the router rejected `house` outside Home root and the
+ * frame independently hardcoded the same rule. Two copies of one rule is
+ * exactly how the participant name drifted three ways; the router must never
+ * accept a scene the switcher will not offer, or a URL can install a place with
+ * no way back to it.
+ *
+ * WHY Home root gets only House and Record: Home coordinates, scheme rooms own
+ * scheme work (design v2 §5.5). Home cannot bind a thesis -- the API answers
+ * 409 -- so a Bench there would be a door onto a refusal. A branch off Home is
+ * an ordinary conversation and carries no household at all.
+ *
+ * WHY an ordinary room offers all four even when empty: a Bench with no thesis
+ * is where a thesis is CREATED, and a Library with no readings is where the
+ * first one is explained. Hiding a scene until it has content is how the
+ * trading panel once made its own create flow unreachable.
+ */
+export function scenesForDestination(
+  room: Pick<UserRoom, 'is_home'>,
+  thread: Pick<Thread, 'parent_thread_id'>,
+): readonly ImplementedWorkspaceScene[] {
+  if (room.is_home) {
+    return thread.parent_thread_id === null
+      ? (['house', 'record'] as const)
+      : (['record'] as const)
+  }
+  return ['record', 'bench', 'library', 'ledger'] as const
+}
+
+/**
  * Resolve a requested scene against what this destination can actually show.
  *
- * Two distinct rejections, both landing on the destination's default:
- * an approved-but-unimplemented scene (`field`), and a scene that exists but
- * does not belong here (`house` outside Home's root -- the House is the
- * household view and an ordinary room has no house to show).
+ * Two distinct rejections, both landing on the destination's default: an
+ * approved-but-unimplemented scene (`field`), and an implemented scene that
+ * does not belong here (`bench` at Home root).
  */
 export function resolveWorkspaceScene(
   room: Pick<UserRoom, 'is_home'>,
@@ -64,7 +96,7 @@ export function resolveWorkspaceScene(
   // full WorkspaceScene union — which does not satisfy the return type.
   const candidate = requested ?? null
   if (!isImplementedWorkspaceScene(candidate)) return fallback
-  if (candidate === 'house' && fallback !== 'house') return fallback
+  if (!scenesForDestination(room, thread).includes(candidate)) return fallback
   return candidate
 }
 

@@ -105,8 +105,12 @@ describe('workspace scenes', () => {
   })
 
   it('falls back from approved but not-yet-implemented scenes', () => {
+    // `library` was the example here until Release 2 built it. The assertion
+    // is about the FALLBACK, so it needs a scene that is still only a name —
+    // production holds zero commitments and zero briefs, so Judgment and the
+    // rest stay unbuilt on purpose.
     expect(resolveWorkspaceScene(home, root, 'field')).toBe('house')
-    expect(resolveWorkspaceScene(scheme, root, 'library')).toBe('record')
+    expect(resolveWorkspaceScene(scheme, root, 'judgment')).toBe('record')
   })
 
   it('canonicalizes a known but unavailable scene back to the destination default', () => {

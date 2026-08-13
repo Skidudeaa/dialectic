@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect } from 'react'
 import { useAppStore } from '../../stores/appStore.ts'
+import type { ImplementedWorkspaceScene } from '../../types'
 import './AppLayout.css'
 
 interface AppLayoutProps {
@@ -8,7 +9,7 @@ interface AppLayoutProps {
   rightPanel: ReactNode
   /** Home restyles the main pane around the scheme board, not a stream. */
   isHome?: boolean
-  workspaceScene?: 'house' | 'record'
+  workspaceScene?: ImplementedWorkspaceScene
   /** Once Home has a conversation, the table takes the column and the house caps. */
   homeTalking?: boolean
 }

@@ -18,6 +18,7 @@ import { RoomSettingsDialog } from './components/layout/RoomSettingsDialog'
 import { HelpDialog } from './components/layout/HelpDialog'
 import { RoomList } from './components/sidebar/RoomList'
 import { RightPanel } from './components/sidebar/RightPanel'
+import { MemoryPanel } from './components/sidebar/MemoryPanel'
 import { MessageList } from './components/chat/MessageList'
 import { MessageInput } from './components/chat/MessageInput'
 import { SearchOverlay } from './components/chat/SearchOverlay'
@@ -29,6 +30,13 @@ import { HomeActivityPulse } from './components/home/HomeActivityPulse'
 import { BriefingPanel } from './components/analytics/BriefingPanel'
 import { CommitmentSurface } from './components/stakes/CommitmentSurface'
 import { WorkspaceSceneFrame } from './components/workspace/WorkspaceSceneFrame'
+import { BenchScene } from './components/workspace/scenes/BenchScene'
+import { LibraryScene } from './components/workspace/scenes/LibraryScene'
+import { LedgerScene } from './components/workspace/scenes/LedgerScene'
+import { TradingPanel } from './components/trading/TradingPanel'
+import { scenesForDestination } from './lib/workspaceRoute.ts'
+import { useWorkspaceObjects } from './hooks/useWorkspaceObjects.ts'
+import type { WorkspaceObject } from './types/workspace.ts'
 
 function RoomBriefing({ roomId }: { roomId: string }) {
   const [dismissed, setDismissed] = useState(false)
@@ -356,9 +364,21 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const unreadSince = roomMeta?.last_read_at ?? roomMeta?.joined_at ?? null
   // Home derives from the saved-room descriptor, never from name or URL.
   const isHome = roomMeta?.is_home ?? currentRoom?.is_home === true
-  // Only Home's ROOT carries the household. A Home branch is an ordinary
-  // conversation and renders Record alone.
-  const isHomeRoot = isHome && currentThread?.parent_thread_id === null
+  // Only Home's ROOT carries the household; a Home branch is an ordinary
+  // conversation. That rule now lives in scenesForDestination, which the frame
+  // and the router share, rather than in a local flag read by one of them.
+  // One projection per room, filtered per scene — the server builds every kind
+  // in a single pass regardless, so asking once per scene would be four full
+  // projections to render one room.
+  //
+  // Disabled at Home (which offers no workroom scene) and for a guest identity,
+  // which holds no JWT: the projection sits behind get_current_user, so firing
+  // the request anyway would paint "unavailable" across every scene and read as
+  // an outage rather than as the guest boundary it is.
+  const workspaceObjects = useWorkspaceObjects(
+    currentRoom?.id ?? null,
+    Boolean(accessToken) && !isHome,
+  )
 
   useAwayAlerts({
     messages,
@@ -433,6 +453,13 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
             onEditMessage={editMessageContent}
             onDeleteMessage={deleteMessage}
             emptyKind={isHome ? 'hearth' : 'dialogue'}
+            onOpenBench={() => {
+              void navigate({
+                roomId: currentRoom.id,
+                threadId: currentThread?.id ?? null,
+                scene: 'bench',
+              }, 'push')
+            }}
           />
           <TypingIndicator typingUsers={typingDisplay} activityLabel={toolActivityLabel} />
           <MessageInput
@@ -476,6 +503,62 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
       {recordSurface}
     </>
   )
+
+  // What this destination may show — the ONE definition, shared with the
+  // router, so the switcher can never offer a scene a URL would be refused.
+  const availableScenes = scenesForDestination(
+    { is_home: isHome },
+    { parent_thread_id: currentThread?.parent_thread_id ?? null },
+  )
+
+  // Every workroom scene is a filter over ONE projection of this room. The
+  // scenes that need it are only reachable outside Home, and the projection
+  // sits behind get_current_user, so a guest identity would 401 on every call —
+  // hence the explicit enable rather than an unconditional fetch.
+  const openWorkspaceObject = (object: WorkspaceObject) => {
+    if (!object.branch_id) return
+    void navigate({ roomId: currentRoom.id, threadId: object.branch_id }, 'push')
+  }
+
+  const sceneContent = {
+    house: houseSurface,
+    record: recordSurface,
+    bench: (
+      <BenchScene
+        state={workspaceObjects}
+        onOpen={openWorkspaceObject}
+        tradingPanel={<TradingPanel />}
+      />
+    ),
+    library: <LibraryScene state={workspaceObjects} onOpen={openWorkspaceObject} />,
+    ledger: (
+      <LedgerScene
+        state={workspaceObjects}
+        onOpen={openWorkspaceObject}
+        // The panel travels WITH the scene. The Ledger shows what the room
+        // holds; adding a fact and granting personal recall are still done
+        // here, so moving the tab must not drop the affordances.
+        memoryPanel={
+          <MemoryPanel
+            memories={memories}
+            onAddMemory={(key, content) => {
+              if (!send('add_memory', { key, content })) window.alert('Reconnect before adding memory.')
+            }}
+            onSetMemoryPromotion={async (memoryId, promoted) => {
+              const result = promoted
+                ? await api.promoteMemory(memoryId)
+                : await api.demoteMemory(memoryId)
+              setMemories(memories.map((memory) => (
+                memory.id === result.memory_id
+                  ? { ...memory, personally_promoted: result.promoted }
+                  : memory
+              )))
+            }}
+          />
+        }
+      />
+    ),
+  }
 
   return (
     <>
@@ -535,7 +618,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
             )}
             <WorkspaceSceneFrame
               scene={workspaceScene}
-              isHomeRoot={isHomeRoot}
+              scenes={availableScenes}
               onSelect={(scene) => {
                 void navigate({
                   roomId: currentRoom.id,
@@ -543,8 +626,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
                   scene,
                 }, 'push')
               }}
-              house={houseSurface}
-              record={recordSurface}
+              content={sceneContent}
             />
           </>
         }

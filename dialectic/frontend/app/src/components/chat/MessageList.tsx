@@ -30,6 +30,8 @@ interface MessageListProps {
   onDeleteMessage?: (messageId: string) => void
   /** Home's empty state is a table, not a prompt to start a chat. */
   emptyKind?: 'dialogue' | 'hearth'
+  /** Carried down to a thesis-proposal card so it can ask for the Bench. */
+  onOpenBench?: () => void
 }
 
 /**
@@ -120,6 +122,7 @@ export function MessageList({
   onEditMessage,
   onDeleteMessage,
   emptyKind = 'dialogue',
+  onOpenBench,
 }: MessageListProps) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -308,6 +311,7 @@ export function MessageList({
                     onEdit={onEditMessage}
                     onDelete={onDeleteMessage}
                     isContinuation={isContinuation}
+                    onOpenBench={onOpenBench}
                   />
                   </Fragment>
                 )
