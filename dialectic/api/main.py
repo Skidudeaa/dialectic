@@ -40,7 +40,7 @@ from api.reading_relay import router as reading_relay_router, set_reading_relay_
 from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_pool
 from api.home import router as home_router, set_home_db_pool
 from api.workspace import router as workspace_router, set_workspace_db_pool
-from api.capabilities import router as capabilities_router
+from api.capabilities import router as capabilities_router, set_capabilities_db_pool
 from collections import defaultdict
 import time
 
@@ -205,6 +205,7 @@ async def lifespan(app: FastAPI):
 
         # Set db_pool for the read-only workspace-object projection
         set_workspace_db_pool(db_pool)
+        set_capabilities_db_pool(db_pool)
 
         async with db_pool.acquire() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
@@ -264,6 +265,10 @@ async def lifespan(app: FastAPI):
         register_prediction_watch_jobs(scheduler_instance)
         register_reading_echo_jobs(scheduler_instance)
         scheduler_instance.start()
+
+    # The capability map reads these exact Job objects, so what it reports and
+    # what the loop runs cannot drift.
+    app.state.scheduler = scheduler_instance
 
     yield
 

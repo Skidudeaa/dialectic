@@ -691,7 +691,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
         />
       )}
       {showHelp && (
-        <HelpDialog onClose={() => setShowHelp(false)} />
+        <HelpDialog roomId={currentRoom.id} onClose={() => setShowHelp(false)} />
       )}
       {showRoomAccess && (
         <RoomAccess

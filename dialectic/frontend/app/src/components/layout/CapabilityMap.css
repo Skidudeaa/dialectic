@@ -1,0 +1,52 @@
+.capability-map {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+.capability-prose {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--color-secondary);
+    text-wrap: pretty;
+}
+.capability-prose strong { color: var(--color-bone); font-weight: 600; }
+.capability-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    list-style: none;
+}
+.capability-list li {
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--color-secondary);
+    text-wrap: pretty;
+}
+.capability-list li strong { color: var(--color-bone); font-weight: 600; }
+.capability-list.capability-plain li { display: list-item; margin-left: 1rem; }
+/* State is a word, not a colour — a reader who cannot distinguish the two
+   still reads "off". Dimming is secondary to the label. */
+.capability-state {
+    flex: 0 0 2.4rem;
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--color-amber);
+    padding-top: 2px;
+}
+.capability-list li.is-off { color: var(--color-faint); }
+.capability-list li.is-off .capability-state { color: var(--color-faint); }
+.capability-list li.is-off strong { color: var(--color-secondary); }
+.capability-cadence { color: var(--color-faint); font-family: var(--font-mono); font-size: 9px; }
+.capability-unknown {
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--color-warning);
+}

@@ -408,6 +408,23 @@ class DialecticAPI {
     return this.fetch('/auth/capabilities');
   }
 
+  /**
+   * What THIS room can do, and what is actually running for it.
+   *
+   * The job list comes from the running scheduler, not a second roster — so
+   * the map cannot describe a daily rhythm that is switched off, which is what
+   * the hardcoded help modal did.
+   */
+  async getRoomCapabilities(roomId: string): Promise<{
+    thesis_bound: boolean;
+    auto_interjection: boolean;
+    interjection_turn_threshold: number;
+    scheduler_running: boolean;
+    jobs: { name: string; enabled: boolean; interval_s: number; daily_at: string | null }[];
+  }> {
+    return this.fetch(`/rooms/${roomId}/capabilities`);
+  }
+
   // Auth (no room token needed)
   // WHY: surfaces the backend's `detail` message (e.g. "Invalid email or password")
   // instead of returning the error body as if it were a TokenResponse — a swallowed
