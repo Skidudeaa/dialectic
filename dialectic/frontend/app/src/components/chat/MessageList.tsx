@@ -228,13 +228,22 @@ export function MessageList({
         </div>
       )
     }
+    // Most rooms are empty most of the time, so this is a primary surface
+    // rather than a placeholder. It has to carry the one thing a newcomer
+    // cannot guess: the participant joins on its own judgment, and there is
+    // also a way to address it directly.
     return (
       <div className="messages-wrapper">
         <div className="messages-container">
           <div className="empty-state">
             <div className="empty-icon">&#9672;</div>
             <h3>Start the dialogue</h3>
-            <p>Type a message to begin. Claude will join the conversation.</p>
+            <p className="empty-premise" data-testid="empty-room-premise">
+              Write what you are actually chewing on. {PARTICIPANT_NAME} reads
+              along and joins when it judges it has something — a challenge, a
+              connection, a check against live data. Say{' '}
+              <strong>@{PARTICIPANT_NAME}</strong> to bring it in directly.
+            </p>
           </div>
         </div>
       </div>

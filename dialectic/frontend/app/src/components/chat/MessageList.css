@@ -80,6 +80,23 @@
     font-weight: 500;
     margin-bottom: 0.5rem;
 }
+/* This is the surface most first visits actually land on, so it is set to be
+   read rather than glanced past: serif, measured line length, centered under
+   the heading. `text-wrap: pretty` keeps it off a one-word last line. */
+.empty-state .empty-premise {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--color-secondary);
+    max-width: 46ch;
+    margin: 0 auto;
+    text-wrap: pretty;
+}
+.empty-state .empty-premise strong {
+    color: var(--color-amber);
+    font-weight: 600;
+    white-space: nowrap;
+}
 
 /* Home empty: sit the invitation near the composer, no stream hairline. */
 .messages-wrapper-hearth {
