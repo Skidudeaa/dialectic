@@ -7,6 +7,7 @@ from datetime import date
 from typing import Any, Awaitable, Callable, Optional
 from uuid import UUID
 
+from . import cairn_client as cn
 from . import defuddle_client as dc
 from . import tradingdesk_client as td
 
@@ -1084,13 +1085,208 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
     ]
 
 
+# ── cairn dev-memory tools ───────────────────────────────────────────
+
+_CAIRN_OFF_VALUES = frozenset({"0", "false", "no", "off"})
+
+
+def _cairn_tools_enabled() -> bool:
+    """Group-level kill switch, default ON per house style — the deploy
+    itself is the enablement act. DIALECTIC_TOOLS_ENABLED remains the
+    global emergency-off above this."""
+    import os
+    return os.getenv("CAIRN_TOOLS_ENABLED", "").strip().lower() not in _CAIRN_OFF_VALUES
+
+
+_EMPTY_DEV_MEMORY_NOTE = (
+    "Nothing in dev memory matches. Say so rather than inventing."
+)
+
+
+def _build_cairn_tools() -> list[Tool]:
+    """Read-only tools over cairn, the passive dev-session memory on this
+    host. Failures surface at call time as CairnError → the loop's is_error
+    result; a down cairn never kills a turn."""
+
+    async def search_dev_sessions(args: dict) -> dict:
+        query = str(args.get("query") or "").strip()
+        if not query:
+            raise ValueError("query is required — what dev work are you looking for?")
+        limit = min(int(args.get("limit") or 5), 10)
+        data = await cn.post("/api/search/sessions",
+                             json={"query": query, "limit": limit})
+        out = {
+            "query": query,
+            "count": data.get("count", 0),
+            "sessions": data.get("results", []),
+        }
+        if not out["sessions"]:
+            out["note"] = _EMPTY_DEV_MEMORY_NOTE
+        return _shrink(out, TOOL_RESULT_CHAR_CAP)
+
+    async def recent_dev_activity(args: dict) -> dict:
+        limit = min(int(args.get("limit") or 10), 20)
+        params = {"limit": limit}
+        project = str(args.get("project") or "").strip()
+        if project:
+            params["project"] = project
+        sessions = await cn.get("/api/sessions", params=params)
+        if not isinstance(sessions, list):
+            return {"sessions": [], "note": "cairn returned an unexpected shape."}
+        out = {"count": len(sessions), "sessions": sessions}
+        if project:
+            out["project"] = project
+        if not sessions:
+            out["note"] = _EMPTY_DEV_MEMORY_NOTE
+        return _shrink(out, TOOL_RESULT_CHAR_CAP)
+
+    async def get_dev_session(args: dict) -> dict:
+        session_id = str(args.get("session_id") or "").strip()
+        if not session_id:
+            raise ValueError(
+                "session_id is required — get one from search_dev_sessions "
+                "or recent_dev_activity."
+            )
+        session = await cn.get(f"/api/sessions/{session_id}")
+        events = await cn.get(f"/api/sessions/{session_id}/events",
+                              params={"limit": 50})
+        out = {
+            "session": session,
+            "events": events if isinstance(events, list) else [],
+            "event_count_shown": len(events) if isinstance(events, list) else 0,
+        }
+        return _shrink(out, TOOL_RESULT_CHAR_CAP)
+
+    async def search_dev_insights(args: dict) -> dict:
+        query = str(args.get("query") or "").strip()
+        if not query:
+            raise ValueError("query is required — what problem/solution/decision?")
+        limit = min(int(args.get("limit") or 5), 10)
+        data = await cn.post("/api/search/insights",
+                             json={"query": query, "limit": limit})
+        out = {
+            "query": query,
+            "count": data.get("count", 0),
+            "insights": data.get("results", []),
+        }
+        if not out["insights"]:
+            out["note"] = _EMPTY_DEV_MEMORY_NOTE
+        return _shrink(out, TOOL_RESULT_CHAR_CAP)
+
+    return [
+        Tool(
+            name="search_dev_sessions",
+            description=(
+                "Full-text search over Amo's passively captured dev-work sessions "
+                "(file edits, commits, terminal activity across his projects on "
+                "this host). Use it when the conversation touches what Amo was "
+                "building, fixing or working on — 'what was I doing with X', 'when "
+                "did we touch Y' — instead of guessing from memory. Results are "
+                "ranked by relevance and recency."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "What to look for, e.g. 'search indexes mongo'.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results, 1-10. Default 5.",
+                    },
+                },
+                "required": ["query"],
+            },
+            execute=search_dev_sessions,
+            label="searching dev memory",
+        ),
+        Tool(
+            name="recent_dev_activity",
+            description=(
+                "Amo's most recent dev sessions, newest first — which projects "
+                "were touched, when, and how much happened in each. Use it for "
+                "'what has Amo worked on today/this week', or to orient before "
+                "drilling into one session. Pass project to narrow to a single repo."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max sessions, 1-20. Default 10.",
+                    },
+                    "project": {
+                        "type": "string",
+                        "description": "Project name to filter to, e.g. 'cairn'.",
+                    },
+                },
+            },
+            execute=recent_dev_activity,
+            label="checking recent dev activity",
+        ),
+        Tool(
+            name="get_dev_session",
+            description=(
+                "One dev session in full: its metadata plus the captured event "
+                "stream (file edits, commits, terminal commands, logged notes). "
+                "Use it to drill into a session surfaced by search_dev_sessions or "
+                "recent_dev_activity when the question needs the actual sequence "
+                "of what happened, not just that a session exists."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session id, e.g. 'session_680c8515251d'.",
+                    },
+                },
+                "required": ["session_id"],
+            },
+            execute=get_dev_session,
+            label="reading a dev session",
+        ),
+        Tool(
+            name="search_dev_insights",
+            description=(
+                "Search the distilled insights extracted from dev sessions — "
+                "problems hit, solutions found, decisions made. Use it when the "
+                "question is 'how did we solve X before' or 'why did we choose Y', "
+                "where the answer is a conclusion rather than a raw activity log."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "What to look for, e.g. 'mongo text index conflict'.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results, 1-10. Default 5.",
+                    },
+                },
+                "required": ["query"],
+            },
+            execute=search_dev_insights,
+            label="searching dev insights",
+        ),
+    ]
+
+
 def build_registry(room, db) -> ToolRegistry:
     """
     ARCHITECTURE: Build the per-room tool set — the tradingDesk reads, memory
-    and transcript search, and the (write-free) prediction draft.
+    and transcript search, the (write-free) prediction draft, and the cairn
+    dev-memory reads.
     WHY per room: the executors close over this room's id and book binding,
     so a tool can never read another room's transcript or the wrong book.
+    (The cairn tools are host-global read-onlys, so they close over nothing.)
     TRADEOFF: rebuilt per turn (cheap — closures, no I/O) rather than cached,
     because a room's linked book can change between messages.
     """
-    return ToolRegistry(tools=_build_trading_tools(room) + _build_dialectic_tools(room, db))
+    tools = _build_trading_tools(room) + _build_dialectic_tools(room, db)
+    if _cairn_tools_enabled():
+        tools += _build_cairn_tools()
+    return ToolRegistry(tools=tools)

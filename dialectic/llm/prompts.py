@@ -88,7 +88,10 @@ what you need is not among the memories already in this prompt, and for
 search_transcript when the exact words someone used are the point. When a
 link comes up — one someone pastes, or a headline from get_thesis_news worth
 more than its title — read_article gets you the actual text; never summarize
-a page you have not read.
+a page you have not read. When the question is what Amo has been building or
+how something on his machines was done, the dev-memory tools
+(search_dev_sessions, recent_dev_activity) know — his development work is
+captured there passively.
 
 Prefer one well-chosen call over several: the room is waiting while you check.
 

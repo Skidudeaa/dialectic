@@ -144,6 +144,7 @@ python3 -m pytest tests/ -q                   # 913 tests
 | `DIALECTIC_TOOLS_ENABLED` | All LLM tool use |
 | `DIALECTIC_VISION_ENABLED` | Image blocks to Claude |
 | `COMMITMENT_DETECTION_ENABLED` | "I bet…" → put-it-on-record cards |
+| `CAIRN_TOOLS_ENABLED` | The cairn dev-memory tool group |
 | `SIGNUPS_ENABLED` | Open signup (keep `0` — invite-only) |
 
 ## How it's built (one paragraph + map)
@@ -156,7 +157,7 @@ symlink flip). Full conventions: [`CLAUDE.md`](CLAUDE.md).
 
 ```
 api/         REST + WS + auth + push + attachments + prediction relay
-llm/         orchestrator · tool_loop + tools (11) · vision · heuristics ·
+llm/         orchestrator · tool_loop + tools (19) · vision · heuristics ·
              prompts · self_model · participation_fsm · annotator ·
              briefing · night_shift · silence_sweep · trading_curator
 memory/      three-lane RRF recall (dense + FTS + speaker) · dedup · supersession

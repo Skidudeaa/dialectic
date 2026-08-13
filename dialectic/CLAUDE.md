@@ -41,7 +41,8 @@ These can live in `dialectic/.env` (auto-loaded by `run.py` via python-dotenv). 
 Feature flags (optional, all default ON): `SCHEDULER_ENABLED`,
 `NIGHT_SHIFT_ENABLED` (7am CT brief), `PARTICIPATION_SWEEP_ENABLED` (60s
 silence follow-ups), `DIALECTIC_TOOLS_ENABLED`, `DIALECTIC_VISION_ENABLED`,
-`COMMITMENT_DETECTION_ENABLED` (implicit "I bet…" → proposal cards).
+`COMMITMENT_DETECTION_ENABLED` (implicit "I bet…" → proposal cards),
+`CAIRN_TOOLS_ENABLED` (the cairn dev-memory tool group).
 `SIGNUPS_ENABLED` must stay `0` — invite-only since the auth bridge.
 
 ## Architecture
@@ -60,7 +61,7 @@ silence follow-ups), `DIALECTIC_TOOLS_ENABLED`, `DIALECTIC_VISION_ENABLED`,
 | `llm/silence_sweep.py` | 60s scheduler job: one capped follow-up when a question goes unanswered (10min, 3/day, quiet 23:00–07:00 CT) |
 | `llm/briefing.py` | Shared morning-brief builder (endpoint + night-shift job) |
 | `llm/night_shift.py` | `morning_brief` job registration — posts + pushes per room 07:00 America/Chicago |
-| `llm/tool_loop.py` + `llm/tools.py` | Anthropic tool loop + 15-tool registry (read-only + proposal-shaped `draft_prediction`/`propose_thesis`/`save_reading`); wired on streaming AND non-streaming paths (provoker/protocol/annotator never). `read_article` fetches article bodies via the defuddle sidecar (`defuddle_service/`, client `llm/defuddle_client.py`) |
+| `llm/tool_loop.py` + `llm/tools.py` | Anthropic tool loop + 19-tool registry (read-only + proposal-shaped `draft_prediction`/`propose_thesis`/`save_reading`); wired on streaming AND non-streaming paths (provoker/protocol/annotator never). `read_article` fetches article bodies via the defuddle sidecar (`defuddle_service/`, client `llm/defuddle_client.py`); the 4-tool cairn dev-memory group (`search_dev_sessions`/`recent_dev_activity`/`get_dev_session`/`search_dev_insights`) reads Amo's passive dev-session memory via `llm/cairn_client.py` (`CAIRN_URL`, group flag `CAIRN_TOOLS_ENABLED`, safe to omit — a down cairn is an is_error tool result, never a dead turn) |
 | `llm/reading.py` + `api/reading_relay.py` | The reading library (`reading_items`, migration 014): human-Accept filing of articles, full-text `search_reading`, memory twin (key `reading:<domain>-<slug>`, dedup=False) so three-lane recall finds readings unchanged. `is_thin()`/`THIN_CONTENT_MIN_WORDS` (80) is the one thin-content policy every filing path shares — bot-blocked shells and cookie walls are skipped before the LLM call, in both `news_night` and `wire` |
 | `llm/claim_check.py` | Claim check: human messages linking an article get a fire-and-forget defuddle fetch + Haiku verdict; only `mixed`/`misrepresented` lands a `metadata.claim_check` badge (metadata patch + MESSAGE_METADATA), every failure path silent. Env `CLAIM_CHECK_ENABLED`, default on |
 | `llm/news_night.py` | `thesis_news_digest` job (05:30 America/Chicago, `NEWS_DIGEST_ENABLED`, default on): per linked room, defuddles fresh GDELT headlines (cap 3/room), Haiku-distills against the thesis snapshot, files to the reading library (source `night_shift`); the 07:00 brief renders them as "📰 Read overnight" |

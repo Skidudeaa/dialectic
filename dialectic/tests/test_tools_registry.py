@@ -9,6 +9,7 @@ from uuid import uuid4
 import httpx
 import pytest
 
+from llm import cairn_client as cn
 from llm import defuddle_client as dc
 from llm import tools as tools_mod
 from llm import tradingdesk_client as td
@@ -34,6 +35,10 @@ EXPECTED_TOOLS = {
     "read_article",
     "save_reading",
     "search_reading",
+    "search_dev_sessions",
+    "recent_dev_activity",
+    "get_dev_session",
+    "search_dev_insights",
 }
 
 
@@ -65,9 +70,9 @@ def registry(room, db):
 
 
 class TestRegistryContract:
-    def test_registers_all_fifteen_tools(self, registry):
+    def test_registers_all_nineteen_tools(self, registry):
         assert set(registry.names()) == EXPECTED_TOOLS
-        assert len(registry.tools) == 15
+        assert len(registry.tools) == 19
 
     def test_names_match_anthropic_pattern(self, registry):
         for tool in registry.tools:
@@ -1213,3 +1218,162 @@ class TestReadingProposalHoist:
             [{"ok": True, "provenance": {"kind": "thesis_proposal"},
               "input": {}}]
         ) is None
+
+
+# ── cairn dev-memory tools ───────────────────────────────────────────
+
+
+@pytest.fixture
+def cairn_env(monkeypatch):
+    monkeypatch.setenv("CAIRN_URL", "http://cairn.test")
+    cn.reset()
+    yield
+    cn.reset()
+
+
+def install_cn_transport(handler):
+    """Point the cairn client's module-level client at a MockTransport."""
+    cn._client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0)
+
+
+CAIRN_SESSION = {
+    "id": "session_abc123def456",
+    "name": "auto: cairn 2026-08-13 22:41",
+    "project": "cairn",
+    "status": "completed",
+    "started_at": "2026-08-13T22:41:12",
+    "ended_at": "2026-08-13T22:42:45",
+    "event_count": 9,
+}
+
+
+class TestCairnToolsFlag:
+    def test_default_on(self, room, db, monkeypatch):
+        monkeypatch.delenv("CAIRN_TOOLS_ENABLED", raising=False)
+        registry = build_registry(room, db)
+        assert "search_dev_sessions" in registry.names()
+
+    def test_off_values_remove_the_group(self, room, db, monkeypatch):
+        monkeypatch.delenv("CAIRN_TOOLS_ENABLED", raising=False)
+        for off in ("0", "false", "no", "off"):
+            monkeypatch.setenv("CAIRN_TOOLS_ENABLED", off)
+            registry = build_registry(room, db)
+            assert "search_dev_sessions" not in registry.names()
+            assert "get_dev_session" not in registry.names()
+            # The rest of the registry is untouched
+            assert "get_live_quotes" in registry.names()
+
+    def test_explicit_on_keeps_the_group(self, room, db, monkeypatch):
+        monkeypatch.setenv("CAIRN_TOOLS_ENABLED", "1")
+        registry = build_registry(room, db)
+        assert "search_dev_insights" in registry.names()
+
+
+class TestCairnTools:
+    @pytest.mark.asyncio
+    async def test_search_returns_shaped_sessions(self, registry, cairn_env):
+        def handler(request):
+            assert request.url.path == "/api/search/sessions"
+            body = json.loads(request.content)
+            assert body["query"] == "search indexes"
+            return json_response(
+                {"query": "search indexes", "count": 1, "results": [CAIRN_SESSION]}
+            )
+
+        install_cn_transport(handler)
+        out = await registry.get("search_dev_sessions").execute(
+            {"query": "search indexes"}
+        )
+        assert out["count"] == 1
+        assert out["sessions"][0]["id"] == "session_abc123def456"
+        assert "note" not in out
+
+    @pytest.mark.asyncio
+    async def test_empty_results_carry_the_honesty_note(self, registry, cairn_env):
+        install_cn_transport(
+            lambda request: json_response({"query": "x", "count": 0, "results": []})
+        )
+        out = await registry.get("search_dev_sessions").execute({"query": "x"})
+        assert "Nothing in dev memory" in out["note"]
+
+    @pytest.mark.asyncio
+    async def test_query_is_validated_before_any_fetch(self, registry, cairn_env):
+        called = []
+
+        def handler(request):
+            called.append(request)
+            return json_response({})
+
+        install_cn_transport(handler)
+        with pytest.raises(ValueError):
+            await registry.get("search_dev_sessions").execute({"query": "  "})
+        assert called == []
+
+    @pytest.mark.asyncio
+    async def test_recent_activity_lists_sessions(self, registry, cairn_env):
+        def handler(request):
+            assert request.url.path == "/api/sessions"
+            assert request.url.params.get("project") == "cairn"
+            return json_response([CAIRN_SESSION])
+
+        install_cn_transport(handler)
+        out = await registry.get("recent_dev_activity").execute({"project": "cairn"})
+        assert out["count"] == 1
+        assert out["project"] == "cairn"
+
+    @pytest.mark.asyncio
+    async def test_get_session_joins_events(self, registry, cairn_env):
+        def handler(request):
+            if request.url.path == "/api/sessions/session_abc123def456":
+                return json_response(CAIRN_SESSION)
+            if request.url.path == "/api/sessions/session_abc123def456/events":
+                return json_response([{"type": "commit", "message": "Git commit"}])
+            raise AssertionError(f"unexpected path {request.url.path}")
+
+        install_cn_transport(handler)
+        out = await registry.get("get_dev_session").execute(
+            {"session_id": "session_abc123def456"}
+        )
+        assert out["session"]["id"] == "session_abc123def456"
+        assert out["event_count_shown"] == 1
+
+    @pytest.mark.asyncio
+    async def test_backend_down_raises_for_the_loop(self, registry, cairn_env):
+        def handler(request):
+            raise httpx.ConnectError("refused")
+
+        install_cn_transport(handler)
+        with pytest.raises(cn.CairnError, match="unreachable"):
+            await registry.get("recent_dev_activity").execute({})
+
+    @pytest.mark.asyncio
+    async def test_html_200_is_refused(self, registry, cairn_env):
+        install_cn_transport(
+            lambda request: httpx.Response(
+                200, text="<html>spa shell</html>",
+                headers={"content-type": "text/html"},
+            )
+        )
+        with pytest.raises(cn.CairnError, match="not JSON"):
+            await registry.get("recent_dev_activity").execute({})
+
+    @pytest.mark.asyncio
+    async def test_error_detail_is_surfaced(self, registry, cairn_env):
+        install_cn_transport(
+            lambda request: json_response({"detail": "Session not found"}, status=404)
+        )
+        with pytest.raises(cn.CairnError, match="Session not found"):
+            await registry.get("get_dev_session").execute({"session_id": "session_x"})
+
+    @pytest.mark.asyncio
+    async def test_url_read_from_env_at_call_time(self, registry, cairn_env, monkeypatch):
+        seen = []
+
+        def handler(request):
+            seen.append(str(request.url))
+            return json_response([])
+
+        install_cn_transport(handler)
+        monkeypatch.setenv("CAIRN_URL", "http://late-bound.test")
+        await registry.get("recent_dev_activity").execute({})
+        assert seen and seen[0].startswith("http://late-bound.test")
