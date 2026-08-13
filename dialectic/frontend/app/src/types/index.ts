@@ -1,3 +1,6 @@
+import type { WorkspaceScene } from './workspace.ts'
+export * from './workspace.ts'
+
 export interface Room {
   id: string;
   name: string | null;
@@ -9,10 +12,13 @@ export interface Room {
 
 export type HistoryMode = 'push' | 'replace' | 'none';
 
-/** A navigation target. roomId null is the canonical Home-root destination. */
+/** A navigation target. roomId null is the canonical Home-root destination.
+ *  `scene` is the third destination axis: null means "no scene requested",
+ *  which resolves to the destination's default rather than to an error. */
 export interface RoomDestination {
   roomId: string | null;
   threadId?: string | null;
+  scene?: WorkspaceScene | null;
 }
 
 export interface User {
