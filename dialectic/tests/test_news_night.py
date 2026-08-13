@@ -237,6 +237,27 @@ class TestThesisNewsDigest:
         assert mocks.extract_calls == []
         assert mocks.saved == []
 
+    async def test_thin_content_is_skipped_before_the_distill(self, mocks, monkeypatch):
+        """Bot-blocked shells ("404", cookie walls) must not be filed — and
+        must not spend a distill call on the way out."""
+        async def _thin_extract(url):
+            return {"url": url, "title": "404", "author": None,
+                    "site": "ZeroHedge", "published": None,
+                    "word_count": 12, "content": "Article not available"}
+
+        monkeypatch.setattr(news_night.dc, "extract_article", _thin_extract)
+        db = make_digest_db(rooms=[make_room()])
+        detail = await news_night.thesis_news_digest(_ctx(db))
+
+        assert mocks.saved == []
+        assert mocks.distill_calls == []
+        skipped = detail[str(ROOM_ID)]["skipped"]
+        # Only the per-room cap's worth of articles is even attempted.
+        assert skipped == [
+            {"url": a["url"], "reason": "thin_content"}
+            for a in mocks.articles[:news_night.NEWS_DIGEST_PER_ROOM_CAP]
+        ]
+
     async def test_per_room_cap_of_three(self, mocks):
         mocks.articles = make_articles(6)
         db = make_digest_db(rooms=[make_room()])
