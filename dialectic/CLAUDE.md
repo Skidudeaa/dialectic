@@ -73,6 +73,8 @@ silence follow-ups), `DIALECTIC_TOOLS_ENABLED`, `DIALECTIC_VISION_ENABLED`,
 | `scheduler.py` | asyncio job scheduler — advisory lock, `scheduled_job_runs` ledger, interval buckets + wall-clock daily slots (`daily_at`/`daily_tz`) |
 | `memory/manager.py` | Three-lane recall (dense + FTS + entity/speaker, RRF-fused) + versioned room memories + write-path dedup |
 | `api/notifications/` | Dual-channel push: Web Push/VAPID (`webpush.py`, the live channel for the installed PWA) + Expo (dormant until a native app ships) |
+| `workspace_objects.py` + `api/workspace.py` | The workspace-object projection (design v2 §8.1): seven read-only adapters — readings, research briefs, the thesis, commitments, proposals, dossier entries, the Record — plus `workspace_object_from_movement` reusing the House's own movement. **Adapters, not a table**: no new storage, no writes, and `available_actions` describes what a surface may offer without performing it. Two entities carry a memory TWIN that must fold into one object, never render twice: a reading and its `reading:<domain>-<slug>` memory (paired through `llm.reading._reading_key`, the writer's own function), and a thesis and its `THESIS_STATE_MEMORY_KEY` slot. `GET /rooms/{id}/workspace/objects` is read-only by construction — the router carries no write route, and every write stays with the entity that owns it |
+| `proposal_envelope.py` | The unified proposal envelope (design v2 §8.3–8.4) over the FIVE proposal shapes already in `messages.metadata` (`proposal`, `thesis_proposal`, `reading_proposal`, `commitment_proposals[]`, `resolution_proposal`). Normalizes kind, status and the action a surface may offer; writes nothing and leaves every relay untouched. Status is derived from the room — a passed deadline or a bound book is `expired`, an article the wire already filed is `superseded` (never `failed`, which has no row at all: a relay failure deliberately leaves `accepted` false so a retry is fresh). `PROPOSAL_SLOTS` is the one slot→kind table, shared with the frontend and pinned by a contract test; `workspace_objects.proposals()` projects these envelopes rather than re-reading metadata |
 | `transport/handlers.py` | WebSocket message routing; coordinates annotator + primary LLM |
 | `transport/websocket.py` | WebSocket connection lifecycle |
 | `models.py` | Pydantic data models for all entities |
@@ -172,8 +174,9 @@ unavailable marker). `api/home.py` is the only membership door
 (candidate→confirm add, nondelegable `can_manage_home`); the generic join
 refuses Home; thesis create/draft/propose return 409 in Home. Frontend:
 `hooks/useRoomNavigation.ts` is the ONE URL-authoritative navigation
-transaction (bare `/` = Home root; explicit `?room=`/`&thread=` URLs win;
-popstate is history-neutral), `components/home/` holds the pulse + settings,
+transaction (explicit `?room=`/`&thread=`/`?scene=` URLs win; a bare `/`
+restores the window's last room/branch/scene via `lib/sceneContinuity`, or
+opens Home when there is nothing stored; popstate is history-neutral), `components/home/` holds the pulse + settings,
 `BranchTree` renders genealogy in rail and Branches panel alike. Founder
 activation (`deploy/activate_home_founders.sql`) and member removal
 (`deploy/remove_home_member.sql`) are reviewed operator scripts — never UI.

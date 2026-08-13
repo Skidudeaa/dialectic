@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { PARTICIPANT_NAME } from './lib/productIdentity.ts'
 import './styles/global.css'
 import { useAppStore } from './stores/appStore.ts'
 import { api } from './lib/api.ts'
@@ -27,6 +28,7 @@ import { ProtocolBanner } from './components/protocols/ProtocolBanner'
 import { HomeActivityPulse } from './components/home/HomeActivityPulse'
 import { BriefingPanel } from './components/analytics/BriefingPanel'
 import { CommitmentSurface } from './components/stakes/CommitmentSurface'
+import { WorkspaceSceneFrame } from './components/workspace/WorkspaceSceneFrame'
 
 function RoomBriefing({ roomId }: { roomId: string }) {
   const [dismissed, setDismissed] = useState(false)
@@ -64,6 +66,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const isLLMThinking = useAppStore((s) => s.isLLMThinking)
   const isLLMStreaming = useAppStore((s) => s.isLLMStreaming)
   const isDeepDiveActive = useAppStore((s) => s.isDeepDiveActive)
+  const workspaceScene = useAppStore((s) => s.workspaceScene)
   const llmToolActivity = useAppStore((s) => s.llmToolActivity)
   const streamingContent = useAppStore((s) => s.streamingContent)
   const activeProtocol = useAppStore((s) => s.activeProtocol)
@@ -333,7 +336,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
     if (!target) return null
     const author = target.speaker_type === 'human'
       ? (target.user_name ?? (target.user_id ? userNames[target.user_id] : null) ?? 'Human')
-      : 'Claude'
+      : PARTICIPANT_NAME
     return { author, content: target.content }
   }, [replyToId, messages, userNames])
 
@@ -353,6 +356,9 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const unreadSince = roomMeta?.last_read_at ?? roomMeta?.joined_at ?? null
   // Home derives from the saved-room descriptor, never from name or URL.
   const isHome = roomMeta?.is_home ?? currentRoom?.is_home === true
+  // Only Home's ROOT carries the household. A Home branch is an ordinary
+  // conversation and renders Record alone.
+  const isHomeRoot = isHome && currentThread?.parent_thread_id === null
 
   useAwayAlerts({
     messages,
@@ -365,7 +371,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   })
 
   const typingDisplay = typingUsers.map((id) => userNames[id] ?? id.slice(0, 8))
-  if (isLLMThinking && !isLLMStreaming) typingDisplay.push('Claude')
+  if (isLLMThinking && !isLLMStreaming) typingDisplay.push(PARTICIPANT_NAME)
 
   // Only a tool that is still running says anything useful — a finished one is
   // already answered in the tokens arriving underneath it.
@@ -375,7 +381,9 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
     : null
 
   const participants = [
-    { id: 'claude', name: 'Claude', isOnline: true, isClaude: true },
+    // `isClaude` stays as the internal prop name this tranche; only the
+    // visible label changes.
+    { id: 'dialectic', name: PARTICIPANT_NAME, isOnline: true, isClaude: true },
     ...onlineUsers.map((participant) => ({
       id: participant.user_id,
       name: participant.display_name,
@@ -388,11 +396,93 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
 
   if (!user || !currentRoom || !roomToken) return null
 
+  // WHY these are built AFTER the null guard above: each reads user.id,
+  // currentRoom.id and roomToken, which are only non-null past that return.
+  const recordSurface = (
+    <>
+          <RoomBriefing key={currentRoom.id} roomId={currentRoom.id} />
+          {activeProtocol && (
+            <ProtocolBanner
+              protocol={activeProtocol}
+              onAdvance={advanceProtocol}
+              onAbort={abortProtocol}
+            />
+          )}
+          <CommitmentSurface />
+          <MessageList
+            // Remount per branch so follow-the-tail and the unread pill start
+            // fresh instead of inheriting the previous branch's scroll state.
+            key={currentThread?.id ?? 'no-thread'}
+            messages={displayMessages}
+            currentUserId={user.id}
+            onFork={forkFromMessage}
+            onReply={(messageId) => {
+              // The in-flight stream is a synthetic placeholder with no row in
+              // the database, so it cannot be a reply target.
+              if (messageId === STREAMING_ID) return
+              setReplyToId(messageId)
+            }}
+            streamingMessageId={isLLMStreaming ? STREAMING_ID : null}
+            userNames={userNames}
+            unreadSince={unreadSince}
+            onSeen={handleSeen}
+            jumpTarget={jumpTarget}
+            reactions={reactions}
+            attachments={attachments}
+            onToggleReaction={toggleReaction}
+            onEditMessage={editMessageContent}
+            onDeleteMessage={deleteMessage}
+            emptyKind={isHome ? 'hearth' : 'dialogue'}
+          />
+          <TypingIndicator typingUsers={typingDisplay} activityLabel={toolActivityLabel} />
+          <MessageInput
+            roomId={currentRoom.id}
+            onSend={(content, messageType, files) => {
+              // The ids travel with the send itself: the server binds them in
+              // the message transaction and the broadcast carries them back.
+              const sent = sendMessage(
+                content,
+                messageType,
+                effectiveReplyToId,
+                files.map((file) => file.id),
+              )
+              if (!sent) return false
+              setReplyToId(null)
+              return true
+            }}
+            onTypingStart={sendTypingStart}
+            onTypingStop={sendTypingStop}
+            onTypingContent={sendTypingContent}
+            onResearch={sendDeepDive}
+            researchActive={isDeepDiveActive}
+            disabled={!isConnected || !currentThread}
+            replyTo={replyTarget}
+            onCancelReply={() => setReplyToId(null)}
+            placeholder={isHome ? `Sit down — ${PARTICIPANT_NAME} is already here` : undefined}
+            quiet={isHome}
+          />
+    </>
+  )
+
+  // The House is the shipped pulse ABOVE the same table — the Record is not
+  // duplicated into a second component, it is composed.
+  const houseSurface = (
+    <>
+      <HomeActivityPulse
+        onNavigate={(destination) => navigate(destination, 'push')}
+        refreshVersion={homeRefreshVersion}
+        residents={participants}
+      />
+      {recordSurface}
+    </>
+  )
+
   return (
     <>
       <AppLayout
         isHome={isHome}
-        homeTalking={isHome && displayMessages.length > 0}
+        workspaceScene={workspaceScene}
+        homeTalking={isHome && workspaceScene === 'house' && displayMessages.length > 0}
         sidebar={
           <RoomList
             rooms={rooms}
@@ -443,73 +533,18 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
                 </button>
               </div>
             )}
-            {isHome && (
-              <HomeActivityPulse
-                onNavigate={(destination) => navigate(destination, 'push')}
-                refreshVersion={homeRefreshVersion}
-                residents={participants}
-              />
-            )}
-            <RoomBriefing key={currentRoom.id} roomId={currentRoom.id} />
-            {activeProtocol && (
-              <ProtocolBanner
-                protocol={activeProtocol}
-                onAdvance={advanceProtocol}
-                onAbort={abortProtocol}
-              />
-            )}
-            <CommitmentSurface />
-            <MessageList
-              // Remount per branch so follow-the-tail and the unread pill start
-              // fresh instead of inheriting the previous branch's scroll state.
-              key={currentThread?.id ?? 'no-thread'}
-              messages={displayMessages}
-              currentUserId={user.id}
-              onFork={forkFromMessage}
-              onReply={(messageId) => {
-                // The in-flight stream is a synthetic placeholder with no row in
-                // the database, so it cannot be a reply target.
-                if (messageId === STREAMING_ID) return
-                setReplyToId(messageId)
+            <WorkspaceSceneFrame
+              scene={workspaceScene}
+              isHomeRoot={isHomeRoot}
+              onSelect={(scene) => {
+                void navigate({
+                  roomId: currentRoom.id,
+                  threadId: currentThread?.id ?? null,
+                  scene,
+                }, 'push')
               }}
-              streamingMessageId={isLLMStreaming ? STREAMING_ID : null}
-              userNames={userNames}
-              unreadSince={unreadSince}
-              onSeen={handleSeen}
-              jumpTarget={jumpTarget}
-              reactions={reactions}
-              attachments={attachments}
-              onToggleReaction={toggleReaction}
-              onEditMessage={editMessageContent}
-              onDeleteMessage={deleteMessage}
-              emptyKind={isHome ? 'hearth' : 'dialogue'}
-            />
-            <TypingIndicator typingUsers={typingDisplay} activityLabel={toolActivityLabel} />
-            <MessageInput
-              roomId={currentRoom.id}
-              onSend={(content, messageType, files) => {
-                // The ids travel with the send itself: the server binds them in
-                // the message transaction and the broadcast carries them back.
-                const sent = sendMessage(
-                  content,
-                  messageType,
-                  effectiveReplyToId,
-                  files.map((file) => file.id),
-                )
-                if (!sent) return false
-                setReplyToId(null)
-                return true
-              }}
-              onTypingStart={sendTypingStart}
-              onTypingStop={sendTypingStop}
-              onTypingContent={sendTypingContent}
-              onResearch={sendDeepDive}
-              researchActive={isDeepDiveActive}
-              disabled={!isConnected || !currentThread}
-              replyTo={replyTarget}
-              onCancelReply={() => setReplyToId(null)}
-              placeholder={isHome ? 'Sit down — Claude is already here' : undefined}
-              quiet={isHome}
+              house={houseSurface}
+              record={recordSurface}
             />
           </>
         }

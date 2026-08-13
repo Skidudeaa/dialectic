@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import DOMPurify from 'dompurify'
 import { api } from '../../lib/api'
 import type { SearchResult } from '../../types'
@@ -13,7 +14,7 @@ interface SearchOverlayProps {
 const DEBOUNCE_MS = 220
 
 function speakerLabel(result: SearchResult): string {
-  if (result.speaker_type === 'llm_primary') return 'Claude'
+  if (result.speaker_type === 'llm_primary') return PARTICIPANT_NAME
   if (result.speaker_type === 'llm_provoker') return 'Claude (Provoker)'
   if (result.speaker_type === 'llm_annotator') return 'Claude (Annotator)'
   if (result.speaker_type === 'system') return 'System'

@@ -39,6 +39,7 @@ from api.prediction_relay import router as prediction_relay_router, set_predicti
 from api.reading_relay import router as reading_relay_router, set_reading_relay_db_pool
 from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_pool
 from api.home import router as home_router, set_home_db_pool
+from api.workspace import router as workspace_router, set_workspace_db_pool
 from collections import defaultdict
 import time
 
@@ -201,6 +202,9 @@ async def lifespan(app: FastAPI):
         set_thesis_relay_db_pool(db_pool)
         set_home_db_pool(db_pool)
 
+        # Set db_pool for the read-only workspace-object projection
+        set_workspace_db_pool(db_pool)
+
         async with db_pool.acquire() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
@@ -341,6 +345,10 @@ app.include_router(thesis_relay_router)
 # Home membership administration — the only door into Home (the generic
 # join path below refuses it).
 app.include_router(home_router)
+
+# Workspace-object projection -- read-only adapters over entities that
+# already exist; every write still belongs to the entity's own endpoint.
+app.include_router(workspace_router)
 
 connection_manager: ConnectionManager = ConnectionManager()
 

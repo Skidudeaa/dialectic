@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { HouseMovement } from './HouseMovement'
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import { api } from '../../lib/api.ts'
 import type { HomeActivityProjection, HomeActivityRoom, RoomDestination } from '../../types/index.ts'
 import './HomeActivityPulse.css'
@@ -128,6 +130,11 @@ export function HomeActivityPulse({ onNavigate, refreshVersion, residents }: Hom
           </div>
         </section>
       )}
+
+      <HouseMovement
+        movement={snapshot.rooms.flatMap((room) => room.movement ?? [])}
+        onNavigate={onNavigate}
+      />
 
       <section className="home-wings" aria-label="The house">
         <h2>The house</h2>
@@ -321,7 +328,7 @@ function doorBody(room: HomeActivityRoom): string {
 
 function displaySpeaker(raw: string | null | undefined): string {
   if (!raw) return ''
-  if (raw === 'llm_primary' || raw === 'llm_provoker' || raw === 'llm_annotator') return 'Claude'
+  if (raw === 'llm_primary' || raw === 'llm_provoker' || raw === 'llm_annotator') return PARTICIPANT_NAME
   if (raw === 'system') return 'System'
   return raw
 }

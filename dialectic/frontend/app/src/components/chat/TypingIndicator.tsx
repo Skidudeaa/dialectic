@@ -1,4 +1,5 @@
 import './TypingIndicator.css'
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 
 interface TypingIndicatorProps {
   typingUsers: string[]
@@ -14,7 +15,7 @@ export function TypingIndicator({ typingUsers, activityLabel }: TypingIndicatorP
   if (!activityLabel && typingUsers.length === 0) return null
 
   const text = activityLabel
-    ? `Claude is ${activityLabel}…`
+    ? `${PARTICIPANT_NAME} is ${activityLabel}…`
     : typingUsers.length === 1
       ? `${typingUsers[0]} is thinking...`
       : `${typingUsers.join(', ')} are thinking...`

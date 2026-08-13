@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
+import { PARTICIPANT_NAME } from '../lib/productIdentity.ts'
 import { useAppStore } from '../stores/appStore.ts'
 import { api } from '../lib/api.ts'
 import { groupAttachmentsByMessage, isUuid } from '../lib/attachments.ts'
@@ -326,7 +327,7 @@ export function useDialecticSocket(options?: {
               ? payload.message_type as Message['message_type']
               : 'text',
             content: (payload.content as string) ?? '',
-            user_name: payload.speaker_type === 'llm_provoker' ? 'Provoker' : 'Claude',
+            user_name: payload.speaker_type === 'llm_provoker' ? 'Provoker' : PARTICIPANT_NAME,
             // Only path the tool trace takes to the client — the REST message
             // list projects a fixed field set with no metadata in it.
             metadata: (payload.metadata as MessageMetadata | undefined) ?? null,

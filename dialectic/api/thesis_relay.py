@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from api.auth.dependencies import AuthenticatedUser, get_current_user
 from api.token_utils import extract_room_token
+from api.trading_ingest import THESIS_STATE_MEMORY_KEY
 from llm import tradingdesk_client as td
 from llm.thesis_drafter import DraftError, draft_thesis_graph
 from models import EventType
@@ -278,8 +279,9 @@ async def retire_thesis(
     # ALL active rows, not one: a racing pair of pushes can twin the slot
     # (see trading_ingest's heal), and a retire must silence every copy.
     memory_rows = await db.fetch(
-        """SELECT id FROM memories
-           WHERE room_id = $1 AND key = 'thesis_state_current' AND status = 'active'""",
+        f"""SELECT id FROM memories
+            WHERE room_id = $1 AND key = '{THESIS_STATE_MEMORY_KEY}'
+              AND status = 'active'""",
         room_id,
     )
     if memory_rows:

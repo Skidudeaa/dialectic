@@ -1,4 +1,5 @@
 import type { Attachment, HomeActivityProjection, Memory, Thread, ThreadNode, UserRoom } from '../types/index.ts';
+import type { ProposalEnvelopeProjection, ProposalKind, WorkspaceObjectKind, WorkspaceObjectProjection } from '../types/workspace.ts';
 
 const BASE = '';  // Same origin via Vite proxy
 
@@ -113,6 +114,36 @@ class DialecticAPI {
         confirmed_user_id: confirmedUserId,
       }),
     });
+  }
+  /**
+   * The room's workspace objects — one shape over readings, briefs, the
+   * thesis, commitments, proposals, dossier entries and the Record.
+   *
+   * Read-only by contract: the server projects rows that already exist and
+   * writes nothing, so a surface that wants to ACT on an object calls that
+   * entity's own endpoint (accept a proposal, retire a thesis) rather than
+   * posting back here.
+   */
+  async getWorkspaceObjects(
+    roomId: string,
+    kind?: WorkspaceObjectKind,
+  ): Promise<WorkspaceObjectProjection> {
+    const query = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+    return this.fetch(`/rooms/${roomId}/workspace/objects${query}`);
+  }
+  /**
+   * The room's proposals, normalized (design v2 §8.3–8.4).
+   *
+   * The projection knows what a message alone cannot: whether the target is
+   * already gone — a book bound, an article filed by the wire, a deadline
+   * past. Accepting still goes to the relay that owns the write.
+   */
+  async getRoomProposals(
+    roomId: string,
+    kind?: ProposalKind,
+  ): Promise<ProposalEnvelopeProjection> {
+    const query = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+    return this.fetch(`/rooms/${roomId}/workspace/proposals${query}`);
   }
   async getMessages(threadId: string, limit = 50) { return this.fetch(`/threads/${threadId}/messages?limit=${limit}`); }
   async getMemories(roomId: string): Promise<Memory[]> {

@@ -1,3 +1,6 @@
+import type { WorkspaceScene } from './workspace.ts'
+export * from './workspace.ts'
+
 export interface Room {
   id: string;
   name: string | null;
@@ -9,10 +12,13 @@ export interface Room {
 
 export type HistoryMode = 'push' | 'replace' | 'none';
 
-/** A navigation target. roomId null is the canonical Home-root destination. */
+/** A navigation target. roomId null is the canonical Home-root destination.
+ *  `scene` is the third destination axis: null means "no scene requested",
+ *  which resolves to the destination's default rather than to an error. */
 export interface RoomDestination {
   roomId: string | null;
   threadId?: string | null;
+  scene?: WorkspaceScene | null;
 }
 
 export interface User {
@@ -142,7 +148,7 @@ export interface ResolutionProposal {
   accepted?: boolean;
 }
 
-/** Transient "Claude is checking live prices…" signal, one per tool event. */
+/** Transient "Dialectic is checking live prices…" signal, one per tool event. */
 export interface LLMToolActivity {
   tool: string;
   label: string;
@@ -244,6 +250,29 @@ export interface HomeActivityCommitment {
   category: string;
 }
 
+/** One thing that moved in a room the whole household can see.
+ *  Mirrors home_activity.HomeActivityMovement. A movement is a PROJECTION —
+ *  `destination` is the canonical URL of where the thing actually lives. */
+export interface HomeActivityMovement {
+  kind:
+    | 'reading_filed'
+    | 'research_completed'
+    | 'claim_warning'
+    | 'wire_interruption'
+    | 'prediction_review'
+    | 'commitment_due'
+    | 'echo_created'
+    | 'thesis_lifecycle';
+  room_id: string;
+  thread_id: string | null;
+  object_id: string | null;
+  title: string;
+  state: string;
+  requires_judgment: boolean;
+  occurred_at: string;
+  destination: string;
+}
+
 export interface HomeActivityRoom {
   id: string;
   name: string | null;
@@ -254,6 +283,7 @@ export interface HomeActivityRoom {
   branches: HomeActivityBranch[];
   unresolved_questions: HomeActivityQuestion[];
   commitments_due: HomeActivityCommitment[];
+  movement: HomeActivityMovement[];
 }
 
 export interface HomeActivityProjection {

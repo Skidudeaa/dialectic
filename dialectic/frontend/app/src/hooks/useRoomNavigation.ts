@@ -15,29 +15,25 @@ import type { HistoryMode, RoomDestination, Thread, UserRoom } from '../types/in
  * and history-order regressions.
  */
 
-export function destinationFromLocation(location: Location): {
-  roomId: string | null;
-  threadId: string | null;
-} {
-  const params = new URLSearchParams(location.search)
-  return {
-    roomId: params.get('room'),
-    threadId: params.get('thread'),
-  }
-}
+// The route grammar moved to lib/workspaceRoute so it can be unit-tested without
+// mounting this hook. Imported for internal use AND re-exported, because existing
+// call sites import these names from here; this hook remains the one destination
+// WRITER. (A bare `export ... from` would re-export without binding them locally,
+// leaving the uses below undefined.)
+import {
+  destinationFromLocation,
+  destinationUrl,
+  entryDestination,
+  resolveWorkspaceScene,
+} from '../lib/workspaceRoute.ts'
+import {
+  chooseEntryDestination,
+  isExplicitDestination,
+  rememberScene,
+  restoreScene,
+} from '../lib/sceneContinuity.ts'
 
-export function destinationUrl(
-  room: Pick<UserRoom, 'id' | 'is_home'>,
-  thread: Pick<Thread, 'id' | 'parent_thread_id'>,
-): string {
-  // Only Home's root canonicalizes to bare `/`; a Home branch carries both
-  // ids, and an ordinary room root is `/?room=<id>`.
-  const rootHome = room.is_home && thread.parent_thread_id === null
-  if (rootHome) return '/'
-  const params = new URLSearchParams({ room: room.id })
-  if (thread.parent_thread_id !== null) params.set('thread', thread.id)
-  return `/?${params.toString()}`
-}
+export { destinationFromLocation, destinationUrl }
 
 /** Local descriptor for the guest invite path — no JWT saved-room list. */
 function guestDescriptor(room: Pick<UserRoom, 'id' | 'name' | 'token'>): UserRoom {
@@ -80,6 +76,7 @@ export function useRoomNavigation(): RoomNavigation {
   const setThread = useAppStore((s) => s.setThread)
   const setThreads = useAppStore((s) => s.setThreads)
   const setMobileDrawer = useAppStore((s) => s.setMobileDrawer)
+  const setWorkspaceScene = useAppStore((s) => s.setWorkspaceScene)
 
   const [rooms, setRooms] = useState<UserRoom[]>([])
   const [loading, setLoading] = useState(true)
@@ -150,7 +147,6 @@ export function useRoomNavigation(): RoomNavigation {
     // A denied explicit destination is corrected to Home with replace
     // history, so Back never returns to a room the user cannot open.
     const denied = async (message: string): Promise<false> => {
-      setAccessError(message)
       await refreshRooms()
       let homeInstalled = false
       if (destination.roomId !== null) {
@@ -164,6 +160,12 @@ export function useRoomNavigation(): RoomNavigation {
           state.leaveRoom()
         }
       }
+      // AFTER the correction, not before it. The corrective navigation ends in
+      // a successful install, and a successful install clears the access error
+      // — so setting the message first meant the Home correction silently wiped
+      // the very explanation it exists to give, and a user who followed a link
+      // to a room they had lost was bounced to Home with no reason offered.
+      setAccessError(message)
       setReady(true)
       return false
     }
@@ -206,6 +208,11 @@ export function useRoomNavigation(): RoomNavigation {
       ?? threads[0]
     if (!thread) return denied('That room has no branches yet.')
 
+    // Scene resolves against the destination that was actually reached, not the
+    // one requested: an unavailable or ill-fitting scene lands on the default
+    // rather than erroring, and the URL below serializes what we installed.
+    const scene = resolveWorkspaceScene(room, thread, destination.scene)
+
     if (state.currentRoom?.id !== room.id) {
       setRoom(
         { id: room.id, name: room.name, token: room.token, is_home: room.is_home },
@@ -214,11 +221,23 @@ export function useRoomNavigation(): RoomNavigation {
     }
     setThreads(threads)
     setThread(thread)
+    // AFTER setRoom, which resets the scene to 'record' on a room change.
+    setWorkspaceScene(scene)
 
-    const url = destinationUrl(room, thread)
+    const url = destinationUrl(room, thread, scene)
     if (historyMode === 'push') window.history.pushState(null, '', url)
     else if (historyMode === 'replace') window.history.replaceState(null, '', url)
     // 'none' (popstate, initial entry) mutates no history.
+
+    // Device-local continuity (§15.2): remember what was ACTUALLY installed,
+    // here at the single writer, so a restored destination can never describe
+    // somewhere navigation did not go. Home root is remembered too — its scene
+    // is part of where the user chose to be.
+    rememberScene(useAppStore.getState().user?.id ?? null, {
+      roomId: room.is_home && thread.parent_thread_id === null ? null : room.id,
+      threadId: thread.parent_thread_id === null ? null : thread.id,
+      scene,
+    })
 
     // Successful state installation is the one destination-driven drawer
     // close — including branch changes within the same room.
@@ -228,7 +247,7 @@ export function useRoomNavigation(): RoomNavigation {
     // Badge parity: entering a room used to refetch the saved-room list.
     void refreshRooms()
     return true
-  }, [refreshRooms, setMobileDrawer, setRoom, setThread, setThreads])
+  }, [refreshRooms, setMobileDrawer, setRoom, setThread, setThreads, setWorkspaceScene])
 
   useEffect(() => {
     navigateRef.current = navigate
@@ -252,18 +271,39 @@ export function useRoomNavigation(): RoomNavigation {
     return navigateRef.current({ roomId: granted.id }, 'push')
   }, [refreshRooms])
 
-  // Initial entry: an explicit room/thread URL wins; a bare URL enters
-  // Home's root regardless of any persisted room. Both use 'none' history.
+  // Initial entry, in the order §15.3 sets out:
+  //     deep link / notification  >  local restoration  >  Home → House
+  //
+  // WHY the room list is awaited before restoring, and not before a deep link:
+  // a restored room the user has since lost must fall back SILENTLY, and the
+  // only way to be silent is to never ask navigation for it — refusal sets a
+  // visible access error, which for a room nobody requested would announce
+  // both that the room exists and that they were removed from it. An explicit
+  // deep link is the opposite case: there the refusal is the correct answer,
+  // and it should not wait on a list load.
   const bootedRef = useRef(false)
   useEffect(() => {
     if (bootedRef.current) return
     bootedRef.current = true
-    void refreshRooms()
+    const loading = refreshRooms()
     const parsed = destinationFromLocation(window.location)
     void (async () => {
+      let restored: RoomDestination | null = null
+      if (!isExplicitDestination(parsed)) {
+        const list = await loading.catch(() => [] as UserRoom[])
+        restored = restoreScene(
+          useAppStore.getState().user?.id ?? null, list,
+        )
+      }
+      // 'none' for an entry URL, which is already correct and must be left
+      // exactly as the user or the notification wrote it. 'replace' for a
+      // RESTORED destination, because the address bar would otherwise read `/`
+      // while the app shows a room — and in a URL-authoritative app a URL that
+      // does not describe the screen is a URL nobody can copy, share or reload
+      // into the same place. Replace, never push: Back must still leave.
       const installed = await navigateRef.current(
-        parsed.roomId ? parsed : { roomId: null, threadId: null },
-        'none',
+        chooseEntryDestination(parsed, restored),
+        restored ? 'replace' : 'none',
       )
       if (!installed) setReady(true)
     })()
@@ -274,7 +314,7 @@ export function useRoomNavigation(): RoomNavigation {
     const onPopState = () => {
       const parsed = destinationFromLocation(window.location)
       void navigateRef.current(
-        parsed.roomId ? parsed : { roomId: null, threadId: null },
+        entryDestination(parsed),
         'none',
       )
     }

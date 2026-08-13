@@ -30,18 +30,22 @@
 
 /* Home empty: the house takes the column; the hearth stays compact.
    Home talking: the table is a real conversation; the house caps above it. */
+/* WHY no `>` here any more: the scene frame is now a wrapper between .app-main
+   and this content, so every direct-child rule silently stopped matching. These
+   are scoped to .workspace-scene-house instead, which also keeps the House
+   geometry from leaking into Record. */
 .app-main-home .participants-bar {
     border-bottom: none;
 }
-.app-main-home > .messages-wrapper-hearth {
+.app-main-home .workspace-scene-house .messages-wrapper-hearth {
     flex: 0 0 auto;
 }
-.app-main-home-talking .home-house {
+.app-main-home-talking .workspace-scene-house .home-house {
     flex: 0 1 auto;
     max-height: min(36vh, 20rem);
 }
-.app-main-home-talking > .messages-viewport,
-.app-main-home-talking > .messages-wrapper {
+.app-main-home-talking .workspace-scene-house .messages-viewport,
+.app-main-home-talking .workspace-scene-house .messages-wrapper {
     flex: 1 1 auto;
     max-height: none;
     min-height: 0;

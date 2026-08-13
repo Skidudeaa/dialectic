@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import DOMPurify from 'dompurify'
 import { useAppStore } from '../../stores/appStore.ts'
 import { api, ApiError } from '../../lib/api.ts'
@@ -491,7 +492,7 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
       </button>
       {busy === 'drafting' && (
         <p className="thesis-create-note">
-          Claude is composing nodes, mechanisms and thresholds — usually
+          {PARTICIPANT_NAME} is composing nodes, mechanisms and thresholds — usually
           20–40 seconds.
         </p>
       )}

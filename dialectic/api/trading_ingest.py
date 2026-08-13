@@ -38,6 +38,14 @@ from api.trading import TradingSnapshotResponse, format_thesis_summary
 
 logger = logging.getLogger(__name__)
 
+# The deterministic memory slot that shadows rooms.trading_config, so recall
+# can find the live thesis without reading JSONB. It is named here, once,
+# because three call sites now depend on it -- this upsert, the retire path in
+# api/thesis_relay.py, and the thesis adapter in workspace_objects.py, which
+# must fold the slot back into the thesis it shadows rather than projecting it
+# as a second, independently-worded object.
+THESIS_STATE_MEMORY_KEY = "thesis_state_current"
+
 
 # WHY 8/day: two humans and a thesis book. More than eight unprompted LLM
 # paragraphs in a waking day is a notification the room learns to ignore,
@@ -216,7 +224,7 @@ async def ingest_snapshot(
 
     # Upsert memory: check for existing key, update if found, create if not
     memory_manager = MemoryManager(db)
-    memory_key = "thesis_state_current"
+    memory_key = THESIS_STATE_MEMORY_KEY
 
     # WHY fetch (plural) and heal: the slot's invariant is ONE active row,
     # but the check-then-insert below has no DB constraint behind it, so two

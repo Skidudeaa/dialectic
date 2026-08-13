@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import './HelpDialog.css'
 
 interface HelpDialogProps {
@@ -29,7 +30,7 @@ export function HelpDialog({ onClose }: HelpDialogProps) {
           <section className="help-section">
             <h3>The room</h3>
             <ul>
-              <li><strong>@Claude</strong> gets an instant streamed reply. Without it, Claude jumps in on its own judgment.</li>
+              <li><strong>@Dialectic</strong> gets an instant streamed reply (<strong>@Claude</strong> and <strong>@llm</strong> still work). Without it, {PARTICIPANT_NAME} jumps in on its own judgment.</li>
               <li>Room Settings → <strong>auto-interjection</strong> toggle makes Claude speak only when summoned.</li>
               <li>Mark a message <strong>Claim</strong>, <strong>Question</strong>, or <strong>Definition</strong> so its role matters.</li>
               <li><strong>Fork</strong> any message to branch — the fork inherits everything above it.</li>
@@ -44,7 +45,7 @@ export function HelpDialog({ onClose }: HelpDialogProps) {
             <h3>Claude's hands and eyes</h3>
             <ul>
               <li>Ask it to check reality — "what's oil at?", "any news on the thesis?", "run the what-if". It pulls live quotes, Polymarket, thesis state, headlines.</li>
-              <li>Watch the "Claude is checking…" label while it works; expand the "used N tools" footer to audit every fetch.</li>
+              <li>Watch the "Dialectic is checking…" label while it works; expand the "used N tools" footer to audit every fetch.</li>
               <li>Paste or drag-drop a chart and ask about it — Claude sees images (not video).</li>
               <li>Ask and walk away: after 10 quiet minutes Claude follows up once (max 3/day, quiet 11pm–7am, off when the interjection toggle is off).</li>
               <li>Claude may draft a prediction — the <strong>Accept</strong> card is yours. Claude never writes to the desk itself.</li>

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from models import Message, Thread, SpeakerType
+from llm.mentions import contains_explicit_llm_mention
 
 
 @dataclass
@@ -77,7 +78,7 @@ def assemble_context(
             score += 50.0
 
         # @Claude mentions get high priority
-        if "@claude" in msg.content.lower() or "@llm" in msg.content.lower():
+        if contains_explicit_llm_mention(msg.content):
             score += 80.0
 
         # Claude's own responses get priority (context for follow-ups)
