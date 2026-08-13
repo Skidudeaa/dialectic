@@ -276,7 +276,7 @@ def _parse_json(text: str) -> Optional[dict]:
 
 async def draft_thesis_graph(
     title: str, claim: str, monthly_budget: int,
-    model: str = "claude-sonnet-4-6",
+    model: str = "claude-sonnet-5",
 ) -> dict:
     """Draft {nodes, edges, rationale} for the thesis, or raise DraftError.
 

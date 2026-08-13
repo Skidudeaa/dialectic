@@ -660,7 +660,7 @@ def make_orchestrator(monkeypatch, db=None):
 
 class FakeStreamRouter:
     async def stream(self, _request):
-        yield "attempt", {"provider": "anthropic", "model": "claude-sonnet-4-6"}
+        yield "attempt", {"provider": "anthropic", "model": "claude-sonnet-5"}
         yield "token", {"token": "hi"}
 
 

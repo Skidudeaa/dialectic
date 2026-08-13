@@ -14,7 +14,7 @@ from llm.providers import (
 def _msg(content, stop_reason="end_turn"):
     return {
         "content": content,
-        "model": "claude-sonnet-4-6",
+        "model": "claude-sonnet-5",
         "usage": {"input_tokens": 10, "output_tokens": 5},
         "stop_reason": stop_reason,
     }
@@ -173,3 +173,55 @@ class TestOpenAIToolGuard:
         with pytest.raises(ToolsUnsupportedError):
             async for _ in provider.stream(req):
                 pass
+
+
+class TestModelResolution:
+    """The 5-series contract: no Haiku on the wire, no rejected parameters.
+
+    These guard a defect that a green suite cannot see. The request body is
+    what the API validates, and every other test in this file mocks it away.
+    """
+
+    def _body(self, **kw):
+        from llm.providers import AnthropicProvider
+        provider = AnthropicProvider.__new__(AnthropicProvider)  # no API key needed
+        req = LLMRequest(messages=[{"role": "user", "content": "x"}],
+                         system="s", model=kw.pop("model", "claude-sonnet-5"), **kw)
+        return provider._request_body(req)
+
+    def test_every_mapping_lands_on_the_five_series(self):
+        """A legacy key rewritten to its own target is a silent no-op — the
+        lookup misses and the stored ID goes to the wire unchanged."""
+        from llm.providers import AnthropicProvider
+        for key, target in AnthropicProvider.MODELS.items():
+            assert target in (AnthropicProvider.SONNET, AnthropicProvider.OPUS), (
+                f"{key} resolves to {target}, which is not a current tier"
+            )
+
+    def test_haiku_ids_still_resolve_and_land_on_sonnet(self):
+        """Haiku is retired by owner decision. The keys must SURVIVE — delete
+        them and a stored row falls through to a live Haiku endpoint."""
+        from llm.providers import AnthropicProvider
+        haiku_keys = [k for k in AnthropicProvider.MODELS if "haiku" in k]
+        assert haiku_keys, "legacy Haiku keys were removed; stored rows now reach Haiku"
+        for key in haiku_keys:
+            assert AnthropicProvider.MODELS[key] == AnthropicProvider.SONNET
+
+    def test_no_haiku_id_can_reach_the_wire(self):
+        assert "haiku" not in self._body(model="claude-haiku-4-5-20251001")["model"]
+
+    def test_temperature_is_never_sent(self):
+        """Non-default sampling parameters are a 400 on the 5-series. Callers
+        still pass temperature=; it must not reach the body."""
+        body = self._body(temperature=0.2)
+        assert "temperature" not in body
+        assert "top_p" not in body and "top_k" not in body
+
+    def test_thinking_defaults_off_so_tight_budgets_survive(self):
+        """max_tokens caps thinking AND output together; a 256-token scoring
+        call left adaptive would spend the budget reasoning and return nothing."""
+        assert self._body(max_tokens=256)["thinking"] == {"type": "disabled"}
+
+    def test_callers_can_opt_into_adaptive_thinking(self):
+        body = self._body(thinking={"type": "adaptive"})
+        assert body["thinking"] == {"type": "adaptive"}

@@ -48,7 +48,7 @@ def tool_use_response(calls, text=""):
         raw.append({"type": "tool_use", "id": call_id, "name": name, "input": payload})
         tool_calls.append(ToolCall(id=call_id, name=name, input=payload))
     return LLMResponse(
-        content=text, model="claude-sonnet-4-6", input_tokens=10, output_tokens=10,
+        content=text, model="claude-sonnet-5", input_tokens=10, output_tokens=10,
         stop_reason="tool_use", provider=ProviderName.ANTHROPIC,
         tool_calls=tool_calls, raw_content=raw,
     )
@@ -56,7 +56,7 @@ def tool_use_response(calls, text=""):
 
 def text_response(text):
     return LLMResponse(
-        content=text, model="claude-sonnet-4-6", input_tokens=10, output_tokens=10,
+        content=text, model="claude-sonnet-5", input_tokens=10, output_tokens=10,
         stop_reason="end_turn", provider=ProviderName.ANTHROPIC,
         raw_content=[{"type": "text", "text": text}],
     )
@@ -72,7 +72,7 @@ def failed():
 
 
 def stream_script(*, text_chunks=(), tool_calls=(), stop_reason="end_turn"):
-    events = [("attempt", {"provider": "anthropic", "model": "claude-sonnet-4-6"})]
+    events = [("attempt", {"provider": "anthropic", "model": "claude-sonnet-5"})]
     raw = []
     for chunk in text_chunks:
         events.append(("text", {"text": chunk}))
@@ -125,7 +125,7 @@ def make_request(text="what is brent doing?"):
     return LLMRequest(
         messages=[{"role": "user", "content": text}],
         system="you are a participant",
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
     )
 
 

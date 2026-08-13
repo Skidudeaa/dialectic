@@ -178,7 +178,7 @@ class TradingCuratorEngine:
             for m in recent
         )
 
-        # Use existing provider infrastructure with Haiku (cheap, fast)
+        # Use existing provider infrastructure with the background model (cheap, fast)
         from .providers import get_provider, ProviderName, LLMRequest
 
         provider = get_provider(ProviderName.ANTHROPIC)
@@ -194,7 +194,7 @@ class TradingCuratorEngine:
                 ),
             }],
             system=TRADING_CURATOR_IDENTITY,
-            model="claude-haiku-4-5-20251001",
+            model="claude-sonnet-5",
             max_tokens=512,
             temperature=0.3,
         )

@@ -13,7 +13,7 @@ alert. Tests want the receipt semantics without a live server. One
 function with an explicit `fire_curator` flag beats three copies drifting.
 
 WHY the curator is now gated on events rather than fired on every receipt:
-the coordinator pushes every 300s per book. Firing a Haiku alert on each
+the coordinator pushes every 300s per book. Firing an LLM alert on each
 one meant the room's alert history was mostly "nothing happened, here is a
 paragraph about nothing" — the 5-minute dedup was the only thing keeping it
 survivable, which made the dedup window load-bearing for cost rather than

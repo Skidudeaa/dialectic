@@ -15,7 +15,7 @@ GUARDRAILS:
   - enabled_env NIGHT_SHIFT_ENABLED (kill switch, default on)
   - hard cap of NIGHT_SHIFT_LLM_CAP briefs per UTC-day, counted by posted
     night_shift messages (TradingCurator.count_today pattern) — each brief
-    is at most one Haiku call, so the message count IS the LLM budget
+    is at most one background-model call, so the message count IS the LLM budget
   - rooms quiet for 48h are never iterated; rooms with nothing to say
     (no missed messages, no expiring commitments, no unanswered questions)
     are skipped without an LLM call

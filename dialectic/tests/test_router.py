@@ -57,8 +57,8 @@ def make_router(primary: FakeProvider, fallback: FakeProvider) -> ModelRouter:
     router = ModelRouter(
         primary_provider=primary.name,
         fallback_provider=fallback.name,
-        primary_model="claude-sonnet-4-6",
-        fallback_model="claude-haiku-4-5-20251001",
+        primary_model="claude-sonnet-5",
+        fallback_model="claude-sonnet-5",
     )
     # Inject fakes into the router's provider cache
     router._providers[primary.name] = primary
@@ -82,17 +82,17 @@ class TestRouteChain:
         """A provoker-model request must hit that model, not the chain's frozen primary."""
         router = make_router(primary, fallback)
         request = LLMRequest(messages=[{"role": "user", "content": "hi"}],
-                             system="s", model="claude-haiku-4-5-20251001")
+                             system="s", model="claude-sonnet-5")
         result = await router.route(request)
         assert result.success
-        assert primary.complete_calls[0].model == "claude-haiku-4-5-20251001"
+        assert primary.complete_calls[0].model == "claude-sonnet-5"
 
     @pytest.mark.asyncio
     async def test_route_falls_back_to_secondary_provider(self, primary, fallback):
         primary.fail_completes = 99  # exhaust all retries on primary
         router = make_router(primary, fallback)
         request = LLMRequest(messages=[{"role": "user", "content": "hi"}],
-                             system="s", model="claude-sonnet-4-6")
+                             system="s", model="claude-sonnet-5")
         result = await router.route(request)
         assert result.success
         assert result.response.provider == ProviderName.OPENAI
@@ -105,7 +105,7 @@ class TestRouteChain:
         fallback.fail_completes = 99
         router = make_router(primary, fallback)
         request = LLMRequest(messages=[{"role": "user", "content": "hi"}],
-                             system="s", model="claude-sonnet-4-6")
+                             system="s", model="claude-sonnet-5")
         result = await router.route(request)
         assert not result.success
         assert result.response is None
@@ -124,7 +124,7 @@ class TestStreamChain:
     async def test_stream_happy_path(self, primary, fallback):
         router = make_router(primary, fallback)
         request = LLMRequest(messages=[{"role": "user", "content": "hi"}],
-                             system="s", model="claude-sonnet-4-6", stream=True)
+                             system="s", model="claude-sonnet-5", stream=True)
         events = await self.collect(router, request)
         tokens = [d["token"] for t, d in events if t == "token"]
         assert tokens == ["hello", " world"]
@@ -135,7 +135,7 @@ class TestStreamChain:
         primary.stream_error_after = 0  # fail before yielding anything
         router = make_router(primary, fallback)
         request = LLMRequest(messages=[{"role": "user", "content": "hi"}],
-                             system="s", model="claude-sonnet-4-6", stream=True)
+                             system="s", model="claude-sonnet-5", stream=True)
         events = await self.collect(router, request)
         tokens = [d["token"] for t, d in events if t == "token"]
         assert tokens == ["hello", " world"]
@@ -150,7 +150,7 @@ class TestStreamChain:
         primary.stream_error_after = 1
         router = make_router(primary, fallback)
         request = LLMRequest(messages=[{"role": "user", "content": "hi"}],
-                             system="s", model="claude-sonnet-4-6", stream=True)
+                             system="s", model="claude-sonnet-5", stream=True)
         with pytest.raises(RuntimeError, match="mid-flight"):
             await self.collect(router, request)
         assert len(fallback.stream_calls) == 0
@@ -160,7 +160,7 @@ class TestStreamChain:
         primary.stream_tokens = []  # completes without yielding — e.g. silent API error
         router = make_router(primary, fallback)
         request = LLMRequest(messages=[{"role": "user", "content": "hi"}],
-                             system="s", model="claude-sonnet-4-6", stream=True)
+                             system="s", model="claude-sonnet-5", stream=True)
         events = await self.collect(router, request)
         tokens = [d["token"] for t, d in events if t == "token"]
         assert tokens == ["hello", " world"]
@@ -172,7 +172,7 @@ class TestStreamChain:
         fallback.stream_error_after = 0
         router = make_router(primary, fallback)
         request = LLMRequest(messages=[{"role": "user", "content": "hi"}],
-                             system="s", model="claude-sonnet-4-6", stream=True)
+                             system="s", model="claude-sonnet-5", stream=True)
         with pytest.raises(RuntimeError):
             await self.collect(router, request)
 
@@ -182,13 +182,13 @@ class TestToolAwareChain:
 
     def test_chain_filters_openai_when_tools_requested(self, primary, fallback):
         router = make_router(primary, fallback)
-        chain = router._build_chain("claude-sonnet-4-6", tools_requested=True)
+        chain = router._build_chain("claude-sonnet-5", tools_requested=True)
         assert all(p == ProviderName.ANTHROPIC for p, _ in chain)
         assert len(chain) >= 1
 
     def test_chain_unfiltered_without_tools(self, primary, fallback):
         router = make_router(primary, fallback)
-        chain = router._build_chain("claude-sonnet-4-6", tools_requested=False)
+        chain = router._build_chain("claude-sonnet-5", tools_requested=False)
         assert any(p == ProviderName.OPENAI for p, _ in chain)
 
     @pytest.mark.asyncio
@@ -196,7 +196,7 @@ class TestToolAwareChain:
         """route() rebuilds the request per chain entry — tools must survive."""
         router = make_router(primary, fallback)
         tools = [{"name": "get_live_quotes", "input_schema": {"type": "object"}}]
-        req = LLMRequest(messages=[], system="s", model="claude-sonnet-4-6",
+        req = LLMRequest(messages=[], system="s", model="claude-sonnet-5",
                          tools=tools, tool_choice={"type": "auto"})
         result = await router.route(req)
         assert result.success
@@ -209,7 +209,7 @@ class TestToolAwareChain:
         """Primary down + tools requested -> fail without touching OpenAI."""
         bad_primary = FakeProvider(ProviderName.ANTHROPIC, fail_completes=99)
         router = make_router(bad_primary, fallback)
-        req = LLMRequest(messages=[], system="s", model="claude-sonnet-4-6",
+        req = LLMRequest(messages=[], system="s", model="claude-sonnet-5",
                          tools=[{"name": "t", "input_schema": {}}])
         result = await router.route(req)
         assert not result.success
@@ -219,7 +219,7 @@ class TestToolAwareChain:
     async def test_stream_events_yields_typed_events(self, primary, fallback):
         """stream_events wraps the default provider stream into typed events."""
         router = make_router(primary, fallback)
-        req = LLMRequest(messages=[], system="s", model="claude-sonnet-4-6")
+        req = LLMRequest(messages=[], system="s", model="claude-sonnet-5")
         events = []
         async for kind, payload in router.stream_events(req):
             events.append((kind, payload))
@@ -233,7 +233,7 @@ class TestToolAwareChain:
         """Pre-first-event failure falls through to the next chain entry."""
         bad_primary = FakeProvider(ProviderName.ANTHROPIC, stream_error_after=0)
         router = make_router(bad_primary, fallback)
-        req = LLMRequest(messages=[], system="s", model="claude-sonnet-4-6")
+        req = LLMRequest(messages=[], system="s", model="claude-sonnet-5")
         events = []
         async for kind, payload in router.stream_events(req):
             events.append((kind, payload))

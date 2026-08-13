@@ -56,6 +56,9 @@ class LLMRequest:
     # Anthropic tool schema dicts, passed verbatim. None = plain text call.
     tools: Optional[list[dict]] = None
     tool_choice: Optional[dict] = None
+    # None preserves the pre-5-series behaviour: no thinking. Callers opt in
+    # with {"type": "adaptive"} where the extra reasoning is worth the budget.
+    thinking: Optional[dict] = None
 
 
 def _parse_anthropic_message(data: dict, provider: ProviderName) -> LLMResponse:
@@ -216,15 +219,34 @@ class LLMProvider(ABC):
 class AnthropicProvider(LLMProvider):
     name = ProviderName.ANTHROPIC
 
+    # The live 5-series IDs. There is no `-latest` alias on the Anthropic API:
+    # claude-sonnet-latest and claude-opus-latest both 404 (verified against
+    # GET /v1/models, which lists only concrete IDs). "Newest" is therefore a
+    # pin we update here, in one place, rather than a string the API resolves.
+    SONNET = "claude-sonnet-5"
+    OPUS = "claude-opus-5"
+
     MODELS = {
-        # Current Claude 4.x model IDs
-        "claude-sonnet-4-6": "claude-sonnet-4-6",
-        "claude-haiku-4-5-20251001": "claude-haiku-4-5-20251001",
-        "claude-opus-4-6": "claude-opus-4-6",
-        # Legacy aliases kept so existing room rows continue to resolve
-        "claude-sonnet-4-20250514": "claude-sonnet-4-6",
-        "claude-haiku-4-20250514": "claude-haiku-4-5-20251001",
-        "claude-opus-4-5-20251101": "claude-opus-4-6",
+        # Current
+        "claude-sonnet-5": SONNET,
+        "claude-opus-5": OPUS,
+        # Legacy aliases kept so existing room rows continue to resolve. Every
+        # one of them rolls FORWARD -- a stored row naming a retired model gets
+        # the current tier rather than a 404.
+        #
+        # These keys are DELIBERATELY the old strings. Do not sweep them with a
+        # find/replace over model IDs: rewriting a key to its own target makes
+        # the entry a no-op, the lookup misses, and the raw stored ID goes to
+        # the wire -- which is how a "retired" model keeps serving traffic.
+        "claude-sonnet-4-6": SONNET,
+        "claude-sonnet-4-20250514": SONNET,
+        "claude-opus-4-6": OPUS,
+        "claude-opus-4-5-20251101": OPUS,
+        # Haiku is retired from this codebase by owner decision (2026-08-12).
+        # The IDs stay mapped so historical rows still resolve -- they land on
+        # Sonnet, never on a Haiku endpoint.
+        "claude-haiku-4-5-20251001": SONNET,
+        "claude-haiku-4-20250514": SONNET,
     }
 
     def __init__(self):
@@ -238,9 +260,21 @@ class AnthropicProvider(LLMProvider):
         body = {
             "model": self.MODELS.get(request.model, request.model),
             "max_tokens": request.max_tokens,
-            "temperature": request.temperature,
             "system": request.system,
             "messages": request.messages,
+            # TWO 5-series contracts, both of which silently break a naive swap:
+            #
+            # temperature/top_p/top_k are REJECTED with a 400, so the sampling
+            # knob never reaches the wire. Callers still pass temperature= and
+            # it is still on LLMRequest -- it simply stops being sent. What used
+            # to come from temperature=0 has to come from the prompt now.
+            #
+            # Thinking runs ADAPTIVE unless told otherwise, and max_tokens caps
+            # thinking AND output together. Every background call here budgets
+            # 256-1024 tokens for a JSON verdict; left adaptive, the model would
+            # spend the whole budget reasoning and return nothing parseable.
+            # Off is exactly what every caller got before the swap.
+            "thinking": request.thinking or {"type": "disabled"},
         }
         if request.tools:
             body["tools"] = request.tools

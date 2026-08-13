@@ -8,7 +8,7 @@ WHY this file exists: the job spends LLM money on a wall-clock timer and
 writes into rooms nobody asked it to. The expensive mistakes are echoing
 twice (metadata dedup), echoing a room what it already read (library
 dedup), spending on a capped or thesis-less room (cap/no-thesis before the
-Haiku call), and a cross-room reference leaking into prompt injection (the
+background-model call), and a cross-room reference leaking into prompt injection (the
 reference is a citation only — the cross_session gate is never touched).
 
 Strategy mirrors tests/test_prediction_watch.py: a fake pool/conn answering

@@ -3,7 +3,7 @@
 #
 # Fire-and-forget from the message-send path (transport/handlers.py, beside
 # _detect_commitment_proposals): the defuddle sidecar fetches the article,
-# one Haiku call compares the message text against the body, and only a
+# one background-model call compares the message text against the body, and only a
 # `mixed` or `misrepresented` verdict lands — a metadata.claim_check patch
 # on the SOURCE message plus a MESSAGE_METADATA broadcast, the exact
 # write/broadcast shape commitment proposals use.
@@ -38,7 +38,7 @@ _OFF_VALUES = frozenset({"0", "false", "no", "off"})
 # Verdicts that produce a card. Everything else keeps the room quiet.
 CARD_VERDICTS = frozenset({"mixed", "misrepresented"})
 
-# Haiku never sees more than this — mirrors tools.ARTICLE_CONTENT_CAP.
+# the model never sees more than this — mirrors tools.ARTICLE_CONTENT_CAP.
 ARTICLE_BODY_CAP = 6000
 
 CLAIM_CHECK_IDENTITY = '''You compare a chat message against the article it links \
@@ -182,7 +182,7 @@ async def _write_claim_check(db, message_id: UUID, patch: dict) -> None:
 
 
 async def _judge_claim(message_text: str, article: dict) -> Optional[dict]:
-    """One Haiku call: message vs. article body → {verdict, note} or None.
+    """One background-model call: message vs. article body → {verdict, note} or None.
 
     None on ANY failure — no API key, provider error, unparseable JSON, an
     out-of-vocabulary verdict, or an empty article body. The caller treats
@@ -206,7 +206,7 @@ async def _judge_claim(message_text: str, article: dict) -> Optional[dict]:
             ),
         }],
         system=CLAIM_CHECK_IDENTITY,
-        model="claude-haiku-4-5-20251001",
+        model="claude-sonnet-5",
         max_tokens=256,
         temperature=0.0,
     )
@@ -221,7 +221,7 @@ async def _judge_claim(message_text: str, article: dict) -> Optional[dict]:
 def _parse_verdict(text: str) -> Optional[dict]:
     """Strict-JSON verdict extraction; None on anything unexpected.
 
-    Tolerates a code fence around the object (Haiku sometimes adds one
+    Tolerates a code fence around the object (the model sometimes adds one
     despite instructions) but never a verdict outside the fixed vocabulary.
     """
     try:

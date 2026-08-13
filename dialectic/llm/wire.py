@@ -67,7 +67,7 @@ WIRE_THRESHOLD = 0.7
 THESIS_CONTEXT_CAP = 4000
 ARTICLE_CONTEXT_CAP = 6000  # mirrors news_night / tools.ARTICLE_CONTENT_CAP
 SUMMARY_CAP = 500
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
+BACKGROUND_MODEL = "claude-sonnet-5"
 
 
 async def _linked_rooms(pool):
@@ -102,7 +102,7 @@ async def _interjections_today(conn, room_id) -> int:
 
 
 def _parse_score(text: str) -> Optional[dict]:
-    """Tolerant JSON parse of the Haiku relevance verdict (thesis_drafter
+    """Tolerant JSON parse of the relevance verdict (thesis_drafter
     pattern). Anything unparseable — or a score that is not a number — is
     None, and the caller treats None as below threshold."""
     text = text.strip()
@@ -132,7 +132,7 @@ def _parse_score(text: str) -> Optional[dict]:
 
 
 async def _score(article: dict, thesis_context: str) -> Optional[dict]:
-    """One Haiku call: does this article bear on the room's live thesis?
+    """One background-model call: does this article bear on the room's live thesis?
 
     Provider import stays lazy (briefing.py pattern) so importing this module
     never touches provider config; a missing API key or any provider failure
@@ -158,7 +158,7 @@ async def _score(article: dict, thesis_context: str) -> Optional[dict]:
             ),
         }],
         system="You score breaking news against a trading thesis. Be terse, factual, and output only the JSON object asked for.",
-        model=HAIKU_MODEL,
+        model=BACKGROUND_MODEL,
         max_tokens=256,
         temperature=0.1,
     )
@@ -291,7 +291,7 @@ async def wire_watch(ctx: SchedulerContext) -> dict:
                         continue
 
                     # Before the scoring call, not after: a bot-blocked shell
-                    # must not cost a Haiku call, and must never reach the room
+                    # must not cost a background-model call, and must never reach the room
                     # as an interjection.
                     if is_thin(article):
                         skipped.append({"url": url, "reason": "thin_content"})

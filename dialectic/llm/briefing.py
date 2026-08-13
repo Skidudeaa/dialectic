@@ -10,7 +10,7 @@ stays lazy so importing this module never touches provider config.
 WHY: async dialogue needs a "catch-up" mechanism, not raw message history —
 and the 7am brief must produce exactly what a returning user would see.
 
-TRADEOFF: LLM call per briefing vs pre-computed summaries. Haiku is cheap and
+TRADEOFF: LLM call per briefing vs pre-computed summaries. the background model is cheap and
 the deterministic sections (commitments, staleness, unanswered questions)
 carry the facts even when the summary call fails.
 """
@@ -47,7 +47,7 @@ class BriefingResponse(BaseModel):
     last_seen: Optional[datetime]
     generated_at: datetime
     # Deterministic content sections (additive — the pre-extraction response
-    # shape is untouched). Each carries facts the Haiku summary might omit.
+    # shape is untouched). Each carries facts the background summary might omit.
     commitments_due: List[dict] = []
     thesis_staleness: Optional[dict] = None
     unanswered_questions: List[BriefingHighlight] = []
@@ -258,7 +258,7 @@ async def build_briefing(
                     ),
                 }],
                 system="You are summarizing missed conversation activity for a returning user. Be brief and informative.",
-                model="claude-haiku-4-5-20251001",
+                model="claude-sonnet-5",
                 max_tokens=256,
                 temperature=0.2,
             )

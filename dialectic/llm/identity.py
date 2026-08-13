@@ -127,7 +127,7 @@ class LLMIdentityManager:
         """
         After a conversation session, distill/update the LLM's identity document.
 
-        ARCHITECTURE: Uses a cheap model (Haiku) to analyze the session and produce
+        ARCHITECTURE: Uses a cheap background model to analyze the session and produce
         an updated identity document covering intellectual positions, position changes,
         collaborative patterns, and effective interventions.
         WHY: Identity should feel like a living reflection, not a sterile summary.
@@ -161,7 +161,7 @@ class LLMIdentityManager:
             request = LLMRequest(
                 messages=[{"role": "user", "content": prompt_text}],
                 system="You are an AI reflecting on your own intellectual evolution through dialogue. Be honest and specific.",
-                model="claude-haiku-4-5-20251001",
+                model="claude-sonnet-5",
                 max_tokens=1024,
                 temperature=0.3,
             )
@@ -228,7 +228,7 @@ class LLMIdentityManager:
             request = LLMRequest(
                 messages=[{"role": "user", "content": prompt_text}],
                 system="You are an AI building a model of a dialogue partner's thinking patterns. Be observational, not judgmental.",
-                model="claude-haiku-4-5-20251001",
+                model="claude-sonnet-5",
                 max_tokens=512,
                 temperature=0.3,
             )

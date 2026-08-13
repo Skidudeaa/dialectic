@@ -5,7 +5,7 @@ ARCHITECTURE: One hourly scheduler job — prediction_deadline_watch. It lists
 the predictions logged on tradingDesk (the dialectic service principal's own
 tracker), finds the unresolved ones whose deadline is today or tomorrow,
 gathers evidence for the book-linked ones (thesis news → defuddled
-articles), asks Haiku for a verdict, and posts a quiet annotator-lane
+articles), asks the background model for a verdict, and posts a quiet annotator-lane
 message carrying a resolution_proposal card. Nothing is resolved here — a
 human tapping Mark correct/incorrect on the card hits
 api/prediction_relay.resolve_accept, and THAT tap is the write.
@@ -27,7 +27,7 @@ GUARDRAILS:
   - PREDICTION_WATCH_RUN_CAP proposals per run; dedup on
     metadata->>'source' = 'prediction_watch' carrying the same prediction id
     means a re-run never re-proposes
-  - per-prediction failures (desk down, defuddle down, a bad Haiku parse)
+  - per-prediction failures (desk down, defuddle down, a bad parse)
     skip that prediction and are recorded in the detail dict — the job
     itself never raises
 
@@ -59,7 +59,7 @@ EVIDENCE_CONTENT_CAP = 4000
 # A prediction is due when its deadline is today or tomorrow — a one-day
 # runway so the proposal lands before the moment, not after.
 DEADLINE_GRACE_DAYS = 1
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
+BACKGROUND_MODEL = "claude-sonnet-5"
 VERDICTS = ("correct", "incorrect", "unclear")
 
 
@@ -171,7 +171,7 @@ def _parse_verdict(text: str) -> Optional[dict]:
 
 
 async def _verdict(prediction: dict, evidence: list) -> Optional[dict]:
-    """One Haiku call: given the statement and the evidence, did it land?
+    """One background-model call: given the statement and the evidence, did it land?
 
     Provider import stays lazy (news_night._distill pattern) so importing
     this module never touches provider config; a missing API key, a provider
@@ -203,7 +203,7 @@ async def _verdict(prediction: dict, evidence: list) -> Optional[dict]:
             ),
         }],
         system="You judge logged predictions against evidence. Be terse, factual, and output only the JSON object asked for.",
-        model=HAIKU_MODEL,
+        model=BACKGROUND_MODEL,
         max_tokens=256,
         temperature=0.2,
     )

@@ -48,7 +48,7 @@ class FakeRouter:
 
     async def stream(self, _request):
         self.stream_calls += 1
-        yield "attempt", {"provider": "anthropic", "model": "claude-sonnet-4-6"}
+        yield "attempt", {"provider": "anthropic", "model": "claude-sonnet-5"}
         for token in self.tokens:
             yield "token", {"token": token}
 
@@ -449,7 +449,7 @@ class TestTracePersistence:
             thread=thread,
             content="XOP is 41.2",
             speaker_type=SpeakerType.LLM_PRIMARY,
-            model_used="claude-sonnet-4-6",
+            model_used="claude-sonnet-5",
             prompt_hash="abc",
             token_count=0,
             metadata=trace,
@@ -478,7 +478,7 @@ class TestTracePersistence:
             thread=make_thread(),
             content="plain answer",
             speaker_type=SpeakerType.LLM_PRIMARY,
-            model_used="claude-sonnet-4-6",
+            model_used="claude-sonnet-5",
             prompt_hash="abc",
             token_count=0,
         )
@@ -653,7 +653,7 @@ def scripted_llm(thread_id, metadata=None):
         yield ("done", {
             "message_id": str(uuid4()),
             "content": "XOP is 41.2",
-            "model_used": "claude-sonnet-4-6",
+            "model_used": "claude-sonnet-5",
             "truncated": False,
             "sequence": 7,
             "created_at": datetime.now(timezone.utc).isoformat(),

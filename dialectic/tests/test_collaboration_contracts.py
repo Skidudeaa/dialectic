@@ -373,7 +373,7 @@ def test_llm_done_payload_contains_authoritative_persisted_fields():
     payload = _llm_done_payload(thread_id, {
         "message_id": str(uuid4()),
         "content": "answer",
-        "model_used": "claude-sonnet-4-6",
+        "model_used": "claude-sonnet-5",
         "truncated": False,
         "sequence": 9,
         "created_at": created_at,
@@ -401,7 +401,7 @@ async def test_orchestrator_done_event_uses_persisted_message_metadata():
 
     class FakeRouter:
         async def stream(self, _request):
-            yield "attempt", {"provider": "anthropic", "model": "claude-haiku-4-5-20251001"}
+            yield "attempt", {"provider": "anthropic", "model": "claude-sonnet-5"}
             yield "token", {"token": "counterpoint"}
 
     orchestrator = LLMOrchestrator(SimpleNamespace())
@@ -411,7 +411,7 @@ async def test_orchestrator_done_event_uses_persisted_message_metadata():
     orchestrator._get_router = MagicMock(return_value=FakeRouter())
     orchestrator._persist_response = AsyncMock(return_value=persisted)
     orchestrator._schedule_self_memory_extraction = MagicMock()
-    room = make_room(provoker_model="claude-haiku-4-5-20251001")
+    room = make_room(provoker_model="claude-sonnet-5")
     thread = make_thread(id=persisted.thread_id)
 
     events = [

@@ -50,7 +50,7 @@ class LLMSelfMemory:
         """
         Extract claims/positions from an LLM response and store as LLM-scoped memories.
 
-        Uses a cheap model (Haiku) to analyze the LLM's response and extract:
+        Uses a cheap background model to analyze the LLM's response and extract:
         - Key claims it made
         - Position changes ("I was wrong about X")
         - Definitions or frameworks it proposed
@@ -81,7 +81,7 @@ class LLMSelfMemory:
     ) -> list[dict]:
         """
         ARCHITECTURE: Single cheap LLM call to extract structured claims.
-        WHY: Haiku/mini is fast and cheap enough to run on every response.
+        WHY: the background model is fast and cheap enough to run on every response.
         TRADEOFF: Extraction quality vs cost — cheap model may miss nuance.
         """
         context_summary = "\n".join(
@@ -99,7 +99,7 @@ class LLMSelfMemory:
         request = LLMRequest(
             messages=[{"role": "user", "content": extraction_prompt}],
             system="You are a claim extraction assistant. Extract claims as JSON.",
-            model="claude-haiku-4-5-20251001",
+            model="claude-sonnet-5",
             max_tokens=1024,
             temperature=0.0,
         )

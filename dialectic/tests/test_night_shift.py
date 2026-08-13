@@ -236,7 +236,7 @@ def make_briefing_db(*, message_rows=(), commitment_rows=(), snap_ts=None,
 
 @pytest.fixture
 def fake_llm(monkeypatch):
-    """Intercept the Haiku summary call at its import site."""
+    """Intercept the background summary call at its import site."""
     import llm.providers as providers
 
     provider = MagicMock()

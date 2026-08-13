@@ -7,7 +7,7 @@ America/Chicago, ninety minutes before the morning brief so the brief's
 It iterates rooms with a linked trading book (trading_watch._linked_rooms
 pattern), pulls the book's GDELT headlines from tradingDesk, defuddles the
 newest few the room hasn't filed yet, distills each against the room's live
-thesis snapshot with one Haiku call, and files the result in the reading
+thesis snapshot with one background-model call, and files the result in the reading
 library (llm/reading.py, source='night_shift').
 
 WHY: a thesis that never meets the news is a diary, not a position. The room
@@ -21,9 +21,9 @@ GUARDRAILS:
   - NEWS_DIGEST_DAILY_LLM_CAP distill calls per UTC-day, counted by
     reading_items rows saved with source='night_shift' (mirrors
     night_shift._briefs_posted_today: each saved reading is exactly one
-    Haiku call, so the row count IS the LLM budget)
+    background-model call, so the row count IS the LLM budget)
   - per-room/per-article failures (tradingDesk down, defuddle down, a bad
-    Haiku parse) skip that room/article and are recorded in the job's
+    parse) skip that room/article and are recorded in the job's
     detail dict — the job itself never raises
 
 CONNECTIONS: the job body acquires its own connections from ctx.pool and
@@ -51,7 +51,7 @@ THESIS_CONTEXT_CAP = 4000
 ARTICLE_CONTEXT_CAP = 6000  # mirrors tools.ARTICLE_CONTENT_CAP
 SUMMARY_CAP = 500
 KEY_CLAIMS_CAP = 5
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
+BACKGROUND_MODEL = "claude-sonnet-5"
 
 
 async def _linked_rooms(pool):
@@ -71,7 +71,7 @@ async def _readings_saved_today(conn) -> int:
     """Night-shift readings filed so far today (UTC) — the LLM budget gauge.
 
     WHY reading_items rather than the messages-metadata count night_shift
-    uses: this job posts no messages; its artifact (and its Haiku spend) is
+    uses: this job posts no messages; its artifact (and its LLM spend) is
     the reading row, so that is what the cap must count.
     """
     start_of_day = datetime.now(timezone.utc).replace(
@@ -86,7 +86,7 @@ async def _readings_saved_today(conn) -> int:
 
 
 def _parse_distill(text: str) -> Optional[dict]:
-    """Tolerant JSON parse of the Haiku distillation (thesis_drafter pattern)."""
+    """Tolerant JSON parse of the distillation (thesis_drafter pattern)."""
     text = text.strip()
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
@@ -114,7 +114,7 @@ def _parse_distill(text: str) -> Optional[dict]:
 
 
 async def _distill(article: dict, thesis_context: str) -> Optional[dict]:
-    """One Haiku call: what does this article say, and why does the thesis care?
+    """One background-model call: what does this article say, and why does the thesis care?
 
     Provider import stays lazy (briefing.py pattern) so importing this module
     never touches provider config; a missing API key or any provider failure
@@ -140,7 +140,7 @@ async def _distill(article: dict, thesis_context: str) -> Optional[dict]:
             ),
         }],
         system="You distill news articles against a trading thesis. Be terse, factual, and output only the JSON object asked for.",
-        model=HAIKU_MODEL,
+        model=BACKGROUND_MODEL,
         max_tokens=512,
         temperature=0.2,
     )

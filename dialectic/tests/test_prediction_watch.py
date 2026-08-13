@@ -1,6 +1,6 @@
 """
 Tests for llm/prediction_watch.py — the hourly deadline watcher that gathers
-evidence for due logged predictions, asks Haiku for a verdict, and posts a
+evidence for due logged predictions, asks the background model for a verdict, and posts a
 resolution_proposal card the human settles.
 
 WHY this file exists: the job spends LLM money on a wall-clock timer against

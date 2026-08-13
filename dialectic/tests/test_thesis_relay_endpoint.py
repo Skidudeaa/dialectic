@@ -46,7 +46,7 @@ def _make_db(room_found=True, linked_book_id=None, members=None, is_home=False):
             return {"token": ROOM_TOKEN, "linked_book_id": linked_book_id,
                     "is_home": is_home,
                     "primary_provider": "anthropic",
-                    "primary_model": "claude-sonnet-4-6"}
+                    "primary_model": "claude-sonnet-5"}
         if "FROM room_memberships" in query:
             _room_id, user_id = params
             return {"?column?": 1} if user_id in members else None
@@ -250,7 +250,7 @@ def test_draft_returns_the_proposal_and_writes_nothing(monkeypatch):
     assert resp.status_code == 200
     assert resp.json() == DRAFT
     # The room's own primary model drafts.
-    assert drafter.await_args.kwargs.get("model") == "claude-sonnet-4-6"
+    assert drafter.await_args.kwargs.get("model") == "claude-sonnet-5"
     # Stateless: a proposal must not touch the database.
     fake_db.execute.assert_not_awaited()
 

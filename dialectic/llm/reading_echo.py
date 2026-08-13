@@ -36,7 +36,7 @@ GUARDRAILS:
     carrying the same url (prediction_watch._already_proposed pattern), and
     on the target room's own reading_items (they read it themselves —
     llm/reading.seen_urls)
-  - per-reading/per-room failures (a bad Haiku parse, a dead pool, a
+  - per-reading/per-room failures (a bad parse, a dead pool, a
     missing thread) skip that pair and are recorded in the detail dict —
     the job itself never raises
 
@@ -69,7 +69,7 @@ READING_ECHO_DAILY_CAP = 6
 # can carry whole orderbooks; the model needs the posture, not the ticks.
 THESIS_CONTEXT_CAP = 3000
 KEY_CLAIMS_CAP = 5
-HAIKU_MODEL = "claude-haiku-4-5-20251001"
+BACKGROUND_MODEL = "claude-sonnet-5"
 
 
 async def _recent_readings(conn) -> list:
@@ -171,7 +171,7 @@ def _parse_relevance(text: str) -> Optional[dict]:
 
 
 async def _relevance(reading: dict, thesis_context: str) -> Optional[dict]:
-    """One Haiku call: does this reading bear on the target room's thesis?
+    """One background-model call: does this reading bear on the target room's thesis?
 
     Provider import stays lazy (news_night._distill pattern) so importing
     this module never touches provider config; a missing API key, a provider
@@ -201,7 +201,7 @@ async def _relevance(reading: dict, thesis_context: str) -> Optional[dict]:
             ),
         }],
         system="You judge whether an article bears on a trading thesis. Be terse, factual, and output only the JSON object asked for.",
-        model=HAIKU_MODEL,
+        model=BACKGROUND_MODEL,
         max_tokens=256,
         temperature=0.2,
     )

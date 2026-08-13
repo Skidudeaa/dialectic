@@ -62,7 +62,7 @@ class CommitmentDetector:
         if not has_trigger:
             return []
 
-        # Use Haiku for fast extraction
+        # Use the background model for fast extraction
         try:
             return await self._extract_with_llm(message, room_id)
         except Exception as e:
@@ -104,7 +104,7 @@ class CommitmentDetector:
                 "Be conservative — only extract claims that are genuinely testable or "
                 "falsifiable. Ignore opinions, preferences, and vague statements."
             ),
-            model="claude-haiku-4-5-20251001",
+            model="claude-sonnet-5",
             max_tokens=512,
             temperature=0.1,
         )
