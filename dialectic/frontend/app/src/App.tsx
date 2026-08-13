@@ -665,6 +665,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
             onUpdateConfidence={(commitmentId, confidence) => recordConfidence(commitmentId, confidence)}
             onResolveCommitment={handleResolveCommitment}
             isHome={isHome}
+            scene={workspaceScene}
             canManageHome={roomMeta?.can_manage_home ?? false}
             onMembershipChanged={() => setHomeRefreshVersion((version) => version + 1)}
           />

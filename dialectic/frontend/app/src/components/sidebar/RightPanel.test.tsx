@@ -29,9 +29,49 @@ const tabNames = () =>
     .map((b) => b.textContent?.trim())
     .filter(Boolean) as string[]
 
+describe('RightPanel — the rail follows the scene', () => {
+  it('offers the transcript\u2019s own tools while you are in the Record', () => {
+    render(<RightPanel {...props} isHome={false} scene="record" />)
+    const tabs = tabNames()
+    // Insights and History are ABOUT the transcript — they belong where the
+    // transcript is, not everywhere.
+    expect(tabs).toContain('Insights')
+    expect(tabs).toContain('History')
+  })
+
+  it('does not carry them into a scene they say nothing about', () => {
+    const tabs = (scene: 'library' | 'bench') => {
+      const { unmount } = render(<RightPanel {...props} isHome={false} scene={scene} />)
+      const names = tabNames()
+      unmount()
+      return names
+    }
+    for (const scene of ['library', 'bench'] as const) {
+      expect(tabs(scene)).not.toContain('Insights')
+      expect(tabs(scene)).not.toContain('History')
+    }
+  })
+
+  it('puts Dialectic\u2019s own papers with the Ledger, where remembered material lives', () => {
+    // Design v2 7.7: the Dossier is how remembered material is presented, and
+    // the identity papers are part of it.
+    render(<RightPanel {...props} isHome={false} scene="ledger" />)
+    expect(tabNames()).toContain('AI')
+  })
+
+  it('keeps People and Share in every scene — they are room-wide', () => {
+    for (const scene of ['record', 'bench', 'library', 'ledger'] as const) {
+      const { unmount } = render(<RightPanel {...props} isHome={false} scene={scene} />)
+      expect(tabNames()).toContain('Users')
+      expect(tabNames()).toContain('Share')
+      unmount()
+    }
+  })
+})
+
 describe('RightPanel — what the rail still owns', () => {
   it('gives up the panels a scene owns, in an ordinary room', () => {
-    render(<RightPanel {...props} isHome={false} />)
+    render(<RightPanel {...props} isHome={false} scene="record" />)
     const tabs = tabNames()
     expect(tabs).not.toContain('Trading')
     expect(tabs).not.toContain('Memory')
@@ -39,7 +79,7 @@ describe('RightPanel — what the rail still owns', () => {
   })
 
   it('keeps what no scene has taken', () => {
-    render(<RightPanel {...props} isHome={false} />)
+    render(<RightPanel {...props} isHome={false} scene="record" />)
     const tabs = tabNames()
     // People and sharing are room-wide, not scene-scoped.
     expect(tabs).toContain('Users')
@@ -47,7 +87,7 @@ describe('RightPanel — what the rail still owns', () => {
   })
 
   it('keeps every panel at Home, which has no workroom scene to hold them', () => {
-    render(<RightPanel {...props} isHome />)
+    render(<RightPanel {...props} isHome scene="house" />)
     const tabs = tabNames()
     expect(tabs).toContain('Memory')
     expect(tabs).toContain('Stakes')
@@ -61,13 +101,13 @@ describe('RightPanel — what the rail still owns', () => {
     // anyway — a second memory panel with no tab to leave it by. Found in a
     // screenshot, not by a test, which is why this one exists.
     useAppStore.setState({ rightPanelTab: 'memory' })
-    render(<RightPanel {...props} isHome={false} />)
+    render(<RightPanel {...props} isHome={false} scene="record" />)
     expect(screen.queryByText(/Nothing remembered here yet/i)).not.toBeInTheDocument()
   })
 
   it('never offers Trading at Home — Home cannot bind a thesis', () => {
     // The API answers 409 there, so the tab would be a door onto a refusal.
-    render(<RightPanel {...props} isHome />)
+    render(<RightPanel {...props} isHome scene="house" />)
     expect(tabNames()).not.toContain('Trading')
   })
 })

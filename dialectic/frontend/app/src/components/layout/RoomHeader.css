@@ -107,8 +107,32 @@
 
 /* Below 600px the labeled actions collapse to icons — icon, title and
    aria-label remain; the drawer toggles keep their full hit area. */
+/* WHY the header wraps on AVAILABLE SPACE rather than viewport width.
+   Measured: the action group is 217px of fixed-width controls that cannot
+   shrink. When it shares a row with the room identity and space runs short,
+   flexbox resolves the shortfall by collapsing the room title AND the branch
+   select to width ZERO — you cannot see which room you are in, which branch
+   you are on, or operate the selector at all.
+
+   That happens at 390px on a phone, and it ALSO happens at 1024px, because the
+   header lives inside .app-main, which is ~544px once both rails are up. A
+   viewport-keyed media query fixes the phone and leaves the desktop broken —
+   which is exactly what the first version of this fix did, and what the
+   browser fence caught. The flex-basis below wraps whenever identity would get
+   less than it needs, at any container width, with no breakpoint to keep in
+   step. */
+.room-header { flex-wrap: wrap; row-gap: 0.35rem; }
+.room-header-left {
+    flex: 1 1 15rem;   /* wrap to its own row below this, not before */
+    min-width: 0;
+}
+.room-header-right { flex: 0 0 auto; margin-left: auto; }
+.room-title { max-width: none; flex: 0 1 auto; min-width: 3rem; }
+.thread-breadcrumb { min-width: 0; flex: 0 1 auto; }
+.thread-breadcrumb select { max-width: 9rem; min-width: 4rem; }
+
 @media (max-width: 600px) {
     .room-header .btn-label { display: none; }
-    .room-title { max-width: 6.5rem; }
-    .thread-breadcrumb select { max-width: 7rem; }
+    .room-header-left { gap: 0.5rem; }
+}
 }

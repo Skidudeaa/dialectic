@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Memory, ThreadNode } from '../../types'
+import type { ImplementedWorkspaceScene, Memory, ThreadNode } from '../../types'
 import { useAppStore } from '../../stores/appStore.ts'
 import { MemoryPanel } from './MemoryPanel'
 import { ThreadPanel } from './ThreadPanel'
@@ -37,6 +37,8 @@ interface RightPanelProps {
   onUpdateConfidence: (commitmentId: string, confidence: number) => void
   onResolveCommitment: (commitmentId: string) => void
   isHome: boolean
+  /** Which scene is open — the rail offers what that scene needs. */
+  scene?: ImplementedWorkspaceScene
   canManageHome: boolean
   onMembershipChanged: () => void
 }
@@ -69,6 +71,7 @@ export function RightPanel({
   onUpdateConfidence,
   onResolveCommitment,
   isHome,
+  scene = 'record',
   canManageHome,
   onMembershipChanged,
 }: RightPanelProps) {
@@ -104,12 +107,31 @@ export function RightPanel({
   // offered there at all — it never was, and a tab onto a refusal would be
   // worse than its absence.
   const OWNED_BY_A_SCENE: TabId[] = ['memory', 'stakes']
+
+  // THE RAIL FOLLOWS THE SCENE. Some panels are about the room (who is here,
+  // how to invite someone) and belong everywhere; others are about ONE scene
+  // and were previously offered in all of them.
+  //
+  // Insights and History read the transcript, so they belong where the
+  // transcript is. Dialectic's own papers are remembered material, which is the
+  // Dossier's business (v2 7.7), so they sit with the Ledger. Branches is
+  // navigation and stays room-wide alongside the left rail's tree.
+  const SCENE_TABS: Partial<Record<ImplementedWorkspaceScene, TabId[]>> = {
+    record: ['analytics', 'history'],
+    ledger: ['identity'],
+  }
+  const ROOM_WIDE: TabId[] = ['users', 'threads', 'share']
+
   const roomTabs = isHome
     ? [
         { id: 'home' as TabId, label: 'House' },
         ...BASE_TABS.filter((tab) => tab.id !== 'share'),
       ]
-    : BASE_TABS.filter((tab) => !OWNED_BY_A_SCENE.includes(tab.id))
+    : BASE_TABS.filter((tab) => {
+        if (OWNED_BY_A_SCENE.includes(tab.id)) return false
+        if (ROOM_WIDE.includes(tab.id)) return true
+        return (SCENE_TABS[scene] ?? []).includes(tab.id)
+      })
   // Trading lives on the Bench now, and the Bench exists only outside Home.
   const tabs = roomTabs
 
