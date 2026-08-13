@@ -55,6 +55,46 @@ class HomeActivityCommitment(BaseModel):
     category: str
 
 
+# The eight kinds House v2 surfaces (design v2 §8.5). Ordered as the House
+# reads them: what arrived, what finished, what warns, what interrupted, what
+# needs a verdict, what is owed, what crossed rooms, what changed the thesis.
+MOVEMENT_KINDS = (
+    "reading_filed",
+    "research_completed",
+    "claim_warning",
+    "wire_interruption",
+    "prediction_review",
+    "commitment_due",
+    "echo_created",
+    "thesis_lifecycle",
+)
+
+# Kinds a human must personally answer. Everything else is arrival, not a
+# question — marking arrivals as judgment is how a House becomes a nag.
+_JUDGMENT_KINDS = frozenset({
+    "claim_warning", "prediction_review", "commitment_due",
+})
+
+
+class HomeActivityMovement(BaseModel):
+    """One thing that moved in a room the whole household can see.
+
+    A movement is a PROJECTION, never a copy: it names where the thing lives
+    and how to get there. `destination` is built with the same grammar the
+    frontend navigation transaction parses, so a House tap lands on the object
+    rather than on a room root.
+    """
+    kind: str
+    room_id: UUID
+    thread_id: Optional[UUID]
+    object_id: Optional[UUID]
+    title: str
+    state: str
+    requires_judgment: bool
+    occurred_at: datetime
+    destination: str
+
+
 class HomeActivityRoom(BaseModel):
     id: UUID
     name: Optional[str]
@@ -65,9 +105,22 @@ class HomeActivityRoom(BaseModel):
     branches: list[HomeActivityBranch]
     unresolved_questions: list[HomeActivityQuestion]
     commitments_due: list[HomeActivityCommitment]
+    movement: list[HomeActivityMovement] = []
 
 
 _EPOCH = datetime.min.replace(tzinfo=timezone.utc)
+
+
+def _movement_destination(room_id: UUID, thread_id: Optional[UUID]) -> str:
+    """The exact destination, in the frontend's own URL grammar.
+
+    Home's root is the only bare `/`; a movement always names its origin room,
+    so it is always the explicit `?room=` form. Scene is deliberately absent --
+    the destination is an object's room/branch, and the scene default applies.
+    """
+    if thread_id is None:
+        return f"/?room={room_id}"
+    return f"/?room={room_id}&thread={thread_id}"
 
 
 class HomeActivityProjection(BaseModel):
@@ -126,6 +179,11 @@ class HomeActivityProjection(BaseModel):
             lines.append(
                 f"commitment due {c.deadline.isoformat()} "
                 f"({c.category}): {c.claim}"
+            )
+        for mv in room.movement:
+            judgment = " [needs a human]" if mv.requires_judgment else ""
+            lines.append(
+                f"movement {mv.kind} ({mv.state}){judgment}: {mv.title}"
             )
         return "\n".join(lines) + "\n"
 
@@ -271,6 +329,94 @@ ORDER BY deadline
 """
 
 
+
+# House v2 movement, one fenced UNION over the sources that already exist.
+#
+# WHY one statement rather than eight round trips: every arm must be fenced by
+# the SAME eligible-room array inside the SAME snapshot. Eight separate queries
+# are eight chances to forget the fence, and the fence is the entire privacy
+# invariant.
+#
+# WHY reading source partitions rather than overlaps: a wire hit is BOTH filed
+# and interrupting, so `wire` is its own kind and reading_filed excludes it --
+# otherwise one article moves the House twice.
+_MOVEMENT_SQL = """
+WITH er AS (
+    SELECT unnest($1::uuid[]) AS room_id
+)
+SELECT * FROM (
+    SELECT 'reading_filed' AS kind, ri.room_id, NULL::uuid AS thread_id,
+           ri.id AS object_id,
+           COALESCE(ri.title, ri.url) AS title,
+           ri.source AS state, ri.created_at AS occurred_at
+    FROM reading_items ri JOIN er ON er.room_id = ri.room_id
+    WHERE ri.source <> 'wire'
+
+    UNION ALL
+    SELECT 'wire_interruption', ri.room_id, NULL::uuid, ri.id,
+           COALESCE(ri.title, ri.url), 'wire', ri.created_at
+    FROM reading_items ri JOIN er ON er.room_id = ri.room_id
+    WHERE ri.source = 'wire'
+
+    UNION ALL
+    SELECT 'research_completed', t.room_id, m.thread_id, m.id,
+           left(m.content, 120), 'completed', m.created_at
+    FROM messages m JOIN threads t ON t.id = m.thread_id
+    JOIN er ON er.room_id = t.room_id
+    WHERE NOT m.is_deleted AND m.metadata->>'source' = 'deep_dive'
+
+    UNION ALL
+    SELECT 'echo_created', t.room_id, m.thread_id, m.id,
+           left(m.content, 120), 'cited', m.created_at
+    FROM messages m JOIN threads t ON t.id = m.thread_id
+    JOIN er ON er.room_id = t.room_id
+    WHERE NOT m.is_deleted AND m.metadata->>'source' = 'reading_echo'
+
+    UNION ALL
+    SELECT 'claim_warning', t.room_id, m.thread_id, m.id,
+           COALESCE(m.metadata->'claim_check'->>'note', left(m.content, 120)),
+           COALESCE(m.metadata->'claim_check'->>'verdict', 'mixed'),
+           m.created_at
+    FROM messages m JOIN threads t ON t.id = m.thread_id
+    JOIN er ON er.room_id = t.room_id
+    WHERE NOT m.is_deleted AND m.metadata ? 'claim_check'
+
+    UNION ALL
+    SELECT 'prediction_review', t.room_id, m.thread_id, m.id,
+           COALESCE(m.metadata->'resolution_proposal'->>'statement',
+                    left(m.content, 120)),
+           CASE WHEN COALESCE((m.metadata->'resolution_proposal'->>'accepted')::bool, false)
+                THEN 'accepted' ELSE 'awaiting' END,
+           m.created_at
+    FROM messages m JOIN threads t ON t.id = m.thread_id
+    JOIN er ON er.room_id = t.room_id
+    WHERE NOT m.is_deleted AND m.metadata ? 'resolution_proposal'
+
+    UNION ALL
+    SELECT 'commitment_due', c.room_id, c.thread_id, c.id,
+           c.claim, 'due', c.deadline
+    FROM commitments c JOIN er ON er.room_id = c.room_id
+    WHERE c.status = 'active' AND c.deadline IS NOT NULL
+      AND c.deadline <= NOW() + INTERVAL '72 hours'
+
+    UNION ALL
+    SELECT 'thesis_lifecycle', e.room_id, e.thread_id, e.id,
+           e.event_type, lower(replace(e.event_type, 'THESIS_', '')),
+           e.timestamp
+    FROM events e JOIN er ON er.room_id = e.room_id
+    WHERE e.event_type IN ('THESIS_CREATED', 'THESIS_RETIRED')
+) mv
+ORDER BY occurred_at DESC
+LIMIT $2
+"""
+
+# One bound for the whole House. The 150 ms p95 target was measured before
+# these eight arms existed, so the projection is capped rather than trusted;
+# per-room slicing happens after the fetch.
+_MOVEMENT_TOTAL_CAP = 200
+_MOVEMENT_PER_ROOM_CAP = 12
+
+
 class HomeActivityService:
     """Builds the viewer's Home activity projection inside one snapshot."""
 
@@ -317,6 +463,12 @@ class HomeActivityService:
         )
         latest_rows = await self.db.fetch(_LATEST_SQL, room_ids)
         commitment_rows = await self.db.fetch(_COMMITMENTS_SQL, room_ids)
+        # NB: no viewer parameter — movement is fenced by the eligible-room
+        # array alone. Adding a viewer filter here would make the House
+        # per-person, which is exactly what the shared-projection rule forbids.
+        movement_rows = await self.db.fetch(
+            _MOVEMENT_SQL, room_ids, _MOVEMENT_TOTAL_CAP
+        )
 
         branches_by_room: dict[UUID, list[HomeActivityBranch]] = {
             rid: [] for rid in room_ids
@@ -373,6 +525,29 @@ class HomeActivityService:
                 )
             )
 
+        movement_by_room: dict[UUID, list[HomeActivityMovement]] = {
+            rid: [] for rid in room_ids
+        }
+        for row in movement_rows:
+            bucket = movement_by_room.get(row["room_id"])
+            # A room absent from the fence cannot appear; the SQL already
+            # joins on it, and this is the belt to that suspenders.
+            if bucket is None or len(bucket) >= _MOVEMENT_PER_ROOM_CAP:
+                continue
+            bucket.append(HomeActivityMovement(
+                kind=row["kind"],
+                room_id=row["room_id"],
+                thread_id=row["thread_id"],
+                object_id=row["object_id"],
+                title=row["title"] or "",
+                state=row["state"] or "",
+                requires_judgment=row["kind"] in _JUDGMENT_KINDS,
+                occurred_at=row["occurred_at"],
+                destination=_movement_destination(
+                    row["room_id"], row["thread_id"]
+                ),
+            ))
+
         rooms = []
         for rid in room_ids:
             last = latest.get(rid)
@@ -388,6 +563,7 @@ class HomeActivityService:
                 branches=branches_by_room[rid],
                 unresolved_questions=questions_by_room[rid],
                 commitments_due=commitments_by_room[rid],
+                movement=movement_by_room[rid],
             ))
         # Rooms with unread first, then by latest activity, newest first.
         rooms.sort(key=lambda r: (
