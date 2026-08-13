@@ -70,15 +70,16 @@ uvicorn web.main:app --port 8006                     # see trading/README.md
   credential into `/var/lib/tradingdesk/room-tokens.env`, no restart) and
   `POST /api/bridge/room-unbind` (retire; the book survives). Auth bridge:
   shared HS256 secret; td maps dialectic JWTs via `DIALECTIC_USER_MAP`.
-- **The workroom projection** (in flight, `codex/scene-kernel-identity-shell`):
+- **The workroom projection** (live in production since 2026-08-13):
   `dialectic/workspace_objects.py` gives readings, briefs, the thesis,
   commitments, proposals, dossier entries and the Record one read-only shape —
   **adapters over the entities that already exist, never a universal artifact
   table**. Two entities keep a deliberate memory twin that must project as one
   object (a reading + its `reading:` memory; a thesis + its
-  `thesis_state_current` slot). Unreleased: Release 1 opens one PR at its
-  integrated gate, and `docs/superpowers/plans/…-release-1-sdd-ledger.md` is
-  the canonical record of what has landed.
+  `thesis_state_current` slot). Shipped as Release 1 with NO migration — it
+  projects entities that already exist, so its deploy was a backend restart
+  plus a frontend flip. `docs/superpowers/plans/…-release-1-sdd-ledger.md` is
+  the canonical record of what landed and what was deliberately left open.
 - **Key tables**: `events`, `rooms` (+`linked_book_id`, `trading_config`,
   `is_home`), `threads`, `messages` (+`metadata`), `memories`, `attachments`,
   `room_memberships` (+`can_manage_home`), `llm_decisions`,
