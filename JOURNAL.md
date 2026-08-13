@@ -6,4 +6,4 @@
 [2026-08-12] Locked the dual-spine construction workroom — artifacts are the durable output, deliberation is the inspectable reasoning around them, and conversation coordinates both.
 [2026-08-12] Integrated Library, Night Shift, claim checking, The Wire, Research, prediction resolution, and Echo as one evidence metabolism feeding both spines — avoids shipping seven disconnected chat features.
 [2026-08-12] Made the Home Room the canonical default entry — The Table becomes its house-wide scene rather than a competing app-level front door.
-[2026-08-12] Set cross-platform launch semantics: deliberate launch opens Home Room, while OS or browser restoration resumes the exact prior scene on iOS, Android, macOS, and Windows — continuity is platform-wide, not a mobile exception.
+[2026-08-12] Chose exact scene restoration across macOS, Windows, iOS, and Android, scoped per device — preserves local continuity without silently moving every device to another device's last state.
