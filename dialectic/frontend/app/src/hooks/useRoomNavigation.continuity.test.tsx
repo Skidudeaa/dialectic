@@ -86,6 +86,27 @@ describe('boot with a stored scene', () => {
     expect(state.currentThread?.id).toBe(`${SCHEME.id}-branch`)
   })
 
+  it('rewrites the address bar to the restored destination', async () => {
+    // A URL-authoritative app whose address bar reads `/` while a room is on
+    // screen has a URL nobody can copy, share, or reload into the same place.
+    // Replace, not push: Back must still leave the app rather than walking
+    // back through a destination the user never chose.
+    rememberScene(USER_ID, {
+      roomId: SCHEME.id, threadId: null, scene: 'record',
+    })
+    const { result } = renderHook(() => useRoomNavigation())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(window.location.search).toContain(`room=${SCHEME.id}`)
+  })
+
+  it('leaves a deep link URL exactly as it arrived', async () => {
+    vi.mocked(api.getRooms).mockResolvedValue([HOME, SCHEME, OTHER])
+    enter(`/?room=${OTHER.id}`)
+    const { result } = renderHook(() => useRoomNavigation())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(window.location.search).toBe(`?room=${OTHER.id}`)
+  })
+
   it('lets an explicit room URL win over it', async () => {
     rememberScene(USER_ID, {
       roomId: SCHEME.id, threadId: null, scene: 'record',

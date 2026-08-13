@@ -295,9 +295,15 @@ export function useRoomNavigation(): RoomNavigation {
           useAppStore.getState().user?.id ?? null, list,
         )
       }
+      // 'none' for an entry URL, which is already correct and must be left
+      // exactly as the user or the notification wrote it. 'replace' for a
+      // RESTORED destination, because the address bar would otherwise read `/`
+      // while the app shows a room — and in a URL-authoritative app a URL that
+      // does not describe the screen is a URL nobody can copy, share or reload
+      // into the same place. Replace, never push: Back must still leave.
       const installed = await navigateRef.current(
         chooseEntryDestination(parsed, restored),
-        'none',
+        restored ? 'replace' : 'none',
       )
       if (!installed) setReady(true)
     })()
