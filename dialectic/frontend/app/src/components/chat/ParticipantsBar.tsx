@@ -1,4 +1,5 @@
 import './ParticipantsBar.css'
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 
 interface Participant {
   id: string
@@ -43,7 +44,7 @@ export function ParticipantsBar({ participants }: ParticipantsBarProps) {
           <div
             key={p.id}
             className={`participant-chip ${p.isClaude ? 'is-claude' : ''}`}
-            title={p.isClaude ? 'Claude' : `${p.name} — ${status}${ago ? `, last seen ${ago}` : ''}`}
+            title={p.isClaude ? PARTICIPANT_NAME : `${p.name} — ${status}${ago ? `, last seen ${ago}` : ''}`}
           >
             <span className={`presence-dot ${status === 'online' ? 'online' : status === 'away' ? 'away' : 'offline'}`} />
             <span className="p-name">{p.name}</span>

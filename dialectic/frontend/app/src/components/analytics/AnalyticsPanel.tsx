@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import { api } from '../../lib/api';
 import type { ConversationDNA } from '../../types';
 import { DNAGlyph } from './DNAGlyph';
@@ -30,7 +31,7 @@ const SPEAKER_COLORS: Record<string, string> = {
 
 const SPEAKER_LABELS: Record<string, string> = {
   human: 'Human',
-  llm_primary: 'Claude',
+  llm_primary: PARTICIPANT_NAME,
   llm_provoker: 'Provoker',
   llm_annotator: 'Annotator',
   system: 'System',

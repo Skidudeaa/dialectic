@@ -148,7 +148,7 @@ export interface ResolutionProposal {
   accepted?: boolean;
 }
 
-/** Transient "Claude is checking live prices…" signal, one per tool event. */
+/** Transient "Dialectic is checking live prices…" signal, one per tool event. */
 export interface LLMToolActivity {
   tool: string;
   label: string;

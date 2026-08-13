@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { PARTICIPANT_NAME } from './lib/productIdentity.ts'
 import './styles/global.css'
 import { useAppStore } from './stores/appStore.ts'
 import { api } from './lib/api.ts'
@@ -335,7 +336,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
     if (!target) return null
     const author = target.speaker_type === 'human'
       ? (target.user_name ?? (target.user_id ? userNames[target.user_id] : null) ?? 'Human')
-      : 'Claude'
+      : PARTICIPANT_NAME
     return { author, content: target.content }
   }, [replyToId, messages, userNames])
 
@@ -370,7 +371,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   })
 
   const typingDisplay = typingUsers.map((id) => userNames[id] ?? id.slice(0, 8))
-  if (isLLMThinking && !isLLMStreaming) typingDisplay.push('Claude')
+  if (isLLMThinking && !isLLMStreaming) typingDisplay.push(PARTICIPANT_NAME)
 
   // Only a tool that is still running says anything useful — a finished one is
   // already answered in the tokens arriving underneath it.
@@ -380,7 +381,9 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
     : null
 
   const participants = [
-    { id: 'claude', name: 'Claude', isOnline: true, isClaude: true },
+    // `isClaude` stays as the internal prop name this tranche; only the
+    // visible label changes.
+    { id: 'dialectic', name: PARTICIPANT_NAME, isOnline: true, isClaude: true },
     ...onlineUsers.map((participant) => ({
       id: participant.user_id,
       name: participant.display_name,
@@ -455,7 +458,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
             disabled={!isConnected || !currentThread}
             replyTo={replyTarget}
             onCancelReply={() => setReplyToId(null)}
-            placeholder={isHome ? 'Sit down — Claude is already here' : undefined}
+            placeholder={isHome ? `Sit down — ${PARTICIPANT_NAME} is already here` : undefined}
             quiet={isHome}
           />
     </>

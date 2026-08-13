@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import type { Commitment } from '../../types';
 import './CommitmentCard.css';
 
@@ -60,7 +61,7 @@ export function CommitmentCard({ commitment, onUpdateConfidence, onResolve }: Co
           <h5>Confidence</h5>
           {Array.from(latestConfidence.entries()).map(([userId, conf]) => (
             <div className="confidence-bar-row" key={userId}>
-              <span className="conf-label">{userId === 'llm' ? 'Claude' : userId.slice(0, 8)}</span>
+              <span className="conf-label">{userId === 'llm' ? PARTICIPANT_NAME : userId.slice(0, 8)}</span>
               <div className="conf-track">
                 <div className="conf-fill" style={{ width: `${conf * 100}%` }} />
               </div>

@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import type { Attachment, Message, Reaction } from '../../types'
 import { useDocumentVisibility } from '../../hooks/useDocumentVisibility'
 import { MessageBubble } from './MessageBubble'
@@ -56,7 +57,7 @@ function continuesPrevious(current: Message, previous: Message | undefined): boo
 }
 
 function getAuthorName(msg: Message, userNames: Record<string, string>): string {
-  if (msg.speaker_type === 'llm_primary') return 'Claude'
+  if (msg.speaker_type === 'llm_primary') return PARTICIPANT_NAME
   if (msg.speaker_type === 'llm_provoker') return 'Claude (Provoker)'
   if (msg.speaker_type === 'llm_annotator') return 'Claude (Annotator)'
   if (msg.speaker_type === 'system') return 'System'

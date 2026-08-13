@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 import logging
-import re
 
 import asyncpg
 
@@ -22,6 +21,7 @@ from api.attachments import (
     _to_response,
 )
 from memory.manager import MemoryManager
+from llm.mentions import contains_explicit_llm_mention
 from llm.orchestrator import LLMOrchestrator
 from llm.annotator import AnnotatorEngine
 from llm.claim_check import schedule_claim_check
@@ -55,7 +55,6 @@ logger = logging.getLogger(__name__)
 # WHY: The UI and prompt-context layer treat both @llm and @claude as
 # explicit summons; mention detection must accept the same set or
 # "@claude" messages silently fall back to heuristic gating.
-LLM_MENTION_RE = re.compile(r"@(llm|claude)\b", re.IGNORECASE)
 
 _DETECTION_OFF_VALUES = {"0", "false", "no", "off"}
 
@@ -490,7 +489,7 @@ class MessageHandler:
             sender_id=conn.user_id,
         )
 
-        mentioned = bool(LLM_MENTION_RE.search(content))
+        mentioned = contains_explicit_llm_mention(content)
 
         # Check typing cache first (pre-computed while user was typing)
         cache = conn.typing_cache

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import { api } from '../../lib/api.ts'
 import type { HomeActivityProjection, HomeActivityRoom, RoomDestination } from '../../types/index.ts'
 import './HomeActivityPulse.css'
@@ -321,7 +322,7 @@ function doorBody(room: HomeActivityRoom): string {
 
 function displaySpeaker(raw: string | null | undefined): string {
   if (!raw) return ''
-  if (raw === 'llm_primary' || raw === 'llm_provoker' || raw === 'llm_annotator') return 'Claude'
+  if (raw === 'llm_primary' || raw === 'llm_provoker' || raw === 'llm_annotator') return PARTICIPANT_NAME
   if (raw === 'system') return 'System'
   return raw
 }
