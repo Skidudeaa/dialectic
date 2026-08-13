@@ -40,6 +40,7 @@ from api.reading_relay import router as reading_relay_router, set_reading_relay_
 from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_pool
 from api.home import router as home_router, set_home_db_pool
 from api.workspace import router as workspace_router, set_workspace_db_pool
+from api.capabilities import router as capabilities_router
 from collections import defaultdict
 import time
 
@@ -349,6 +350,10 @@ app.include_router(home_router)
 # Workspace-object projection -- read-only adapters over entities that
 # already exist; every write still belongs to the entity's own endpoint.
 app.include_router(workspace_router)
+
+# Which doors are open, answered WITHOUT a credential -- the signed-out screen
+# renders before one exists, and a closed door should be closed on sight.
+app.include_router(capabilities_router)
 
 connection_manager: ConnectionManager = ConnectionManager()
 

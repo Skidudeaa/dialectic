@@ -1,0 +1,84 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AuthScreen } from './AuthScreen'
+import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
+import { api } from '../../lib/api.ts'
+
+// The signed-out screen is the first thing anyone ever sees of this product,
+// and it said four words: "Collaborative reasoning engine". These tests fence
+// the two failures that cost a new user the most — a screen that never says
+// what the thing IS, and a door that looks open but is not.
+
+vi.mock('../../lib/api.ts', () => ({
+  api: { getCapabilities: vi.fn(), setAccessToken: vi.fn() },
+}))
+
+const mockCapabilities = (signups_enabled: boolean) => {
+  vi.mocked(api.getCapabilities).mockResolvedValue({ signups_enabled })
+}
+
+describe('AuthScreen — the front door', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCapabilities(false)
+  })
+
+  it('says what Dialectic actually is, not just a tagline', () => {
+    render(<AuthScreen />)
+    // The load-bearing idea: the third participant is a participant, not an
+    // assistant waiting to be prompted. A new user who misses this misreads
+    // every other surface in the product.
+    expect(screen.getByTestId('auth-premise')).toHaveTextContent(/participant/i)
+  })
+
+  it('names the participant from product identity, never a provider', () => {
+    const { container } = render(<AuthScreen />)
+    expect(container.textContent).toContain(PARTICIPANT_NAME)
+    // Provider names belong in technical provenance, never a product label.
+    expect(container.textContent).not.toMatch(/\bClaude\b/)
+  })
+
+  it('says the account door is closed BEFORE the form is filled in', async () => {
+    render(<AuthScreen />)
+    fireEvent.click(screen.getByRole('tab', { name: /create account/i }))
+    // Today this only surfaces as a 403 AFTER three fields and a submit.
+    expect(await screen.findByTestId('signup-closed-notice')).toHaveTextContent(
+      /invite/i,
+    )
+  })
+
+  it('offers no form it knows the server will refuse', async () => {
+    render(<AuthScreen />)
+    fireEvent.click(screen.getByRole('tab', { name: /create account/i }))
+    await screen.findByTestId('signup-closed-notice')
+    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument()
+  })
+
+  it('opens the account form when the server says signups are open', async () => {
+    mockCapabilities(true)
+    render(<AuthScreen />)
+    fireEvent.click(screen.getByRole('tab', { name: /create account/i }))
+    // The door is not hardcoded shut — it follows the deployment.
+    await waitFor(() => {
+      expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('signup-closed-notice')).not.toBeInTheDocument()
+  })
+
+  it('tells a guest what the guest identity does not get them', () => {
+    render(<AuthScreen />)
+    fireEvent.click(screen.getByRole('tab', { name: /invite link/i }))
+    // A guest identity carries no JWT, so every newer surface (the workroom
+    // projection, Home, memory promotion) refuses it. Saying "no account
+    // needed" without saying that is the lie this fences.
+    expect(screen.getByTestId('guest-limits')).toBeInTheDocument()
+  })
+
+  it('never claims a capability it has not heard back about', () => {
+    // Unresolved promise: the screen must not guess "open" while in flight.
+    vi.mocked(api.getCapabilities).mockReturnValue(new Promise(() => {}))
+    render(<AuthScreen />)
+    fireEvent.click(screen.getByRole('tab', { name: /create account/i }))
+    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument()
+  })
+})

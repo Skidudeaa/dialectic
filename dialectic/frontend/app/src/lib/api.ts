@@ -396,6 +396,18 @@ class DialecticAPI {
     return this.fetch(`/rooms/${roomId}/trading/thesis`, { method: 'DELETE' });
   }
 
+  /**
+   * Which doors this deployment has open — answered without a credential,
+   * because the signed-out screen renders before one exists.
+   *
+   * WHY the screen asks instead of assuming: hardcoding "invite only" into the
+   * UI is how the help modal ended up advertising five theses that may not be
+   * five any more. The server owns the gate; the screen reports it.
+   */
+  async getCapabilities(): Promise<{ signups_enabled: boolean }> {
+    return this.fetch('/meta/capabilities');
+  }
+
   // Auth (no room token needed)
   // WHY: surfaces the backend's `detail` message (e.g. "Invalid email or password")
   // instead of returning the error body as if it were a TokenResponse — a swallowed

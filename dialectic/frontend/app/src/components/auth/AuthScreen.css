@@ -1,9 +1,14 @@
 /* Auth screen — centered on void background */
+/* WHY min-height and not height: the card now carries the product premise, so
+   it is taller than a bare form. At `height: 100vh` a centered overflowing
+   child is clipped at BOTH ends with no scrollbar to recover it — on a phone
+   in landscape the sign-in button simply would not exist. */
 .auth-screen {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100vh;
+    min-height: 100vh;
+    overflow-y: auto;
     background: var(--color-void);
     padding: 1rem;
 }
@@ -104,9 +109,68 @@
     border-radius: var(--radius-sm);
     margin-bottom: 0.5rem;
 }
-.auth-hint {
-    color: var(--color-faint);
+/* The premise. Serif and actually readable, deliberately unlike the 9px mono
+   chrome around it — this is the one block on the screen meant to be READ, and
+   it is the only place the product says what it is. */
+.auth-premise {
+    border-left: 2px solid var(--color-bean);
+    padding: 0 0 0 0.85rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+.auth-premise p {
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--color-secondary);
+    text-wrap: pretty;
+}
+.auth-premise strong {
+    color: var(--color-bone);
+    font-weight: 600;
+}
+
+/* A closed door, stated plainly and with somewhere to go. */
+.auth-closed {
+    background: rgba(191,161,98,.06);
+    border: 1px solid rgba(191,161,98,.2);
+    border-radius: var(--radius-sm);
+    padding: 0.9rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.auth-closed-headline {
     font-family: var(--font-mono);
-    font-size: 9px;
-    line-height: 1.4;
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--color-warning);
+}
+.auth-closed p:not(.auth-closed-headline) {
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--color-secondary);
+    text-wrap: pretty;
+}
+
+/* What a guest identity does and does not carry. Stated on the door rather
+   than discovered later as a 401. */
+.auth-limits {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+.auth-limits p {
+    font-family: var(--font-serif);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-secondary);
+    text-wrap: pretty;
+}
+.auth-limits-caveat {
+    color: var(--color-faint);
 }
