@@ -55,7 +55,35 @@ clear caches before reading any browser result in this app.**
 
 ---
 
-## Task Group B — House v2 semantic movement — NOT STARTED
+## Task Group B — House v2 semantic movement — COMPLETE
+
+| Task | Commit | Result |
+|---|---|---|
+| B1–B3 Movement projection (8 kinds, fenced) | `743d743` | 6 pg tests. 1082 backend. |
+| B (frontend) House reads movement | `08347c0` | 27 frontend tests. |
+
+### Observed
+- Backend **1082 passed**; frontend **27 passed**; lint 0; build 0.
+- **p95 re-measured, not inherited** (the 150 ms target predates these arms):
+  25 rooms / 200 movement items → median **6.0 ms**, p95 **9.3 ms**.
+  Capped at 200 total / 12 per room.
+
+### The fence mutation that killed nothing
+Deleting the `JOIN er` from the `reading_filed` arm left all five projection
+tests green: the service drops rows for rooms outside the eligible map
+(`bucket is None`), which **masks** a missing fence in any single UNION arm.
+Added `test_movement_sql_fences_every_arm_by_itself`, which runs `_MOVEMENT_SQL`
+directly; the same mutation now fails with
+`unfenced rows leaked: ['reading_filed']`. A guard the pipeline shadows must be
+asserted where it lives.
+
+### Design decisions worth carrying
+- Wire is its own kind; `reading_filed` excludes `source='wire'` so one article
+  cannot move the House twice.
+- Only `claim_warning`, `prediction_review`, `commitment_due` set
+  `requires_judgment` — marking arrivals as judgment turns a House into a nag.
+- The component navigates by room/branch, never by the server's `destination`
+  string, so it does not become a second destination writer.
 ## Task Group C — Workspace-object adapters — NOT STARTED
 ## Task Group D — Unified proposal envelope — NOT STARTED
 ## Task Group E — Current-scene local continuity — NOT STARTED
