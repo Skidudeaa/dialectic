@@ -192,7 +192,104 @@ must be tested where it lives.
 
 Baseline at handoff: **1114 backend**, **33 frontend**, lint 0, build 0.
 
-## Task Group D — Unified proposal envelope — NOT STARTED
+## Task Group D — Unified proposal envelope — COMPLETE
+
+| Task | Commit | Result |
+|---|---|---|
+| D1–D4 Envelope, lifecycle, disarming, migration safety | `47c57df` | 1138 backend (+24), 49 frontend (+16). RED observed before implementation. |
+
+### Observed (this worktree, 2026-08-12 — not inherited)
+
+- Backend **1138 passed**; frontend **49 passed** across 8 files; lint 0; build 0;
+  `ruff --select F` clean on every changed file.
+- Envelope projection measured: 120 carriers (capped to 50) × 4 slots →
+  **200 envelopes**, 50 supersessions detected against a 200-reading library,
+  median **4.7 ms**, p95 **6.2 ms**.
+- **The production replay is inconclusive and says so**: production holds zero
+  proposals, so "C and D disagree in 0 rooms" is a fact about an empty set.
+  The fixture suite is the only real coverage until a proposal exists.
+
+### D3 — duplicate disarming, driven through the real relay
+
+`test_accepting_through_the_relay_disarms_the_envelope` calls
+`api.prediction_relay.accept_prediction` against a real connection with the
+desk stubbed: envelope `proposed` with `accept` → relay writes → envelope
+`accepted`, `accept` gone, `inspect` kept (§8.4) → second call raises **409**
+and the desk was posted to exactly **once**. Stamping the flag by hand would
+have proved only that the envelope agrees with my own copy of the relay's rule.
+
+### Status derivation — every rule points at a column
+
+| Status | Derived from | Kind |
+|---|---|---|
+| `accepted` | the stored flag the relay stamps | all |
+| `expired` | deadline before today | prediction_draft |
+| `expired` | the room already holds `linked_book_id` (§12.2) | thesis_proposal |
+| `superseded` | the article is already in `reading_items` | reading_draft |
+| `proposed` | otherwise | all |
+
+`superseded` is deliberately not `failed`: the two demand opposite responses,
+and reporting "already filed" as a failure sends a human to retry a write that
+has already happened.
+
+### What the storage cannot say — recorded, not faked
+
+1. **`failed` has no row, on purpose.** A relay failure leaves the accepted flag
+   FALSE so a retry is a fresh accept rather than a conflict. Failure is
+   therefore a CLIENT-held state over the same envelope; it stays in the
+   vocabulary because dropping it is how a failed write becomes an invisible
+   one (§5.1, §9.3). The card keeps its action after a failure, so a human is
+   never stranded.
+2. **`dismissed` has no row either** — nothing in the shipped UI dismisses a
+   proposal.
+3. **§9.3's "preserve the accepting human" is only half met.** `accepted_by` /
+   `accepted_at` are real for `reading_draft` (`reading_items.saved_by_user_id`)
+   and `commitment_proposal` (`commitments.created_by_user_id`), both joined on
+   a real `source_message_id` FK. The two tradingDesk-crossing kinds —
+   `prediction_draft`, `prediction_resolution` — write **only a boolean and log
+   no event**, so their accepting human is preserved nowhere. Null, never a
+   guess. Closing it means an event on the relay write path, which Release 1's
+   "relays untouched" rule forbids: **for Release 2 or an owner ruling.**
+4. **`thesis_draft` is named but stored nowhere.** A thesis draft lives in the
+   Create Thesis panel's own flow and never reaches message metadata. Kept in
+   the vocabulary so a future writer does not invent a sixth name; asserted by a
+   test so nobody reads its absence as breakage.
+5. **The commitment acceptance join is correct but unexercised in production.**
+   The card sends `source_message_id` and the handler stores it, but both
+   production commitments predate the card and carry NULL — verified rather
+   than assumed.
+
+### The defect D found in C
+
+Collapsing the two proposal parses into one exposed a dangling link C had
+shipped: the Research Brief built its proposal relationships from the **kind**
+(`proposal:<mid>:prediction_draft`) while a proposal's id is built from the
+metadata **slot** (`proposal:<mid>:proposal`). Three of four links pointed at
+ids that did not exist, and nothing complained because no surface had followed
+one yet. Fixed at the source, and
+`test_every_relationship_id_resolves_to_a_real_object` now walks every
+relationship id in a full projection — mutation-checked by reinstating the
+kind-keyed form, which turns it red.
+
+### Design decisions worth carrying
+
+- **One definition of a proposal.** `workspace_objects.proposals()` projects
+  D's envelopes instead of re-reading metadata; the slot table, the SQL and the
+  status rules all live in `proposal_envelope.py`. A production replay confirms
+  C and D emit identical ids room by room.
+- **The client derives only message-local facts** — which slots are proposals,
+  the stored flag, the transient `failed`. `expired` and `superseded` need joins
+  the browser does not have and come from the projection, so the rule is not
+  copied into a place that cannot evaluate it. The slot table it *does* share is
+  pinned by `test_the_metadata_slot_table_has_one_definition` (mutation-checked).
+- The spec's "rejected or dismissed" is ONE state under ONE name. Two names for
+  one state is how a surface ends up rendering both.
+- A `claim_check` is a nudge, not a decision, and is excluded from the slot
+  table — asserted at the normalizer AND at the rendered component, because
+  "every metadata badge is a proposal" is the easy wrong generalization here.
+
+Baseline at handoff: **1138 backend**, **49 frontend**, lint 0, build 0.
+
 ## Task Group E — Current-scene local continuity — NOT STARTED
 ## Task Group F — Integrated Release 1 gate — NOT STARTED
 

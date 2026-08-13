@@ -73,7 +73,7 @@ Release 1 (Workroom Foundation) runs as six task groups, `A → (B ∥ C) → D 
 - [x] **A** Scene and identity kernel — scene as the third destination axis
 - [x] **B** House v2 semantic movement — eight kinds, one fenced projection
 - [x] **C** Workspace-object adapters — one shape, no new table, twins folded
-- [ ] **D** Unified proposal envelope — over today's message metadata
+- [x] **D** Unified proposal envelope — five kinds, one contract, no new writes
 - [ ] **E** Current-scene local continuity — device-local, deep links win
 - [ ] **F** Integrated Release 1 gate — fresh counts, browser acceptance, the PR
 
