@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { forgetScene } from '../lib/sceneContinuity.ts'
 import { revokeAttachmentUrls } from '../lib/attachments.ts'
 import type {
   User,
@@ -371,6 +372,9 @@ export const useAppStore = create<AppState>()(
 
       logout: (reason) => {
         revokeAttachmentUrls()
+        // A shared device: the next person to open the app gets Home, and no
+        // record of which rooms the last one was in.
+        forgetScene()
         set({
           user: null,
           accessToken: null,
