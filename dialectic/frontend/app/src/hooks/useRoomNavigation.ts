@@ -23,6 +23,7 @@ import type { HistoryMode, RoomDestination, Thread, UserRoom } from '../types/in
 import {
   destinationFromLocation,
   destinationUrl,
+  resolveWorkspaceScene,
 } from '../lib/workspaceRoute.ts'
 
 export { destinationFromLocation, destinationUrl }
@@ -68,6 +69,7 @@ export function useRoomNavigation(): RoomNavigation {
   const setThread = useAppStore((s) => s.setThread)
   const setThreads = useAppStore((s) => s.setThreads)
   const setMobileDrawer = useAppStore((s) => s.setMobileDrawer)
+  const setWorkspaceScene = useAppStore((s) => s.setWorkspaceScene)
 
   const [rooms, setRooms] = useState<UserRoom[]>([])
   const [loading, setLoading] = useState(true)
@@ -194,6 +196,11 @@ export function useRoomNavigation(): RoomNavigation {
       ?? threads[0]
     if (!thread) return denied('That room has no branches yet.')
 
+    // Scene resolves against the destination that was actually reached, not the
+    // one requested: an unavailable or ill-fitting scene lands on the default
+    // rather than erroring, and the URL below serializes what we installed.
+    const scene = resolveWorkspaceScene(room, thread, destination.scene)
+
     if (state.currentRoom?.id !== room.id) {
       setRoom(
         { id: room.id, name: room.name, token: room.token, is_home: room.is_home },
@@ -202,8 +209,10 @@ export function useRoomNavigation(): RoomNavigation {
     }
     setThreads(threads)
     setThread(thread)
+    // AFTER setRoom, which resets the scene to 'record' on a room change.
+    setWorkspaceScene(scene)
 
-    const url = destinationUrl(room, thread)
+    const url = destinationUrl(room, thread, scene)
     if (historyMode === 'push') window.history.pushState(null, '', url)
     else if (historyMode === 'replace') window.history.replaceState(null, '', url)
     // 'none' (popstate, initial entry) mutates no history.
@@ -216,7 +225,7 @@ export function useRoomNavigation(): RoomNavigation {
     // Badge parity: entering a room used to refetch the saved-room list.
     void refreshRooms()
     return true
-  }, [refreshRooms, setMobileDrawer, setRoom, setThread, setThreads])
+  }, [refreshRooms, setMobileDrawer, setRoom, setThread, setThreads, setWorkspaceScene])
 
   useEffect(() => {
     navigateRef.current = navigate

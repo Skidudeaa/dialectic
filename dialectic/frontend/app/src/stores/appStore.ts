@@ -15,6 +15,7 @@ import type {
   Reaction,
   LLMToolActivity,
   Attachment,
+  ImplementedWorkspaceScene,
 } from '../types/index.ts'
 
 interface AppState {
@@ -90,6 +91,11 @@ interface AppState {
   // Actions
   setUser: (user: User, accessToken: string, refreshToken?: string) => void;
   setRoom: (room: Room, token: string) => void;
+  /** The scene the ONE navigation transaction resolved for this destination.
+   *  Transient and URL-authoritative in this release: deliberately absent from
+   *  `partialize`, because device-local scene restoration is Release 3. */
+  workspaceScene: ImplementedWorkspaceScene;
+  setWorkspaceScene: (scene: ImplementedWorkspaceScene) => void;
   setThread: (thread: Thread) => void;
   setThreads: (threads: Thread[]) => void;
   addMessage: (message: Message) => void;
@@ -132,6 +138,7 @@ interface AppState {
 
 const initialRoomState = {
   currentRoom: null,
+  workspaceScene: 'record' as ImplementedWorkspaceScene,
   currentThread: null,
   threads: [],
   messages: [],
@@ -188,6 +195,9 @@ export const useAppStore = create<AppState>()(
           currentRoom: room,
           roomToken: token,
           // Reset room-specific state
+          // Scene resets with the room: a House selected in Home must not
+          // survive into a scheme room, which has no household to show.
+          workspaceScene: 'record',
           currentThread: null,
           threads: [],
           messages: [],
@@ -240,6 +250,8 @@ export const useAppStore = create<AppState>()(
               : m,
           ),
         })),
+
+      setWorkspaceScene: (scene) => set({ workspaceScene: scene }),
 
       setWsSend: (send) => set({ wsSend: send }),
 

@@ -108,6 +108,12 @@ describe('workspace scenes', () => {
     expect(resolveWorkspaceScene(scheme, root, 'library')).toBe('record')
   })
 
+  it('canonicalizes a known but unavailable scene back to the destination default', () => {
+    const resolved = resolveWorkspaceScene(home, root, 'field')
+    expect(resolved).toBe('house')
+    expect(destinationUrl(home, root, resolved)).toBe('/')
+  })
+
   it('omits the default scene and serializes only a non-default scene', () => {
     expect(destinationUrl(home, root, 'house')).toBe('/')
     expect(destinationUrl(home, root, 'record')).toBe('/?scene=record')
