@@ -75,6 +75,12 @@ _JUDGMENT_KINDS = frozenset({
     "claim_warning", "prediction_review", "commitment_due",
 })
 
+# How near a deadline has to be before a commitment is a question rather than
+# a diary entry. Named once because the House, the Home pulse and the
+# workspace-object projection must all draw the line in the same place — a
+# second copy of "72 hours" is a second definition of what a human owes.
+COMMITMENT_DUE_WINDOW = "72 hours"
+
 
 class HomeActivityMovement(BaseModel):
     """One thing that moved in a room the whole household can see.
@@ -316,15 +322,15 @@ CROSS JOIN LATERAL (
 ) l
 """
 
-# Active commitments due inside 72 hours (overdue actives included — they
-# are the most due of all). Mirrors stakes/manager.get_expiring_soon.
-_COMMITMENTS_SQL = """
+# Active commitments inside COMMITMENT_DUE_WINDOW (overdue actives included —
+# they are the most due of all). Mirrors stakes/manager.get_expiring_soon.
+_COMMITMENTS_SQL = f"""
 SELECT room_id, id, claim, deadline, category
 FROM commitments
 WHERE room_id = ANY($1::uuid[])
   AND status = 'active'
   AND deadline IS NOT NULL
-  AND deadline <= NOW() + INTERVAL '72 hours'
+  AND deadline <= NOW() + INTERVAL '{COMMITMENT_DUE_WINDOW}'
 ORDER BY deadline
 """
 
@@ -340,7 +346,7 @@ ORDER BY deadline
 # WHY reading source partitions rather than overlaps: a wire hit is BOTH filed
 # and interrupting, so `wire` is its own kind and reading_filed excludes it --
 # otherwise one article moves the House twice.
-_MOVEMENT_SQL = """
+_MOVEMENT_SQL = f"""
 WITH er AS (
     SELECT unnest($1::uuid[]) AS room_id
 ), mv AS (
@@ -396,7 +402,7 @@ WITH er AS (
            c.claim, 'due', c.deadline
     FROM commitments c JOIN er ON er.room_id = c.room_id
     WHERE c.status = 'active' AND c.deadline IS NOT NULL
-      AND c.deadline <= NOW() + INTERVAL '72 hours'
+      AND c.deadline <= NOW() + INTERVAL '{COMMITMENT_DUE_WINDOW}'
 
     UNION ALL
     SELECT 'thesis_lifecycle', e.room_id, e.thread_id, e.id,
