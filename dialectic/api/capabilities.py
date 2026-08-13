@@ -34,6 +34,7 @@
 # already-proxied prefix buys the same semantics with no production routing
 # change. If this grows beyond auth doors, add the prefix to BOTH lists first.
 
+import os
 from typing import Optional
 from uuid import UUID
 
@@ -42,6 +43,38 @@ from pydantic import BaseModel
 
 from api.auth.dependencies import AuthenticatedUser, get_current_user
 from api.auth.routes import _signups_enabled
+
+# Guests are CLOSED by owner ruling (2026-08-13). A flag rather than deleted
+# code, so re-opening is a flip and not a rewrite -- and it fails closed for the
+# same reason signups do: unset, empty or misspelled all mean no.
+#
+# WHY it needed closing at all: POST /users was unauthenticated and minted a
+# real users row for anyone who asked, and the identity it handed back carried
+# no JWT -- so every endpoint behind get_current_user refused it, including the
+# whole workroom projection. A door that opens onto a room you cannot use.
+_GUEST_ENABLED_VALUES = {"1", "true", "yes", "on"}
+
+
+def guest_access_enabled() -> bool:
+    """Read at call time, so the gate follows the running environment."""
+    return os.environ.get("GUEST_ACCESS_ENABLED", "").strip().lower() in _GUEST_ENABLED_VALUES
+
+
+def require_guest_access() -> None:
+    """Refuse before anything else runs.
+
+    WHY a dependency and not a check in the body: FastAPI resolves the
+    signature's dependencies BEFORE the body, so a guard inside the function
+    still lets `Depends(get_db)` acquire a pool connection first. Declared
+    ahead of the db dependency, this raises and nothing downstream is
+    evaluated -- which is what makes "a refusal costs no database work" a
+    true statement rather than an approximate one.
+    """
+    if not guest_access_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Guest access is closed. Ask Amo for an invite.",
+        )
 from api.token_utils import extract_room_token
 
 router = APIRouter(tags=["capabilities"])
@@ -63,12 +96,16 @@ class Capabilities(BaseModel):
     """Doors, as booleans. No configuration, no identifiers, no secrets."""
 
     signups_enabled: bool
+    guest_access_enabled: bool
 
 
 @router.get("/auth/capabilities", response_model=Capabilities)
 async def get_capabilities() -> Capabilities:
     """What a caller may do here, answered before they have a credential."""
-    return Capabilities(signups_enabled=_signups_enabled())
+    return Capabilities(
+        signups_enabled=_signups_enabled(),
+        guest_access_enabled=guest_access_enabled(),
+    )
 
 
 class ScheduledJob(BaseModel):

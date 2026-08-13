@@ -22,8 +22,8 @@ to that book. Unlinked predictions have no room to come home to; v1 skips
 them and reports them in the job detail.
 
 GUARDRAILS:
-  - enabled_env PREDICTION_WATCH_ENABLED (kill switch, default off — this
-    job spends LLM money on a wall-clock timer)
+  - enabled_env PREDICTION_WATCH_ENABLED — default ON (unset means on). The kill
+    switch exists because this job spends LLM money on a wall-clock timer; set it to 0 to stop it.
   - PREDICTION_WATCH_RUN_CAP proposals per run; dedup on
     metadata->>'source' = 'prediction_watch' carrying the same prediction id
     means a re-run never re-proposes

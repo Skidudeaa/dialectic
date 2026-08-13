@@ -40,7 +40,11 @@ from api.reading_relay import router as reading_relay_router, set_reading_relay_
 from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_pool
 from api.home import router as home_router, set_home_db_pool
 from api.workspace import router as workspace_router, set_workspace_db_pool
-from api.capabilities import router as capabilities_router, set_capabilities_db_pool
+from api.capabilities import (
+    router as capabilities_router,
+    set_capabilities_db_pool,
+    require_guest_access,
+)
 from collections import defaultdict
 import time
 
@@ -613,9 +617,20 @@ async def create_room(
 @app.post("/users")
 async def create_user(
     request: CreateUserRequest,
+    # Declared BEFORE db so the refusal happens before a connection is acquired.
+    _guest_gate: None = Depends(require_guest_access),
     db=Depends(get_db),
 ):
-    """Create a new user."""
+    """Create a guest identity. CLOSED unless GUEST_ACCESS_ENABLED says otherwise.
+
+    This route was unauthenticated and minted a real users row for anyone who
+    asked, handing back an identity with no JWT — so every endpoint behind
+    get_current_user refused it, the workroom projection included. It was a door
+    onto a room you could not use.
+
+    Checked before ANY database work, for the same reason signup is: a refusal
+    must not consume a uuid or write a row.
+    """
     user_id = uuid4()
     now = datetime.now(timezone.utc)
 

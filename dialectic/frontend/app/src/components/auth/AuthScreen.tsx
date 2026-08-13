@@ -40,7 +40,9 @@ export function AuthScreen() {
 
   // null = not heard back yet. Deliberately distinct from "closed" in the
   // type, and treated as closed in the UI.
-  const [capabilities, setCapabilities] = useState<{ signups_enabled: boolean } | null>(null);
+  const [capabilities, setCapabilities] = useState<
+    { signups_enabled: boolean; guest_access_enabled: boolean } | null
+  >(null);
 
   // Sign In
   const [signInEmail, setSignInEmail] = useState('');
@@ -71,7 +73,11 @@ export function AuthScreen() {
     return () => { live = false; };
   }, []);
 
-  const signupsOpen = capabilities?.signups_enabled === true;
+  const signupsOpen = capabilities?.signups_enabled === true
+  // Owner ruling 2026-08-13: guests are closed. Read rather than hardcoded, so
+  // re-opening is a flag flip; unknown counts as closed, so the tab never
+  // appears while the answer is still in flight.
+  const guestsOpen = capabilities?.guest_access_enabled === true;
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,7 +187,7 @@ export function AuthScreen() {
         <div className="auth-tabs" role="tablist" aria-label="How to get in">
           {tab('signin', 'Sign In')}
           {tab('create', 'Create Account')}
-          {tab('guest', 'Invite link')}
+          {guestsOpen && tab('guest', 'Invite link')}
         </div>
 
         {signedOutReason && !error && (
@@ -284,7 +290,7 @@ export function AuthScreen() {
           </form>
         )}
 
-        {activeTab === 'guest' && (
+        {activeTab === 'guest' && guestsOpen && (
           <form className="auth-form" id="auth-panel-guest" role="tabpanel" aria-labelledby="auth-tab-guest" onSubmit={handleGuestJoin}>
             <label className="auth-label">
               Display Name

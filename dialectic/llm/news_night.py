@@ -15,8 +15,9 @@ should wake up to find the reading already done — and because it lands in
 reading_items, recall and the 07:00 brief pick it up with zero new plumbing.
 
 GUARDRAILS:
-  - enabled_env NEWS_DIGEST_ENABLED (kill switch, default off — this job
-    spends LLM money on a wall-clock timer)
+  - enabled_env NEWS_DIGEST_ENABLED — default ON (unset means on). The kill
+    switch exists because this job spends LLM money on a wall-clock timer;
+    set it to 0 to stop it.
   - NEWS_DIGEST_PER_ROOM_CAP articles per room per run
   - NEWS_DIGEST_DAILY_LLM_CAP distill calls per UTC-day, counted by
     reading_items rows saved with source='night_shift' (mirrors

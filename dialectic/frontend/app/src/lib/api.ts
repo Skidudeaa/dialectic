@@ -404,7 +404,7 @@ class DialecticAPI {
    * UI is how the help modal ended up advertising five theses that may not be
    * five any more. The server owns the gate; the screen reports it.
    */
-  async getCapabilities(): Promise<{ signups_enabled: boolean }> {
+  async getCapabilities(): Promise<{ signups_enabled: boolean; guest_access_enabled: boolean }> {
     return this.fetch('/auth/capabilities');
   }
 

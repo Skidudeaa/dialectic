@@ -17,8 +17,10 @@ node-trigger event at 14:00 is stale by 05:30. Same pipeline, opposite
 cadence, plus the interjection the digest deliberately never makes.
 
 GUARDRAILS:
-  - enabled_env WIRE_ENABLED (kill switch, default off — this job spends LLM
-    money on a wall-clock timer AND speaks uninvited)
+  - enabled_env WIRE_ENABLED — default ON (unset means on: Job.enabled reads
+    the var with "1" as its default, and .env.example ships it as 1). The
+    kill switch exists because this job spends LLM money on a wall-clock timer
+    AND speaks uninvited; set it to 0 to stop both.
   - quiet hours 23:00–07:00 America/Chicago (silence_sweep.in_quiet_hours —
     zero interjections at night; the news keeps, the digest will file it)
   - rooms.auto_interjection_enabled = false: the room is not interrupted

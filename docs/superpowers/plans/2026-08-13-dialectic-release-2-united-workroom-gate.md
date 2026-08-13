@@ -115,24 +115,45 @@ passed**, which is the finding worth carrying forward more than any of them:
    `.app-main` (~544px with both rails up). The browser fence failed at 1024 and
    passed at 390 — the reverse of what a phone fix predicts.
 
-## 6. Recorded, not papered over
+## 6. Owner rulings, 2026-08-13
 
-- **Docs disagree with the deployment.** The job docstrings and `CLAUDE.md`
-  describe `WIRE`, `NEWS_DIGEST`, `PREDICTION_WATCH` and `READING_ECHO` as
-  defaulting **off**; production's `.env` sets every one to `1`. The capability
-  map reports the running system; the prose understated it. The docs are the
-  thing to correct, not the map.
-- **A guest sees no scene.** The projection sits behind `get_current_user`, and
-  a Quick Join identity carries no JWT, so every workroom scene would 401. The
-  hook is explicitly disabled for them rather than painting "unavailable" across
-  four scenes; the limit is now stated on the guest door itself.
+Both open questions were ruled on and are now closed in code.
+
+**The jobs are default ON — the docs were wrong.** `Job.enabled()` reads
+`os.environ.get(enabled_env, "1")`, so an unset flag has *always* meant on, and
+`.env.example` ships all four as `1`. Five docstrings and four `CLAUDE.md` rows
+claimed "default off" — wrong in the direction that understates what ships.
+Corrected, and the dangling justification rewritten: the clause explaining the
+cost was written to defend an off-by-default and now reads as the reason a kill
+switch exists.
+
+**No guests, for now.** The disabled fetch was treating a symptom. `POST /users`
+was unauthenticated and minted a real users row for anyone who asked, handing
+back an identity with no JWT — a door onto a room you cannot use. It is now
+gated on `GUEST_ACCESS_ENABLED`, failing closed like signups, and
+`/auth/capabilities` reports it so the screen shows two doors instead of three
+without hardcoding the answer.
+
+A flag rather than deleted code, so re-opening is a flip. The guest-descriptor
+path in `useRoomNavigation` is deliberately left in place: it also covers a
+persisted tokenless state, and deleting scaffolding that a flag can revive is
+how a working path gets lost.
+
+Verified live, not only mocked: with the flag unset the route answers 403 and
+the `users` row count is **unchanged (4 → 4)**. The guard is a dependency
+declared *ahead of* `Depends(get_db)`, because FastAPI resolves the signature
+before the body — a check inside the function would still have acquired a
+connection first, which is the difference between "costs no database work" being
+true and being approximately true.
+
+## 7. Recorded, not papered over
 - **No stranger has actually tried it.** Every claim above is a probe. The bar
   set for this work is about a person's comprehension, and that needs a person.
 - **Not yet unified:** the Record scene has not absorbed the Insights and
   History panels into its body — they are scene-scoped rail tabs, which is
   honest but not finished.
 
-## 7. Deploy
+## 8. Deploy
 
 No migration. The release adds two read-only endpoints and frontend surfaces,
 so deploy is a backend restart plus a frontend flip.

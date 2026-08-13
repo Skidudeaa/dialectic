@@ -26,8 +26,8 @@ memory reference; riding auto-injection still requires explicit user
 promotion. This module never touches that path.
 
 GUARDRAILS:
-  - enabled_env READING_ECHO_ENABLED (kill switch, default off — this job
-    spends LLM money on a wall-clock timer)
+  - enabled_env READING_ECHO_ENABLED — default ON (unset means on). The kill
+    switch exists because this job spends LLM money on a wall-clock timer and posts across rooms; set it to 0 to stop it.
   - READING_ECHO_TARGET_CAP rooms per reading; READING_ECHO_DAILY_CAP echo
     notes per target room per UTC-day, counted by posted reading_echo
     messages (night_shift._briefs_posted_today pattern: the message count

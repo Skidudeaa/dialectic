@@ -100,6 +100,58 @@ def test_it_is_the_same_predicate_not_a_copy_of_it() -> None:
     assert capabilities_mod._signups_enabled is auth_routes._signups_enabled
 
 
+def test_guest_access_is_closed_unless_explicitly_opened(monkeypatch) -> None:
+    """Owner ruling 2026-08-13: no guests for now.
+
+    Fails CLOSED like signups — unset, empty, misspelled or any unrecognised
+    value all mean closed, so a config mistake cannot silently mint identities.
+    A flag rather than deleted code, so re-opening is a flip and not a rewrite.
+    """
+    monkeypatch.delenv("GUEST_ACCESS_ENABLED", raising=False)
+    assert TestClient(main_mod.app).get(PATH).json()["guest_access_enabled"] is False
+    for value in ("0", "", "banana", "no"):
+        monkeypatch.setenv("GUEST_ACCESS_ENABLED", value)
+        assert TestClient(main_mod.app).get(PATH).json()["guest_access_enabled"] is False
+    for value in ("1", "true", "on", "yes"):
+        monkeypatch.setenv("GUEST_ACCESS_ENABLED", value)
+        assert TestClient(main_mod.app).get(PATH).json()["guest_access_enabled"] is True
+
+
+def test_the_user_route_refuses_while_guests_are_closed(monkeypatch) -> None:
+    """The door itself, not just what the screen says about it.
+
+    POST /users was unauthenticated and minted a real row for anyone who asked.
+    Reporting it closed in /auth/capabilities while the route still answered
+    would be the advertisement and the enforcement disagreeing -- the exact
+    failure this module exists to prevent.
+    """
+    monkeypatch.delenv("GUEST_ACCESS_ENABLED", raising=False)
+
+    async def db_dependency():  # pragma: no cover - must not be entered
+        raise AssertionError("refusal must not acquire a connection")
+        yield None
+
+    main_mod.app.dependency_overrides[main_mod.get_db] = db_dependency
+    response = TestClient(main_mod.app).post("/users", json={"display_name": "walk-in"})
+    assert response.status_code == 403
+    assert "invite" in response.json()["detail"].lower()
+
+
+def test_the_refusal_costs_no_database_work(monkeypatch) -> None:
+    """Refused before ANY db call, so a closed door cannot consume a uuid or
+    reveal anything by timing. Asserted by giving the route a db that explodes
+    if touched."""
+    monkeypatch.delenv("GUEST_ACCESS_ENABLED", raising=False)
+
+    async def db_dependency():  # pragma: no cover - must not be entered
+        raise AssertionError("refusal must not acquire a connection")
+        yield None
+
+    main_mod.app.dependency_overrides[main_mod.get_db] = db_dependency
+    assert TestClient(main_mod.app).post(
+        "/users", json={"display_name": "walk-in"}).status_code == 403
+
+
 def test_exposes_no_secret(monkeypatch) -> None:
     """Unauthenticated surface: booleans about doors, never configuration."""
     monkeypatch.setenv("JWT_SECRET_KEY", "super-secret-value-not-for-the-wire")
