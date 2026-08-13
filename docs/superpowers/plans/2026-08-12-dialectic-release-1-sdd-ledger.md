@@ -105,8 +105,93 @@ UNION arm supplies a non-null `object_id`, so the React key cannot collide.
 
 Baseline at handoff: **1083 backend**, **27 frontend**, lint 0, build 0.
 
-## Task Group C — Workspace-object adapters — NOT STARTED
+## Task Group C — Workspace-object adapters — COMPLETE
+
 Handoff: `2026-08-12-dialectic-release-1-taskgroup-c-handoff.md`
+
+| Task | Commit | Result |
+|---|---|---|
+| C1–C4 Adapters, contract, endpoint, mirror | `f4c0d7b` | 1114 backend (+31), 33 frontend (+6). RED observed before implementation (unresolved module). |
+
+### Observed (this worktree, 2026-08-12 — not inherited)
+
+- Backend **1114 passed**; frontend **33 passed** across 6 files; lint 0; build 0.
+  `ruff --select F` clean on every changed file. (`api/main.py` carries 9
+  pre-existing F401s, identical at `HEAD` — not introduced here.)
+- **Replayed against production, read-only** (`repeatable_read`, `readonly`):
+  23 rooms in **135 ms** total. 13 readings → **13 objects, 13 twins absorbed,
+  0 leaked into the Dossier**; 124 Dossier entries still projected, so the
+  guard does not fight the feature it protects. A naive adapter emits 26.
+- Busy-room projection **measured fresh**, not inherited: 400 messages / 120
+  readings + twins / 60 memories / 40 commitments / 300 events → 411 objects,
+  median **16.6 ms**, p95 **30.2 ms** against the 150 ms design target.
+
+### The twin rule — three mutations, all red
+
+| Mutation | Killed |
+|---|---|
+| Drop `key NOT LIKE 'reading:%'` from the dossier statement | 3 tests, incl. the direct-SQL one |
+| Stop absorbing the twin in the reading adapter | the `source_entity` assertion |
+| Drop the `thesis_state_current` exclusion | the second-twin test |
+
+Guarded twice on purpose: the reading adapter pairs through
+`llm.reading._reading_key` — the **writer's own function**, so the pairing
+cannot drift from the rule that produced the key — and the dossier excludes the
+whole namespace in SQL, asserted by running `_DOSSIER_SQL` directly. That
+second assertion exists because of B's lesson: a guard the pipeline can shadow
+must be tested where it lives.
+
+### Defects and findings
+
+1. **A SECOND twin, previously unnamed.** `api/trading_ingest.py` upserts a
+   `thesis_state_current` memory that shadows `rooms.trading_config` — the same
+   two-rows-one-thing shape as the reading twin, and it would have rendered as
+   a Dossier entry beside the Thesis it describes. The thesis adapter folds it
+   in; the dossier excludes it. The key is now one constant (`trading_ingest`),
+   read by all three call sites.
+2. **§8.2's "Research question" is not projectable.** `llm/research.py` sends
+   the question over `DEEP_DIVE_STARTED` and never persists it, so no durable
+   row carries it. C projects the brief that does exist and records the gap —
+   carrying the question needs a write, which Release 1 does not make.
+3. **The 72-hour judgment window had no single definition.** Extracted to
+   `home_activity.COMMITMENT_DUE_WINDOW`, used by both movement arms and the
+   commitment adapter, so the House and the workroom cannot disagree about what
+   a human owes.
+4. **`dialectic_test` was missing `rooms.linked_book_id`** (present in
+   `schema.sql:626` and in production). Added to the test DB; the thesis
+   adapter could not otherwise be tested at all.
+5. **Production holds zero proposals and zero research briefs today** (checked
+   all five metadata slots + `deep_dive`). The empty projection is correct, not
+   a bug — but it means **D's envelope has no production population to replay
+   against**, and fixtures are the only coverage until one exists.
+
+### Design decisions worth carrying
+
+- `status` is the entity's own lifecycle; `review_state` is what a human still
+  owes. They are separate axes — a reading has a `source` and owes nothing.
+  `failed` is in the vocabulary though C cannot produce it, because D reuses it
+  and a failed human-authorized write must stay visible (§5.1, §8.4).
+- Proposal kind lives in `provenance.detail`, and the exact metadata slot in
+  `source_entity[0].field` — so **D reads a coordinate, never re-parses an id
+  string**.
+- **One row in several roles is not a twin.** A message projects as a Record
+  event AND a Brief AND its Proposals; collapsing that would delete the
+  Record's copy because a higher-order artifact summarized it, which §6.4
+  forbids outright. Written into the module header so it is not "fixed" later.
+- Bounds are per kind inside each statement (B's starvation lesson), and the
+  Record is bounded **per source** so a chatty event log cannot evict the
+  transcript from its own Record.
+- Read-only is asserted structurally, not promised: the router carries no write
+  route, and a pg test counts every touched table and every memory status
+  before and after a build.
+- The TS mirror is pinned by `tests/test_workspace_contract.py`, which reads
+  the real `.ts` file. Mutation-checked four ways — field added on one side
+  only, field removed on the other, vocabulary reordered (all red) — and a
+  comment quoting a field name leaves it green, so it reads statements, not
+  prose.
+
+Baseline at handoff: **1114 backend**, **33 frontend**, lint 0, build 0.
+
 ## Task Group D — Unified proposal envelope — NOT STARTED
 ## Task Group E — Current-scene local continuity — NOT STARTED
 ## Task Group F — Integrated Release 1 gate — NOT STARTED
