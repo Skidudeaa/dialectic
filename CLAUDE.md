@@ -145,6 +145,36 @@ One minor inconsistency, left alone deliberately: tradingDesk's **dev** port is
 reserved"), while `trading/README.md:14` shows 8006 for dev. Production is 8006
 everywhere. The Makefile is not wrong; the README's dev line is the odd one.
 
+## Amendment 2026-08-14 — Release 3 is live (amend-beside; prefer this over older counts)
+
+Release 3 — Deliberation and Whole-House Intelligence — merged, pushed and
+deployed 2026-08-14 (master `7535e1c`, gate ledger
+`docs/superpowers/plans/2026-08-14-dialectic-release-3-deliberation-gate.md`).
+What the sections above understate as of that date:
+
+- **Migrations run to `017`** (`017_field_marks.sql`, applied to the live DB;
+  the table is also appended to the `schema.sql` baseline, unlike 014's gap).
+- **Ten scheduled jobs, not nine**: `field_inference` joined (1800s,
+  `llm/field_inference.py`, `FIELD_INFERENCE_ENABLED`, model pinned
+  `claude-haiku-4-5-20251001`). Caps 6 marks/room/run, 20/room/day, counted
+  from `field_marks` rows.
+- **New backend modules**: `field_marks.py` (append-only marks, review state
+  DERIVED at read time; the partial dedup index is the re-assertion law — and
+  note its `ON CONFLICT` must repeat the index's `WHERE dedup_key IS NOT
+  NULL` predicate), `api/field.py` (the one Field write route),
+  `atlas_objects.py` + `api/atlas.py` (per-viewer-fenced cross-room map,
+  JWT-only), `proposal_intake.py` (server-side gate for human proposal
+  metadata at the message door).
+- **Scenes**: ordinary rooms are `record/bench/field/library/ledger`; Home
+  root is `house/atlas/record`. Focus is a STATE riding `&object=`, not a
+  scene. `judgment` remains name-only.
+- **Chat is de-chatted (F1)**: full-width rows, signature marks
+  (`markGlyph` in `productIdentity.ts`), no participant color coding. F2
+  (typographic voices/motion) deliberately deferred — needs a
+  contribution-vs-position field that doesn't exist yet.
+- **Backend suite ~1300 / frontend ~233** at the Release 3 gate (the "790
+  tests" in Commands above is two releases stale).
+
 ## Code style
 
 ARCHITECTURE/WHY/TRADEOFF docstrings on non-obvious decisions. Match the
