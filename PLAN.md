@@ -1326,3 +1326,32 @@ contradiction and stops — no silent improvisation, no quiet re-planning.**
 ---
 
 ## AMENDMENTS
+
+AMENDED 2026-08-13: Owner addressed §4.1 mid-build, verbatim: "b stray room
+probe do not create in production you are clear to build it as wwell" —
+read as clearance on the (b) open-question item (the stray room) and a green
+light to proceed with the full build, because the owner named the room and
+the question list directly. The exact disposal action (deleting room
+`eeffa8f1-9d5a-4d31-981d-b5cf0a0627e8` from production) will still be
+confirmed in one line at the TG-H gate before any production delete — the
+wording is ambiguous between "cleared to proceed" and "cleared to delete",
+and a production delete needs the unambiguous form.
+
+AMENDED 2026-08-13: Owner relayed the human-interaction surface audit
+(`docs/audits/2026-08-13-dialectic-human-interaction-surface-audit.md`, 794
+lines, commit 5019e2b — landed on this branch from a parallel session) with
+"take this into account with the current build". Disposition, because the
+audit's own follow-through in `dialectic/TODOS.md` states that PLAN.md
+remains the authority for Release 3: (1) the audit's canonical topology and
+authority-loop asks (D12 Make a Move, Focus as universal inspector, Field
+review/history, Atlas, restoration, a11y) are what this plan already builds
+— no scope change; its P0 "branchless workspace-object taps do nothing" is
+closed by §1.18's tap→Focus. (2) The two owner-named "remove immediately"
+items (T02 fake Math.random() latency, T04 inert new-case +) were removed
+in rider commit e234212 on this branch; they go live at tradingDesk's next
+deploy, which is NOT part of Release 3's deploy plan. (3) Everything else
+(invitations/verification/recovery delivery, membership/presence/permission
+separation, tradingDesk consolidation, A25 URL-fragment token) stays on the
+TODOS.md board — post-release work, not silently folded in. Also noted:
+three parallel-session commits (f9d125c, 5019e2b, 7d79bd6) now ride this
+branch and will reach master at the gate merge.
