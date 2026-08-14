@@ -6,6 +6,7 @@ import { api } from '../../lib/api'
 import { localProposals, type LocalProposal } from '../../lib/proposalEnvelope'
 import { useAppStore } from '../../stores/appStore'
 import { MessageAttachments } from './MessageAttachments'
+import { SignatureMark } from './SignatureMark'
 import './MessageBubble.css'
 
 /** Small, deliberately boring set — a picker is more chrome than this needs. */
@@ -72,27 +73,20 @@ function quoteExcerpt(content: string): string {
   return flat.length > QUOTE_MAX_CHARS ? `${flat.slice(0, QUOTE_MAX_CHARS)}…` : flat
 }
 
+/**
+ * Structural role only now — F1 dropped every visual difference this class
+ * used to carry (bubble background, border hue, avatar color). What is left
+ * is genuinely role-based, not participant-color-coded: the annotator's
+ * reduced size/opacity marks it as marginalia, and the system class centers
+ * a notice that is not a contribution at all. Neither varies by WHO is
+ * speaking, only by WHAT KIND of turn it is (design v2 §16.4).
+ */
 function speakerClass(type: Message['speaker_type'], isSelf: boolean): string {
   if (type === 'human') return isSelf ? 'msg-human-self' : 'msg-human-other'
   if (type === 'llm_primary') return 'msg-claude'
   if (type === 'llm_provoker') return 'msg-provoker'
   if (type === 'llm_annotator') return 'msg-annotator'
   return 'msg-system'
-}
-
-function avatarClass(type: Message['speaker_type'], isSelf: boolean): string {
-  if (type === 'human') return isSelf ? 'avatar-self' : 'avatar-human-2'
-  if (type === 'llm_primary' || type === 'llm_annotator') return 'avatar-claude'
-  if (type === 'llm_provoker') return 'avatar-provoker'
-  return ''
-}
-
-function avatarLabel(type: Message['speaker_type'], authorName: string): string {
-  if (type === 'llm_primary') return 'C'
-  if (type === 'llm_provoker') return '!'
-  if (type === 'llm_annotator') return 'A'
-  if (type === 'system') return '*'
-  return authorName.charAt(0).toUpperCase()
 }
 
 function formatTime(iso: string): string {
@@ -314,20 +308,10 @@ export function MessageBubble({
       className={`msg ${cls}${streamCls}${isContinuation ? ' msg-continuation' : ''}`}
       data-message-id={message.id}
     >
-      {message.speaker_type !== 'system' && (
-        <div className="msg-avatar">
-          {/* The slot is kept even when the avatar is suppressed, so grouped
-              messages stay aligned with the one that carries the byline. */}
-          {!isContinuation && (
-            <div className={`avatar ${avatarClass(message.speaker_type, isSelf)}`}>
-              {avatarLabel(message.speaker_type, authorName)}
-            </div>
-          )}
-        </div>
-      )}
       <div className="msg-body">
         {!isContinuation && (
           <div className="msg-meta">
+            <SignatureMark speakerType={message.speaker_type} authorName={authorName} />
             <span className="msg-author">{authorName}</span>
             <span className="msg-time">{formatTime(message.created_at)}</span>
             {message.message_type !== 'text' && (
@@ -336,7 +320,7 @@ export function MessageBubble({
             {message.edited_at && <span className="msg-edited" title="This message was edited">edited</span>}
           </div>
         )}
-        <div className={`msg-bubble${isFolded ? ' msg-folded' : ''}`}>
+        <div className={`msg-content-frame${isFolded ? ' msg-folded' : ''}`}>
           {replyToContent !== undefined && (
             <div className="msg-quote">
               <span className="msg-quote-author">{replyToAuthor}</span>

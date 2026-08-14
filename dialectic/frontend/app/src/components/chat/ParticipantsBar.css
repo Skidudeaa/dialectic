@@ -36,13 +36,13 @@
     color: inherit;
     font-weight: normal;
 }
-/* Claude chip: amber outline */
-.participant-chip.is-claude {
-    color: var(--color-amber);
-    border-color: var(--amber-30);
-    background: var(--amber-08);
-}
-.participant-chip.is-claude .p-name { color: var(--color-amber); }
+/* Dialectic's chip used to get its own amber outline/fill here, chosen
+   because of WHO it represented rather than any state — exactly the
+   participant color coding design v2 §16.4 forbids ("color does not encode
+   participants"). Every chip now renders through the same neutral rule;
+   Dialectic's identity is carried by its name text, same as the two
+   humans'. The `is-claude` class stays on the element (still useful as a
+   structural hook) but no longer changes color. */
 
 /* Staleness of the other person's attention — the question that actually
    matters in a room used asynchronously. */

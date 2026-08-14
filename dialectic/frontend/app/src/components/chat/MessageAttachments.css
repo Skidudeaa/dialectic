@@ -9,7 +9,6 @@
     align-self: flex-start;
     max-width: 100%;
 }
-.msg-human-self .msg-attachments { align-self: flex-end; }
 
 .attachment {
     max-width: 100%;

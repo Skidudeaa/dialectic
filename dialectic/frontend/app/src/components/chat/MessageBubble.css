@@ -1,25 +1,40 @@
-/* Dispatch layout: gutter + entry column (dossier ledger style) */
+/* ── Full-width contribution rows (design v2 §16.1/§16.4/§16.7/§16.9) ──────
+   De-chat grammar: no bubble container, no left/right alignment by who is
+   speaking, no color coding by participant. A row is a full-width strip of
+   the stream; hairline rules mark where one turn ends and the next begins
+   (applied on `:not(.msg-continuation)` — see the grouping comment below —
+   so a burst from one speaker reads as one entry, not N divided ones). What
+   is left of `speakerClass` is genuinely role-based (system = a notice, not
+   a contribution; annotator = marginalia) and never participant-based. */
 .msg {
     display: flex;
-    gap: 0.75rem;
-    max-width: 90%;
+    flex-direction: column;
+    gap: 0.3rem;
+    width: 100%;
+    max-width: 100%;
     animation: fadeIn 0.3s var(--ease-out);
     position: relative;
-    padding: 0.15rem 0;
+    padding: 0.6rem 0 0.15rem;
 }
-.msg.msg-human-self { align-self: flex-end; flex-direction: row-reverse; }
-.msg.msg-human-other { align-self: flex-start; }
-.msg.msg-claude { align-self: flex-start; animation: claudeEnter 0.5s var(--ease-out); }
-.msg.msg-provoker { align-self: flex-start; animation: claudeEnter 0.5s var(--ease-out); }
-.msg.msg-annotator { align-self: flex-start; animation: claudeEnter 0.5s var(--ease-out); }
+.msg:not(.msg-continuation) {
+    border-top: 1px solid var(--color-bean);
+    padding-top: 0.7rem;
+    margin-top: 0.15rem;
+}
+.msg.msg-claude,
+.msg.msg-provoker,
+.msg.msg-annotator {
+    animation: claudeEnter 0.5s var(--ease-out);
+}
 .msg.msg-system {
-    align-self: center;
-    max-width: 70%;
-    justify-content: center;
+    align-items: center;
+    text-align: center;
 }
 
-.msg-avatar { flex-shrink: 0; margin-top: 0.2rem; }
-
+/* RoomList's own-user avatar (components/sidebar/RoomList.tsx) reuses these
+   two rules — they are NOT dead code even though MessageBubble stopped
+   rendering an `.avatar` div itself (replaced by SignatureMark, which never
+   varies by participant). Do not delete without checking that caller. */
 .avatar {
     width: 26px;
     height: 26px;
@@ -35,33 +50,26 @@
     color: var(--color-ink);
 }
 .avatar-self { border-color: var(--color-teal); color: var(--color-teal); }
-.avatar-human-2 { border-color: var(--human-2); color: var(--human-2); }
-.avatar-claude { border-color: var(--amber-30); color: var(--color-amber); font-family: var(--font-mono); font-size: 10px; }
-.avatar-provoker { border-color: rgba(191,161,98,.3); color: var(--claude-provoker); }
 
-.msg-body { display: flex; flex-direction: column; min-width: 0; }
+.msg-body { display: flex; flex-direction: column; min-width: 0; width: 100%; }
 .msg-meta {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    margin-bottom: 0.25rem;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
     font-family: var(--font-mono);
     font-size: 10px;
 }
-/* Author name in mono 10px, uppercase, per-participant color */
+/* Author name: one ink color for every participant — who they are is said in
+   words, not in hue (§16.4: "Color does not encode participants"). */
 .msg-author {
     font-family: var(--font-mono);
     font-size: 10px;
-    font-weight: normal;
+    font-weight: 600;
     letter-spacing: .06em;
     text-transform: uppercase;
-    color: var(--color-ink);
+    color: var(--color-bone);
 }
-.msg-human-self .msg-author { color: var(--color-teal); }
-.msg-human-other .msg-author { color: var(--human-2); }
-.msg-claude .msg-author { color: var(--color-amber); }
-.msg-provoker .msg-author { color: var(--claude-provoker); }
-.msg-annotator .msg-author { color: var(--claude-annotator); }
 
 /* Timestamp — faint mono */
 .msg-time {
@@ -83,10 +91,12 @@
     background: transparent;
 }
 
-/* P1-2: Message body prose — 72ch reading measure */
-.msg-bubble {
-    padding: 0.65rem 0.85rem;
-    border-radius: var(--radius-sm);
+/* Message body prose — 72ch reading measure. No background, no border, no
+   shadow: the "card" is gone (design v2 §16.7 — "most objects should not be
+   rounded cards"). Every speaker type renders through the same rule; the
+   row's hairline top-border (above) is the only separator now. */
+.msg-content-frame {
+    padding: 0 0 0.15rem;
     line-height: 1.52;
     font-family: var(--font-serif);
     font-size: 14px;
@@ -94,63 +104,29 @@
     overflow: hidden;
     max-width: 72ch;  /* reading measure */
 }
-
-/* Human messages: cacao card with bean border */
-.msg-human-self .msg-bubble {
-    background: var(--color-cacao);
-    border: 1px solid var(--color-bean);
-    box-shadow: var(--shadow-md);
-}
-.msg-human-other .msg-bubble {
-    background: var(--color-cacao);
-    border: 1px solid var(--color-bean);
-    box-shadow: var(--shadow-md);
-}
-
-/* Claude / provoker: amber 2px left rule + transparent fill */
-.msg-claude .msg-bubble {
-    background: var(--amber-08);
-    border: 1px solid var(--color-bean);
-    border-left: 2px solid var(--amber-30);
-    padding-left: 11px;
-    box-shadow: var(--shadow-md);
-}
-.msg-provoker .msg-bubble {
-    background: rgba(191,161,98,.06);
-    border: 1px solid var(--color-bean);
-    border-left: 2px solid rgba(191,161,98,.3);
-    padding-left: 11px;
-    box-shadow: var(--shadow-md);
-}
-.msg-annotator .msg-bubble {
-    background: var(--teal-10);
-    border: 1px solid var(--color-bean);
-    border-left: 2px solid var(--teal-30);
-    padding-left: 11px;
-    box-shadow: var(--shadow-md);
-}
-.msg-system .msg-bubble {
-    background: var(--color-espresso);
-    border: 1px solid var(--color-bean);
+.msg-system .msg-content-frame {
     color: var(--color-faint);
     font-family: var(--font-mono);
     font-size: 10px;
     font-style: normal;
 }
 
-/* Streaming cursor — amber */
-.msg.streaming .msg-bubble::after {
+/* Streaming cursor + shimmer — one accent (brass/amber, §16.4's "current
+   attention or active transformation") regardless of which Dialectic mode is
+   writing. A mode-specific tint here would be exactly the participant color
+   coding §16.4 forbids; the mode is already named in the byline text. */
+.msg.streaming .msg-content-frame::after {
     content: '';
     display: inline-block;
     width: 6px;
     height: 14px;
-    background: var(--color-teal);
+    background: var(--color-amber);
     margin-left: 2px;
     vertical-align: text-bottom;
     animation: cursorBlink 0.8s step-end infinite;
     border-radius: 1px;
 }
-.msg.streaming .msg-bubble::before {
+.msg.streaming .msg-content-frame::before {
     content: '';
     position: absolute;
     top: 0; left: -100%; right: 0; bottom: 0;
@@ -164,16 +140,6 @@
     );
     animation: shimmer 2.5s ease-in-out infinite;
     pointer-events: none;
-}
-.msg.streaming.provoker-stream .msg-bubble::after { background: var(--claude-provoker); }
-.msg.streaming.provoker-stream .msg-bubble::before {
-    background: linear-gradient(90deg,
-        transparent 0%,
-        rgba(191,161,98,.06) 45%,
-        rgba(191,161,98,.1) 50%,
-        rgba(191,161,98,.06) 55%,
-        transparent 100%
-    );
 }
 
 /* P1-2: Markdown content — reading measure enforced on prose */
@@ -216,12 +182,19 @@
 .msg-content strong { color: var(--color-bone); font-weight: 600; }
 .msg-content em { color: var(--color-secondary); font-style: italic; }
 
-/* Message actions (hover) */
+/* Message actions — quiet at rest, but never HOVER-ONLY (design v2 §17.4 /
+   §7.4: "no hover-only controls"). `display: none` used to be how these
+   stayed out of the way; that also removed them from the tab order, so a
+   keyboard or touch user had no path to Reply/Fork/Edit/Delete at all. Now
+   they stay in the DOM and the tab order always — `opacity`/`pointer-events`
+   fade them out visually, and `:focus-within` (a button inside receiving
+   focus via Tab) brings them back exactly the way `:hover` does. Nothing
+   here is reachable by mouse alone. */
 .msg-actions {
     position: absolute;
     top: -0.5rem;
     right: 0;
-    display: none;
+    display: flex;
     gap: 0.15rem;
     background: var(--color-espresso);
     border: 1px solid var(--color-bean);
@@ -229,9 +202,15 @@
     padding: 0.15rem;
     box-shadow: var(--shadow-md);
     z-index: 5;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s var(--ease-out);
 }
-.msg-human-self .msg-actions { right: auto; left: 0; }
-.msg:hover .msg-actions { display: flex; }
+.msg:hover .msg-actions,
+.msg:focus-within .msg-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
 .msg-action-btn {
     padding: 3px 7px;
     background: transparent;
@@ -246,10 +225,6 @@
     letter-spacing: .04em;
 }
 .msg-action-btn:hover { background: var(--color-cacao); color: var(--color-ink); }
-
-@media (max-width: 768px) {
-    .msg { max-width: 95%; }
-}
 
 /* ── Quoted parent (reply context) ───────────────────────────
    A glance at what is being answered, not a second copy of it. The amber
@@ -279,11 +254,11 @@
 
 /* Landing marker for a jumped-to message (search result). Fades rather than
    persists — it answers "which one" and then gets out of the way. */
-.msg.msg-flash .msg-bubble {
+.msg.msg-flash .msg-content-frame {
     animation: msgFlash 1.6s var(--ease-out);
 }
 @keyframes msgFlash {
-    0%, 55% { background-color: var(--amber-18); border-color: var(--color-amber); }
+    0%, 55% { background-color: var(--amber-18); }
     100%    { background-color: transparent; }
 }
 
@@ -381,10 +356,13 @@
    A single Claude annotation could fill the entire viewport, burying what the
    two people in the room actually said. Long messages — and annotations at any
    length — open folded. */
-.msg-bubble.msg-folded {
+.msg-content-frame.msg-folded {
     max-height: 168px;
     overflow: hidden;
 }
+/* One gradient for every speaker type now — there is no per-type tinted
+   background left to match (the whole point of dropping the bubble). It
+   fades straight to the stream's own background. */
 .msg-fold-veil {
     position: absolute;
     left: 0;
@@ -392,27 +370,7 @@
     bottom: 0;
     height: 62px;
     pointer-events: none;
-    /* Human bubbles are an opaque cacao card, so one gradient matches them. */
-    background: linear-gradient(to bottom, transparent, var(--color-cacao));
-}
-/* Claude's bubbles are a translucent tint OVER the obsidian stream, so no flat
-   colour can match them — a hardcoded hex reads as a dark band across the fade.
-   Stacking the same two layers the bubble itself is built from reproduces the
-   exact composite, and keeps following the tokens if they are ever retuned. */
-.msg-claude .msg-fold-veil {
-    background:
-        linear-gradient(to bottom, transparent, var(--amber-08)),
-        linear-gradient(to bottom, transparent, var(--color-obsidian));
-}
-.msg-provoker .msg-fold-veil {
-    background:
-        linear-gradient(to bottom, transparent, rgba(191,161,98,.06)),
-        linear-gradient(to bottom, transparent, var(--color-obsidian));
-}
-.msg-annotator .msg-fold-veil {
-    background:
-        linear-gradient(to bottom, transparent, var(--teal-10)),
-        linear-gradient(to bottom, transparent, var(--color-obsidian));
+    background: linear-gradient(to bottom, transparent, var(--color-obsidian));
 }
 
 .msg-fold-toggle {
@@ -430,21 +388,21 @@
     cursor: pointer;
 }
 .msg-fold-toggle:hover { color: var(--color-amber); border-bottom-color: var(--amber-30); }
-.msg-human-self .msg-fold-toggle { align-self: flex-end; }
 
 /* ── Grouped consecutive messages ────────────────────────────
-   Same speaker inside five minutes reads as one block: no repeated avatar, no
-   repeated byline, tighter leading. */
-.msg.msg-continuation { padding-top: 0; margin-top: -2px; }
-.msg.msg-continuation .msg-avatar { width: 26px; }
+   Same speaker inside five minutes reads as one block: no repeated mark, no
+   repeated byline, tighter leading. The `:not(.msg-continuation)` hairline
+   rule above already does the heavy lifting. */
 .msg-edited-standalone { margin-top: 2px; align-self: flex-start; }
-.msg-human-self .msg-edited-standalone { align-self: flex-end; }
 
 /* ── Annotator as marginalia ─────────────────────────────────
    These are notes left for whoever was offline, not turns in the conversation.
-   They were rendered at the same weight as human speech and dominated it. */
-.msg.msg-annotator { max-width: 76%; opacity: .92; }
-.msg-annotator .msg-bubble {
+   They were rendered at the same weight as human speech and dominated it.
+   Reduced size/opacity is a ROLE distinction (marginalia vs. contribution),
+   not a participant color — it applies the same way no matter who or what
+   mode wrote the note. */
+.msg.msg-annotator { opacity: .92; }
+.msg-annotator .msg-content-frame {
     font-size: 13px;
     line-height: 1.5;
 }
@@ -456,7 +414,6 @@
    same as the annotation fold above: it exists for the moment someone doubts a
    number, and should cost nothing on every other turn. */
 .msg-tools { align-self: flex-start; margin-top: 3px; }
-.msg-human-self .msg-tools { align-self: flex-end; }
 .msg-tools-toggle {
     padding: 1px 6px 1px 0;
     background: none;
@@ -500,7 +457,6 @@
     border-left: 2px solid var(--color-amber);
     background: var(--amber-10, transparent);
 }
-.msg-human-self .msg-proposal { align-self: flex-end; }
 .msg-proposal-title {
     font-family: var(--font-mono);
     font-size: 9px;
@@ -564,10 +520,38 @@
     max-width: 100%;
     background: var(--amber-10, transparent);
 }
-.msg-human-self .msg-claim-check { align-self: flex-end; }
 .msg-claim-check-link {
     color: var(--color-secondary);
     text-decoration: underline;
     overflow-wrap: anywhere;
 }
 .msg-claim-check-link:hover { color: var(--color-ink); }
+
+/* ── Reduced motion (design v2 §16.8 / §17.4) ────────────────────
+   Nothing in this file's motion carries meaning a static frame does not —
+   the entrance fades and the streaming shimmer are decoration around text
+   that is fully present and readable either way, so turning them off loses
+   nothing. There was no `prefers-reduced-motion` handling anywhere in the
+   app before this; scoped here to the surface this task group owns. */
+@media (prefers-reduced-motion: reduce) {
+    .msg,
+    .msg.msg-claude,
+    .msg.msg-provoker,
+    .msg.msg-annotator {
+        animation: none;
+    }
+    .msg.streaming .msg-content-frame::after {
+        animation: none;
+    }
+    .msg.streaming .msg-content-frame::before {
+        animation: none;
+        display: none;
+    }
+    .msg.msg-flash .msg-content-frame {
+        animation: none;
+        /* The flash still marks "this is the one you jumped to" without
+           motion: a held highlight that a later interaction clears, rather
+           than a timed fade the reader might not be looking at yet. */
+        background-color: var(--amber-18);
+    }
+}
