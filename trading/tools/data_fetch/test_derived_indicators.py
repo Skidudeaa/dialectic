@@ -15,6 +15,8 @@ from derived_indicators import (
     rsi_wilder,
     sma,
     validate_derived_indicator_spec,
+    bars_required,
+    expected_key,
     _cli_compute,
 )
 
@@ -745,3 +747,72 @@ class TestCurveSpreadIntegration:
         # And the spec itself MUST have been validated with overlay=true
         # (any violation would have raised before we got here).
         assert node["derivedIndicators"][0]["overlay"] is True
+
+
+class TestSpecIntrospection:
+    """bars_required / expected_key — the two helpers a fetch window is sized
+    from. These exist because a fixed 63-bar window silently swallowed a
+    declared sma200 for months (ai-capex-unwind, semis-breakdown).
+    """
+
+    def test_sma_needs_exactly_period_closes(self):
+        assert bars_required({"kind": "sma", "period": 200}) == 200
+        assert bars_required({"kind": "sma", "period": 50}) == 50
+
+    def test_rsi_and_atr_need_one_more_than_period(self):
+        # They consume deltas BETWEEN bars, so period+1 closes.
+        assert bars_required({"kind": "rsi", "period": 14}) == 15
+        assert bars_required({"kind": "atr", "period": 14}) == 15
+
+    def test_curve_spread_needs_only_the_latest_close(self):
+        assert bars_required({"kind": "curveSpread", "frontSymbol": "CL=F",
+                              "backSymbol": "CLZ26.NYM"}) == 1
+
+    def test_missing_period_defaults_to_fourteen(self):
+        assert bars_required({"kind": "rsi"}) == 15
+        assert expected_key({"kind": "rsi"}) == "rsi14"
+
+    def test_sma200_would_not_fit_the_old_fixed_window(self):
+        """The regression itself: 3mo of dailies is 63 bars (measured against
+        Yahoo 2026-08-14), and sma200 needs 200. Pinning the arithmetic keeps
+        anyone from reintroducing a fixed window that cannot serve the specs.
+        """
+        assert bars_required({"kind": "sma", "period": 200}) > 63
+
+    def test_expected_key_matches_what_compute_actually_writes(self):
+        """Round-trip: expected_key is the single source of truth for the
+        tvIndicators key, so it must equal the key compute_node_indicators
+        emits for the same spec. If either side drifts this goes red.
+        """
+        closes = [100 + (i % 7) for i in range(60)]
+        highs = [c + 1 for c in closes]
+        lows = [c - 1 for c in closes]
+        specs = [
+            {"kind": "rsi", "period": 14, "symbol": "X", "overlay": True},
+            {"kind": "atr", "period": 14, "symbol": "X", "overlay": True},
+            {"kind": "sma", "period": 50, "symbol": "X", "overlay": True},
+            {"kind": "curveSpread", "frontSymbol": "X", "backSymbol": "Y",
+             "overlay": True},
+        ]
+        ohlcv = {
+            "X": {"closes": closes, "highs": highs, "lows": lows},
+            "Y": {"closes": closes, "highs": highs, "lows": lows},
+        }
+        for spec in specs:
+            out = compute_node_indicators({"id": "n", "derivedIndicators": [spec]},
+                                          ohlcv)
+            assert out, f"{spec['kind']} produced nothing on a 60-bar series"
+            assert list(out.keys()) == [expected_key(spec)]
+
+    def test_a_spec_longer_than_the_series_still_yields_nothing(self):
+        """bars_required is a promise about the input, not a rescue. Below it,
+        compute still declines — the caller is what must fetch enough.
+        """
+        spec = {"kind": "sma", "period": 200, "symbol": "X", "overlay": True}
+        short = {"X": {"closes": [100.0] * 63, "highs": [], "lows": []}}
+        assert compute_node_indicators({"id": "n", "derivedIndicators": [spec]},
+                                       short) == {}
+        long = {"X": {"closes": [100.0] * bars_required(spec), "highs": [],
+                      "lows": []}}
+        assert compute_node_indicators({"id": "n", "derivedIndicators": [spec]},
+                                       long) == {"sma200": 100.0}

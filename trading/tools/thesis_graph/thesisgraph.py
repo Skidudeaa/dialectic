@@ -1734,9 +1734,58 @@ def fetch_gdelt(cfg: dict) -> dict:
 
 _YAHOO_CHART_BASE = "https://query1.finance.yahoo.com/v8/finance/chart/"
 
+# Yahoo's `range` parameter takes discrete values, not a bar count. These are
+# the daily bars each one actually returns (measured 2026-08-14: 3mo -> 63 for
+# SOXX; the rest are ~252/yr trading days). We pick the SMALLEST range that
+# covers a symbol's longest declared period, per symbol, so a book asking only
+# for rsi14 keeps its existing 3mo window and its published values do not move.
+_YAHOO_RANGE_BARS = (
+    ("3mo", 63), ("6mo", 126), ("1y", 252), ("2y", 504), ("5y", 1260),
+)
+
+# Cap on how many closes are turned into close_observations rows per
+# (node x threshold) each cycle. Event volume is per-close-per-threshold, so a
+# longer indicator window would otherwise multiply the SQLite upserts every
+# run. The longest closesRequired in any book is 5 (japan-rate-shock jgb-10y),
+# and 90 exceeds the 63-bar window production already emitted, so this cannot
+# shrink what the streak gate sees.
+_CLOSE_EVENT_WINDOW = 90
+
+
+def _range_for_bars(needed: int) -> str:
+    """Smallest Yahoo `range` value that returns at least `needed` daily bars."""
+    for name, bars in _YAHOO_RANGE_BARS:
+        if bars >= needed:
+            return name
+    return "max"
+
+
+def _import_derived_indicators():
+    """Import the sibling derived_indicators module, or None if unavailable.
+
+    Shared by the fetch (which sizes its window from the specs) and the
+    compute pass (which runs them), so both agree on the same module.
+    """
+    di_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "data_fetch")
+    )
+    if di_dir not in sys.path:
+        sys.path.insert(0, di_dir)
+    try:
+        import derived_indicators as di
+        return di
+    except ImportError as e:
+        print(f"  derived_indicators: import failed: {e}", file=sys.stderr)
+        return None
+
 
 def fetch_ohlcv_for_derived(cfg: dict, retries: int = 2) -> dict:
-    """Fetch 3 months of OHLCV for symbols referenced by derivedIndicators.
+    """Fetch OHLCV history for symbols referenced by derivedIndicators.
+
+    The window is sized PER SYMBOL from the longest period declared against it
+    (via `derived_indicators.bars_required`), not fixed. A fixed 3mo window is
+    what let `sma200` be declared on ai-capex-unwind's semis-breakdown and
+    silently produce nothing for months — 3mo is 63 bars.
 
     WHY a separate fetch from fetch_prices(): fetch_prices() uses the v7
     spark batch endpoint, which returns only the current price (no close
@@ -1754,28 +1803,40 @@ def fetch_ohlcv_for_derived(cfg: dict, retries: int = 2) -> dict:
     """
     import urllib.parse
 
-    wanted: set[str] = set()
+    di = _import_derived_indicators()
+
+    # symbol -> the most bars any spec against it needs. Falling back to the
+    # old fixed window when the module is missing keeps behaviour unchanged;
+    # compute_derived_indicators reports the real import failure.
+    wanted: dict[str, int] = {}
+
+    def _want(symbol: object, bars: int) -> None:
+        key = str(symbol)
+        wanted[key] = max(wanted.get(key, 0), bars)
+
     for node in cfg.get("nodes", []):
         for spec in node.get("derivedIndicators", []) or []:
             if not isinstance(spec, dict):
                 continue
+            bars = di.bars_required(spec) if di else 63
             if spec.get("symbol"):
-                wanted.add(str(spec["symbol"]))
+                _want(spec["symbol"], bars)
             # curveSpread uses two symbols instead of one — pick both up so
             # compute_node_indicators has OHLCV for the front and back legs.
             if spec.get("frontSymbol"):
-                wanted.add(str(spec["frontSymbol"]))
+                _want(spec["frontSymbol"], bars)
             if spec.get("backSymbol"):
-                wanted.add(str(spec["backSymbol"]))
+                _want(spec["backSymbol"], bars)
 
     if not wanted:
         return cfg
 
     cfg.setdefault("_ohlcv", {})
     fetched = 0
-    for symbol in sorted(wanted):
+    for symbol, bars_needed in sorted(wanted.items()):
         encoded = urllib.parse.quote(symbol, safe="=^.-")
-        url = f"{_YAHOO_CHART_BASE}{encoded}?range=3mo&interval=1d"
+        rng = _range_for_bars(bars_needed)
+        url = f"{_YAHOO_CHART_BASE}{encoded}?range={rng}&interval=1d"
         succeeded = False
         for attempt in range(1, retries + 1):
             try:
@@ -1834,7 +1895,11 @@ def fetch_ohlcv_for_derived(cfg: dict, retries: int = 2) -> dict:
                         "dates": dates,
                     }
                     fetched += 1
-                    print(f"  ohlcv {symbol}: {len(closes)} closes", file=sys.stderr)
+                    print(
+                        f"  ohlcv {symbol}: {len(closes)} closes "
+                        f"(range={rng}, need {bars_needed})",
+                        file=sys.stderr,
+                    )
                 succeeded = True
                 break
             except (URLError, HTTPError, TimeoutError, OSError) as e:
@@ -1877,20 +1942,12 @@ def compute_derived_indicators(cfg: dict) -> dict:
     Does NOT touch node["current"], node["state"], node["probability"], or
     any other propagation-read field.
     """
-    di_dir = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "data_fetch")
-    )
-    if di_dir not in sys.path:
-        sys.path.insert(0, di_dir)
-
     # Always seed an empty events bucket so the coordinator can branch on
     # "key exists" without special-casing import/OHLCV failures.
     cfg["_close_events"] = []
 
-    try:
-        import derived_indicators as di
-    except ImportError as e:
-        print(f"  derived_indicators: import failed: {e}", file=sys.stderr)
+    di = _import_derived_indicators()
+    if di is None:
         cfg.pop("_ohlcv", None)
         return cfg
 
@@ -1921,6 +1978,27 @@ def compute_derived_indicators(cfg: dict) -> dict:
             node["tvIndicators"] = tv
             updated_nodes += 1
 
+        # Declared but not produced -> say so. This used to vanish silently:
+        # ai-capex-unwind declared sma200 against a fixed 63-bar window and no
+        # one saw it drop for months. Range selection makes under-fetch
+        # impossible for known ranges, but a thin or newly-listed symbol can
+        # still return fewer bars than requested, and ATR still needs
+        # highs/lows Yahoo may omit.
+        for spec in specs:
+            if not isinstance(spec, dict):
+                continue
+            key = di.expected_key(spec)
+            if key in (tv or {}):
+                continue
+            symbol = spec.get("symbol") or spec.get("frontSymbol") or "?"
+            have = len(((ohlcv.get(symbol) or {}).get("closes")) or [])
+            print(
+                f"  derived_indicators: {node.get('id', '?')}.{key} not "
+                f"computed — {symbol} needs {di.bars_required(spec)} closes, "
+                f"have {have}",
+                file=sys.stderr,
+            )
+
         # Emit close events for every (threshold, close) pair on price/reversal
         # nodes with closesRequired gates. The coordinator writes these to the
         # close_observations table (PK-dedup on thesis_id + node_id +
@@ -1933,10 +2011,19 @@ def compute_derived_indicators(cfg: dict) -> dict:
         ]
         if not thresholds_with_closes:
             continue
+        # One node commonly carries several specs against the SAME symbol
+        # (rsi14 + atr14 + sma200 on SMH). The close series is a property of
+        # the symbol, not the spec, so emitting per spec produced N identical
+        # events per close — absorbed by the close_observations PK but paid
+        # for on every cycle. Emit once per symbol.
+        seen_symbols: set = set()
         for spec in specs:
             if not isinstance(spec, dict):
                 continue
             symbol = spec.get("symbol")
+            if symbol in seen_symbols:
+                continue
+            seen_symbols.add(symbol)
             series = ohlcv.get(symbol) or {}
             closes = series.get("closes") or []
             dates = series.get("dates") or []
@@ -1944,7 +2031,12 @@ def compute_derived_indicators(cfg: dict) -> dict:
                 continue
             # Pair closes with dates; fall back to the empty string when Yahoo
             # didn't return timestamps (keeps the PK deterministic).
-            for idx, close_value in enumerate(closes):
+            # Only the recent tail can matter to a closesRequired streak, and
+            # the window is now period-sized — see _CLOSE_EVENT_WINDOW for why
+            # this is capped. `offset` keeps the dates[] index aligned.
+            recent = closes[-_CLOSE_EVENT_WINDOW:]
+            offset = len(closes) - len(recent)
+            for idx, close_value in enumerate(recent, start=offset):
                 market_date = dates[idx] if idx < len(dates) else ""
                 if not market_date:
                     continue  # Skip undated rows — can't key the PK safely.

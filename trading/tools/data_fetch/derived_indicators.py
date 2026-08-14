@@ -228,6 +228,40 @@ def consecutive_closes_above(closes: list[float], threshold: float) -> int:
 
 
 # =========================================================================
+# SPEC INTROSPECTION
+# =========================================================================
+
+def bars_required(spec: dict) -> int:
+    """Minimum daily closes a spec needs before it can yield a value.
+
+    Mirrors the guards inside each indicator above: `sma` returns None below
+    `period` closes; `rsi`/`atr` need `period + 1` because they consume the
+    deltas BETWEEN bars; `curveSpread` reads only the latest close on each
+    leg. Callers sizing a fetch window MUST ask here rather than assuming a
+    fixed history — a hardcoded window is how `sma200` came to be declared on
+    a 63-bar fetch and silently produce nothing.
+    """
+    kind = spec.get("kind")
+    if kind == "curveSpread":
+        return 1
+    period = int(spec.get("period", 14))
+    return period if kind == "sma" else period + 1
+
+
+def expected_key(spec: dict) -> str:
+    """The `tvIndicators` key `compute_node_indicators` writes for this spec.
+
+    Single source of truth for the naming. Anything detecting a
+    declared-but-missing indicator must call this instead of re-deriving
+    `f"{kind}{period}"`, or the check drifts from the code it guards.
+    """
+    kind = spec.get("kind")
+    if kind == "curveSpread":
+        return "curveSpread"
+    return f"{kind}{int(spec.get('period', 14))}"
+
+
+# =========================================================================
 # NODE-LEVEL COMPUTATION
 # =========================================================================
 
@@ -317,7 +351,7 @@ def compute_node_indicators(node: dict, ohlcv: dict) -> dict:
             flat_band = float(spec.get("flatBand", 0.10))
             result = curve_spread(front_closes, back_closes, flat_band=flat_band)
             if result is not None:
-                out["curveSpread"] = result
+                out[expected_key(spec)] = result
             continue
 
         symbol = spec["symbol"]
@@ -328,7 +362,7 @@ def compute_node_indicators(node: dict, ohlcv: dict) -> dict:
 
         period = int(spec.get("period", 14))
         value: float | None = None
-        key = f"{kind}{period}"
+        key = expected_key(spec)
 
         if kind == "rsi":
             value = rsi_wilder(closes, period)

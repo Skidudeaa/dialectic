@@ -1409,5 +1409,223 @@ class TestGdeltFetchPlanning:
         assert checked == 5, f"expected 5 gdelt nodes across the books, found {checked}"
 
 
+
+class TestDerivedFetchWindow:
+    """The fetch window is sized per symbol from the specs declared against it.
+
+    Regression: `range=3mo` was hardcoded (63 daily bars), so ai-capex-unwind's
+    `sma200` on semis-breakdown returned None on every run and was dropped
+    without a word. Verified absent from the live snapshot 2026-08-14.
+    """
+
+    @staticmethod
+    def _fake_chart(n_closes: int):
+        """A Yahoo v8 chart payload with `n_closes` daily bars."""
+        base = int(datetime(2026, 1, 2, tzinfo=timezone.utc).timestamp())
+        return {
+            "chart": {
+                "result": [{
+                    "timestamp": [base + i * 86400 for i in range(n_closes)],
+                    "indicators": {"quote": [{
+                        "close": [100.0 + i for i in range(n_closes)],
+                        "high": [101.0 + i for i in range(n_closes)],
+                        "low": [99.0 + i for i in range(n_closes)],
+                    }]},
+                }]
+            }
+        }
+
+    def _capture_urls(self, cfg, monkeypatch, n_closes=300):
+        """Run the fetch against a stubbed Yahoo, return the URLs requested."""
+        import tools.thesis_graph.thesisgraph as tg
+
+        urls = []
+        payload = json.dumps(self._fake_chart(n_closes)).encode()
+
+        class _Resp:
+            def __enter__(self_inner):
+                return self_inner
+
+            def __exit__(self_inner, *a):
+                return False
+
+            def read(self_inner):
+                return payload
+
+        def _fake_urlopen(req, timeout=None):
+            urls.append(req.full_url)
+            return _Resp()
+
+        monkeypatch.setattr(tg, "urlopen", _fake_urlopen)
+        monkeypatch.setattr(tg.time, "sleep", lambda *_: None)
+        tg.fetch_ohlcv_for_derived(cfg)
+        return urls
+
+    def test_range_for_bars_picks_the_smallest_covering_window(self):
+        from tools.thesis_graph.thesisgraph import _range_for_bars
+        assert _range_for_bars(15) == "3mo"
+        assert _range_for_bars(63) == "3mo"
+        assert _range_for_bars(64) == "6mo"
+        assert _range_for_bars(200) == "1y"
+        assert _range_for_bars(252) == "1y"
+        assert _range_for_bars(253) == "2y"
+        assert _range_for_bars(99999) == "max"
+
+    def test_sma200_symbol_gets_a_year_not_three_months(self, monkeypatch):
+        cfg = {
+            "nodes": [{
+                "id": "semis-breakdown", "type": "price",
+                "derivedIndicators": [
+                    {"kind": "rsi", "period": 14, "symbol": "SOXX",
+                     "overlay": True},
+                    {"kind": "sma", "period": 200, "symbol": "SOXX",
+                     "overlay": True},
+                ],
+            }],
+        }
+        urls = self._capture_urls(cfg, monkeypatch)
+        assert len(urls) == 1
+        assert "range=1y" in urls[0], urls[0]
+
+    def test_an_rsi_only_symbol_keeps_its_existing_three_month_window(
+            self, monkeypatch):
+        """Blast radius: Wilder smoothing has a long memory tail, so a longer
+        series shifts published RSI values. Symbols that never needed more
+        history must keep the exact window they had, even when a SIBLING
+        symbol in the same book asks for 200 bars.
+        """
+        cfg = {
+            "nodes": [
+                {"id": "a", "type": "price", "derivedIndicators": [
+                    {"kind": "sma", "period": 200, "symbol": "SOXX",
+                     "overlay": True}]},
+                {"id": "b", "type": "price", "derivedIndicators": [
+                    {"kind": "rsi", "period": 14, "symbol": "TSM",
+                     "overlay": True}]},
+            ],
+        }
+        urls = sorted(self._capture_urls(cfg, monkeypatch))
+        assert any("SOXX?range=1y" in u for u in urls), urls
+        assert any("TSM?range=3mo" in u for u in urls), urls
+
+    def test_the_declared_indicator_actually_lands_end_to_end(self, monkeypatch):
+        """The originating symptom: sma200 declared, snapshot silent. Drive
+        fetch -> compute and assert the key is present.
+        """
+        import tools.thesis_graph.thesisgraph as tg
+        cfg = {
+            "nodes": [{
+                "id": "semis-breakdown", "type": "indicator",
+                "derivedIndicators": [
+                    {"kind": "sma", "period": 200, "symbol": "SOXX",
+                     "overlay": True},
+                ],
+            }],
+        }
+        self._capture_urls(cfg, monkeypatch)
+        tg.compute_derived_indicators(cfg)
+        tv = cfg["nodes"][0].get("tvIndicators") or {}
+        assert "sma200" in tv, tv
+
+    def test_short_series_reports_the_miss_instead_of_swallowing_it(
+            self, monkeypatch, capsys):
+        """A thin or newly-listed symbol can still under-deliver. That must be
+        loud — silence is what hid the original defect.
+        """
+        import tools.thesis_graph.thesisgraph as tg
+        cfg = {
+            "nodes": [{
+                "id": "semis-breakdown", "type": "indicator",
+                "derivedIndicators": [
+                    {"kind": "sma", "period": 200, "symbol": "SOXX",
+                     "overlay": True},
+                ],
+            }],
+        }
+        self._capture_urls(cfg, monkeypatch, n_closes=40)
+        tg.compute_derived_indicators(cfg)
+        err = capsys.readouterr().err
+        assert "semis-breakdown.sma200 not computed" in err, err
+        assert "have 40" in err, err
+
+
+class TestCloseEventVolume:
+    """Close events are emitted per close per threshold, so the window growing
+    must not multiply the SQLite upserts the coordinator performs each cycle.
+    """
+
+    @staticmethod
+    def _cfg(n_closes: int) -> dict:
+        base = date(2026, 1, 1)
+        return {
+            "nodes": [{
+                "id": "brent", "type": "price", "current": 120.0,
+                "thresholds": [{"level": 115, "closesRequired": 3}],
+                "derivedIndicators": [
+                    {"kind": "rsi", "period": 14, "symbol": "BZ=F",
+                     "overlay": True}],
+            }],
+            "_ohlcv": {"BZ=F": {
+                "closes": [100.0 + i for i in range(n_closes)],
+                "highs": [], "lows": [],
+                "dates": [date.fromordinal(base.toordinal() + i).isoformat()
+                          for i in range(n_closes)],
+            }},
+        }
+
+    def test_a_long_series_is_capped_to_the_recent_tail(self):
+        from tools.thesis_graph.thesisgraph import (
+            compute_derived_indicators, _CLOSE_EVENT_WINDOW)
+        cfg = self._cfg(300)
+        compute_derived_indicators(cfg)
+        assert len(cfg["_close_events"]) == _CLOSE_EVENT_WINDOW
+
+    def test_the_cap_never_shrinks_what_the_old_window_emitted(self):
+        """63 bars was the old fixed fetch. The cap must sit above it, or this
+        change would quietly starve the closesRequired streak gate.
+        """
+        from tools.thesis_graph.thesisgraph import _CLOSE_EVENT_WINDOW
+        assert _CLOSE_EVENT_WINDOW >= 63
+        cfg = self._cfg(63)
+        from tools.thesis_graph.thesisgraph import compute_derived_indicators
+        compute_derived_indicators(cfg)
+        assert len(cfg["_close_events"]) == 63
+
+    def test_dates_stay_aligned_after_the_tail_slice(self):
+        """The slice offsets the index into dates[]. A misalignment would key
+        close_observations rows to the wrong market_date — silent, and it
+        would corrupt the streak the XOP gate fires on.
+        """
+        from tools.thesis_graph.thesisgraph import compute_derived_indicators
+        cfg = self._cfg(300)
+        expected_last = cfg["_ohlcv"]["BZ=F"]["dates"][-1]
+        expected_last_close = cfg["_ohlcv"]["BZ=F"]["closes"][-1]
+        compute_derived_indicators(cfg)
+        last = cfg["_close_events"][-1]
+        assert last["market_date"] == expected_last
+        assert last["close_value"] == expected_last_close
+
+    def test_repeat_specs_on_one_symbol_emit_events_once(self):
+        """rsi + atr + sma on the same symbol share one close series. Emitting
+        per spec meant 3x identical events per close every cycle — dedup'd by
+        the close_observations PK, but paid for on every run.
+        """
+        from tools.thesis_graph.thesisgraph import compute_derived_indicators
+        cfg = self._cfg(120)
+        cfg["nodes"][0]["derivedIndicators"] = [
+            {"kind": "rsi", "period": 14, "symbol": "BZ=F", "overlay": True},
+            {"kind": "atr", "period": 14, "symbol": "BZ=F", "overlay": True},
+            {"kind": "sma", "period": 50, "symbol": "BZ=F", "overlay": True},
+        ]
+        compute_derived_indicators(cfg)
+        events = cfg["_close_events"]
+        assert len(events) == 90
+        keys = {(e["node_id"], e["market_date"], e["threshold_key"])
+                for e in events}
+        assert len(keys) == len(events), "duplicate (node, date, threshold)"
+
+
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
