@@ -7,6 +7,7 @@ import {
   destinationFromSearch,
   destinationUrl,
   resolveWorkspaceScene,
+  scenesForDestination,
 } from './workspaceRoute'
 
 const home = {
@@ -35,6 +36,7 @@ describe('destinationFromSearch', () => {
       roomId: null,
       threadId: null,
       scene: null,
+      object: null,
     })
   })
 
@@ -43,11 +45,13 @@ describe('destinationFromSearch', () => {
       roomId: 'scheme-room',
       threadId: null,
       scene: null,
+      object: null,
     })
     expect(destinationFromSearch('?room=scheme-room&thread=branch-thread')).toEqual({
       roomId: 'scheme-room',
       threadId: 'branch-thread',
       scene: null,
+      object: null,
     })
   })
 
@@ -58,7 +62,37 @@ describe('destinationFromSearch', () => {
       roomId: 'scheme-room',
       threadId: 'branch-thread',
       scene: null,
+      object: null,
     })
+  })
+})
+
+describe('the object axis (§1.18)', () => {
+  it('reads an object id alongside a room and branch', () => {
+    expect(destinationFromSearch('?room=scheme-room&object=field_mark:abc')).toEqual({
+      roomId: 'scheme-room',
+      threadId: null,
+      scene: null,
+      object: 'field_mark:abc',
+    })
+  })
+
+  it('round-trips through destinationUrl', () => {
+    expect(
+      destinationUrl(scheme, root, 'field', 'field_mark:abc'),
+    ).toBe('/?room=scheme-room&scene=field&object=field_mark%3Aabc')
+    expect(
+      destinationFromSearch('?room=scheme-room&scene=field&object=field_mark%3Aabc'),
+    ).toEqual({
+      roomId: 'scheme-room',
+      threadId: null,
+      scene: 'field',
+      object: 'field_mark:abc',
+    })
+  })
+
+  it('omits the object param when none is selected', () => {
+    expect(destinationUrl(scheme, root)).toBe('/?room=scheme-room')
   })
 })
 
@@ -84,12 +118,24 @@ describe('workspace scenes', () => {
       roomId: null,
       threadId: null,
       scene: 'record',
+      object: null,
     })
     expect(destinationFromSearch('?scene=made-up')).toEqual({
       roomId: null,
       threadId: null,
       scene: null,
+      object: null,
     })
+  })
+
+  it('offers Field in an ordinary room but never at Home root', () => {
+    // THE one scenesForDestination definition (§5.2) — Field joins Bench
+    // between Bench and Library; Home holds no Field at all.
+    expect(scenesForDestination(scheme, root)).toEqual([
+      'record', 'bench', 'field', 'library', 'ledger',
+    ])
+    expect(scenesForDestination(home, root)).toEqual(['house', 'record'])
+    expect(scenesForDestination(home, branch)).toEqual(['record'])
   })
 
   it('defaults Home root to House and every other destination to Record', () => {
@@ -131,7 +177,7 @@ describe('workspace scenes', () => {
 
 describe('entryDestination', () => {
   it('keeps an explicit room destination untouched', () => {
-    const parsed = { roomId: 'scheme-room', threadId: 'branch-thread', scene: 'record' as const }
+    const parsed = { roomId: 'scheme-room', threadId: 'branch-thread', scene: 'record' as const, object: null }
     expect(entryDestination(parsed)).toEqual(parsed)
   })
 
@@ -143,6 +189,7 @@ describe('entryDestination', () => {
       roomId: null,
       threadId: null,
       scene: 'record',
+      object: null,
     })
   })
 
@@ -151,6 +198,21 @@ describe('entryDestination', () => {
       roomId: null,
       threadId: null,
       scene: null,
+      object: null,
+    })
+  })
+
+  it('preserves a selected object when falling back to Home root, same as scene', () => {
+    // The object axis must not silently drop the same way the scene once did
+    // (see the regression above) — Focus can be open at Home root too, since
+    // house movements are workspace objects.
+    expect(entryDestination({
+      roomId: null, threadId: null, scene: null, object: 'house_movement:x',
+    })).toEqual({
+      roomId: null,
+      threadId: null,
+      scene: null,
+      object: 'house_movement:x',
     })
   })
 })

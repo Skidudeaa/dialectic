@@ -33,10 +33,14 @@ import { WorkspaceSceneFrame } from './components/workspace/WorkspaceSceneFrame'
 import { BenchScene } from './components/workspace/scenes/BenchScene'
 import { LibraryScene } from './components/workspace/scenes/LibraryScene'
 import { LedgerScene } from './components/workspace/scenes/LedgerScene'
+import { FieldScene } from './components/workspace/scenes/FieldScene'
+import { FocusSurface } from './components/workspace/focus/FocusSurface.tsx'
+import { bareMarkId } from './components/workspace/fieldDisplay.ts'
 import { TradingPanel } from './components/trading/TradingPanel'
 import { scenesForDestination } from './lib/workspaceRoute.ts'
 import { useWorkspaceObjects } from './hooks/useWorkspaceObjects.ts'
-import type { WorkspaceObject } from './types/workspace.ts'
+import { useFieldMarks } from './hooks/useFieldMarks.ts'
+import type { FieldReviewRequest } from './types/workspace.ts'
 
 function RoomBriefing({ roomId }: { roomId: string }) {
   const [dismissed, setDismissed] = useState(false)
@@ -86,7 +90,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
 
   // Every destination change goes through nav.navigate — no setRoom,
   // setThread, or leaveRoom call expresses a destination in this file.
-  const { rooms, navigate } = nav
+  const { rooms, navigate, objectId } = nav
   const [showRoomAccess, setShowRoomAccess] = useState(false)
   const [showProtocolPicker, setShowProtocolPicker] = useState(false)
   // The fork tree behind both the rail's compact view and the Branches
@@ -379,6 +383,16 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
     currentRoom?.id ?? null,
     Boolean(accessToken) && !isHome,
   )
+  // Same fence as workspaceObjects, for the same reasons — the Field sits
+  // behind get_current_user too, and Home holds no Field (§5.2). Fetched
+  // unconditionally (not only while the Field scene is showing): Focus can
+  // open from Bench/Library/Ledger too, and FocusStructure's "incoming"
+  // relationships need the room's marks regardless of which scene tapped
+  // the object that opened it.
+  const fieldMarks = useFieldMarks(
+    currentRoom?.id ?? null,
+    Boolean(accessToken) && !isHome,
+  )
 
   useAwayAlerts({
     messages,
@@ -515,9 +529,43 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // scenes that need it are only reachable outside Home, and the projection
   // sits behind get_current_user, so a guest identity would 401 on every call —
   // hence the explicit enable rather than an unconditional fetch.
-  const openWorkspaceObject = (object: WorkspaceObject) => {
-    if (!object.branch_id) return
-    void navigate({ roomId: currentRoom.id, threadId: object.branch_id }, 'push')
+  // §1.18: a tap selects the object into Focus, product-wide — it no longer
+  // jumps to the object's branch (Release 2's behavior). "Open branch" lives
+  // inside Focus itself now (FocusSurface.tsx), as one of its actions rather
+  // than the tap's only outcome. Selecting stays in the SAME room/thread/
+  // scene, so the surface underneath does not jump around under the reader
+  // just because they looked at something in it.
+  //
+  // Typed structurally ({ id: string }) rather than WorkspaceObject: the
+  // Field scene passes a FieldMark here, which shares the same id space
+  // (`field_mark:<uuid>`, same as every other workspace-object id) but is
+  // NOT a WorkspaceObject — field marks are deliberately not wired into the
+  // generic projection this release (§5.1).
+  const openWorkspaceObject = (object: { id: string }) => {
+    void navigate({
+      roomId: currentRoom.id,
+      threadId: currentThread?.id ?? null,
+      scene: workspaceScene,
+      object: object.id,
+    }, 'push')
+  }
+
+  // FocusSurface's one navigation primitive (see its own doc comment for
+  // why it is one function and not three) — resolved here, where roomId and
+  // the current thread/scene are already in scope, so Focus itself never
+  // has to reconstruct a destination from parts it was not given.
+  const focusNavigate = (target: { threadId?: string; object: string | null }) => {
+    void navigate({
+      roomId: currentRoom.id,
+      threadId: target.threadId ?? currentThread?.id ?? null,
+      scene: workspaceScene,
+      object: target.object,
+    }, 'push')
+  }
+
+  const handleFieldReview = async (markId: string, request: FieldReviewRequest) => {
+    await api.postFieldReview(currentRoom.id, bareMarkId(markId), request)
+    if (fieldMarks.status === 'ready') fieldMarks.refresh()
   }
 
   const sceneContent = {
@@ -530,6 +578,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
         tradingPanel={<TradingPanel />}
       />
     ),
+    field: <FieldScene state={fieldMarks} objects={workspaceObjects} onOpen={openWorkspaceObject} />,
     library: <LibraryScene state={workspaceObjects} onOpen={openWorkspaceObject} />,
     ledger: (
       <LedgerScene
@@ -616,18 +665,39 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
                 </button>
               </div>
             )}
-            <WorkspaceSceneFrame
-              scene={workspaceScene}
-              scenes={availableScenes}
-              onSelect={(scene) => {
-                void navigate({
-                  roomId: currentRoom.id,
-                  threadId: currentThread?.id ?? null,
-                  scene,
-                }, 'push')
-              }}
-              content={sceneContent}
-            />
+            <div className="workspace-with-focus">
+              <WorkspaceSceneFrame
+                scene={workspaceScene}
+                scenes={availableScenes}
+                onSelect={(scene) => {
+                  void navigate({
+                    roomId: currentRoom.id,
+                    threadId: currentThread?.id ?? null,
+                    // Focus rides alongside whatever scene is showing (§5.2)
+                    // — a scene switch does not close it.
+                    scene,
+                    object: objectId,
+                  }, 'push')
+                }}
+                content={sceneContent}
+              />
+              {/* Home holds no Field and offers no object-tap surface today
+                  (§5.2) — Focus never opens there in practice, but the guard
+                  is explicit rather than relying on that absence, since
+                  `objects`/`fieldMarks` are not fetched at Home and a stray
+                  `&object=` would otherwise hang in a permanent loading
+                  state instead of resolving to "not here". */}
+              {!isHome && objectId && (
+                <FocusSurface
+                  objectId={objectId}
+                  objects={workspaceObjects}
+                  fieldMarks={fieldMarks}
+                  canAct={Boolean(accessToken)}
+                  onNavigate={focusNavigate}
+                  onReview={handleFieldReview}
+                />
+              )}
+            </div>
           </>
         }
         rightPanel={

@@ -1,0 +1,72 @@
+/* The Field's material accents (design v2 §16.4). Scoped locally rather than
+   added to styles/tokens.css: the shipped token set is still the "Dark
+   Roast" v1 system (see tokens.css's own header) and the canonical §16.4
+   material palette lands with TG-F's identity pass, which restyles Field's
+   and Focus's surfaces afterward (PLAN.md §5.0 dependency order: "F after B
+   and C exist"). These two tokens exist here so the review encoding can ship
+   now without waiting on that pass, and so TG-F has one place to redirect
+   them from rather than a scatter of literal hex values. */
+:root {
+    --field-oxidized-copper: #718A80;
+    --field-oxblood: #8C5F5A;
+}
+
+/* Never color-only (§16.4, §17.4): every review state carries this literal
+   text chip. The class below only ever ADDS a border/opacity accent on top
+   of it — removing the chip's text is not an option any theme pass may take
+   without re-opening this rule. */
+.field-review-chip {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-bean);
+    color: var(--color-faint);
+}
+.field-review-chip.is-confirmed {
+    color: var(--field-oxidized-copper);
+    border-color: var(--field-oxidized-copper);
+}
+.field-review-chip.is-contested {
+    color: var(--field-oxblood);
+    border-color: var(--field-oxblood);
+}
+.field-review-chip.is-provisional {
+    color: var(--color-faint);
+    border-style: dashed;
+}
+.field-review-chip.is-superseded {
+    color: var(--color-ghost);
+    border-color: var(--color-ghost);
+}
+
+/* Row-level encoding, applied to whatever element renders one mark — a
+   plain row with a hairline rule, never a rounded card (§16.7). */
+.field-mark-row {
+    border-left: 2px solid transparent;
+    padding-left: 0.75rem;
+}
+.field-mark-row.is-provisional {
+    border-left-style: dashed;
+    border-left-color: var(--color-faint);
+    opacity: .72;
+}
+.field-mark-row.is-confirmed {
+    border-left-style: solid;
+    border-left-color: var(--field-oxidized-copper);
+}
+.field-mark-row.is-contested {
+    border-left-style: solid;
+    border-left-color: var(--field-oxblood);
+}
+.field-mark-row.is-contested .field-mark-title {
+    text-decoration: underline;
+    text-decoration-color: var(--field-oxblood);
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 3px;
+}

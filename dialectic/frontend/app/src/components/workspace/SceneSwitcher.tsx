@@ -13,6 +13,7 @@ const SCENE_LABELS: Record<ImplementedWorkspaceScene, string> = {
   house: 'House',
   record: 'Record',
   bench: 'Bench',
+  field: 'Field',
   library: 'Library',
   ledger: 'Ledger',
 }

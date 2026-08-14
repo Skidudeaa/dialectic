@@ -1,0 +1,116 @@
+.field-scene {
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+}
+
+.field-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.field-section-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    color: var(--color-secondary);
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--color-bean);
+}
+
+.field-section-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Plain rows with a hairline rule between them — not rounded cards (§16.7). */
+.field-section-list > li {
+    border-bottom: 1px solid var(--color-bean);
+    padding: 0.6rem 0 0.6rem 0.75rem;
+}
+.field-section-list > li:last-child { border-bottom: none; }
+
+.field-mark-open {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+.field-mark-open:focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 2px;
+}
+
+.field-mark-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.6rem;
+}
+.field-mark-title {
+    font-family: var(--font-serif);
+    font-size: 13.5px;
+    color: var(--color-bone);
+    line-height: 1.35;
+}
+.field-mark-subjects {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-faint);
+    margin-top: 0.25rem;
+    overflow-wrap: anywhere;
+}
+
+/* Support/challenge edges: indented lines under their subject's row
+   (§5.2), not a section of their own. */
+.field-mark-nested {
+    margin-top: 0.35rem;
+    margin-left: 1rem;
+    font-family: var(--font-serif);
+    font-size: 12px;
+    color: var(--color-secondary);
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+.field-mark-nested.is-provisional { opacity: .72; }
+
+.field-mark-history { margin-top: 0.4rem; }
+.field-mark-history-toggle {
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--color-faint);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.field-mark-history-toggle:hover { color: var(--color-secondary); }
+.field-mark-history-list {
+    list-style: none;
+    margin-top: 0.4rem;
+    margin-left: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.field-mark-history-list > li {
+    border-left: 2px dashed var(--color-ghost);
+    padding-left: 0.6rem;
+    opacity: .6;
+}
+
+.field-mark-orphan { padding-left: 0.75rem; }

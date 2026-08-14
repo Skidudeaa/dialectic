@@ -26,6 +26,11 @@ export function destinationFromSearch(search: string): RoomDestination {
     // An unknown scene name is dropped to null, not preserved: a typo or a
     // stale link resolves to the destination's default instead of 404-ing.
     scene: isWorkspaceScene(requestedScene) ? requestedScene : null,
+    // Unlike scene, an object id has no closed vocabulary to validate against
+    // here — resolving whether it exists is a room-scoped question this pure
+    // module cannot answer. An id that does not resolve is Focus's own
+    // unavailable state (§1.18), never dropped silently like an unknown scene.
+    object: params.get('object'),
   }
 }
 
@@ -61,10 +66,13 @@ export function defaultWorkspaceScene(
  * 409 -- so a Bench there would be a door onto a refusal. A branch off Home is
  * an ordinary conversation and carries no household at all.
  *
- * WHY an ordinary room offers all four even when empty: a Bench with no thesis
+ * WHY an ordinary room offers all five even when empty: a Bench with no thesis
  * is where a thesis is CREATED, and a Library with no readings is where the
  * first one is explained. Hiding a scene until it has content is how the
- * trading panel once made its own create flow unreachable.
+ * trading panel once made its own create flow unreachable. The Field is the
+ * same shape: an empty Field teaches what lands there (SceneEmpty's contract)
+ * rather than staying unreachable until the inference job has something to
+ * show. Home root does not get it — Home holds no Field (§5.2).
  */
 export function scenesForDestination(
   room: Pick<UserRoom, 'is_home'>,
@@ -75,7 +83,7 @@ export function scenesForDestination(
       ? (['house', 'record'] as const)
       : (['record'] as const)
   }
-  return ['record', 'bench', 'library', 'ledger'] as const
+  return ['record', 'bench', 'field', 'library', 'ledger'] as const
 }
 
 /**
@@ -104,6 +112,7 @@ export function destinationUrl(
   room: Pick<UserRoom, 'id' | 'is_home'>,
   thread: Pick<Thread, 'id' | 'parent_thread_id'>,
   scene: ImplementedWorkspaceScene = defaultWorkspaceScene(room, thread),
+  object: string | null = null,
 ): string {
   // Only Home's root canonicalizes to bare `/`; a Home branch carries both ids,
   // and an ordinary room root is `/?room=<id>`. The default scene is OMITTED so
@@ -115,6 +124,7 @@ export function destinationUrl(
   if (!rootHome) params.set('room', room.id)
   if (thread.parent_thread_id !== null) params.set('thread', thread.id)
   if (scene !== defaultScene) params.set('scene', scene)
+  if (object) params.set('object', object)
 
   const query = params.toString()
   return query ? `/?${query}` : '/'
@@ -131,5 +141,10 @@ export function destinationUrl(
  */
 export function entryDestination(parsed: RoomDestination): RoomDestination {
   if (parsed.roomId) return parsed
-  return { roomId: null, threadId: null, scene: parsed.scene ?? null }
+  return {
+    roomId: null,
+    threadId: null,
+    scene: parsed.scene ?? null,
+    object: parsed.object ?? null,
+  }
 }

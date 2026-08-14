@@ -69,6 +69,13 @@ export interface RoomNavigation {
   enterGrantedRoom: (
     granted: Pick<UserRoom, 'id' | 'name' | 'token'>,
   ) => Promise<boolean>
+  /** The `object` axis of the last successfully installed destination —
+   *  Focus's selection (§1.18). Pure pass-through: whatever `navigate` was
+   *  given for this axis, verbatim, with no validation here — an id that
+   *  does not resolve is FocusSurface's own unavailable state to render,
+   *  never this hook's concern (§5.2). Resets to null on any navigate call
+   *  that does not carry one, same as every other destination axis. */
+  objectId: string | null
 }
 
 export function useRoomNavigation(): RoomNavigation {
@@ -83,6 +90,7 @@ export function useRoomNavigation(): RoomNavigation {
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [accessError, setAccessError] = useState<string | null>(null)
+  const [objectId, setObjectId] = useState<string | null>(null)
 
   const roomsRef = useRef<UserRoom[]>([])
   const loadRef = useRef<Promise<UserRoom[]> | null>(null)
@@ -212,6 +220,12 @@ export function useRoomNavigation(): RoomNavigation {
     // one requested: an unavailable or ill-fitting scene lands on the default
     // rather than erroring, and the URL below serializes what we installed.
     const scene = resolveWorkspaceScene(room, thread, destination.scene)
+    // The object axis has no closed vocabulary to resolve against here
+    // (unlike scene) — pure pass-through. A destination that omits it (every
+    // ordinary room/thread/scene change) installs null, which is what closes
+    // Focus on an unrelated navigation without any extra code at the call
+    // sites that don't care about it.
+    const object = destination.object ?? null
 
     if (state.currentRoom?.id !== room.id) {
       setRoom(
@@ -224,7 +238,9 @@ export function useRoomNavigation(): RoomNavigation {
     // AFTER setRoom, which resets the scene to 'record' on a room change.
     setWorkspaceScene(scene)
 
-    const url = destinationUrl(room, thread, scene)
+    setObjectId(object)
+
+    const url = destinationUrl(room, thread, scene, object)
     if (historyMode === 'push') window.history.pushState(null, '', url)
     else if (historyMode === 'replace') window.history.replaceState(null, '', url)
     // 'none' (popstate, initial entry) mutates no history.
@@ -348,5 +364,6 @@ export function useRoomNavigation(): RoomNavigation {
     refreshRooms,
     navigate,
     enterGrantedRoom,
+    objectId,
   }
 }

@@ -1,5 +1,13 @@
 import type { Attachment, HomeActivityProjection, Memory, Thread, ThreadNode, UserRoom } from '../types/index.ts';
-import type { ProposalEnvelopeProjection, ProposalKind, WorkspaceObjectKind, WorkspaceObjectProjection } from '../types/workspace.ts';
+import type {
+  FieldProjection,
+  FieldReviewRequest,
+  FieldReviewResponse,
+  ProposalEnvelopeProjection,
+  ProposalKind,
+  WorkspaceObjectKind,
+  WorkspaceObjectProjection,
+} from '../types/workspace.ts';
 
 const BASE = '';  // Same origin via Vite proxy
 
@@ -144,6 +152,32 @@ class DialecticAPI {
   ): Promise<ProposalEnvelopeProjection> {
     const query = kind ? `?kind=${encodeURIComponent(kind)}` : '';
     return this.fetch(`/rooms/${roomId}/workspace/proposals${query}`);
+  }
+  /**
+   * The room's Field -- every mark with derived review and inline review
+   * history (design v2 §14, dialectic/field_marks.py). Read-only, same
+   * contract as getWorkspaceObjects: a surface that wants to ACT calls
+   * postFieldReview, never a second write path.
+   */
+  async getFieldMarks(roomId: string): Promise<FieldProjection> {
+    return this.fetch(`/rooms/${roomId}/field`);
+  }
+  /**
+   * One human action on one mark -- confirm/contest/correct/split/merge/
+   * supersede. All writes land in one transaction on the server; on any
+   * failure nothing lands (api/field.py). The caller re-fetches (or the
+   * hook's refresh()) rather than optimistically patching the projection,
+   * because a correct/split/merge changes more than the one row it targets.
+   */
+  async postFieldReview(
+    roomId: string,
+    markId: string,
+    request: FieldReviewRequest,
+  ): Promise<FieldReviewResponse> {
+    return this.fetch(`/rooms/${roomId}/field/marks/${markId}/review`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
   }
   async getMessages(threadId: string, limit = 50) { return this.fetch(`/threads/${threadId}/messages?limit=${limit}`); }
   async getMemories(roomId: string): Promise<Memory[]> {

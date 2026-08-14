@@ -14,11 +14,19 @@ export type HistoryMode = 'push' | 'replace' | 'none';
 
 /** A navigation target. roomId null is the canonical Home-root destination.
  *  `scene` is the third destination axis: null means "no scene requested",
- *  which resolves to the destination's default rather than to an error. */
+ *  which resolves to the destination's default rather than to an error.
+ *  `object` is the fourth axis (§1.18) — the workspace object id selected
+ *  into Focus. Focus is a STATE, not a scene: it rides alongside whatever
+ *  scene is showing rather than replacing it, so it is a destination axis
+ *  of its own rather than a WorkspaceScene value. null/omitted means no
+ *  object is selected; an id that does not resolve renders Focus's own
+ *  unavailable state, never a 404 — resolution happens client-side against
+ *  whatever projection the caller already has, not here. */
 export interface RoomDestination {
   roomId: string | null;
   threadId?: string | null;
   scene?: WorkspaceScene | null;
+  object?: string | null;
 }
 
 export interface User {

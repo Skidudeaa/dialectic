@@ -24,9 +24,12 @@ const root = { id: 'main', parent_thread_id: null } as Pick<Thread, 'id' | 'pare
 const branch = { id: 'br', parent_thread_id: 'main' } as Pick<Thread, 'id' | 'parent_thread_id'>
 
 describe('scenesForDestination', () => {
-  it('gives an ordinary room the four workroom scenes', () => {
+  it('gives an ordinary room the five workroom scenes', () => {
+    // Field joined this list in Release 3 (§5.2) — it lives between Bench
+    // and Library, and Home root still does not get it (Home holds no
+    // Field).
     expect(scenesForDestination(scheme, root)).toEqual([
-      'record', 'bench', 'library', 'ledger',
+      'record', 'bench', 'field', 'library', 'ledger',
     ])
   })
 
@@ -78,8 +81,13 @@ describe('resolveWorkspaceScene agrees with what is on offer', () => {
   })
 
   it('still falls back from approved but unbuilt scenes', () => {
-    expect(resolveWorkspaceScene(scheme, root, 'field')).toBe('record')
+    // `field` moved out of this list in Release 3 — FieldScene.tsx renders
+    // it now, so it belongs in the "accepts every scene on offer" case
+    // above instead. `atlas`, `judgment` and `focus` stay unbuilt (`focus`
+    // is a state, not a scene, and stays out of the implemented list on
+    // purpose — §5.2).
     expect(resolveWorkspaceScene(scheme, root, 'atlas')).toBe('record')
+    expect(resolveWorkspaceScene(scheme, root, 'judgment')).toBe('record')
     expect(resolveWorkspaceScene(home, root, 'focus')).toBe('house')
   })
 })

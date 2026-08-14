@@ -17,6 +17,17 @@ from pathlib import Path
 
 import pytest
 
+from field_marks import (
+    FIELD_ACTIONS,
+    FIELD_DELIBERATIVE_STATUSES,
+    FIELD_ORIGINS,
+    FIELD_RELATIONS,
+    FIELD_REVIEW_STATES,
+    FieldMark,
+    FieldProjection,
+    FieldReview,
+    FieldSubjectRef,
+)
 from proposal_envelope import (
     PROPOSAL_ACTIONS,
     PROPOSAL_KINDS,
@@ -109,6 +120,10 @@ def test_typescript_workspace_object_matches_the_backend_model(ts_source):
     (WorkspaceRelationship, "WorkspaceRelationship"),
     (WorkspaceProvenance, "WorkspaceProvenance"),
     (WorkspaceObjectProjection, "WorkspaceObjectProjection"),
+    (FieldSubjectRef, "FieldSubjectRef"),
+    (FieldReview, "FieldReview"),
+    (FieldMark, "FieldMark"),
+    (FieldProjection, "FieldProjection"),
 ])
 def test_every_nested_shape_agrees(ts_source, model, interface):
     assert _interface_fields(ts_source, interface) == set(model.model_fields)
@@ -180,6 +195,11 @@ def test_the_metadata_slot_table_has_one_definition(ts_source):
     (PROPOSAL_KINDS, "PROPOSAL_KINDS"),
     (PROPOSAL_STATUSES, "PROPOSAL_STATUSES"),
     (PROPOSAL_ACTIONS, "PROPOSAL_ACTIONS"),
+    (FIELD_RELATIONS, "FIELD_RELATIONS"),
+    (FIELD_ACTIONS, "FIELD_ACTIONS"),
+    (FIELD_ORIGINS, "FIELD_ORIGINS"),
+    (FIELD_REVIEW_STATES, "FIELD_REVIEW_STATES"),
+    (FIELD_DELIBERATIVE_STATUSES, "FIELD_DELIBERATIVE_STATUSES"),
 ])
 def test_closed_vocabularies_agree_in_order(ts_source, python_values, ts_const):
     """Order too, not just membership: these render as switch arms and lists,

@@ -25,16 +25,23 @@ export type WorkspaceScene = (typeof WORKSPACE_SCENES)[number]
 // hold readings, 8 hold memories -- and each recomposes a panel that already
 // worked rather than rebuilding a workflow beside it.
 //
-// Judgment, Brief, Field, Focus, Current and Atlas stay in the approved NAME
-// space and out of this list on purpose: production holds zero commitments,
-// zero proposals and zero research briefs, so every one of them would render an
-// empty scene in every room. WHICH scenes a given destination may show is
-// scenesForDestination() in lib/workspaceRoute.ts -- one definition, read by
-// both the router and the frame.
+// Judgment, Brief, Focus and Current stay in the approved NAME space and out
+// of this list on purpose: production holds zero commitments, zero
+// proposals and zero research briefs, so every one of them would render an
+// empty scene in every room, and Focus is a STATE, not a scene at all
+// (§5.2) -- a permanent Focus tab is exactly the "generic permanent tab"
+// design v2 §7.4 says Focus replaces. WHICH scenes a given destination may
+// show is scenesForDestination() in lib/workspaceRoute.ts -- one definition,
+// read by both the router and the frame.
+//
+// Field joins this list in Release 3 (§5.2): FieldScene.tsx renders a real
+// projection with its own teaching empty state, so it is no longer an
+// approved-but-unbuilt name.
 export const IMPLEMENTED_WORKSPACE_SCENES = [
   'house',
   'record',
   'bench',
+  'field',
   'library',
   'ledger',
 ] as const
@@ -253,4 +260,156 @@ export interface ProposalEnvelopeProjection {
   generated_at: string
   room_id: string
   proposals: ProposalEnvelope[]
+}
+
+// ---------------------------------------------------------------------------
+// The Field (design v2 §14) -- dialectic/field_marks.py
+//
+// Mirrors field_marks.py's models and vocabularies. field_marks is a
+// proofreader's-marks metaphor over one append-only table (migration 017):
+// Dialectic pencils in provisional structure -- a support, a contradiction,
+// an open question -- and a human's confirm/contest/correct restyles the
+// mark rather than rewriting it (§1.10). `review` is DERIVED server-side
+// (never a stored column read verbatim); this side never re-derives it.
+//
+// Pinned to the backend by dialectic/tests/test_workspace_contract.py, same
+// as the workspace-object and proposal-envelope shapes above -- order too,
+// not just membership, since these render as switch arms and section lists.
+// ---------------------------------------------------------------------------
+
+// §14.3's ten low-risk automatic kinds, with support/challenge split into two
+// directed relations -- eleven total. §14.4's human-ratified judgments are
+// deliberately NOT here: none of them is a member, which is what makes them
+// structurally unwritable by inference (field_marks.py's own guard comment).
+export const FIELD_RELATIONS = [
+  'contribution_type',
+  'claim_group',
+  'supports',
+  'challenges',
+  'repeated_definition',
+  'possible_contradiction',
+  'emerging_position',
+  'evidence_attachment',
+  'branch_candidate',
+  'unanswered_question',
+  'candidate_synthesis',
+] as const
+
+export type FieldRelation = (typeof FIELD_RELATIONS)[number]
+
+export const FIELD_ACTIONS = [
+  'confirm',
+  'contest',
+  'correct',
+  'supersede',
+  'split',
+  'merge',
+] as const
+
+export type FieldAction = (typeof FIELD_ACTIONS)[number]
+
+export const FIELD_ORIGINS = [
+  'explicit',
+  'inferred',
+] as const
+
+export type FieldOrigin = (typeof FIELD_ORIGINS)[number]
+
+/** The independent REVIEW axis (§1.3, §14.2) -- never conflated with
+ *  deliberative_status, and never implying the marked proposition is true. */
+export const FIELD_REVIEW_STATES = [
+  'provisional',
+  'confirmed',
+  'contested',
+  'superseded',
+] as const
+
+export type FieldReviewState = (typeof FIELD_REVIEW_STATES)[number]
+
+export const FIELD_DELIBERATIVE_STATUSES = [
+  'active',
+  'accepted',
+  'rejected',
+  'resolved',
+  'withdrawn',
+] as const
+
+export type FieldDeliberativeStatus = (typeof FIELD_DELIBERATIVE_STATUSES)[number]
+
+/** Exactly where a mark points. Mirrors field_marks.FieldSubjectRef, which
+ *  deliberately mirrors WorkspaceSourceRef's shape without importing it (the
+ *  backend's own module docstring explains why: the opposite dependency
+ *  already exists). Kept as its own interface here for the same reason. */
+export interface FieldSubjectRef {
+  entity: string
+  id: string
+  field: string | null
+}
+
+/** One human action on a mark. Never itself reviewed -- reviews are the
+ *  leaves of the append-only tree, not a target of a target. */
+export interface FieldReview {
+  id: string
+  action: FieldAction
+  actor_user_id: string | null
+  note: string | null
+  created_at: string
+}
+
+/** One relation-kind row, exactly as a surface renders it. `review` is
+ *  DERIVED server-side (never a stored column) -- see field_marks.py's
+ *  `_derive_review_state`. `supersedes_id`/`caused_by_id` are bare row ids
+ *  (not `field_mark:`-prefixed) because they are foreign keys into this SAME
+ *  table, not cross-entity references. */
+export interface FieldMark {
+  id: string
+  room_id: string
+  thread_id: string | null
+  relation: FieldRelation
+  origin: FieldOrigin | null
+  review: FieldReviewState
+  deliberative_status: FieldDeliberativeStatus
+  subjects: FieldSubjectRef[]
+  title: string
+  payload: Record<string, unknown>
+  supersedes_id: string | null
+  caused_by_id: string | null
+  actor_user_id: string | null
+  provenance: string
+  created_at: string
+  reviews: FieldReview[]
+}
+
+export interface FieldProjection {
+  generated_at: string
+  room_id: string
+  marks: FieldMark[]
+}
+
+// --- the review write door (api/field.py) -----------------------------------
+//
+// Not pinned by test_workspace_contract.py (that file pins the READ shapes
+// above) -- these are request/response payloads for lib/api.ts's
+// postFieldReview, kept here beside the shapes they carry rather than as
+// anonymous inline types.
+
+export interface FieldReplacementRequest {
+  relation: FieldRelation
+  subjects: FieldSubjectRef[]
+  title?: string
+  payload?: Record<string, unknown>
+}
+
+export interface FieldReviewRequest {
+  action: FieldAction
+  note?: string | null
+  replacement?: FieldReplacementRequest
+  replacements?: FieldReplacementRequest[]
+  merge_ids?: string[]
+}
+
+export interface FieldReviewResponse {
+  review: FieldReview
+  replacements: FieldMark[]
+  mark: FieldMark
 }

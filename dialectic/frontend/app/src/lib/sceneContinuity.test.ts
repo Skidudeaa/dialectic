@@ -83,7 +83,11 @@ describe('startup precedence', () => {
 
   it('opens Home → House on a bare URL with nothing stored', () => {
     expect(chooseEntryDestination(bare, null)).toEqual({
-      roomId: null, threadId: null, scene: null,
+      // object: null joined roomId/threadId/scene here when Release 3 (§5.2)
+      // extended RoomDestination with the Focus object axis and
+      // entryDestination started preserving it the same way it already
+      // preserved scene (workspaceRoute.ts) — not a behavior change here.
+      roomId: null, threadId: null, scene: null, object: null,
     })
   })
 
@@ -91,7 +95,7 @@ describe('startup precedence', () => {
     const chosen = chooseEntryDestination(
       { roomId: null, threadId: null, scene: 'record' }, restored,
     )
-    expect(chosen).toEqual({ roomId: null, threadId: null, scene: 'record' })
+    expect(chosen).toEqual({ roomId: null, threadId: null, scene: 'record', object: null })
   })
 })
 
