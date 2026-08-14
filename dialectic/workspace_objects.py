@@ -46,6 +46,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from api.trading_ingest import THESIS_STATE_MEMORY_KEY
+from field_marks import FieldMark
 from home_activity import COMMITMENT_DUE_WINDOW, HomeActivityMovement
 from llm.reading import _reading_key
 from proposal_envelope import ProposalEnvelopeService, proposal_slots
@@ -61,6 +62,7 @@ WORKSPACE_OBJECT_KINDS = (
     "dossier_entry",
     "house_movement",
     "record_event",
+    "field_mark",
 )
 
 # Who or what produced the underlying row. `detail` carries the specific source
@@ -215,7 +217,7 @@ LEFT JOIN LATERAL (
 ) mem ON true
 LEFT JOIN LATERAL (
     SELECT id, event_type, thread_id FROM events
-    WHERE room_id = r.id AND event_type = 'THESIS_CREATED'
+    WHERE room_id = r.id AND event_type = 'thesis_created'
     ORDER BY timestamp DESC LIMIT 1
 ) ev ON true
 WHERE r.id = $1 AND r.linked_book_id IS NOT NULL
@@ -756,6 +758,65 @@ def workspace_object_from_movement(
             id=str(movement.object_id) if movement.object_id else "",
             field=movement.kind,
         )],
+    )
+
+
+def workspace_object_from_field_mark(mark: FieldMark) -> WorkspaceObject:
+    """A Field mark → the generic projection, REUSING field_marks.py's own
+    derivation, mirroring workspace_object_from_movement above.
+
+    NOT wired into WorkspaceObjectService.build() this release (§5.1) — the
+    Field has its own richer endpoint (GET /rooms/{id}/field) that carries
+    all three epistemic axes plus inline review history; this function exists
+    so a LATER consumer (Atlas, most likely) can fold a mark into the generic
+    shape without inventing a second mapping. Calling it is opt-in per
+    caller, not automatic.
+
+    The mapping is deliberately LOSSY (§1.20) — three independent axes
+    (origin, review, deliberative_status) do not fit the generic object's
+    single `status` + `review_state` pair, so this keeps the derived REVIEW
+    axis (the one a surface would default to showing) and drops the other
+    two rather than picking a wrong single number:
+      - `status`             := the mark's derived review state verbatim
+                                 (provisional | confirmed | contested |
+                                 superseded) — the Field's own endpoint is
+                                 still where the full three-axis state lives.
+      - `provenance.origin`  := 'dialectic' for an inferred mark, 'human' for
+                                 an explicit one.
+      - `provenance.detail`  := the relation (§14.3 vocabulary).
+      - `review_state`       := 'accepted' only when review == 'confirmed';
+                                 everything else (including 'provisional')
+                                 maps to 'none' (§1.20) — routing every
+                                 provisional inference into "awaiting_human"
+                                 would bury the proposals §9.4 actually wants
+                                 there.
+    """
+    row_id = mark.id.split(":", 1)[1]
+    updated_at = mark.created_at
+    if mark.reviews:
+        updated_at = max(mark.created_at, max(r.created_at for r in mark.reviews))
+    actions = ["inspect", "open_room"]
+    if mark.thread_id is not None:
+        actions.append("open_branch")
+    return WorkspaceObject(
+        id=mark.id,
+        kind="field_mark",
+        room_id=mark.room_id,
+        branch_id=mark.thread_id,
+        title=mark.title or mark.relation,
+        summary=mark.title or mark.relation,
+        status=mark.review,
+        created_at=mark.created_at,
+        updated_at=updated_at,
+        provenance=WorkspaceProvenance(
+            origin="dialectic" if mark.origin == "inferred" else "human",
+            actor_user_id=mark.actor_user_id,
+            detail=mark.relation,
+        ),
+        relationships=[],
+        available_actions=actions,
+        review_state="accepted" if mark.review == "confirmed" else "none",
+        source_entity=[WorkspaceSourceRef(entity="field_marks", id=row_id)],
     )
 
 

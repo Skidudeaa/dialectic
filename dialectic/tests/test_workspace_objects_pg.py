@@ -21,12 +21,15 @@ import asyncpg
 import pytest
 import pytest_asyncio
 
+from field_marks import FieldMark, FieldSubjectRef
 from workspace_objects import (
     WORKSPACE_ACTIONS,
     WORKSPACE_OBJECT_KINDS,
     WORKSPACE_ORIGINS,
     WORKSPACE_REVIEW_STATES,
     WorkspaceObjectService,
+    WorkspaceSourceRef,
+    workspace_object_from_field_mark,
     workspace_object_from_movement,
 )
 
@@ -54,7 +57,7 @@ BASE = datetime(2026, 8, 12, 12, 0, tzinfo=timezone.utc)
 # table nobody counted.
 _TOUCHED_TABLES = (
     "reading_items", "memories", "messages", "commitments", "events",
-    "rooms", "threads",
+    "rooms", "threads", "field_marks",
 )
 
 
@@ -186,7 +189,7 @@ async def workroom(db):
     # --- record: an operation event ----------------------------------------
     await db.execute(
         """INSERT INTO events (id,timestamp,event_type,room_id,thread_id,payload)
-           VALUES ($1,$2,'THESIS_CREATED',$3,$4,'{"book_id":"strait-risk-graph"}'::jsonb)""",
+           VALUES ($1,$2,'thesis_created',$3,$4,'{"book_id":"strait-risk-graph"}'::jsonb)""",
         _uid(0xC61), _d(6), ROOM, TH)
 
     # --- the other room: one of everything, all sentinel-marked ------------
@@ -218,10 +221,17 @@ async def workroom(db):
 
 @pytest.mark.asyncio
 async def test_every_adapter_kind_is_projected(workroom):
-    """C2: each entity in the adapter list reaches the same shape."""
+    """C2: each entity in the adapter list reaches the same shape.
+
+    `field_mark` is excluded from `expected` alongside `house_movement`:
+    §5.1 ships `workspace_object_from_field_mark` as a pure function for a
+    LATER consumer (Atlas) but deliberately does NOT wire an adapter into
+    WorkspaceObjectService.build() this release -- so it can never appear
+    here, by design, the same way house_movement never does.
+    """
     objects = await WorkspaceObjectService(workroom).build(ROOM, AMO)
     kinds = {o.kind for o in objects}
-    expected = set(WORKSPACE_OBJECT_KINDS) - {"house_movement"}
+    expected = set(WORKSPACE_OBJECT_KINDS) - {"house_movement", "field_mark"}
     assert kinds == expected, f"missing: {expected - kinds}"
 
 
@@ -244,6 +254,67 @@ async def test_house_movement_reuses_the_house_projection(workroom):
     # The destination the House already computed travels with the object; the
     # adapter does not invent a second URL grammar.
     assert obj.relationships[0].id == mv.destination
+
+
+def _field_mark(review: str, *, origin="inferred", reviews=None) -> FieldMark:
+    return FieldMark(
+        id=f"field_mark:{_uid(0xC81)}",
+        room_id=ROOM,
+        thread_id=TH,
+        relation="emerging_position",
+        origin=origin,
+        review=review,
+        deliberative_status="active",
+        subjects=[FieldSubjectRef(entity="messages", id=str(M_BRIEF))],
+        title="Amo holds Brent leads",
+        payload={},
+        actor_user_id=AMO if origin == "explicit" else None,
+        provenance="field_inference" if origin == "inferred" else "human",
+        created_at=BASE,
+        reviews=reviews or [],
+    )
+
+
+def test_workspace_object_from_field_mark_maps_provisional_to_none():
+    """§1.20: a provisional inferred mark maps to the generic projection's
+    review_state='none', NOT 'awaiting_human' -- routing every provisional
+    inference there would bury the proposals §9.4 puts there."""
+    obj = workspace_object_from_field_mark(_field_mark("provisional"))
+    assert obj.kind == "field_mark"
+    assert obj.status == "provisional"
+    assert obj.review_state == "none"
+    assert obj.provenance.origin == "dialectic"
+    assert obj.provenance.detail == "emerging_position"
+
+
+def test_workspace_object_from_field_mark_maps_confirmed_to_accepted():
+    obj = workspace_object_from_field_mark(_field_mark("confirmed"))
+    assert obj.status == "confirmed"
+    assert obj.review_state == "accepted"
+
+
+@pytest.mark.parametrize("review", ["contested", "superseded"])
+def test_workspace_object_from_field_mark_maps_everything_else_to_none(review):
+    """Only 'confirmed' becomes 'accepted' -- contested and superseded are
+    NOT treated as settled the way an accepted proposal is."""
+    obj = workspace_object_from_field_mark(_field_mark(review))
+    assert obj.status == review
+    assert obj.review_state == "none"
+
+
+def test_workspace_object_from_field_mark_human_origin_maps_to_human():
+    obj = workspace_object_from_field_mark(_field_mark("provisional", origin="explicit"))
+    assert obj.provenance.origin == "human"
+    assert obj.provenance.actor_user_id == AMO
+
+
+def test_workspace_object_from_field_mark_id_round_trips_the_row_id():
+    mark = _field_mark("provisional")
+    obj = workspace_object_from_field_mark(mark)
+    assert obj.id == mark.id
+    assert obj.source_entity == [
+        WorkspaceSourceRef(entity="field_marks", id=mark.id.split(":", 1)[1])
+    ]
 
 
 @pytest.mark.asyncio

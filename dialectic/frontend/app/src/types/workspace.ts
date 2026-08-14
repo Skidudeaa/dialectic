@@ -81,6 +81,7 @@ export const WORKSPACE_OBJECT_KINDS = [
   'dossier_entry',
   'house_movement',
   'record_event',
+  'field_mark',
 ] as const
 
 export type WorkspaceObjectKind = (typeof WORKSPACE_OBJECT_KINDS)[number]

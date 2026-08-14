@@ -40,6 +40,7 @@ from api.reading_relay import router as reading_relay_router, set_reading_relay_
 from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_pool
 from api.home import router as home_router, set_home_db_pool
 from api.workspace import router as workspace_router, set_workspace_db_pool
+from api.field import router as field_router, set_field_db_pool
 from api.capabilities import (
     router as capabilities_router,
     set_capabilities_db_pool,
@@ -209,6 +210,8 @@ async def lifespan(app: FastAPI):
 
         # Set db_pool for the read-only workspace-object projection
         set_workspace_db_pool(db_pool)
+        # Set db_pool for the Field's write door (api/field.py)
+        set_field_db_pool(db_pool)
         set_capabilities_db_pool(db_pool)
 
         async with db_pool.acquire() as conn:
@@ -253,6 +256,7 @@ async def lifespan(app: FastAPI):
         from llm.wire import register_wire_jobs
         from llm.prediction_watch import register_prediction_watch_jobs
         from llm.reading_echo import register_reading_echo_jobs
+        from llm.field_inference import register_field_inference_jobs
 
         async def _scheduler_broadcast(room_id, message):
             await connection_manager.broadcast(room_id, message)
@@ -268,6 +272,7 @@ async def lifespan(app: FastAPI):
         register_wire_jobs(scheduler_instance)
         register_prediction_watch_jobs(scheduler_instance)
         register_reading_echo_jobs(scheduler_instance)
+        register_field_inference_jobs(scheduler_instance)
         scheduler_instance.start()
 
     # The capability map reads these exact Job objects, so what it reports and
@@ -359,6 +364,11 @@ app.include_router(home_router)
 # Workspace-object projection -- read-only adapters over entities that
 # already exist; every write still belongs to the entity's own endpoint.
 app.include_router(workspace_router)
+
+# The Field's write door -- confirm/contest/correct/split/merge/supersede on
+# a room's field_marks. workspace.py stays write-free; this is the one place
+# a Field review lands (§2 item 15).
+app.include_router(field_router)
 
 # Which doors are open, answered WITHOUT a credential -- the signed-out screen
 # renders before one exists, and a closed door should be closed on sight.

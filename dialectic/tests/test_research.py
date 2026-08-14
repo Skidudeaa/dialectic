@@ -372,7 +372,12 @@ class TestSuccessfulDive:
         )
 
         metadata = db.fetchrow.call_args.args[11]
-        assert set(metadata) == {"source", "tools"}
+        # §5.1 small repair: the question now rides in metadata alongside the
+        # brief itself (it used to travel only over the ephemeral
+        # DEEP_DIVE_STARTED broadcast and was lost — workspace_objects.py's
+        # research_briefs() docstring names this exact gap).
+        assert set(metadata) == {"source", "tools", "question"}
+        assert metadata["question"] == "q"
 
 
 # ── failure posture ──────────────────────────────────────────────────

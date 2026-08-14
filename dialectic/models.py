@@ -70,6 +70,10 @@ class EventType(str, Enum):
     THESIS_RETIRED = "thesis_retired"
     # Home Base events
     HOME_MEMBER_REMOVED = "home_member_removed"
+    # Field marks (Release 3, migration 017) — all-new event types are
+    # lowercase (§1.16).
+    FIELD_MARK_INFERRED = "field_mark_inferred"
+    FIELD_MARK_REVIEWED = "field_mark_reviewed"
 
 
 class CommitmentStatus(str, Enum):

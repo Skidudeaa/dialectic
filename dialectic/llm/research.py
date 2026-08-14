@@ -307,7 +307,12 @@ async def deep_dive(
             })
             return
 
-        metadata: dict = {"source": "deep_dive"}
+        # §5.1 small repair: the question used to travel only over the
+        # ephemeral DEEP_DIVE_STARTED broadcast and was lost once the brief
+        # landed — workspace_objects.research_briefs()'s own docstring (§8.2)
+        # names this exact gap. Persisted at write time, alongside the brief
+        # it answers, so a later reader (or adapter) can recover it.
+        metadata: dict = {"source": "deep_dive", "question": question}
         if tool_trace:
             # Same stamps as the orchestrator: labels baked in so a reader
             # of a months-old trace needs no client-side label table, and

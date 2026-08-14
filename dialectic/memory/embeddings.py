@@ -82,7 +82,7 @@ class VoyageEmbeddings(EmbeddingProvider):
     ARCHITECTURE: Voyage AI embeddings, model and width read from env.
 
     WHY config rather than constants: the pgvector column is a fixed width
-    (VECTOR(1536) today) and Voyage models are not 1536 by default, so the
+    (VECTOR(1024) since migration 016) and Voyage models vary by model, so the
     model name and its dimension have to move together with a schema change.
     Pinning either in code here would let them drift apart silently.
 
@@ -145,9 +145,14 @@ class MockEmbeddings(EmbeddingProvider):
     """
     ARCHITECTURE: Mock embeddings for testing without API keys.
     WHY: Allow development without paid API access.
+
+    DIMENSIONS must match the live pgvector column (VECTOR(1024) since
+    migration 016 narrowed it for Voyage) — this constant sat at the old 1536
+    after that migration and every keyless write failed with a DataError the
+    moment the test DB was rebuilt on the current baseline.
     """
 
-    DIMENSIONS = 1536
+    DIMENSIONS = 1024
 
     async def embed(self, text: str) -> EmbeddingResult:
         # Generate deterministic fake embedding based on text hash

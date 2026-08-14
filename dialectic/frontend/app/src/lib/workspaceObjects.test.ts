@@ -70,7 +70,7 @@ describe('the closed vocabularies', () => {
   it('name every adapter in the spec list', () => {
     expect([...WORKSPACE_OBJECT_KINDS]).toEqual([
       'reading', 'research_brief', 'thesis', 'commitment', 'proposal',
-      'dossier_entry', 'house_movement', 'record_event',
+      'dossier_entry', 'house_movement', 'record_event', 'field_mark',
     ])
   })
 
