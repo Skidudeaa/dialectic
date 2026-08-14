@@ -131,6 +131,20 @@ def sign_in(page, tokens):
 def settle(page):
     page.wait_for_load_state("networkidle")
     page.wait_for_timeout(500)
+    # Geometry must never be sampled mid-animation: claudeEnter scales a
+    # Dialectic row from 0.97, so a width measured while it runs reads ~3%
+    # narrow and manufactures a phantom full-width violation (the recorded
+    # animated-property trap — worse under load, when animations lag the
+    # harness). Wait until every animation in the document has finished.
+    try:
+        page.wait_for_function(
+            "() => document.getAnimations({subtree: true})"
+            ".filter(a => a.playState === 'running').length === 0",
+            timeout=10000,
+        )
+    except Exception:
+        pass  # infinite animations (cursor blink) may keep running; the
+              # entrance animations this guards against are finite.
 
 
 def inject_axe(page):

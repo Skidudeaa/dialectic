@@ -318,6 +318,19 @@ describe('the v2 axes are per-room, not global (§5.5 bleed-across-rooms guard)'
     })
   })
 
+  it('rememberScene takes the NEW scene on that same repeat navigate', () => {
+    // The gate's kill-and-reopen scenario caught the inverse hole: preserving
+    // the axes by spreading the whole prior record let prior.scene clobber
+    // destination.scene, so a Record → Field switch stored 'record' forever
+    // and restoration reopened the wrong scene. Axes survive AND the scene
+    // moves — both halves, one navigate.
+    rememberScene(AMO, { roomId: 'room-1', threadId: 'branch-9', scene: 'record' })
+    rememberSceneAxes(AMO, { composerDraft: 'still typing' })
+    rememberScene(AMO, { roomId: 'room-1', threadId: 'branch-9', scene: 'field' })
+    expect(restoreScene(AMO, ROOMS)).toMatchObject({ scene: 'field' })
+    expect(restoreSceneAxes(AMO)?.composerDraft).toBe('still typing')
+  })
+
   it('rememberScene resets the axes to empty the moment the room changes', () => {
     // Mutation target (b) from the dispatch: this is the continuity-layer
     // half of the bleed-across-rooms guard — appStore.setRoom is the other

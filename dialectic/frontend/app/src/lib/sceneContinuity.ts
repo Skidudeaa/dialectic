@@ -222,7 +222,24 @@ export function rememberScene(
     && prior.roomId === destination.roomId
     && prior.threadId === destination.threadId,
   )
-  const axes: StoredSceneAxes = sameStop && prior ? prior : EMPTY_AXES
+  // Pick the AXES fields explicitly — spreading the whole prior record here
+  // let prior.scene clobber destination.scene on every same-room navigation,
+  // so switching Record → Field stored the stale scene forever and a
+  // kill-and-reopen restored the wrong scene (caught by the Release 3 gate's
+  // kill-and-reopen browser scenario, invisible to every unit test that
+  // only checked axis survival OR destination resets, never both at once).
+  const axes: StoredSceneAxes = sameStop && prior
+    ? {
+        objectId: prior.objectId,
+        focusMode: prior.focusMode,
+        inspectorTab: prior.inspectorTab,
+        fieldViewport: prior.fieldViewport,
+        recordScroll: prior.recordScroll,
+        openProposal: prior.openProposal,
+        composerDraft: prior.composerDraft,
+        replyToId: prior.replyToId,
+      }
+    : EMPTY_AXES
   const entry: StoredScene = { v: 2, userId, ...destination, ...axes }
   safeWrite(window.sessionStorage, WINDOW_KEY, entry)
   safeWrite(window.localStorage, INSTALL_KEY, entry)
