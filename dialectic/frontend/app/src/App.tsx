@@ -34,12 +34,14 @@ import { BenchScene } from './components/workspace/scenes/BenchScene'
 import { LibraryScene } from './components/workspace/scenes/LibraryScene'
 import { LedgerScene } from './components/workspace/scenes/LedgerScene'
 import { FieldScene } from './components/workspace/scenes/FieldScene'
+import { AtlasScene } from './components/workspace/scenes/AtlasScene'
 import { FocusSurface } from './components/workspace/focus/FocusSurface.tsx'
 import { bareMarkId } from './components/workspace/fieldDisplay.ts'
 import { TradingPanel } from './components/trading/TradingPanel'
 import { scenesForDestination } from './lib/workspaceRoute.ts'
 import { useWorkspaceObjects } from './hooks/useWorkspaceObjects.ts'
 import { useFieldMarks } from './hooks/useFieldMarks.ts'
+import { useAtlas } from './hooks/useAtlas.ts'
 import type { FieldReviewRequest } from './types/workspace.ts'
 import { rememberSceneAxes, restoreSceneAxes } from './lib/sceneContinuity.ts'
 
@@ -482,6 +484,11 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
     currentRoom?.id ?? null,
     Boolean(accessToken) && !isHome,
   )
+  // Atlas is the opposite fence: it renders ONLY at Home root (§5.4 — the
+  // Home-root scene list is ['house','atlas','record']), is cross-room by
+  // construction, and needs a JWT but no room token — so the enable is
+  // "signed in and at Home", the inverse of the two room projections above.
+  const atlas = useAtlas(Boolean(accessToken) && isHome)
 
   useAwayAlerts({
     messages,
@@ -670,6 +677,18 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
 
   const sceneContent = {
     house: houseSurface,
+    atlas: (
+      <AtlasScene
+        state={atlas}
+        onNavigate={(destination) => {
+          void navigate({
+            roomId: destination.roomId,
+            threadId: destination.threadId ?? null,
+            object: destination.object ?? null,
+          }, 'push')
+        }}
+      />
+    ),
     record: recordSurface,
     bench: (
       <BenchScene

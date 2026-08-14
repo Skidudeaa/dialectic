@@ -1,0 +1,104 @@
+/* Atlas — plain rows, hairline rules, indentation for depth. No rounded
+   cards, no force-directed layout (§1.4, §16.7's editorial-bands language
+   applied here too): a map is read, not decorated. */
+
+.atlas-scene {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.atlas-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.atlas-room-list {
+  gap: 0.9rem;
+}
+
+.atlas-room-section,
+.atlas-branch-section {
+  border-top: 1px solid var(--color-bean);
+}
+
+.atlas-row-open {
+  width: 100%;
+  text-align: left;
+  background: var(--color-cacao);
+  border: none;
+  padding: 0.55rem 0.8rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.atlas-row-open:hover { background: var(--color-espresso); }
+.atlas-row-open:focus-visible {
+  outline: 2px solid var(--color-amber);
+  outline-offset: -2px;
+}
+
+.atlas-row-static {
+  padding: 0.55rem 0.8rem;
+  color: var(--color-secondary);
+  font-family: var(--font-serif);
+  font-size: 12.5px;
+}
+
+/* Depth is indentation, never re-sorting -- the tree order IS the room's
+   own structure (room_id/branch_id from the projection). */
+.atlas-row[data-depth="1"] .atlas-row-open { padding-left: 1.6rem; }
+.atlas-row[data-depth="2"] .atlas-row-open { padding-left: 2.6rem; }
+
+.atlas-row-kind {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--color-faint);
+}
+
+.atlas-row-title {
+  font-family: var(--font-serif);
+  font-size: 13px;
+  color: var(--color-bone);
+  line-height: 1.35;
+}
+
+.atlas-row[data-kind="room"] .atlas-row-title {
+  font-size: 14px;
+}
+
+/* Not colour alone -- the word "due" carries the meaning (§17.4). */
+.atlas-row-due {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(191,161,98,.35);
+  color: var(--color-warning);
+}
+
+.atlas-group {
+  border-top: 1px solid var(--color-bean);
+  padding-top: 0.6rem;
+}
+
+.atlas-group-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--color-faint);
+  margin: 0 0 0.4rem;
+}

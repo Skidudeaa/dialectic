@@ -41,6 +41,7 @@ from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_
 from api.home import router as home_router, set_home_db_pool
 from api.workspace import router as workspace_router, set_workspace_db_pool
 from api.field import router as field_router, set_field_db_pool
+from api.atlas import router as atlas_router, set_atlas_db_pool
 from proposal_intake import ProposalMetadataError, validate_human_proposal_metadata
 from api.capabilities import (
     router as capabilities_router,
@@ -213,6 +214,8 @@ async def lifespan(app: FastAPI):
         set_workspace_db_pool(db_pool)
         # Set db_pool for the Field's write door (api/field.py)
         set_field_db_pool(db_pool)
+        # Set db_pool for Atlas -- the caller's own cross-room map (api/atlas.py)
+        set_atlas_db_pool(db_pool)
         set_capabilities_db_pool(db_pool)
 
         async with db_pool.acquire() as conn:
@@ -370,6 +373,10 @@ app.include_router(workspace_router)
 # a room's field_marks. workspace.py stays write-free; this is the one place
 # a Field review lands (§2 item 15).
 app.include_router(field_router)
+
+# Atlas -- the caller's own cross-room map: rooms, branches, artifacts and
+# real-provenance edges, fenced per-viewer in the SQL, JWT-only (§5.4).
+app.include_router(atlas_router)
 
 # Which doors are open, answered WITHOUT a credential -- the signed-out screen
 # renders before one exists, and a closed door should be closed on sight.

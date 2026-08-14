@@ -1,4 +1,5 @@
 import type { Attachment, HomeActivityProjection, Memory, Thread, ThreadNode, UserRoom } from '../types/index.ts';
+import type { AtlasProjection } from '../types/atlas.ts';
 import type {
   FieldProjection,
   FieldReviewRequest,
@@ -178,6 +179,15 @@ class DialecticAPI {
       method: 'POST',
       body: JSON.stringify(request),
     });
+  }
+  /**
+   * The caller's own cross-room Atlas — rooms, branches, theses, readings,
+   * briefs, commitments and unresolved work, plus the real-provenance edges
+   * between them (atlas_objects.py). JWT only, no room token: cross-room by
+   * construction, same auth shape as getHomeActivity().
+   */
+  async getAtlas(): Promise<AtlasProjection> {
+    return this.fetch('/users/me/atlas');
   }
   /**
    * The composer's "Make a move" affordance (§1.11, §5.3): a human-authored

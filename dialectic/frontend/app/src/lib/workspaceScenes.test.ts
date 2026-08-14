@@ -33,11 +33,12 @@ describe('scenesForDestination', () => {
     ])
   })
 
-  it('gives Home root the household view and its table, and nothing else', () => {
+  it('gives Home root the household view, the atlas and its table, and nothing else', () => {
     // Home coordinates; scheme rooms own scheme work (§5.5). Home cannot bind
     // a thesis at all — the API returns 409 — so a Bench there would be a door
-    // onto a refusal.
-    expect(scenesForDestination(home, root)).toEqual(['house', 'record'])
+    // onto a refusal. Atlas joins at Home root only (Release 3, §5.4): it is
+    // personal cross-room navigation, so it lives where the person starts.
+    expect(scenesForDestination(home, root)).toEqual(['house', 'atlas', 'record'])
   })
 
   it('treats a Home branch as an ordinary conversation', () => {

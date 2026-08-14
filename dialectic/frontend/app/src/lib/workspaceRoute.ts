@@ -80,7 +80,7 @@ export function scenesForDestination(
 ): readonly ImplementedWorkspaceScene[] {
   if (room.is_home) {
     return thread.parent_thread_id === null
-      ? (['house', 'record'] as const)
+      ? (['house', 'atlas', 'record'] as const)
       : (['record'] as const)
   }
   return ['record', 'bench', 'field', 'library', 'ledger'] as const

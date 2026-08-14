@@ -16,6 +16,7 @@ const SCENE_LABELS: Record<ImplementedWorkspaceScene, string> = {
   field: 'Field',
   library: 'Library',
   ledger: 'Ledger',
+  atlas: 'Atlas',
 }
 
 interface SceneSwitcherProps {

@@ -44,6 +44,7 @@ export const IMPLEMENTED_WORKSPACE_SCENES = [
   'field',
   'library',
   'ledger',
+  'atlas',
 ] as const
 
 export type ImplementedWorkspaceScene =
