@@ -67,13 +67,13 @@ export default function DialecticRoute() {
   const { detail: trade, reload: reloadTrade } = useBookTrade(activeBookId);
   const predictions = usePredictions(activeBookId);
 
-  // clock + latency (cosmetic — wire health shown by the live indicator)
+  // clock (real). The fabricated Math.random() latency readout that used to
+  // live beside it was removed per the 2026-08-13 human-interaction audit
+  // (T02): no cosmetic number may masquerade as observed system truth.
   const [clock, setClock] = useState("—");
-  const [latency, setLatency] = useState(7);
   useEffect(() => {
     const t = setInterval(() => {
       setClock(new Date().toTimeString().slice(0, 8));
-      setLatency(4 + Math.floor(Math.random() * 12));
     }, 1000);
     return () => clearInterval(t);
   }, []);
@@ -113,7 +113,7 @@ export default function DialecticRoute() {
 
           <div className="top-right">
             <Link to="/desk" className="clock" style={{ color: "var(--secondary)" }} title="Open the classic desk">classic desk →</Link>
-            <div className="telex"><span className="d" /><b>WIRE LIVE</b><span>{latency}ms</span></div>
+            <div className="telex"><span className="d" /><b>WIRE LIVE</b></div>
             <span className="clock">{clock}</span>
           </div>
         </header>
@@ -122,7 +122,9 @@ export default function DialecticRoute() {
         <main className="main">
           {/* left rail */}
           <aside className="rail">
-            <div className="rail-h"><span className="lbl">Open cases</span><button className="plus" title="Open a new case">+</button></div>
+            {/* The inert new-case "+" was removed per the 2026-08-13 audit (T04):
+                it had no click handler. Restore only wired to a real creation flow. */}
+            <div className="rail-h"><span className="lbl">Open cases</span></div>
             <div className="books">
               {books.map((b) => {
                 const on = b.id === activeBookId;
