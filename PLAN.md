@@ -1355,3 +1355,14 @@ separation, tradingDesk consolidation, A25 URL-fragment token) stays on the
 TODOS.md board — post-release work, not silently folded in. Also noted:
 three parallel-session commits (f9d125c, 5019e2b, 7d79bd6) now ride this
 branch and will reach master at the gate merge.
+
+AMENDED 2026-08-14 (conflict-rule resolution, forced ordering): §5.8 lists
+the owner device checklist as step 6, before merge (8) and deploy (9) — but
+the checklist's content (§7.6: open the PWA, switch to Field, Focus an
+object) cannot execute before the deploy: production carries no Release 3
+surface until the flip, and the isolated fixture is loopback-only,
+unreachable from any real device. No alternative order exists, so the gate
+runs: mechanical verification → ledger → merge → deploy → owner checklist
+immediately after, results recorded verbatim as the ledger's final section.
+If any device line fails, the fix ships as an immediate follow-up and the
+ledger records the failure honestly.
