@@ -41,6 +41,7 @@ import { scenesForDestination } from './lib/workspaceRoute.ts'
 import { useWorkspaceObjects } from './hooks/useWorkspaceObjects.ts'
 import { useFieldMarks } from './hooks/useFieldMarks.ts'
 import type { FieldReviewRequest } from './types/workspace.ts'
+import { rememberSceneAxes, restoreSceneAxes } from './lib/sceneContinuity.ts'
 
 function RoomBriefing({ roomId }: { roomId: string }) {
   const [dismissed, setDismissed] = useState(false)
@@ -88,6 +89,22 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const logout = useAppStore((s) => s.logout)
   const setTradingConfig = useAppStore((s) => s.setTradingConfig)
 
+  // Exact-restoration axes (§15.2, TG-E) that are not part of a destination —
+  // homed in appStore (see its own header comment), reset per-room there.
+  // No surface writes these yet; they exist so continuity has a real slot to
+  // capture and a future consumer never has to touch sceneContinuity.ts
+  // again to use them.
+  const focusMode = useAppStore((s) => s.focusMode)
+  const inspectorTab = useAppStore((s) => s.inspectorTab)
+  const fieldViewport = useAppStore((s) => s.fieldViewport)
+  const recordScroll = useAppStore((s) => s.recordScroll)
+  const openProposal = useAppStore((s) => s.openProposal)
+  const setFocusMode = useAppStore((s) => s.setFocusMode)
+  const setInspectorTab = useAppStore((s) => s.setInspectorTab)
+  const setFieldViewport = useAppStore((s) => s.setFieldViewport)
+  const setRecordScroll = useAppStore((s) => s.setRecordScroll)
+  const setOpenProposal = useAppStore((s) => s.setOpenProposal)
+
   // Every destination change goes through nav.navigate — no setRoom,
   // setThread, or leaveRoom call expresses a destination in this file.
   const { rooms, navigate, objectId } = nav
@@ -102,7 +119,30 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const [homeRefreshVersion, setHomeRefreshVersion] = useState(0)
   const [showSettings, setShowSettings] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
-  const [replyToId, setReplyToId] = useState<string | null>(null)
+  // Lazy initializers, not an effect: both restore from continuity exactly
+  // once, on ChatLayout's first render for this window — reading storage
+  // synchronously during an effect body to call setState would cascade an
+  // extra render (react-hooks/set-state-in-effect) for no benefit, since the
+  // value is already known before the first paint. replyToId is reconciled
+  // for free by replyTarget below, which resolves it against `messages` and
+  // silently drops it the instant it does not resolve (§15.5).
+  const [replyToId, setReplyToId] = useState<string | null>(
+    () => restoreSceneAxes(user?.id ?? null)?.replyToId ?? null,
+  )
+  // The composer's unsent text. components/chat/MessageInput.tsx owns the
+  // live textarea's `content` state (still local and uncontrolled — this is
+  // NOT a fully controlled input); it accepts an `initialValue` prop, a
+  // minimal easement granted to this task group specifically for restoration
+  // (owner ruling, see PLAN.md §5.5 amendment), used only as MessageInput's
+  // own `useState` initial value, so this seeds the textarea once on mount
+  // and does not fight the user's typing on every later render. Also
+  // captured here via the onTypingContent callback MessageInput already
+  // calls on every keystroke, purely so continuity has the latest text to
+  // remember — MessageInput remains the source of truth for what is
+  // actually on screen after the first render.
+  const [composerDraft, setComposerDraft] = useState(
+    () => restoreSceneAxes(user?.id ?? null)?.composerDraft ?? '',
+  )
   const [showSearch, setShowSearch] = useState(false)
   // The nonce makes a repeat jump to the same message a distinct value, so the
   // stream re-scrolls instead of ignoring an unchanged prop.
@@ -355,6 +395,55 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // Never send a reference to a message the composer can no longer resolve.
   const effectiveReplyToId = replyTarget ? replyToId : null
 
+  // Restore this window's remaining non-destination axes (§15.2) into
+  // appStore exactly once, when ChatLayout first mounts. By then nav.navigate
+  // has already installed room/thread/scene/object for this boot —
+  // including a restored object, via restoreScene's `object` field flowing
+  // through useRoomNavigation's own boot effect, which this file does not
+  // touch. ChatLayout is not remounted on later in-session room switches
+  // (AuthenticatedWorkspace renders it unkeyed), so this genuinely fires
+  // once per window life — "restoration", not "every room switch".
+  // replyToId/composerDraft restore via the lazy useState initializers
+  // above instead of here, to avoid the extra setState-in-effect render
+  // this rule (react-hooks/set-state-in-effect) flags for a REACT-owned
+  // setter; appStore's setters are a store method, not a React setState, so
+  // they are exempt from that rule and stay here for a single, obvious
+  // restoration hook.
+  const restoredStoreAxesRef = useRef(false)
+  useEffect(() => {
+    if (restoredStoreAxesRef.current) return
+    restoredStoreAxesRef.current = true
+    const axes = restoreSceneAxes(user?.id ?? null)
+    if (!axes) return
+    setFocusMode(axes.focusMode)
+    setInspectorTab(axes.inspectorTab)
+    setFieldViewport(axes.fieldViewport)
+    setRecordScroll(axes.recordScroll)
+    setOpenProposal(axes.openProposal)
+  }, [
+    user?.id, setFocusMode, setInspectorTab, setFieldViewport,
+    setRecordScroll, setOpenProposal,
+  ])
+
+  // The write side: merge-patch every v2 axis into continuity's own storage
+  // whenever one changes. `objectId` is captured here rather than at its
+  // source (useRoomNavigation.ts) because that file is the ONE destination
+  // writer and is explicitly out of this task group's reach — mirroring its
+  // value through this effect keeps that boundary intact while still
+  // letting continuity remember it (see sceneContinuity.ts's own header for
+  // why this is a second WRITE path into storage, not a second destination
+  // writer). rememberSceneAxes no-ops before the first navigate has ever
+  // written a record, so this is safe to run from the first render.
+  useEffect(() => {
+    rememberSceneAxes(user?.id ?? null, {
+      objectId, replyToId, composerDraft,
+      focusMode, inspectorTab, fieldViewport, recordScroll, openProposal,
+    })
+  }, [
+    user?.id, objectId, replyToId, composerDraft,
+    focusMode, inspectorTab, fieldViewport, recordScroll, openProposal,
+  ])
+
   // The "new since you were last here" boundary, taken from the same receipt
   // data the unread badge is computed from so the line and the badge can never
   // disagree.
@@ -478,6 +567,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
           <TypingIndicator typingUsers={typingDisplay} activityLabel={toolActivityLabel} />
           <MessageInput
             roomId={currentRoom.id}
+            initialValue={composerDraft}
             onSend={(content, messageType, files) => {
               // The ids travel with the send itself: the server binds them in
               // the message transaction and the broadcast carries them back.
@@ -489,11 +579,21 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
               )
               if (!sent) return false
               setReplyToId(null)
+              // The composer clears its own local `content` on a successful
+              // send (MessageInput.tsx) — mirror that here so continuity
+              // never restores a draft that was already sent.
+              setComposerDraft('')
               return true
             }}
             onTypingStart={sendTypingStart}
             onTypingStop={sendTypingStop}
-            onTypingContent={sendTypingContent}
+            onTypingContent={(content) => {
+              sendTypingContent(content)
+              // Captured for continuity only — see composerDraft's own
+              // declaration above for why this does not feed back into the
+              // textarea.
+              setComposerDraft(content)
+            }}
             onResearch={sendDeepDive}
             researchActive={isDeepDiveActive}
             disabled={!isConnected || !currentThread}

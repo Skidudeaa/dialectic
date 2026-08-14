@@ -89,6 +89,27 @@ interface AppState {
   /** A propose_thesis card's payload, consumed by the Create Thesis form. */
   thesisSeed: { title: string; claim: string; monthlyBudget: number } | null;
 
+  /**
+   * Exact-restoration axes (design v2 §15.2, Release 3 / TG-E) — the part of
+   * the scene contract that is not a destination and so does not belong to
+   * `useRoomNavigation`. Room-scoped, same as `workspaceScene`: reset on
+   * every `setRoom` (below) so none of them bleeds from one room's restored
+   * state into another's, and cleared on sign-out via `initialRoomState`
+   * (logout/leaveRoom already spread it). Homed here so a later task group
+   * has a real slot to write into; no UI sets any of these yet — TG-E's own
+   * report records that honestly rather than claiming a consumer exists.
+   */
+  focusMode: string | null;
+  inspectorTab: string | null;
+  fieldViewport: number | null;
+  recordScroll: number | null;
+  openProposal: string | null;
+  setFocusMode: (mode: string | null) => void;
+  setInspectorTab: (tab: string | null) => void;
+  setFieldViewport: (offset: number | null) => void;
+  setRecordScroll: (offset: number | null) => void;
+  setOpenProposal: (id: string | null) => void;
+
   // Actions
   setUser: (user: User, accessToken: string, refreshToken?: string) => void;
   setRoom: (room: Room, token: string) => void;
@@ -163,6 +184,11 @@ const initialRoomState = {
   thesisSeed: null,
   wsSend: null,
   roomToken: null,
+  focusMode: null,
+  inspectorTab: null,
+  fieldViewport: null,
+  recordScroll: null,
+  openProposal: null,
 }
 
 export const useAppStore = create<AppState>()(
@@ -218,6 +244,15 @@ export const useAppStore = create<AppState>()(
           tradingConfig: null,
           rightPanelTab: 'memory',
           thesisSeed: null,
+          // Exact-restoration axes (§15.2/TG-E): a Focus selection, scroll
+          // offset or open proposal from the room just left has no meaning
+          // in the one just entered — reset here, same place `workspaceScene`
+          // already resets, or they bleed across rooms (a flagged hazard).
+          focusMode: null,
+          inspectorTab: null,
+          fieldViewport: null,
+          recordScroll: null,
+          openProposal: null,
         })
       },
 
@@ -369,6 +404,12 @@ export const useAppStore = create<AppState>()(
       setMobileDrawer: (drawer) => set({ mobileDrawer: drawer }),
 
       setThesisSeed: (seed) => set({ thesisSeed: seed }),
+
+      setFocusMode: (mode) => set({ focusMode: mode }),
+      setInspectorTab: (tab) => set({ inspectorTab: tab }),
+      setFieldViewport: (offset) => set({ fieldViewport: offset }),
+      setRecordScroll: (offset) => set({ recordScroll: offset }),
+      setOpenProposal: (id) => set({ openProposal: id }),
 
       logout: (reason) => {
         revokeAttachmentUrls()

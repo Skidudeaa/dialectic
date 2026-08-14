@@ -4,7 +4,9 @@ import {
   forgetScene,
   isExplicitDestination,
   rememberScene,
+  rememberSceneAxes,
   restoreScene,
+  restoreSceneAxes,
 } from './sceneContinuity.ts'
 import type { RoomDestination, UserRoom } from '../types'
 
@@ -52,6 +54,10 @@ describe('what counts as an explicit destination', () => {
     // outrank a restored House exactly as a room link does.
     expect(isExplicitDestination({ ...bare, scene: 'record' })).toBe(true)
   })
+
+  it('treats an object deep link as explicit too — §15.3 ranks it tier 1', () => {
+    expect(isExplicitDestination({ ...bare, object: 'field_mark:abc' })).toBe(true)
+  })
 })
 
 describe('startup precedence', () => {
@@ -81,6 +87,14 @@ describe('startup precedence', () => {
     expect(chooseEntryDestination(bare, restored)).toEqual(restored)
   })
 
+  it('gives an object-only deep link the last word too (§15.3 tier 1)', () => {
+    const chosen = chooseEntryDestination(
+      { roomId: null, threadId: null, scene: null, object: 'field_mark:xyz' },
+      restored,
+    )
+    expect(chosen.object).toBe('field_mark:xyz')
+  })
+
   it('opens Home → House on a bare URL with nothing stored', () => {
     expect(chooseEntryDestination(bare, null)).toEqual({
       // object: null joined roomId/threadId/scene here when Release 3 (§5.2)
@@ -103,7 +117,7 @@ describe('remembering and restoring', () => {
   it('restores what was last installed, scene included', () => {
     rememberScene(AMO, { roomId: 'room-1', threadId: 'branch-9', scene: 'record' })
     expect(restoreScene(AMO, ROOMS)).toEqual({
-      roomId: 'room-1', threadId: 'branch-9', scene: 'record',
+      roomId: 'room-1', threadId: 'branch-9', scene: 'record', object: null,
     })
   })
 
@@ -188,5 +202,145 @@ describe('forgetting', () => {
     expect(window.localStorage.getItem('dialectic-scene-install')).toBeNull()
     expect(window.sessionStorage.getItem('dialectic-scene-window')).toBeNull()
     expect(JSON.stringify(window.localStorage)).not.toContain('room-1')
+  })
+
+  it('clears every v2 field, not just the original four', () => {
+    rememberScene(AMO, { roomId: 'room-1', threadId: 'branch-9', scene: 'record' })
+    rememberSceneAxes(AMO, {
+      objectId: 'field_mark:abc',
+      focusMode: 'desktop',
+      inspectorTab: 'sources',
+      fieldViewport: 240,
+      recordScroll: 880,
+      openProposal: 'proposal-1',
+      composerDraft: 'half a sentence',
+      replyToId: 'message-9',
+    })
+    forgetScene()
+    expect(restoreScene(AMO, ROOMS)).toBeNull()
+    expect(restoreSceneAxes(AMO)).toBeNull()
+    const raw = JSON.stringify(window.localStorage) + JSON.stringify(window.sessionStorage)
+    for (const needle of [
+      'field_mark:abc', 'desktop', 'sources', 'proposal-1',
+      'half a sentence', 'message-9',
+    ]) {
+      expect(raw).not.toContain(needle)
+    }
+  })
+})
+
+describe('payload v2 (§15.2) — versioning and degradation', () => {
+  it('restores a v1 blob (no `v`) without throwing, defaulting every new axis to null', () => {
+    // A v1 blob is exactly what this module wrote before Release 3 — no `v`
+    // key, just the original four fields.
+    window.sessionStorage.setItem(
+      'dialectic-scene-window',
+      JSON.stringify({ userId: AMO, roomId: 'room-1', threadId: 'branch-9', scene: 'record' }),
+    )
+    expect(() => restoreScene(AMO, ROOMS)).not.toThrow()
+    expect(restoreScene(AMO, ROOMS)).toEqual({
+      roomId: 'room-1', threadId: 'branch-9', scene: 'record', object: null,
+    })
+    expect(restoreSceneAxes(AMO)).toEqual({
+      focusMode: null, inspectorTab: null, fieldViewport: null,
+      recordScroll: null, openProposal: null, composerDraft: null, replyToId: null,
+    })
+  })
+
+  it('round-trips every v2 axis', () => {
+    rememberScene(AMO, { roomId: 'room-1', threadId: 'branch-9', scene: 'record' })
+    rememberSceneAxes(AMO, {
+      objectId: 'field_mark:abc',
+      focusMode: 'desktop',
+      inspectorTab: 'sources',
+      fieldViewport: 240,
+      recordScroll: 880,
+      openProposal: 'proposal-1',
+      composerDraft: 'half a sentence',
+      replyToId: 'message-9',
+    })
+    expect(restoreScene(AMO, ROOMS)).toEqual({
+      roomId: 'room-1', threadId: 'branch-9', scene: 'record', object: 'field_mark:abc',
+    })
+    expect(restoreSceneAxes(AMO)).toEqual({
+      focusMode: 'desktop',
+      inspectorTab: 'sources',
+      fieldViewport: 240,
+      recordScroll: 880,
+      openProposal: 'proposal-1',
+      composerDraft: 'half a sentence',
+      replyToId: 'message-9',
+    })
+  })
+
+  it('never throws on a corrupted v2-shaped blob — wrong types default to null', () => {
+    window.sessionStorage.setItem(
+      'dialectic-scene-window',
+      JSON.stringify({
+        v: 2, userId: AMO, roomId: 'room-1', threadId: null, scene: 'record',
+        // Every axis holds the wrong type — a number where a string is
+        // expected and vice versa.
+        objectId: 42, focusMode: true, inspectorTab: {}, fieldViewport: 'far',
+        recordScroll: [], openProposal: 9, composerDraft: null, replyToId: 7,
+      }),
+    )
+    expect(() => restoreScene(AMO, ROOMS)).not.toThrow()
+    expect(restoreScene(AMO, ROOMS)?.object).toBeNull()
+    expect(restoreSceneAxes(AMO)).toEqual({
+      focusMode: null, inspectorTab: null, fieldViewport: null,
+      recordScroll: null, openProposal: null, composerDraft: null, replyToId: null,
+    })
+  })
+})
+
+describe('the v2 axes are per-room, not global (§5.5 bleed-across-rooms guard)', () => {
+  it('rememberSceneAxes merges onto the current record without disturbing room/branch/scene', () => {
+    rememberScene(AMO, { roomId: 'room-1', threadId: 'branch-9', scene: 'record' })
+    rememberSceneAxes(AMO, { replyToId: 'message-9' })
+    rememberSceneAxes(AMO, { composerDraft: 'still typing' })
+    expect(restoreScene(AMO, ROOMS)).toEqual({
+      roomId: 'room-1', threadId: 'branch-9', scene: 'record', object: null,
+    })
+    expect(restoreSceneAxes(AMO)).toMatchObject({
+      replyToId: 'message-9', composerDraft: 'still typing',
+    })
+  })
+
+  it('rememberScene preserves the axes on a repeat navigate within the SAME room+branch', () => {
+    // Mirrors a scene switch: navigate fires again (rememberScene runs
+    // again), room and branch are unchanged, and a half-typed draft must
+    // survive the switch.
+    rememberScene(AMO, { roomId: 'room-1', threadId: 'branch-9', scene: 'record' })
+    rememberSceneAxes(AMO, { composerDraft: 'still typing', replyToId: 'message-9' })
+    rememberScene(AMO, { roomId: 'room-1', threadId: 'branch-9', scene: 'field' })
+    expect(restoreSceneAxes(AMO)).toMatchObject({
+      composerDraft: 'still typing', replyToId: 'message-9',
+    })
+  })
+
+  it('rememberScene resets the axes to empty the moment the room changes', () => {
+    // Mutation target (b) from the dispatch: this is the continuity-layer
+    // half of the bleed-across-rooms guard — appStore.setRoom is the other
+    // half, tested in appStore.test.ts.
+    rememberScene(AMO, { roomId: 'room-1', threadId: 'branch-9', scene: 'record' })
+    rememberSceneAxes(AMO, { composerDraft: 'a note for room one', objectId: 'field_mark:abc' })
+    rememberScene(AMO, { roomId: 'room-2', threadId: null, scene: 'record' })
+    expect(restoreScene(AMO, [...ROOMS, room({ id: 'room-2', token: 't2' })])).toEqual({
+      roomId: 'room-2', threadId: null, scene: 'record', object: null,
+    })
+    expect(restoreSceneAxes(AMO)?.composerDraft).toBeNull()
+  })
+
+  it('rememberScene resets the axes the moment the branch changes within the same room', () => {
+    rememberScene(AMO, { roomId: 'room-1', threadId: 'branch-9', scene: 'record' })
+    rememberSceneAxes(AMO, { replyToId: 'message-9' })
+    rememberScene(AMO, { roomId: 'room-1', threadId: 'branch-10', scene: 'record' })
+    expect(restoreSceneAxes(AMO)?.replyToId).toBeNull()
+  })
+
+  it('rememberSceneAxes is a no-op before anything has ever been remembered', () => {
+    expect(() => rememberSceneAxes(AMO, { replyToId: 'message-9' })).not.toThrow()
+    expect(restoreScene(AMO, ROOMS)).toBeNull()
+    expect(restoreSceneAxes(AMO)).toBeNull()
   })
 })

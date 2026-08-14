@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
 import type { Attachment, Message } from '../../types'
 import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import { api } from '../../lib/api'
@@ -33,6 +33,12 @@ const nextUploadKey = () => `upload-${++uploadKeySeed}`
 interface MessageInputProps {
   onSend: (content: string, messageType: MessageType, attachments: Attachment[]) => boolean
   roomId: string
+  /** Seeds the composer on first mount only (device-local restoration,
+   *  design v2 §15.2/§15.5) — a plain `useState` initial value, so a later
+   *  prop change does NOT overwrite what the user is typing. The caller
+   *  (App.tsx) owns deciding what this is; this component does not know or
+   *  care that it came from continuity. */
+  initialValue?: string
   onTypingStart?: () => void
   onTypingStop?: () => void
   onTypingContent?: (content: string) => void
@@ -56,8 +62,8 @@ const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
   { value: 'definition', label: 'Definition' },
 ]
 
-export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTypingContent, onResearch, researchActive = false, disabled, replyTo, onCancelReply, placeholder = `Think out loud... paste a link and ${PARTICIPANT_NAME} reads it`, quiet = false }: MessageInputProps) {
-  const [content, setContent] = useState('')
+export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTypingStop, onTypingContent, onResearch, researchActive = false, disabled, replyTo, onCancelReply, placeholder = `Think out loud... paste a link and ${PARTICIPANT_NAME} reads it`, quiet = false }: MessageInputProps) {
+  const [content, setContent] = useState(initialValue ?? '')
   const [messageType, setMessageType] = useState<MessageType>('text')
   const [sendError, setSendError] = useState(false)
   const [uploads, setUploads] = useState<ComposerUpload[]>([])
@@ -69,6 +75,14 @@ export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTy
   // Drag events fire for every child element crossed, so a plain leave handler
   // flickers the highlight off while the pointer is still over the composer.
   const dragDepthRef = useRef(0)
+
+  // A restored multi-line draft (initialValue) should not sit clipped to one
+  // row until the next keystroke — same auto-resize handleInput already does.
+  useEffect(() => {
+    if (!textareaRef.current) return
+    textareaRef.current.style.height = 'auto'
+    textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px'
+  }, [])
 
   const patchUpload = useCallback((key: string, patch: Partial<ComposerUpload>) => {
     setUploads((list) => list.map((entry) => (entry.key === key ? { ...entry, ...patch } : entry)))
