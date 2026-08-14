@@ -41,6 +41,7 @@ from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_
 from api.home import router as home_router, set_home_db_pool
 from api.workspace import router as workspace_router, set_workspace_db_pool
 from api.field import router as field_router, set_field_db_pool
+from proposal_intake import ProposalMetadataError, validate_human_proposal_metadata
 from api.capabilities import (
     router as capabilities_router,
     set_capabilities_db_pool,
@@ -453,6 +454,11 @@ class SendMessageRequest(BaseModel):
     content: str
     message_type: str = "text"
     references_message_id: Optional[UUID] = None
+    # A human-composed proposal block ("Make a move" — §1.11, §5.3). Never
+    # trusted as-is: validate_human_proposal_metadata re-validates and
+    # re-shapes every field before it reaches storage, the same way
+    # llm/tools.py's draft executors validate the LLM's own proposals.
+    metadata: Optional[dict] = None
 
 
 class ForkThreadRequest(BaseModel):
@@ -1105,21 +1111,34 @@ async def send_message(
     room = await verify_room_token(thread_row['room_id'], token, db)
     await verify_room_member(room.id, user_id, db)
 
+    # The message-create door's server-side validation block for
+    # HUMAN-authored proposal metadata (§1.11, §5.3). A client payload is a
+    # document, not a trust boundary already crossed — every value is
+    # re-validated and re-shaped against proposal_envelope's own slot
+    # table, unknown kinds (claim_check included — §2 item 7) and malformed
+    # payloads are rejected here, and any client-supplied
+    # accepted/accepted_by/accepted_at is stripped before anything else is
+    # checked, so a human cannot self-stamp their own submission accepted.
+    try:
+        metadata = validate_human_proposal_metadata(request.metadata) or None
+    except ProposalMetadataError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
     now = datetime.now(timezone.utc)
     message_id = uuid4()
 
     await db.execute(
         """INSERT INTO messages
            (id, thread_id, sequence, created_at, speaker_type, user_id,
-            message_type, content, references_message_id)
+            message_type, content, references_message_id, metadata)
            VALUES (
                $1, $2,
                (SELECT COALESCE(MAX(sequence), 0) + 1 FROM messages WHERE thread_id = $2),
-               $3, $4, $5, $6, $7, $8
+               $3, $4, $5, $6, $7, $8, $9
            )""",
         message_id, thread_id, now,
         SpeakerType.HUMAN.value, user_id, request.message_type,
-        request.content, request.references_message_id
+        request.content, request.references_message_id, metadata
     )
 
     # Get the actual sequence that was assigned
@@ -1144,6 +1163,8 @@ async def send_message(
         user_id=user_id,
         message_type=request.message_type,
         content=request.content,
+        references_message_id=request.references_message_id,
+        metadata=metadata,
     )
 
 

@@ -1,0 +1,172 @@
+/* "Make a move" — the propose surface. Same tokens as the composer's own
+   attach/send/research buttons, so this reads as part of the composer, not
+   a bolted-on feature. */
+
+.propose-menu {
+    position: relative;
+}
+
+/* The trigger is a text-labelled button, never an icon-only affordance and
+   never revealed on hover (§17.4) — always visible, always tappable. */
+.propose-trigger {
+    height: 42px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    color: var(--color-secondary);
+    font-family: var(--font-stencil);
+    font-size: 10px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+}
+.propose-trigger:hover:not(:disabled) { color: var(--color-amber); border-color: var(--amber-30); }
+.propose-trigger[aria-expanded="true"] { color: var(--color-amber); border-color: var(--amber-30); }
+.propose-trigger:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* The panel anchors to the composer (`.input-area-inner` is `position:
+   relative`), opening UPWARD so it never gets clipped by the keyboard on a
+   phone. Width is capped to the viewport, not just the composer, so it
+   stays reachable at phone width without horizontal overflow. */
+.propose-panel {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    width: min(360px, calc(100vw - 32px));
+    max-height: min(480px, calc(100vh - 120px));
+    overflow-y: auto;
+    padding: 12px;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    z-index: 20;
+}
+
+.propose-hint {
+    margin: 0 0 8px;
+    color: var(--color-faint);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    line-height: 1.4;
+}
+
+.propose-kinds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.propose-kind-btn {
+    padding: 7px 12px;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    color: var(--color-bone);
+    font-family: var(--font-serif);
+    font-size: 13px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+.propose-kind-btn:hover { color: var(--color-amber); border-color: var(--amber-30); }
+
+.propose-form { display: flex; flex-direction: column; gap: 8px; }
+
+.propose-field { display: flex; flex-direction: column; gap: 3px; }
+.propose-field label {
+    color: var(--color-faint);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+.propose-field input,
+.propose-field textarea,
+.propose-field select {
+    padding: 7px 9px;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    color: var(--color-bone);
+    font-family: var(--font-serif);
+    font-size: 13px;
+    resize: vertical;
+    outline: none;
+}
+.propose-field input:focus,
+.propose-field textarea:focus,
+.propose-field select:focus {
+    border-color: var(--amber-30);
+}
+.propose-field textarea { min-height: 46px; }
+
+.propose-error {
+    margin: 0;
+    color: var(--error);
+    font-family: var(--font-mono);
+    font-size: 10px;
+}
+
+.propose-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 2px;
+}
+.propose-cancel {
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    color: var(--color-faint);
+    font-family: var(--font-stencil);
+    font-size: 10px;
+    letter-spacing: .05em;
+    cursor: pointer;
+}
+.propose-cancel:hover:not(:disabled) { color: var(--color-secondary); }
+.propose-cancel:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.propose-submit {
+    padding: 6px 14px;
+    background: var(--color-amber);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-void);
+    font-family: var(--font-stencil);
+    font-size: 10px;
+    letter-spacing: .05em;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.propose-submit:hover:not(:disabled) { background: var(--color-amber-hot); }
+.propose-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.propose-sent {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.propose-sent p {
+    margin: 0;
+    color: var(--color-secondary);
+    font-family: var(--font-serif);
+    font-size: 13px;
+    line-height: 1.4;
+}
+.propose-sent .propose-submit { align-self: flex-end; }
+
+@media (max-width: 768px) {
+    .propose-panel {
+        right: auto;
+        left: 50%;
+        transform: translateX(-50%);
+        width: min(360px, calc(100vw - 24px));
+    }
+}

@@ -179,6 +179,23 @@ class DialecticAPI {
       body: JSON.stringify(request),
     });
   }
+  /**
+   * The composer's "Make a move" affordance (§1.11, §5.3): a human-authored
+   * proposal, written as an ordinary message whose metadata carries ONE
+   * proposal block. Server-side validation (proposal_intake.py) re-shapes
+   * every field before it reaches storage — this is a document, not a
+   * write of record.
+   */
+  async proposeMove(
+    threadId: string,
+    content: string,
+    metadata: Record<string, unknown>,
+  ): Promise<{ id: string; metadata?: Record<string, unknown> | null }> {
+    return this.fetch(`/threads/${threadId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content, message_type: 'text', metadata }),
+    });
+  }
   async getMessages(threadId: string, limit = 50) { return this.fetch(`/threads/${threadId}/messages?limit=${limit}`); }
   async getMemories(roomId: string): Promise<Memory[]> {
     const [memories, promotions] = await Promise.all([

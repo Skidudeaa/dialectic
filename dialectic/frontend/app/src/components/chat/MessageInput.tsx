@@ -3,6 +3,7 @@ import type { Attachment, Message } from '../../types'
 import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import { api } from '../../lib/api'
 import { ACCEPTED_MIME_ATTRIBUTE, formatBytes, rejectionReason } from '../../lib/attachments'
+import { ProposeMenu } from './ProposeMenu'
 import './MessageInput.css'
 
 type MessageType = Message['message_type']
@@ -377,6 +378,10 @@ export function MessageInput({ onSend, roomId, onTypingStart, onTypingStop, onTy
               <polygon points="22 2 15 22 11 13 2 9 22 2"/>
             </svg>
           </button>
+          {/* Home hides the propose surface too — theses, predictions and
+              commitments are scheme-room speech acts (§5.3); Home cannot
+              bind a thesis at all (see llm/tools.py propose_thesis). */}
+          {!quiet && <ProposeMenu disabled={disabled} />}
           {onResearch && (
             <button
               className="research-btn"
