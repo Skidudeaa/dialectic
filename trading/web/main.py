@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI):
     log.info("SQLite persistence initialized: %s", DEFAULT_DB_PATH)
 
     # WHY: Give the WS manager access to the repo so broadcast_to_book_rooms
-    # can query rooms without importing web.state.
+    # can query rooms without a circular import.
     from web.ws import manager
     manager.set_repo(repo)
 
@@ -111,7 +111,7 @@ def get_uptime() -> float:
 
 # ── Route registration ───────────────────────────────────────────────────
 
-from web.routes import auth, health, thesis, market, builder as builder_routes, outcomes, rooms, messages, llm, journal, predictions, tradingview
+from web.routes import auth, health, thesis, market, builder as builder_routes, outcomes, rooms, ws_routes, llm, journal, predictions, tradingview
 from web.routes import bridge, relay
 from web.routes.v1 import bootstrap as v1_bootstrap
 from web.routes.v1 import scenarios as v1_scenarios
@@ -127,7 +127,7 @@ app.include_router(builder_routes.router)
 app.include_router(market.router)
 app.include_router(outcomes.router)
 app.include_router(rooms.router)
-app.include_router(messages.router)
+app.include_router(ws_routes.router)  # the machine WS lane; chat routes died in the C4 cull
 app.include_router(llm.router)
 app.include_router(journal.router)
 app.include_router(predictions.router)

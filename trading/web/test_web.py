@@ -53,14 +53,6 @@ def auth_headers():
     return {"Authorization": f"Bearer {token}"}
 
 
-@pytest.fixture
-def room_id(auth_headers):
-    """Create a room and return its ID."""
-    resp = client.post("/api/rooms", json={"name": "test-room"}, headers=auth_headers)
-    assert resp.status_code == 200
-    return resp.json()["id"]
-
-
 # ── Auth Tests ───────────────────────────────────────────────────────────
 
 class TestAuth:
@@ -234,132 +226,21 @@ class TestRoutes:
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_rooms_create_and_get(self, auth_headers):
-        resp = client.post("/api/rooms", json={"name": "alpha", "topic": "testing"}, headers=auth_headers)
-        assert resp.status_code == 200
-        room = resp.json()
-        assert room["name"] == "alpha"
-        assert room["participants"] == ["amo"]
-
+    def test_room_get_after_repo_seed(self, auth_headers, isolate_state):
+        room = isolate_state.create_room("alpha", participants=["amo"])
         resp = client.get(f"/api/rooms/{room['id']}", headers=auth_headers)
         assert resp.status_code == 200
+        assert resp.json()["name"] == "alpha"
+
+    def test_room_writes_are_gone(self, auth_headers):
+        # C4 cull contract: the chat-era write surface stays dead.
+        assert client.post("/api/rooms", json={"name": "x"}, headers=auth_headers).status_code == 405
+        assert client.patch("/api/rooms/some-id", json={"name": "x"}, headers=auth_headers).status_code == 405
+        assert client.delete("/api/rooms/some-id", headers=auth_headers).status_code == 405
 
     def test_room_not_found(self, auth_headers):
         resp = client.get("/api/rooms/nonexistent-uuid", headers=auth_headers)
         assert resp.status_code == 404
-
-    def test_messages_crud(self, auth_headers, room_id):
-        # Post a message
-        resp = client.post(
-            f"/api/rooms/{room_id}/messages",
-            json={"content": "hello world"},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200
-        msg = resp.json()
-        assert msg["content"] == "hello world"
-        assert msg["msg_type"] == "user"
-
-        # List messages
-        resp = client.get(f"/api/rooms/{room_id}/messages", headers=auth_headers)
-        assert resp.status_code == 200
-        assert len(resp.json()) == 1
-
-    def test_message_to_nonexistent_room(self, auth_headers):
-        resp = client.post(
-            "/api/rooms/fake-room-id/messages",
-            json={"content": "test"},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 404
-
-    def test_post_article_clipping(self, auth_headers, room_id):
-        resp = client.post(
-            f"/api/rooms/{room_id}/messages",
-            json={
-                "kind": "article",
-                "article": {"source": "reuters.com", "title": "Tanker traffic drops 18%", "take": "the gap"},
-            },
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200
-        msg = resp.json()
-        assert msg["kind"] == "article"
-        assert msg["meta"]["source"] == "reuters.com"
-        # server-derived readable fallback content
-        assert "Tanker traffic drops 18%" in msg["content"]
-
-    def test_post_code_exhibit(self, auth_headers, room_id):
-        resp = client.post(
-            f"/api/rooms/{room_id}/messages",
-            json={
-                "kind": "code",
-                "code": {"fn": "reroute.py", "lang": "python", "code": "print('hi')"},
-            },
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200
-        msg = resp.json()
-        assert msg["kind"] == "code"
-        assert msg["meta"]["fn"] == "reroute.py"
-        assert "print('hi')" in msg["content"]
-
-    def test_article_kind_requires_payload(self, auth_headers, room_id):
-        # kind=article without an `article` payload is a 422 validation error.
-        resp = client.post(
-            f"/api/rooms/{room_id}/messages",
-            json={"kind": "article", "content": "no payload"},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 422
-
-    def test_empty_text_message_rejected(self, auth_headers, room_id):
-        resp = client.post(
-            f"/api/rooms/{room_id}/messages",
-            json={"content": "   "},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 422
-
-    def test_slash_command_posts_system_message(self, auth_headers, room_id):
-        # The fix: a slash command runs server-side and posts a SYSTEM message,
-        # which clients themselves are not allowed to author. /predict is
-        # offline + deterministic, so it exercises the full path.
-        resp = client.post(
-            f"/api/rooms/{room_id}/command",
-            json={"text": '/predict "Brent over 120" 70%'},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200
-        msg = resp.json()
-        assert msg["msg_type"] == "system"
-        assert msg["user"] == "system"
-        assert "Prediction created" in msg["content"]
-        # Side effect persisted, and the system message is in the room log.
-        preds = client.get("/api/predictions", headers=auth_headers).json()
-        assert any("Brent over 120" in p["statement"] for p in preds)
-        msgs = client.get(f"/api/rooms/{room_id}/messages", headers=auth_headers).json()
-        assert any(m["msg_type"] == "system" for m in msgs)
-
-    def test_slash_command_unknown_rejected(self, auth_headers, room_id):
-        resp = client.post(
-            f"/api/rooms/{room_id}/command",
-            json={"text": "/bogus arg"},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 400
-
-    def test_slash_command_nonexistent_room(self, auth_headers):
-        resp = client.post(
-            "/api/rooms/fake-room-id/command",
-            json={"text": "/brief"},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 404
-
-    def test_slash_command_requires_auth(self, room_id):
-        resp = client.post(f"/api/rooms/{room_id}/command", json={"text": "/brief"})
-        assert resp.status_code in (401, 403)
 
     def test_prediction_lifecycle(self, auth_headers):
         # Create
@@ -403,35 +284,6 @@ class TestRoutes:
         }, headers=auth_headers)
         assert resp.status_code == 404
 
-    def test_pin_typed_validation(self, auth_headers, room_id):
-        # Post without required 'id' field — should fail validation
-        resp = client.post(
-            f"/api/rooms/{room_id}/pins",
-            json={"content": "no id field"},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 422
-
-    def test_pin_valid(self, auth_headers, room_id):
-        resp = client.post(
-            f"/api/rooms/{room_id}/pins",
-            json={
-                "id": "msg-1", "room_id": room_id, "user": "amo",
-                "content": "important", "msg_type": "user", "ts": "2026-01-01",
-            },
-            headers=auth_headers,
-        )
-        assert resp.status_code == 200
-
-    def test_message_type_restricted(self, auth_headers, room_id):
-        # Trying to send msg_type="system" should fail
-        resp = client.post(
-            f"/api/rooms/{room_id}/messages",
-            json={"content": "fake system", "msg_type": "system"},
-            headers=auth_headers,
-        )
-        assert resp.status_code == 422
-
     def test_journal_crud(self, auth_headers):
         resp = client.post("/api/journal", json={
             "thesis": "oil shock",
@@ -445,52 +297,9 @@ class TestRoutes:
         assert resp.status_code == 200
         assert len(resp.json()) == 1
 
-    def test_export_chat(self, auth_headers, room_id):
-        # Add a message first
-        client.post(f"/api/rooms/{room_id}/messages", json={"content": "exportable"}, headers=auth_headers)
-        resp = client.get(f"/api/rooms/{room_id}/export", headers=auth_headers)
-        assert resp.status_code == 200
-        assert "exportable" in resp.json()["markdown"]
-
-
-# ── Agent API Tests ──────────────────────────────────────────────────────
 
 class TestAgentAPI:
     """Tests for agent-friendly endpoints — full CRUD, protocol docs, single-resource GET."""
-
-    def test_room_update(self, auth_headers):
-        resp = client.post("/api/rooms", json={"name": "orig"}, headers=auth_headers)
-        room_id = resp.json()["id"]
-        resp = client.patch(f"/api/rooms/{room_id}", json={"name": "renamed", "topic": "new topic"}, headers=auth_headers)
-        assert resp.status_code == 200
-        assert resp.json()["name"] == "renamed"
-        assert resp.json()["topic"] == "new topic"
-
-    def test_room_update_not_found(self, auth_headers):
-        resp = client.patch("/api/rooms/nonexistent", json={"name": "x"}, headers=auth_headers)
-        assert resp.status_code == 404
-
-    def test_room_update_empty_body(self, auth_headers):
-        resp = client.post("/api/rooms", json={"name": "test"}, headers=auth_headers)
-        room_id = resp.json()["id"]
-        resp = client.patch(f"/api/rooms/{room_id}", json={}, headers=auth_headers)
-        assert resp.status_code == 422
-
-    def test_room_delete(self, auth_headers):
-        resp = client.post("/api/rooms", json={"name": "deletable"}, headers=auth_headers)
-        room_id = resp.json()["id"]
-        # Add a message so the room has data
-        client.post(f"/api/rooms/{room_id}/messages", json={"content": "bye"}, headers=auth_headers)
-        resp = client.delete(f"/api/rooms/{room_id}", headers=auth_headers)
-        assert resp.status_code == 200
-        assert resp.json()["deleted"] is True
-        # Verify room is gone
-        resp = client.get(f"/api/rooms/{room_id}", headers=auth_headers)
-        assert resp.status_code == 404
-
-    def test_room_delete_not_found(self, auth_headers):
-        resp = client.delete("/api/rooms/nonexistent", headers=auth_headers)
-        assert resp.status_code == 404
 
     def test_journal_update(self, auth_headers):
         resp = client.post("/api/journal", json={

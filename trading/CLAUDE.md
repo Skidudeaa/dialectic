@@ -391,3 +391,30 @@ tradingDesk/
 - Tests use pytest, run with `python3 -m pytest`
 - Total: 505 tests across the full pipeline — engine (thesis-graph + derived_indicators), bridge (diff + push + run-all + e2e), data-fetch (polymarket + derived_indicators), outcomes (lifecycle + cross-book + morning brief), web (auth + state + routes + TradingView)
 - `_archive/` holds superseded code; do not delete without explicit review. Currently contains `empty-placeholders/` (tools/polymarket, tools/signals — never populated) and `orphan-snapshots/` (pre-graph-version snapshots).
+
+## Amendment 2026-08-14 — the C4 cull landed (amend-beside; prefer this over older sections)
+
+The fusion plan's §C4 finally executed. What the sections above still
+describe as first-class is now GONE:
+
+- **The duplicated social tier is deleted**: `web/routes/messages.py` (chat
+  CRUD, pins, export, slash commands), room WRITE routes (create/update/
+  delete — reads survive for the WS lane's discovery), `POST /api/llm/chat`
+  (`/compare` survives as the deep-surface power tool), frontend
+  `components/dialectic/` (Field Desk cockpit) and `Chat.tsx`, the chat
+  onboarding step, `web/state.py` (413 dead lines), and
+  `tools/validation/{mock_dialectic.py,e2e_test.py}` (the live push has its
+  own suite in `web/runtime/test_dialectic_push.py`).
+- **`/ws/{room_id}` moved to `web/routes/ws_routes.py`** — the machine WS
+  lane survives; coordinator/thesis/predictions/tradingview broadcast
+  through it and agents consume it. Protocol unchanged.
+- **`/` boots into the Dashboard again**; `/dialectic` redirects to `/`;
+  `/builder` is unchanged and remains the deep DAG surface, now reached
+  from dialectic's Bench as the single "deep instrument" affordance.
+- **The 36 chat rows** are archived at `docs/archive/td-chat-export-2026-08.json`.
+- **Rollback**: branch `archive/field-desk-cockpit` holds the pre-cull tree.
+- Test counts above ("505 tests") are stale twice over; the suite at the
+  cull gate is **1377 passed, 3 skipped** (`python3 -m pytest web/ tools/ -q`).
+- The dashboard user manual sections describing chat/slash commands
+  describe deleted features; the surviving product is: dashboard panels,
+  Builder, TradingView integration, outcomes, and the dialectic bridge.

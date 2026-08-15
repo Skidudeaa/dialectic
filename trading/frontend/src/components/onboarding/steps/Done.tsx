@@ -1,10 +1,11 @@
-// Step 7 — Done.
+// Step 6 — Done.
 //
 // Closure step. We folded the "Tuesday morning" 4-action walkthrough into
-// this step instead of adding an 8th — the existing test asserts "step 1
-// of 7" so changing STEPS.length is a breaking change for the test
-// invariant, and a 7-step tour with a punchy closer reads better than an
-// 8-step tour anyway.
+// this step instead of adding another — a tour with a punchy closer reads
+// better than one that pads itself out with a dedicated summary step.
+// (Was step 7 of 7 when the Chat step still existed; the C4 cull dropped
+// that step and the tour's own tests along with it — see
+// OnboardingTour.test.tsx for the current "step N of 6" invariant.)
 //
 // The TryThis footer is the load-bearing addition: three concrete starter
 // actions with copyable artifacts (slash command, book-pick rule, journal

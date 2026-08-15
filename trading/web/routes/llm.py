@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from web.auth import get_current_user
 from web.deps import get_repo
-from web.models import User, LLMChatRequest, LLMCompareRequest
+from web.models import User, LLMCompareRequest
 from web.persistence.repository import Repository
 from web.runtime.coordinator import get_latest_revision
 from web.ws import manager, mark_agent_thinking, mark_agent_idle
@@ -261,100 +261,10 @@ async def _stream_llm(
     return full_response
 
 
-@router.post("/chat")
-async def chat(req: LLMChatRequest, user: User = Depends(get_current_user),
-               repo: Repository = Depends(get_repo)) -> dict:
-    """Send prompt to a single LLM, stream response via WebSocket."""
-    model = req.model
-    # Resolve alias
-    for alias, full_model in MODEL_ALIASES.items():
-        if model.lower() == alias:
-            model = full_model
-            break
-
-    model_label = model.split("/")[-1] if "/" in model else model
-    # Stamp call metadata BEFORE the stream so we can record both success
-    # and failure with the same revision/start-time pair.
-    _t0 = time.monotonic()
-    _thesis_id = _resolve_thesis_id(req.room_id, repo)
-    _revision_at_call = (
-        get_latest_revision(_thesis_id) if _thesis_id else None
-    )
-    try:
-        full_response = await _stream_llm(model, req.prompt, req.room_id, user.username, model_label, repo)
-        record_agent_call(
-            model=model_label,
-            prompt=req.prompt,
-            tool_calls=[],
-            latency_ms=(time.monotonic() - _t0) * 1000.0,
-            status="success",
-            room_id=req.room_id,
-            thesis_id=_thesis_id,
-            snapshot_revision=_revision_at_call,
-        )
-    except HTTPException as e:
-        error_msg = e.detail if hasattr(e, "detail") else str(e)
-        if isinstance(error_msg, bytes):
-            error_msg = error_msg.decode(errors="replace")
-        if len(str(error_msg)) > 200:
-            error_msg = str(error_msg)[:200] + "..."
-        record_agent_call(
-            model=model_label,
-            prompt=req.prompt,
-            tool_calls=[],
-            latency_ms=(time.monotonic() - _t0) * 1000.0,
-            status="error",
-            room_id=req.room_id,
-            thesis_id=_thesis_id,
-            snapshot_revision=_revision_at_call,
-        )
-        if req.room_id:
-            msg = repo.save_message(
-                room_id=req.room_id, user="system",
-                content=f"LLM error: {error_msg}", msg_type="system",
-            )
-            await manager.broadcast(req.room_id, "message", msg, user="system")
-            await manager.broadcast(req.room_id, "llm_done", {"model": model_label, "full_response": ""}, user="assistant")
-        return {"model": model_label, "response": "", "error": error_msg}
-    except Exception as e:
-        log.exception("Unexpected error in LLM chat for model %s", model_label)
-        error_msg = str(e)[:200]
-        record_agent_call(
-            model=model_label,
-            prompt=req.prompt,
-            tool_calls=[],
-            latency_ms=(time.monotonic() - _t0) * 1000.0,
-            status="error",
-            room_id=req.room_id,
-            thesis_id=_thesis_id,
-            snapshot_revision=_revision_at_call,
-        )
-        if req.room_id:
-            msg = repo.save_message(
-                room_id=req.room_id, user="system",
-                content=f"LLM error: {error_msg}", msg_type="system",
-            )
-            await manager.broadcast(req.room_id, "message", msg, user="system")
-            await manager.broadcast(req.room_id, "llm_done", {"model": model_label, "full_response": ""}, user="assistant")
-        return {"model": model_label, "response": "", "error": error_msg}
-
-    # Persist LLM response as a message in the room and broadcast it
-    # WHY: llm_done clears the streaming bubble on the frontend. The persisted
-    # message must arrive via WS so it appears in the chat history immediately.
-    # Without this broadcast the response vanishes after streaming completes.
-    if req.room_id:
-        msg = repo.save_message(
-            room_id=req.room_id,
-            user="assistant",
-            content=full_response,
-            msg_type="llm",
-            model=model_label,
-        )
-        await manager.broadcast(req.room_id, "message", msg, user="assistant")
-
-    return {"model": model_label, "response": full_response}
-
-
+# /chat died in the C4 cull (2026-08) with the chat tier it served.
+# /compare survives as the deep-surface power tool (fusion plan: "Panel of
+# Rivals" candidate) — _stream_llm, _get_thesis_context and record_agent_call
+# are its plumbing, shared and kept.
 @router.post("/compare")
 async def compare(req: LLMCompareRequest, user: User = Depends(get_current_user),
                   repo: Repository = Depends(get_repo)) -> dict:

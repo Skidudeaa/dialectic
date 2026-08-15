@@ -12,7 +12,6 @@
 import type { ComponentType } from "react";
 
 import WelcomeStep from "./steps/Welcome";
-import ChatPanelStep from "./steps/ChatPanel";
 import ThesisViewerStep from "./steps/ThesisViewer";
 import TradingViewStep from "./steps/TradingView";
 import BuilderStep from "./steps/Builder";
@@ -24,7 +23,7 @@ export interface StepMeta {
   /** Short label shown in the progress dot tooltip and (small caps) header. */
   title: string;
   /** Surface the step is about — useful if we ever pin this near a panel. */
-  anchor: "global" | "chat" | "thesis" | "tradingview" | "builder" | "integrations";
+  anchor: "global" | "thesis" | "tradingview" | "builder" | "integrations";
   /** Reading time hint, e.g. "20s". Surfaced in the corner of the modal. */
   est: string;
   Component: ComponentType;
@@ -37,13 +36,6 @@ export const STEPS: StepMeta[] = [
     anchor: "global",
     est: "20s",
     Component: WelcomeStep,
-  },
-  {
-    id: "chat",
-    title: "Chat",
-    anchor: "chat",
-    est: "30s",
-    Component: ChatPanelStep,
   },
   {
     id: "thesis",

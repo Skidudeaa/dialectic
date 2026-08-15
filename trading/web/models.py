@@ -32,18 +32,6 @@ class User(BaseModel):
 
 # ── Rooms ─────────────────────────────────────────────────────────────────
 
-class RoomCreate(BaseModel):
-    name: str
-    topic: str = ""
-    linked_book_id: Optional[str] = None
-
-
-class RoomUpdate(BaseModel):
-    name: Optional[str] = None
-    topic: Optional[str] = None
-    linked_book_id: Optional[str] = None
-
-
 class Room(BaseModel):
     id: str
     name: str
@@ -54,72 +42,6 @@ class Room(BaseModel):
 
 
 # ── Messages ──────────────────────────────────────────────────────────────
-
-class ArticleMeta(BaseModel):
-    """A shared article clipping — the paperclipped memo in the room."""
-    source: str
-    title: str
-    take: str = ""
-
-
-class CodeExhibitMeta(BaseModel):
-    """A code exhibit filed into the room."""
-    fn: str
-    lang: str = ""
-    code: str
-
-
-class MessageCreate(BaseModel):
-    """Client-authored message.
-
-    ``msg_type`` stays locked to ``"user"`` (system/llm are server-only).
-    ``kind`` discriminates plain dispatches from structured article clippings
-    and code exhibits; the matching payload is required for non-text kinds.
-    The server derives a readable ``content`` fallback for structured kinds so
-    search, export, and the classic chat view still show something sensible.
-    """
-    content: str = ""
-    msg_type: Literal["user"] = "user"
-    model: Optional[str] = None
-    kind: Literal["text", "article", "code"] = "text"
-    article: Optional[ArticleMeta] = None
-    code: Optional[CodeExhibitMeta] = None
-
-    @model_validator(mode="after")
-    def _check_payload(self) -> "MessageCreate":
-        if self.kind == "text":
-            if not self.content.strip():
-                raise ValueError("text message requires non-empty content")
-        elif self.kind == "article":
-            if self.article is None:
-                raise ValueError("article message requires an `article` payload")
-        elif self.kind == "code":
-            if self.code is None:
-                raise ValueError("code message requires a `code` payload")
-        return self
-
-
-class RoomCommand(BaseModel):
-    """A slash command dispatched from chat (e.g. ``/brief``).
-
-    WHY a dedicated endpoint: command *results* must be posted as ``system``
-    messages, which clients are not allowed to author (see ``MessageCreate``'s
-    ``msg_type`` lock). The server executes the command and posts the trusted
-    system message itself, then broadcasts it to the room.
-    """
-    text: str
-
-
-class PinRequest(BaseModel):
-    """Typed pin request — prevents arbitrary dict injection."""
-    id: str
-    room_id: str
-    user: str
-    content: str
-    msg_type: str
-    model: Optional[str] = None
-    ts: str
-
 
 class Message(BaseModel):
     id: str
@@ -281,12 +203,6 @@ class CrossBookResult(BaseModel):
 
 
 # ── LLM ───────────────────────────────────────────────────────────────────
-
-class LLMChatRequest(BaseModel):
-    prompt: str
-    model: str = "anthropic/claude-sonnet-4.6"
-    room_id: Optional[str] = None
-
 
 class LLMCompareRequest(BaseModel):
     prompt: str

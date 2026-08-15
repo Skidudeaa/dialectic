@@ -36,16 +36,16 @@ describe("OnboardingTour", () => {
     expect(
       screen.getByText(/turns macro theses into causal graphs/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/step 1 of 7/i)).toBeInTheDocument();
+    expect(screen.getByText(/step 1 of 6/i)).toBeInTheDocument();
 
     // Click Next ("Show me how" is the primaryLabel on step 1).
     fireEvent.click(screen.getByRole("button", { name: /show me how/i }));
 
-    // Step 2 — Chat — content visible.
+    // Step 2 — Thesis Viewer — content visible.
     expect(
-      screen.getByText(/argue with another human and three llms/i),
+      screen.getByText(/where you read the model — and where the model reads you/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/step 2 of 7/i)).toBeInTheDocument();
+    expect(screen.getByText(/step 2 of 6/i)).toBeInTheDocument();
 
     // localStorage not yet written — we haven't skipped or completed.
     expect(localStorage.getItem(ONBOARDED_KEY)).toBeNull();
@@ -54,7 +54,7 @@ describe("OnboardingTour", () => {
     fireEvent.click(screen.getByRole("button", { name: /skip the tour/i }));
 
     expect(
-      screen.queryByText(/argue with another human and three llms/i),
+      screen.queryByText(/where you read the model — and where the model reads you/i),
     ).not.toBeInTheDocument();
 
     const stamp = localStorage.getItem(ONBOARDED_KEY);
@@ -86,7 +86,7 @@ describe("OnboardingTour", () => {
     expect(
       screen.getByText(/turns macro theses into causal graphs/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/step 1 of 7/i)).toBeInTheDocument();
+    expect(screen.getByText(/step 1 of 6/i)).toBeInTheDocument();
   });
 
   it("ArrowRight advances the step", () => {
@@ -95,10 +95,10 @@ describe("OnboardingTour", () => {
         <div />
       </OnboardingProvider>,
     );
-    expect(screen.getByText(/step 1 of 7/i)).toBeInTheDocument();
+    expect(screen.getByText(/step 1 of 6/i)).toBeInTheDocument();
     act(() => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
     });
-    expect(screen.getByText(/step 2 of 7/i)).toBeInTheDocument();
+    expect(screen.getByText(/step 2 of 6/i)).toBeInTheDocument();
   });
 });

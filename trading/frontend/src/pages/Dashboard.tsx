@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  MessageSquare,
-  BarChart3,
   FileText,
   Scan,
   LogOut,
@@ -23,9 +21,8 @@ import {
   Bot,
 } from "lucide-react";
 import { useOnboarding } from "../components/onboarding/useOnboarding";
-import { apiFetch, getDisplayName, getUsername, clearAuth, sendPresenceUpdate, subscribeAuth } from "../lib/api";
+import { apiFetch, getDisplayName, getUsername, clearAuth, sendPresenceUpdate, subscribeAuth, RoomSocket } from "../lib/api";
 import type { Room, ThesisBook, ThesisState } from "../lib/types";
-import Chat from "../components/Chat";
 import ThesisViewer from "../components/ThesisViewer";
 import MarketTicker from "../components/MarketTicker";
 import MorningBrief from "../components/MorningBrief";
@@ -47,7 +44,6 @@ interface Props {
 }
 
 type RightPanel =
-  | "thesis"
   | "predictions"
   | "journal"
   | "crossbook"
@@ -159,7 +155,6 @@ export default function Dashboard({ onLogout }: Props) {
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [books, setBooks] = useState<ThesisBook[]>([]);
-  const [activeRoom, setActiveRoom] = useState<Room | null>(null);
   const [activeBookOverride, setActiveBookOverride] = useState<string | null>(() => {
     try {
       return localStorage.getItem(ACTIVE_BOOK_KEY);
@@ -167,11 +162,8 @@ export default function Dashboard({ onLogout }: Props) {
       return null;
     }
   });
-  const [rightPanel, setRightPanel] = useState<RightPanel>("thesis");
+  const [rightPanel, setRightPanel] = useState<RightPanel>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [showNewRoom, setShowNewRoom] = useState(false);
-  const [newRoomName, setNewRoomName] = useState("");
-  const [newRoomBook, setNewRoomBook] = useState("");
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [cmdPalette, setCmdPalette] = useState(false);
   const [cmdQuery, setCmdQuery] = useState("");
@@ -248,26 +240,6 @@ export default function Dashboard({ onLogout }: Props) {
     return () => clearInterval(interval);
   }, [books, loadAllBookStates]);
 
-  async function createRoom() {
-    if (!newRoomName.trim()) return;
-    try {
-      const room = await apiFetch<Room>("/api/rooms", {
-        method: "POST",
-        body: JSON.stringify({
-          name: newRoomName.trim(),
-          linked_book_id: newRoomBook || null,
-        }),
-      });
-      setRooms((prev) => [...prev, room]);
-      setActiveRoom(room);
-      setShowNewRoom(false);
-      setNewRoomName("");
-      setNewRoomBook("");
-    } catch {
-      toast("Failed to create room", "error");
-    }
-  }
-
   function handleLogout() {
     clearAuth();
     onLogout();
@@ -296,14 +268,33 @@ export default function Dashboard({ onLogout }: Props) {
     }
   }
 
-  // Resolve which book the right panels render against.
-  // Priority: explicit operator override → active room link → first book.
+  // Resolve which book the right panels + center thesis view render against.
+  // Priority: explicit operator override → first book.
   const linkedBookId = useMemo(() => {
     if (activeBookOverride && books.some((b) => b.id === activeBookOverride)) {
       return activeBookOverride;
     }
-    return activeRoom?.linked_book_id || books[0]?.id || null;
-  }, [activeBookOverride, books, activeRoom]);
+    return books[0]?.id || null;
+  }, [activeBookOverride, books]);
+
+  // Room used purely to key the live WebSocket (price ticks, presence,
+  // agent state) now that there's no rooms UI to pick one explicitly —
+  // prefer the room linked to the active book, falling back to the first
+  // room so live updates still flow even when no room names its book.
+  const activeRoom = useMemo(() => {
+    if (rooms.length === 0) return null;
+    return rooms.find((r) => r.linked_book_id === linkedBookId) || rooms[0];
+  }, [rooms, linkedBookId]);
+
+  // Sole owner of the room WebSocket now that Chat is gone. Every other
+  // live-data component (MarketTicker, PresencePills, AgentInRoomPanel)
+  // taps into it via subscribeRoomMessages() / the module-level active
+  // socket in lib/api.ts rather than opening a second connection.
+  useEffect(() => {
+    if (!activeRoom) return;
+    const sock = new RoomSocket(activeRoom.id);
+    return () => sock.close();
+  }, [activeRoom?.id]);
 
   // Unit 9: tell the server which book we're viewing so other clients can
   // render our presence pill with the right ring color. Also retry shortly
@@ -316,18 +307,9 @@ export default function Dashboard({ onLogout }: Props) {
   }, [linkedBookId, activeRoom?.id]);
 
   // Command palette items — recents bubble to top.
-  type CmdItem = { label: string; type: "room" | "panel" | "action"; action: () => void };
+  type CmdItem = { label: string; type: "panel" | "action"; action: () => void };
   const allCmdItems: CmdItem[] = useMemo(
     () => [
-      ...rooms.map((r) => ({
-        label: r.name,
-        type: "room" as const,
-        action: () => {
-          setActiveRoom(r);
-          setCmdPalette(false);
-        },
-      })),
-      { label: "Thesis panel", type: "panel", action: () => { togglePanel("thesis"); setCmdPalette(false); } },
       { label: "Morning brief", type: "panel", action: () => { togglePanel("brief"); setCmdPalette(false); } },
       { label: "Cross-book scan", type: "panel", action: () => { togglePanel("crossbook"); setCmdPalette(false); } },
       { label: "Cross-book matrix", type: "panel", action: () => { togglePanel("matrix"); setCmdPalette(false); } },
@@ -336,13 +318,11 @@ export default function Dashboard({ onLogout }: Props) {
       { label: "TradingView", type: "panel", action: () => { togglePanel("tradingview"); setCmdPalette(false); } },
       { label: "Trade lifecycle", type: "panel", action: () => { togglePanel("trades"); setCmdPalette(false); } },
       { label: "Agent in room", type: "panel", action: () => { togglePanel("agent"); setCmdPalette(false); } },
-      { label: "Field Desk (dossier view)", type: "action", action: () => { navigate("/"); setCmdPalette(false); } },
-      { label: "New room", type: "action", action: () => { setShowNewRoom(true); setSidebarOpen(true); setCmdPalette(false); } },
       { label: "Show keyboard shortcuts", type: "action", action: () => { setShowShortcuts(true); setCmdPalette(false); } },
       { label: "Logout", type: "action", action: () => { handleLogout(); setCmdPalette(false); } },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rooms],
+    [],
   );
 
   const cmdItems = useMemo(() => {
@@ -477,13 +457,6 @@ export default function Dashboard({ onLogout }: Props) {
         </button>
         <span className="font-mono text-amber font-semibold text-xs">tradingDesk</span>
 
-        {/* Active room */}
-        {activeRoom && (
-          <span className="text-text-dim text-[10px] ml-1 font-mono truncate max-w-[14ch] hidden sm:inline">
-            / {activeRoom.name}
-          </span>
-        )}
-
         {/* Book switcher — only when >1 book exists; otherwise quiet single-book label */}
         {books.length > 1 ? (
           <label className="ml-2 hidden md:flex items-center gap-1">
@@ -549,7 +522,6 @@ export default function Dashboard({ onLogout }: Props) {
           {/* Connection status */}
           <ConnectionDot status={connection} />
 
-          <button onClick={() => togglePanel("thesis")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "thesis" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Thesis"><BarChart3 size={13} /></button>
           <button onClick={() => togglePanel("brief")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "brief" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Brief"><FileText size={13} /></button>
           <button onClick={() => togglePanel("crossbook")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "crossbook" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Cross-Book"><Scan size={13} /></button>
           <button onClick={() => togglePanel("matrix")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "matrix" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Cross-book matrix" aria-label="Cross-book matrix"><Layers size={13} /></button>
@@ -559,15 +531,6 @@ export default function Dashboard({ onLogout }: Props) {
           <button onClick={() => togglePanel("trades")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "trades" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Trade lifecycle" aria-label="Trade lifecycle panel"><AlertOctagon size={13} /></button>
           <button onClick={() => togglePanel("agent")} className={`p-1 rounded text-[10px] font-mono ${rightPanel === "agent" ? "text-amber bg-elevated" : "text-text-dim hover:text-text-primary"}`} title="Agent in room" aria-label="Agent in room panel"><Bot size={13} /></button>
           <div className="w-px h-4 bg-border mx-1" />
-          <button
-            onClick={() => navigate("/")}
-            className="px-1.5 py-0.5 rounded text-[9px] font-mono tracking-wider text-amber border border-amber/40 hover:bg-elevated whitespace-nowrap"
-            title="Open the Field Desk — dossier view: cases, dispatch stream, situation board"
-            aria-label="Open the Field Desk"
-            data-testid="open-field-desk"
-          >
-            ◆ FIELD DESK
-          </button>
           <button
             onClick={() => startTour()}
             className="p-1 text-text-dim hover:text-text-primary"
@@ -614,68 +577,6 @@ export default function Dashboard({ onLogout }: Props) {
         {/* LEFT sidebar */}
         {sidebarOpen && (
           <aside className={`bg-surface border-r border-border flex flex-col shrink-0 ${isNarrow ? "absolute left-0 top-8 bottom-0 z-30 w-60 shadow-xl" : "w-60"}`}>
-            {/* Rooms */}
-            <div className="p-1.5 border-b border-border">
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-[10px] text-text-dim font-medium uppercase tracking-widest">Rooms</span>
-                <button
-                  onClick={() => setShowNewRoom(!showNewRoom)}
-                  className="text-text-dim hover:text-amber"
-                  aria-label="New room"
-                >
-                  <Plus size={11} />
-                </button>
-              </div>
-              {showNewRoom && (
-                <div className="mb-1 space-y-0.5">
-                  <input
-                    className="input w-full"
-                    placeholder="Room name"
-                    value={newRoomName}
-                    onChange={(e) => setNewRoomName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") createRoom();
-                      if (e.key === "Escape") { setShowNewRoom(false); setNewRoomName(""); }
-                    }}
-                    autoFocus
-                  />
-                  <select
-                    className="input w-full"
-                    value={newRoomBook}
-                    onChange={(e) => setNewRoomBook(e.target.value)}
-                  >
-                    <option value="">No linked book</option>
-                    {books.map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
-                  </select>
-                  <button className="btn-primary w-full" onClick={createRoom} disabled={!newRoomName.trim()}>
-                    Create
-                  </button>
-                </div>
-              )}
-              {rooms.map((room) => (
-                <button
-                  key={room.id}
-                  onClick={() => { setActiveRoom(room); if (isNarrow) setSidebarOpen(false); }}
-                  className={`w-full text-left px-1.5 py-0.5 rounded text-xs flex items-center gap-1 ${
-                    activeRoom?.id === room.id
-                      ? "bg-elevated text-amber"
-                      : "text-text-muted hover:text-text-primary hover:bg-elevated/50"
-                  }`}
-                >
-                  <MessageSquare size={11} />
-                  <span className="truncate">{room.name}</span>
-                </button>
-              ))}
-              {rooms.length === 0 && !showNewRoom && (
-                <button
-                  onClick={() => setShowNewRoom(true)}
-                  className="w-full text-left text-text-dim hover:text-amber text-[10px] font-mono px-1.5 py-0.5"
-                >
-                  No rooms yet — create your first +
-                </button>
-              )}
-            </div>
-
             {/* Watchlist */}
             <div className="flex-1 overflow-y-auto p-1.5">
               <span className="text-[10px] text-text-dim font-medium uppercase tracking-widest block mb-0.5">Watchlist</span>
@@ -684,18 +585,13 @@ export default function Dashboard({ onLogout }: Props) {
           </aside>
         )}
 
-        {/* CENTER — chat */}
-        <main className="flex-1 flex flex-col min-w-0">
-          {activeRoom ? (
-            <Chat room={activeRoom} />
-          ) : (
-            <EmptyChatState
-              hasRooms={rooms.length > 0}
-              modKey={modKey}
-              onCreate={() => { setSidebarOpen(true); setShowNewRoom(true); }}
-              onPalette={() => { setCmdPalette(true); setCmdQuery(""); }}
-            />
-          )}
+        {/* CENTER — thesis viewer (the desk's primary surface now that
+            rooms/chat are gone; BookTabBar above drives which book it
+            shows) */}
+        <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+          <div className="p-2">
+            <ThesisViewer bookId={linkedBookId} books={books} />
+          </div>
         </main>
 
         {/* RIGHT panel + drag gutter */}
@@ -718,7 +614,6 @@ export default function Dashboard({ onLogout }: Props) {
               style={!isNarrow ? { width: rightWidth } : undefined}
             >
               <div className="p-2">
-                {rightPanel === "thesis" && <ThesisViewer bookId={linkedBookId} books={books} />}
                 {rightPanel === "brief" && <MorningBrief />}
                 {rightPanel === "crossbook" && <CrossBookPanel />}
                 {rightPanel === "matrix" && (
@@ -874,52 +769,6 @@ function ConnectionDot({ status }: { status: "online" | "reconnecting" | "offlin
   );
 }
 
-function EmptyChatState({
-  hasRooms,
-  modKey,
-  onCreate,
-  onPalette,
-}: {
-  hasRooms: boolean;
-  modKey: string;
-  onCreate: () => void;
-  onPalette: () => void;
-}) {
-  return (
-    <div className="flex-1 flex items-center justify-center text-text-dim p-4">
-      <div className="text-center max-w-xs">
-        <MessageSquare size={28} className="mx-auto mb-2 opacity-20" />
-        {hasRooms ? (
-          <>
-            <p className="text-xs font-mono mb-2 text-text-muted">Select a room to start.</p>
-            <p className="text-[10px] font-mono text-text-dim">
-              Press <span className="kbd">{modKey}+K</span> for the command palette
-              {" · "}
-              <span className="kbd">?</span> for shortcuts
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="text-xs font-mono mb-1 text-text-muted">Welcome to tradingDesk.</p>
-            <p className="text-[10px] font-mono text-text-dim mb-3 leading-relaxed">
-              Rooms are workspaces for collaborative thesis discussion. Each room links to
-              an active thesis book (Iran/Hormuz, Trump tariffs, etc.).
-            </p>
-            <div className="flex gap-2 justify-center">
-              <button onClick={onCreate} className="btn-primary">
-                + Create first room
-              </button>
-              <button onClick={onPalette} className="btn-secondary">
-                {modKey}+K
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function ShortcutsOverlay({ onClose, modKey }: { onClose: () => void; modKey: string }) {
   const rows: Array<[string, string]> = [
     [`${modKey}+K`, "Open command palette"],
@@ -968,7 +817,7 @@ function ShortcutsOverlay({ onClose, modKey }: { onClose: () => void; modKey: st
           </tbody>
         </table>
         <div className="px-3 py-1.5 border-t border-border text-[9px] text-text-dim font-mono">
-          Tip: chat slash-commands (/brief, /thesis, /diff, /predict, /watchlist) work inside any room.
+          Tip: {modKey}+K opens the command palette from anywhere.
         </div>
       </div>
     </div>
