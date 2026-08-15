@@ -19,9 +19,28 @@ from models import (
 
 logger = logging.getLogger(__name__)
 
-# Annotations per room per UTC day. See should_annotate for the measurement
-# that set it; 0 disables annotation entirely.
+# Annotations per room per UTC day — a runaway ceiling, NOT the volume control.
+# Measured against the week of 2026-08-08: a cap of 12 would have cut 2 of 126
+# annotations, because the problem was never spikes, it was a steady 8-14/day
+# baseline from annotating every message. The volume control is the worth gate
+# below. 0 disables annotation entirely.
 ANNOTATOR_DAILY_CAP = int(os.getenv("ANNOTATOR_DAILY_CAP", "12"))
+
+# The worth gate. The annotator's stated job is to CONNECT and SURFACE — to
+# leave the absent person a breadcrumb tying this message to what the room
+# already knows. When recall finds nothing to tie it to, there is no breadcrumb
+# to leave, only a note saying so.
+#
+# Measured over the 104 human messages of 2026-08-08..15:
+#   15 (14%) fall below the substance floor  — "ok", "yes", acknowledgements
+#   34 more return no memories at all        — nothing to connect
+#   55 (53%) return >=1 memory               — the proposed gate
+#   43 (41%) return >=2                      — the stricter setting
+# >=1 is the default because it self-scales with the room: a room holding 422
+# memories annotates often, one holding 5 stays quiet, and that is the feature
+# behaving correctly rather than a quota.
+ANNOTATOR_MIN_MEMORY_HITS = int(os.getenv("ANNOTATOR_MIN_MEMORY_HITS", "1"))
+ANNOTATOR_MIN_CHARS = int(os.getenv("ANNOTATOR_MIN_CHARS", "25"))
 
 
 ANNOTATOR_IDENTITY = '''You are operating in Annotator mode. The other participant \
@@ -59,26 +78,38 @@ class AnnotatorEngine:
         self.memory = memory_manager
         self.orchestrator = orchestrator
 
-    async def should_annotate(self, room_id: UUID, sender_user_id: UUID) -> bool:
+    async def prepare_annotation(
+        self, room_id: UUID, sender_user_id: UUID, message: Message,
+    ) -> Optional[list]:
         """
-        Check if annotator mode should activate.
+        Decide whether this message earns an annotation, and if so hand back the
+        recalled context the annotation will be built from.
 
-        Two conditions, both required:
-          1. no other human is online in the room, and
-          2. the room is under its daily annotation cap.
+        Returns None to stay silent. A non-None return is always a NON-EMPTY
+        list of memories — the gate requires at least one hit, so "annotate"
+        and "have something to say" cannot come apart.
 
-        WHY THE CAP (added 2026-08-15): condition 1 alone is close to
-        unconditional in a two-person room — somebody is nearly always offline —
-        so the annotator fired on EVERY message and became the single largest
-        source of machine speech: 122 of 214 LLM messages against 104 human
-        ones over a week, none of it gated by the interjection engine. The
-        marginalia are for the absent person to read on return; past a couple of
-        dozen a day nobody reads them, so volume actively defeats the feature.
+        Four conditions in ascending cost, so the expensive one runs last:
+          1. no other human is online          (one indexed count)
+          2. under the daily runaway ceiling   (one indexed count)
+          3. the message has substance         (free, in-process)
+          4. recall finds something to connect (one embedding + three lanes)
 
-        Counted from `messages` rather than a new table — the annotation's own
-        row is the ledger, so the cap needs no plumbing (wire._interjections_today
-        pattern, on a UTC day boundary because that is something a human can
-        reason about). Tune via ANNOTATOR_DAILY_CAP; 0 disables annotation.
+        WHY 3 AND 4 EXIST (2026-08-15): condition 1 alone is near-unconditional
+        in a two-person room — somebody is nearly always offline — so the
+        annotator fired on EVERY message and became the single largest source of
+        machine speech, 122 of 214 LLM messages against 104 human ones in a
+        week, none of it visible to the interjection engine. A daily cap does
+        not fix that: measured against the same week, a cap of 12 would have cut
+        2 of 126. The volume was never spikes, it was annotating everything.
+
+        WHY RECALL IS THE RIGHT GATE: it is the annotator's own job description.
+        CONNECT and SURFACE both presuppose something to connect to, and the
+        search was already being run inside annotate() — so this gate reads a
+        signal the feature was computing anyway, and hands it forward rather
+        than paying for it twice.
+
+        Knobs: ANNOTATOR_DAILY_CAP, ANNOTATOR_MIN_MEMORY_HITS, ANNOTATOR_MIN_CHARS.
         """
         online_count = await self.db.fetchval(
             """SELECT COUNT(*) FROM user_presence
@@ -87,7 +118,7 @@ class AnnotatorEngine:
             room_id, sender_user_id
         )
         if online_count != 0:
-            return False
+            return None
 
         start_of_day = datetime.now(timezone.utc).replace(
             hour=0, minute=0, second=0, microsecond=0,
@@ -105,15 +136,42 @@ class AnnotatorEngine:
                 "Annotator cap reached for room %s (%s/%s today)",
                 room_id, today, ANNOTATOR_DAILY_CAP,
             )
-            return False
+            return None
 
-        return True
+        # Substance floor. A question earns a breadcrumb at any length — "why?"
+        # is worth marking — but a bare acknowledgement never does.
+        content = (message.content or "").strip()
+        if len(content) < ANNOTATOR_MIN_CHARS and "?" not in content:
+            logger.debug("Annotator skipped a %d-char message", len(content))
+            return None
+
+        # SECURITY: room-scoped recall only. Cross-room memories must not appear
+        # in an annotation another member will read — they may reference rooms
+        # that member cannot access.
+        try:
+            related = await self.memory.search_memories(room_id, content, limit=5)
+        except Exception:
+            # Recall is the gate; if it cannot run we cannot judge worth, so we
+            # stay silent rather than annotate blind. A degraded recall lane
+            # should not turn into noise in the room.
+            logger.debug("Annotation recall failed — staying silent")
+            return None
+
+        if len(related) < ANNOTATOR_MIN_MEMORY_HITS:
+            logger.debug(
+                "Nothing to connect (%d hits < %d) — staying silent",
+                len(related), ANNOTATOR_MIN_MEMORY_HITS,
+            )
+            return None
+
+        return related
 
     async def annotate(
         self,
         room_id: UUID,
         thread_id: UUID,
         message: Message,
+        related: Optional[list] = None,
     ) -> Optional[Message]:
         """
         Generate an annotation for a message sent while the other person is offline.
@@ -121,6 +179,11 @@ class AnnotatorEngine:
         ARCHITECTURE: Uses cheap LLM with curator identity to produce structured annotation.
         WHY: Annotations should be fast and inexpensive — marginalia, not essays.
         TRADEOFF: Haiku quality vs cost; annotations are supplementary, not core.
+
+        `related` is the recall prepare_annotation already performed and used to
+        decide this message was worth marking — passing it forward means the
+        embedding is paid for once, not twice. When it is omitted this falls
+        back to searching itself, so a caller that skips the gate still works.
         """
         # Find the offline user's name for the annotation template
         offline_users = await self.db.fetch(
@@ -140,11 +203,12 @@ class AnnotatorEngine:
         # Search for related memories within THIS room only
         # SECURITY: Cross-room memories must NOT appear in annotations visible to
         # other users — they may reference rooms the other user doesn't have access to.
-        related = []
-        try:
-            related = await self.memory.search_memories(room_id, message.content, limit=5)
-        except Exception:
-            logger.debug("Annotation memory search failed (non-critical)")
+        if related is None:
+            related = []
+            try:
+                related = await self.memory.search_memories(room_id, message.content, limit=5)
+            except Exception:
+                logger.debug("Annotation memory search failed (non-critical)")
 
         # Format related context
         context_text = ""

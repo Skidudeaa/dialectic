@@ -244,11 +244,11 @@ each traced to a value rather than to config, each fixed. Suite 1327.
 - **The annotator was the largest single source and the engine never saw it.**
   122 of the 214. `should_annotate` required only "no other human online",
   which in a two-person room is near-permanent, so it wrote one note per
-  message. Now also capped at `ANNOTATOR_DAILY_CAP` (12/room/UTC-day, 0
-  disables), counted from `messages` joined through `threads` — the
-  annotation's own row is the ledger, so the cap needs no new plumbing
-  (`wire._interjections_today` pattern). **Note `messages` has no `room_id`** —
-  it is reachable only via `threads`.
+  message. Capped at `ANNOTATOR_DAILY_CAP`, counted from `messages` joined
+  through `threads` — the annotation's own row is the ledger, so the cap needs
+  no new plumbing (`wire._interjections_today` pattern). **Note `messages` has
+  no `room_id`** — it is reachable only via `threads`. **The cap turned out not
+  to be the fix** — see the second amendment below.
 - **`semantic_novelty_threshold` 0.70 → 0.85** (`INTERJECTION_NOVELTY_THRESHOLD`).
   At 0.70 it was not detecting a spike, it was cutting one continuous
   distribution in half: rows that stayed silent ran 0.32–0.69 (mean 0.56),
@@ -283,3 +283,45 @@ the window loses the row (the 27 remaining NULLs are legitimate — they are the
 `no_trigger` silences, which say nothing and so have nothing to measure).
 `human_responded` is a pure function of `messages` and would be better derived
 at read time than snapshotted on a timer.
+
+## Amendment 2026-08-15 (later) — the annotator worth gate (amend-beside)
+
+The cap shipped above was the wrong instrument and the measurement says so:
+against the same week, **`ANNOTATOR_DAILY_CAP=12` would have cut 2 of 126
+annotations.** The volume was never spikes — it was a steady 8-14/room/day
+baseline from annotating every message. A ceiling cannot fix a baseline.
+
+**`should_annotate` → `prepare_annotation`**, which returns the recalled context
+to build the annotation from, or `None` to stay silent. Gate and material are
+one decision, so "annotate" and "have something to say" cannot come apart — a
+non-`None` return is always a NON-EMPTY list.
+
+Four conditions in ascending cost, so the expensive one runs last:
+nobody else online → under the daily ceiling → **the message has substance** →
+**recall finds something to connect**.
+
+**Why recall is the right gate:** it is the annotator's own job description.
+CONNECT and SURFACE both presuppose something to connect to, and `annotate()`
+was already running that search — so the gate reads a signal the feature was
+computing anyway, and `annotate(related=...)` takes it forward instead of
+paying for the embedding twice.
+
+Measured over the 104 human messages of 2026-08-08..15:
+
+| | messages | |
+|---|---|---|
+| below the substance floor | 15 (14%) | acknowledgements — cut before recall runs |
+| recall returns nothing | 34 | nothing to connect |
+| **≥1 hit — the default gate** | **55 (53%)** | roughly halves annotation volume |
+| ≥2 hits | 43 (41%) | `ANNOTATOR_MIN_MEMORY_HITS=2` for a stricter room |
+
+`≥1` self-scales with the room rather than imposing a quota: the room holding
+422 memories annotates often, the one holding 5 stays quiet, and that is the
+feature behaving correctly. A question earns a breadcrumb at any length — "why?"
+is below the 25-char floor and passes anyway. **Recall failure is treated as
+stay-silent**, not annotate-blind: a degraded lane must not become noise.
+
+Live cap is `5` in `.env` as an agreed stopgap from before the gate landed.
+Now that both are live they stack, and 5 will do cutting the gate was meant to
+do — relax toward 12 after observing a few days, or the gate's real effect
+stays invisible.

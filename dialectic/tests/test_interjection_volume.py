@@ -108,44 +108,131 @@ def test_response_measurement_queries_the_stored_speaker_type():
         )
 
 
+# ── the annotator worth gate ──────────────────────────────────────────────
+# Condition 1 (nobody else online) is near-permanent in a two-person room, so
+# everything downstream of it is what actually controls volume.
+
+
+class FakeDB:
+    """Presence count then annotations-today, in the order the gate asks."""
+
+    def __init__(self, online=0, annotations_today=0):
+        self.online = online
+        self.annotations_today = annotations_today
+        self.calls = 0
+
+    async def fetchval(self, query, *args):
+        self.calls += 1
+        if "user_presence" in query:
+            return self.online
+        return self.annotations_today
+
+
+class FakeMemory:
+    def __init__(self, hits=0, raises=False):
+        self.hits = hits
+        self.raises = raises
+        self.searches = 0
+
+    async def search_memories(self, room_id, query, limit=10):
+        self.searches += 1
+        if self.raises:
+            raise RuntimeError("recall lane down")
+        return [object() for _ in range(self.hits)]
+
+
+def _msg(content):
+    from unittest.mock import Mock
+    m = Mock()
+    m.content = content
+    return m
+
+
+SUBSTANTIAL = "the hormuz cascade node fired again this morning, worth a look"
+
+
 @pytest.mark.asyncio
-async def test_annotator_stops_at_the_daily_cap():
-    """Condition 1 (nobody else online) is near-permanent in a 2-person room,
-    so the cap is the only thing standing between it and one note per message."""
-    from uuid import uuid4
-    from llm.annotator import ANNOTATOR_DAILY_CAP, AnnotatorEngine
-
-    class FakeDB:
-        def __init__(self, annotations_today):
-            self.annotations_today = annotations_today
-            self.calls = 0
-
-        async def fetchval(self, query, *args):
-            self.calls += 1
-            # First call is the presence check, second is the cap count.
-            if "user_presence" in query:
-                return 0  # nobody else online — the always-true condition
-            return self.annotations_today
-
-    room, sender = uuid4(), uuid4()
-
-    under = FakeDB(ANNOTATOR_DAILY_CAP - 1)
-    assert await AnnotatorEngine(under, None, None).should_annotate(room, sender)
-
-    at_cap = FakeDB(ANNOTATOR_DAILY_CAP)
-    assert not await AnnotatorEngine(at_cap, None, None).should_annotate(room, sender)
-    assert at_cap.calls == 2, "the cap must actually be counted, not assumed"
-
-
-@pytest.mark.asyncio
-async def test_annotator_still_silent_when_someone_else_is_online():
-    """The original condition must survive the change."""
-    from uuid import uuid4
+async def test_annotates_when_there_is_something_to_connect():
     from llm.annotator import AnnotatorEngine
+    from uuid import uuid4
 
-    class OnlineDB:
-        async def fetchval(self, query, *args):
-            return 1  # another human is present
+    mem = FakeMemory(hits=3)
+    engine = AnnotatorEngine(FakeDB(), mem, None)
+    related = await engine.prepare_annotation(uuid4(), uuid4(), _msg(SUBSTANTIAL))
 
-    engine = AnnotatorEngine(OnlineDB(), None, None)
-    assert not await engine.should_annotate(uuid4(), uuid4())
+    assert related is not None
+    # The contract: a non-None return is never empty, so "annotate" and "has
+    # something to say" cannot come apart.
+    assert len(related) == 3
+    assert mem.searches == 1
+
+
+@pytest.mark.asyncio
+async def test_silent_when_recall_finds_nothing_to_connect():
+    """34 of 104 production messages landed here — no memories, no breadcrumb."""
+    from llm.annotator import AnnotatorEngine
+    from uuid import uuid4
+
+    engine = AnnotatorEngine(FakeDB(), FakeMemory(hits=0), None)
+    assert await engine.prepare_annotation(uuid4(), uuid4(), _msg(SUBSTANTIAL)) is None
+
+
+@pytest.mark.asyncio
+async def test_substance_floor_skips_acknowledgements_before_paying_for_recall():
+    """15 of 104 production messages were "ok"-class. The floor must cut them
+    WITHOUT spending an embedding — that is the point of ordering it first."""
+    from llm.annotator import AnnotatorEngine
+    from uuid import uuid4
+
+    mem = FakeMemory(hits=5)
+    engine = AnnotatorEngine(FakeDB(), mem, None)
+
+    assert await engine.prepare_annotation(uuid4(), uuid4(), _msg("ok")) is None
+    assert await engine.prepare_annotation(uuid4(), uuid4(), _msg("sure thing")) is None
+    assert mem.searches == 0, "the substance floor must run before recall"
+
+
+@pytest.mark.asyncio
+async def test_a_short_question_still_earns_a_breadcrumb():
+    """"why?" is below the character floor and worth marking anyway."""
+    from llm.annotator import AnnotatorEngine
+    from uuid import uuid4
+
+    engine = AnnotatorEngine(FakeDB(), FakeMemory(hits=2), None)
+    assert await engine.prepare_annotation(uuid4(), uuid4(), _msg("why?")) is not None
+
+
+@pytest.mark.asyncio
+async def test_failed_recall_stays_silent_rather_than_annotating_blind():
+    """Recall IS the gate — if it cannot run, worth cannot be judged."""
+    from llm.annotator import AnnotatorEngine
+    from uuid import uuid4
+
+    engine = AnnotatorEngine(FakeDB(), FakeMemory(raises=True), None)
+    assert await engine.prepare_annotation(uuid4(), uuid4(), _msg(SUBSTANTIAL)) is None
+
+
+@pytest.mark.asyncio
+async def test_daily_cap_still_bounds_a_runaway():
+    from llm.annotator import ANNOTATOR_DAILY_CAP, AnnotatorEngine
+    from uuid import uuid4
+
+    mem = FakeMemory(hits=5)
+    at_cap = FakeDB(annotations_today=ANNOTATOR_DAILY_CAP)
+    engine = AnnotatorEngine(at_cap, mem, None)
+
+    assert await engine.prepare_annotation(uuid4(), uuid4(), _msg(SUBSTANTIAL)) is None
+    assert at_cap.calls == 2, "the cap must actually be counted, not assumed"
+    assert mem.searches == 0, "the cap must short-circuit before recall"
+
+
+@pytest.mark.asyncio
+async def test_still_silent_when_someone_else_is_online():
+    """The original condition must survive the change."""
+    from llm.annotator import AnnotatorEngine
+    from uuid import uuid4
+
+    mem = FakeMemory(hits=5)
+    engine = AnnotatorEngine(FakeDB(online=1), mem, None)
+    assert await engine.prepare_annotation(uuid4(), uuid4(), _msg(SUBSTANTIAL)) is None
+    assert mem.searches == 0

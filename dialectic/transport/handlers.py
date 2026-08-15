@@ -462,11 +462,19 @@ class MessageHandler:
             "SELECT COUNT(*) FROM room_memberships WHERE room_id = $1", conn.room_id
         )
         annotation = None
-        if member_count >= 2 and await annotator.should_annotate(conn.room_id, conn.user_id):
+        related = None
+        if member_count >= 2:
+            # Returns the recalled context to build the annotation from, or None
+            # to stay silent — the gate and the material are one decision.
+            related = await annotator.prepare_annotation(
+                conn.room_id, conn.user_id, message,
+            )
+        if related is not None:
             annotation = await annotator.annotate(
                 room_id=conn.room_id,
                 thread_id=thread_id,
                 message=message,
+                related=related,
             )
             if annotation:
                 await self.connections.broadcast(conn.room_id, OutboundMessage(
