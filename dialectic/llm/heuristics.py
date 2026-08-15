@@ -7,6 +7,7 @@ import os
 import re
 
 from models import Message, SpeakerType, MessageType
+from llm.mentions import addresses_someone_else
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class InterjectionEngine:
     TRADEOFF: False positives (annoying) vs false negatives (silent).
 
     Heuristics evaluated in priority order:
+      0. Addressed to others       (SILENCE — outranks the mention)
       1. Explicit mention          (confidence 1.0)
       2. Turn threshold            (confidence 0.8)
       3. Question detection        (confidence 0.7)
@@ -46,14 +48,19 @@ class InterjectionEngine:
       6. Stagnation detection      (confidence 0.6, provoker)
       7. Speaker balance redirect  (confidence 0.55, 3+ speakers only)
 
-    NOTE ON SHAPE (2026-08-15): every rung votes only YES — the first match
-    returns immediately and nothing can vote against speaking, so silence is
-    reachable only by falling through all seven. Measured over a week of
-    production rows, every reason except no_trigger fired 100% of the time it
-    was reached, and `confidence` is recorded after the fact rather than used
-    to decide. The thresholds below are therefore the ONLY volume control this
-    engine has. Re-shaping the ladder into something that can weigh a case for
-    silence is the real fix and is deliberately not attempted here.
+    NOTE ON SHAPE (2026-08-15): rungs 1-7 vote only YES — the first match
+    returns immediately and none of them can vote against speaking, so
+    silence is reachable only by falling through all seven. Measured over a
+    week of production rows, every reason except no_trigger fired 100% of the
+    time it was reached, and `confidence` is recorded after the fact rather
+    than used to decide. The thresholds below are the only volume control
+    those seven rungs have.
+
+    AMENDED the same evening ("man this thing chimes in about everything"):
+    rung 0 is the first rung that can decline a turn, on the narrowest ground
+    available — the message opens by addressing someone else. It is not the
+    general re-shaping described above, which still wants doing; it is the
+    one case where the room already told us whose turn it was.
     """
 
     def __init__(
@@ -89,6 +96,25 @@ class InterjectionEngine:
         """
         considered_reasons: list[str] = []
 
+        recent_human = next(
+            (m for m in reversed(messages) if m.speaker_type == SpeakerType.HUMAN),
+            None
+        )
+
+        # 0. Addressed to other people — the ONE rung that argues for silence,
+        #    and the only reason it outranks the explicit mention is that a
+        #    message can NAME the participant while talking to someone else.
+        #    Every rung below votes yes and returns on first match, so nothing
+        #    further down can decline a turn that was never ours.
+        if recent_human and addresses_someone_else(recent_human.content):
+            return InterjectionDecision(
+                should_interject=False,
+                reason="addressed_to_another_human",
+                confidence=0.0,
+                use_provoker=False,
+                considered_reasons=considered_reasons,
+            )
+
         # 1. Explicit mention — highest priority, always fires
         if mentioned:
             return InterjectionDecision(
@@ -119,10 +145,6 @@ class InterjectionEngine:
             considered_reasons.append("turn_threshold")
 
         # 3. Question detection — most recent human message asks a question
-        recent_human = next(
-            (m for m in reversed(messages) if m.speaker_type == SpeakerType.HUMAN),
-            None
-        )
         if recent_human and self._is_question(recent_human.content):
             return InterjectionDecision(
                 should_interject=True,

@@ -9,6 +9,7 @@ from llm.trading_curator import (
     TradingCuratorEngine,
     TRADING_CURATOR_IDENTITY,
     _format_snapshot_for_prompt,
+    snapshot_fingerprint,
 )
 from models import SpeakerType
 from tests.conftest import ROOM_ID, THREAD_ID
@@ -54,7 +55,10 @@ def make_mock_db():
     """Create a mock DB connection with async methods."""
     db = AsyncMock()
     db.fetchval = AsyncMock(return_value=0)
-    db.fetchrow = AsyncMock(return_value={"sequence": 1})
+    # "fingerprint" rides along because generate_alert's unchanged-thesis gate
+    # also fetchrow()s; NULL is what the real query returns for a room whose
+    # last curator alert predates fingerprinting, i.e. "this is news".
+    db.fetchrow = AsyncMock(return_value={"sequence": 1, "fingerprint": None})
     db.fetch = AsyncMock(return_value=[])
     db.execute = AsyncMock()
     return db
@@ -266,7 +270,7 @@ class TestCuratorMetadataTagging:
         db = make_mock_db()
         # should_alert → 1 offline; is_duplicate → 0 → not duplicate
         db.fetchval = AsyncMock(side_effect=[1, 0])
-        db.fetchrow = AsyncMock(return_value={"sequence": 7})
+        db.fetchrow = AsyncMock(return_value={"sequence": 7, "fingerprint": None})
 
         # Mock provider + thread messages
         fake_response = MagicMock()
@@ -554,3 +558,139 @@ class TestFormatSnapshotForPrompt:
         assert "2026-01-01T00:00:00Z" in text
         assert "Fired" in text
         assert "a" in text
+
+
+# ============================================================
+# CONTENT FINGERPRINT — the unchanged-thesis gate
+#
+# Regression fence for 2026-08-15: Japan Rate Shock took 21 curator alerts
+# in three days off ONE unchanged snapshot, because every gate the curator
+# had was a clock (a 5/30-minute window, an 8/day ceiling) and a repushed
+# snapshot clears a clock by waiting.
+# ============================================================
+
+
+class TestSnapshotFingerprint:
+    def test_identical_causal_state_hashes_the_same(self):
+        assert snapshot_fingerprint(make_snapshot_dict()) == \
+            snapshot_fingerprint(make_snapshot_dict())
+
+    def test_clock_fields_do_not_change_it(self):
+        """The push clock moves on every heartbeat; the thesis does not."""
+        before = snapshot_fingerprint(make_snapshot_dict())
+        after = snapshot_fingerprint(make_snapshot_dict(
+            timestamp="2026-03-29T22:02:32Z",
+            revision=31062,
+            generatedAt="2026-03-29T22:02:32Z",
+        ))
+        assert before == after
+
+    def test_market_noise_does_not_change_it(self):
+        """A fourth decimal place on a quote is not worth waking anyone."""
+        before = snapshot_fingerprint(make_snapshot_dict())
+        after = snapshot_fingerprint(
+            make_snapshot_dict(marketSnapshot={"BZ=F": 82.51}))
+        assert before == after
+
+    def test_node_transition_changes_it(self):
+        before = snapshot_fingerprint(make_snapshot_dict())
+        after = snapshot_fingerprint(make_snapshot_dict(nodeStates={
+            "sanctions_reimposed": "fired",
+            "hormuz_closure": "fired",          # approaching -> fired
+            "brent_spike": "gated",
+        }))
+        assert before != after
+
+    def test_new_alert_event_changes_it(self):
+        before = snapshot_fingerprint(make_snapshot_dict())
+        after = snapshot_fingerprint(make_snapshot_dict(alertEvents=[
+            {"event_type": "node_fired", "severity": "critical",
+             "node_id": "hormuz_closure", "old_value": "approaching",
+             "new_value": "fired"},
+        ]))
+        assert before != after
+
+    def test_phase_change_changes_it(self):
+        before = snapshot_fingerprint(make_snapshot_dict())
+        after = snapshot_fingerprint(make_snapshot_dict(cascadePhase={
+            "number": 3, "key": "amplification", "status": "active",
+        }))
+        assert before != after
+
+
+class TestIsUnchanged:
+    @pytest.mark.asyncio
+    async def test_true_when_last_alert_carried_this_fingerprint(self):
+        db = make_mock_db()
+        db.fetchrow = AsyncMock(return_value={"fingerprint": "abc123"})
+        engine = TradingCuratorEngine(db, make_mock_memory(), None)
+        assert await engine.is_unchanged(THREAD_ID, "abc123") is True
+
+    @pytest.mark.asyncio
+    async def test_false_when_the_state_moved(self):
+        db = make_mock_db()
+        db.fetchrow = AsyncMock(return_value={"fingerprint": "abc123"})
+        engine = TradingCuratorEngine(db, make_mock_memory(), None)
+        assert await engine.is_unchanged(THREAD_ID, "def456") is False
+
+    @pytest.mark.asyncio
+    async def test_false_when_the_room_has_never_been_alerted(self):
+        db = make_mock_db()
+        db.fetchrow = AsyncMock(return_value=None)
+        engine = TradingCuratorEngine(db, make_mock_memory(), None)
+        assert await engine.is_unchanged(THREAD_ID, "abc123") is False
+
+    @pytest.mark.asyncio
+    async def test_false_for_alerts_written_before_fingerprints_existed(self):
+        """Every curator message already in production lacks the key."""
+        db = make_mock_db()
+        db.fetchrow = AsyncMock(return_value={"fingerprint": None})
+        engine = TradingCuratorEngine(db, make_mock_memory(), None)
+        assert await engine.is_unchanged(THREAD_ID, "abc123") is False
+
+
+class TestUnchangedSnapshotStaysQuiet:
+    """The whole point: the same thesis state twice speaks once."""
+
+    @staticmethod
+    async def _run(*, last_fingerprint):
+        """Drive generate_alert past should_alert + is_duplicate, with the
+        room's LAST curator alert carrying `last_fingerprint`.
+
+        Everything downstream of the gate is stubbed so that if the gate ever
+        stops firing, this test fails on ITS OWN assertions rather than on a
+        mock's missing key — a mutation must be killed by the claim, not by
+        the harness tripping over itself.
+        """
+        db = make_mock_db()
+        # should_alert -> 1 offline; is_duplicate -> 0 recent; count_today -> 0
+        db.fetchval = AsyncMock(side_effect=[1, 0, 0])
+        db.fetchrow = AsyncMock(side_effect=[
+            {"fingerprint": last_fingerprint},   # is_unchanged
+            {"sequence": 3},                     # the INSERT, if we get there
+        ])
+        engine = TradingCuratorEngine(db, make_mock_memory(), None)
+
+        provider = AsyncMock()
+        provider.complete = AsyncMock(return_value=MagicMock(content="ALERT: ..."))
+        with patch("operations.get_thread_messages", AsyncMock(return_value=[])), \
+             patch("llm.providers.get_provider", MagicMock(return_value=provider)):
+            alert = await engine.generate_alert(
+                ROOM_ID, THREAD_ID, make_snapshot_dict())
+        return alert, provider
+
+    @pytest.mark.asyncio
+    async def test_repeat_snapshot_produces_no_alert_and_no_llm_call(self):
+        alert, provider = await self._run(
+            last_fingerprint=snapshot_fingerprint(make_snapshot_dict()))
+        assert alert is None
+        # The gate runs BEFORE the model spends: 21 Sonnet calls bought 21
+        # paragraphs saying the same thing.
+        provider.complete.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_moved_snapshot_still_speaks(self):
+        """The fence must not mute a room that has real news."""
+        alert, provider = await self._run(last_fingerprint="a-different-state")
+        assert alert is not None
+        provider.complete.assert_called_once()

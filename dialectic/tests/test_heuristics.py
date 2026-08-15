@@ -649,3 +649,51 @@ class TestBackwardCompatibility:
             use_provoker=False,
         )
         assert decision.considered_reasons == []
+
+
+# ── Addressed to another human: the ladder's only argument for silence ──
+
+
+class TestAddressedToAnotherHuman:
+    """Regression fence (2026-08-15): "man this thing chimes in about
+    everything." Every other rung votes YES and returns on first match, so
+    a question aimed at a person fired rung 3 (question_detected) and the
+    participant answered a request that was never its turn."""
+
+    def test_question_to_a_human_is_not_our_turn(self, engine):
+        msgs = [make_message("@amo can you make the name highlight?")]
+        decision = engine.decide(msgs)
+        assert decision.should_interject is False
+        assert decision.reason == "addressed_to_another_human"
+
+    def test_naming_us_as_the_subject_does_not_summon_us(self, engine):
+        """The real message: addressed to Amo, ABOUT the participant.
+
+        `mentioned=True` here because mention detection matches @llm from
+        anywhere — which is why this rung has to outrank it.
+        """
+        msgs = [make_message(
+            "@amo feature idea can you make it highlight the name if it is "
+            "one of us and make the @llm a different color")]
+        assert engine.decide(msgs, mentioned=True).should_interject is False
+
+    def test_an_address_block_naming_us_still_summons(self, engine):
+        msgs = [make_message("@dan @dialectic what do you both think?")]
+        assert engine.decide(msgs, mentioned=True).should_interject is True
+
+    def test_a_mid_sentence_summon_still_works(self, engine):
+        msgs = [make_message("hey @dialectic what do you think?")]
+        assert engine.decide(msgs, mentioned=True).should_interject is True
+
+    def test_silence_outranks_the_turn_threshold(self, engine):
+        """Four human turns ending in a message addressed elsewhere."""
+        msgs = [make_message(f"turn {i}") for i in range(4)]
+        msgs.append(make_message("@dan your read on the yen?"))
+        assert engine.decide(msgs).should_interject is False
+
+    def test_an_ordinary_question_still_fires(self, engine):
+        """The fence must not mute the room."""
+        msgs = [make_message("what do you think about the BOJ?")]
+        decision = engine.decide(msgs)
+        assert decision.should_interject is True
+        assert decision.reason == "question_detected"

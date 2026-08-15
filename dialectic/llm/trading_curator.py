@@ -7,6 +7,8 @@ WHY: Trading data shifts while people are away — the curator flags what change
 TRADEOFF: Extra LLM call per snapshot (Haiku = cheap) vs silent data arrival.
 """
 
+import hashlib
+import json
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -96,6 +98,36 @@ class TradingCuratorEngine:
         )
         return count > 0
 
+    async def is_unchanged(self, thread_id: UUID, fingerprint: str) -> bool:
+        """Has the room already been told about exactly this thesis state?
+
+        WHY this exists alongside is_duplicate(): that gate is a TIME window,
+        and a time window cannot answer the question the room actually asks.
+        A snapshot repushed every 30 minutes clears any window eventually, so
+        an unchanged thesis alerted again, and again — nineteen times in
+        Japan Rate Shock on 2026-08-13..15, the model dutifully opening each
+        one "ALERT (19th confirmation - STALE, do not action)". A ceiling
+        cannot fix a baseline; only content can.
+
+        Compared against the room's LAST curator alert rather than any within
+        a window: the question is "is this new since we last spoke", and a
+        state that reverts to one we described two alerts ago IS news.
+        """
+        row = await self.db.fetchrow(
+            """SELECT metadata->>'snapshot_fingerprint' AS fingerprint
+               FROM messages
+               WHERE thread_id = $1
+                 AND speaker_type = $2
+                 AND metadata->>'source' = 'trading_curator'
+               ORDER BY created_at DESC
+               LIMIT 1""",
+            thread_id,
+            SpeakerType.LLM_ANNOTATOR.value,
+        )
+        # No previous alert, or one written before fingerprints existed:
+        # nothing to compare, so this is news by default.
+        return bool(row and row["fingerprint"] == fingerprint)
+
     async def count_today(self, room_id: UUID) -> int:
         """Curator messages posted into this room so far today (UTC).
 
@@ -157,6 +189,14 @@ class TradingCuratorEngine:
         ):
             return None
 
+        fingerprint = snapshot_fingerprint(snapshot)
+        if await self.is_unchanged(thread_id, fingerprint):
+            logger.info(
+                "Trading curator: thesis state unchanged since the last alert "
+                "in room %s — staying quiet", room_id,
+            )
+            return None
+
         if daily_cap is not None and await self.count_today(room_id) >= daily_cap:
             logger.info(
                 "Trading curator daily cap (%d) reached for room %s — skipping",
@@ -210,6 +250,7 @@ class TradingCuratorEngine:
                 "source": "trading_curator",
                 "snapshot_timestamp": snapshot.get("timestamp"),
                 "snapshot_v": snapshot.get("v"),
+                "snapshot_fingerprint": fingerprint,
             }
             row = await self.db.fetchrow(
                 """INSERT INTO messages
@@ -256,6 +297,30 @@ class TradingCuratorEngine:
         except Exception as e:
             logger.warning("Trading curator alert failed (non-critical): %s", e)
             return None
+
+
+def snapshot_fingerprint(snapshot: dict) -> str:
+    """Stable hash of the CAUSAL content an alert would be about.
+
+    WHY these four fields and not the whole payload: `timestamp`, `revision`
+    and `generatedAt` change on every push by construction, so hashing the
+    payload would fingerprint the clock and never match. `marketSnapshot`
+    ticks on ordinary noise — a fourth decimal place on usdJpy is not a
+    reason to wake someone at 3am, and including it would hand the same
+    always-different behaviour back through a different field.
+
+    What remains is what the curator's own identity prompt says it reports:
+    node state transitions, cascade phase, countdowns, and the alert events
+    tradingDesk itself classified as worth announcing.
+    """
+    material = {
+        "nodeStates": snapshot.get("nodeStates") or {},
+        "cascadePhase": snapshot.get("cascadePhase"),
+        "countdowns": snapshot.get("countdowns"),
+        "alertEvents": snapshot.get("alertEvents") or [],
+    }
+    encoded = json.dumps(material, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:16]
 
 
 def _format_snapshot_for_prompt(snapshot: dict) -> str:

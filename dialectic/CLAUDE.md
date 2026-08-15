@@ -385,3 +385,59 @@ references only, so it checks nothing and exits 0; use `tsc -b`, which is what
 caught a genuine missing import here.
 
 Suites at this gate: backend 1340, frontend 252.
+
+## Amendment 2026-08-15 (evening) — the curator's clock, and whose turn it is
+
+Two more sources found by measuring the same week, both of the shape the
+earlier amendments name: **a ceiling cannot fix a baseline**, and **the ladder
+can only vote yes**.
+
+- **A leftover interim timer was the loudest thing in the house.**
+  `tradingdesk-bridge.timer` (`OnCalendar=*:00/30`, unit description:
+  *"interim; removed when coordinator push deploys"*) was still running
+  `tools/bridge/run-all.py` long after the coordinator's inline push shipped.
+  Its payloads stamp **`v: 2`**, and `curator_plan` gives v1/v2 the legacy
+  "alert on every receipt" branch — the v3 contract's whole point is that
+  `alertEvents: []` means *nothing happened, stay quiet*. So the desk's own
+  hourly v3 heartbeats were correctly silent while a redundant duplicate of
+  them chattered every 30 minutes. **32 of the 35 curator alerts ever posted
+  came in on v2; 3 on v3.** Timer stopped and disabled; the coordinator pushes
+  all five books (9 heartbeats each that day) and is the only pusher needed.
+- **The curator had no content gate at all** — `is_duplicate` is a 5/30-minute
+  window and `CURATOR_DAILY_CAP` an 8/day ceiling, and a snapshot repushed
+  every 30 minutes clears a clock by waiting. Japan Rate Shock took **21
+  alerts in three days off one unchanged snapshot**, the model opening each
+  one *"ALERT (19th confirmation — STALE, do not action)"* — it knew, and had
+  no way to decline. `snapshot_fingerprint()` + `is_unchanged()` now compare
+  the CAUSAL content (nodeStates, cascadePhase, countdowns, alertEvents)
+  against the room's last curator alert. Deliberately excluded: `timestamp` /
+  `revision` / `generatedAt` (change every push by construction, so hashing
+  the payload would fingerprint the clock) and `marketSnapshot` (a fourth
+  decimal place on usdJpy is not a reason to wake anyone). Compared against
+  the LAST alert only, so a state that reverts and returns is news again.
+  A pre-fingerprint alert reads NULL → "this is news": the opposite failure
+  is a permanently muted trading room. Note the curator calls
+  **`claude-sonnet-5`**, not the Haiku its docstring claims — those 21
+  paragraphs were Sonnet calls.
+- **`heuristics.decide` gained rung 0, the first rung that can decline.**
+  A message that OPENS by addressing people who do not include us is not our
+  turn. It has to outrank the explicit mention, because a message can name
+  the participant while talking to someone else: *"@amo feature idea can you
+  make it highlight the name … and make the @llm a different color"* fired
+  rung 1 and got an answer that opened "This one's not for me to weigh in
+  on." Being right about that in the reply is not the same as staying out of
+  it. `llm/mentions.addresses_someone_else()` reads the **address block** —
+  the leading run of `@handles` — and leaves everything else alone, so
+  "hey @dialectic what do you think" still summons from mid-sentence.
+  Measured over the week: **10 of 45** `@`-opening human messages. Inside the
+  block a handle is ours if it *starts with* an alias (`@llmThe` — a real
+  message, space lost to a fast thumb); erring toward speech is the safe
+  direction for an address we misparse.
+
+This is still not the re-shaping the earlier amendment asks for — rungs 1–7
+remain yes-only. It is the one case where the room had already said whose
+turn it was.
+
+Suites at this gate: backend 1376 (1358 + 18), including six real-Postgres
+contracts in `tests/test_trading_curator_pg.py` — the mocked curator tests
+hand `fetchrow` a dict and so assert the shape of a query that never ran.
