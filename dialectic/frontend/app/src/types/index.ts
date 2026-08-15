@@ -412,6 +412,13 @@ export interface TradingSnapshot {
     sgov_available?: number;
     allocated?: number;
   };
+  // v2/v3 fields that were always pushed but never typed until the Bench
+  // cockpit started rendering them (2026-08-14).
+  tvIndicators?: Record<string, Record<string, number | null>>;
+  alertEvents?: import('./trading').AlertEvent[];
+  thesisId?: string;
+  revision?: number;
+  generatedAt?: string;
 }
 
 // WebSocket message types

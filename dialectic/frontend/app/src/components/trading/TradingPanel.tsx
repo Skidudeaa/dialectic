@@ -365,12 +365,13 @@ function CreateThesisForm({ roomId }: { roomId: string }) {
         </ul>
         {accessToken && (
           <a
-            className="trading-footer-link"
+            className="trading-instrument-link"
             href={buildTradingDeskUrl(accessToken, roomId, '/builder')}
             target="_blank"
             rel="noopener noreferrer"
           >
-            Open Thesis Builder — refine the DAG →
+            <span className="trading-instrument-link-kicker">Deep instrument</span>
+            Open Builder — refine the DAG →
           </a>
         )}
       </div>
@@ -584,12 +585,13 @@ export function TradingPanel() {
           </p>
           {accessToken && (
             <a
-              className="trading-footer-link"
+              className="trading-instrument-link"
               href={buildTradingDeskUrl(accessToken, currentRoom?.id, '/builder')}
               target="_blank"
               rel="noopener noreferrer"
             >
-              Open Thesis Builder →
+              <span className="trading-instrument-link-kicker">Deep instrument</span>
+              Open Builder — draw the cascade →
             </a>
           )}
         </div>
@@ -642,22 +644,28 @@ export function TradingPanel() {
         </div>
       )}
 
-      {/* Footer link — hands the current session across to tradingDesk. */}
+      {/* Footer — the ONE remaining hand-off, and it is deep EDITING only.
+          The dashboard link died with the cockpit merge (2026-08-14): the
+          Bench now renders the graph, quotes, trades, scenarios and news
+          natively, so "open the other app to see your thesis" is over. The
+          Builder link survives per design v2 §12.5 — a deeper instrument
+          for restructuring the DAG, not an exit to a parallel product. */}
       <div className="trading-footer">
         {accessToken ? (
           <a
-            className="trading-footer-link"
-            href={buildTradingDeskUrl(accessToken, currentRoom?.id)}
+            className="trading-instrument-link"
+            href={buildTradingDeskUrl(accessToken, currentRoom?.id, '/builder')}
             target="_blank"
             rel="noopener noreferrer"
           >
-            Open Full Dashboard (tradingDesk) →
+            <span className="trading-instrument-link-kicker">Deep instrument</span>
+            Open Builder — restructure the DAG →
           </a>
         ) : (
           // No token means no handoff is possible; a link that silently
           // dumped you on a login screen would be worse than no link.
-          <span className="trading-footer-link trading-footer-link--inert">
-            Open Full Dashboard (tradingDesk)
+          <span className="trading-instrument-link trading-instrument-link--inert">
+            Builder unavailable — sign in again
           </span>
         )}
         {/* Retire — two taps on purpose. The book survives on the desk;

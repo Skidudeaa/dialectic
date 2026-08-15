@@ -252,6 +252,19 @@ class DialecticAPI {
     const settings = await this.fetch<Record<string, unknown>>(`/rooms/${roomId}/settings`);
     return (settings.trading_config as Record<string, unknown> | null) ?? null;
   }
+  // The trading relay (api/trading_relay.py): room-scoped reads over the
+  // desk. An unbound room answers 409 — callers treat that as "no cockpit",
+  // never as an error.
+  async getThesisStructure(roomId: string) { return this.fetch<import('../types/trading').ThesisStructure>(`/rooms/${roomId}/trading/structure`); }
+  async getTradingQuotes(roomId: string) { return this.fetch<import('../types/trading').Quote[]>(`/rooms/${roomId}/trading/quotes`); }
+  async getPolymarketOdds(roomId: string) { return this.fetch<import('../types/trading').PolymarketOdd[]>(`/rooms/${roomId}/trading/polymarket`); }
+  async getTradingDiff(roomId: string) { return this.fetch<import('../types/trading').ThesisDiff>(`/rooms/${roomId}/trading/diff`); }
+  async getOpenTrades(roomId: string) { return this.fetch<import('../types/trading').OpenTrades>(`/rooms/${roomId}/trading/trades`); }
+  async getMorningBrief(roomId: string) { return this.fetch<import('../types/trading').MorningBrief>(`/rooms/${roomId}/trading/brief`); }
+  async getThesisNews(roomId: string) { return this.fetch<import('../types/trading').ThesisNews>(`/rooms/${roomId}/trading/news`); }
+  async evaluateScenario(roomId: string, scenarioId: string) {
+    return this.fetch<import('../types/trading').ScenarioEvaluation>(`/rooms/${roomId}/trading/scenarios/${encodeURIComponent(scenarioId)}/evaluate`, { method: 'POST' });
+  }
 
   // Analytics
   async getThreadDNA(threadId: string) { return this.fetch(`/analytics/threads/${threadId}/dna`); }

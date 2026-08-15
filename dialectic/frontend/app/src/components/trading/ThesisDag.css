@@ -1,0 +1,317 @@
+/* ThesisDag — read-only causal-DAG viewer (Bench). Dark Roast tokens only. */
+
+.thesis-dag {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+}
+
+/* Toolbar: legend left, zoom/fit controls right. Wraps on narrow rails. */
+.thesis-dag-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.thesis-dag-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--color-secondary);
+}
+
+.thesis-dag-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.thesis-dag-legend-item--dimmed {
+    color: var(--color-ghost);
+}
+
+.thesis-dag-controls {
+    display: flex;
+    gap: 0.3rem;
+}
+
+/* 44px touch targets — mobile has no wheel, pinch is optional so these are
+   the only way to zoom on a phone. */
+.thesis-dag-btn {
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-mono);
+    font-size: 16px;
+    line-height: 1;
+    color: var(--color-secondary);
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: color 120ms ease, border-color 120ms ease;
+}
+
+.thesis-dag-btn:hover {
+    color: var(--color-amber);
+    border-color: var(--color-amber-mute);
+}
+
+.thesis-dag-btn:focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 1px;
+}
+
+.thesis-dag-canvas {
+    position: relative;
+    width: 100%;
+    max-height: 420px;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    background: var(--color-void);
+    overflow: hidden;
+}
+
+.thesis-dag-svg {
+    display: block;
+    width: 100%;
+    height: 420px;
+    touch-action: none;
+    cursor: grab;
+}
+
+.thesis-dag-svg:active {
+    cursor: grabbing;
+}
+
+.thesis-dag-stale-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--color-warning);
+    background: var(--color-cacao);
+    border: 1px solid var(--color-warning);
+    border-radius: var(--radius-sm);
+    padding: 3px 6px;
+}
+
+.thesis-dag-background {
+    fill: var(--color-void);
+}
+
+.thesis-dag-phase-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    fill: var(--color-ghost);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+}
+
+.thesis-dag-edge-path {
+    fill: none;
+    stroke: var(--color-bean);
+}
+
+.thesis-dag-edge-label {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    fill: var(--color-secondary);
+}
+
+.thesis-dag-arrow-head {
+    fill: var(--color-bean);
+}
+
+/* Nodes */
+.thesis-dag-node {
+    cursor: pointer;
+    outline: none;
+}
+
+.thesis-dag-node-rect {
+    fill: var(--color-cacao);
+    stroke: var(--color-bean);
+    stroke-width: 1.5px;
+    transition: stroke 120ms ease, stroke-width 120ms ease;
+}
+
+.thesis-dag-node-type {
+    font-family: var(--font-mono);
+    font-size: 7.5px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    fill: var(--color-ghost);
+}
+
+.thesis-dag-node-label {
+    font-family: var(--font-serif);
+    font-size: 12px;
+    fill: var(--color-bone);
+}
+
+.thesis-dag-node-phase {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    fill: var(--color-faint);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+/* Visible focus ring — required, not decorative (Release-3 a11y gate). */
+.thesis-dag-node:focus-visible .thesis-dag-node-rect,
+.thesis-dag-node--selected .thesis-dag-node-rect {
+    stroke: var(--color-amber);
+    stroke-width: 2.5px;
+}
+
+/* State → border color, ALWAYS paired with a distinct dot shape below (no
+   color-only meaning). */
+.thesis-dag-node--fired .thesis-dag-node-rect { stroke: var(--sev-crit); }
+.thesis-dag-node--approaching .thesis-dag-node-rect { stroke: var(--color-amber); }
+.thesis-dag-node--resolved .thesis-dag-node-rect { stroke: var(--sev-resolve); }
+.thesis-dag-node--monitoring .thesis-dag-node-rect,
+.thesis-dag-node--neutral .thesis-dag-node-rect { stroke: var(--color-bean); }
+
+.thesis-dag-node--invalidated .thesis-dag-node-rect {
+    stroke: var(--color-faint);
+    stroke-dasharray: 2, 3;
+}
+.thesis-dag-node--invalidated .thesis-dag-node-label {
+    fill: var(--color-faint);
+    text-decoration: line-through;
+}
+
+/* Authored-only (no live reading) — dashed border on top of whatever the
+   authored state's border already is, plus reduced opacity. */
+.thesis-dag-node--dimmed {
+    opacity: 0.45;
+}
+.thesis-dag-node--dimmed .thesis-dag-node-rect {
+    stroke-dasharray: 3, 3;
+}
+
+/* State dot shapes — filled / ring / x / check / small dot. The shape IS
+   the signal; color reinforces it, never replaces it. */
+.thesis-dag-dot--filled { fill: var(--sev-crit); }
+.thesis-dag-dot--ring { stroke: var(--color-amber); stroke-width: 2px; }
+.thesis-dag-dot--check { stroke: var(--sev-resolve); stroke-width: 2px; stroke-linecap: round; stroke-linejoin: round; }
+.thesis-dag-dot--x line { stroke: var(--color-faint); stroke-width: 2px; stroke-linecap: round; }
+.thesis-dag-dot--dim { fill: var(--color-secondary); }
+
+.thesis-dag-footnote {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    line-height: 1.4;
+    color: var(--color-ghost);
+}
+
+/* Detail card — click/keyboard driven only, never hover. */
+.thesis-dag-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    background: var(--color-cacao);
+    padding: 0.6rem 0.7rem;
+    box-shadow: var(--shadow-md);
+}
+
+.thesis-dag-detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.thesis-dag-detail-title {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-bone);
+}
+
+.thesis-dag-detail-close {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: var(--color-ghost);
+    background: transparent;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: color 120ms ease, border-color 120ms ease;
+}
+
+.thesis-dag-detail-close:hover {
+    color: var(--color-amber);
+    border-color: var(--color-amber-mute);
+}
+
+.thesis-dag-detail-close:focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 1px;
+}
+
+.thesis-dag-detail-fields {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+}
+
+.thesis-dag-detail-row {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 10px;
+}
+
+.thesis-dag-detail-row dt {
+    flex: 0 0 84px;
+    margin: 0;
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--color-ghost);
+}
+
+.thesis-dag-detail-row dd {
+    flex: 1;
+    margin: 0;
+    color: var(--color-ink);
+    word-break: break-word;
+}
+
+.thesis-dag-detail-row--context dd {
+    font-family: var(--font-serif);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .thesis-dag-btn,
+    .thesis-dag-detail-close,
+    .thesis-dag-node-rect {
+        transition: none;
+    }
+}

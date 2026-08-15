@@ -695,6 +695,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
         state={workspaceObjects}
         onOpen={openWorkspaceObject}
         tradingPanel={<TradingPanel />}
+        roomId={currentRoom?.id ?? null}
       />
     ),
     field: <FieldScene state={fieldMarks} objects={workspaceObjects} onOpen={openWorkspaceObject} />,

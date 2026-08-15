@@ -1,0 +1,543 @@
+/* Bench cockpit — shared render grammar for the presentational feed modules
+ * (MarketStrip, PolymarketStrip, OpenTradesTable, HourlyDiff,
+ * MorningBriefCard, ThesisNewsList, AlertEventsList, ScenarioWhatIf).
+ *
+ * ARCHITECTURE: one stylesheet, imported by every module, so the cockpit
+ * reads as one system rather than eight ad-hoc widgets. Every module shares
+ * the same header treatment (uppercase mono title + optional freshness
+ * stamp + optional refresh affordance) and the same three-state body
+ * grammar (loading skeleton / unavailable error+stale / empty one-liner) —
+ * see each module's own status switch for how the grammar is applied.
+ * Tokens come from styles/tokens.css (Dark Roast); this file introduces no
+ * new colors, only new component shapes built from existing tokens so the
+ * cockpit matches TradingPanel's terminal-adjacent density.
+ */
+
+.cockpit-module {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0; /* let tables/rows shrink instead of blowing out flex parents */
+}
+
+/* Header row: title left, freshness/refresh right. Wraps on narrow mobile
+ * instead of clipping — no fixed widths anywhere in this file. */
+.cockpit-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.4rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--color-bean);
+}
+.cockpit-title {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: normal;
+    text-transform: uppercase;
+    letter-spacing: .18em;
+    color: var(--color-secondary);
+}
+.cockpit-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.cockpit-freshness {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--color-ghost);
+    white-space: nowrap;
+}
+
+.cockpit-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+/* --- Loading: quiet skeleton lines, not a spinner --- */
+.cockpit-skeleton-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.cockpit-skeleton {
+    height: 0.8rem;
+    width: 100%;
+    max-width: 220px;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(90deg, var(--color-cacao) 25%, var(--color-espresso) 50%, var(--color-cacao) 75%);
+    background-size: 200% 100%;
+    animation: cockpit-shimmer 1.6s ease-in-out infinite;
+}
+.cockpit-skeleton--wide { max-width: 100%; }
+.cockpit-skeleton--narrow { max-width: 120px; }
+@keyframes cockpit-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .cockpit-skeleton { animation: none; }
+}
+
+/* --- Unavailable: error line + stale-marked previous data --- */
+.cockpit-error-line {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--color-error);
+}
+.cockpit-error-line::before {
+    content: '\26A0';
+    flex-shrink: 0;
+}
+.cockpit-stale-note {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--color-warning);
+}
+
+/* --- Empty: one calm line --- */
+.cockpit-empty-line {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--color-ghost);
+    font-style: italic;
+    padding: 0.4rem 0;
+}
+
+/* --- Chips (MarketStrip, PolymarketStrip) --- */
+.cockpit-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+.cockpit-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    padding: 3px 7px;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    background: var(--color-cacao);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.4;
+    max-width: 100%;
+}
+.cockpit-chip-symbol {
+    color: var(--color-bone);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cockpit-chip-value {
+    color: var(--color-amber);
+    white-space: nowrap;
+}
+.cockpit-chip-sub {
+    color: var(--color-faint);
+    font-size: 9px;
+}
+
+/* --- Tables (OpenTradesTable, ScenarioWhatIf mini-table) --- */
+.cockpit-table-wrap {
+    overflow-x: auto;
+    width: 100%;
+}
+.cockpit-table {
+    width: 100%;
+    min-width: 340px;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 10px;
+}
+.cockpit-table th {
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    font-size: 8.5px;
+    font-weight: normal;
+    color: var(--color-ghost);
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--color-bean);
+    white-space: nowrap;
+}
+.cockpit-table td {
+    padding: 6px;
+    border-bottom: 1px solid rgba(60, 42, 30, .4);
+    color: var(--color-ink);
+    vertical-align: top;
+}
+.cockpit-table-row[data-expandable="true"] {
+    cursor: pointer;
+}
+.cockpit-table-row[data-expandable="true"]:hover {
+    background: var(--color-cacao);
+}
+.cockpit-table-row[data-expandable="true"]:focus-visible {
+    outline: 1px solid var(--color-amber);
+    outline-offset: -1px;
+}
+.cockpit-expand-caret {
+    display: inline-block;
+    width: 0.9em;
+    color: var(--color-faint);
+    transition: transform .15s var(--ease-out);
+}
+.cockpit-table-row[aria-expanded="true"] .cockpit-expand-caret {
+    transform: rotate(90deg);
+    color: var(--color-amber);
+}
+.cockpit-predicate-list {
+    margin: 0;
+    padding: 4px 0 4px 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 9.5px;
+    color: var(--color-secondary);
+    list-style: disc;
+}
+.cockpit-predicate-list li mark {
+    background: none;
+    color: var(--color-amber);
+    font-weight: 600;
+}
+
+/* --- Buttons: 40px+ touch targets everywhere, no hover-only actions --- */
+.cockpit-btn {
+    min-height: 40px;
+    min-width: 40px;
+    padding: 0 12px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    border: 1px solid var(--color-bean);
+    background: var(--color-espresso);
+    color: var(--color-ink);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+.cockpit-btn:hover:not(:disabled) {
+    border-color: var(--color-crater);
+}
+.cockpit-btn:focus-visible {
+    outline: 1px solid var(--color-amber);
+    outline-offset: 1px;
+}
+.cockpit-btn:disabled {
+    opacity: .55;
+    cursor: default;
+}
+.cockpit-btn--retry {
+    border-color: var(--scar-35);
+    color: var(--color-error);
+}
+.cockpit-btn--ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--color-secondary);
+    padding: 0 8px;
+}
+.cockpit-refresh-btn {
+    min-height: 40px;
+    min-width: 40px;
+    padding: 0 10px;
+    background: transparent;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    color: var(--color-secondary);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    cursor: pointer;
+}
+.cockpit-refresh-btn:hover {
+    border-color: var(--color-crater);
+    color: var(--color-ink);
+}
+
+/* --- Preformatted text block (MorningBriefCard) --- */
+.cockpit-pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    line-height: 1.55;
+    color: var(--color-ink);
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 0.65rem 0.75rem;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+/* --- Diff lines (HourlyDiff) --- */
+.cockpit-diff-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.cockpit-diff-line {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-ink);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    align-items: baseline;
+}
+.cockpit-diff-node {
+    color: var(--color-bone);
+    font-weight: 600;
+}
+.cockpit-diff-old {
+    color: var(--color-secondary);
+    text-decoration: line-through;
+    text-decoration-color: var(--scar-50);
+}
+.cockpit-diff-arrow {
+    color: var(--color-faint);
+}
+.cockpit-diff-new {
+    color: var(--color-amber);
+}
+.cockpit-diff-compact {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--color-secondary);
+    word-break: break-word;
+}
+.cockpit-diff-compact-key {
+    color: var(--color-ghost);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-right: 0.35em;
+}
+
+/* --- News (ThesisNewsList) --- */
+.cockpit-news-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.cockpit-news-item {
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid rgba(60, 42, 30, .4);
+}
+.cockpit-news-item:last-child {
+    border-bottom: none;
+}
+.cockpit-news-link {
+    font-family: var(--font-serif);
+    font-size: 12px;
+    color: var(--color-bone);
+    text-decoration: none;
+}
+.cockpit-news-link:hover {
+    color: var(--color-amber);
+    text-decoration: underline;
+}
+.cockpit-news-meta {
+    display: block;
+    margin-top: 2px;
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    color: var(--color-faint);
+}
+
+/* --- Alert events (AlertEventsList) --- */
+.cockpit-alert-list {
+    display: flex;
+    flex-direction: column;
+}
+.cockpit-alert-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 4px 2px;
+    border-bottom: 1px solid rgba(60, 42, 30, .4);
+    font-family: var(--font-mono);
+    font-size: 10px;
+}
+.cockpit-alert-row:last-child {
+    border-bottom: none;
+}
+.cockpit-alert-event-type {
+    color: var(--color-ink);
+}
+.cockpit-alert-node {
+    color: var(--color-secondary);
+}
+.cockpit-alert-values {
+    color: var(--color-faint);
+}
+.cockpit-alert-values mark {
+    background: none;
+    color: var(--color-amber);
+}
+
+/* --- Severity chips: outline, currentColor, shared with TradingPanel's
+ * node-badge treatment --- */
+.cockpit-severity {
+    display: inline-block;
+    padding: 2px 5px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-stencil);
+    font-size: 8.5px;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    border: 1px solid currentColor;
+    background: transparent;
+    flex-shrink: 0;
+}
+.cockpit-severity--critical { color: var(--sev-crit); }
+.cockpit-severity--warning { color: var(--sev-improve); }
+.cockpit-severity--info { color: var(--color-secondary); }
+
+/* --- Scenario what-if (ScenarioWhatIf) --- */
+.cockpit-scenario-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+.cockpit-scenario-row {
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(60, 42, 30, .4);
+}
+.cockpit-scenario-row:last-child {
+    border-bottom: none;
+}
+.cockpit-scenario-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: space-between;
+}
+.cockpit-scenario-name {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-bone);
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+.cockpit-scenario-probs {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 10px;
+}
+.cockpit-scenario-prob-label {
+    color: var(--color-ghost);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-right: 0.25em;
+}
+.cockpit-scenario-prob-authored { color: var(--color-secondary); }
+.cockpit-scenario-prob-live { color: var(--color-amber); }
+.cockpit-scenario-net-impact { color: var(--color-ink); }
+.cockpit-scenario-net-impact--neg { color: var(--color-error); }
+.cockpit-scenario-net-impact--pos { color: var(--sev-stable); }
+.cockpit-scenario-notes {
+    margin-top: 0.3rem;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--color-secondary);
+    line-height: 1.4;
+}
+.cockpit-scenario-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.cockpit-scenario-result {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+}
+.cockpit-scenario-result-label {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--color-warning);
+    margin-bottom: 0.35rem;
+}
+.cockpit-scenario-result-prob {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-amber);
+    margin-bottom: 0.35rem;
+}
+.cockpit-node-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-bottom: 0.4rem;
+}
+.cockpit-node-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.25rem;
+    padding: 2px 6px;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--color-ink);
+    background: var(--color-espresso);
+}
+.cockpit-mini-table {
+    width: 100%;
+    min-width: 300px;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+}
+.cockpit-mini-table th {
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    font-size: 8px;
+    font-weight: normal;
+    color: var(--color-ghost);
+    padding: 3px 5px;
+    border-bottom: 1px solid var(--color-bean);
+    white-space: nowrap;
+}
+.cockpit-mini-table td {
+    padding: 4px 5px;
+    border-bottom: 1px solid rgba(60, 42, 30, .4);
+    color: var(--color-ink);
+    white-space: nowrap;
+}
+
+/* Mobile: keep chips/rows wrapping, never fixed-width; tables already carry
+ * their own overflow-x wrapper above. */
+@media (max-width: 480px) {
+    .cockpit-scenario-actions,
+    .cockpit-scenario-probs {
+        width: 100%;
+    }
+}

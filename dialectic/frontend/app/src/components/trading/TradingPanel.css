@@ -307,33 +307,50 @@
     border-top: 1px solid var(--color-bean);
     text-align: center;
 }
-.trading-footer-link {
+/* The Builder hand-off — styled as opening a DEEPER INSTRUMENT (design v2
+   §12.5), not as leaving for another product. A bordered plate with a
+   kicker, deliberately heavier than the dead footer link it replaced:
+   this is the one surviving crossing to tradingDesk. */
+.trading-instrument-link {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
     font-family: var(--font-mono);
-    font-size: 9px;
-    color: var(--color-amber-mute);
-    /* WHY not `cursor: default`: this was a dead span for months and read as
-       decoration. Now that it is a real anchor it has to LOOK clickable. */
+    font-size: 10px;
+    color: var(--color-amber);
     cursor: pointer;
     text-decoration: none;
-    border-bottom: 1px solid transparent;
-    transition: color 120ms ease, border-color 120ms ease;
+    text-align: left;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--color-bean);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--color-amber) 5%, transparent);
+    transition: border-color 120ms ease, background 120ms ease;
 }
 
-.trading-footer-link:hover,
-.trading-footer-link:focus-visible {
-    color: var(--color-amber);
-    border-bottom-color: var(--color-amber);
+.trading-instrument-link:hover,
+.trading-instrument-link:focus-visible {
+    border-color: var(--color-amber-mute);
+    background: color-mix(in srgb, var(--color-amber) 10%, transparent);
+}
+
+.trading-instrument-link-kicker {
+    font-size: 8px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-faint);
 }
 
 /* Shown when there is no session to hand across — not clickable, and says so. */
-.trading-footer-link--inert {
+.trading-instrument-link--inert {
     cursor: default;
     opacity: 0.5;
+    color: var(--color-amber-mute);
 }
 
-.trading-footer-link--inert:hover {
-    color: var(--color-amber-mute);
-    border-bottom-color: transparent;
+@media (prefers-reduced-motion: reduce) {
+    .trading-instrument-link { transition: none; }
 }
 
 /* Create Thesis — the empty-state flow. The room births its book here;
@@ -428,8 +445,7 @@
     cursor: default;
 }
 
-.thesis-create--done .trading-footer-link {
-    display: inline-block;
+.thesis-create--done .trading-instrument-link {
     margin-top: 0.2rem;
 }
 
