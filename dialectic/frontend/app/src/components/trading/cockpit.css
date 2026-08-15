@@ -18,6 +18,13 @@
     flex-direction: column;
     gap: 0.5rem;
     min-width: 0; /* let tables/rows shrink instead of blowing out flex parents */
+    /* A drawn panel, not a floating list — the Bench composes as instrument
+       cards on the void, each with its own edge and paper shadow. */
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px 14px;
+    box-shadow: var(--shadow-sm);
 }
 
 /* Header row: title left, freshness/refresh right. Wraps on narrow mobile
@@ -33,11 +40,11 @@
 }
 .cockpit-title {
     font-family: var(--font-mono);
-    font-size: 9.5px;
-    font-weight: normal;
+    font-size: 11px;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: .18em;
-    color: var(--color-secondary);
+    color: var(--color-bone);
 }
 .cockpit-header-right {
     display: flex;

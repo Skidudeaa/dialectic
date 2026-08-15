@@ -15,3 +15,34 @@
     flex-direction: column;
     overflow: hidden;
 }
+
+/* ── Scene body — the shared canvas every non-Record scene renders into ──
+   Previously an unstyled div that happened to work; now the layout system:
+   it scrolls, it breathes, and it caps its measure so wide monitors get
+   composed columns instead of a 1700px smear. */
+.scene-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px 22px 40px;
+}
+.scene-body > * {
+    width: 100%;
+    max-width: 1180px;
+    margin-inline: auto;
+}
+
+/* Two half-width modules sharing a row on screens with the room for it.
+   An explicit pairing wrapper, not nth-child guessing — the scene decides
+   which modules are peers. */
+.cockpit-duo {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px 16px;
+}
+@media (min-width: 1180px) {
+    .cockpit-duo { grid-template-columns: 1fr 1fr; align-items: start; }
+}

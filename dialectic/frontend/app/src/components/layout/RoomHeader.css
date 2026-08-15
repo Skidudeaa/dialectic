@@ -19,7 +19,10 @@
 .room-title {
     font-family: var(--font-serif);
     font-weight: 600;
-    font-size: 0.95rem;
+    /* A masthead, not a label — the case title is the one piece of display
+       ink on the screen and it was set smaller than the body text. */
+    font-size: 1.18rem;
+    letter-spacing: .01em;
     color: var(--color-display);   /* case title — display ink */
     white-space: nowrap;
     overflow: hidden;

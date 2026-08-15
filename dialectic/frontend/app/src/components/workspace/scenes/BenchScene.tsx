@@ -91,10 +91,15 @@ export function BenchScene({
         </section>
       ) : null}
       <MarketStrip slice={desk.quotes} onRefresh={desk.refresh} />
-      <PolymarketStrip slice={desk.polymarket} />
-      <AlertEventsList events={tradingConfig?.alertEvents} />
-      <HourlyDiff slice={desk.diff} />
-      <OpenTradesTable slice={desk.trades} />
+      {/* Deliberate pairs — peers share a row on wide screens (.cockpit-duo). */}
+      <div className="cockpit-duo">
+        <PolymarketStrip slice={desk.polymarket} />
+        <AlertEventsList events={tradingConfig?.alertEvents} />
+      </div>
+      <div className="cockpit-duo">
+        <HourlyDiff slice={desk.diff} />
+        <OpenTradesTable slice={desk.trades} />
+      </div>
       {desk.structure.status === 'ready' && desk.structure.data && roomId ? (
         <ScenarioWhatIf
           roomId={roomId}
@@ -102,8 +107,10 @@ export function BenchScene({
           snapshotImpacts={tradingConfig?.scenarioImpacts}
         />
       ) : null}
-      <MorningBriefCard slice={desk.brief} />
-      <ThesisNewsList slice={desk.news} />
+      <div className="cockpit-duo">
+        <MorningBriefCard slice={desk.brief} />
+        <ThesisNewsList slice={desk.news} />
+      </div>
     </>
   ) : null
 

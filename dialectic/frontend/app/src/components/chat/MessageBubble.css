@@ -18,8 +18,8 @@
 }
 .msg:not(.msg-continuation) {
     border-top: 1px solid var(--color-bean);
-    padding-top: 0.7rem;
-    margin-top: 0.15rem;
+    padding-top: 0.95rem;
+    margin-top: 0.3rem;
 }
 .msg.msg-claude,
 .msg.msg-provoker,
@@ -97,12 +97,12 @@
    row's hairline top-border (above) is the only separator now. */
 .msg-content-frame {
     padding: 0 0 0.15rem;
-    /* 15.5/1.58 (was 14/1.52): Newsreader runs light on dark ground and the
-       owner's screenshot showed a transcript that whispered. The measure
-       stays 72ch — the column got taller type, not longer lines. */
-    line-height: 1.58;
+    /* 16/1.6: Newsreader runs light on dark ground — this is the size at
+       which it stops whispering. The measure stays 72ch — the column got
+       taller type, not longer lines. */
+    line-height: 1.6;
     font-family: var(--font-serif);
-    font-size: 15.5px;
+    font-size: 16px;
     position: relative;
     overflow: hidden;
     max-width: 72ch;  /* reading measure */
@@ -380,7 +380,7 @@
     bottom: 0;
     height: 24px;
     pointer-events: none;
-    background: linear-gradient(to bottom, transparent, var(--color-obsidian));
+    background: linear-gradient(to bottom, transparent, var(--color-sheet));
 }
 
 /* A real affordance now — the 9px ghost text read as debris, not a control. */

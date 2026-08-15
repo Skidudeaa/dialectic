@@ -2,11 +2,13 @@
 .input-area {
     padding: 8px 16px 11px;
     border-top: 1px solid var(--color-bean);
-    background: var(--color-obsidian);
+    /* Void, like the stream around the sheet — the composer's own cacao box
+       is what reads as "the writing surface". */
+    background: var(--color-void);
     flex-shrink: 0;
 }
 .input-area-inner {
-    max-width: 800px;
+    max-width: 860px;  /* aligned with the sheet above it */
     margin: 0 auto;
     /* The drop target is the whole composer, so the outline below has something
        to hang off without shifting anything when it appears. */

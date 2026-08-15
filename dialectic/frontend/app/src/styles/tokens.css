@@ -16,6 +16,11 @@
     /* Surfaces — luminance ladder (deeper floor, brighter lifts) */
     --color-void:     #0C0805;   /* page background, side rails */
     --color-obsidian: #150D07;   /* stream / content background */
+    --color-sheet:    #1B120B;   /* the dossier PAGE — the bounded sheet the
+                                    transcript sits on. Sits between obsidian
+                                    and cacao; v2.1 exists because obsidian on
+                                    void was a 2% step nobody could see, so
+                                    text read as floating in darkness. */
     --color-cacao:    #221510;   /* memo cards, exhibits, composer box, panels */
     --color-espresso: #332217;   /* elevated cards */
     --color-bean:     #4E3826;   /* all structural borders — visibly drawn now */
