@@ -395,6 +395,7 @@ connection_manager: ConnectionManager = ConnectionManager()
 # ============================================================
 
 from api.token_utils import extract_room_token
+from api.thread_titles import ROOT_THREAD_TITLE
 
 
 async def verify_room_token(
@@ -623,7 +624,7 @@ async def create_room(
     await db.execute(
         """INSERT INTO threads (id, room_id, created_at, title)
            VALUES ($1, $2, $3, $4)""",
-        thread_id, room_id, now, "Main"
+        thread_id, room_id, now, ROOT_THREAD_TITLE
     )
 
     await db.execute(
@@ -636,7 +637,7 @@ async def create_room(
         """INSERT INTO events (id, timestamp, event_type, room_id, thread_id, payload)
            VALUES ($1, $2, $3, $4, $5, $6)""",
         uuid4(), now, EventType.THREAD_CREATED.value, room_id, thread_id,
-        {"title": "Main"}
+        {"title": ROOT_THREAD_TITLE}
     )
 
     return CreateRoomResponse(id=room_id, token=token, name=request.name)

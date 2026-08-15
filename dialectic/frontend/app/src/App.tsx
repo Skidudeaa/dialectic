@@ -11,7 +11,7 @@ import { useRoomNavigation, type RoomNavigation } from './hooks/useRoomNavigatio
 import { useDocumentVisibility } from './hooks/useDocumentVisibility.ts'
 import { useAwayAlerts } from './hooks/useAwayAlerts.ts'
 import { usePushSubscription } from './hooks/usePushSubscription.ts'
-import type { Message, SearchResult, Thread, ThreadNode, TradingSnapshot } from './types/index.ts'
+import type { Message, SearchResult, ThesisSeed, Thread, ThreadNode, TradingSnapshot } from './types/index.ts'
 import { AppLayout } from './components/layout/AppLayout'
 import { RoomHeader } from './components/layout/RoomHeader'
 import { RoomSettingsDialog } from './components/layout/RoomSettingsDialog'
@@ -563,13 +563,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
             onEditMessage={editMessageContent}
             onDeleteMessage={deleteMessage}
             emptyKind={isHome ? 'hearth' : 'dialogue'}
-            onOpenBench={() => {
-              void navigate({
-                roomId: currentRoom.id,
-                threadId: currentThread?.id ?? null,
-                scene: 'bench',
-              }, 'push')
-            }}
+            onOpenBench={(seed) => { void openThesisSeed(seed) }}
           />
           <TypingIndicator typingUsers={typingDisplay} activityLabel={toolActivityLabel} />
           <MessageInput
@@ -612,14 +606,71 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
     </>
   )
 
+  /**
+   * Take a proposed thesis to the Bench where it can actually be created.
+   *
+   * Outside Home that is this room's own Bench and nothing moves. AT HOME
+   * there is no Bench and `POST .../trading/thesis` answers 409 "Propose it in
+   * the scheme's room" — so the tap used to resolve to the default scene and
+   * do nothing at all. That silent refusal is what pushed general talk back
+   * out of the shared room: the one place built so conversation would not get
+   * lost in the individual threads could not turn a conversation into work.
+   *
+   * So Home spawns the scheme's room instead of naming it as somewhere to go.
+   * The server carries Home's membership into it in the same statement that
+   * creates it — `POST /rooms` writes none, which is why a bound trading room
+   * with zero members already exists in production.
+   *
+   * ORDER IS LOAD-BEARING: appStore clears `thesisSeed` on room switch, on
+   * purpose (a seed from the room you left means nothing in the one you
+   * entered). Seeding before navigating would be dropped in flight, so the
+   * seed is set only after `navigate` resolves. Do not hoist it.
+   */
+  const openThesisSeed = async (seed: ThesisSeed) => {
+    const store = useAppStore.getState()
+    if (!isHome) {
+      store.setThesisSeed(seed)
+      void navigate({
+        roomId: currentRoom.id,
+        threadId: currentThread?.id ?? null,
+        scene: 'bench',
+      }, 'push')
+      return
+    }
+    try {
+      const spawned = await api.spawnScheme(seed.title)
+      const arrived = await navigate({
+        roomId: spawned.room_id,
+        threadId: spawned.thread_id,
+        scene: 'bench',
+      }, 'push')
+      // Only seed once we are actually there; a refused navigation would
+      // otherwise leave a seed sitting in the room we never left.
+      if (arrived) useAppStore.getState().setThesisSeed(seed)
+    } catch (err) {
+      window.alert(
+        err instanceof Error
+          ? `Could not open a room for this scheme: ${err.message}`
+          : 'Could not open a room for this scheme.',
+      )
+    }
+  }
+
   // The House is the shipped pulse ABOVE the same table — the Record is not
   // duplicated into a second component, it is composed.
+  //
+  // AMENDED 2026-08-15: the pulse renders COMPACT here. It used to stack
+  // residents, needs, movement and every scheme door ahead of the transcript,
+  // which made the room the two of them share read as a directory pointing at
+  // the other rooms. The conversation is the place; the pulse is the lintel
+  // over it. Everything demoted is one <details> away, not gone.
   const houseSurface = (
     <>
       <HomeActivityPulse
         onNavigate={(destination) => navigate(destination, 'push')}
         refreshVersion={homeRefreshVersion}
         residents={participants}
+        compact
       />
       {recordSurface}
     </>

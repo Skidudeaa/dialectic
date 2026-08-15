@@ -20,6 +20,21 @@ interface HomeActivityPulseProps {
    *  intersection contracts immediately instead of on the next interval. */
   refreshVersion: number
   residents: HomeResident[]
+  /**
+   * Render as a lintel over the conversation rather than a board above it.
+   *
+   * WHY (2026-08-15): the House scene stacked residents, needs, movement and
+   * every scheme door ahead of the transcript, so the default view of the room
+   * the two of them share was a dashboard ABOUT OTHER ROOMS with the
+   * conversation below the fold. Home was created saying "the humans want a
+   * place to gather, so general talk doesn't get lost in the individual
+   * threads" and then read as a directory to the individual threads.
+   *
+   * Compact keeps who-is-here and what-needs-a-body — both are part of being
+   * in a place — and folds movement and the doors into a <details> the reader
+   * opens deliberately. Native disclosure, no state, no library.
+   */
+  compact?: boolean
 }
 
 type Need =
@@ -32,7 +47,7 @@ type Need =
  * Same projection as before — read-only, membership-fenced, no receipts
  * written. The transcript under this is the table, not the place.
  */
-export function HomeActivityPulse({ onNavigate, refreshVersion, residents }: HomeActivityPulseProps) {
+export function HomeActivityPulse({ onNavigate, refreshVersion, residents, compact = false }: HomeActivityPulseProps) {
   const [snapshot, setSnapshot] = useState<HomeActivityProjection | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -92,8 +107,30 @@ export function HomeActivityPulse({ onNavigate, refreshVersion, residents }: Hom
 
   const needs = collectNeeds(snapshot.rooms)
 
+  const elsewhere = (
+    <>
+      <HouseMovement
+        movement={snapshot.rooms.flatMap((room) => room.movement ?? [])}
+        onNavigate={onNavigate}
+      />
+
+      <section className="home-wings" aria-label="The house">
+        <h2>The house</h2>
+        {snapshot.rooms.length === 0 ? (
+          <p className="home-house-empty">No shared rooms yet — every Home member must belong to a room for it to appear here.</p>
+        ) : (
+          <div className="home-doors">
+            {snapshot.rooms.map((room) => (
+              <SchemeDoor key={room.id} room={room} onNavigate={onNavigate} />
+            ))}
+          </div>
+        )}
+      </section>
+    </>
+  )
+
   return (
-    <div className="home-house">
+    <div className={`home-house${compact ? ' compact' : ''}`}>
       <div className="home-lintel">
         <div className="home-residents">
           {residents.map((resident) => {
@@ -131,23 +168,19 @@ export function HomeActivityPulse({ onNavigate, refreshVersion, residents }: Hom
         </section>
       )}
 
-      <HouseMovement
-        movement={snapshot.rooms.flatMap((room) => room.movement ?? [])}
-        onNavigate={onNavigate}
-      />
-
-      <section className="home-wings" aria-label="The house">
-        <h2>The house</h2>
-        {snapshot.rooms.length === 0 ? (
-          <p className="home-house-empty">No shared rooms yet — every Home member must belong to a room for it to appear here.</p>
-        ) : (
-          <div className="home-doors">
-            {snapshot.rooms.map((room) => (
-              <SchemeDoor key={room.id} room={room} onNavigate={onNavigate} />
-            ))}
-          </div>
-        )}
-      </section>
+      {compact ? (
+        <details className="home-fold">
+          <summary>
+            Elsewhere in the house
+            <span className="home-fold-count">
+              {snapshot.rooms.length === 0
+                ? 'no shared rooms yet'
+                : `${snapshot.rooms.length} ${snapshot.rooms.length === 1 ? 'scheme' : 'schemes'}`}
+            </span>
+          </summary>
+          <div className="home-fold-body">{elsewhere}</div>
+        </details>
+      ) : elsewhere}
     </div>
   )
 }

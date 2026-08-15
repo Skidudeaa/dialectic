@@ -99,6 +99,25 @@ class DialecticAPI {
   async getHomeActivity(): Promise<HomeActivityProjection> {
     return this.fetch('/users/me/home/activity');
   }
+  /**
+   * Create the scheme's room from Home, carrying Home's membership into it.
+   *
+   * Same auth shape as getHomeActivity — JWT plus Home membership, no room
+   * token. The thesis is NOT created here; this only opens the room where the
+   * drafted cascade can be reviewed, which at Home is a place that does not
+   * exist yet rather than a scene that was refused.
+   */
+  async spawnScheme(name: string): Promise<{
+    room_id: string;
+    thread_id: string;
+    name: string;
+    member_count: number;
+  }> {
+    return this.fetch('/users/me/home/schemes', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  }
   async resolveHomeMember(email: string): Promise<{
     user_id: string;
     display_name: string;

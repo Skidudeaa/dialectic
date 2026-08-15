@@ -181,6 +181,7 @@ async def build_briefing(
                WHERE t.room_id = $1
                  AND m.created_at > $2
                  AND NOT m.is_deleted
+                 AND m.speaker_type != 'llm_annotator'
                  AND (m.user_id IS NULL OR m.user_id != $3)
                ORDER BY m.created_at DESC
                LIMIT 100""",
@@ -195,10 +196,27 @@ async def build_briefing(
                WHERE t.room_id = $1
                  AND m.created_at > $2
                  AND NOT m.is_deleted
+                 AND m.speaker_type != 'llm_annotator'
                ORDER BY m.created_at DESC
                LIMIT 100""",
             room_id, last_seen
         )
+    # WHY the annotator lane is excluded above (2026-08-15): the morning brief
+    # POSTS as llm_annotator, so with no filter the next night's brief read its
+    # own output back as conversation to summarize. In Home, whose last window
+    # held three annotator notes and zero human messages, that produced a brief
+    # addressed to nobody — "It looks like the conversation details got cut off
+    # partway through—could you paste…" — and that is the last thing in the
+    # room the two of them share.
+    #
+    # It fixes two things at once: the summary corpus stops containing the
+    # summarizer, and `messages_missed` stops counting the machine's own
+    # marginalia as messages a human missed (it also gates "quiet" below and
+    # drives the push). llm_primary and llm_provoker STAY — Claude is a
+    # participant and its turns are real conversation. Only the annotator lane
+    # is marginalia written FOR the person who was away, which is precisely
+    # what a brief must not mistake for what they were away from.
+    #
     # Reverse to chronological order after LIMIT
     message_rows = list(reversed(message_rows))
 

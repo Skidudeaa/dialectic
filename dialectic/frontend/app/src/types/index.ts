@@ -105,6 +105,19 @@ export interface ClaimCheck {
  * Nothing exists yet: the card seeds the Create Thesis form, where the
  * cascade is drafted, reviewed, and — only on the human's tap — created.
  */
+/**
+ * A proposed thesis on its way to a Create Thesis form.
+ *
+ * Named because it now crosses a ROOM boundary: proposed at Home, created in
+ * the scheme's room the tap spawns. appStore clears `thesisSeed` on room
+ * switch by design, so this travels as an argument until it has arrived.
+ */
+export interface ThesisSeed {
+  title: string
+  claim: string
+  monthlyBudget: number
+}
+
 export interface ThesisProposal {
   title: string;
   claim: string;

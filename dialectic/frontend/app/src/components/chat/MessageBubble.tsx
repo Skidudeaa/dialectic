@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import type { Attachment, CommitmentProposal, Message, Reaction } from '../../types'
+import type { Attachment, CommitmentProposal, Message, Reaction, ThesisSeed } from '../../types'
 import { api } from '../../lib/api'
 import { localProposals, type LocalProposal } from '../../lib/proposalEnvelope'
 import { useAppStore } from '../../stores/appStore'
@@ -55,9 +55,10 @@ interface MessageBubbleProps {
    * scene is a destination axis. Design v2 §5.7 gives navigation exactly one
    * owner (useRoomNavigation), so a card deep in the transcript must ask for
    * the destination rather than install one — otherwise the URL, the history
-   * entry and the rendered scene can disagree.
+   * entry and the rendered scene can disagree. The seed rides along because
+   * at Home the destination is a room that does not exist yet.
    */
-  onOpenBench?: () => void
+  onOpenBench?: (seed: ThesisSeed) => void
 }
 
 /** Quoted parents are a glance, not a re-read. */
@@ -218,20 +219,25 @@ export function MessageBubble({
   const proposalLogged = proposalsBySlot.get('proposal')?.status === 'accepted'
 
   // A proposed thesis, if this turn made one. Nothing exists yet — the tap
-  // seeds the Create Thesis form and opens the Trading tab, where the
+  // carries the seed up and the destination is decided above, where the
   // cascade is drafted and reviewed before anything is created.
+  //
+  // AMENDED 2026-08-15: this used to write setThesisSeed itself and then ask
+  // for the Bench. That is only correct when the Bench is in THIS room. At
+  // Home there is no Bench and thesis creation answers 409, so the tap
+  // resolved to the default scene and did nothing — the dead end that pushed
+  // general talk back out of the shared room. Home now spawns the scheme's
+  // room, which is a ROOM SWITCH, and appStore clears thesisSeed on exactly
+  // that. Seeding from here would be dropped in flight, so the seed travels
+  // as an argument and whoever handles the move decides when to set it.
   const thesisProposal = message.metadata?.thesis_proposal
   const openThesisCreate = () => {
     if (!thesisProposal) return
-    const state = useAppStore.getState()
-    state.setThesisSeed({
+    onOpenBench?.({
       title: thesisProposal.title,
       claim: thesisProposal.claim,
       monthlyBudget: thesisProposal.monthly_budget ?? 5000,
     })
-    // The Bench is a scene now, not a rail tab. Navigation owns the move;
-    // this only asks for it.
-    onOpenBench?.()
   }
 
   // Detected implicit commitments ("I bet…"). Accept sends an ordinary

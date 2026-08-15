@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { PARTICIPANT_NAME, participantDisplayName } from '../../lib/productIdentity.ts'
-import type { Attachment, Message, Reaction } from '../../types'
+import type { Attachment, Message, Reaction , ThesisSeed } from '../../types'
 import { useDocumentVisibility } from '../../hooks/useDocumentVisibility'
 import { MessageBubble } from './MessageBubble'
 import './MessageList.css'
@@ -31,7 +31,7 @@ interface MessageListProps {
   /** Home's empty state is a table, not a prompt to start a chat. */
   emptyKind?: 'dialogue' | 'hearth'
   /** Carried down to a thesis-proposal card so it can ask for the Bench. */
-  onOpenBench?: () => void
+  onOpenBench?: (seed: ThesisSeed) => void
 }
 
 /**
