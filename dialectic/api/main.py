@@ -38,6 +38,7 @@ from api.attachments import router as attachments_router, set_attachments_db_poo
 from api.prediction_relay import router as prediction_relay_router, set_prediction_relay_db_pool
 from api.reading_relay import router as reading_relay_router, set_reading_relay_db_pool
 from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_pool
+from api.trading_relay import router as trading_relay_router, set_trading_relay_db_pool
 from api.home import router as home_router, set_home_db_pool
 from api.workspace import router as workspace_router, set_workspace_db_pool
 from api.field import router as field_router, set_field_db_pool
@@ -208,6 +209,7 @@ async def lifespan(app: FastAPI):
         set_prediction_relay_db_pool(db_pool)
         set_reading_relay_db_pool(db_pool)
         set_thesis_relay_db_pool(db_pool)
+        set_trading_relay_db_pool(db_pool)
         set_home_db_pool(db_pool)
 
         # Set db_pool for the read-only workspace-object projection
@@ -360,6 +362,9 @@ app.include_router(reading_relay_router)
 
 # Include thesis relay router (Create Thesis → book born bound to its room)
 app.include_router(thesis_relay_router)
+
+# Trading relay (the Bench's read window: structure, quotes, trades, what-ifs)
+app.include_router(trading_relay_router)
 
 # Home membership administration — the only door into Home (the generic
 # join path below refuses it).
