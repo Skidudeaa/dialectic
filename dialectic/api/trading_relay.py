@@ -33,10 +33,13 @@ _db_pool = None
 # warm hits are milliseconds. The margin covers the cold path.
 QUOTES_TIMEOUT_S = 25.0
 
-# GDELT's cold fetch on td's news endpoint can outrun the client's 10s
-# default (observed live 2026-08-14: the first Bench render 502'd on it);
-# td caches for 15 min, so the wide margin is paid rarely.
-NEWS_TIMEOUT_S = 20.0
+# Must EXCEED td's own GDELT timeout (tools/data_fetch/gdelt.py
+# DEFAULT_TIMEOUT = 20): when GDELT stalls, td holds the request the full
+# 20s and then answers a graceful {"articles": [], "note": ...} — a proxy
+# timeout at exactly 20s loses that race and turns the graceful empty into
+# a 502 (observed live 2026-08-14, three renders in a row). td caches 15
+# min, so the margin is paid rarely.
+NEWS_TIMEOUT_S = 25.0
 
 
 def set_trading_relay_db_pool(pool):
