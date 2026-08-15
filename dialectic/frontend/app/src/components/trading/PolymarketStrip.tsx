@@ -57,7 +57,7 @@ export function PolymarketStrip({ slice }: PolymarketStripProps) {
   return (
     <section className="cockpit-module" aria-label="Polymarket strip">
       <div className="cockpit-header">
-        <span className="cockpit-title">Polymarket</span>
+        <span className="cockpit-title" title="Prediction-market odds bound to this thesis">Polymarket</span>
         <div className="cockpit-header-right">
           {freshness && <span className="cockpit-freshness">{freshness}</span>}
         </div>

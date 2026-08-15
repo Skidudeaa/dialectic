@@ -15,7 +15,7 @@ body {
     color: var(--color-ink);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-image: radial-gradient(120% 80% at 50% -10%, rgba(230,154,76,.04), transparent 55%);
+    background-image: radial-gradient(120% 80% at 50% -10%, rgba(242,162,74,.04), transparent 55%);
 }
 
 /* Monospace shorthand */
@@ -93,7 +93,7 @@ code, pre { font-family: var(--font-mono); }
 }
 .form-input:focus {
     border-color: var(--amber-30);
-    box-shadow: 0 0 0 2px rgba(230,154,76,.1);
+    box-shadow: 0 0 0 2px rgba(242,162,74,.1);
 }
 .form-input::placeholder { color: var(--color-faint); font-style: italic; }
 

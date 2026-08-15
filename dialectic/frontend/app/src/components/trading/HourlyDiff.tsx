@@ -79,7 +79,7 @@ export function HourlyDiff({ slice }: HourlyDiffProps) {
   return (
     <section className="cockpit-module" aria-label="Hourly diff">
       <div className="cockpit-header">
-        <span className="cockpit-title">Hourly Diff</span>
+        <span className="cockpit-title" title="What moved in the last hour — node flips, confluence, market, portfolio">Hourly Diff</span>
       </div>
       <div className="cockpit-body">
         {slice.status === 'loading' && (

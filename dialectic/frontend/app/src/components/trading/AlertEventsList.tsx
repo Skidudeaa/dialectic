@@ -32,7 +32,7 @@ export function AlertEventsList({ events }: AlertEventsListProps) {
   return (
     <section className="cockpit-module" aria-label="Alert events">
       <div className="cockpit-header">
-        <span className="cockpit-title">Alert Events</span>
+        <span className="cockpit-title" title="State transitions carried by the latest snapshot push">Alert Events</span>
       </div>
       <div className="cockpit-body">
         {rows.length === 0 ? (

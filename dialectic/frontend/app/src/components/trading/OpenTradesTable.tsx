@@ -109,7 +109,7 @@ export function OpenTradesTable({ slice }: OpenTradesTableProps) {
   return (
     <section className="cockpit-module" aria-label="Open trades">
       <div className="cockpit-header">
-        <span className="cockpit-title">Open Trades</span>
+        <span className="cockpit-title" title="Desk-wide exposure with each trade's resting predicates — expand a row for detail">Open Trades</span>
       </div>
       <div className="cockpit-body">
         {slice.status === 'loading' && (

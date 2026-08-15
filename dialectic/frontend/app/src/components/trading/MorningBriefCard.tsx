@@ -11,7 +11,7 @@ export function MorningBriefCard({ slice }: MorningBriefCardProps) {
   return (
     <section className="cockpit-module" aria-label="Morning brief">
       <div className="cockpit-header">
-        <span className="cockpit-title">Morning Brief</span>
+        <span className="cockpit-title" title="The desk's own daily brief for this book — snapshot state, flags, ledger">Morning Brief</span>
       </div>
       <div className="cockpit-body">
         {slice.status === 'loading' && (

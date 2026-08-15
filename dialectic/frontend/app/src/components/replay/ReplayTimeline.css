@@ -92,7 +92,7 @@
     background: var(--color-amber);
     border-radius: 1px;
     pointer-events: none;
-    box-shadow: 0 0 6px rgba(230,154,76,.4);
+    box-shadow: 0 0 6px rgba(242,162,74,.4);
     transition: left 0.05s linear;
 }
 .replay-loading {

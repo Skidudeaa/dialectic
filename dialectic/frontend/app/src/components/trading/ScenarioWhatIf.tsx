@@ -122,7 +122,7 @@ export function ScenarioWhatIf({ roomId, scenarios, snapshotImpacts }: ScenarioW
   return (
     <section className="cockpit-module" aria-label="Scenario what-if">
       <div className="cockpit-header">
-        <span className="cockpit-title">Scenario What-If</span>
+        <span className="cockpit-title" title="Authored scenarios — Evaluate runs a hypothetical against the live snapshot, nothing is placed">Scenario What-If</span>
       </div>
       <div className="cockpit-body">
         {scenarios.length === 0 ? (

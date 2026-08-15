@@ -343,11 +343,11 @@
 .cockpit-news-link {
     font-family: var(--font-serif);
     font-size: 12px;
-    color: var(--color-bone);
+    color: var(--color-steel); /* outbound reference — cool, not amber action */
     text-decoration: none;
 }
 .cockpit-news-link:hover {
-    color: var(--color-amber);
+    color: var(--color-cream);
     text-decoration: underline;
 }
 .cockpit-news-meta {
@@ -540,4 +540,11 @@
     .cockpit-scenario-probs {
         width: 100%;
     }
+}
+
+/* One-line orientation for the whole cockpit (rendered by BenchScene). */
+.cockpit-caption {
+    margin: 2px 0 0;
+    font: italic 11.5px/1.5 var(--font-serif);
+    color: var(--color-faint);
 }

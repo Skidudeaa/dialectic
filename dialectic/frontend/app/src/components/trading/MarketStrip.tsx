@@ -51,7 +51,7 @@ export function MarketStrip({ slice, onRefresh }: MarketStripProps) {
   return (
     <section className="cockpit-module" aria-label="Market strip">
       <div className="cockpit-header">
-        <span className="cockpit-title">Market Strip</span>
+        <span className="cockpit-title" title="Live quotes off the desk watchlist — refreshes every 5 minutes while you watch">Market Strip</span>
         <div className="cockpit-header-right">
           {freshness && <span className="cockpit-freshness">{freshness}</span>}
           {onRefresh && (

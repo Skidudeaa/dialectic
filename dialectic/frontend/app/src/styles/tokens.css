@@ -1,54 +1,78 @@
 :root {
     /* ══════════════════════════════════════════════════════
-       DARK ROAST SYSTEM v1 — canonical token set
+       DARK ROAST SYSTEM v2 — canonical token set
        Aesthetic: classified dossier, seen by candlelight.
+
+       v2 (2026-08-15, owner: "very shallow"): the v1 cup was six
+       surfaces spanning ~20 luminance points with near-invisible
+       mid-tier ink and one warm hue. v2 widens the ladder (deeper
+       floor, brighter lifts), raises every ink tier — faint was
+       #5C4A38 and functionally unreadable — heats the accents, and
+       adds a cool counterpoint band (steel/plum/sage) so the palette
+       has more than crema. Token NAMES are unchanged: every component
+       re-skins from here alone.
        ══════════════════════════════════════════════════════ */
 
-    /* Surfaces — luminance ladder (4 steps) */
-    --color-void:     #120C06;   /* page background, side rails */
-    --color-obsidian: #160E08;   /* stream / content background */
-    --color-cacao:    #1E140E;   /* memo cards, exhibits, composer box, panels */
-    --color-espresso: #2A1C14;   /* elevated cards */
-    --color-bean:     #3C2A1E;   /* all structural borders */
-    --color-crater:   #4D3B31;   /* hover borders, scrollbar thumb */
+    /* Surfaces — luminance ladder (deeper floor, brighter lifts) */
+    --color-void:     #0C0805;   /* page background, side rails */
+    --color-obsidian: #150D07;   /* stream / content background */
+    --color-cacao:    #221510;   /* memo cards, exhibits, composer box, panels */
+    --color-espresso: #332217;   /* elevated cards */
+    --color-bean:     #4E3826;   /* all structural borders — visibly drawn now */
+    --color-crater:   #6B5140;   /* hover borders, scrollbar thumb */
 
     /* Ink tiers (pre-mixed — never add opacity on top of these) */
-    --color-display:  #FFF7EE;   /* case title + brand chrome ONLY */
-    --color-bone:     #EBE1D7;   /* section headlines, emphasized text */
-    --color-ink:      #D4C4A8;   /* ALL body/dispatch text (workhorse) */
-    --color-secondary:#8B7355;   /* labels, metadata */
-    --color-faint:    #5C4A38;   /* timestamps, gutter numbers */
-    --color-ghost:    #46382B;   /* ultra-dim gutter */
+    --color-display:  #FFF9F0;   /* case title + brand chrome ONLY */
+    --color-bone:     #F3E9DC;   /* section headlines, emphasized text */
+    --color-ink:      #E3D2B4;   /* ALL body/dispatch text (workhorse) */
+    --color-secondary:#AC8F66;   /* labels, metadata */
+    --color-faint:    #7D6347;   /* timestamps, gutter numbers */
+    --color-ghost:    #5A4732;   /* ultra-dim gutter */
 
-    /* Accents */
-    --color-amber:      #E69A4C;  /* primary accent, CTAs, cursor */
-    --color-amber-hot:  #D2691E;  /* hover on amber */
-    --color-amber-mute: #C07A4A;  /* reader contexts */
-    --color-teal:       #4CC4B4;  /* live/kinetic, success, CONFIRM */
-    --color-warning:    #BFA162;  /* warning notes */
-    --color-error:      #C75B39;  /* errors (non-structural) */
-    --color-scarlet:    #C44C4C;  /* events ONLY — see red budget rules */
-    --color-gold:       #DAA520;
+    /* Accents — hotter than v1 across the board */
+    --color-amber:      #F2A24A;  /* primary accent, CTAs, cursor */
+    --color-amber-hot:  #E77E1F;  /* hover on amber */
+    --color-amber-mute: #CE8450;  /* reader contexts */
+    --color-teal:       #54D8C6;  /* live/kinetic, success, CONFIRM */
+    --color-warning:    #D8B668;  /* warning notes */
+    --color-error:      #DD6B3F;  /* errors (non-structural) */
+    --color-scarlet:    #DE5151;  /* events ONLY — see red budget rules */
+    --color-gold:       #EDB331;
 
-    /* Severity ramp (node/predicate states) */
-    --sev-crit:    #C44C4C;
-    --sev-worse:   #C25F90;
-    --sev-improve: #D4A040;
-    --sev-stable:  #879A39;  /* olive */
-    --sev-resolve: #4CC4B4;
+    /* Counterpoint band — NEW in v2. The dossier gains cool tones:
+       steel for links/info, plum for rare cross-reference highlights,
+       sage for quiet-positive, copper bridges warm↔cool, cream is the
+       high-contrast fill for chips that must read at a glance. */
+    --color-steel:  #7FA9CB;
+    --color-plum:   #B48AD4;
+    --color-sage:   #9CBE7A;
+    --color-copper: #C97A3D;
+    --color-cream:  #F6ECDA;
 
-    /* Opacity fills */
-    --amber-08:  rgba(230,154,76,.08);
-    --amber-12:  rgba(230,154,76,.12);
-    --amber-18:  rgba(230,154,76,.18);
-    --amber-30:  rgba(230,154,76,.3);
-    --teal-10:   rgba(76,196,180,.1);
-    --teal-18:   rgba(76,196,180,.18);
-    --teal-30:   rgba(76,196,180,.3);
-    --scar-10:   rgba(196,76,76,.1);
-    --scar-18:   rgba(196,76,76,.18);
-    --scar-35:   rgba(196,76,76,.35);
-    --scar-50:   rgba(196,76,76,.5);
+    /* Severity ramp (node/predicate states) — more separation */
+    --sev-crit:    #DE5151;
+    --sev-worse:   #DB74A8;
+    --sev-improve: #EBB347;
+    --sev-stable:  #A3BC42;  /* olive, brightened */
+    --sev-resolve: #54D8C6;
+
+    /* Opacity fills — raised so tinted surfaces actually register */
+    --amber-08:  rgba(242,162,74,.10);
+    --amber-12:  rgba(242,162,74,.15);
+    --amber-18:  rgba(242,162,74,.22);
+    --amber-30:  rgba(242,162,74,.34);
+    --teal-10:   rgba(84,216,198,.13);
+    --teal-18:   rgba(84,216,198,.22);
+    --teal-30:   rgba(84,216,198,.34);
+    --scar-10:   rgba(222,81,81,.12);
+    --scar-18:   rgba(222,81,81,.22);
+    --scar-35:   rgba(222,81,81,.38);
+    --scar-50:   rgba(222,81,81,.52);
+    --steel-12:  rgba(127,169,203,.14);
+    --steel-30:  rgba(127,169,203,.32);
+    --plum-12:   rgba(180,138,212,.14);
+    --sage-12:   rgba(156,190,122,.14);
+    --gold-12:   rgba(237,179,49,.14);
 
     /* ══════════════════════════════════════════════════════
        SEMANTIC ALIASES — component CSS uses these.
@@ -70,44 +94,44 @@
     --border-strong:  var(--color-crater);
 
     /* Text → ink tiers */
-    --text-primary:   var(--color-ink);       /* workhorse body text #D4C4A8 */
+    --text-primary:   var(--color-ink);       /* workhorse body text */
     --text-secondary: var(--color-secondary); /* labels, metadata */
     --text-tertiary:  var(--color-faint);     /* timestamps */
     --text-ghost:     var(--color-ghost);     /* ultra-dim */
 
-    /* Participants — Dark Roast accent set */
-    /* human-1: amber/teal (you / me) */
-    --human-1:            #4CC4B4;
-    --human-1-dim:        #2E9E90;
-    --human-1-bg:         rgba(76,196,180,.06);
-    --human-1-border:     rgba(76,196,180,.2);
+    /* Participants — Dark Roast accent set, v2 brightness */
+    /* human-1: teal (you / me) */
+    --human-1:            #54D8C6;
+    --human-1-dim:        #37AC9C;
+    --human-1-bg:         rgba(84,216,198,.08);
+    --human-1-border:     rgba(84,216,198,.24);
     /* human-2: gold */
-    --human-2:            #DAA520;
-    --human-2-dim:        #B8881A;
-    --human-2-bg:         rgba(218,165,32,.06);
-    --human-2-border:     rgba(218,165,32,.2);
+    --human-2:            #EDB331;
+    --human-2-dim:        #C6941F;
+    --human-2-bg:         rgba(237,179,49,.08);
+    --human-2-border:     rgba(237,179,49,.24);
     /* claude-primary: amber */
-    --claude-primary:         #E69A4C;
-    --claude-primary-dim:     #C07A4A;
+    --claude-primary:         #F2A24A;
+    --claude-primary-dim:     #CE8450;
     --claude-primary-bg:      var(--amber-08);
     --claude-primary-border:  var(--amber-30);
-    --claude-primary-glow:    rgba(230,154,76,.2);
+    --claude-primary-glow:    rgba(242,162,74,.22);
     /* claude-provoker: warning gold */
-    --claude-provoker:        #BFA162;
-    --claude-provoker-dim:    #9B7F46;
-    --claude-provoker-bg:     rgba(191,161,98,.06);
-    --claude-provoker-border: rgba(191,161,98,.2);
-    --claude-provoker-glow:   rgba(191,161,98,.15);
+    --claude-provoker:        #D8B668;
+    --claude-provoker-dim:    #B08F4C;
+    --claude-provoker-bg:     rgba(216,182,104,.08);
+    --claude-provoker-border: rgba(216,182,104,.24);
+    --claude-provoker-glow:   rgba(216,182,104,.18);
     /* claude-annotator: muted teal */
-    --claude-annotator:       #4CC4B4;
-    --claude-annotator-dim:   #2E9E90;
+    --claude-annotator:       #54D8C6;
+    --claude-annotator-dim:   #37AC9C;
     --claude-annotator-bg:    var(--teal-10);
     --claude-annotator-border:var(--teal-30);
 
     /* Status */
-    --success: var(--sev-stable);   /* #879A39 olive */
+    --success: var(--sev-stable);
     --warning: var(--color-warning);
-    --error:   var(--color-error);   /* #C75B39 — never on structural borders */
+    --error:   var(--color-error);   /* never on structural borders */
 
     /* Typography */
     --font-serif:   'Newsreader', Georgia, serif;
@@ -122,13 +146,13 @@
     --radius-xl:   2px;
     --radius-full: 9999px;  /* pills only */
 
-    /* Shadows — paper-like offset */
-    --shadow-sm:          1px 1px 0 rgba(0,0,0,.15);
-    --shadow-md:          3px 3px 0 rgba(0,0,0,.18);
-    --shadow-lg:          3px 3px 0 rgba(0,0,0,.25);
-    --shadow-glow-indigo: 0 0 12px rgba(230,154,76,.12);  /* repurposed: amber glow */
-    --shadow-glow-amber:  0 0 12px rgba(230,154,76,.15);
-    --shadow-inset:       inset 0 1px 0 rgba(0,0,0,.2);
+    /* Shadows — paper-like offset, slightly deeper for separation */
+    --shadow-sm:          1px 1px 0 rgba(0,0,0,.22);
+    --shadow-md:          3px 3px 0 rgba(0,0,0,.26);
+    --shadow-lg:          3px 3px 0 rgba(0,0,0,.34);
+    --shadow-glow-indigo: 0 0 12px rgba(242,162,74,.14);  /* repurposed: amber glow */
+    --shadow-glow-amber:  0 0 12px rgba(242,162,74,.18);
+    --shadow-inset:       inset 0 1px 0 rgba(0,0,0,.24);
 
     /* Transitions */
     --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);

@@ -73,6 +73,11 @@ export function BenchScene({
 
   const cockpit = desk.bound && roomId ? (
     <>
+      <p className="cockpit-caption">
+        Everything the desk sees, read-only — live states color the authored
+        graph; Evaluate runs a hypothetical, never a trade. Deep edits happen
+        in the Builder.
+      </p>
       {desk.structure.status === 'ready' && desk.structure.data ? (
         <ThesisDag
           structure={desk.structure.data}

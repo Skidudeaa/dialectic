@@ -39,9 +39,24 @@ in the pulse only when every Home member belongs to it — a room nobody has
 joined, or that's missing one member, stays out until the membership catches
 up.)*
 
-## The room
+## The room, and its places
 
 A room is you, Dan, and Claude. One room per durable scheme or thinking stream.
+
+A room is a **workroom**, not a chat window. The tabs under the room title are
+its places (the active one shows a one-line hint of what lives there):
+
+| Place | What it is |
+|---|---|
+| **Record** | The exact transcript — searchable, attributable, never paraphrased |
+| **Bench** | The thesis under construction — causal graph, live market, open trades, what-ifs |
+| **Field** | Provisional reasoning — support, tension, and synthesis candidates awaiting your review |
+| **Library** | What the room has actually read — filed evidence, one entry per source |
+| **Ledger** | What the room holds itself to — commitments, dossier entries, memories |
+
+Home has its own places: **House** (movement across every shared scheme),
+**Atlas** (the whole house mapped — rooms, artifacts, echoes, crossings), and
+its Record.
 
 | You want… | Do this |
 |---|---|
@@ -81,11 +96,11 @@ A room is you, Dan, and Claude. One room per durable scheme or thinking stream.
     disarms for both of you.
   Claude never writes to the desk itself. Order placement is not a thing and
   won't be.
-- **Rooms birth their theses.** The Trading tab's empty state IS the create
+- **Rooms birth their theses.** The Bench's empty state IS the create
   surface: title + claim in, Claude-drafted DAG for review, first snapshot in
-  the panel within seconds, deep link into the desk's Builder to refine.
-  Retire from the panel footer when a thesis resolves — the book survives on
-  the desk, and the room can birth its successor.
+  the panel within seconds. Retire from the panel footer when a thesis
+  resolves — the book survives on the desk, and the room can birth its
+  successor.
 - **The whole cockpit works on your phone.** Below 1024px the room list and the
   right-rail cockpit are slide-over drawers (☰ and ▦ in the header) — memory,
   trading, stakes, everything, with the same behavior as desktop.
@@ -95,12 +110,22 @@ A room is you, Dan, and Claude. One room per durable scheme or thinking stream.
 Iran/Hormuz · Trump Tariffs · AI Capex Unwind · China Property Cascade · Japan
 Rate Shock — each bound to a live thesis book on the desk:
 
+- **The Bench is the cockpit** (since 2026-08-14). A bound room's Bench renders,
+  natively: the **causal graph** (phase columns, live node states colored onto
+  the authored structure, click any node for its thresholds and gates), the
+  **market strip** (live quotes), **Polymarket odds**, **alert events**, the
+  **hourly diff**, **open trades** with their resting predicates, **scenario
+  what-ifs** (Evaluate runs a hypothetical against the live snapshot — nothing
+  is ever placed), the **morning brief**, and **thesis news**. Everything
+  Claude's tools can see, you can see.
 - Thesis state (cascade phase, fired/approaching nodes, confluence, countdowns)
   is in Claude's context for every reply — within minutes of anything moving.
 - A **critical** node flip buzzes both pockets. Warnings stay in-room; heartbeats
   are silent. If the feed ever goes quiet 3+ hours, a watchdog says so in the room.
-- **Open Full Dashboard** in the trading panel → the full DAG canvas at
-  td.somacura.org, no second login (72h bridged session).
+- The one remaining crossing to td.somacura.org is **Open Builder** — the deep
+  DAG-*editing* instrument (restructure nodes/edges), reached from the Bench
+  with no second login (72h bridged session). The old "Open Full Dashboard"
+  link is gone because the dashboard now lives in the Bench.
 
 ## The daily rhythm
 
@@ -128,7 +153,7 @@ createdb dialectic && psql dialectic < schema.sql
 cp .env.example .env   # DATABASE_URL, ANTHROPIC_API_KEY, JWT_SECRET_KEY required
 PORT=8002 python3 run.py                      # backend on :8002
 cd frontend/app && npm install && npm run dev # frontend on :3000
-python3 -m pytest tests/ -q                   # 913 tests
+python3 -m pytest tests/ -q                   # ~1335 tests
 ```
 
 `frontend/app` (React/Vite/TS) is the only live frontend; the legacy
@@ -167,8 +192,9 @@ stakes/      commitments + Brier calibration
 analytics/   conversation DNA, briefings, knowledge graph
 replay/      event replay + state materialization
 frontend/app React PWA
-migrations/  011 current; schema.sql = fresh-DB baseline
-tests/       pytest (913) incl. real-Postgres integration tests
+migrations/  017 current; schema.sql = fresh-DB baseline (014's reading_items
+             is migration-only — a fresh DB needs the migrations too)
+tests/       pytest (~1335) incl. real-Postgres integration tests
 ```
 
 Task board: [`TODOS.md`](TODOS.md) · Quarter plan + Amendment 1: `../docs/plans/`

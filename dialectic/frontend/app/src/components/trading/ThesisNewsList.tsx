@@ -50,7 +50,7 @@ export function ThesisNewsList({ slice }: ThesisNewsListProps) {
   return (
     <section className="cockpit-module" aria-label="Thesis news">
       <div className="cockpit-header">
-        <span className="cockpit-title">Thesis News</span>
+        <span className="cockpit-title" title="Fresh GDELT headlines matched to this book's query">Thesis News</span>
       </div>
       <div className="cockpit-body">
         {slice.status === 'loading' && (

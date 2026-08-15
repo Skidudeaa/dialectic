@@ -1,12 +1,22 @@
+.scene-switcher-wrap {
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--color-bean);
+    background: var(--color-void);
+}
+
 .scene-switcher {
     display: flex;
-    flex: 0 0 auto;
     align-items: center;
     gap: 18px;
     min-height: 34px;
     padding: 0 18px;
-    border-bottom: 1px solid var(--color-bean);
-    background: var(--color-void);
+}
+
+/* The active scene's one-line hint — visible, not tooltip-only. */
+.scene-switcher-hint {
+    padding: 0 18px 6px;
+    font: italic 11px/1.4 var(--font-serif);
+    color: var(--color-faint);
 }
 
 .scene-switcher-action {

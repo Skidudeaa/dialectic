@@ -178,7 +178,10 @@
 }
 .msg-content ul, .msg-content ol { margin: 0.4rem 0; padding-left: 1.3rem; }
 .msg-content li { margin-bottom: 0.15rem; }
-.msg-content a { color: var(--color-amber); text-decoration: underline; }
+/* Links are steel — the cool counterpoint (Dark Roast v2): an outbound
+   reference reads differently from an amber action. */
+.msg-content a { color: var(--color-steel); text-decoration: underline; }
+.msg-content a:hover { color: var(--color-cream); }
 .msg-content strong { color: var(--color-bone); font-weight: 600; }
 .msg-content em { color: var(--color-secondary); font-style: italic; }
 

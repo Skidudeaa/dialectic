@@ -24,7 +24,7 @@ Live at **[dialectic.somacura.org](https://dialectic.somacura.org)** — built b
    - **Memory** is the shared brain. Claude recalls by meaning, exact words, or speaker — "what did Dan say about the boat deal" finds it, attributed to whoever said it. Restating a fact *updates* it; the old version keeps its history.
    - **Stakes** turns predictions into tracked commitments with confidence scores — the app keeps calibration stats on how well you both actually forecast.
    - **Protocols** run structured inquiry: Steelman, Socratic, Devil's Advocate, Synthesis — Claude switches from participant to facilitator.
-5. **The five trading rooms are all live** — Iran/Hormuz, Trump Tariffs, AI Capex Unwind, China Property Cascade, Japan Rate Shock — each fed by the desk within minutes of anything moving, each with a **"Open Full Dashboard"** link that lands you in the full DAG canvas at [td.somacura.org](https://td.somacura.org) with no second login. A **critical** node firing buzzes your pocket; lesser noise stays in-room.
+5. **The five trading rooms are all live** — Iran/Hormuz, Trump Tariffs, AI Capex Unwind, China Property Cascade, Japan Rate Shock — each fed by the desk within minutes of anything moving. Since 2026-08-14 the room's **Bench** IS the cockpit: the causal graph with live node states, quotes, Polymarket, open trades, scenario what-ifs, the brief and the news, all native — the one crossing left to [td.somacura.org](https://td.somacura.org) is **Open Builder** for deep DAG editing, no second login. A **critical** node firing buzzes your pocket; lesser noise stays in-room.
 6. **Every morning at 7am CT there's a brief waiting** in each active room — yesterday's threads, unanswered questions, commitments due in the next 72 hours, thesis staleness — with a push to both phones.
 7. When you've been away, the room shows a "new since you were here" line and Claude leaves catch-up annotations about what happened without you.
 
@@ -54,7 +54,8 @@ Vision in full: [`docs/VISION.md`](docs/VISION.md) · Current quarter's roadmap:
 | **Silence detection** *(2026-08-09)* | A state machine watches each room (engaged / question-pending / ignored / dormant); an unanswered question gets exactly one follow-up after 10 quiet minutes — capped 3/day, hushed 23:00–07:00 CT, disabled by the room's interjection toggle |
 | **Proposal-writes** *(2026-08-09)* | `draft_prediction` — Claude proposes, a human taps Accept, the tap posts to tradingDesk |
 | **Trading bloodstream** *(2026-08-09)* | All five thesis books event-driven into their rooms (push on change + hourly heartbeat + reconcile pull); a freshness watchdog tells the room if the feed ever goes quiet; critical alerts buzz pockets |
-| **One login** *(2026-08-09)* | The desk trusts Dialectic sessions — "Open Full Dashboard" deep-links into [td.somacura.org](https://td.somacura.org) with a day-long session; signups are invite-only |
+| **One login** *(2026-08-09)* | The desk trusts Dialectic sessions — the Bench's "Open Builder" deep-links into [td.somacura.org](https://td.somacura.org) with a day-long session; signups are invite-only |
+| **One app** *(2026-08-14)* | The Bench renders the whole cockpit natively (DAG, quotes, trades, what-ifs, brief, news); tradingDesk's duplicate social tier is deleted (fusion plan §C4) — it is the engine + the Builder now |
 | **Analytics** | Conversation DNA, room briefings, event replay timeline |
 
 ## What's next (the quarter)

@@ -1,6 +1,17 @@
 # tradingDesk — User Manual
 
-A collaborative analysis workspace for two traders. Think: a living research notebook where the math keeps your thesis honest, the chat room lets you argue with the AIs, and every trigger and trade is tracked from first-idea to post-mortem.
+> **Amended 2026-08-15 (read this first).** The C4 cull landed: the chat
+> rooms, slash commands, message pins/export, and the Field Desk cockpit
+> described below are **deleted**. Day-to-day trading now happens in
+> **dialectic's Bench** (https://dialectic.somacura.org — the causal graph,
+> quotes, trades, what-ifs, brief and news are all native there). What
+> tradingDesk still IS: the engine, the **Dashboard** at `/` (thesis viewer,
+> predictions, journal, TradingView, outcomes panels), and the **Builder**
+> at `/builder` for deep DAG editing — reached from the Bench's "Open
+> Builder" link with no second login. Sections below describing chat are
+> kept for history only.
+
+A collaborative analysis workspace for two traders. Think: a living research notebook where the math keeps your thesis honest and every trigger and trade is tracked from first-idea to post-mortem.
 
 ---
 
