@@ -168,18 +168,30 @@ def _book_to_engine_format(req: SaveBookRequest, book_id: str) -> dict:
     cfg["cascadePhases"] = dict(req.cascadePhases)
     return cfg
 def _engine_to_builder_format(cfg: dict, book_id: str) -> dict:
-    """Convert engine JSON to builder-friendly format with x/y positions."""
+    """Convert engine JSON to builder-friendly format with x/y positions.
+
+    WHY the fallback stacks WITHIN the phase column: the old `i * 120`
+    fallback used the global node index, so a 19-node unpositioned book
+    rendered as a 2300px-tall diagonal — unreadable in every canvas that
+    fit it. Column x by phase, row y by position within that phase, is the
+    phase-column layout the fallback always meant. Persisted _builderX/Y
+    still win untouched.
+    """
     nodes = []
-    for i, n in enumerate(cfg.get("nodes", [])):
+    per_phase_row: dict = {}
+    for n in cfg.get("nodes", []):
+        phase = n.get("phase", 1)
+        row = per_phase_row.get(phase, 0)
+        per_phase_row[phase] = row + 1
         node = {
             "id": n["id"],
             "label": n.get("label", n["id"]),
             "type": n.get("type", "event"),
-            "phase": n.get("phase", 1),
+            "phase": phase,
             "state": n.get("state", "monitoring"),
             "context": n.get("context", ""),
-            "x": n.get("_builderX", (n.get("phase", 1) - 1) * 280 + 100),
-            "y": n.get("_builderY", i * 120 + 60),
+            "x": n.get("_builderX", (phase - 1) * 280 + 100),
+            "y": n.get("_builderY", row * 120 + 60),
             "probability": n.get("probability"),
             "current": n.get("current"),
             "feeds": n.get("feeds", []),

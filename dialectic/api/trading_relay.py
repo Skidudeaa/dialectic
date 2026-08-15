@@ -33,6 +33,11 @@ _db_pool = None
 # warm hits are milliseconds. The margin covers the cold path.
 QUOTES_TIMEOUT_S = 25.0
 
+# GDELT's cold fetch on td's news endpoint can outrun the client's 10s
+# default (observed live 2026-08-14: the first Bench render 502'd on it);
+# td caches for 15 min, so the wide margin is paid rarely.
+NEWS_TIMEOUT_S = 20.0
+
 
 def set_trading_relay_db_pool(pool):
     global _db_pool
@@ -196,7 +201,9 @@ async def get_news(
 ):
     book_id = await _room_book(room_id, token, current_user.user_id, db)
     try:
-        return await td.service_get(f"/api/bridge/news/{book_id}")
+        return await td.service_get(
+            f"/api/bridge/news/{book_id}", timeout=NEWS_TIMEOUT_S
+        )
     except td.TradingDeskError as e:
         raise _bad_gateway("news", e)
 

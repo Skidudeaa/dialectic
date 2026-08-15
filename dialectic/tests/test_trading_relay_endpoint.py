@@ -127,7 +127,8 @@ def test_news_proxies_bridge(monkeypatch):
     resp = _call(_make_db(), monkeypatch, "news",
                  td_mocks={"service_get": service_get})
     assert resp.status_code == 200
-    service_get.assert_awaited_once_with(f"/api/bridge/news/{BOOK_ID}")
+    service_get.assert_awaited_once_with(
+        f"/api/bridge/news/{BOOK_ID}", timeout=relay.NEWS_TIMEOUT_S)
 
 
 def test_scenario_evaluate_posts_the_what_if(monkeypatch):
