@@ -64,17 +64,17 @@
    words, not in hue (§16.4: "Color does not encode participants"). */
 .msg-author {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
-    letter-spacing: .06em;
+    letter-spacing: .07em;
     text-transform: uppercase;
     color: var(--color-bone);
 }
 
-/* Timestamp — faint mono */
+/* Timestamp — quiet but legible (9px faint was decoration, not information) */
 .msg-time {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 10px;
     color: var(--color-faint);
 }
 
@@ -84,7 +84,7 @@
     border: 1px solid currentColor;
     border-radius: var(--radius-sm);
     font-family: var(--font-stencil);
-    font-size: 8.5px;
+    font-size: 9.5px;
     text-transform: uppercase;
     letter-spacing: .03em;
     color: var(--color-secondary);
@@ -97,9 +97,12 @@
    row's hairline top-border (above) is the only separator now. */
 .msg-content-frame {
     padding: 0 0 0.15rem;
-    line-height: 1.52;
+    /* 15.5/1.58 (was 14/1.52): Newsreader runs light on dark ground and the
+       owner's screenshot showed a transcript that whispered. The measure
+       stays 72ch — the column got taller type, not longer lines. */
+    line-height: 1.58;
     font-family: var(--font-serif);
-    font-size: 14px;
+    font-size: 15.5px;
     position: relative;
     overflow: hidden;
     max-width: 72ch;  /* reading measure */
@@ -360,37 +363,47 @@
    two people in the room actually said. Long messages — and annotations at any
    length — open folded. */
 .msg-content-frame.msg-folded {
-    max-height: 168px;
+    max-height: 240px;
     overflow: hidden;
 }
 /* One gradient for every speaker type now — there is no per-type tinted
    background left to match (the whole point of dropping the bubble). It
-   fades straight to the stream's own background. */
+   fades straight to the stream's own background.
+   WHY only 24px: the old 62px veil over a 168px window dissolved more than
+   a third of every folded message into the ground — the owner's screenshot
+   showed whole paragraphs at ghost opacity. The veil's job is to signal
+   "cut here", not to erase the last three lines. */
 .msg-fold-veil {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    height: 62px;
+    height: 24px;
     pointer-events: none;
     background: linear-gradient(to bottom, transparent, var(--color-obsidian));
 }
 
+/* A real affordance now — the 9px ghost text read as debris, not a control. */
 .msg-fold-toggle {
     align-self: flex-start;
-    margin-top: 3px;
-    padding: 1px 6px;
+    margin-top: 5px;
+    padding: 4px 10px;
     background: none;
-    border: none;
-    border-bottom: 1px solid transparent;
-    color: var(--color-secondary);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    color: var(--color-amber-mute);
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: .16em;
+    letter-spacing: .14em;
     cursor: pointer;
 }
-.msg-fold-toggle:hover { color: var(--color-amber); border-bottom-color: var(--amber-30); }
+.msg-fold-toggle:hover,
+.msg-fold-toggle:focus-visible {
+    color: var(--color-amber);
+    border-color: var(--color-crater);
+    background: var(--amber-08);
+}
 
 /* ── Grouped consecutive messages ────────────────────────────
    Same speaker inside five minutes reads as one block: no repeated mark, no
@@ -404,13 +417,18 @@
    Reduced size/opacity is a ROLE distinction (marginalia vs. contribution),
    not a participant color — it applies the same way no matter who or what
    mode wrote the note. */
-.msg.msg-annotator { opacity: .92; }
+/* Marginalia is distinguished by STRUCTURE, not by dimming: the old
+   treatment (secondary ink × .92 opacity × the fold veil) triple-dimmed
+   the notes into illegibility, and in trading rooms the notes are most of
+   the transcript. A rule and an inset say "aside"; the ink stays readable. */
 .msg-annotator .msg-content-frame {
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: 14px;
+    line-height: 1.55;
+    border-left: 2px solid var(--color-bean);
+    padding-left: 14px;
 }
-.msg-annotator .msg-content { color: var(--color-secondary); }
-.msg-annotator .msg-content strong { color: var(--color-ink); }
+.msg-annotator .msg-content { color: var(--color-ink); }
+.msg-annotator .msg-content strong { color: var(--color-bone); }
 
 /* ── Tool trace footer ───────────────────────────────────────
    Provenance for an answer that checked something live. Collapsed by default,
