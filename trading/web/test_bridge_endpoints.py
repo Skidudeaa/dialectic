@@ -597,3 +597,71 @@ class TestCorruptBookSurvival:
                                          tick_interval=9999)
         c._load_definitions()  # would previously sys.exit here
         assert set(c.definitions) == {"good-graph"}
+
+
+# =========================================================================
+# STRUCTURE ENDPOINT
+# =========================================================================
+
+
+STRUCTURE_BOOK = {
+    "meta": {"title": "Test Thesis", "claim": "A causes B",
+             "dialecticRoomId": "room-1"},
+    "nodes": [
+        {"id": "shock", "label": "The Shock", "type": "event", "phase": 1,
+         "state": "fired", "_builderX": 40, "_builderY": 80},
+        {"id": "spread", "label": "The Spread", "type": "market", "phase": 2},
+    ],
+    "edges": [
+        {"from": "shock", "to": "spread", "mechanism": "supply cut",
+         "lag": "2-5d", "strength": 0.8},
+    ],
+    "scenarios": [{"id": "s1", "name": "Base"}],
+}
+
+
+class TestStructureEndpoint:
+    @pytest.fixture(autouse=True)
+    def books_dir(self, tmp_path, monkeypatch):
+        (tmp_path / "test-book.json").write_text(json.dumps(STRUCTURE_BOOK))
+        (tmp_path / "corrupt-book.json").write_text("{not json")
+        monkeypatch.setattr(bridge_mod, "_BOOKS_DIR", tmp_path)
+
+    def test_missing_token_is_401(self, client):
+        resp = client.get("/api/bridge/structure/test-book")
+        assert resp.status_code == 401
+
+    def test_unknown_book_is_404(self, client):
+        resp = client.get("/api/bridge/structure/nope", headers=svc_headers())
+        assert resp.status_code == 404
+        assert resp.headers["content-type"].startswith("application/json")
+
+    # Path-traversal ids never reach this handler with a separator (httpx and
+    # the ASGI stack normalize "../" away before routing), and the id that
+    # does arrive goes through _book_path, whose containment is covered by
+    # TestBookPathContainment above.
+
+    def test_builder_shape_with_positions(self, client):
+        resp = client.get("/api/bridge/structure/test-book",
+                          headers=svc_headers())
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("application/json")
+        body = resp.json()
+        assert body["id"] == "test-book"
+        assert body["meta"]["title"] == "Test Thesis"
+        by_id = {n["id"]: n for n in body["nodes"]}
+        # persisted builder position wins; fallback is phase-column layout
+        assert (by_id["shock"]["x"], by_id["shock"]["y"]) == (40, 80)
+        assert by_id["spread"]["x"] == (2 - 1) * 280 + 100
+        assert by_id["shock"]["state"] == "fired"
+        [edge] = body["edges"]
+        assert edge == {"source": "shock", "target": "spread",
+                        "mechanism": "supply cut", "lag": "2-5d",
+                        "strength": 0.8}
+        assert body["scenarios"] == [{"id": "s1", "name": "Base"}]
+
+    def test_corrupt_book_is_500_not_html(self, client):
+        resp = client.get("/api/bridge/structure/corrupt-book",
+                          headers=svc_headers())
+        assert resp.status_code == 500
+        assert "unreadable" in resp.json()["detail"]

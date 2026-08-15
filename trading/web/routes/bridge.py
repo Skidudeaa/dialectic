@@ -661,3 +661,41 @@ async def get_thesis_news(
     payload, ttl = await asyncio.to_thread(_fetch_news_sync, thesis_id, book)
     _news_cache[thesis_id] = (time.monotonic() + ttl, payload)
     return JSONResponse(content=payload, media_type="application/json")
+
+
+@router.get("/structure/{thesis_id}")
+async def get_thesis_structure(
+    thesis_id: str,
+    _svc: None = Depends(require_service_token),
+) -> JSONResponse:
+    """Causal structure (nodes + edges) for a thesis book, builder format.
+
+    WHY: the v3 snapshot push carries only nodeStates keyed by id — no
+    edges, labels, mechanisms or positions — so Dialectic cannot draw the
+    DAG from pushes alone. This read serves the authored structure via the
+    same builder serializer the deep-editing surface uses, x/y included
+    (persisted positions or the phase-column fallback), so the client
+    never invents a layout.
+
+    Node `state` here is the book file's authoring-time state; live state
+    is the snapshot's nodeStates and the client overlays it.
+
+    Explicit JSONResponse for the same reason as /snapshot: the SPA
+    catch-all answers unknown paths with 200 + HTML.
+    """
+    path = _book_path(thesis_id)
+    if path is None:
+        raise HTTPException(
+            status_code=404, detail=f"No book for thesis {thesis_id!r}",
+        )
+    try:
+        cfg = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Book {thesis_id!r} is unreadable: {exc}",
+        )
+    from web.routes.builder import _engine_to_builder_format
+    return JSONResponse(
+        content=_engine_to_builder_format(cfg, thesis_id),
+        media_type="application/json",
+    )
