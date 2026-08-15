@@ -236,13 +236,17 @@ function NodeDetailCard({
  */
 function normalizeLayout(nodes: ThesisStructureNode[]): ThesisStructureNode[] {
   if (nodes.length === 0) return nodes
-  const onGrid = nodes.every((n) => n.x === (n.phase - 1) * 280 + 100)
+  // Grid MEMBERSHIP, not own-column match: a node whose phase was edited
+  // after positioning sits on the grid in the WRONG column (production has
+  // one), and a human drag lands off-grid entirely. Any off-grid node means
+  // a hand touched this layout — pass it through verbatim.
+  const onGrid = nodes.every((n) => (n.x - 100) % 280 === 0)
   if (!onGrid) return nodes
   const rows = new Map<number, number>()
   return nodes.map((n) => {
     const row = rows.get(n.phase) ?? 0
     rows.set(n.phase, row + 1)
-    return { ...n, y: row * 120 + 60 }
+    return { ...n, x: (n.phase - 1) * 280 + 100, y: row * 120 + 60 }
   })
 }
 
