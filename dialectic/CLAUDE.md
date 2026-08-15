@@ -325,3 +325,63 @@ Live cap is `5` in `.env` as an agreed stopgap from before the gate landed.
 Now that both are live they stack, and 5 will do cutting the gate was meant to
 do — relax toward 12 after observing a few days, or the gate's real effect
 stays invisible.
+
+## Amendment 2026-08-15 (Home) — the gathering room, and the dead end behind it
+
+Home was created 2026-08-12 for exactly what it sounds like: *"the humans want
+a place to gather, so general talk doesn't get lost in teh individual
+threads."* It held 18 messages and went quiet on the 14th. The transcript says
+why — on the 13th, *"claude lets make a thesis on this"*, which Home cannot
+answer. `thesis_relay.py:93` returns 409 *"Propose it in the scheme's room"*,
+`scenesForDestination` gives Home root no Bench, so the tap on a proposed
+thesis resolved to the default scene and did nothing at all.
+
+**The doctrine is kept — Home coordinates, scheme rooms own scheme work. What
+changed is that Home now MAKES the scheme's room instead of naming it as
+somewhere you must go.**
+
+- **`POST /users/me/home/schemes`** (`api/home.py`) creates the room and
+  carries every Home member into it in ONE statement. Authorization lives
+  inside the CTE: its first term joins the caller's Home membership, so a
+  non-member matches no Home and every downstream insert writes nothing —
+  same 404 shape as the activity projection, which must not reveal whether
+  Home exists. The thesis is NOT created here; the human still reviews the
+  drafted cascade in the new room's Bench.
+- **`POST /rooms` writes ZERO `room_memberships`** — it takes no caller
+  identity at all. That is why `8adcabb7 Trump Tariffs Trading Room` is bound
+  to a live book with **0 members**, and why `T123` / `firstRoom!` and the
+  rest have none. The spawn's membership insert is therefore not a follow-up
+  step that could fail separately; it is in the same statement as the room.
+  **`messages` has no `room_id`** — reach it through `threads`.
+- **The seed crosses a room boundary now.** `appStore.ts` clears `thesisSeed`
+  on room switch deliberately, so `MessageBubble` no longer writes it; the
+  seed travels as an argument to `onOpenBench` and `App.openThesisSeed` sets
+  it only AFTER `navigate()` resolves. Do not hoist that.
+- **The House renders the pulse `compact`.** It used to stack residents,
+  needs, movement and every scheme door ahead of the transcript, so the
+  default view of the shared room was a dashboard about the OTHER rooms.
+  Movement and the doors live behind a `<details>`.
+- **`ROOT_THREAD_TITLE`** (`api/thread_titles.py`, its own module so a router
+  importing the app cannot close an import loop) replaces the literal
+  `"Main"`, which was written in TWO places in `create_room` — the row and
+  the `THREAD_CREATED` payload. Home's existing row was renamed; other rooms
+  were deliberately left alone rather than rewriting history nobody asked to
+  rewrite.
+- **The morning brief stopped reading itself.** The brief posts as
+  `llm_annotator` and `briefing.py`'s summary corpus had no `speaker_type`
+  filter, so each night's brief summarized the previous night's. In Home —
+  last window three annotator notes, zero human messages — it produced a
+  brief addressed to nobody. The filter also stops `messages_missed` counting
+  the machine's marginalia as messages a human missed, which gates
+  night_shift's `quiet` branch and drives the push. `llm_primary` and
+  `llm_provoker` stay: Claude is a participant.
+
+Testing notes worth keeping: `idx_rooms_single_home` is a **partial unique
+index**, so a fixture cannot invent a second Home — reuse the singleton.
+`dialectic_test` is built from the `schema.sql` baseline and predates the auth
+migrations, so it has **no `users.email`**. And `npx tsc --noEmit` at the app
+root is **VACUOUS** — `tsconfig.json` carries `"files": []` with project
+references only, so it checks nothing and exits 0; use `tsc -b`, which is what
+caught a genuine missing import here.
+
+Suites at this gate: backend 1340, frontend 252.
