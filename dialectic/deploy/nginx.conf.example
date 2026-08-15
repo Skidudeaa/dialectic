@@ -32,6 +32,18 @@ server {
         try_files $uri =404;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
     }
+    # The service worker gates every PWA update; no-store keeps Cloudflare
+    # from edge-caching it and stamping browsers with its 4h default TTL
+    # (2026-08-15: an installed iPad ran a stale bundle all day because of
+    # exactly this — the owner reviewed shipped work that never reached him).
+    location = /sw.js {
+        try_files $uri =404;
+        add_header Cache-Control "no-store, must-revalidate" always;
+    }
+    location = /manifest.webmanifest {
+        try_files $uri =404;
+        add_header Cache-Control "no-cache" always;
+    }
 
     location /ws/ {
         proxy_pass http://127.0.0.1:8002;

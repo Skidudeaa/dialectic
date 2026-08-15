@@ -49,6 +49,10 @@ export default defineConfig({
       srcDir: 'src',
       filename: 'sw.ts',
       registerType: 'autoUpdate',
+      // Registration lives in main.tsx (updateViaCache + resume checks +
+      // controllerchange reload) — the injectable one-liner can't do any of
+      // that and is what let installed PWAs run stale bundles for hours.
+      injectRegister: false,
       includeAssets: ['icons/apple-touch-icon.png', 'icons/favicon.svg'],
       manifest: {
         name: 'Dialectic',
