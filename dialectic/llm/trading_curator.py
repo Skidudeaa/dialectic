@@ -50,7 +50,7 @@ class TradingCuratorEngine:
         """
         Check if any room member is offline.
 
-        ARCHITECTURE: Different from AnnotatorEngine.should_annotate() which checks
+        ARCHITECTURE: Different from AnnotatorEngine.prepare_annotation() which checks
         "is the OTHER user offline". Here we check if ANY member is offline, because
         the snapshot comes from an external script, not a human sender.
         """
