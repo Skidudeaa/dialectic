@@ -83,3 +83,44 @@ describe('ThesisDag', () => {
     expect(screen.getAllByText('Oil spikes').length).toBeGreaterThan(0)
   })
 })
+
+describe('normalizeLayout (via render)', () => {
+  it('restacks the baked-diagonal fallback per phase column', () => {
+    // Real production signature: every x exactly on the (phase-1)*280+100
+    // grid, y a global-index diagonal (60, 180, 300, ...). The component
+    // must restack y per phase so two same-phase nodes sit at 60 and 180,
+    // not 60 and 300.
+    const diagonal: ThesisStructure = {
+      id: 'diag',
+      meta: { title: 'Diagonal' },
+      nodes: [
+        { id: 'a', label: 'A', type: 'event', phase: 1, state: 'monitoring', x: 100, y: 60 },
+        { id: 'b', label: 'B', type: 'event', phase: 1, state: 'monitoring', x: 100, y: 180 },
+        { id: 'c', label: 'C', type: 'event', phase: 2, state: 'monitoring', x: 380, y: 300 },
+      ],
+      edges: [],
+      scenarios: [],
+    }
+    render(<ThesisDag structure={diagonal} />)
+    const c = screen.getByRole('button', { name: /^C/ })
+    // Phase-2's first node restacks to row 0 (y=60), not the diagonal 300.
+    expect(c.getAttribute('transform')).toBe('translate(380, 60)')
+    const b = screen.getByRole('button', { name: /^B/ })
+    expect(b.getAttribute('transform')).toBe('translate(100, 180)')
+  })
+
+  it('leaves authored (off-grid) layouts untouched', () => {
+    const authored: ThesisStructure = {
+      id: 'auth',
+      meta: { title: 'Authored' },
+      nodes: [
+        { id: 'a', label: 'A', type: 'event', phase: 1, state: 'monitoring', x: 40, y: 500 },
+      ],
+      edges: [],
+      scenarios: [],
+    }
+    render(<ThesisDag structure={authored} />)
+    const a = screen.getByRole('button', { name: /^A/ })
+    expect(a.getAttribute('transform')).toBe('translate(40, 500)')
+  })
+})

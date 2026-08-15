@@ -225,8 +225,29 @@ function NodeDetailCard({
   )
 }
 
+/**
+ * The old server fallback stacked y by GLOBAL node index, and every book
+ * saved through td's Builder has that diagonal BAKED IN as persisted
+ * positions (all five production books do) — a 19-node book renders as a
+ * ~2300px sliver. A human drag moves x off the column grid, so "every x
+ * sits exactly on (phase-1)*280+100" is the signature of positions no hand
+ * ever touched: restack those per phase column, deterministically. Anything
+ * else is authored layout and passes through verbatim.
+ */
+function normalizeLayout(nodes: ThesisStructureNode[]): ThesisStructureNode[] {
+  if (nodes.length === 0) return nodes
+  const onGrid = nodes.every((n) => n.x === (n.phase - 1) * 280 + 100)
+  if (!onGrid) return nodes
+  const rows = new Map<number, number>()
+  return nodes.map((n) => {
+    const row = rows.get(n.phase) ?? 0
+    rows.set(n.phase, row + 1)
+    return { ...n, y: row * 120 + 60 }
+  })
+}
+
 export function ThesisDag({ structure, nodeStates, stale }: ThesisDagProps) {
-  const nodes = useMemo(() => structure.nodes ?? [], [structure.nodes])
+  const nodes = useMemo(() => normalizeLayout(structure.nodes ?? []), [structure.nodes])
   const edges = useMemo(() => structure.edges ?? [], [structure.edges])
   const svgRef = useRef<SVGSVGElement>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
