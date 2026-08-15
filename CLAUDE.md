@@ -180,3 +180,34 @@ What the sections above understate as of that date:
 ARCHITECTURE/WHY/TRADEOFF docstrings on non-obvious decisions. Match the
 surrounding file's idioms; minimal diffs; house-style commit messages with the
 `--` em-dash flourish (see `git log --oneline`).
+
+## Amendment 2026-08-14 (late) — One App: the Bench cockpit + the C4 cull (amend-beside)
+
+The owner's complaint ("dialectic and trading desk are STILL separate
+interfaces?!") closed tonight. Prefer this over anything above that
+describes the Bench as a badge panel or td as a parallel product:
+
+- **The Bench is the trading cockpit.** A bound room renders natively: the
+  causal DAG (`ThesisDag.tsx`, read-only SVG, live nodeStates overlaid on
+  authored structure, client restack of the baked-diagonal layouts), market
+  strip, Polymarket, alert events, hourly diff, open trades, scenario
+  what-ifs (per-row Evaluate — pure hypothetical), morning brief, thesis
+  news. Data: `api/trading_relay.py` — room-scoped proxies over the same
+  `tradingdesk_client` calls the LLM tools use; the book id never reaches
+  the browser. Hook: `useTradingDesk.ts` (tri-state slices, 409 = unbound
+  = calm create state, quotes poll 300s, snapshot-stamp refetch).
+- **New bridge read**: td `GET /api/bridge/structure/{thesis_id}`
+  (X-Service-Token) serves builder-format nodes+edges — the one endpoint
+  that lets dialectic draw the graph (snapshots carry states only).
+- **Timeout law of the seam**: a proxy timeout must EXCEED the inner
+  fetch's own timeout (news 25s over GDELT's 20s; quotes 25s over the
+  ~18.5s cold path) or graceful empties become 502s.
+- **The C4 cull executed** (fusion plan §C4, deferred since 2026-08-09):
+  td's duplicated social tier is deleted; see `trading/CLAUDE.md`'s
+  2026-08-14 amendment for the full list. td `/` boots the Dashboard;
+  the Builder remains the deep-editing surface, reached from the Bench's
+  single "Deep instrument" affordance (design v2 §12.5 satisfied — the
+  "Open Full Dashboard" link is gone).
+- Suites at this gate: dialectic backend 1335 (one pre-existing
+  load-sensitive p95 gate flake in `test_home_activity_pg`), frontend 250;
+  td backend 1377, frontend 62.
