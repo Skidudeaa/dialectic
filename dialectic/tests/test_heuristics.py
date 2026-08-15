@@ -356,10 +356,17 @@ class TestStagnation:
 
 
 class TestSpeakerBalance:
+    # AMENDED 2026-08-15: the rule now needs 3+ speakers. Redirecting toward a
+    # quieter participant requires a quieter participant to exist; in a
+    # two-human room "the other one" is the only option and the LLM can already
+    # address them. See llm/heuristics._detect_speaker_imbalance for the
+    # production measurement. The 70% dominance test itself is unchanged — the
+    # cases below just carry a third speaker.
+
     def test_balance_redirect_triggers(self, engine):
         """One speaker with 70%+ of messages triggers balance_redirect."""
         msgs = [make_message("I agree")]
-        balance = {str(USER_A_ID): 8, str(USER_B_ID): 2}
+        balance = {str(USER_A_ID): 8, str(USER_B_ID): 1, "c": 1}
         decision = engine.decide(msgs, speaker_balance=balance)
         assert decision.should_interject is True
         assert decision.reason == "balance_redirect"
@@ -369,7 +376,7 @@ class TestSpeakerBalance:
     def test_balance_redirect_exact_threshold(self, engine):
         """Exactly 70% triggers (7 out of 10)."""
         msgs = [make_message("msg")]
-        balance = {str(USER_A_ID): 7, str(USER_B_ID): 3}
+        balance = {str(USER_A_ID): 7, str(USER_B_ID): 2, "c": 1}
         decision = engine.decide(msgs, speaker_balance=balance)
         assert decision.should_interject is True
         assert decision.reason == "balance_redirect"
@@ -377,7 +384,7 @@ class TestSpeakerBalance:
     def test_balance_redirect_below_threshold(self, engine):
         """Below 70% does not trigger."""
         msgs = [make_message("msg")]
-        balance = {str(USER_A_ID): 6, str(USER_B_ID): 4}
+        balance = {str(USER_A_ID): 6, str(USER_B_ID): 3, "c": 1}
         decision = engine.decide(msgs, speaker_balance=balance)
         assert decision.reason != "balance_redirect"
 
@@ -385,6 +392,14 @@ class TestSpeakerBalance:
         """Only 1 human present should NOT trigger balance redirect."""
         msgs = [make_message("msg")]
         balance = {str(USER_A_ID): 10}
+        decision = engine.decide(msgs, speaker_balance=balance)
+        assert decision.reason != "balance_redirect"
+
+    def test_balance_two_speakers_no_trigger(self, engine):
+        """A dominated TWO-person window is ordinary conversation, not an
+        imbalance — this is the case that fired 13 times in production."""
+        msgs = [make_message("msg")]
+        balance = {str(USER_A_ID): 8, str(USER_B_ID): 2}
         decision = engine.decide(msgs, speaker_balance=balance)
         assert decision.reason != "balance_redirect"
 

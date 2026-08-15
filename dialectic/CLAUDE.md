@@ -234,3 +234,52 @@ dialectic/
 - JSONB columns: pass dict directly to asyncpg — pool codec handles serialization
 - Message role alternation: Anthropic API requires last message to be `user` role — `prompts.py` strips trailing assistant messages before API call
 - Tests: pytest + pytest-asyncio, 913 tests, incl. real-Postgres integration tests (test_memory_recall_pg.py needs `createdb dialectic_test && psql dialectic_test -f schema.sql`; skips cleanly without it)
+
+## Amendment 2026-08-15 — the volume controls (amend-beside)
+
+Measured, not guessed: over 2026-08-08..15 the room ran **104 human messages
+against 214 machine ones — 2.06 machine messages per human turn**. Four causes,
+each traced to a value rather than to config, each fixed. Suite 1327.
+
+- **The annotator was the largest single source and the engine never saw it.**
+  122 of the 214. `should_annotate` required only "no other human online",
+  which in a two-person room is near-permanent, so it wrote one note per
+  message. Now also capped at `ANNOTATOR_DAILY_CAP` (12/room/UTC-day, 0
+  disables), counted from `messages` joined through `threads` — the
+  annotation's own row is the ledger, so the cap needs no new plumbing
+  (`wire._interjections_today` pattern). **Note `messages` has no `room_id`** —
+  it is reachable only via `threads`.
+- **`semantic_novelty_threshold` 0.70 → 0.85** (`INTERJECTION_NOVELTY_THRESHOLD`).
+  At 0.70 it was not detecting a spike, it was cutting one continuous
+  distribution in half: rows that stayed silent ran 0.32–0.69 (mean 0.56),
+  rows that fired ran 0.71–1.00, no gap, 26 of 28 firings hugging the line.
+  Largest driver inside the engine (28 of 71 speaks).
+- **`_detect_speaker_imbalance` now needs 3+ speakers**
+  (`INTERJECTION_BALANCE_MIN_SPEAKERS`). It fired 13 times on windows of
+  `{3,1}`, `{5,1}`, `{4,1}` — one person taking a couple of turns in a row.
+  There is no quieter third party to redirect toward in a two-human room.
+- **`self_model.py` queried `speaker_type = 'HUMAN'`; the stored value is
+  `'human'`** (`SpeakerType.HUMAN.value` — the uppercase form is the enum
+  MEMBER name). The predicate matched zero rows unconditionally, so
+  `human_responded` was pinned False for every measured decision and
+  `engaged_count` never left zero. The identity distillation was built
+  specifically to avoid LLM self-report and was reading an instrument that
+  could only answer "ignored". **71 historical rows were repaired** from the
+  same 3-message window: 52 true / 19 false, i.e. **73% of the participant's
+  contributions did get a reply**, recorded as 0%. Backup at
+  `/root/llm_decisions_effectiveness_backup_2026-08-15.csv`.
+
+**Shape, unfixed and deliberately so:** every rung of `InterjectionEngine.decide`
+votes only YES — first match returns immediately and nothing can argue for
+silence, which is reachable only by falling through all seven. Every reason
+except `no_trigger` fired 100% of the time it was reached, and `confidence` is
+recorded after the decision rather than used to make it. **The thresholds are
+the only volume control this engine has.** Re-shaping the ladder so it can weigh
+a case for silence is the real fix and was not attempted here.
+
+Still outstanding from the same measurement: `_schedule_effectiveness_measurement`
+is a fire-and-forget `asyncio.sleep(30)` task with no retry, so a restart inside
+the window loses the row (the 27 remaining NULLs are legitimate — they are the
+`no_trigger` silences, which say nothing and so have nothing to measure).
+`human_responded` is a pure function of `messages` and would be better derived
+at read time than snapshotted on a timer.

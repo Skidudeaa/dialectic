@@ -3,11 +3,19 @@
 from dataclasses import dataclass, field
 from typing import Optional
 import logging
+import os
 import re
 
 from models import Message, SpeakerType, MessageType
 
 logger = logging.getLogger(__name__)
+
+# WHY these are env-tunable: both were measured against a week of real
+# llm_decisions rows (2026-08-08..15) rather than chosen a priori, and the
+# right value is a room-culture question the owner should be able to turn
+# without a deploy. See the docstrings on each for the measurement.
+NOVELTY_THRESHOLD = float(os.getenv("INTERJECTION_NOVELTY_THRESHOLD", "0.85"))
+BALANCE_MIN_SPEAKERS = int(os.getenv("INTERJECTION_BALANCE_MIN_SPEAKERS", "3"))
 
 
 @dataclass
@@ -36,13 +44,22 @@ class InterjectionEngine:
       4. Information gap           (confidence 0.65)
       5. Semantic novelty spike    (confidence varies, provoker)
       6. Stagnation detection      (confidence 0.6, provoker)
-      7. Speaker balance redirect  (confidence 0.55)
+      7. Speaker balance redirect  (confidence 0.55, 3+ speakers only)
+
+    NOTE ON SHAPE (2026-08-15): every rung votes only YES — the first match
+    returns immediately and nothing can vote against speaking, so silence is
+    reachable only by falling through all seven. Measured over a week of
+    production rows, every reason except no_trigger fired 100% of the time it
+    was reached, and `confidence` is recorded after the fact rather than used
+    to decide. The thresholds below are therefore the ONLY volume control this
+    engine has. Re-shaping the ladder into something that can weigh a case for
+    silence is the real fix and is deliberately not attempted here.
     """
 
     def __init__(
         self,
         turn_threshold: int = 4,
-        semantic_novelty_threshold: float = 0.7,
+        semantic_novelty_threshold: float = NOVELTY_THRESHOLD,
     ):
         self.turn_threshold = turn_threshold
         self.semantic_novelty_threshold = semantic_novelty_threshold
@@ -133,6 +150,13 @@ class InterjectionEngine:
             considered_reasons.append("information_gap")
 
         # 5. Semantic novelty spike — conversation shifted to new territory
+        #    WHY 0.85 (was 0.70): at 0.70 this was not detecting a spike, it was
+        #    cutting one continuous distribution in half. Over a week of real
+        #    decisions the values that did NOT fire ran 0.32-0.69 (mean 0.56) and
+        #    the ones that did ran 0.71-1.00 — no gap, no bimodality, and 26 of 28
+        #    firings hugged the line. It was the single largest source of speech
+        #    (28 of 71). 0.85 puts the bar in the actual tail. Tune via
+        #    INTERJECTION_NOVELTY_THRESHOLD.
         if semantic_novelty is not None and semantic_novelty >= self.semantic_novelty_threshold:
             return InterjectionDecision(
                 should_interject=True,
@@ -212,10 +236,19 @@ class InterjectionEngine:
         """
         Detect if one speaker dominates the recent message window.
 
-        Only triggers when multiple humans are present — a single human
-        speaking is expected behaviour, not an imbalance.
+        Only triggers when a GROUP is present — this rule exists to redirect
+        toward a participant the room is talking over, which needs a third
+        party to be talked over in the first place.
+
+        WHY BALANCE_MIN_SPEAKERS = 3 (was 2): in a two-human room the rule has
+        no quiet participant to redirect to — "the other one" is the only
+        option, and the LLM is already free to address them. Against a week of
+        production decisions it fired 13 times on windows of {3,1}, {5,1} and
+        {4,1}: one person taking two or three turns in a row, which is ordinary
+        conversation, not an imbalance. It stays live for 3+ speaker rooms,
+        where it was designed to work.
         """
-        if len(speaker_balance) < 2:
+        if len(speaker_balance) < BALANCE_MIN_SPEAKERS:
             return False
 
         total = sum(speaker_balance.values())

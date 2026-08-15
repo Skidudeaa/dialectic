@@ -8,6 +8,7 @@ TRADEOFF: Different voice (librarian/curator) vs consistent participant persona.
 """
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
@@ -17,6 +18,10 @@ from models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Annotations per room per UTC day. See should_annotate for the measurement
+# that set it; 0 disables annotation entirely.
+ANNOTATOR_DAILY_CAP = int(os.getenv("ANNOTATOR_DAILY_CAP", "12"))
 
 
 ANNOTATOR_IDENTITY = '''You are operating in Annotator mode. The other participant \
@@ -57,7 +62,23 @@ class AnnotatorEngine:
     async def should_annotate(self, room_id: UUID, sender_user_id: UUID) -> bool:
         """
         Check if annotator mode should activate.
-        True when: only one human is online in the room.
+
+        Two conditions, both required:
+          1. no other human is online in the room, and
+          2. the room is under its daily annotation cap.
+
+        WHY THE CAP (added 2026-08-15): condition 1 alone is close to
+        unconditional in a two-person room — somebody is nearly always offline —
+        so the annotator fired on EVERY message and became the single largest
+        source of machine speech: 122 of 214 LLM messages against 104 human
+        ones over a week, none of it gated by the interjection engine. The
+        marginalia are for the absent person to read on return; past a couple of
+        dozen a day nobody reads them, so volume actively defeats the feature.
+
+        Counted from `messages` rather than a new table — the annotation's own
+        row is the ledger, so the cap needs no plumbing (wire._interjections_today
+        pattern, on a UTC day boundary because that is something a human can
+        reason about). Tune via ANNOTATOR_DAILY_CAP; 0 disables annotation.
         """
         online_count = await self.db.fetchval(
             """SELECT COUNT(*) FROM user_presence
@@ -65,7 +86,28 @@ class AnnotatorEngine:
                AND user_id != $2""",
             room_id, sender_user_id
         )
-        return online_count == 0
+        if online_count != 0:
+            return False
+
+        start_of_day = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0,
+        )
+        today = await self.db.fetchval(
+            """SELECT COUNT(*) FROM messages m
+               JOIN threads t ON t.id = m.thread_id
+               WHERE t.room_id = $1
+               AND m.speaker_type = 'llm_annotator'
+               AND m.created_at >= $2""",
+            room_id, start_of_day,
+        )
+        if (today or 0) >= ANNOTATOR_DAILY_CAP:
+            logger.debug(
+                "Annotator cap reached for room %s (%s/%s today)",
+                room_id, today, ANNOTATOR_DAILY_CAP,
+            )
+            return False
+
+        return True
 
     async def annotate(
         self,

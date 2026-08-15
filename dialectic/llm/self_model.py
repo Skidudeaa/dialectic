@@ -419,12 +419,20 @@ class SelfModel:
         """
         try:
             # Find human messages after this LLM message (within 3 messages)
+            # WHY the lowercase literal matters: SpeakerType.HUMAN's VALUE is
+            # "human" (models.py) — the enum MEMBER name is what is uppercase.
+            # This predicate read 'HUMAN' until 2026-08-15 and so matched zero
+            # rows unconditionally, which pinned human_responded to False for
+            # every measured decision (29 false / 0 true over a week) and left
+            # engaged_count permanently at zero. The identity distillation was
+            # built to avoid LLM self-report and was instead reading an
+            # instrument that could only ever answer "ignored".
             responses = await self.db.fetch(
                 """SELECT content, char_length(content) as length
                    FROM messages
                    WHERE thread_id = (SELECT thread_id FROM messages WHERE id = $1)
                    AND sequence > (SELECT sequence FROM messages WHERE id = $1)
-                   AND speaker_type = 'HUMAN'
+                   AND speaker_type = 'human'
                    ORDER BY sequence
                    LIMIT 3""",
                 llm_message_id,
