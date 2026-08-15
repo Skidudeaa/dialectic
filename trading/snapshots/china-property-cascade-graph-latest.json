@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-08-13T01:30:17Z",
+  "timestamp": "2026-08-15T03:00:53Z",
   "title": "China Property + EM Cascade — April 2026",
   "nodeStates": {
     "property-sales": "fired",
@@ -64,19 +64,19 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-08-13T01:30:14Z",
+      "fetchedAt": "2026-08-15T03:00:23Z",
       "ttlSeconds": 300,
-      "detail": "27/30 symbols"
+      "detail": "28/30 symbols"
     },
     "fred": {
       "source": "fred",
-      "fetchedAt": "2026-08-13T01:30:16Z",
+      "fetchedAt": "2026-08-15T03:00:52Z",
       "ttlSeconds": 3600,
       "detail": "4/4 series"
     },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-08-13T01:30:17Z",
+      "fetchedAt": "2026-08-15T03:00:53Z",
       "ttlSeconds": 86400,
       "detail": "2 node(s)"
     }
@@ -165,16 +165,16 @@
   },
   "tvIndicators": {
     "cny-break": {
-      "rsi14": 26.13,
+      "rsi14": 23.49,
       "sma50": 6.77,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:30:17Z"
+      "computedAt": "2026-08-15T03:00:53Z"
     },
     "iron-copper": {
-      "rsi14": 60.41,
-      "atr14": 2.69,
+      "rsi14": 53.3,
+      "atr14": 2.63,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:30:17Z"
+      "computedAt": "2026-08-15T03:00:53Z"
     }
   }
 }

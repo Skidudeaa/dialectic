@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-08-13T01:02:02Z",
+  "timestamp": "2026-08-15T02:31:14Z",
   "title": "Japan Rate Normalization Shock Thesis — April 2026",
   "nodeStates": {
     "boj-decision": "fired",
@@ -13,7 +13,7 @@
     "lifer-repatriation": "fired",
     "us-10y": "approaching",
     "move-index": "approaching",
-    "tech-breakdown": "stable",
+    "tech-breakdown": "approaching",
     "margin-calls": "monitoring",
     "vix-spike": "approaching",
     "fed-reaction": "monitoring",
@@ -22,7 +22,7 @@
   "confluenceScores": {
     "lifer-repatriation": 0.8,
     "margin-calls": 0.42,
-    "vix-spike": 0.3,
+    "vix-spike": 0.68,
     "resolution": 0.25
   },
   "cascadePhase": {
@@ -54,33 +54,33 @@
     },
     "boj-surprise-hike": {
       "probability": 0.2,
-      "netImpact": -2.0
+      "netImpact": 1.2
     },
     "carry-flash-unwind": {
       "probability": 0.15,
-      "netImpact": -5.9
+      "netImpact": -3.5
     },
     "fed-cuts-absorb": {
       "probability": 0.2,
-      "netImpact": -9.6
+      "netImpact": -6.4
     }
   },
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-08-13T01:01:55Z",
+      "fetchedAt": "2026-08-15T02:31:11Z",
       "ttlSeconds": 300,
       "detail": "17/17 symbols"
     },
     "fred": {
       "source": "fred",
-      "fetchedAt": "2026-08-13T01:02:01Z",
+      "fetchedAt": "2026-08-15T02:31:13Z",
       "ttlSeconds": 3600,
       "detail": "3/3 series"
     },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-08-13T01:02:02Z",
+      "fetchedAt": "2026-08-15T02:31:14Z",
       "ttlSeconds": 86400,
       "detail": "3 node(s)"
     }
@@ -104,7 +104,6 @@
         "lifer-repatriation": "monitoring",
         "us-10y": "approaching",
         "move-index": "monitoring",
-        "vix-spike": "monitoring",
         "margin-calls": "monitoring",
         "fed-reaction": "monitoring",
         "boj-intervention": "monitoring",
@@ -113,8 +112,9 @@
         "boj-rhetoric": "monitoring",
         "jgb-10y": "fired",
         "usd-jpy": "fired",
-        "tech-breakdown": "stable",
-        "carry-unwind": "monitoring"
+        "tech-breakdown": "approaching",
+        "carry-unwind": "monitoring",
+        "vix-spike": "approaching"
       },
       "confluence": {}
     },
@@ -128,7 +128,7 @@
         "jgb-10y": "fired",
         "usd-jpy": "fired",
         "move-index": "approaching",
-        "tech-breakdown": "stable",
+        "tech-breakdown": "approaching",
         "carry-unwind": "monitoring",
         "nikkei-stress": "stable",
         "lifer-repatriation": "stable",
@@ -138,7 +138,7 @@
       },
       "confluence": {
         "margin-calls": 0.42,
-        "vix-spike": 0.3
+        "vix-spike": 0.68
       }
     },
     "T+90d": {
@@ -153,7 +153,7 @@
         "lifer-repatriation": "fired",
         "us-10y": "approaching",
         "move-index": "approaching",
-        "tech-breakdown": "stable",
+        "tech-breakdown": "approaching",
         "margin-calls": "monitoring",
         "vix-spike": "approaching",
         "fed-reaction": "monitoring",
@@ -162,31 +162,31 @@
       "confluence": {
         "lifer-repatriation": 0.8,
         "margin-calls": 0.42,
-        "vix-spike": 0.3,
+        "vix-spike": 0.68,
         "resolution": 0.25
       }
     }
   },
   "tvIndicators": {
     "usd-jpy": {
-      "rsi14": 42.51,
-      "atr14": 1.26,
-      "sma50": 161.17,
+      "rsi14": 42.52,
+      "atr14": 1.23,
+      "sma50": 161.14,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:02:02Z"
+      "computedAt": "2026-08-15T02:31:14Z"
     },
     "us-10y": {
-      "rsi14": 56.86,
-      "sma50": 4.55,
+      "rsi14": 57.28,
+      "sma50": 4.56,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:02:02Z"
+      "computedAt": "2026-08-15T02:31:14Z"
     },
     "tech-breakdown": {
-      "rsi14": 59.51,
-      "atr14": 5.0,
-      "sma50": 183.09,
+      "rsi14": 60.35,
+      "atr14": 4.65,
+      "sma50": 182.82,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:02:02Z"
+      "computedAt": "2026-08-15T02:31:14Z"
     }
   }
 }

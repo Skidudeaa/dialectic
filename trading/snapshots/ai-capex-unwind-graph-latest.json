@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-08-13T01:30:09Z",
+  "timestamp": "2026-08-15T03:00:18Z",
   "title": "AI Capex Unwind — April 2026",
   "nodeStates": {
     "gpu-price": "fired",
@@ -67,19 +67,19 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-08-13T01:30:07Z",
+      "fetchedAt": "2026-08-15T03:00:03Z",
       "ttlSeconds": 300,
       "detail": "21/23 symbols"
     },
     "fred": {
       "source": "fred",
-      "fetchedAt": "2026-08-13T01:30:08Z",
+      "fetchedAt": "2026-08-15T03:00:17Z",
       "ttlSeconds": 3600,
       "detail": "2/2 series"
     },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-08-13T01:30:09Z",
+      "fetchedAt": "2026-08-15T03:00:18Z",
       "ttlSeconds": 86400,
       "detail": "2 node(s)"
     }
@@ -165,16 +165,17 @@
   },
   "tvIndicators": {
     "tsm-utilization": {
-      "rsi14": 56.17,
-      "sma50": 425.69,
+      "rsi14": 54.43,
+      "sma50": 425.16,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:30:09Z"
+      "computedAt": "2026-08-15T03:00:18Z"
     },
     "semis-breakdown": {
-      "rsi14": 53.29,
-      "atr14": 23.71,
+      "rsi14": 54.1,
+      "atr14": 21.87,
+      "sma200": 462.03,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:30:09Z"
+      "computedAt": "2026-08-15T03:00:18Z"
     }
   }
 }

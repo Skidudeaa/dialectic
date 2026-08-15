@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-08-13T01:30:38Z",
+  "timestamp": "2026-08-15T03:01:59Z",
   "title": "Iran/Hormuz Thesis — June 2026",
   "nodeStates": {
     "hormuz": "fired",
@@ -71,31 +71,31 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-08-13T01:30:20Z",
+      "fetchedAt": "2026-08-15T03:00:56Z",
       "ttlSeconds": 300,
       "detail": "12/20 symbols"
     },
     "fred": {
       "source": "fred",
-      "fetchedAt": "2026-08-13T01:30:23Z",
+      "fetchedAt": "2026-08-15T03:01:06Z",
       "ttlSeconds": 3600,
       "detail": "5/5 series"
     },
     "eia": {
       "source": "eia",
-      "fetchedAt": "2026-08-13T01:30:26Z",
+      "fetchedAt": "2026-08-15T03:01:49Z",
       "ttlSeconds": 691200,
       "detail": "1/1 specs"
     },
     "treasury": {
       "source": "treasury",
-      "fetchedAt": "2026-08-13T01:30:36Z",
+      "fetchedAt": "2026-08-15T03:01:57Z",
       "ttlSeconds": 172800,
-      "detail": "curve 2026-08-12"
+      "detail": "curve 2026-08-14"
     },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-08-13T01:30:38Z",
+      "fetchedAt": "2026-08-15T03:01:59Z",
       "ttlSeconds": 86400,
       "detail": "4 node(s)"
     }
@@ -188,32 +188,32 @@
   },
   "tvIndicators": {
     "brent": {
-      "rsi14": 52.61,
-      "atr14": 4.55,
-      "sma50": 84.29,
+      "rsi14": 53.36,
+      "atr14": 4.35,
+      "sma50": 83.95,
       "curveSpread": {
-        "spread": 4.22,
+        "spread": 4.38,
         "shape": "backwardation",
-        "front": 87.92,
-        "back": 83.7
+        "front": 88.59,
+        "back": 84.21
       },
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:30:38Z"
+      "computedAt": "2026-08-15T03:01:59Z"
     },
     "food-spike": {
-      "rsi14": 53.35,
+      "rsi14": 63.34,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:30:38Z"
+      "computedAt": "2026-08-15T03:01:59Z"
     },
     "dxy-stress": {
-      "rsi14": 43.12,
+      "rsi14": 38.64,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:30:38Z"
+      "computedAt": "2026-08-15T03:01:59Z"
     },
     "demand-destruction": {
-      "rsi14": 52.13,
+      "rsi14": 52.27,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-13T01:30:38Z"
+      "computedAt": "2026-08-15T03:01:59Z"
     }
   }
 }
