@@ -176,7 +176,15 @@ def fetch_polymarket_probs(
     if not market_ids:
         return []
 
-    probabilities = polymarket_mod.fetch_markets(market_ids)
+    # WHY strict here: this backs a verification tool. A transport/API failure
+    # must fail the tool call, not turn into a successful "no_data" claim.
+    probabilities = polymarket_mod.fetch_markets(
+        market_ids,
+        timeout=5,
+        retries=2,
+        raise_on_error=True,
+        parallel=True,
+    )
     return [
         {"slug": market_id, "probability": probability}
         for market_id, probability in probabilities.items()

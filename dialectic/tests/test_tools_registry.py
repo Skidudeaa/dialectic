@@ -709,6 +709,26 @@ class TestTradingTools:
         assert out["book_id"] == "china-property-cascade-graph"
         assert out["count"] == 0
 
+    @pytest.mark.asyncio
+    async def test_polymarket_timeout_exceeds_the_producer_budget(
+        self, td_env, monkeypatch,
+    ):
+        room = SimpleNamespace(id=uuid4(), linked_book_id="iran-hormuz-graph",
+                               trading_config=None)
+        seen = {}
+
+        async def service_get(path, **kwargs):
+            seen.update(path=path, **kwargs)
+            return {"status": "no_data", "configured_markets": ["market-a"],
+                    "markets": []}
+
+        monkeypatch.setattr(td, "service_get", service_get)
+        tool = build_registry(room, FakeDB()).get("get_polymarket_odds")
+        await tool.execute({})
+
+        assert seen["timeout"] == td.POLYMARKET_TIMEOUT_S
+        assert tool.timeout_s > td.POLYMARKET_TIMEOUT_S
+
 
 class TestThesisNewsTool:
     """get_thesis_news rides the service-token bridge path, not the JWT one."""

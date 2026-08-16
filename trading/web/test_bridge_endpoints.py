@@ -14,6 +14,8 @@ these routes would look like a passing 200 to a naive test.
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 
 import pytest
 from fastapi.testclient import TestClient
@@ -458,6 +460,20 @@ class TestNewsEndpoint:
         assert body["status"] == "no_matches"
         assert body["query"] == query
 
+    def test_query_bounds_apply_after_trimming(self, client, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        monkeypatch.setattr(gdelt, "fetch_articles", lambda *_args, **_kwargs: [])
+        trimmed = "x" * 499
+        body = client.get(
+            f"/api/bridge/news/{THESIS_ID}",
+            headers=svc_headers(),
+            params={"query": f"  {trimmed}  "},
+        ).json()
+
+        assert body["status"] == "no_matches"
+        assert body["query"] == trimmed
+
     @pytest.mark.parametrize("query", ["tiny", "x" * 501, "  abc  "])
     def test_focused_query_length_is_bounded(self, client, monkeypatch, query):
         from tools.data_fetch import gdelt
@@ -531,6 +547,73 @@ class TestNewsEndpoint:
 
         assert len(calls) == 2
         assert len(bridge_mod._news_cache) == 2
+
+    def test_concurrent_same_query_is_single_flight(self, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        book = json.loads(bridge_mod._book_path(THESIS_ID).read_text())
+        calls = []
+
+        def _fetch(query, **_kwargs):
+            calls.append(query)
+            return []
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
+        query = "concurrent verification query"
+        key = (THESIS_ID, query)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(
+                lambda _index: bridge_mod._fetch_and_cache_news_sync(
+                    THESIS_ID, book, query, key,
+                ),
+                range(2),
+            ))
+
+        assert len(calls) == 1
+        assert sorted(result["cache_hit"] for result in results) == [False, True]
+
+    def test_concurrent_success_cannot_erase_rate_limit(self, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        book = json.loads(bridge_mod._book_path(THESIS_ID).read_text())
+        rate_fetch_started = Event()
+        release_rate_fetch = Event()
+        calls = []
+
+        def _fetch(query, **_kwargs):
+            calls.append(query)
+            if query == "rate limited query":
+                rate_fetch_started.set()
+                assert release_rate_fetch.wait(timeout=1)
+                raise gdelt.GdeltRateLimitError("429")
+            return []
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            rate_future = pool.submit(
+                bridge_mod._fetch_and_cache_news_sync,
+                THESIS_ID,
+                book,
+                "rate limited query",
+                (THESIS_ID, "rate limited query"),
+            )
+            assert rate_fetch_started.wait(timeout=1)
+            success_future = pool.submit(
+                bridge_mod._fetch_and_cache_news_sync,
+                THESIS_ID,
+                book,
+                "would otherwise succeed",
+                (THESIS_ID, "would otherwise succeed"),
+            )
+            release_rate_fetch.set()
+            rate_result = rate_future.result(timeout=1)
+            second_result = success_future.result(timeout=1)
+
+        assert calls == ["rate limited query"]
+        assert rate_result["status"] == "rate_limited"
+        assert second_result["status"] == "rate_limited"
+        assert bridge_mod._news_rate_limit_streak == 1
+        assert bridge_mod._news_rate_limit_until > 0.0
 
     def test_query_cache_is_bounded_to_64_entries(self, client, monkeypatch):
         from tools.data_fetch import gdelt

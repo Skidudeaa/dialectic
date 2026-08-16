@@ -53,6 +53,10 @@ QUOTES_TIMEOUT_S = 25.0
 # restart or a td cache flush.
 NEWS_TIMEOUT_S = td.NEWS_TIMEOUT_S
 
+# Same seam law as news: the browser relay must not cancel tradingDesk before
+# the configured markets' bounded producer budget has elapsed.
+POLYMARKET_TIMEOUT_S = td.POLYMARKET_TIMEOUT_S
+
 
 def set_trading_relay_db_pool(pool: asyncpg.Pool) -> None:
     global _db_pool
@@ -163,7 +167,10 @@ async def get_polymarket(
 ) -> list:
     book_id = await _resolve_room_book(room_id, token, current_user.user_id, pool)
     try:
-        result = await td.service_get(f"/api/bridge/polymarket/{book_id}")
+        result = await td.service_get(
+            f"/api/bridge/polymarket/{book_id}",
+            timeout=POLYMARKET_TIMEOUT_S,
+        )
         if not isinstance(result, dict) or not isinstance(result.get("markets"), list):
             raise td.TradingDeskError(
                 "tradingDesk polymarket bridge returned an unexpected shape"

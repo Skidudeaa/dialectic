@@ -25,6 +25,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -532,6 +533,7 @@ NEWS_RATE_LIMIT_MAX_DOUBLINGS = 8
 # GDELT rate-limits by caller IP, so the cooldown must span books and queries.
 _news_rate_limit_streak = 0
 _news_rate_limit_until = 0.0
+_news_fetch_lock = Lock()
 
 NEWS_MAX_HEADLINES = 15
 NEWS_CACHE_MAX_ENTRIES = 64
@@ -751,10 +753,34 @@ def _store_news_cache(
     _news_cache[key] = (now + ttl, payload)
 
 
+def _fetch_and_cache_news_sync(
+    thesis_id: str,
+    book: dict[str, Any],
+    focused_query: Optional[str],
+    cache_key: tuple[str, str],
+) -> dict[str, Any]:
+    """Single-flight GDELT fetch with atomic cache and cooldown state."""
+    # WHY one process-wide lock: GDELT throttles by source IP. Letting focused
+    # queries race can stampede upstream, and a concurrent success can erase a
+    # 429 cooldown after another request sets it. Rechecking the cache inside
+    # the lock also collapses concurrent calls for the same exact query.
+    with _news_fetch_lock:
+        now = time.monotonic()
+        cached = _news_cache.get(cache_key)
+        if cached and cached[0] > now:
+            cached_payload = dict(cached[1])
+            cached_payload["cache_hit"] = True
+            return cached_payload
+
+        payload, ttl = _fetch_news_sync(thesis_id, book, focused_query)
+        _store_news_cache(cache_key, payload, ttl)
+        return payload
+
+
 @router.get("/news/{thesis_id}")
 async def get_thesis_news(
     thesis_id: str,
-    query: Optional[str] = Query(default=None, min_length=5, max_length=500),
+    query: Optional[str] = Query(default=None),
     _svc: None = Depends(require_service_token),
 ) -> JSONResponse:
     """Return status-rich GDELT headlines for a standing or focused query."""
@@ -778,17 +804,13 @@ async def get_thesis_news(
         )
     resolved_query = focused_query or _gdelt_query_for_book(book)
     cache_key = (thesis_id, resolved_query or "")
-    now = time.monotonic()
-    cached = _news_cache.get(cache_key)
-    if cached and cached[0] > now:
-        cached_payload = dict(cached[1])
-        cached_payload["cache_hit"] = True
-        return JSONResponse(content=cached_payload, media_type="application/json")
-
-    payload, ttl = await asyncio.to_thread(
-        _fetch_news_sync, thesis_id, book, focused_query,
+    payload = await asyncio.to_thread(
+        _fetch_and_cache_news_sync,
+        thesis_id,
+        book,
+        focused_query,
+        cache_key,
     )
-    _store_news_cache(cache_key, payload, ttl)
     return JSONResponse(content=payload, media_type="application/json")
 
 

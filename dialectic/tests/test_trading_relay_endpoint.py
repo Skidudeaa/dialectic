@@ -126,6 +126,7 @@ def test_polymarket_is_book_scoped_but_remains_list_shaped(monkeypatch):
     assert resp.json() == markets
     service_get.assert_awaited_once_with(
         f"/api/bridge/polymarket/{BOOK_ID}",
+        timeout=relay.POLYMARKET_TIMEOUT_S,
     )
 
 

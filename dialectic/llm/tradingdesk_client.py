@@ -30,6 +30,11 @@ DEFAULT_BASE_URL = "http://127.0.0.1:8006"
 # default, meaning the LLM's own news tool could only succeed on a warm cache.
 NEWS_TIMEOUT_S = 60.0
 
+# The bridge reads every configured Polymarket ID concurrently. Each ID gets
+# two attempts; an attempt can make two sequential 5s requests, with a 1.5s
+# retry delay. 25s clears that 21.5s cold ceiling inside the LLM's 60s turn.
+POLYMARKET_TIMEOUT_S = 25.0
+
 
 class TradingDeskError(Exception):
     """Any failure talking to tradingDesk — unreachable, non-200, non-JSON,

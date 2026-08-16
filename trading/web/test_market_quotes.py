@@ -135,18 +135,30 @@ class TestPolymarketCollection:
         ]
 
     def test_fetch_omits_markets_without_a_probability(self, monkeypatch):
+        seen = {}
+
+        def fetch(market_ids, **kwargs):
+            seen.update(kwargs)
+            return {market_ids[0]: 0.42, market_ids[1]: None}
+
         monkeypatch.setattr(
             market.polymarket_mod,
             "fetch_markets",
-            lambda market_ids: {market_ids[0]: 0.42, market_ids[1]: None},
+            fetch,
         )
 
         assert market.fetch_polymarket_probs(["priced", "missing"]) == [
             {"slug": "priced", "probability": 0.42},
         ]
+        assert seen == {
+            "timeout": 5,
+            "retries": 2,
+            "raise_on_error": True,
+            "parallel": True,
+        }
 
     def test_fetch_failure_is_not_an_empty_success(self, monkeypatch):
-        def fail(_market_ids):
+        def fail(_market_ids, **_kwargs):
             raise RuntimeError("upstream broke")
 
         monkeypatch.setattr(market.polymarket_mod, "fetch_markets", fail)

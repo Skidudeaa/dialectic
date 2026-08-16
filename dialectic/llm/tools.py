@@ -41,6 +41,10 @@ ARTICLE_CONTENT_CAP = 6000
 # out is worse than no tool, because the room waits 10s to learn nothing.
 QUOTES_TIMEOUT_S = 20.0
 
+# The tool loop's asyncio timeout must outlive the HTTP client's complete
+# Polymarket budget and stay under half the 60s whole-turn budget.
+POLYMARKET_TOOL_TIMEOUT_S = td.POLYMARKET_TIMEOUT_S + 4.0
+
 # Keys dropped from any tradingDesk payload before it reaches the model:
 # per-tick traces and history arrays are the bulk of the bytes and none of
 # the meaning at conversation altitude.
@@ -295,7 +299,10 @@ def _build_trading_tools(room) -> list[Tool]:
 
     async def get_polymarket_odds(args: dict) -> dict:
         book_id = resolve_book_id(room, args.get("book_id"))
-        result = await td.service_get(f"/api/bridge/polymarket/{book_id}")
+        result = await td.service_get(
+            f"/api/bridge/polymarket/{book_id}",
+            timeout=td.POLYMARKET_TIMEOUT_S,
+        )
         if not isinstance(result, dict) or not isinstance(result.get("markets"), list):
             raise td.TradingDeskError(
                 "tradingDesk polymarket bridge returned an unexpected shape"
@@ -429,6 +436,7 @@ def _build_trading_tools(room) -> list[Tool]:
             input_schema={"type": "object", "properties": {}},
             execute=get_polymarket_odds,
             label="checking Polymarket odds",
+            timeout_s=POLYMARKET_TOOL_TIMEOUT_S,
         ),
         Tool(
             name="get_thesis_state",
