@@ -290,19 +290,37 @@ class TestSemanticNovelty:
 
 
 class TestStagnation:
-    def test_stagnation_detected(self):
-        """6+ short TEXT-only messages triggers stagnation (with high turn threshold)."""
-        # Use a high turn threshold so turn_threshold doesn't fire first
+    def test_brevity_is_not_stagnation(self):
+        """INVERTED 2026-08-15. This test used to assert the bug.
+
+        The rung fired on six consecutive TEXT messages averaging under 100
+        characters, with no repetition test anywhere despite its docstring.
+        That is ordinary chat, and in production all five firings interrupted
+        somebody TELLING A STORY in short beats.
+        """
         engine = InterjectionEngine(turn_threshold=100, semantic_novelty_threshold=0.99)
         msgs = [
             make_message("ok", sequence=i, message_type=MessageType.TEXT)
             for i in range(6)
         ]
         decision = engine.decide(msgs)
-        assert decision.should_interject is True
-        assert decision.reason == "stagnation_detected"
-        assert decision.use_provoker is True
-        assert decision.confidence == 0.6
+        assert decision.should_interject is False
+        assert decision.reason == "no_trigger"
+
+    def test_a_story_told_in_short_beats_is_left_alone(self):
+        """The real production sequence that was being cut off."""
+        engine = InterjectionEngine(turn_threshold=100, semantic_novelty_threshold=0.99)
+        story = [
+            "I read about 2 Utah bro's who went to Zaire to stage a coup",
+            "They got caught and sentenced to death",
+            "But then they started a war with their neighbor",
+            "and wanted US help.",
+            "So trump's team got the two released",
+            "Dam even the AI be talking back",
+        ]
+        msgs = [make_message(line, sequence=i, message_type=MessageType.TEXT)
+                for i, line in enumerate(story)]
+        assert engine.decide(msgs).should_interject is False
 
     def test_stagnation_needs_six_messages(self, engine):
         """Fewer than 6 messages should not trigger stagnation."""
@@ -336,20 +354,24 @@ class TestStagnation:
         decision = engine.decide(msgs)
         assert decision.reason != "stagnation_detected"
 
-    def test_stagnation_uses_last_six(self):
-        """Stagnation only looks at the last 6 messages."""
-        # Use a high turn threshold so turn_threshold doesn't fire first
+    def test_a_long_discussion_that_turns_terse_is_left_alone(self):
+        """Was test_stagnation_uses_last_six — the window no longer matters.
+
+        Ten substantial messages followed by six short ones is a discussion
+        that reached agreement and is wrapping up. The old rung read the
+        last six, saw brevity, and called it stuck.
+        """
         engine = InterjectionEngine(turn_threshold=100, semantic_novelty_threshold=0.99)
         old_msgs = [
             make_message("x" * 200, sequence=i, message_type=MessageType.TEXT)
             for i in range(10)
         ]
-        stale_msgs = [
+        terse = [
             make_message("ok", sequence=10 + i, message_type=MessageType.TEXT)
             for i in range(6)
         ]
-        decision = engine.decide(old_msgs + stale_msgs)
-        assert decision.reason == "stagnation_detected"
+        decision = engine.decide(old_msgs + terse)
+        assert decision.should_interject is False
 
 
 # ── Speaker balance redirect trigger ──
@@ -586,8 +608,12 @@ class TestEdgeCases:
         )
         assert decision.reason == "information_gap"
 
-    def test_priority_order_stagnation_over_balance(self):
-        """Stagnation fires before speaker balance."""
+    def test_brevity_no_longer_outranks_anything(self):
+        """Was test_priority_order_stagnation_over_balance.
+
+        With the stagnation rung gone, six short messages plus a two-speaker
+        imbalance reach the end of the ladder — balance needs 3+ speakers.
+        """
         engine = InterjectionEngine(turn_threshold=100, semantic_novelty_threshold=0.99)
         msgs = [
             make_message("ok", sequence=i, message_type=MessageType.TEXT)
@@ -595,7 +621,8 @@ class TestEdgeCases:
         ]
         balance = {str(USER_A_ID): 8, str(USER_B_ID): 2}
         decision = engine.decide(msgs, speaker_balance=balance)
-        assert decision.reason == "stagnation_detected"
+        assert decision.should_interject is False
+        assert decision.reason == "no_trigger"
 
     def test_decision_is_dataclass(self, engine):
         """InterjectionDecision should be a proper dataclass."""
@@ -697,3 +724,44 @@ class TestAddressedToAnotherHuman:
         decision = engine.decide(msgs)
         assert decision.should_interject is True
         assert decision.reason == "question_detected"
+
+
+# ── The per-room dials, live at last (2026-08-15) ──
+
+
+class TestPerRoomThresholds:
+    """`rooms.interjection_turn_threshold` and `.semantic_novelty_threshold`
+    were stored, range-validated by PATCH /rooms/{id}/config, and reported by
+    /auth/capabilities — while `decide()` read `self.*` and the orchestrator
+    built the engine with NO arguments. Every room ran module defaults no
+    matter what its row said, so turning the knob down answered "we already
+    turned that down" with a yes and changed nothing."""
+
+    def test_room_turn_threshold_overrides_the_engine_default(self):
+        engine = InterjectionEngine(turn_threshold=4)
+        msgs = [make_message(f"turn {i}") for i in range(4)]
+        # Engine default WOULD fire at 4 human turns...
+        assert engine.decide(msgs).reason.startswith("turn_threshold_exceeded")
+        # ...the room's own value is what actually governs.
+        assert engine.decide(msgs, turn_threshold=8).should_interject is False
+
+    def test_a_room_can_be_made_louder_too(self):
+        """The dial turns both ways — this is config, not a one-way ratchet."""
+        engine = InterjectionEngine(turn_threshold=8)
+        msgs = [make_message(f"turn {i}") for i in range(4)]
+        assert engine.decide(msgs).should_interject is False
+        assert engine.decide(msgs, turn_threshold=3).should_interject is True
+
+    def test_room_novelty_threshold_overrides_the_engine_default(self):
+        engine = InterjectionEngine(turn_threshold=100, semantic_novelty_threshold=0.85)
+        msgs = [make_message("a statement with no question mark")]
+        assert engine.decide(msgs, semantic_novelty=0.80).should_interject is False
+        assert engine.decide(
+            msgs, semantic_novelty=0.80, novelty_threshold=0.70
+        ).reason.startswith("semantic_novelty_spike")
+
+    def test_omitting_both_keeps_the_engine_defaults(self):
+        """A caller that passes nothing must behave exactly as before."""
+        engine = InterjectionEngine(turn_threshold=5, semantic_novelty_threshold=0.9)
+        msgs = [make_message(f"turn {i}") for i in range(5)]
+        assert engine.decide(msgs).reason.startswith("turn_threshold_exceeded")

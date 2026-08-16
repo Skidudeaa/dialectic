@@ -441,3 +441,64 @@ turn it was.
 Suites at this gate: backend 1376 (1358 + 18), including six real-Postgres
 contracts in `tests/test_trading_curator_pg.py` — the mocked curator tests
 hand `fetchrow` a dict and so assert the shape of a query that never ran.
+
+## Amendment 2026-08-15 (late) — the dials were never connected
+
+Owner, after the evening fix: *"whatever we adjusted the commentary threshold
+limits aims in the 'main' thread, its not nearly tight enough."* Replaying the
+week's **146 real `llm_decisions` rows** through the engine with each row's own
+stored inputs (novelty, unsurfaced count, speaker balance) and the real message
+stream up to the triggering message — only the rule under test varies:
+
+| arm | speaks | of decisions |
+|---|---|---|
+| before this session (turn=4, novelty 0.70) | 67 | 46% |
+| after the morning fix (turn=4, novelty 0.85) | 26 | 18% |
+| **now** (turn=8, novelty 0.85, no stagnation) | **16** | **11%** |
+| tightened further (turn=12) | 16 | 11% |
+
+Tonight's Home window alone (41 decisions): 23 → 4.
+
+- **`rooms.interjection_turn_threshold` and `rooms.semantic_novelty_threshold`
+  reached NOTHING.** `decide()` accepted a `turn_threshold` parameter and read
+  `self.turn_threshold` anyway; the orchestrator never passed one; and
+  `InterjectionEngine()` is constructed with no arguments, so every room ran
+  module defaults regardless of its row. The columns are stored, range-checked
+  by `PATCH /rooms/{id}/config` (2–12 and 0.3–0.95), reported by
+  `/auth/capabilities`, **and exposed as two sliders in
+  `RoomSettingsDialog.tsx`** — "Turns before Dialectic considers joining" and
+  "Topic-shift sensitivity". Dragging either did nothing. A dial that changes
+  nothing is worse than no dial: it answers "we already turned that down" with
+  a yes. The orchestrator already receives the whole `Room` object, so the fix
+  is two arguments at the call site — the data was in hand the entire time.
+- **Wiring them would have LOOSENED the rooms**, because every row said 0.70
+  while `INTERJECTION_NOVELTY_THRESHOLD=0.85` was what actually ran. So the
+  stored values were aligned to the shipped truth in the same step:
+  `UPDATE rooms SET interjection_turn_threshold=8, semantic_novelty_threshold=0.85`
+  (24 rows, one of which — a QA room — had been hand-set to 6 and had never
+  taken effect), plus the `schema.sql` defaults and the `Room` model. **Run the
+  UPDATE before the restart**: the ingest order is data, then code.
+- **The stagnation rung is gone.** It never detected stagnation. Its docstring
+  promised "short, repetitive messages"; the body tested one thing — six
+  consecutive TEXT messages averaging under 100 characters — with no repetition
+  test anywhere. That is ordinary chat, and all five production firings
+  interrupted somebody TELLING A STORY in short beats ("I read about 2 Utah
+  bro's who went to Zaire to stage a coup" / "They got caught and sentenced to
+  death" / …). A sixth fired on "Dam even the AI be talking back" — the
+  complaint about the noise produced more of it. `_detect_stagnation` is kept
+  as a `return False` stub with the history, because a REAL stagnation detector
+  (repetition, circling, no new entities) is a reasonable thing to want and
+  this is where it goes. What it must not do is fire on brevity.
+- **`INTERJECTION_TURN_THRESHOLD` 4 → 8.** This is the one rung with no content
+  justification at all — it fires on turn COUNT. All 10 of its weekly firings
+  were triggered by messages like `"Yes"`, `"N"`, `"Yep getting notification
+  pushed to me"`. At 6 it fires zero times over the corpus; 8 keeps a safety
+  valve without making the participant a metronome.
+
+**What is left, and it is now the whole story:** `question_detected` is 9 of
+the remaining 16 speaks. Rungs 1–7 still vote only YES. If the room wants
+quieter than this, that rung is the next thing to look at — a question in a
+two-human room is usually for the other human, and rung 0 only catches the ones
+that say so with an `@`.
+
+Suites at this gate: backend 1381.
