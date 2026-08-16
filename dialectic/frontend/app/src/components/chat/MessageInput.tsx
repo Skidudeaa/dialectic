@@ -32,7 +32,7 @@ let uploadKeySeed = 0
 const nextUploadKey = () => `upload-${++uploadKeySeed}`
 
 interface MessageInputProps {
-  onSend: (content: string, messageType: MessageType, attachments: Attachment[]) => boolean
+  onSend: (content: string, messageType: MessageType, attachments: Attachment[], tags: string[]) => boolean
   roomId: string
   /** Seeds the composer on first mount only (device-local restoration,
    *  design v2 §15.2/§15.5) — a plain `useState` initial value, so a later
@@ -59,6 +59,19 @@ interface MessageInputProps {
   quiet?: boolean
 }
 
+/**
+ * The tag vocabulary, mirroring MESSAGE_TAGS in dialectic/proposal_intake.py.
+ * Fixed rather than free text so the things tagged can be found again — the
+ * ask was "so we don't lose track of them", and a junk drawer of `bug`,
+ * `Bug`, `bugs` is exactly losing track of them. The server is the authority
+ * and refuses anything outside it; this list only decides what to OFFER.
+ */
+const MESSAGE_TAG_OPTIONS: { value: string; label: string; hint: string }[] = [
+  { value: 'meta', label: 'Meta', hint: 'About Dialectic itself — architecture, direction' },
+  { value: 'bug', label: 'Bug', hint: 'Something is broken' },
+  { value: 'idea', label: 'Idea', hint: 'A hope, a dream, a thing to try' },
+]
+
 const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
   { value: 'text', label: 'Text' },
   { value: 'claim', label: 'Claim' },
@@ -73,6 +86,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
   const [uploads, setUploads] = useState<ComposerUpload[]>([])
   const [notice, setNotice] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [tags, setTags] = useState<string[]>([])
   const [mentionOpen, setMentionOpen] = useState(false)
   const [mentionIndex, setMentionIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -169,7 +183,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
     // accepts an attachment-only message and binds them in the send.
     if (!trimmed && ready.length === 0) return
 
-    const sent = onSend(trimmed, messageType, ready.map((entry) => entry.record))
+    const sent = onSend(trimmed, messageType, ready.map((entry) => entry.record), tags)
     // WHY: onSend returns false when the socket is not open. This used to be a
     // silent no-op — the text stayed in the box with no indication it had not
     // been delivered, which reads as "the app ate my message."
@@ -180,6 +194,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
     setSendError(false)
     setNotice(null)
     setContent('')
+    setTags([])
     setUploads([])
     setMessageType('text')
     if (textareaRef.current) {
@@ -187,7 +202,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
     }
     onTypingStop?.()
     typingRef.current = false
-  }, [content, messageType, onSend, onTypingStop, uploading, failed, ready])
+  }, [content, messageType, onSend, onTypingStop, uploading, failed, ready, tags])
 
   // Research mode: the composer's text is the question, and the dive runs
   // long (the server caps it at 15 iterations / 300s), so the same send
@@ -410,6 +425,26 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
                   <span className="attach-chip-progress" style={{ width: `${entry.progress}%` }} />
                 )}
               </div>
+            ))}
+          </div>
+        )}
+        {!quiet && (
+          <div className="msg-tag-selector">
+            {MESSAGE_TAG_OPTIONS.map(t => (
+              <button
+                key={t.value}
+                type="button"
+                title={t.hint}
+                aria-pressed={tags.includes(t.value)}
+                className={`tag-btn ${tags.includes(t.value) ? 'active' : ''}`}
+                onClick={() => setTags((current) =>
+                  current.includes(t.value)
+                    ? current.filter((x) => x !== t.value)
+                    : [...current, t.value],
+                )}
+              >
+                #{t.label}
+              </button>
             ))}
           </div>
         )}

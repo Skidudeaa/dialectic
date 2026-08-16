@@ -345,6 +345,9 @@ export function MessageBubble({
               <span className="msg-type-badge">{message.message_type}</span>
             )}
             {message.edited_at && <span className="msg-edited" title="This message was edited">edited</span>}
+            {(message.metadata?.tags ?? []).map((tag) => (
+              <span key={tag} className={`msg-tag msg-tag-${tag}`}>#{tag}</span>
+            ))}
             {addressedTo.length > 0 && (
               <span className="msg-addressed" title={`Addressed to ${addressedTo.join(', ')}`}>
                 <span aria-hidden="true">→</span> {addressedTo.join(', ')}

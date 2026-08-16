@@ -590,7 +590,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
             roomId={currentRoom.id}
             memberNames={memberNames}
             initialValue={composerDraft}
-            onSend={(content, messageType, files) => {
+            onSend={(content, messageType, files, tags) => {
               // The ids travel with the send itself: the server binds them in
               // the message transaction and the broadcast carries them back.
               const sent = sendMessage(
@@ -598,6 +598,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
                 messageType,
                 effectiveReplyToId,
                 files.map((file) => file.id),
+                tags,
               )
               if (!sent) return false
               setReplyToId(null)

@@ -328,3 +328,31 @@
     color: var(--color-amber);
     border-color: var(--amber-30);
 }
+
+/* Tag toggles. Sit above the type selector and read as filing, not as a
+ * speech act — the type row (TEXT/CLAIM/QUESTION) says what a message IS,
+ * this says where it should be findable later. */
+.msg-tag-selector {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.tag-btn {
+    padding: 2px 8px;
+    background: none;
+    border: 1px solid var(--color-bean);
+    border-radius: 999px;
+    color: var(--color-faint);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+}
+.tag-btn:hover { color: var(--color-secondary); }
+/* Active is a color AND a filled pill — never color alone. */
+.tag-btn.active {
+    color: var(--color-amber);
+    border-color: var(--color-amber);
+    background: var(--amber-08);
+    font-weight: 600;
+}

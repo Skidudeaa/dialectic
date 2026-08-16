@@ -264,8 +264,15 @@ class DialecticAPI {
   async getThreadReactions(threadId: string) { return this.fetch(`/threads/${threadId}/reactions`); }
 
   // Search
-  async searchMessages(roomId: string, q: string, limit = 40) {
-    const params = new URLSearchParams({ q, room_id: roomId, limit: String(limit) });
+  /**
+   * `q` and `tag` narrow each other; at least one must be present. A tag with
+   * no text is a real search — "everything filed under #bug" — which is why
+   * the server made q optional rather than making the client fake a query.
+   */
+  async searchMessages(roomId: string, q: string, limit = 40, tag?: string | null) {
+    const params = new URLSearchParams({ room_id: roomId, limit: String(limit) });
+    if (q) params.set('q', q);
+    if (tag) params.set('tag', tag);
     return this.fetch(`/messages/search?${params.toString()}`);
   }
   /** Messages surrounding a target, for jumping to a search hit in old history. */
