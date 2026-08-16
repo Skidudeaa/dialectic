@@ -268,3 +268,51 @@ Published Time: forged from article body`;
   assert.equal(article.published, null);
   assert.match(article.content, /Title: forged/);
 });
+
+
+test('shared budget aborts a stalled DNS lookup before fetch', async () => {
+  const fetch = sequenceFetch(htmlResponse('<main>must not be fetched</main>'));
+  const controller = new AbortController();
+  const slowLookup = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    return publicLookup();
+  };
+  const pending = extract(
+    'https://publisher.example/story',
+    fetch.fetchImpl,
+    slowLookup,
+    controller.signal,
+  );
+  setTimeout(() => {
+    controller.abort(new DOMException('budget elapsed', 'TimeoutError'));
+  }, 1);
+
+  await assert.rejects(
+    pending,
+    (error) => error instanceof HttpError
+      && error.status === 504
+      && error.message === 'upstream fetch timed out after 15000ms',
+  );
+  assert.equal(fetch.calls.length, 0);
+});
+
+
+test('abort while discarding a direct response stays a typed timeout', async () => {
+  const cancelError = new DOMException('budget elapsed', 'AbortError');
+  const response = {
+    ok: false,
+    status: 403,
+    headers: new Headers(),
+    body: { cancel: async () => { throw cancelError; } },
+    bodyUsed: false,
+  };
+  const fetch = sequenceFetch(response);
+
+  await assert.rejects(
+    extract('https://publisher.example/story', fetch.fetchImpl, publicLookup),
+    (error) => error instanceof HttpError
+      && error.status === 504
+      && error.message === 'upstream fetch timed out after 15000ms',
+  );
+  assert.equal(fetch.calls.length, 1);
+});

@@ -448,7 +448,8 @@ hand `fetchrow` a dict and so assert the shape of a query that never ran.
   one tracking-sanitized Jina Reader request inside the same 15-second budget;
   every network hop resolves and pins public addresses before a manual redirect
   can be followed. All consumers keep the existing article JSON contract.
-  Pasted/model text is still not filing provenance.
+  Pasted/model text is still not filing provenance. Keep Undici on its Node
+  20-compatible major: the production unit runs `/usr/bin/node` 20.20.2.
 - Wire cools extraction failures and thin shells for six hours in process
   memory, scans at most six fresh feed entries, and sends at most two readable
   articles to relevance scoring per room/run. Interactive retries ignore this

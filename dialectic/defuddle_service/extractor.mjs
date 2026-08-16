@@ -37,7 +37,31 @@ function isPublicAddress(address) {
 }
 
 
-async function resolvePublicAddresses(parsed, lookupImpl, privateMessage) {
+async function waitForLookup(lookupPromise, signal) {
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    lookupPromise.then(
+      (records) => {
+        signal.removeEventListener('abort', onAbort);
+        if (signal.aborted) {
+          reject(signal.reason);
+          return;
+        }
+        resolve(records);
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+
+async function resolvePublicAddresses(parsed, lookupImpl, privateMessage, signal) {
+  signal.throwIfAborted();
   const hostname = bareHostname(parsed.hostname);
   if (hostname === 'localhost' || hostname.endsWith('.local')) {
     throw new HttpError(400, privateMessage);
@@ -45,7 +69,10 @@ async function resolvePublicAddresses(parsed, lookupImpl, privateMessage) {
 
   const records = ipaddr.isValid(hostname)
     ? [{ address: hostname, family: ipaddr.parse(hostname).kind() === 'ipv4' ? 4 : 6 }]
-    : await lookupImpl(hostname, { all: true, verbatim: true });
+    : await waitForLookup(
+      Promise.resolve(lookupImpl(hostname, { all: true, verbatim: true })),
+      signal,
+    );
   if (!Array.isArray(records) || records.length === 0) {
     throw new Error(`DNS returned no addresses for ${hostname}`);
   }
@@ -91,6 +118,24 @@ async function discardResponse(response) {
 }
 
 
+async function closeAfter(dispatcher, operation) {
+  try {
+    return await operation();
+  } finally {
+    await dispatcher.close();
+  }
+}
+
+
+function directFetchError(error) {
+  if (error instanceof HttpError) return error;
+  if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+    return new HttpError(504, `upstream fetch timed out after ${FETCH_TIMEOUT_MS}ms`);
+  }
+  return new HttpError(502, `upstream fetch failed: ${error.message}`);
+}
+
+
 async function fetchPublic(
   url,
   { fetchImpl, lookupImpl, headers, signal, initialPrivateMessage },
@@ -111,6 +156,7 @@ async function fetchPublic(
       redirectCount === 0
         ? initialPrivateMessage
         : 'redirect led to a private or loopback address',
+      signal,
     );
     const dispatcher = pinnedDispatcher(addresses);
 
@@ -129,8 +175,7 @@ async function fetchPublic(
 
     const location = response.headers.get('location');
     if (REDIRECT_STATUSES.has(response.status) && location) {
-      await discardResponse(response);
-      await dispatcher.close();
+      await closeAfter(dispatcher, () => discardResponse(response));
       if (redirectCount === MAX_REDIRECTS) {
         throw new Error(`too many redirects (>${MAX_REDIRECTS})`);
       }
@@ -226,7 +271,12 @@ async function extractWithReader(
 }
 
 
-export async function extract(url, fetchImpl = undiciFetch, lookupImpl = lookup) {
+export async function extract(
+  url,
+  fetchImpl = undiciFetch,
+  lookupImpl = lookup,
+  signal = AbortSignal.timeout(FETCH_TIMEOUT_MS),
+) {
   let parsed;
   try {
     parsed = new URL(url);
@@ -237,7 +287,6 @@ export async function extract(url, fetchImpl = undiciFetch, lookupImpl = lookup)
     throw new HttpError(400, 'only http(s) URLs are supported');
   }
 
-  const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
   let fetched;
   try {
     fetched = await fetchPublic(url, {
@@ -251,17 +300,16 @@ export async function extract(url, fetchImpl = undiciFetch, lookupImpl = lookup)
       initialPrivateMessage: 'refusing to fetch a private or loopback address',
     });
   } catch (error) {
-    if (error instanceof HttpError) throw error;
-    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-      throw new HttpError(504, `upstream fetch timed out after ${FETCH_TIMEOUT_MS}ms`);
-    }
-    throw new HttpError(502, `upstream fetch failed: ${error.message}`);
+    throw directFetchError(error);
   }
 
   const { response, dispatcher } = fetched;
   if (!response.ok) {
-    await discardResponse(response);
-    await dispatcher.close();
+    try {
+      await closeAfter(dispatcher, () => discardResponse(response));
+    } catch (error) {
+      throw directFetchError(error);
+    }
     if (response.status === 403) {
       return extractWithReader(parsed, url, fetchImpl, lookupImpl, signal);
     }
@@ -270,14 +318,9 @@ export async function extract(url, fetchImpl = undiciFetch, lookupImpl = lookup)
 
   let html;
   try {
-    html = await response.text();
+    html = await closeAfter(dispatcher, () => response.text());
   } catch (error) {
-    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-      throw new HttpError(504, `upstream fetch timed out after ${FETCH_TIMEOUT_MS}ms`);
-    }
-    throw new HttpError(502, `upstream fetch failed: ${error.message}`);
-  } finally {
-    await dispatcher.close();
+    throw directFetchError(error);
   }
 
   const { document } = parseHTML(html);

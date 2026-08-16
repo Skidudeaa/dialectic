@@ -12,6 +12,6 @@
     "defuddle": "^0.19.2",
     "ipaddr.js": "^2.5.0",
     "linkedom": "^0.18.13",
-    "undici": "^8.10.0"
+    "undici": "7.29.0"
   }
 }
