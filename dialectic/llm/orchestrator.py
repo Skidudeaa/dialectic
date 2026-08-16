@@ -805,9 +805,16 @@ class LLMOrchestrator:
         messages: list[Message],
         memories: list[Memory],
         use_provoker: bool = False,
+        reason: str = "explicit_mention",
     ) -> AsyncIterator[tuple[str, dict]]:
         """
         Stream LLM response token-by-token.
+
+        `reason` is what gets written to the decision log. Both callers are
+        explicit human summons, but they are different actions and are kept
+        apart in the record: an `@Claude` inside a message
+        (`explicit_mention`, the default) versus the client's own `summon_llm`
+        control (`explicit_summon`).
 
         Yields tuples of (event_type, data) where event_type is:
         - "thinking": Processing started
@@ -963,6 +970,66 @@ class LLMOrchestrator:
 
             # Fire-and-forget: extract LLM self-memories in background
             self._schedule_self_memory_extraction(response_message, thread.room_id, messages)
+
+            # The self-model has to see this turn too.
+            #
+            # WHY: until 2026-08-16 this path logged NOTHING. Across the first
+            # 149 rows of llm_decisions there was not one explicit_mention —
+            # every row came from on_message's heuristic rungs or
+            # force_response's wire/sweep. So the participant's record of
+            # itself held only the occasions it decided to speak on its own and
+            # none of the ones a human asked it to, which is the commonest
+            # interaction in the room. Every participation stat, effectiveness
+            # average and identity distillation was drawn from that biased
+            # sample, and a self-model deploy could read "no errors" purely
+            # because the path never ran.
+            #
+            # The decision is REAL — it was made by the caller rather than by
+            # the heuristics engine, which is why there is no engine output to
+            # carry. handlers.py streams exactly when `mentioned` is true and
+            # RETURNS before reaching on_message, so the two paths are strictly
+            # either/or and this cannot double-log. Reason and confidence
+            # mirror heuristics.py's own rung-1 mention so both sources group
+            # in one query instead of splitting the history.
+            #
+            # BEFORE the "done" yield deliberately: a generator only advances
+            # while it is being consumed, so anything written after the last
+            # yield is stranded when a client disconnects mid-turn — which this
+            # room does routinely. Both helpers below swallow their own
+            # failures, so the conversation cannot be lost to bookkeeping.
+            decision = InterjectionDecision(
+                should_interject=True,
+                reason=reason,
+                confidence=1.0,
+                use_provoker=use_provoker,
+                considered_reasons=[reason],
+            )
+            fsm = await self._apply_fsm_turn(thread.room_id, messages, decision)
+            triggered_msg = next(
+                (m for m in reversed(messages) if m.speaker_type == SpeakerType.HUMAN),
+                None,
+            )
+            decision_id = await self._self_model.log_decision(
+                room_id=room.id,
+                thread_id=thread.id,
+                triggered_by_message_id=triggered_msg.id if triggered_msg else None,
+                decision=decision,
+                # semantic_novelty / speaker_balance / unsurfaced_memory_count
+                # are genuinely ABSENT here, not merely unmeasured: no rung
+                # ran, so they were never computed. Leaving them NULL says
+                # that; inventing zeros would read as "measured, and low".
+                message_count=len(messages),
+                response_message_id=response_message.id,
+                mode="provoker" if use_provoker else "primary",
+                tool_calls=tool_metadata["tools"]["calls"] if tool_metadata else None,
+                **self._fsm_log_kwargs(fsm),
+            )
+            if decision_id:
+                self._schedule_effectiveness_measurement(
+                    room_id=room.id,
+                    llm_message_id=response_message.id,
+                    decision_id=decision_id,
+                )
 
             yield ("done", {
                 "message_id": str(response_message.id),

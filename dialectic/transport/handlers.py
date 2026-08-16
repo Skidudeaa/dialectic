@@ -1593,6 +1593,10 @@ class MessageHandler:
             messages=messages,
             memories=memories,
             use_provoker=use_provoker,
+            # The summon control, not an @Claude inside a message — kept apart
+            # in the decision log so "we asked it to speak" and "we named it
+            # mid-sentence" stay countable as different things.
+            reason="explicit_summon",
         ):
             if event_type == "thinking":
                 await self.connections.broadcast(conn.room_id, OutboundMessage(
