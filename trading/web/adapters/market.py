@@ -46,8 +46,34 @@ def _iter_instruments(cfg: dict):
                 yield inst.get("id", ""), inst.get("role", inst.get("id", ""))
 
 
+def _polymarket_feed_id(feed: dict) -> str:
+    """The ONE place a Polymarket feed's market id is resolved.
+
+    ARCHITECTURE (design 2026-08-16 §3.1): `market` first, legacy `slug`
+    second, empty ignored. `market` wins a conflict because it is the field
+    current books author and the thesis engine consumes — thesisgraph.py:158
+    already validates a polymarket feed as `slug or market`, so accepting both
+    here is honoring a contract the project had already written down, not
+    inventing one.
+
+    WHY a helper rather than an inline `or` at each site: there were two read
+    sites, both read ONLY `slug`, and every book on disk writes `market` while
+    none writes `slug`. So the collector discovered zero markets and
+    fetch_polymarket_probs returned [] without ever contacting Polymarket —
+    permanently, for iran-hormuz and trump-tariffs alike, and indistinguishably
+    from "no markets configured". A second inline copy is how the two sites
+    drifted from the validator in the first place; one helper is what stops it
+    happening again.
+    """
+    for key in ("market", "slug"):
+        value = feed.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
 def _collect_symbols_from_books() -> tuple[Set[str], List[str]]:
-    """Scan all book configs for Yahoo Finance symbols and Polymarket slugs."""
+    """Scan all book configs for Yahoo Finance symbols and Polymarket market ids."""
     yahoo_symbols: Set[str] = set()
     poly_slugs: List[str] = []
 
@@ -66,9 +92,9 @@ def _collect_symbols_from_books() -> tuple[Set[str], List[str]]:
         for node in cfg.get("nodes", []):
             for feed in node.get("feeds", []):
                 if feed.get("source") == "polymarket":
-                    slug = feed.get("slug", "")
-                    if slug and slug not in poly_slugs:
-                        poly_slugs.append(slug)
+                    market_id = _polymarket_feed_id(feed)
+                    if market_id and market_id not in poly_slugs:
+                        poly_slugs.append(market_id)
 
     return yahoo_symbols, poly_slugs
 
@@ -149,17 +175,28 @@ def fetch_quotes(force_refresh: bool = False) -> List[Dict[str, Any]]:
 
 
 def fetch_polymarket_probs() -> List[Dict[str, Any]]:
-    """Fetch Polymarket probabilities for all configured slugs."""
-    _, poly_slugs = _collect_symbols_from_books()
-    if not poly_slugs:
+    """Fetch Polymarket probabilities for every configured market.
+
+    An empty list means exactly one thing: no book declares a Polymarket feed.
+    It does NOT mean the fetch failed.
+
+    WHY the blanket `except Exception: return []` is gone (design §3.1): it
+    made an upstream failure indistinguishable from "nothing configured", and
+    both indistinguishable from "no current data". Downstream that collapse
+    reached the room as a flat "Polymarket is empty" — an operational failure
+    reported as a fact about the world. The only caller is
+    web/routes/market.py, which awaits this in a thread, so a real fetch
+    failure now surfaces as a failed request instead of a confident [].
+
+    The response key stays `slug` — that is the wire contract the browser and
+    the bridge already read; only the BOOK-side key was ever ambiguous.
+    """
+    _, poly_markets = _collect_symbols_from_books()
+    if not poly_markets:
         return []
 
-    try:
-        probs = polymarket_mod.fetch_markets(poly_slugs)
-        return [{"slug": slug, "probability": prob} for slug, prob in probs.items()]
-    except Exception as e:
-        log.warning("Polymarket fetch failed: %s", e)
-        return []
+    probs = polymarket_mod.fetch_markets(poly_markets)
+    return [{"slug": slug, "probability": prob} for slug, prob in probs.items()]
 
 
 def get_watchlist() -> List[Dict[str, Any]]:
@@ -189,12 +226,12 @@ def get_watchlist() -> List[Dict[str, Any]]:
         for node in cfg.get("nodes", []):
             for feed in node.get("feeds", []):
                 if feed.get("source") == "polymarket":
-                    slug = feed.get("slug", "")
-                    if slug and slug not in seen:
-                        seen.add(slug)
+                    market_id = _polymarket_feed_id(feed)
+                    if market_id and market_id not in seen:
+                        seen.add(market_id)
                         items.append({
-                            "symbol": slug,
-                            "label": feed.get("label", slug),
+                            "symbol": market_id,
+                            "label": feed.get("label", market_id),
                             "last_price": None,
                             "change_pct": None,
                             "source": "polymarket",
