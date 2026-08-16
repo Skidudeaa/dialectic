@@ -159,6 +159,10 @@
     display: flex;
     gap: 0.5rem;
     align-items: flex-end;
+    /* The @-picker anchors to this row, so it must be the positioning
+       context — without it the list escapes to the nearest ancestor and
+       lands somewhere unrelated to the caret. */
+    position: relative;
 }
 .msg-textarea {
     flex: 1;
@@ -260,4 +264,95 @@
 
 @media (max-width: 768px) {
     .input-area { padding: 0.5rem 0.75rem 0.75rem; }
+}
+
+/* ── The @-picker ──────────────────────────────────────────────────────
+ * Floats above the composer rather than below it: the composer already sits
+ * at the bottom of the viewport, so a list underneath would open off-screen
+ * on a phone. */
+.mention-picker {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    z-index: 20;
+    min-width: 200px;
+    max-height: 240px;
+    overflow-y: auto;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.mention-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 8px;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+/* Selection is a background AND a left rule — keyboard position must not be
+ * carried by color alone. */
+.mention-option.active,
+.mention-option:hover {
+    background: var(--amber-08);
+    box-shadow: inset 2px 0 0 var(--color-amber);
+}
+
+.mention-option-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    flex: none;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-stencil);
+    font-size: 0.7rem;
+}
+
+.mention-option-mark.mention-participant {
+    color: var(--color-amber);
+    border-color: var(--amber-30);
+}
+
+/* Tag toggles. Sit above the type selector and read as filing, not as a
+ * speech act — the type row (TEXT/CLAIM/QUESTION) says what a message IS,
+ * this says where it should be findable later. */
+.msg-tag-selector {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.tag-btn {
+    padding: 2px 8px;
+    background: none;
+    border: 1px solid var(--color-bean);
+    border-radius: 999px;
+    color: var(--color-faint);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+}
+.tag-btn:hover { color: var(--color-secondary); }
+/* Active is a color AND a filled pill — never color alone. */
+.tag-btn.active {
+    color: var(--color-amber);
+    border-color: var(--color-amber);
+    background: var(--amber-08);
+    font-weight: 600;
 }

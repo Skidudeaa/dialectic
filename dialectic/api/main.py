@@ -47,7 +47,11 @@ from api.workspace import router as workspace_router, set_workspace_db_pool
 from api.field import router as field_router, set_field_db_pool
 from api.atlas import router as atlas_router, set_atlas_db_pool
 from api.rate_limit import check_rate_limit
-from proposal_intake import ProposalMetadataError, validate_human_proposal_metadata
+from proposal_intake import (
+    MESSAGE_TAGS,
+    ProposalMetadataError,
+    validate_human_proposal_metadata,
+)
 from api.capabilities import (
     router as capabilities_router,
     set_capabilities_db_pool,
@@ -578,6 +582,17 @@ class UpdateRoomSettingsRequest(BaseModel):
     auto_interjection_enabled: Optional[bool] = None
 
 
+class RoomMemberResponse(BaseModel):
+    """A room's membership, deliberately without presence.
+
+    Presence is a separate, faster-moving fact (`user_presence`) that the
+    client already receives over the socket. Folding them together here would
+    make a roster that goes stale the moment someone closes a tab.
+    """
+    user_id: UUID
+    display_name: str
+
+
 class RoomSettingsResponse(BaseModel):
     """Current room LLM heuristic settings."""
     interjection_turn_threshold: int
@@ -863,6 +878,39 @@ async def get_room_settings(
         last_trading_push_at=room.last_trading_push_at,
         trading_push_count=room.trading_push_count,
     )
+
+
+@app.get("/rooms/{room_id}/members", response_model=List[RoomMemberResponse])
+async def get_room_members(
+    room_id: UUID,
+    token: str = Depends(extract_room_token),
+    db=Depends(get_db),
+):
+    """Who belongs to this room — MEMBERSHIP, which is not presence.
+
+    WHY this exists: every roster the client had was built from
+    `onlineUsers` plus yourself, so a member who has never spoken and is not
+    currently connected did not appear anywhere. The @-mention picker cannot
+    offer someone it has never heard of, and the moment that matters most is
+    a NEW member — exactly the person with no messages and no presence row.
+    (2026-08-16: the room gained a third human who had posted nothing.)
+
+    Room-token authorized like every other room-scoped read here; the
+    membership list is not more sensitive than the transcript it belongs to.
+    """
+    await verify_room_token(room_id, token, db)
+    rows = await db.fetch(
+        """SELECT u.id, u.display_name
+           FROM users u
+           JOIN room_memberships rm ON rm.user_id = u.id
+           WHERE rm.room_id = $1
+           ORDER BY rm.joined_at NULLS LAST, u.display_name""",
+        room_id,
+    )
+    return [
+        RoomMemberResponse(user_id=r["id"], display_name=r["display_name"])
+        for r in rows
+    ]
 
 
 @app.patch("/rooms/{room_id}/settings", response_model=RoomSettingsResponse)
@@ -1843,7 +1891,11 @@ async def update_llm_identity(
 
 @app.get("/messages/search", response_model=List[SearchResultResponse])
 async def search_messages(
-    q: str = Query(..., min_length=1, description="Search query"),
+    q: Optional[str] = Query(None, min_length=1, description="Search query"),
+    tag: Optional[str] = Query(
+        None,
+        description="Only messages carrying this tag (meta / bug / idea).",
+    ),
     room_id: Optional[UUID] = Query(None, description="Filter by room"),
     thread_id: Optional[UUID] = Query(None, description="Filter by thread"),
     date_from: Optional[datetime] = Query(None, description="Filter from date"),
@@ -1862,29 +1914,65 @@ async def search_messages(
     TRADEOFF: Less flexible than Elasticsearch, but zero infrastructure overhead.
     """
     user_id = current_user.user_id
+
+    # WHY `q` became optional: a tag is a filing decision, not a word, and
+    # "show me everything filed under #bug" has no text to search for. One of
+    # the two must be present — an unfiltered dump of every message the caller
+    # can see is not a search result, it is a data export.
+    if tag is not None:
+        if tag not in MESSAGE_TAGS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"unknown tag '{tag}' — expected one of {', '.join(MESSAGE_TAGS)}",
+            )
+    if not q and tag is None:
+        raise HTTPException(status_code=422, detail="q or tag is required")
+
     # Build query with room membership check
-    query = """
+    if q:
+        ranked = """
+            ts_headline('english', m.content, plainto_tsquery('english', $1),
+                'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=20'
+            ) as snippet,
+            ts_rank(m.search_vector, plainto_tsquery('english', $1)) as rank"""
+        matches = "AND m.search_vector @@ plainto_tsquery('english', $1)"
+        params = [q, user_id]
+        param_idx = 3
+    else:
+        # No query to rank against: the newest matching message is the most
+        # useful one, and left(...) is a plain excerpt rather than a headline
+        # with nothing to highlight.
+        ranked = """
+            left(m.content, 240) as snippet,
+            0::float4 as rank"""
+        matches = ""
+        params = [user_id]
+        param_idx = 2
+
+    query = f"""
         SELECT
             m.id,
             m.thread_id,
             m.content,
-            ts_headline('english', m.content, plainto_tsquery('english', $1),
-                'StartSel=<mark>, StopSel=</mark>, MaxWords=50, MinWords=20'
-            ) as snippet,
+            {ranked},
             COALESCE(u.display_name, m.speaker_type) as sender_name,
             m.speaker_type,
-            m.created_at,
-            ts_rank(m.search_vector, plainto_tsquery('english', $1)) as rank
+            m.created_at
         FROM messages m
         JOIN threads t ON m.thread_id = t.id
         JOIN room_memberships rm ON t.room_id = rm.room_id
         LEFT JOIN users u ON m.user_id = u.id
-        WHERE rm.user_id = $2
-          AND m.search_vector @@ plainto_tsquery('english', $1)
+        WHERE rm.user_id = ${'2' if q else '1'}
+          {matches}
           AND NOT m.is_deleted
     """
-    params = [q, user_id]
-    param_idx = 3
+
+    if tag is not None:
+        # `?` is the JSONB key-exists operator; asyncpg takes it literally
+        # here because the driver uses $n placeholders, not ?.
+        query += f" AND m.metadata->'tags' ? ${param_idx}"
+        params.append(tag)
+        param_idx += 1
 
     # WHY: without this the search spans every room the caller belongs to, so
     # searching inside one conversation silently returns hits from another. The

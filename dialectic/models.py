@@ -125,8 +125,8 @@ class Room(BaseModel):
     primary_model: str = "claude-sonnet-4-20250514"
     provoker_model: str = "claude-haiku-4-20250514"
     auto_interjection_enabled: bool = True
-    interjection_turn_threshold: int = 4
-    semantic_novelty_threshold: float = 0.7
+    interjection_turn_threshold: int = 8
+    semantic_novelty_threshold: float = 0.85
     trading_config: Optional[dict] = None
     last_trading_push_at: Optional[datetime] = None
     trading_push_count: int = 0

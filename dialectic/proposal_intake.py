@@ -54,6 +54,59 @@ ALLOWED_HUMAN_PROPOSAL_SLOTS = {
     if slot != "resolution_proposal"
 }
 
+# ── Tags ──────────────────────────────────────────────────────────────
+#
+# A tag is NOT a proposal: nothing accepts it, nobody relays it, and it
+# stamps no state. It rides the same metadata document through the same
+# door, which is the only reason it is validated here — one door, one gate,
+# rather than a second sanitizer nobody remembers to call.
+#
+# WHY a fixed tuple and not free text: the ask was "a tag or marker that
+# tracks meta or dialectic architecture/bugs/hopes and dreams so we don't
+# lose track of them". A free-text tag field becomes a junk drawer inside a
+# week — `bug`, `Bug`, `bugs`, `BUG?` — and the thing you cannot then do is
+# the one thing it was for, which is finding them all again. Fixed
+# vocabulary is also house style: FIELD_RELATIONS says outright that the
+# tuple IS the guard.
+#
+# WHY NOT a Field relation: FIELD_RELATIONS is what stops
+# llm/field_inference.py minting relations. Putting `meta` there would hand
+# the inference engine the power to invent product-meta marks about the
+# room's own conversation. Product-meta is a note about the tool, not a
+# claim about the subject, and does not belong on the deliberation axis.
+MESSAGE_TAGS = ("meta", "bug", "idea")
+TAGS_SLOT = "tags"
+_MAX_TAGS = len(MESSAGE_TAGS)
+
+
+def validate_tags(value: Any) -> list[str]:
+    """A message's tags: a set drawn from MESSAGE_TAGS, order preserved.
+
+    Deduplicated rather than rejected — a client that sends ["bug","bug"]
+    means one bug, and refusing the whole message over it is a worse answer
+    than storing what was meant.
+    """
+    if not isinstance(value, list):
+        raise ProposalMetadataError(f"{TAGS_SLOT} must be a list")
+    if not value:
+        raise ProposalMetadataError(f"{TAGS_SLOT} must not be empty")
+    if len(value) > _MAX_TAGS:
+        raise ProposalMetadataError(
+            f"{TAGS_SLOT} carries at most {_MAX_TAGS} tags"
+        )
+    out: list[str] = []
+    for tag in value:
+        if not isinstance(tag, str):
+            raise ProposalMetadataError(f"each {TAGS_SLOT} entry must be a string")
+        cleaned = tag.strip().lower()
+        if cleaned not in MESSAGE_TAGS:
+            raise ProposalMetadataError(
+                f"unknown tag '{tag}' — expected one of {', '.join(MESSAGE_TAGS)}"
+            )
+        if cleaned not in out:
+            out.append(cleaned)
+    return out
+
 
 class ProposalMetadataError(ValueError):
     """A client-supplied proposal metadata block failed validation.
@@ -185,6 +238,10 @@ def validate_human_proposal_metadata(metadata: Any) -> dict:
 
     out: dict = {}
     for slot, value in metadata.items():
+        if slot == TAGS_SLOT:
+            out[slot] = validate_tags(value)
+            continue
+
         if slot == PROPOSAL_LIST_SLOT:
             if not isinstance(value, list) or not value:
                 raise ProposalMetadataError(

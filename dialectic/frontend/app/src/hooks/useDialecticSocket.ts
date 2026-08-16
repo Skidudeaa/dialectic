@@ -604,6 +604,7 @@ export function useDialecticSocket(options?: {
       messageType?: string,
       referencesMessageId?: string | null,
       attachmentIds?: string[],
+      tags?: string[],
     ): boolean => (
       send('send_message', {
         content,
@@ -615,6 +616,10 @@ export function useDialecticSocket(options?: {
         // Omitted when empty for the same reason — and because the server binds
         // them in the message transaction, they never travel separately.
         ...(attachmentIds && attachmentIds.length > 0 ? { attachment_ids: attachmentIds } : {}),
+        // Omitted when empty, again for the same reason: the server validates
+        // tags against a fixed vocabulary whenever the key is present, and an
+        // empty list is an error there rather than "no tags".
+        ...(tags && tags.length > 0 ? { tags } : {}),
       })
     ),
     [send],

@@ -11,6 +11,10 @@ interface SearchOverlayProps {
   onJump: (result: SearchResult) => void
 }
 
+/** Mirrors MESSAGE_TAGS in dialectic/proposal_intake.py — the server
+ *  is the authority and refuses anything outside it. */
+const SEARCHABLE_TAGS = ['meta', 'bug', 'idea'] as const
+
 const DEBOUNCE_MS = 220
 
 // Delegates for the same reason MessageList does: this was the second private
@@ -34,6 +38,7 @@ export function SearchOverlay({ roomId, onClose, onJump }: SearchOverlayProps) {
   const [status, setStatus] = useState<'idle' | 'searching' | 'done' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
+  const [tag, setTag] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   // Guards against a slow early request overwriting a later, more specific one.
   const requestSeqRef = useRef(0)
@@ -47,12 +52,14 @@ export function SearchOverlay({ roomId, onClose, onJump }: SearchOverlayProps) {
   useEffect(() => {
     // An empty box has nothing to reset — the render below simply ignores any
     // previous results rather than clearing them from in here.
-    if (!trimmed) return
+    // A tag on its own IS a search — "show me everything filed under #bug" —
+    // so an empty box no longer means there is nothing to do.
+    if (!trimmed && !tag) return
 
     const seq = ++requestSeqRef.current
     const timer = window.setTimeout(() => {
       setStatus('searching')
-      api.searchMessages(roomId, trimmed)
+      api.searchMessages(roomId, trimmed, 40, tag)
         .then((data) => {
           if (seq !== requestSeqRef.current) return
           setResults(data as SearchResult[])
@@ -68,11 +75,17 @@ export function SearchOverlay({ roomId, onClose, onJump }: SearchOverlayProps) {
     }, DEBOUNCE_MS)
 
     return () => window.clearTimeout(timer)
-  }, [trimmed, roomId])
+  }, [trimmed, roomId, tag])
 
-  // Everything below keys off `trimmed`, so an emptied box falls back to the
-  // idle state without any of it needing to be unwound.
-  const showResults = Boolean(trimmed) && status === 'done'
+  // Everything below keys off the QUERY — text or tag — so clearing both
+  // falls back to the idle state without any of it needing to be unwound.
+  //
+  // `tag` belongs here and not only in the effect: with the gate on `trimmed`
+  // alone, a tag-only search ran, returned its hits, and rendered nothing.
+  // Browser acceptance caught it — 10 of 11 checks green and the one that
+  // mattered, "can you find it again", silently empty.
+  const hasQuery = Boolean(trimmed) || Boolean(tag)
+  const showResults = hasQuery && status === 'done'
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
     if (event.key === 'Escape') {
@@ -118,14 +131,34 @@ export function SearchOverlay({ roomId, onClose, onJump }: SearchOverlayProps) {
           <button className="search-close" onClick={onClose} aria-label="Close search">&times;</button>
         </div>
 
+        {/* Tags are how product-meta stops evaporating; this is the half that
+            finds it again. A tag alone is a valid search. */}
+        <div className="search-tag-row">
+          {SEARCHABLE_TAGS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={tag === t}
+              className={`search-tag-btn ${tag === t ? 'active' : ''}`}
+              onClick={() => setTag((current) => (current === t ? null : t))}
+            >
+              #{t}
+            </button>
+          ))}
+        </div>
+
         <div className="search-results">
-          {!trimmed && (
+          {!trimmed && !tag && (
             <div className="search-note">Type to search everything said in this room.</div>
           )}
-          {trimmed && status === 'error' && <div className="search-note search-note-error">{error}</div>}
-          {trimmed && status === 'searching' && <div className="search-note">Searching&hellip;</div>}
+          {hasQuery && status === 'error' && <div className="search-note search-note-error">{error}</div>}
+          {hasQuery && status === 'searching' && <div className="search-note">Searching&hellip;</div>}
           {showResults && results.length === 0 && (
-            <div className="search-note">No messages match &ldquo;{trimmed}&rdquo;.</div>
+            <div className="search-note">
+              {trimmed
+                ? <>No messages match &ldquo;{trimmed}&rdquo;{tag ? <> filed under #{tag}</> : null}.</>
+                : <>Nothing filed under #{tag} yet.</>}
+            </div>
           )}
 
           {showResults && results.map((result, index) => (

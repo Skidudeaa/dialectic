@@ -54,6 +54,10 @@ export interface ToolCallTrace {
  * the field, on history reloads too.
  */
 export interface MessageMetadata {
+  /** Human-applied tags from a fixed vocabulary (MESSAGE_TAGS on the server).
+   *  NOT a proposal: nothing accepts it, nothing relays it, it stamps no
+   *  state. It exists so product-meta, bugs and ideas can be found again. */
+  tags?: string[];
   /** Set on research-mode briefs ('deep_dive') — the message came from the
    *  long tool loop, not an ordinary turn. */
   source?: string;

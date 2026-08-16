@@ -28,8 +28,10 @@ GUARDRAILS:
   - WIRE_DAILY_CAP interjections per room per UTC day, counted on the
     llm_decisions ledger (reason='wire_interjection') — force_response
     already writes that row, so the cap needs no new plumbing
-  - WIRE_PER_ROOM_CAP articles per room per run — feed order is the
-    freshness ranking, the cap takes the top
+  - WIRE_PER_ROOM_CAP readable articles per room per run, found within the
+    first WIRE_FEED_SCAN_CAP unseen headlines in feed freshness order
+  - fetch failures and thin bodies cool that exact URL for six hours so a
+    blocked lead story cannot consume every scheduled run
   - a failed relevance parse scores below threshold (silence, never a bad
     interruption); per-room/per-article failures (tradingDesk down, defuddle
     down, a dead interjection) skip that room/article and are recorded in
@@ -42,6 +44,7 @@ a long job holding the ledger conn stalls every other tick).
 
 import logging
 import re
+import time
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
@@ -63,6 +66,8 @@ logger = logging.getLogger(__name__)
 INTERJECTION_REASON = "wire_interjection"
 WIRE_DAILY_CAP = 4
 WIRE_PER_ROOM_CAP = 2
+WIRE_FEED_SCAN_CAP = 6
+WIRE_FETCH_COOLDOWN_SECONDS = 6 * 60 * 60
 WIRE_THRESHOLD = 0.7
 # The thesis snapshot goes into the prompt truncated: a trading_config JSON
 # can carry whole orderbooks; the model needs the posture, not the ticks.
@@ -70,6 +75,33 @@ THESIS_CONTEXT_CAP = 4000
 ARTICLE_CONTEXT_CAP = 6000  # mirrors news_night / tools.ARTICLE_CONTENT_CAP
 SUMMARY_CAP = 500
 BACKGROUND_MODEL = "claude-sonnet-5"
+
+_fetch_cooldowns: dict[str, float] = {}
+
+
+def _in_fetch_cooldown(url: str) -> bool:
+    """Whether an exact URL still has time left on its failed-fetch cooldown."""
+    expires_at = _fetch_cooldowns.get(url)
+    if expires_at is None:
+        return False
+    if expires_at <= time.monotonic():
+        del _fetch_cooldowns[url]
+        return False
+    return True
+
+
+def _cool_fetch(url: str) -> None:
+    """Suppress an exact failed URL for the bounded retry interval."""
+    _fetch_cooldowns[url] = time.monotonic() + WIRE_FETCH_COOLDOWN_SECONDS
+
+
+def _prune_fetch_cooldowns() -> None:
+    """Drop expired URLs even when rotating feeds never present them again."""
+    now = time.monotonic()
+    expired = [url for url, deadline in _fetch_cooldowns.items()
+               if deadline <= now]
+    for url in expired:
+        del _fetch_cooldowns[url]
 
 
 async def _linked_rooms(pool):
@@ -236,6 +268,7 @@ async def _interject(ctx: SchedulerContext, conn, room_id, article, verdict):
 
 async def wire_watch(ctx: SchedulerContext) -> dict:
     """One pass over every linked room's news feed."""
+    _prune_fetch_cooldowns()
     if in_quiet_hours():
         return {"skipped": "quiet_hours"}
 
@@ -282,13 +315,21 @@ async def wire_watch(ctx: SchedulerContext) -> dict:
 
                 thesis_context = str(room["trading_config"] or "")[:THESIS_CONTEXT_CAP]
                 filed, interjected, skipped = [], [], []
-                # Feed order is the freshness ranking; the cap takes the top.
-                for headline in fresh[:WIRE_PER_ROOM_CAP]:
+                readable_count = 0
+                # Feed order is the freshness ranking. Fetch failures do not
+                # consume either of the two readable-article scoring slots.
+                for headline in fresh[:WIRE_FEED_SCAN_CAP]:
+                    if readable_count >= WIRE_PER_ROOM_CAP:
+                        break
                     url = headline["url"]
+                    if _in_fetch_cooldown(url):
+                        skipped.append({"url": url, "reason": "fetch_cooldown"})
+                        continue
                     try:
                         article = await dc.extract_article(url)
                     except dc.DefuddleError as e:
                         logger.info("defuddle failed for %s: %s", url, e)
+                        _cool_fetch(url)
                         skipped.append({"url": url, "reason": "extract_failed"})
                         continue
 
@@ -296,9 +337,11 @@ async def wire_watch(ctx: SchedulerContext) -> dict:
                     # must not cost a background-model call, and must never reach the room
                     # as an interjection.
                     if is_thin(article):
+                        _cool_fetch(url)
                         skipped.append({"url": url, "reason": "thin_content"})
                         continue
 
+                    readable_count += 1
                     verdict = await _score(article, thesis_context)
                     if verdict is None or verdict["score"] < WIRE_THRESHOLD:
                         skipped.append({"url": url, "reason": "below_threshold"})

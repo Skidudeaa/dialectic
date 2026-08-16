@@ -4,6 +4,7 @@ import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import { api } from '../../lib/api'
 import { ACCEPTED_MIME_ATTRIBUTE, formatBytes, rejectionReason } from '../../lib/attachments'
 import { ProposeMenu } from './ProposeMenu'
+import { applyMention, matchCandidates, mentionQueryAt, type MentionCandidate } from '../../lib/mentionPicker'
 import './MessageInput.css'
 
 type MessageType = Message['message_type']
@@ -31,7 +32,7 @@ let uploadKeySeed = 0
 const nextUploadKey = () => `upload-${++uploadKeySeed}`
 
 interface MessageInputProps {
-  onSend: (content: string, messageType: MessageType, attachments: Attachment[]) => boolean
+  onSend: (content: string, messageType: MessageType, attachments: Attachment[], tags: string[]) => boolean
   roomId: string
   /** Seeds the composer on first mount only (device-local restoration,
    *  design v2 §15.2/§15.5) — a plain `useState` initial value, so a later
@@ -51,9 +52,25 @@ interface MessageInputProps {
   replyTo?: { author: string; content: string } | null
   onCancelReply?: () => void
   placeholder?: string
+  /** Room members' display names, for the @-picker. Membership, not
+   *  presence: a member who has never spoken must still be reachable. */
+  memberNames?: string[]
   /** Home hides claim/question/definition — those are scheme-room speech acts. */
   quiet?: boolean
 }
+
+/**
+ * The tag vocabulary, mirroring MESSAGE_TAGS in dialectic/proposal_intake.py.
+ * Fixed rather than free text so the things tagged can be found again — the
+ * ask was "so we don't lose track of them", and a junk drawer of `bug`,
+ * `Bug`, `bugs` is exactly losing track of them. The server is the authority
+ * and refuses anything outside it; this list only decides what to OFFER.
+ */
+const MESSAGE_TAG_OPTIONS: { value: string; label: string; hint: string }[] = [
+  { value: 'meta', label: 'Meta', hint: 'About Dialectic itself — architecture, direction' },
+  { value: 'bug', label: 'Bug', hint: 'Something is broken' },
+  { value: 'idea', label: 'Idea', hint: 'A hope, a dream, a thing to try' },
+]
 
 const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
   { value: 'text', label: 'Text' },
@@ -62,13 +79,16 @@ const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
   { value: 'definition', label: 'Definition' },
 ]
 
-export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTypingStop, onTypingContent, onResearch, researchActive = false, disabled, replyTo, onCancelReply, placeholder = `Think out loud... paste a link and ${PARTICIPANT_NAME} reads it`, quiet = false }: MessageInputProps) {
+export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTypingStop, onTypingContent, onResearch, researchActive = false, disabled, replyTo, onCancelReply, placeholder = `Think out loud... paste a link and ${PARTICIPANT_NAME} reads it`, memberNames = [], quiet = false }: MessageInputProps) {
   const [content, setContent] = useState(initialValue ?? '')
   const [messageType, setMessageType] = useState<MessageType>('text')
   const [sendError, setSendError] = useState(false)
   const [uploads, setUploads] = useState<ComposerUpload[]>([])
   const [notice, setNotice] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [tags, setTags] = useState<string[]>([])
+  const [mentionOpen, setMentionOpen] = useState(false)
+  const [mentionIndex, setMentionIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const typingRef = useRef(false)
@@ -163,7 +183,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
     // accepts an attachment-only message and binds them in the send.
     if (!trimmed && ready.length === 0) return
 
-    const sent = onSend(trimmed, messageType, ready.map((entry) => entry.record))
+    const sent = onSend(trimmed, messageType, ready.map((entry) => entry.record), tags)
     // WHY: onSend returns false when the socket is not open. This used to be a
     // silent no-op — the text stayed in the box with no indication it had not
     // been delivered, which reads as "the app ate my message."
@@ -174,6 +194,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
     setSendError(false)
     setNotice(null)
     setContent('')
+    setTags([])
     setUploads([])
     setMessageType('text')
     if (textareaRef.current) {
@@ -181,7 +202,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
     }
     onTypingStop?.()
     typingRef.current = false
-  }, [content, messageType, onSend, onTypingStop, uploading, failed, ready])
+  }, [content, messageType, onSend, onTypingStop, uploading, failed, ready, tags])
 
   // Research mode: the composer's text is the question, and the dive runs
   // long (the server caps it at 15 iterations / 300s), so the same send
@@ -212,7 +233,62 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
 
   // Enter sends, Shift+Enter inserts a newline — the convention the hint text
   // has always claimed. Cmd/Ctrl+Enter stays supported for muscle memory.
+  // The @-picker, derived from the caret rather than held in state, so it
+  // cannot disagree with what is actually typed.
+  const mentionQuery = mentionOpen
+    ? mentionQueryAt(content, textareaRef.current?.selectionStart ?? content.length)
+    : null
+  const mentionCandidates = mentionQuery
+    ? matchCandidates(mentionQuery.partial, memberNames)
+    : []
+  const mentionActive = mentionCandidates.length > 0
+  const activeIndex = Math.min(mentionIndex, Math.max(0, mentionCandidates.length - 1))
+
+  const chooseMention = (candidate: MentionCandidate) => {
+    const query = mentionQueryAt(
+      content,
+      textareaRef.current?.selectionStart ?? content.length,
+    )
+    if (!query) return
+    const next = applyMention(content, query, candidate)
+    setMentionIndex(0)
+    handleInput(next.text, next.caret)
+    // Restore the caret after React has written the new value, or the browser
+    // parks it at the end and the rest of the sentence types in the wrong place.
+    requestAnimationFrame(() => {
+      const el = textareaRef.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(next.caret, next.caret)
+    })
+  }
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // While the picker is open it owns navigation and acceptance — Enter must
+    // choose a name, never send a half-typed handle as a message.
+    if (mentionActive) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIndex((i) => (i + 1) % mentionCandidates.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIndex((i) => (i - 1 + mentionCandidates.length) % mentionCandidates.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        if (e.nativeEvent.isComposing) return
+        e.preventDefault()
+        chooseMention(mentionCandidates[activeIndex])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setMentionOpen(false)
+        return
+      }
+    }
     if (e.key !== 'Enter') return
     if (e.shiftKey) return
     // A composing IME uses Enter to accept a candidate; sending there would cut
@@ -222,9 +298,23 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
     handleSend()
   }
 
-  const handleInput = (value: string) => {
+  const handleInput = (value: string, caretOverride?: number) => {
     setContent(value)
     onTypingContent?.(value)
+    // Open the picker whenever the caret sits inside an @-token, and let it
+    // close itself the moment it does not — no separate dismissal to keep in
+    // step with what is typed.
+    //
+    // caretOverride exists because the textarea's selectionStart is STALE
+    // when we write the value ourselves: choosing "@Fixture " from the picker
+    // left the DOM caret at its old index, `@` was still to its left, and the
+    // picker re-opened on the handle the user had just finished. Browser
+    // acceptance caught it — the list stayed up and would have eaten the
+    // next Enter.
+    const caret = caretOverride ?? textareaRef.current?.selectionStart ?? value.length
+    const query = mentionQueryAt(value, caret)
+    setMentionOpen(Boolean(query))
+    if (!query) setMentionIndex(0)
     // Auto-resize
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
@@ -339,6 +429,26 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
           </div>
         )}
         {!quiet && (
+          <div className="msg-tag-selector">
+            {MESSAGE_TAG_OPTIONS.map(t => (
+              <button
+                key={t.value}
+                type="button"
+                title={t.hint}
+                aria-pressed={tags.includes(t.value)}
+                className={`tag-btn ${tags.includes(t.value) ? 'active' : ''}`}
+                onClick={() => setTags((current) =>
+                  current.includes(t.value)
+                    ? current.filter((x) => x !== t.value)
+                    : [...current, t.value],
+                )}
+              >
+                #{t.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {!quiet && (
           <div className="msg-type-selector">
             {MESSAGE_TYPES.map(t => (
               <button
@@ -375,6 +485,31 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
             </svg>
           </button>
+          {mentionActive && (
+            <ul className="mention-picker" role="listbox" aria-label="Mention someone">
+              {mentionCandidates.map((candidate, i) => (
+                <li key={`${candidate.kind}:${candidate.handle}`}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={i === activeIndex}
+                    className={`mention-option${i === activeIndex ? ' active' : ''}`}
+                    // onMouseDown, not onClick: click fires after blur, and the
+                    // blur would have already closed the list out from under it.
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      chooseMention(candidate)
+                    }}
+                  >
+                    <span className={`mention-option-mark mention-${candidate.kind}`}>
+                      {candidate.kind === 'participant' ? ')' : candidate.label.charAt(0).toUpperCase()}
+                    </span>
+                    {candidate.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
           <textarea
             ref={textareaRef}
             className="msg-textarea"

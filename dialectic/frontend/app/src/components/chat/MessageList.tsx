@@ -3,6 +3,7 @@ import { PARTICIPANT_NAME, participantDisplayName } from '../../lib/productIdent
 import type { Attachment, Message, Reaction , ThesisSeed } from '../../types'
 import { useDocumentVisibility } from '../../hooks/useDocumentVisibility'
 import { MessageBubble } from './MessageBubble'
+import type { MentionContext } from '../../lib/mentions'
 import './MessageList.css'
 
 interface MessageListProps {
@@ -124,6 +125,22 @@ export function MessageList({
   emptyKind = 'dialogue',
   onOpenBench,
 }: MessageListProps) {
+  /**
+   * The room's humans, for resolving @mentions. Names come from the roster
+   * AND from the messages themselves, because a member who has left the
+   * roster can still be named in the transcript that quotes them.
+   */
+  const mentionContext = useMemo<MentionContext>(() => {
+    const names = new Set(Object.values(userNames))
+    for (const msg of messages) {
+      if (msg.speaker_type === 'human' && msg.user_name) names.add(msg.user_name)
+    }
+    return {
+      names: [...names],
+      selfName: (currentUserId && userNames[currentUserId]) || null,
+    }
+  }, [userNames, messages, currentUserId])
+
   const wrapperRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -298,6 +315,7 @@ export function MessageList({
                     message={msg}
                     isSelf={msg.user_id === currentUserId}
                     authorName={getAuthorName(msg, userNames)}
+                    mentionContext={mentionContext}
                     onFork={onFork}
                     onReply={onReply}
                     isStreaming={msg.id === streamingMessageId}

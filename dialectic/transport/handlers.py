@@ -10,6 +10,7 @@ import logging
 
 import asyncpg
 
+from proposal_intake import ProposalMetadataError, validate_tags
 from models import (
     Room, User, Thread, Message, Memory, Event, EventType,
     SpeakerType, MessageType, MessageCreatedPayload,
@@ -280,6 +281,24 @@ class MessageHandler:
         except (TypeError, ValueError):
             await self._send_error(conn, "Invalid message_type")
             return
+
+        # Tags ride the ORDINARY send, not the REST proposal door, because a
+        # tagged message is still a message: it must broadcast to the other
+        # humans and reach the participant like any other turn. The REST door
+        # neither broadcasts nor triggers the LLM — routing a tag through it
+        # would make product notes silently invisible to everyone else.
+        #
+        # Validated by the same gate the REST door uses (proposal_intake),
+        # because client metadata is a document, not a trust boundary already
+        # crossed — one vocabulary, one validator, two doors.
+        message_tags: list[str] = []
+        if payload.get("tags") is not None:
+            try:
+                message_tags = validate_tags(payload.get("tags"))
+            except ProposalMetadataError as exc:
+                await self._send_error(conn, f"Invalid tags: {exc}")
+                return
+
         references_message_id = payload.get("references_message_id")
 
         requested_thread_id = payload.get("thread_id") or conn.thread_id
@@ -349,16 +368,17 @@ class MessageHandler:
                     row = await self.db.fetchrow(
                         """INSERT INTO messages
                            (id, thread_id, sequence, created_at, speaker_type, user_id,
-                            message_type, content, references_message_id)
+                            message_type, content, references_message_id, metadata)
                            VALUES (
                                $1, $2,
                                (SELECT COALESCE(MAX(sequence), 0) + 1 FROM messages WHERE thread_id = $2),
-                               $3, $4, $5, $6, $7, $8
+                               $3, $4, $5, $6, $7, $8, $9
                            )
                            RETURNING sequence""",
                         message_id, thread_id, now,
                         SpeakerType.HUMAN.value, conn.user_id, message_type.value,
-                        content, refs_msg_id
+                        content, refs_msg_id,
+                        {"tags": message_tags} if message_tags else None,
                     )
                     bound_attachments = []
                     for attachment_id in attachment_ids:
@@ -389,6 +409,7 @@ class MessageHandler:
             message_type=message_type,
             content=content,
             references_message_id=refs_msg_id,
+            metadata={"tags": message_tags} if message_tags else None,
         )
 
         event = Event(

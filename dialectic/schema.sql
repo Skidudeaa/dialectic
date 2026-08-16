@@ -34,8 +34,15 @@ CREATE TABLE rooms (
     primary_model TEXT NOT NULL DEFAULT 'claude-sonnet-5',
     provoker_model TEXT NOT NULL DEFAULT 'claude-sonnet-5',
     auto_interjection_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    interjection_turn_threshold INT NOT NULL DEFAULT 4,
-    semantic_novelty_threshold FLOAT NOT NULL DEFAULT 0.7,
+    -- Raised 2026-08-15 from 4 / 0.7. Both are the measured values, not
+    -- taste: at 4 the turn rung fired 10 times in a week on messages like
+    -- "Yes" and "N" (a one-word acknowledgement is not a prompt for
+    -- commentary), and 0.7 cut one continuous novelty distribution in half.
+    -- 0.85 had already been in force via INTERJECTION_NOVELTY_THRESHOLD
+    -- while every row still said 0.7 -- these columns reached nothing until
+    -- the orchestrator started reading them.
+    interjection_turn_threshold INT NOT NULL DEFAULT 8,
+    semantic_novelty_threshold FLOAT NOT NULL DEFAULT 0.85,
     last_trading_push_at TIMESTAMPTZ,
     trading_push_count INTEGER NOT NULL DEFAULT 0
 );
