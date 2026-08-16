@@ -217,6 +217,38 @@
     opacity: 1;
     pointer-events: auto;
 }
+
+/* ...except that the rule above still WAS hover-only on the platform this
+   product is mainly used from. A touch device has no `:hover`, and
+   `:focus-within` needs a descendant to take focus — which a tap on a
+   message body never does, because nothing here is focusable by tapping.
+   So on a phone Reply / React / Fork / Edit / Delete were not merely hidden,
+   they were `pointer-events: none` — inert under the thumb. The comment
+   above reasoned carefully about the keyboard and never about the finger.
+
+   The evidence it went unnoticed is in the data: across 466 messages the
+   live DB holds 4 reactions, 2 replies, 1 fork and 0 edits. That read as
+   "a feature nobody wants"; it was a feature nobody could press.
+
+   Coarse pointer = show them, quietly. Kept at reduced opacity so the
+   transcript still reads as prose rather than a wall of toolbars, and
+   `:focus-within` still brings them to full strength. Deliberately keyed on
+   `hover: none` rather than a width breakpoint — the axis is the input
+   device, not the viewport, so a tablet and a touchscreen laptop are
+   covered and a narrow desktop window is not. */
+@media (hover: none) {
+    .msg-actions {
+        opacity: 0.55;
+        pointer-events: auto;
+    }
+    .msg:focus-within .msg-actions { opacity: 1; }
+    /* Touch targets: the 9px/3px buttons are fine for a mouse and well under
+       the 44px minimum for a thumb. */
+    .msg-action-btn {
+        padding: 8px 10px;
+        font-size: 10px;
+    }
+}
 .msg-action-btn {
     padding: 3px 7px;
     background: transparent;

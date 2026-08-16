@@ -34,13 +34,24 @@ _db_pool = None
 # warm hits are milliseconds. The margin covers the cold path.
 QUOTES_TIMEOUT_S = 25.0
 
-# Must EXCEED td's own GDELT timeout (tools/data_fetch/gdelt.py
-# DEFAULT_TIMEOUT = 20): when GDELT stalls, td holds the request the full
-# 20s and then answers a graceful {"articles": [], "note": ...} — a proxy
-# timeout at exactly 20s loses that race and turns the graceful empty into
-# a 502 (observed live 2026-08-14, three renders in a row). td caches 15
-# min, so the margin is paid rarely.
-NEWS_TIMEOUT_S = 25.0
+# Must EXCEED td's own GDELT timeout: when GDELT stalls, td holds the request
+# and then answers a graceful {"articles": [], "note": ...} — a proxy timeout
+# that loses that race turns the graceful empty into a 502 (observed live
+# 2026-08-14, three renders in a row). td caches 15 min, so the margin is paid
+# rarely.
+#
+# Amended 2026-08-16: this local 25.0 was derived from GDELT's 20s SOCKET
+# timeout, but GDELT retries, and td's own ceiling for the pull is 45s
+# (slow_feeds.py:88). 25s therefore still lost the race on a cold cache —
+# measured cold pulls that day ran 15.8s / 26.7s / 28.9s. Deferring to the one
+# shared constant so all five callers of this route agree.
+#
+# TRADEOFF, this call site only: it is the one INTERACTIVE caller, so the
+# budget is now a 60s spinner rather than a 25s error. Accepted because the
+# wire warms this exact cache every 900s (once its own timeout was fixed in
+# the same change), so a Bench render meets a cold cache only just after a
+# restart or a td cache flush.
+NEWS_TIMEOUT_S = td.NEWS_TIMEOUT_S
 
 
 def set_trading_relay_db_pool(pool: asyncpg.Pool) -> None:

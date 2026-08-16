@@ -12,6 +12,24 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT_S = 10.0
 DEFAULT_BASE_URL = "http://127.0.0.1:8006"
 
+# The timeout law of the seam, in ONE place: a proxy budget must EXCEED the
+# inner fetch's own, or a graceful slow answer arrives as a failure.
+#
+# `/api/bridge/news/{book}` is the slowest thing on the seam. It is a GDELT
+# pull (trading/tools/data_fetch/gdelt.py DEFAULT_TIMEOUT = 20s, which
+# RETRIES) behind a 900s cache. Read td's OWN ceiling rather than re-deriving
+# one from GDELT's socket timeout: trading/web/runtime/slow_feeds.py:88 sets
+# DEFAULT_SOURCE_TIMEOUT = 45.0 and says why — "worst case the CALLER sees is
+# 20s times a retry count it cannot read, plus backoff".
+#
+# Measured 2026-08-16 against the five live books: cache hits answered in 3ms,
+# cold pulls in 15.8s / 26.7s / 28.9s. Four call sites had each guessed their
+# own number under that (10s twice, 25s, 30s), so every cold pull was a
+# failure — the wire's job ledger scored 392 of 1051 room-attempts over three
+# days (37%) as news_unavailable, and `get_thesis_news` ran on the bare 10s
+# default, meaning the LLM's own news tool could only succeed on a warm cache.
+NEWS_TIMEOUT_S = 60.0
+
 
 class TradingDeskError(Exception):
     """Any failure talking to tradingDesk — unreachable, non-200, non-JSON,

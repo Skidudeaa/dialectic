@@ -172,7 +172,9 @@ async def thesis_news_digest(ctx: SchedulerContext) -> dict:
                         f"/api/bridge/news/{room['linked_book_id']}",
                         # GDELT queries routinely take longer than the 10s
                         # client default; a slow feed must not read as down.
-                        timeout=30.0,
+                        # The number lives on td.NEWS_TIMEOUT_S so all five
+                        # callers of this route share one budget.
+                        timeout=td.NEWS_TIMEOUT_S,
                     )
                 except td.TradingDeskError as e:
                     logger.warning("news fetch failed for room %s: %s",

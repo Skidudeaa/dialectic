@@ -18,9 +18,8 @@ is invisible.
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
@@ -189,6 +188,18 @@ class SelfModel:
         The FSM columns (migration 011) ride along when the caller applied a
         participation-FSM event this turn; COALESCE keeps the existing values
         when they didn't, so older call sites can't clobber the machine.
+
+        WHY the explicit ::TIMESTAMPTZ on the state_entered_at fallback:
+        asyncpg sends parameters untyped and lets Postgres deduce them.
+        `COALESCE($7, $2)` is two unknowns, and Postgres resolves an
+        all-unknown COALESCE to TEXT — which then contradicts `last_spoke_at
+        = $2` and raises "inconsistent types deduced for parameter $2" at
+        PARSE time, before a single row is touched. That killed this whole
+        reducer from 2026-08-09 (the commit that added these columns) to
+        2026-08-16: log_decision's except swallowed it, so the only symptom
+        was a WARNING line, a frozen llm_participation_state, and a None
+        return that silently skipped every effectiveness measurement.
+        Pinning ONE argument's type is enough to resolve the whole call.
         """
         now = datetime.now(timezone.utc)
         spoke = decision.should_interject
@@ -206,7 +217,7 @@ class SelfModel:
                            CASE WHEN $4 = 'provoker' THEN 1 ELSE 0 END,
                            CASE WHEN $4 = 'protocol' THEN 1 ELSE 0 END,
                            $4, ARRAY[$5::REAL], $2,
-                           COALESCE($6, 'engaged'), COALESCE($7, $2), COALESCE($8, 'observed'))
+                           COALESCE($6, 'engaged'), COALESCE($7::TIMESTAMPTZ, $2), COALESCE($8, 'observed'))
                    ON CONFLICT (room_id) DO UPDATE SET
                        last_spoke_at = $2,
                        last_spoke_message_id = $3,
@@ -237,7 +248,7 @@ class SelfModel:
                     recent_confidences, updated_at,
                     fsm_state, state_entered_at, state_source)
                    VALUES ($1, 1, 1, ARRAY[$2::REAL], $3,
-                           COALESCE($4, 'engaged'), COALESCE($5, $3), COALESCE($6, 'observed'))
+                           COALESCE($4, 'engaged'), COALESCE($5::TIMESTAMPTZ, $3), COALESCE($6, 'observed'))
                    ON CONFLICT (room_id) DO UPDATE SET
                        turns_since_last_spoke = llm_participation_state.turns_since_last_spoke + 1,
                        total_silences = llm_participation_state.total_silences + 1,

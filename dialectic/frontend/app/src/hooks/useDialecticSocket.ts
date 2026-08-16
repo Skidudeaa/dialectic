@@ -588,6 +588,47 @@ export function useDialecticSocket(options?: {
     };
   }, [currentRoom?.id, roomToken, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Wake the socket when the device comes back.
+  //
+  // WHY: the backoff ladder above gives up after MAX_RECONNECT_ATTEMPTS and
+  // then only console.errors. On a desktop that ceiling is nearly unreachable;
+  // on a phone it is the NORMAL path. Lock the screen and iOS suspends the
+  // page — the socket dies, and the ten attempts burn through their capped
+  // backoff (~1s..30s, well under a minute of wall clock) while nobody is
+  // looking. Unlock, and the room is permanently "Offline" with no control to
+  // press: the header's connection label is a `<span>`, and the only cure is a
+  // full reload. The installed PWA is the product's reach strategy, so this is
+  // the platform it fails on.
+  //
+  // Resetting the counter is what makes the retry possible — the ladder is not
+  // broken, it is exhausted, and a return to the foreground is exactly the new
+  // information that says the exhausted verdict is stale.
+  //
+  // Safe against the unmount sentinel on line 581: this listener is registered
+  // in an effect whose cleanup removes it, so an unmounted hook cannot be
+  // revived by a later visibility change. Guarded on an already-open socket so
+  // an ordinary tab switch is free.
+  useEffect(() => {
+    if (!currentRoom || !roomToken || !user) return;
+
+    const revive = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (wsRef.current?.readyState === WebSocket.OPEN) return;
+      clearTimeout(reconnectTimerRef.current);
+      reconnectAttemptRef.current = 0;
+      connectRef.current();
+    };
+
+    document.addEventListener('visibilitychange', revive);
+    window.addEventListener('online', revive);
+    window.addEventListener('focus', revive);
+    return () => {
+      document.removeEventListener('visibilitychange', revive);
+      window.removeEventListener('online', revive);
+      window.removeEventListener('focus', revive);
+    };
+  }, [currentRoom?.id, roomToken, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Keep the server-side connection context aligned with the selected branch
   // without reconnecting the room socket.
   useEffect(() => {
