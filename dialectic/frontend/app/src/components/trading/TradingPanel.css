@@ -15,13 +15,13 @@
 .trading-panel-empty {
     color: var(--color-ghost);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.5;
     text-align: center;
     padding: 2rem 1rem;
 }
 .trading-panel-hint {
-    font-size: 9px;
+    font-size: 12px;
     margin-top: 0.5rem;
     color: var(--color-ghost);
 }
@@ -33,7 +33,7 @@
 }
 .trading-title {
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     font-weight: normal;
     text-transform: uppercase;
     letter-spacing: .18em;
@@ -47,7 +47,7 @@
     align-items: center;
     gap: 0.4rem;
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     color: var(--color-ghost);
 }
 .trading-staleness-dot {
@@ -71,7 +71,7 @@
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     color: var(--color-secondary);
 }
 .trading-phase-status {
@@ -85,7 +85,7 @@
 }
 .trading-section-label {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     font-weight: normal;
     text-transform: uppercase;
     letter-spacing: .18em;
@@ -95,7 +95,7 @@
 }
 .trading-section-empty {
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     color: var(--color-ghost);
     font-style: italic;
 }
@@ -112,7 +112,7 @@
     padding: 2px 5px;
     border-radius: var(--radius-sm);
     font-family: var(--font-stencil);
-    font-size: 8.5px;
+    font-size: 12px;
     letter-spacing: .03em;
     text-transform: uppercase;
     border: 1px solid currentColor;
@@ -149,7 +149,7 @@
 
 .trading-node-row-id {
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: 12px;
     color: var(--color-ink);
     flex: 1;
     overflow: hidden;
@@ -163,7 +163,7 @@
 /* Confluence multiplier: amber mono 8.5px */
 .trading-node-row-cf {
     font-family: var(--font-mono);
-    font-size: 8.5px;
+    font-size: 12px;
     color: var(--color-amber);
 }
 
@@ -180,12 +180,12 @@
     padding: 3px 5px;
     border-bottom: 1px solid rgba(60,42,30,.4);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
 }
 .trading-countdown-label {
     color: var(--color-secondary);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -193,7 +193,7 @@
 .trading-countdown-days {
     font-weight: normal;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     color: var(--color-secondary);
 }
 /* Urgent countdown: scarlet (event color — text only, not border) */
@@ -217,7 +217,7 @@
     align-items: center;
     padding: 2px 5px;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     border-bottom: 1px solid rgba(60,42,30,.4);
 }
 .trading-confluence-row--high {
@@ -226,11 +226,11 @@
 .trading-confluence-id {
     color: var(--color-secondary);
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
 }
 .trading-confluence-score {
     font-family: var(--font-mono);
-    font-size: 8.5px;
+    font-size: 12px;
     color: var(--color-amber);
     font-weight: normal;
 }
@@ -250,28 +250,28 @@
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     box-shadow: var(--shadow-md);
 }
 .trading-scenario-name {
     flex: 1;
     color: var(--color-secondary);
     font-family: var(--font-serif);
-    font-size: 11.5px;
+    font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 .trading-scenario-prob {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     color: var(--color-ink);
     min-width: 2.5rem;
     text-align: right;
 }
 .trading-scenario-impact {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     min-width: 3.5rem;
     text-align: right;
 }
@@ -291,7 +291,7 @@
 }
 .trading-portfolio-position {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     color: var(--color-secondary);
     padding: 0.15rem 0;
 }
@@ -299,7 +299,7 @@
     display: flex;
     justify-content: space-between;
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     color: var(--color-ghost);
     padding-top: 0.3rem;
     border-top: 1px solid var(--color-bean);
@@ -323,7 +323,7 @@
     align-items: flex-start;
     gap: 0.15rem;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     color: var(--color-amber);
     cursor: pointer;
     text-decoration: none;
@@ -342,7 +342,7 @@
 }
 
 .trading-instrument-link-kicker {
-    font-size: 8px;
+    font-size: 12px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--color-faint);
@@ -372,7 +372,7 @@
 }
 
 .thesis-create-heading {
-    font-size: 9.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .18em;
     color: var(--color-secondary);
@@ -381,7 +381,7 @@
 }
 
 .thesis-create-note {
-    font-size: 9px;
+    font-size: 12px;
     line-height: 1.5;
     color: var(--color-ghost);
     margin: 0;
@@ -395,7 +395,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
-    font-size: 8.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .14em;
     color: var(--color-secondary);
@@ -404,7 +404,7 @@
 .thesis-create-label input,
 .thesis-create-label textarea {
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: 12px;
     color: var(--color-bone);
     background: var(--color-void);
     border: 1px solid var(--color-bean);
@@ -421,14 +421,14 @@
 }
 
 .thesis-create-error {
-    font-size: 9px;
+    font-size: 12px;
     line-height: 1.4;
     color: var(--color-error);
 }
 
 .thesis-create-submit {
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .14em;
     color: var(--color-amber-mute);
@@ -474,7 +474,7 @@
 }
 
 .thesis-draft-phase-label {
-    font-size: 8px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .16em;
     color: var(--color-ghost);
@@ -485,11 +485,11 @@
     display: flex;
     align-items: baseline;
     gap: 0.4rem;
-    font-size: 10px;
+    font-size: 12px;
 }
 
 .thesis-draft-node-type {
-    font-size: 8px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--color-amber-mute);
@@ -501,7 +501,7 @@
 }
 
 .thesis-draft-node-extra {
-    font-size: 8px;
+    font-size: 12px;
     color: var(--color-teal);
     border: 1px solid var(--color-bean);
     border-radius: 2px;
@@ -511,7 +511,7 @@
 .thesis-draft-edge {
     display: flex;
     flex-direction: column;
-    font-size: 9px;
+    font-size: 12px;
     padding: 0.15rem 0;
 }
 
@@ -527,7 +527,7 @@
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    font-size: 9px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .12em;
     color: var(--color-secondary);
@@ -545,7 +545,7 @@
 
 .thesis-draft-discard {
     font-family: var(--font-mono);
-    font-size: 8.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .12em;
     color: var(--color-ghost);
@@ -569,7 +569,7 @@
 }
 
 .trading-retire-warning {
-    font-size: 9px;
+    font-size: 12px;
     line-height: 1.4;
     color: var(--color-warning);
 }
@@ -581,7 +581,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    font-size: 9px;
+    font-size: 12px;
     line-height: 1.5;
     color: var(--color-ghost);
 }
@@ -591,11 +591,11 @@
     color: var(--color-secondary);
     text-transform: uppercase;
     letter-spacing: .08em;
-    font-size: 8.5px;
+    font-size: 12px;
 }
 
 .thesis-draft-summary {
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: .1em;
     text-transform: uppercase;
     color: var(--color-amber-mute);
@@ -614,7 +614,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    font-size: 9px;
+    font-size: 12px;
     line-height: 1.5;
     color: var(--color-ghost);
     text-align: left;
@@ -623,7 +623,7 @@
 /* Destructive confirm — scarlet, unmistakable, still quiet. */
 .thesis-retire-confirm {
     font-family: var(--font-mono);
-    font-size: 8.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .12em;
     color: var(--color-scarlet);

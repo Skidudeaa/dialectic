@@ -258,6 +258,12 @@ def _join(db: AsyncMock):
 
     main_mod.app.dependency_overrides[main_mod.get_db] = db_dependency
     main_mod.app.dependency_overrides[extract_room_token] = lambda: HOME_TOKEN
+    main_mod.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+        user_id=TARGET_ID,
+        email="target@example.com",
+        email_verified=True,
+        display_name="Target",
+    )
     return TestClient(main_mod.app).post(
         f"/rooms/{HOME_ID}/join",
         headers={"X-Room-Token": HOME_TOKEN},

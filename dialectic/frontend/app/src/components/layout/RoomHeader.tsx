@@ -22,6 +22,8 @@ export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, 
   // route into the rails there, so they live on the store, not on props.
   const setMobileDrawer = useAppStore((s) => s.setMobileDrawer)
   const mobileDrawer = useAppStore((s) => s.mobileDrawer)
+  const rightPanelOpen = useAppStore((s) => s.rightPanelOpen)
+  const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen)
   // Home's root is the place, not a branch. The crumb returns once Home
   // actually has a fork — same control as every other room.
   const showBranchCrumb = !isHome || threads.length > 1
@@ -29,10 +31,12 @@ export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, 
     <div className={`room-header${isHome ? ' room-header-home' : ''}`}>
       <div className="room-header-left">
         <button
-          className="btn btn-ghost btn-sm drawer-toggle"
+          className="btn btn-ghost btn-sm mobile-drawer-toggle"
           onClick={() => setMobileDrawer(mobileDrawer === 'rooms' ? null : 'rooms')}
           title="Rooms"
           aria-label="Open room list"
+          aria-expanded={mobileDrawer === 'rooms'}
+          aria-controls="room-list-panel"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M3 6h18M3 12h18M3 18h18"/>
@@ -106,12 +110,26 @@ export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, 
           <span className="conn-label">{connected ? 'Connected' : 'Offline'}</span>
         </div>
         <button
-          className="btn btn-ghost btn-sm drawer-toggle"
-          onClick={() => setMobileDrawer(mobileDrawer === 'panel' ? null : 'panel')}
-          title="Cockpit — memory, trading, stakes"
-          aria-label="Open cockpit panel"
+          className="btn btn-ghost btn-sm desktop-panel-toggle"
+          onClick={() => setRightPanelOpen(!rightPanelOpen)}
+          title={rightPanelOpen ? 'Close context panel' : 'Open context panel'}
+          aria-label={rightPanelOpen ? 'Close desktop context panel' : 'Open desktop context panel'}
+          aria-expanded={rightPanelOpen}
+          aria-controls="context-panel"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="1"/><path d="M14 3v18"/>
+          </svg>
+        </button>
+        <button
+          className="btn btn-ghost btn-sm mobile-drawer-toggle"
+          onClick={() => setMobileDrawer(mobileDrawer === 'panel' ? null : 'panel')}
+          title="Context — branches, room tools, and sharing"
+          aria-label="Open context drawer"
+          aria-expanded={mobileDrawer === 'panel'}
+          aria-controls="context-panel"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <rect x="3" y="3" width="18" height="18" rx="1"/><path d="M14 3v18"/>
           </svg>
         </button>

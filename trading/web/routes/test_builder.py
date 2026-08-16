@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 import pytest
@@ -609,7 +610,7 @@ class TestDialecticRoomBinding:
         )
         assert resp.json()["id"] == "test-thesis-unit-test-graph"
 
-    def test_bound_collision_counter_stays_inside_the_convention(
+    def test_repeated_bound_create_returns_the_same_book(
         self, auth_headers, tmp_books_dir, sample_book_payload
     ):
         sample_book_payload["meta"]["dialecticRoomId"] = self.ROOM
@@ -621,6 +622,42 @@ class TestDialecticRoomBinding:
             "/api/thesis/builder/books", json=sample_book_payload,
             headers=auth_headers,
         ).json()["id"]
+        assert second == first == "test-thesis-unit-test-graph"
+        assert len(list(tmp_books_dir.glob("*-graph.json"))) == 1
+
+    def test_concurrent_bound_create_writes_one_book(
+        self, auth_headers, tmp_books_dir, sample_book_payload
+    ):
+        sample_book_payload["meta"]["dialecticRoomId"] = self.ROOM
+
+        def create(_: int):
+            return client.post(
+                "/api/thesis/builder/books",
+                json=sample_book_payload,
+                headers=auth_headers,
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            responses = list(executor.map(create, range(2)))
+
+        assert [response.status_code for response in responses] == [200, 200]
+        assert len({response.json()["id"] for response in responses}) == 1
+        assert len(list(tmp_books_dir.glob("*-graph.json"))) == 1
+
+    def test_same_title_bound_to_different_rooms_keeps_collision_suffix(
+        self, auth_headers, tmp_books_dir, sample_book_payload
+    ):
+        sample_book_payload["meta"]["dialecticRoomId"] = self.ROOM
+        first = client.post(
+            "/api/thesis/builder/books", json=sample_book_payload,
+            headers=auth_headers,
+        ).json()["id"]
+        sample_book_payload["meta"]["dialecticRoomId"] = "another-room"
+        second = client.post(
+            "/api/thesis/builder/books", json=sample_book_payload,
+            headers=auth_headers,
+        ).json()["id"]
+
         assert first == "test-thesis-unit-test-graph"
         assert second == "test-thesis-unit-test-1-graph"
 

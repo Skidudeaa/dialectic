@@ -469,9 +469,12 @@ async def upload_attachment(
 
         existing = await db.fetchrow(
             """SELECT * FROM attachments
-               WHERE room_id = $1 AND sha256 = $2
+               WHERE room_id = $1
+                 AND sha256 = $2
+                 AND uploader_user_id = $3
+                 AND message_id IS NULL
                ORDER BY created_at ASC LIMIT 1""",
-            room_id, sha256,
+            room_id, sha256, user_id,
         )
         if existing:
             # Same bytes already in this room — the blob on disk is identical

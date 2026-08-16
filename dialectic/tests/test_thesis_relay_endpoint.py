@@ -12,10 +12,10 @@ not), and the local link LAST (a td failure must never leave the room
 pointing at a book that does not exist).
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import UUID
 
-import pytest
 from fastapi.testclient import TestClient
 
 import api.main as main_mod
@@ -32,6 +32,25 @@ REQUEST_BODY = {
     "claim": "Capex cuts cascade into earnings misses",
     "monthly_budget": 4000,
 }
+
+
+class _AsyncContext:
+    def __init__(self, value=None):
+        self.value = value
+
+    async def __aenter__(self):
+        return self.value
+
+    async def __aexit__(self, *exc_info):
+        return None
+
+
+class _Pool:
+    def __init__(self, db):
+        self.db = db
+
+    def acquire(self):
+        return _AsyncContext(self.db)
 
 
 def _make_db(room_found=True, linked_book_id=None, members=None, is_home=False):
@@ -53,21 +72,37 @@ def _make_db(room_found=True, linked_book_id=None, members=None, is_home=False):
         return None
 
     fake_db.fetchrow = AsyncMock(side_effect=fetchrow)
+    fake_db.fetch = AsyncMock(return_value=[])
     fake_db.execute = AsyncMock(return_value=None)
+    fake_db.transaction = lambda: _AsyncContext()
+    fake_db._operation_status = "pending"
+    fake_db._external_result = None
     return fake_db
 
 
 def _create(fake_db, monkeypatch, *, service_post, post, body=None):
-    async def _fake_db_dep():
-        yield fake_db
+    operation = SimpleNamespace(
+        status=fake_db._operation_status,
+        external_result=fake_db._external_result,
+    )
+    claim = AsyncMock(return_value=operation)
+    succeed = AsyncMock()
+    fail = AsyncMock()
+    fake_db._claim = claim
+    fake_db._succeed = succeed
+    fake_db._fail = fail
+    fake_db._pool = _Pool(fake_db)
 
-    main_mod.app.dependency_overrides[relay.get_db] = _fake_db_dep
+    main_mod.app.dependency_overrides[relay.get_pool] = lambda: fake_db._pool
     main_mod.app.dependency_overrides[relay.extract_room_token] = lambda: ROOM_TOKEN
     main_mod.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
         user_id=CALLER_ID, email="caller@test", email_verified=True, display_name="Caller",
     )
     monkeypatch.setattr(relay.td, "service_post", service_post)
     monkeypatch.setattr(relay.td, "post", post)
+    monkeypatch.setattr(relay, "claim_operation", claim)
+    monkeypatch.setattr(relay, "succeed_operation", succeed)
+    monkeypatch.setattr(relay, "fail_operation", fail)
     try:
         return TestClient(main_mod.app).post(
             f"/rooms/{ROOM_ID}/trading/thesis",
@@ -104,6 +139,15 @@ def test_create_registers_token_then_mints_a_bound_book(monkeypatch):
     sqls = [c.args[0] for c in fake_db.execute.await_args_list]
     assert any("UPDATE rooms SET linked_book_id" in s for s in sqls)
     assert any("INSERT INTO events" in s for s in sqls)
+    fake_db._claim.assert_awaited_once_with(
+        fake_db._pool,
+        room_id=ROOM_ID,
+        kind="thesis",
+        operation_key=f"thesis:{ROOM_ID}",
+        initiated_by=CALLER_ID,
+    )
+    fake_db._succeed.assert_awaited_once()
+    assert fake_db._succeed.await_args.kwargs["result"] == resp.json()
 
 
 def test_already_bound_room_is_a_409_and_touches_nothing(monkeypatch):
@@ -116,6 +160,25 @@ def test_already_bound_room_is_a_409_and_touches_nothing(monkeypatch):
     service_post.assert_not_awaited()
     post.assert_not_awaited()
     fake_db.execute.assert_not_awaited()
+    fake_db._fail.assert_awaited_once()
+
+
+def test_succeeded_operation_replays_the_created_thesis(monkeypatch):
+    fake_db = _make_db(linked_book_id="ai-bubble-deflation-graph")
+    fake_db._operation_status = "succeeded"
+    fake_db._external_result = {
+        "book_id": "ai-bubble-deflation-graph",
+        "title": "AI Bubble Deflation",
+    }
+    service_post, post = AsyncMock(), AsyncMock()
+
+    resp = _create(fake_db, monkeypatch, service_post=service_post, post=post)
+
+    assert resp.status_code == 200
+    assert resp.json() == fake_db._external_result
+    service_post.assert_not_awaited()
+    post.assert_not_awaited()
+    fake_db._fail.assert_not_awaited()
 
 
 def test_invalid_room_token_is_401(monkeypatch):
@@ -148,6 +211,7 @@ def test_token_registration_failure_is_502_and_no_book_is_created(monkeypatch):
     assert resp.status_code == 502
     post.assert_not_awaited()
     fake_db.execute.assert_not_awaited()
+    fake_db._fail.assert_awaited_once()
 
 
 def test_book_creation_failure_is_502_and_nothing_links(monkeypatch):
@@ -162,6 +226,7 @@ def test_book_creation_failure_is_502_and_nothing_links(monkeypatch):
 
     assert resp.status_code == 502
     fake_db.execute.assert_not_awaited()
+    fake_db._fail.assert_awaited_once()
 
 
 def test_missing_book_id_in_td_answer_is_502(monkeypatch):
@@ -173,6 +238,7 @@ def test_missing_book_id_in_td_answer_is_502(monkeypatch):
 
     assert resp.status_code == 502
     fake_db.execute.assert_not_awaited()
+    fake_db._fail.assert_awaited_once()
 
 
 def test_blank_title_is_422(monkeypatch):
@@ -215,10 +281,9 @@ def test_create_carries_an_accepted_draft_through(monkeypatch):
 
 
 def _draft(fake_db, monkeypatch, *, drafter, body=None):
-    async def _fake_db_dep():
-        yield fake_db
+    fake_db._pool = _Pool(fake_db)
 
-    main_mod.app.dependency_overrides[relay.get_db] = _fake_db_dep
+    main_mod.app.dependency_overrides[relay.get_pool] = lambda: fake_db._pool
     main_mod.app.dependency_overrides[relay.extract_room_token] = lambda: ROOM_TOKEN
     main_mod.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
         user_id=CALLER_ID, email="caller@test", email_verified=True, display_name="Caller",
@@ -292,10 +357,9 @@ def test_draft_requires_membership(monkeypatch):
 
 
 def _retire(fake_db, monkeypatch, *, service_post, memory_manager=None):
-    async def _fake_db_dep():
-        yield fake_db
+    fake_db._pool = _Pool(fake_db)
 
-    main_mod.app.dependency_overrides[relay.get_db] = _fake_db_dep
+    main_mod.app.dependency_overrides[relay.get_pool] = lambda: fake_db._pool
     main_mod.app.dependency_overrides[relay.extract_room_token] = lambda: ROOM_TOKEN
     main_mod.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
         user_id=CALLER_ID, email="caller@test", email_verified=True, display_name="Caller",

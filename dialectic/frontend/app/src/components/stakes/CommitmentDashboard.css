@@ -6,7 +6,7 @@
 .commitment-dashboard h3 {
     margin: 0;
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .18em;
     color: var(--color-secondary);
@@ -25,7 +25,7 @@
     border: none;
     border-radius: var(--radius-sm);
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .08em;
     cursor: pointer;
@@ -48,7 +48,7 @@
     padding: 32px 16px;
     color: var(--color-ghost);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
 }
 /* New commitment button — dashed bean border */
 .new-commitment-btn {
@@ -58,7 +58,7 @@
     padding: 10px;
     color: var(--color-faint);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .08em;
     cursor: pointer;
@@ -82,7 +82,7 @@
 }
 .commitment-create-form label {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--color-secondary);
@@ -118,7 +118,7 @@
     padding: 5px 12px;
     border-radius: var(--radius-sm);
     font-family: var(--font-stencil);
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: .04em;
     text-transform: uppercase;
     cursor: pointer;
@@ -145,7 +145,7 @@
 .calibration-section h4 {
     margin: 0 0 10px;
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--color-secondary);

@@ -92,6 +92,7 @@ async def test_ws_send_message_ignores_a_client_supplied_metadata_field():
     assert "metadata" not in insert_sql
 
     # And the broadcast — the first thing every OTHER connected client
-    # would see — carries no metadata key either.
+    # would see — carries no client-supplied metadata. The shared persisted
+    # message contract includes an explicit null for messages without metadata.
     broadcast_payload = connections.broadcasts[-1][1].payload
-    assert "metadata" not in broadcast_payload
+    assert broadcast_payload["metadata"] is None

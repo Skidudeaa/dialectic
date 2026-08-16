@@ -526,6 +526,57 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
 
   if (!user || !currentRoom || !roomToken) return null
 
+  /**
+   * Take a proposed thesis to the Bench where it can actually be created.
+   *
+   * Outside Home that is this room's own Bench and nothing moves. AT HOME
+   * there is no Bench and `POST .../trading/thesis` answers 409 "Propose it in
+   * the scheme's room" — so the tap used to resolve to the default scene and
+   * do nothing at all. That silent refusal is what pushed general talk back
+   * out of the shared room: the one place built so conversation would not get
+   * lost in the individual threads could not turn a conversation into work.
+   *
+   * So Home spawns the scheme's room instead of naming it as somewhere to go.
+   * The server carries Home's membership into it in the same statement that
+   * creates it — `POST /rooms` writes none, which is why a bound trading room
+   * with zero members already exists in production.
+   *
+   * ORDER IS LOAD-BEARING: appStore clears `thesisSeed` on room switch, on
+   * purpose (a seed from the room you left means nothing in the one you
+   * entered). Seeding before navigating would be dropped in flight, so the
+   * seed is set only after `navigate` resolves. Do not move that write ahead
+   * of navigation.
+   */
+  const openThesisSeed = async (seed: ThesisSeed) => {
+    const store = useAppStore.getState()
+    if (!isHome) {
+      store.setThesisSeed(seed)
+      void navigate({
+        roomId: currentRoom.id,
+        threadId: currentThread?.id ?? null,
+        scene: 'bench',
+      }, 'push')
+      return
+    }
+    try {
+      const spawned = await api.spawnScheme(seed.title)
+      const arrived = await navigate({
+        roomId: spawned.room_id,
+        threadId: spawned.thread_id,
+        scene: 'bench',
+      }, 'push')
+      // Only seed once we are actually there; a refused navigation would
+      // otherwise leave a seed sitting in the room we never left.
+      if (arrived) useAppStore.getState().setThesisSeed(seed)
+    } catch (err) {
+      window.alert(
+        err instanceof Error
+          ? `Could not open a room for this scheme: ${err.message}`
+          : 'Could not open a room for this scheme.',
+      )
+    }
+  }
+
   // WHY these are built AFTER the null guard above: each reads user.id,
   // currentRoom.id and roomToken, which are only non-null past that return.
   const recordSurface = (
@@ -605,56 +656,6 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
           />
     </>
   )
-
-  /**
-   * Take a proposed thesis to the Bench where it can actually be created.
-   *
-   * Outside Home that is this room's own Bench and nothing moves. AT HOME
-   * there is no Bench and `POST .../trading/thesis` answers 409 "Propose it in
-   * the scheme's room" — so the tap used to resolve to the default scene and
-   * do nothing at all. That silent refusal is what pushed general talk back
-   * out of the shared room: the one place built so conversation would not get
-   * lost in the individual threads could not turn a conversation into work.
-   *
-   * So Home spawns the scheme's room instead of naming it as somewhere to go.
-   * The server carries Home's membership into it in the same statement that
-   * creates it — `POST /rooms` writes none, which is why a bound trading room
-   * with zero members already exists in production.
-   *
-   * ORDER IS LOAD-BEARING: appStore clears `thesisSeed` on room switch, on
-   * purpose (a seed from the room you left means nothing in the one you
-   * entered). Seeding before navigating would be dropped in flight, so the
-   * seed is set only after `navigate` resolves. Do not hoist it.
-   */
-  const openThesisSeed = async (seed: ThesisSeed) => {
-    const store = useAppStore.getState()
-    if (!isHome) {
-      store.setThesisSeed(seed)
-      void navigate({
-        roomId: currentRoom.id,
-        threadId: currentThread?.id ?? null,
-        scene: 'bench',
-      }, 'push')
-      return
-    }
-    try {
-      const spawned = await api.spawnScheme(seed.title)
-      const arrived = await navigate({
-        roomId: spawned.room_id,
-        threadId: spawned.thread_id,
-        scene: 'bench',
-      }, 'push')
-      // Only seed once we are actually there; a refused navigation would
-      // otherwise leave a seed sitting in the room we never left.
-      if (arrived) useAppStore.getState().setThesisSeed(seed)
-    } catch (err) {
-      window.alert(
-        err instanceof Error
-          ? `Could not open a room for this scheme: ${err.message}`
-          : 'Could not open a room for this scheme.',
-      )
-    }
-  }
 
   // The House is the shipped pulse ABOVE the same table — the Record is not
   // duplicated into a second component, it is composed.

@@ -1,6 +1,8 @@
 # api/main.py — FastAPI application
 
 import asyncio
+import base64
+import binascii
 import json
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -9,20 +11,21 @@ from uuid import UUID, uuid4
 import asyncpg
 import logging
 import os
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Query, Header
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Query, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from models import (
     Room, User, Thread, Message, Memory, Event, EventType,
-    SpeakerType, MessageType, MemoryScope, TradingSnapshotRequest
+    SpeakerType, MessageType, MemoryScope, TradingSnapshotRequest,
+    MessageCreatedPayload,
 )
 from memory.manager import MemoryManager
 from memory.cross_session import CrossSessionMemoryManager
 from llm.orchestrator import LLMOrchestrator
 from llm.briefing import BriefingHighlight, BriefingResponse, build_briefing
 from transport.websocket import ConnectionManager, InboundMessage, OutboundMessage, MessageTypes
-from transport.handlers import MessageHandler
+from transport.handlers import MessageHandler, build_message_created_payload
 from api.auth.routes import router as auth_router, set_db_pool as set_auth_db_pool
 from api.auth.dependencies import AuthenticatedUser, get_current_user
 from api.auth.utils import decode_token
@@ -43,68 +46,16 @@ from api.home import router as home_router, set_home_db_pool
 from api.workspace import router as workspace_router, set_workspace_db_pool
 from api.field import router as field_router, set_field_db_pool
 from api.atlas import router as atlas_router, set_atlas_db_pool
+from api.rate_limit import check_rate_limit
 from proposal_intake import ProposalMetadataError, validate_human_proposal_metadata
 from api.capabilities import (
     router as capabilities_router,
     set_capabilities_db_pool,
     require_guest_access,
 )
-from collections import defaultdict
-import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-# ============================================================
-# RATE LIMITING
-# ============================================================
-
-class RateLimiter:
-    """
-    Simple in-memory rate limiter.
-
-    ARCHITECTURE: Token bucket algorithm with per-IP tracking.
-    WHY: Prevents brute force without external dependencies.
-    TRADEOFF: Memory grows with unique IPs; single-server only.
-    """
-    def __init__(self):
-        self._requests: dict[str, list[float]] = defaultdict(list)
-
-    def is_allowed(self, key: str, limit: int, window_seconds: int) -> bool:
-        """Check if request is allowed under rate limit."""
-        now = time.time()
-        cutoff = now - window_seconds
-
-        # Clean old requests
-        self._requests[key] = [t for t in self._requests[key] if t > cutoff]
-
-        if len(self._requests[key]) >= limit:
-            return False
-
-        self._requests[key].append(now)
-        return True
-
-rate_limiter = RateLimiter()
-
-
-from fastapi import Request
-
-async def check_rate_limit(
-    request: Request,
-    limit: int = 60,
-    window: int = 60,
-) -> None:
-    """Rate limit dependency - raises 429 if exceeded."""
-    client_ip = request.client.host if request.client else "unknown"
-    endpoint = request.url.path
-    key = f"{client_ip}:{endpoint}"
-
-    if not rate_limiter.is_allowed(key, limit, window):
-        raise HTTPException(
-            status_code=429,
-            detail="Too many requests. Please try again later."
-        )
 
 
 # ============================================================
@@ -229,9 +180,9 @@ async def lifespan(app: FastAPI):
                 await kg_engine.ensure_view()
             except Exception as e:
                 logger.warning(f"Knowledge graph view creation failed: {e}")
-    except Exception as e:
-        logger.warning(f"Database connection failed: {e}")
-        logger.warning("Running in demo mode without database")
+    except Exception:
+        logger.exception("Database connection failed; aborting startup")
+        raise
 
     # Initialize connection manager: Redis pub/sub if REDIS_URL is set, else in-memory
     redis_url = os.environ.get("REDIS_URL")
@@ -576,6 +527,48 @@ class PaginatedMessagesResponse(BaseModel):
     has_more_after: bool
     oldest_sequence: Optional[int]
     newest_sequence: Optional[int]
+    oldest_cursor: Optional[str] = None
+    newest_cursor: Optional[str] = None
+
+
+_MESSAGE_CURSOR_CHARS = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+)
+
+
+def encode_message_cursor(created_at: datetime, message_id: UUID) -> str:
+    """Encode a stable message coordinate as canonical URL-safe text."""
+    if created_at.tzinfo is None:
+        raise ValueError("Message cursor timestamp must be timezone-aware")
+    timestamp = created_at.astimezone(timezone.utc).isoformat()
+    raw = f"{timestamp}|{message_id}".encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def decode_message_cursor(cursor: str) -> tuple[datetime, UUID]:
+    """Decode a cursor emitted by :func:`encode_message_cursor`."""
+    try:
+        if not 1 <= len(cursor) <= 200:
+            raise ValueError
+        if any(character not in _MESSAGE_CURSOR_CHARS for character in cursor):
+            raise ValueError
+        padding = "=" * (-len(cursor) % 4)
+        raw = base64.b64decode(
+            (cursor + padding).encode("ascii"),
+            altchars=b"-_",
+            validate=True,
+        )
+        timestamp_text, message_id_text = raw.decode("utf-8").rsplit("|", 1)
+        created_at = datetime.fromisoformat(timestamp_text)
+        if created_at.tzinfo is None:
+            raise ValueError
+        message_id = UUID(message_id_text)
+        created_at = created_at.astimezone(timezone.utc)
+        if encode_message_cursor(created_at, message_id) != cursor:
+            raise ValueError
+        return created_at, message_id
+    except (binascii.Error, UnicodeError, ValueError) as exc:
+        raise ValueError("Invalid message cursor") from exc
 
 
 class UpdateRoomSettingsRequest(BaseModel):
@@ -607,6 +600,7 @@ from llm.trading_curator import TradingCuratorEngine
 @app.post("/rooms", response_model=CreateRoomResponse)
 async def create_room(
     request: CreateRoomRequest,
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """Create a new room."""
@@ -681,9 +675,16 @@ async def join_room(
     room_id: UUID,
     request: JoinRoomRequest,
     token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """Join a room."""
+    if request.user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot join a room as another user",
+        )
+
     room_row = await db.fetchrow(
         "SELECT * FROM rooms WHERE id = $1 AND token = $2",
         room_id, token
@@ -947,23 +948,96 @@ async def update_room_settings(
     )
 
 
+_ANCESTRY_MESSAGES_CTE = """
+WITH RECURSIVE thread_ancestry AS (
+    SELECT id, parent_thread_id, fork_point_message_id,
+           0 AS depth, NULL::uuid AS child_fork_point_message_id
+    FROM threads
+    WHERE id = $1
+
+    UNION ALL
+
+    SELECT t.id, t.parent_thread_id, t.fork_point_message_id,
+           ta.depth + 1, ta.fork_point_message_id
+    FROM threads t
+    JOIN thread_ancestry ta ON t.id = ta.parent_thread_id
+    WHERE ta.depth < 50
+), ancestry_messages AS (
+    SELECT m.*
+    FROM messages m
+    JOIN thread_ancestry ta ON m.thread_id = ta.id
+    WHERE NOT m.is_deleted
+      AND (
+          ta.depth = 0
+          OR m.sequence <= COALESCE(
+              (SELECT fork.sequence
+               FROM messages fork
+               WHERE fork.id = ta.child_fork_point_message_id),
+              m.sequence
+          )
+      )
+)
+"""
+
+ANCESTRY_MESSAGES_BEFORE_QUERY = _ANCESTRY_MESSAGES_CTE + """
+SELECT *
+FROM ancestry_messages m
+WHERE $2::timestamptz IS NULL
+   OR (m.created_at, m.id) < ($2::timestamptz, $3::uuid)
+ORDER BY m.created_at DESC, m.id DESC
+LIMIT $4
+"""
+
+ANCESTRY_MESSAGES_AFTER_QUERY = _ANCESTRY_MESSAGES_CTE + """
+SELECT *
+FROM ancestry_messages m
+WHERE (m.created_at, m.id) > ($2::timestamptz, $3::uuid)
+ORDER BY m.created_at ASC, m.id ASC
+LIMIT $4
+"""
+
+_ANCESTRY_EXISTS_BEFORE_QUERY = _ANCESTRY_MESSAGES_CTE + """
+SELECT EXISTS(
+    SELECT 1
+    FROM ancestry_messages m
+    WHERE (m.created_at, m.id) < ($2::timestamptz, $3::uuid)
+)
+"""
+
+_ANCESTRY_EXISTS_AFTER_QUERY = _ANCESTRY_MESSAGES_CTE + """
+SELECT EXISTS(
+    SELECT 1
+    FROM ancestry_messages m
+    WHERE (m.created_at, m.id) > ($2::timestamptz, $3::uuid)
+)
+"""
+
+
 @app.get("/threads/{thread_id}/messages", response_model=PaginatedMessagesResponse)
 async def get_messages(
     thread_id: UUID,
     token: str = Depends(extract_room_token),
     include_ancestry: bool = True,
     limit: int = Query(50, ge=1, le=200, description="Max messages to return"),
-    before_sequence: Optional[int] = Query(None, description="Return messages before this sequence"),
-    after_sequence: Optional[int] = Query(None, description="Return messages after this sequence"),
-    db=Depends(get_db),
-):
-    """
-    Get messages in a thread with cursor-based pagination.
-
-    ARCHITECTURE: Bidirectional cursor pagination using sequence numbers.
-    WHY: Enables infinite scroll in both directions and precise positioning.
-    TRADEOFF: Slightly more complex than offset pagination, but stable under mutations.
-    """
+    before_cursor: Optional[str] = Query(
+        None,
+        description="Return ancestry messages before this opaque cursor",
+    ),
+    after_cursor: Optional[str] = Query(
+        None,
+        description="Return ancestry messages after this opaque cursor",
+    ),
+    before_sequence: Optional[int] = Query(
+        None,
+        description="Return single-thread messages before this sequence",
+    ),
+    after_sequence: Optional[int] = Query(
+        None,
+        description="Return single-thread messages after this sequence",
+    ),
+    db: asyncpg.Connection = Depends(get_db),
+) -> PaginatedMessagesResponse:
+    """Return a stable chronological message window."""
     thread_row = await db.fetchrow(
         "SELECT * FROM threads WHERE id = $1", thread_id
     )
@@ -973,69 +1047,89 @@ async def get_messages(
     await verify_room_token(thread_row['room_id'], token, db)
 
     if include_ancestry:
-        # ARCHITECTURE: Single recursive CTE instead of N+1 queries.
-        # WHY: Fetches entire thread ancestry in one database round-trip.
-        # TRADEOFF: More complex SQL, but O(1) queries vs O(depth) queries.
-
-        all_rows = await db.fetch(
-            """
-            WITH RECURSIVE thread_ancestry AS (
-                -- Base case: current thread (child_fork_point is NULL since we show all messages)
-                SELECT id, parent_thread_id, fork_point_message_id,
-                       0 as depth, NULL::uuid as child_fork_point_message_id
-                FROM threads WHERE id = $1
-
-                UNION ALL
-
-                -- Recursive case: parent threads
-                -- child_fork_point_message_id = the fork point of the child thread (ta)
-                -- that tells us which messages in the parent (t) to include
-                SELECT t.id, t.parent_thread_id, t.fork_point_message_id,
-                       ta.depth + 1, ta.fork_point_message_id as child_fork_point_message_id
-                FROM threads t
-                JOIN thread_ancestry ta ON t.id = ta.parent_thread_id
-                WHERE ta.depth < 50  -- Safety limit
+        if before_sequence is not None or after_sequence is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Sequence cursors cannot paginate thread ancestry",
             )
-            SELECT m.* FROM messages m
-            JOIN thread_ancestry ta ON m.thread_id = ta.id
-            WHERE NOT m.is_deleted
-              AND (
-                  ta.depth = 0  -- Current thread: all messages
-                  OR m.sequence <= COALESCE(
-                      (SELECT sequence FROM messages
-                       WHERE id = ta.child_fork_point_message_id),
-                      m.sequence
-                  )
-              )
-            ORDER BY m.created_at, m.sequence
-            """,
-            thread_id
-        )
-        all_messages = [Message(**dict(row)) for row in all_rows]
+        if before_cursor is not None and after_cursor is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Use only one message cursor at a time",
+            )
 
-        # Apply cursor filters (keep existing logic)
-        if before_sequence is not None:
-            all_messages = [m for m in all_messages if m.sequence < before_sequence]
-            messages = all_messages[-limit:]
-        elif after_sequence is not None:
-            all_messages = [m for m in all_messages if m.sequence > after_sequence]
-            messages = all_messages[:limit]
-        else:
-            messages = all_messages[-limit:]
+        try:
+            before_coordinate = (
+                decode_message_cursor(before_cursor)
+                if before_cursor is not None
+                else None
+            )
+            after_coordinate = (
+                decode_message_cursor(after_cursor)
+                if after_cursor is not None
+                else None
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="Invalid message cursor",
+            ) from exc
 
-        # Calculate has_more flags (keep existing logic)
-        if messages:
-            oldest_seq = min(m.sequence for m in messages)
-            newest_seq = max(m.sequence for m in messages)
-            has_more_before = any(m.sequence < oldest_seq for m in all_messages)
-            has_more_after = any(m.sequence > newest_seq for m in all_messages)
+        if after_coordinate is not None:
+            rows = await db.fetch(
+                ANCESTRY_MESSAGES_AFTER_QUERY,
+                thread_id,
+                after_coordinate[0],
+                after_coordinate[1],
+                limit + 1,
+            )
+            has_more_after = len(rows) > limit
+            messages = [Message(**dict(row)) for row in rows[:limit]]
+            has_more_before = (
+                bool(await db.fetchval(
+                    _ANCESTRY_EXISTS_BEFORE_QUERY,
+                    thread_id,
+                    messages[0].created_at,
+                    messages[0].id,
+                ))
+                if messages
+                else False
+            )
         else:
-            oldest_seq = None
-            newest_seq = None
-            has_more_before = False
-            has_more_after = False
+            rows = await db.fetch(
+                ANCESTRY_MESSAGES_BEFORE_QUERY,
+                thread_id,
+                before_coordinate[0] if before_coordinate else None,
+                before_coordinate[1] if before_coordinate else None,
+                limit + 1,
+            )
+            has_more_before = len(rows) > limit
+            descending = [Message(**dict(row)) for row in rows[:limit]]
+            messages = list(reversed(descending))
+            has_more_after = (
+                bool(await db.fetchval(
+                    _ANCESTRY_EXISTS_AFTER_QUERY,
+                    thread_id,
+                    messages[-1].created_at,
+                    messages[-1].id,
+                ))
+                if messages
+                else False
+            )
+        oldest_seq = None
+        newest_seq = None
     else:
-        # Build query based on cursor direction
+        if before_cursor is not None or after_cursor is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Opaque cursors require ancestry pagination",
+            )
+        if before_sequence is not None and after_sequence is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Use only one sequence cursor at a time",
+            )
+
         if after_sequence is not None:
             query = """
                 SELECT * FROM messages
@@ -1053,7 +1147,6 @@ async def get_messages(
             rows = await db.fetch(query, thread_id, before_sequence, limit)
             messages = [Message(**dict(row)) for row in reversed(rows)]
         else:
-            # Default: most recent messages
             query = """
                 SELECT * FROM messages
                 WHERE thread_id = $1 AND NOT is_deleted
@@ -1062,36 +1155,59 @@ async def get_messages(
             rows = await db.fetch(query, thread_id, limit)
             messages = [Message(**dict(row)) for row in reversed(rows)]
 
-        # Calculate has_more flags
         if messages:
-            oldest_seq = min(m.sequence for m in messages)
-            newest_seq = max(m.sequence for m in messages)
-
-            has_more_before = await db.fetchval(
+            oldest_seq = min(message.sequence for message in messages)
+            newest_seq = max(message.sequence for message in messages)
+            has_more_before = bool(await db.fetchval(
                 "SELECT EXISTS(SELECT 1 FROM messages WHERE thread_id = $1 AND NOT is_deleted AND sequence < $2)",
-                thread_id, oldest_seq
-            )
-            has_more_after = await db.fetchval(
+                thread_id,
+                oldest_seq,
+            ))
+            has_more_after = bool(await db.fetchval(
                 "SELECT EXISTS(SELECT 1 FROM messages WHERE thread_id = $1 AND NOT is_deleted AND sequence > $2)",
-                thread_id, newest_seq
-            )
+                thread_id,
+                newest_seq,
+            ))
         else:
             oldest_seq = None
             newest_seq = None
             has_more_before = False
             has_more_after = False
 
-    message_responses = [MessageResponse(
-        id=m.id,
-        thread_id=m.thread_id,
-        sequence=m.sequence,
-        created_at=m.created_at,
-        speaker_type=m.speaker_type.value if hasattr(m.speaker_type, 'value') else m.speaker_type,
-        user_id=m.user_id,
-        message_type=m.message_type.value if hasattr(m.message_type, 'value') else m.message_type,
-        content=m.content,
-        metadata=m.metadata,
-    ) for m in messages]
+    oldest_cursor = (
+        encode_message_cursor(messages[0].created_at, messages[0].id)
+        if messages
+        else None
+    )
+    newest_cursor = (
+        encode_message_cursor(messages[-1].created_at, messages[-1].id)
+        if messages
+        else None
+    )
+    message_responses = [
+        MessageResponse(
+            id=message.id,
+            thread_id=message.thread_id,
+            sequence=message.sequence,
+            created_at=message.created_at,
+            speaker_type=(
+                message.speaker_type.value
+                if hasattr(message.speaker_type, 'value')
+                else message.speaker_type
+            ),
+            user_id=message.user_id,
+            message_type=(
+                message.message_type.value
+                if hasattr(message.message_type, 'value')
+                else message.message_type
+            ),
+            content=message.content,
+            references_message_id=message.references_message_id,
+            edited_at=message.edited_at,
+            metadata=message.metadata,
+        )
+        for message in messages
+    ]
 
     return PaginatedMessagesResponse(
         messages=message_responses,
@@ -1099,6 +1215,8 @@ async def get_messages(
         has_more_after=has_more_after,
         oldest_sequence=oldest_seq,
         newest_sequence=newest_seq,
+        oldest_cursor=oldest_cursor,
+        newest_cursor=newest_cursor,
     )
 
 
@@ -1137,48 +1255,103 @@ async def send_message(
     except ProposalMetadataError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
+    try:
+        message_type = MessageType(request.message_type)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid message_type")
+
+    if request.references_message_id is not None:
+        referenced_room_id = await db.fetchval(
+            """SELECT t.room_id
+               FROM messages m
+               JOIN threads t ON t.id = m.thread_id
+               WHERE m.id = $1""",
+            request.references_message_id,
+        )
+        if referenced_room_id != room.id:
+            raise HTTPException(
+                status_code=404,
+                detail="Referenced message not found in this room",
+            )
+
     now = datetime.now(timezone.utc)
     message_id = uuid4()
+    row = None
+    for attempt in range(3):
+        try:
+            async with db.transaction():
+                row = await db.fetchrow(
+                    """INSERT INTO messages
+                       (id, thread_id, sequence, created_at, speaker_type, user_id,
+                        message_type, content, references_message_id, metadata)
+                       VALUES (
+                           $1, $2,
+                           (SELECT COALESCE(MAX(sequence), 0) + 1 FROM messages WHERE thread_id = $2),
+                           $3, $4, $5, $6, $7, $8, $9
+                       )
+                       RETURNING sequence""",
+                    message_id, thread_id, now,
+                    SpeakerType.HUMAN.value, user_id, message_type.value,
+                    request.content, request.references_message_id, metadata,
+                )
+                await db.execute(
+                    """INSERT INTO events
+                       (id, timestamp, event_type, room_id, thread_id, user_id, payload)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+                    uuid4(), now, EventType.MESSAGE_CREATED.value,
+                    room.id, thread_id, user_id,
+                    MessageCreatedPayload(
+                        message_id=message_id,
+                        sequence=row["sequence"],
+                        speaker_type=SpeakerType.HUMAN,
+                        user_id=user_id,
+                        message_type=message_type,
+                        content=request.content,
+                        references_message_id=request.references_message_id,
+                    ).model_dump(mode="json"),
+                )
+            break
+        except asyncpg.UniqueViolationError:
+            if attempt == 2:
+                raise
+            await asyncio.sleep(0.05 * (attempt + 1))
 
-    await db.execute(
-        """INSERT INTO messages
-           (id, thread_id, sequence, created_at, speaker_type, user_id,
-            message_type, content, references_message_id, metadata)
-           VALUES (
-               $1, $2,
-               (SELECT COALESCE(MAX(sequence), 0) + 1 FROM messages WHERE thread_id = $2),
-               $3, $4, $5, $6, $7, $8, $9
-           )""",
-        message_id, thread_id, now,
-        SpeakerType.HUMAN.value, user_id, request.message_type,
-        request.content, request.references_message_id, metadata
-    )
+    if row is None:
+        raise RuntimeError("Message insert completed without a sequence")
 
-    # Get the actual sequence that was assigned
-    sequence = await db.fetchval(
-        "SELECT sequence FROM messages WHERE id = $1", message_id
-    )
-
-    await db.execute(
-        """INSERT INTO events (id, timestamp, event_type, room_id, thread_id, user_id, payload)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)""",
-        uuid4(), now, EventType.MESSAGE_CREATED.value,
-        room.id, thread_id, user_id,
-        {"message_id": str(message_id), "content": request.content}
-    )
-
-    return MessageResponse(
+    message = Message(
         id=message_id,
         thread_id=thread_id,
-        sequence=sequence,
+        sequence=row["sequence"],
         created_at=now,
-        speaker_type=SpeakerType.HUMAN.value,
+        speaker_type=SpeakerType.HUMAN,
         user_id=user_id,
-        message_type=request.message_type,
+        message_type=message_type,
         content=request.content,
         references_message_id=request.references_message_id,
         metadata=metadata,
     )
+    user_row = await db.fetchrow(
+        "SELECT display_name FROM users WHERE id = $1",
+        user_id,
+    )
+    try:
+        await connection_manager.broadcast(
+            room.id,
+            OutboundMessage(
+                type=MessageTypes.MESSAGE_CREATED,
+                payload=build_message_created_payload(
+                    message,
+                    user_name=user_row["display_name"] if user_row else "Unknown",
+                ),
+            ),
+        )
+    except Exception:
+        # The database transaction is already committed. Returning an error
+        # would tell the REST client to retry a message that now exists.
+        logger.exception("Post-commit message broadcast failed")
+
+    return MessageResponse(**message.model_dump())
 
 
 @app.post("/threads/{thread_id}/fork")
@@ -1604,6 +1777,7 @@ async def get_user_model(
     room_id: UUID,
     user_id: UUID,
     token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """
@@ -1612,6 +1786,12 @@ async def get_user_model(
     ARCHITECTURE: Per-user view of how the LLM understands each participant.
     WHY: Users should be able to see (and correct) how the LLM models them.
     """
+    if user_id != current_user.user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot view another user's model",
+        )
+
     await verify_room_token(room_id, token, db)
     # Users can only view their own model — prevents reading others' psychological profiles
     await verify_room_member(room_id, user_id, db)

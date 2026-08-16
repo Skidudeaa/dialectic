@@ -16,20 +16,25 @@
 .sidebar-tab-btn {
     flex: 0 0 auto;
     min-width: 54px;
-    padding: 7px 6px;
+    min-height: 44px;
+    padding: 7px 8px;
     background: transparent;
     border: none;
-    color: var(--color-ghost);
+    color: var(--color-secondary);
     cursor: pointer;
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     font-weight: normal;
     text-transform: uppercase;
     letter-spacing: .1em;
     border-bottom: 2px solid transparent;
     transition: all 0.15s;
 }
-.sidebar-tab-btn:hover { color: var(--color-faint); }
+.sidebar-tab-btn:hover,
+.sidebar-tab-btn.active {
+    color: var(--color-bone);
+    border-bottom-color: var(--color-amber);
+}
 .sidebar-tab-slot {
     display: contents;
 }
@@ -44,4 +49,5 @@
     flex: 1;
     overflow-y: auto;
     padding: 0.75rem;
+    font-size: 14px;
 }

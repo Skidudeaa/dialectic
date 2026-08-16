@@ -44,7 +44,7 @@
     gap: 0.35rem;
     color: var(--color-secondary);
     font-family: var(--font-mono);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
@@ -68,7 +68,7 @@
 .home-house-stale {
     margin-left: auto;
     color: var(--color-faint);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
@@ -95,7 +95,7 @@
 .home-wings h2 {
     margin: 0 0 8px;
     font-family: var(--font-mono);
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     font-weight: normal;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -131,7 +131,7 @@
 
 .home-need-kicker {
     font-family: var(--font-mono);
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--color-secondary);
@@ -215,7 +215,7 @@
 .home-door-kicker {
     margin: 6px 0 0;
     font-family: var(--font-mono);
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--color-secondary);
@@ -310,7 +310,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--color-secondary);

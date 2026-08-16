@@ -6,7 +6,7 @@
 
 .home-settings h3 {
     font-family: var(--font-mono);
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     font-weight: normal;
     text-transform: uppercase;
     letter-spacing: 0.16em;
@@ -64,7 +64,7 @@
 
 .home-household-status {
     font-family: var(--font-mono);
-    font-size: 0.65rem;
+    font-size: 0.75rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--color-faint);

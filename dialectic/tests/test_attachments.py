@@ -136,10 +136,13 @@ class FakeDB:
             return {"exists": 1} if (room_id, user_id) in self.members else None
 
         if "FROM attachments WHERE room_id = $1 AND sha256 = $2" in q:
-            room_id, sha = args
+            room_id, sha, uploader = args
             hits = [
                 r for r in self.attachments.values()
-                if r["room_id"] == room_id and r["sha256"] == sha
+                if r["room_id"] == room_id
+                and r["sha256"] == sha
+                and r["uploader_user_id"] == uploader
+                and r["message_id"] is None
             ]
             hits.sort(key=lambda r: r["created_at"])
             return hits[0] if hits else None
@@ -495,6 +498,45 @@ class TestDedup:
         assert a["id"] != b["id"]
         assert a["sha256"] != b["sha256"]
         assert len(stored_files(ctx.media_root)) == 2
+
+    @pytest.mark.asyncio
+    async def test_same_bytes_from_another_uploader_get_a_bindable_row(self, ctx):
+        ctx.db.members.add((ROOM_ID, OUTSIDER_ID))
+        first = upload(ctx, make_png(), "amo.png", "image/png").json()
+
+        ctx.acting["user_id"] = OUTSIDER_ID
+        second = upload(ctx, make_png(), "dan.png", "image/png").json()
+
+        assert second["id"] != first["id"]
+        assert second["storage_path"] == first["storage_path"]
+        message_id = uuid4()
+        ctx.db.messages[message_id] = ROOM_ID
+        bound = await attachments.bind_attachment_to_message(
+            ctx.db,
+            room_id=ROOM_ID,
+            user_id=OUTSIDER_ID,
+            attachment_id=UUID(second["id"]),
+            message_id=message_id,
+        )
+        assert bound["message_id"] == message_id
+
+    @pytest.mark.asyncio
+    async def test_same_uploader_reupload_after_bind_gets_a_fresh_row(self, ctx):
+        first = upload(ctx, make_png(), "first.png", "image/png").json()
+        message_id = uuid4()
+        ctx.db.messages[message_id] = ROOM_ID
+        await attachments.bind_attachment_to_message(
+            ctx.db,
+            room_id=ROOM_ID,
+            user_id=MEMBER_ID,
+            attachment_id=UUID(first["id"]),
+            message_id=message_id,
+        )
+
+        second = upload(ctx, make_png(), "again.png", "image/png").json()
+        assert second["id"] != first["id"]
+        assert second["message_id"] is None
+        assert second["storage_path"] == first["storage_path"]
 
 
 # =========================================================================

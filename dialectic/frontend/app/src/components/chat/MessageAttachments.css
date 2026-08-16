@@ -48,7 +48,7 @@
     border-radius: var(--radius-sm);
 }
 .attachment-placeholder-label {
-    font-size: 9px;
+    font-size: 12px;
     color: var(--color-faint);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -67,7 +67,7 @@
 .attachment-caption {
     display: block;
     margin-top: 2px;
-    font-size: 9px;
+    font-size: 12px;
     color: var(--color-faint);
 }
 
@@ -82,7 +82,7 @@
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     color: var(--color-ink);
-    font-size: 10.5px;
+    font-size: 12px;
     text-align: left;
     cursor: pointer;
     transition: border-color 0.15s, background 0.15s;
@@ -100,7 +100,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.attachment-size { color: var(--color-faint); font-size: 9px; white-space: nowrap; }
+.attachment-size { color: var(--color-faint); font-size: 12px; white-space: nowrap; }
 .attachment-file-failed { border-color: var(--error); }
 .attachment-file-failed .attachment-size { color: var(--error); }
 
@@ -111,7 +111,7 @@
     border: 1px solid var(--error);
     border-radius: var(--radius-sm);
     color: var(--error);
-    font-size: 10px;
+    font-size: 12px;
     cursor: pointer;
 }
 

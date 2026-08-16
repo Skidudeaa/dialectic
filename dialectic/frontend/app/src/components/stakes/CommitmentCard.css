@@ -31,7 +31,7 @@
 /* Status chips — stencil outline, transparent fill */
 .status-badge {
     font-family: var(--font-stencil);
-    font-size: 8.5px;
+    font-size: 12px;
     padding: 2px 5px;
     border-radius: var(--radius-sm);
     text-transform: uppercase;
@@ -46,7 +46,7 @@
 
 .category-badge {
     font-family: var(--font-stencil);
-    font-size: 8.5px;
+    font-size: 12px;
     padding: 2px 5px;
     border-radius: var(--radius-sm);
     background: var(--amber-08);
@@ -65,7 +65,7 @@
 }
 .commitment-deadline {
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     color: var(--color-faint);
     margin-bottom: 12px;
     display: flex;
@@ -80,7 +80,7 @@
 .confidence-section h5 {
     margin: 0 0 8px;
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     color: var(--color-faint);
     text-transform: uppercase;
     letter-spacing: .1em;
@@ -93,7 +93,7 @@
 }
 .confidence-bar-row .conf-label {
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     color: var(--color-secondary);
     width: 64px;
     text-align: right;
@@ -113,7 +113,7 @@
 }
 .confidence-bar-row .conf-value {
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     color: var(--color-faint);
     width: 32px;
 }
@@ -137,7 +137,7 @@
 }
 .update-confidence .conf-display {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     color: var(--color-secondary);
     width: 32px;
 }
@@ -145,7 +145,7 @@
     padding: 4px 12px;
     border-radius: var(--radius-sm);
     font-family: var(--font-stencil);
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: .04em;
     cursor: pointer;
     border: 1px solid var(--color-bean);

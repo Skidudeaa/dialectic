@@ -75,6 +75,7 @@ class PredictionCreate(BaseModel):
     deadline: str  # ISO date
     linked_book_id: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
+    source_key: Optional[str] = None
 
 
 class Prediction(BaseModel):
@@ -92,6 +93,7 @@ class Prediction(BaseModel):
 
 class PredictionResolve(BaseModel):
     resolution: Literal["correct", "incorrect"]
+    source_key: Optional[str] = None
 
 
 # ── Trade Journal ─────────────────────────────────────────────────────────

@@ -25,7 +25,7 @@ const props = {
 }
 
 const tabNames = () =>
-  screen.getAllByRole('button')
+  screen.getAllByRole('tab')
     .map((b) => b.textContent?.trim())
     .filter(Boolean) as string[]
 
@@ -59,10 +59,10 @@ describe('RightPanel — the rail follows the scene', () => {
     expect(tabNames()).toContain('AI')
   })
 
-  it('keeps People and Share in every scene — they are room-wide', () => {
+  it('keeps Branches and Share in every scene — they are room-wide', () => {
     for (const scene of ['record', 'bench', 'library', 'ledger'] as const) {
       const { unmount } = render(<RightPanel {...props} isHome={false} scene={scene} />)
-      expect(tabNames()).toContain('Users')
+      expect(tabNames()).toContain('Branches')
       expect(tabNames()).toContain('Share')
       unmount()
     }
@@ -81,8 +81,8 @@ describe('RightPanel — what the rail still owns', () => {
   it('keeps what no scene has taken', () => {
     render(<RightPanel {...props} isHome={false} scene="record" />)
     const tabs = tabNames()
-    // People and sharing are room-wide, not scene-scoped.
-    expect(tabs).toContain('Users')
+    // Branch navigation and sharing are room-wide, not scene-scoped.
+    expect(tabs).toContain('Branches')
     expect(tabs).toContain('Share')
   })
 
@@ -109,5 +109,17 @@ describe('RightPanel — what the rail still owns', () => {
     // The API answers 409 there, so the tab would be a door onto a refusal.
     render(<RightPanel {...props} isHome scene="house" />)
     expect(tabNames()).not.toContain('Trading')
+  })
+
+  it('never offers the duplicate Users tab or falls back to it', () => {
+    useAppStore.setState({ rightPanelTab: 'memory', rightPanelOpen: true })
+    render(<RightPanel {...props} isHome={false} scene="record" />)
+    expect(screen.queryByRole('tab', { name: 'Users' })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Branches' })).toHaveClass('active')
+    expect(screen.getByRole('tab', { name: 'Branches' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.getByRole('tabpanel', { name: 'Branches panel' })).toBeInTheDocument()
   })
 })

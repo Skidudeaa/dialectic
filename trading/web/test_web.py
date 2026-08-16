@@ -10,7 +10,7 @@ import os
 import tempfile
 import threading
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -24,6 +24,7 @@ from web.main import app
 from web.auth import create_access_token, decode_token, authenticate_user
 from web.deps import get_repo
 from web.persistence.repository import Repository
+import web.routes.predictions as prediction_routes
 
 
 client = TestClient(app)
@@ -283,6 +284,53 @@ class TestRoutes:
             "resolution": "correct",
         }, headers=auth_headers)
         assert resp.status_code == 404
+
+    def test_duplicate_prediction_source_broadcasts_once(
+        self,
+        auth_headers,
+        monkeypatch,
+    ):
+        broadcast = AsyncMock()
+        monkeypatch.setattr(prediction_routes.manager, "broadcast_all", broadcast)
+        payload = {
+            "statement": "Oil hits $120",
+            "confidence": 0.75,
+            "deadline": "2026-12-01",
+            "source_key": "dialectic:m1:proposal",
+        }
+
+        first = client.post("/api/predictions", json=payload, headers=auth_headers)
+        second = client.post("/api/predictions", json=payload, headers=auth_headers)
+
+        assert first.status_code == second.status_code == 200
+        assert first.json()["id"] == second.json()["id"]
+        assert "source_key" not in first.json()
+        assert "resolution_source_key" not in first.json()
+        assert broadcast.await_count == 1
+
+    def test_conflicting_prediction_resolution_returns_409(
+        self,
+        auth_headers,
+    ):
+        prediction = client.post("/api/predictions", json={
+            "statement": "Oil hits $120",
+            "confidence": 0.75,
+            "deadline": "2026-12-01",
+            "source_key": "dialectic:m1:proposal",
+        }, headers=auth_headers).json()
+        first = client.post(
+            f"/api/predictions/{prediction['id']}/resolve",
+            json={"resolution": "correct", "source_key": "dialectic:resolve:p1"},
+            headers=auth_headers,
+        )
+        conflict = client.post(
+            f"/api/predictions/{prediction['id']}/resolve",
+            json={"resolution": "incorrect", "source_key": "dialectic:resolve:p2"},
+            headers=auth_headers,
+        )
+
+        assert first.status_code == 200
+        assert conflict.status_code == 409
 
     def test_journal_crud(self, auth_headers):
         resp = client.post("/api/journal", json={

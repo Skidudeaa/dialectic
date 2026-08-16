@@ -8,7 +8,7 @@
 }
 .sidebar-rooms-header h2 {
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     font-weight: normal;
     text-transform: uppercase;
     letter-spacing: .18em;
@@ -64,7 +64,7 @@
 .room-item.active .room-item-name { color: var(--color-bone); }
 .room-item-preview {
     font-family: var(--font-mono);
-    font-size: 8.5px;
+    font-size: 12px;
     color: var(--color-faint);
     text-transform: uppercase;
     letter-spacing: .06em;
@@ -80,7 +80,7 @@
     background: var(--color-amber);
     color: var(--color-void);
     font-family: var(--font-stencil);
-    font-size: 8px;
+    font-size: 12px;
     padding: 1px 5px;
     border-radius: var(--radius-sm);
     min-width: 16px;
@@ -100,7 +100,7 @@
 .user-info-name {
     flex: 1;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     color: var(--color-bone);
     white-space: nowrap;
     overflow: hidden;

@@ -9,23 +9,28 @@
 # cycle pushes the first snapshot, and the deep-surface builder is where the
 # DAG gets drawn.
 #
-# Relay order is deliberate — each step's failure leaves a consistent world:
+# Relay order is deliberate — the operation lease makes retries recoverable:
 #   1. register the room token on td's bridge  (idempotent; a leftover
 #      registration with no book simply never pushes)
-#   2. create the book, born with meta.dialecticRoomId  (fails → nothing
-#      links, retry is fresh)
-#   3. link rooms.linked_book_id + log THESIS_CREATED  (local, last, so a
-#      td failure can never leave Dialectic pointing at a book that does
-#      not exist)
+#   2. create/replay the room-bound book on tradingDesk
+#   3. link rooms.linked_book_id, log THESIS_CREATED, and complete the local
+#      operation in one transaction
 
 import logging
-from uuid import UUID, uuid4
 from datetime import datetime, timezone
+from uuid import UUID, uuid4
 
+import asyncpg
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.auth.dependencies import AuthenticatedUser, get_current_user
+from api.external_operations import (
+    OperationBusy,
+    claim_operation,
+    fail_operation,
+    succeed_operation,
+)
 from api.token_utils import extract_room_token
 from api.trading_ingest import THESIS_STATE_MEMORY_KEY
 from llm import tradingdesk_client as td
@@ -39,14 +44,15 @@ router = APIRouter(tags=["trading"])
 _db_pool = None
 
 
-def set_thesis_relay_db_pool(pool):
+def set_thesis_relay_db_pool(pool: asyncpg.Pool) -> None:
     global _db_pool
     _db_pool = pool
 
 
-async def get_db():
-    async with _db_pool.acquire() as conn:
-        yield conn
+async def get_pool() -> asyncpg.Pool:
+    if _db_pool is None:
+        raise RuntimeError("thesis relay database pool is not initialized")
+    return _db_pool
 
 
 async def _verify_room_member(room_id: UUID, user_id: UUID, db) -> None:
@@ -76,16 +82,18 @@ async def create_thesis(
     request: CreateThesisRequest,
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
     """Create a thesis book on tradingDesk, born bound to this room."""
-    row = await db.fetchrow(
-        "SELECT token, linked_book_id, is_home FROM rooms WHERE id = $1 AND token = $2",
-        room_id, token,
-    )
-    if not row:
-        raise HTTPException(status_code=401, detail="Invalid room token")
-    await _verify_room_member(room_id, current_user.user_id, db)
+    async with pool.acquire() as db:
+        row = await db.fetchrow(
+            "SELECT token, linked_book_id, is_home FROM rooms WHERE id = $1 AND token = $2",
+            room_id,
+            token,
+        )
+        if not row:
+            raise HTTPException(status_code=401, detail="Invalid room token")
+        await _verify_room_member(room_id, current_user.user_id, db)
 
     # Home connects the schemes; durable theses belong in their own rooms.
     # Guarded at the first authorized boundary — before any linked-book,
@@ -96,15 +104,31 @@ async def create_thesis(
             detail="Propose it in the scheme's room.",
         )
 
+    title = request.title.strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="Title must not be blank")
+
+    operation_key = f"thesis:{room_id}"
+    try:
+        operation = await claim_operation(
+            pool,
+            room_id=room_id,
+            kind="thesis",
+            operation_key=operation_key,
+            initiated_by=current_user.user_id,
+        )
+    except (OperationBusy, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if operation.status == "succeeded":
+        if operation.external_result is None:
+            raise RuntimeError("Succeeded external operation has no recorded result")
+        return operation.external_result
     if row["linked_book_id"]:
+        await fail_operation(pool, operation, error="room was already bound")
         raise HTTPException(
             status_code=409,
             detail=f"This room is already bound to '{row['linked_book_id']}'",
         )
-
-    title = request.title.strip()
-    if not title:
-        raise HTTPException(status_code=422, detail="Title must not be blank")
 
     # The verified room token IS the push credential — hand it to td so the
     # coordinator can deliver snapshots without a desk restart.
@@ -114,11 +138,12 @@ async def create_thesis(
             json_body={"room_id": str(room_id), "token": row["token"]},
         )
     except td.TradingDeskError as e:
+        await fail_operation(pool, operation, error=str(e))
         logger.warning("thesis create: token registration failed: %s", e)
         raise HTTPException(
             status_code=502,
             detail=f"tradingDesk refused the room token: {e}",
-        )
+        ) from e
 
     try:
         created = await td.post(
@@ -135,37 +160,45 @@ async def create_thesis(
             },
         )
     except td.TradingDeskError as e:
-        # The token registration above is idempotent and harmless on its
-        # own, so a retry after the desk recovers is a fresh create.
+        await fail_operation(pool, operation, error=str(e))
         logger.warning("thesis create: book creation failed: %s", e)
         raise HTTPException(
             status_code=502,
             detail=f"tradingDesk refused the thesis: {e}",
-        )
+        ) from e
 
     book_id = str((created or {}).get("id") or "").strip()
     if not book_id:
+        await fail_operation(pool, operation, error="tradingDesk returned no book id")
         logger.error("thesis create: td returned no book id: %r", created)
         raise HTTPException(
             status_code=502, detail="tradingDesk returned no book id"
         )
 
-    await db.execute(
-        "UPDATE rooms SET linked_book_id = $1 WHERE id = $2",
-        book_id, room_id,
-    )
-    await db.execute(
-        """INSERT INTO events (id, timestamp, event_type, room_id, user_id, payload)
-           VALUES ($1, $2, $3, $4, $5, $6)""",
-        uuid4(), datetime.now(timezone.utc), EventType.THESIS_CREATED.value,
-        room_id, current_user.user_id,
-        {"book_id": book_id, "title": title},
-    )
+    result = {"book_id": book_id, "title": title}
+    async with pool.acquire() as db:
+        async with db.transaction():
+            await db.execute(
+                "UPDATE rooms SET linked_book_id = $1 WHERE id = $2",
+                book_id,
+                room_id,
+            )
+            await db.execute(
+                """INSERT INTO events (id, timestamp, event_type, room_id, user_id, payload)
+                   VALUES ($1, $2, $3, $4, $5, $6)""",
+                uuid4(),
+                datetime.now(timezone.utc),
+                EventType.THESIS_CREATED.value,
+                room_id,
+                current_user.user_id,
+                result,
+            )
+            await succeed_operation(db, operation, result=result)
 
     logger.info(
         "thesis created: room %s -> book %s (%s)", room_id, book_id, title
     )
-    return {"book_id": book_id, "title": title}
+    return result
 
 
 @router.post("/rooms/{room_id}/trading/thesis/draft")
@@ -174,7 +207,7 @@ async def draft_thesis(
     request: CreateThesisRequest,
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
     """Claude drafts the causal DAG for review — a proposal, never a write.
 
@@ -184,14 +217,16 @@ async def draft_thesis(
     draft_prediction trust shape. Same auth and same already-bound gate as
     create, so a draft can never be minted for a room that cannot take it.
     """
-    row = await db.fetchrow(
-        """SELECT token, linked_book_id, is_home, primary_provider, primary_model
-           FROM rooms WHERE id = $1 AND token = $2""",
-        room_id, token,
-    )
-    if not row:
-        raise HTTPException(status_code=401, detail="Invalid room token")
-    await _verify_room_member(room_id, current_user.user_id, db)
+    async with pool.acquire() as db:
+        row = await db.fetchrow(
+            """SELECT token, linked_book_id, is_home, primary_provider, primary_model
+               FROM rooms WHERE id = $1 AND token = $2""",
+            room_id,
+            token,
+        )
+        if not row:
+            raise HTTPException(status_code=401, detail="Invalid room token")
+        await _verify_room_member(room_id, current_user.user_id, db)
 
     # Same Home guard as create — a draft can never be minted for a room
     # that could never accept it.
@@ -236,7 +271,7 @@ async def retire_thesis(
     room_id: UUID,
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
     """Retire the room's thesis — the book survives, the binding dies.
 
@@ -248,13 +283,15 @@ async def retire_thesis(
     binding intact and the retry is a fresh retire; the reverse order
     could leave a book pushing at a room that no longer claims it.
     """
-    row = await db.fetchrow(
-        "SELECT token, linked_book_id FROM rooms WHERE id = $1 AND token = $2",
-        room_id, token,
-    )
-    if not row:
-        raise HTTPException(status_code=401, detail="Invalid room token")
-    await _verify_room_member(room_id, current_user.user_id, db)
+    async with pool.acquire() as db:
+        row = await db.fetchrow(
+            "SELECT token, linked_book_id FROM rooms WHERE id = $1 AND token = $2",
+            room_id,
+            token,
+        )
+        if not row:
+            raise HTTPException(status_code=401, detail="Invalid room token")
+        await _verify_room_member(room_id, current_user.user_id, db)
 
     book_id = row["linked_book_id"]
     if not book_id:
@@ -271,41 +308,45 @@ async def retire_thesis(
             detail=f"tradingDesk refused the unbind: {e}",
         )
 
-    await db.execute(
-        "UPDATE rooms SET linked_book_id = NULL, trading_config = NULL WHERE id = $1",
-        room_id,
-    )
+    async with pool.acquire() as db:
+        await db.execute(
+            "UPDATE rooms SET linked_book_id = NULL, trading_config = NULL WHERE id = $1",
+            room_id,
+        )
 
-    # ALL active rows, not one: a racing pair of pushes can twin the slot
-    # (see trading_ingest's heal), and a retire must silence every copy.
-    memory_rows = await db.fetch(
-        f"""SELECT id FROM memories
-            WHERE room_id = $1 AND key = '{THESIS_STATE_MEMORY_KEY}'
-              AND status = 'active'""",
-        room_id,
-    )
-    if memory_rows:
-        from memory.manager import MemoryManager
-        manager = MemoryManager(db)
-        for memory_row in memory_rows:
-            try:
-                await manager.invalidate_memory(
-                    memory_id=memory_row["id"],
-                    invalidated_by_user_id=current_user.user_id,
-                    reason=f"thesis '{book_id}' retired",
-                )
-            except Exception:
-                # The retirement stands either way — a stale memory is a
-                # prompt nuisance, not a reason to fail the explicit retire.
-                logger.exception("thesis retire: memory invalidation failed")
+        # ALL active rows, not one: a racing pair of pushes can twin the slot
+        # (see trading_ingest's heal), and a retire must silence every copy.
+        memory_rows = await db.fetch(
+            f"""SELECT id FROM memories
+                WHERE room_id = $1 AND key = '{THESIS_STATE_MEMORY_KEY}'
+                  AND status = 'active'""",
+            room_id,
+        )
+        if memory_rows:
+            from memory.manager import MemoryManager
+            manager = MemoryManager(db)
+            for memory_row in memory_rows:
+                try:
+                    await manager.invalidate_memory(
+                        memory_id=memory_row["id"],
+                        invalidated_by_user_id=current_user.user_id,
+                        reason=f"thesis '{book_id}' retired",
+                    )
+                except Exception:
+                    # The retirement stands either way — a stale memory is a
+                    # prompt nuisance, not a reason to fail the explicit retire.
+                    logger.exception("thesis retire: memory invalidation failed")
 
-    await db.execute(
-        """INSERT INTO events (id, timestamp, event_type, room_id, user_id, payload)
-           VALUES ($1, $2, $3, $4, $5, $6)""",
-        uuid4(), datetime.now(timezone.utc), EventType.THESIS_RETIRED.value,
-        room_id, current_user.user_id,
-        {"book_id": book_id},
-    )
+        await db.execute(
+            """INSERT INTO events (id, timestamp, event_type, room_id, user_id, payload)
+               VALUES ($1, $2, $3, $4, $5, $6)""",
+            uuid4(),
+            datetime.now(timezone.utc),
+            EventType.THESIS_RETIRED.value,
+            room_id,
+            current_user.user_id,
+            {"book_id": book_id},
+        )
 
     logger.info("thesis retired: room %s released book %s", room_id, book_id)
     return {"retired_book_id": book_id}

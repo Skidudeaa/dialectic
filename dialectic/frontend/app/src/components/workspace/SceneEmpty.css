@@ -12,7 +12,7 @@
 }
 .scene-empty-kicker {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .18em;
     color: var(--color-faint);
@@ -37,7 +37,7 @@
 .scene-empty-body strong { color: var(--color-bone); font-weight: 600; }
 .scene-empty-detail {
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     color: var(--color-faint);
     word-break: break-word;
 }

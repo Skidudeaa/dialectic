@@ -17,13 +17,13 @@
 .user-list-dot.offline { background: var(--color-ghost); }
 .user-list-name {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     color: var(--color-bone);
     flex: 1;
 }
 .user-list-status {
     font-family: var(--font-mono);
-    font-size: 8.5px;
+    font-size: 12px;
     color: var(--color-ghost);
     text-transform: uppercase;
     letter-spacing: .06em;

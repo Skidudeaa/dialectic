@@ -27,7 +27,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.6rem;
-    font-size: 8.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .08em;
     color: var(--color-secondary);
@@ -105,7 +105,7 @@
     right: 8px;
     z-index: 2;
     font-family: var(--font-mono);
-    font-size: 8.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .08em;
     color: var(--color-warning);
@@ -121,7 +121,7 @@
 
 .thesis-dag-phase-label {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     fill: var(--color-ghost);
     text-transform: uppercase;
     letter-spacing: .1em;
@@ -134,7 +134,7 @@
 
 .thesis-dag-edge-label {
     font-family: var(--font-mono);
-    font-size: 8px;
+    font-size: 12px;
     fill: var(--color-secondary);
 }
 
@@ -157,7 +157,7 @@
 
 .thesis-dag-node-type {
     font-family: var(--font-mono);
-    font-size: 7.5px;
+    font-size: 12px;
     letter-spacing: .06em;
     text-transform: uppercase;
     fill: var(--color-ghost);
@@ -171,7 +171,7 @@
 
 .thesis-dag-node-phase {
     font-family: var(--font-mono);
-    font-size: 8px;
+    font-size: 12px;
     fill: var(--color-faint);
     text-transform: uppercase;
     letter-spacing: .06em;
@@ -221,7 +221,7 @@
 .thesis-dag-footnote {
     margin: 0;
     font-family: var(--font-mono);
-    font-size: 8.5px;
+    font-size: 12px;
     line-height: 1.4;
     color: var(--color-ghost);
 }
@@ -289,13 +289,13 @@
 .thesis-dag-detail-row {
     display: flex;
     gap: 0.5rem;
-    font-size: 10px;
+    font-size: 12px;
 }
 
 .thesis-dag-detail-row dt {
     flex: 0 0 84px;
     margin: 0;
-    font-size: 8.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .08em;
     color: var(--color-ghost);
@@ -310,7 +310,7 @@
 
 .thesis-dag-detail-row--context dd {
     font-family: var(--font-serif);
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.4;
 }
 

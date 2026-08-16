@@ -7,7 +7,7 @@
     background: var(--color-obsidian);
     flex-shrink: 0;
     font-family: var(--font-mono);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
 }
 /* Outline chips with currentColor border + transparent fill — no solid backgrounds */
 .participant-chip {
@@ -30,7 +30,7 @@
 .participant-chip .presence-dot.offline { background: var(--color-ghost); }
 .participant-chip .p-name {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: .06em;
     text-transform: uppercase;
     color: inherit;
@@ -49,7 +49,7 @@
 .participant-chip .p-last-seen {
     margin-left: 6px;
     font-family: var(--font-mono);
-    font-size: 8px;
+    font-size: 12px;
     letter-spacing: .14em;
     text-transform: uppercase;
     color: var(--color-faint);

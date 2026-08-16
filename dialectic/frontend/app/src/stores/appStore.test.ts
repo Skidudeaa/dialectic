@@ -29,6 +29,23 @@ describe('workspace scene state', () => {
   })
 })
 
+describe('context rail state', () => {
+  it('starts closed and opens when a contextual tab is requested', () => {
+    expect(useAppStore.getState().rightPanelOpen).toBe(false)
+    useAppStore.getState().setRightPanelTab('threads')
+    expect(useAppStore.getState().rightPanelTab).toBe('threads')
+    expect(useAppStore.getState().rightPanelOpen).toBe(true)
+  })
+
+  it('can close without losing the selected contextual tab', () => {
+    useAppStore.getState().setRightPanelTab('history')
+    useAppStore.getState().setRightPanelOpen(false)
+    const state = useAppStore.getState()
+    expect(state.rightPanelOpen).toBe(false)
+    expect(state.rightPanelTab).toBe('history')
+  })
+})
+
 describe('exact-restoration axes (§15.2, TG-E)', () => {
   it('start null before any restoration or interaction sets them', () => {
     const state = useAppStore.getState()

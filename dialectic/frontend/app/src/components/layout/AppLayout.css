@@ -1,9 +1,15 @@
 .app-layout {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
     display: grid;
+    box-sizing: border-box;
     height: 100dvh;
     height: 100vh;
-    grid-template-columns: 260px 1fr 300px;
+    grid-template-columns: 260px minmax(0, 1fr) 300px;
     grid-template-rows: 1fr;
+    padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
 }
 
 @supports (height: 100dvh) {
@@ -77,41 +83,52 @@
     overflow: hidden;
 }
 
-@media (max-width: 1200px) {
-    .app-layout { grid-template-columns: 220px 1fr 260px; }
+.app-layout.right-panel-closed {
+    grid-template-columns: 260px minmax(0, 1fr);
+}
+.app-layout.right-panel-closed .app-right-panel {
+    display: none;
 }
 
 /* Small screens: the rails become slide-over drawers. WHY not display:none
    (the old rule): the PWA is the reach strategy, and hiding the rails
    outright locked phones out of memory, trading, stakes — the whole
-   cockpit. The ☰ / ▦ buttons in the room header drive `mobileDrawer`.
-   Boundary is EXCLUSIVE of 1024: the Home Base acceptance contract keeps
-   1024 itself on desktop navigation (spec: 1440/1200/1024 are desktop). */
-@media (max-width: 1023.98px) {
-    .app-layout { grid-template-columns: 1fr; }
+   cockpit. The header buttons drive `mobileDrawer`. iPad landscape remains a
+   one-column work surface; fixed rails stop stealing most of its width. */
+@media (max-width: 1279.98px) {
+    .app-layout,
+    .app-layout.right-panel-closed {
+        grid-template-columns: minmax(0, 1fr);
+    }
     .app-sidebar,
     .app-right-panel {
         position: fixed;
-        top: 0;
-        bottom: 0;
+        top: var(--safe-top);
+        bottom: var(--safe-bottom);
         width: min(85vw, 320px);
         z-index: 60;
         transition: transform 180ms ease;
         box-shadow: 0 0 32px rgba(0, 0, 0, 0.55);
     }
+    .app-layout.right-panel-closed .app-right-panel {
+        display: flex;
+    }
     .app-sidebar {
-        left: 0;
+        left: var(--safe-left);
         transform: translateX(-100%);
     }
     .app-right-panel {
-        right: 0;
+        right: var(--safe-right);
         transform: translateX(100%);
     }
     .drawer-rooms .app-sidebar { transform: translateX(0); }
     .drawer-panel .app-right-panel { transform: translateX(0); }
     .app-drawer-scrim {
         position: fixed;
-        inset: 0;
+        top: var(--safe-top);
+        right: var(--safe-right);
+        bottom: var(--safe-bottom);
+        left: var(--safe-left);
         z-index: 50;
         background: rgba(0, 0, 0, 0.5);
     }

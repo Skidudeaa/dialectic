@@ -1,4 +1,30 @@
-# Release 3 — Deliberation and Whole-House Intelligence
+# Dialectic — Current Release Authority
+
+**Current release:** Big-Bang Production Stabilization
+
+**Implementation authority:**
+[`docs/superpowers/plans/2026-08-15-dialectic-big-bang-stabilization.md`](docs/superpowers/plans/2026-08-15-dialectic-big-bang-stabilization.md)
+
+**Approved design:**
+[`docs/superpowers/specs/2026-08-15-dialectic-big-bang-stabilization-design.md`](docs/superpowers/specs/2026-08-15-dialectic-big-bang-stabilization-design.md)
+
+| Boundary | Current state |
+|---|---|
+| Design and implementation slices | Approved and implemented locally on `codex/dialectic-big-bang-stabilization-2026-08-15` |
+| Integrated local gate | Complete 2026-08-16; exact counts, browser widths, screenshots, and red-green mutation ledger are in `JOURNAL.md` |
+| PostgreSQL migration 018 | Applied to `dialectic_test` only; production unchanged |
+| tradingDesk SQLite migration 006 | Exercised against isolated test databases only; production unchanged |
+| Service/runtime/frontend | Production services, unit installation, restarts, and served assets unchanged |
+| Activation | Requires a new explicit authorization after the integrated gate |
+| Device proof | Five-width Playwright gate is local; real iPad/phone proof remains pending |
+
+Releases 1–3 below are shipped history, not the active implementation queue.
+Unfinished product work lives in `dialectic/TODOS.md`; durable decisions and
+verification facts live in `JOURNAL.md` and git.
+
+---
+
+# Historical Release 3 — Deliberation and Whole-House Intelligence
 
 Handoff for a fresh implementer with zero context. You cannot ask the author
 anything. Everything you need is here or named here.

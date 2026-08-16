@@ -25,6 +25,10 @@ from web.persistence.migrations import run_migrations
 log = logging.getLogger(__name__)
 
 
+class PredictionResolutionConflict(RuntimeError):
+    """A resolved prediction cannot be changed to the opposite verdict."""
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -402,6 +406,11 @@ class Repository:
             conn.close()
 
     def save_prediction(self, user: str, prediction: dict) -> dict:
+        record, _created = self.save_prediction_once(user, prediction)
+        return record
+
+    def save_prediction_once(self, user: str, prediction: dict) -> tuple[dict, bool]:
+        """Insert once per optional source key and return the public record."""
         record = {
             "id": _gen_id(),
             "user": user,
@@ -414,40 +423,87 @@ class Repository:
             "tags": prediction.get("tags", []),
             "created_at": _now_iso(),
         }
+        source_key = prediction.get("source_key")
         conn = self._conn()
         try:
-            conn.execute(
-                """INSERT INTO predictions
+            insert = "INSERT" if source_key is None else "INSERT OR IGNORE"
+            cursor = conn.execute(
+                f"""{insert} INTO predictions
                    (id, user, statement, confidence, deadline, resolution,
-                    resolved_at, linked_book_id, tags, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    resolved_at, linked_book_id, tags, created_at, source_key)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (record["id"], user, record["statement"], record["confidence"],
                  record["deadline"], None, None, record["linked_book_id"],
-                 json.dumps(record["tags"]), record["created_at"]),
+                 json.dumps(record["tags"]), record["created_at"], source_key),
             )
             conn.commit()
-            return record
+            created = cursor.rowcount == 1
+            if created:
+                row = conn.execute(
+                    "SELECT * FROM predictions WHERE id = ?", (record["id"],)
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT * FROM predictions WHERE source_key = ?", (source_key,)
+                ).fetchone()
+            if row is None:
+                raise RuntimeError("Prediction insert was ignored without an existing source row")
+            return self._prediction_from_row(row), created
         finally:
             conn.close()
 
     def resolve_prediction(self, prediction_id: str, resolution: str) -> Optional[dict]:
+        record, _changed = self.resolve_prediction_once(
+            prediction_id,
+            resolution,
+            None,
+        )
+        return record
+
+    def resolve_prediction_once(
+        self,
+        prediction_id: str,
+        resolution: str,
+        source_key: Optional[str],
+    ) -> tuple[Optional[dict], bool]:
+        """Resolve once; identical retries are no-ops and conflicts are loud."""
         conn = self._conn()
         try:
             row = conn.execute(
                 "SELECT * FROM predictions WHERE id = ?", (prediction_id,)
             ).fetchone()
             if not row:
-                return None
+                return None, False
+            if row["resolution"] is not None:
+                record = self._prediction_from_row(row)
+                if row["resolution"] != resolution:
+                    raise PredictionResolutionConflict(
+                        "Prediction is already resolved with a different verdict"
+                    )
+                return record, False
             now = _now_iso()
-            conn.execute(
-                "UPDATE predictions SET resolution=?, resolved_at=? WHERE id=?",
-                (resolution, now, prediction_id),
+            cursor = conn.execute(
+                """UPDATE predictions
+                   SET resolution = ?, resolved_at = ?, resolution_source_key = ?
+                   WHERE id = ? AND resolution IS NULL""",
+                (resolution, now, source_key, prediction_id),
             )
+            if cursor.rowcount != 1:
+                current = conn.execute(
+                    "SELECT * FROM predictions WHERE id = ?", (prediction_id,)
+                ).fetchone()
+                if current is None:
+                    return None, False
+                if current["resolution"] != resolution:
+                    raise PredictionResolutionConflict(
+                        "Prediction is already resolved with a different verdict"
+                    )
+                return self._prediction_from_row(current), False
             conn.commit()
-            record = self._prediction_from_row(row)
-            record["resolution"] = resolution
-            record["resolved_at"] = now
-            return record
+            updated = conn.execute(
+                "SELECT * FROM predictions WHERE id = ?", (prediction_id,)
+            ).fetchone()
+            return self._prediction_from_row(updated), True
         finally:
             conn.close()
 
@@ -455,6 +511,8 @@ class Repository:
     def _prediction_from_row(row) -> dict:
         d = dict(row)
         d["tags"] = json.loads(d["tags"]) if d.get("tags") else []
+        d.pop("source_key", None)
+        d.pop("resolution_source_key", None)
         return d
 
     # ════════════════════════════════════════════════════════════════

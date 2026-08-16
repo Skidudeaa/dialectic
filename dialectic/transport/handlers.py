@@ -76,6 +76,32 @@ def _message_type_from_payload(payload: dict) -> MessageType:
     return MessageType(raw_type)
 
 
+def build_message_created_payload(
+    message: Message,
+    *,
+    user_name: str,
+    attachments: list[dict] | None = None,
+) -> dict:
+    """Build the live payload for one persisted human message."""
+    return {
+        "id": str(message.id),
+        "thread_id": str(message.thread_id),
+        "sequence": message.sequence,
+        "created_at": message.created_at.isoformat(),
+        "speaker_type": message.speaker_type.value,
+        "user_id": str(message.user_id) if message.user_id else None,
+        "user_name": user_name,
+        "message_type": message.message_type.value,
+        "content": message.content,
+        "references_message_id": (
+            str(message.references_message_id)
+            if message.references_message_id else None
+        ),
+        "metadata": message.metadata,
+        "attachments": attachments or [],
+    }
+
+
 def _llm_done_payload(thread_id: UUID, data: dict) -> dict:
     """Build the authoritative persisted-message contract for llm_done."""
     payload = {
@@ -396,32 +422,17 @@ class MessageHandler:
 
         await self.connections.broadcast(conn.room_id, OutboundMessage(
             type=MessageTypes.MESSAGE_CREATED,
-            payload={
-                "id": str(message.id),
-                "thread_id": str(message.thread_id),
-                "sequence": message.sequence,
-                "created_at": message.created_at.isoformat(),
-                "speaker_type": message.speaker_type.value,
-                "user_id": str(message.user_id),
-                "user_name": user_row['display_name'] if user_row else "Unknown",
-                "message_type": message.message_type.value,
-                "content": message.content,
-                # WHY: the column is persisted and carried on the event, but was
-                # missing here — so a reply rendered as an ordinary message for
-                # everyone live in the room and only revealed its parent after a
-                # reload (GET /threads/{id}/messages selects m.*).
-                "references_message_id": (
-                    str(message.references_message_id)
-                    if message.references_message_id else None
-                ),
+            payload=build_message_created_payload(
+                message,
+                user_name=user_row['display_name'] if user_row else "Unknown",
                 # Bound in the insert transaction above, so this is the first
                 # read that can carry the media — receivers render from this
                 # and never probe. AttachmentResponse-shaped (see _to_response).
-                "attachments": [
+                attachments=[
                     _to_response(row).model_dump(mode="json")
                     for row in bound_attachments
                 ],
-            }
+            ),
         ))
 
         # P4: implicit-commitment detection — proposal-shaped, fire-and-forget.

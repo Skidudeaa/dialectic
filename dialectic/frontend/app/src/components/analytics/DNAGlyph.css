@@ -14,13 +14,13 @@
     letter-spacing: .08em;
     text-transform: uppercase;
 }
-.dna-glyph.small .dna-fingerprint { font-size: 8px; }
-.dna-glyph.large .dna-fingerprint { font-size: 10px; }
+.dna-glyph.small .dna-fingerprint { font-size: 12px; }
+.dna-glyph.large .dna-fingerprint { font-size: 12px; }
 .dna-archetype {
     font-family: var(--font-stencil);
     text-transform: uppercase;
     letter-spacing: .08em;
     color: var(--color-amber);
 }
-.dna-glyph.small .dna-archetype { font-size: 8px; }
-.dna-glyph.large .dna-archetype { font-size: 11px; }
+.dna-glyph.small .dna-archetype { font-size: 12px; }
+.dna-glyph.large .dna-archetype { font-size: 12px; }

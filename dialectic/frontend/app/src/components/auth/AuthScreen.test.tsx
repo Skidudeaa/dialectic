@@ -10,7 +10,11 @@ import { api } from '../../lib/api.ts'
 // what the thing IS, and a door that looks open but is not.
 
 vi.mock('../../lib/api.ts', () => ({
-  api: { getCapabilities: vi.fn(), setAccessToken: vi.fn() },
+  api: {
+    forgotPassword: vi.fn(),
+    getCapabilities: vi.fn(),
+    setAccessToken: vi.fn(),
+  },
 }))
 
 const mockCapabilities = (signups_enabled: boolean, guest_access_enabled = false) => {
@@ -97,5 +101,21 @@ describe('AuthScreen — the front door', () => {
     render(<AuthScreen />)
     fireEvent.click(screen.getByRole('tab', { name: /create account/i }))
     expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument()
+  })
+
+  it('reports unavailable password recovery without claiming a code was sent', async () => {
+    vi.mocked(api.forgotPassword).mockRejectedValue(
+      new Error('Password recovery is unavailable because email delivery is not configured'),
+    )
+    render(<AuthScreen />)
+    fireEvent.change(screen.getByLabelText(/^email$/i), {
+      target: { value: 'amo@example.com' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /forgot password/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Password recovery is unavailable because email delivery is not configured',
+    )
+    expect(screen.queryByText(/code sent/i)).not.toBeInTheDocument()
   })
 })

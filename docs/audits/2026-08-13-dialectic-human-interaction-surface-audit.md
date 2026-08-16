@@ -9,6 +9,25 @@ sites, backend routes, realtime events, current product specification, current
 Release 3 plan, and operator runbooks. This is a code-grounded audit, not a
 production browser certification.
 
+## 2026-08-16 local stabilization amendment
+
+The big-bang stabilization branch repairs the findings below **locally**. None
+of these status changes is a deployment claim: production migrations, service
+restarts, frontend activation, served-asset checks, and real-device proof remain
+pending a separately authorized activation.
+
+| Audit surface / contract | Local status | What changed | Still pending |
+|---|---|---|---|
+| A06–A07 recovery truth | IMPLEMENTED LOCALLY | Forgot-password creates no unreachable credential and returns the same honest unavailable response for known and unknown accounts; reset failures no longer disclose account state. | Real email delivery and a complete recovery UI. |
+| A13–A15 room authority | IMPLEMENTED LOCALLY | Room creation requires bearer auth; generic join retains its compatible body but binds it to the bearer; user-model reads are self-only. | Production activation and the broader invitation/membership lifecycle. |
+| R04, R07, R11, R19 message truth | IMPLEMENTED LOCALLY | Reload retains reply/edit fields; REST send now shares room fencing, transaction, bounded sequence retry, persisted payload, and post-commit fanout semantics with WebSocket delivery; unread counts include null-authored Dialectic rows and exclude stored lowercase system rows. | Production and multi-device observation. |
+| R21–R22 attachment reuse | IMPLEMENTED LOCALLY | Content-addressed files stay deduplicated, but an attachment row is reused only for the same uploader while unbound. | Product-level file trust/scan metadata remains open. |
+| D10 durable acceptance | IMPLEMENTED LOCALLY | Prediction, resolution, reading, and thesis relays use leased operation keys, release PostgreSQL during external waits, replay success, preserve the initiating human, and finalize local acceptance atomically. tradingDesk prediction writes and room-bound theses are independently idempotent. | Production migrations 018/006 and activation proof. |
+| N05–N06, N08–N10, P01, X08–X09 shell/accessibility | IMPLEMENTED LOCALLY | Below 1280px both rails are independent overlays; desktop context is explicit; duplicate Users is removed; tabs expose active semantics; all seven scenes remain reachable through primary/overflow navigation; safe areas, 44px targets, 12px control type, and contrast pass at five widths. | Hardware iPad/phone, keyboard, and screen-reader proof. |
+| R04 ancestry history | IMPLEMENTED LOCALLY | Cross-thread ancestry uses strict opaque time-plus-ID cursors and a bounded recursive SQL window; incompatible sequence cursors fail instead of returning a false page. | Production query observation at real history volume. |
+| O04 startup truth | IMPLEMENTED LOCALLY | PostgreSQL pool creation failure aborts startup; the supported Redis in-memory fallback remains separate. | Runtime restart/health proof after authorization. |
+| O07 tracked service authority | IMPLEMENTED LOCALLY | The tracked unit now matches the installed non-secret working-tree structure. | No unit was installed or reloaded. |
+
 ## Executive finding
 
 Dialectic does not have one UI. It currently has four human-interaction

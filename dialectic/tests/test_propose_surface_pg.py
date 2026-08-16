@@ -34,6 +34,25 @@ TEST_DATABASE_URL = os.environ.get(
 )
 
 
+class _BorrowedConnection:
+    def __init__(self, connection: asyncpg.Connection) -> None:
+        self.connection = connection
+
+    async def __aenter__(self) -> asyncpg.Connection:
+        return self.connection
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        return None
+
+
+class _BorrowedPool:
+    def __init__(self, connection: asyncpg.Connection) -> None:
+        self.connection = connection
+
+    def acquire(self) -> _BorrowedConnection:
+        return _BorrowedConnection(self.connection)
+
+
 def _uid(n: int) -> UUID:
     return UUID(f"00000000-0000-4000-8000-{n:012x}")
 
@@ -232,7 +251,7 @@ async def test_compose_then_envelope_then_the_other_user_accepts(room, monkeypat
         request=relay.AcceptPredictionRequest(message_id=response.id),
         token="propose-surface-room-token",
         current_user=_caller(DAN, "Dan"),
-        db=room,
+        pool=_BorrowedPool(room),
     )
     assert len(posted) == 1
 

@@ -103,6 +103,19 @@ export function AuthScreen() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await api.forgotPassword(signInEmail);
+      setError('Password recovery is unavailable because email delivery is not configured');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Password recovery is unavailable');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -194,7 +207,7 @@ export function AuthScreen() {
           <div className="auth-notice" role="status">{signedOutReason}</div>
         )}
 
-        {error && <div className="auth-error">{error}</div>}
+        {error && <div className="auth-error" role="alert">{error}</div>}
 
         {activeTab === 'signin' && (
           <form className="auth-form" id="auth-panel-signin" role="tabpanel" aria-labelledby="auth-tab-signin" onSubmit={handleSignIn}>
@@ -224,6 +237,14 @@ export function AuthScreen() {
             </label>
             <button className="btn btn-primary btn-full" type="submit" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
+            </button>
+            <button
+              className="btn btn-ghost btn-full"
+              type="button"
+              disabled={loading || !signInEmail}
+              onClick={() => { void handleForgotPassword(); }}
+            >
+              Forgot password?
             </button>
           </form>
         )}

@@ -9,10 +9,10 @@ and the write at reading_relay.reading_mod.save_reading; no live Postgres,
 no live sidecar.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
-import pytest
 from fastapi.testclient import TestClient
 
 import api.main as main_mod
@@ -48,6 +48,25 @@ ARTICLE = {
 _DEFAULT = object()
 
 
+class _AsyncContext:
+    def __init__(self, value=None):
+        self.value = value
+
+    async def __aenter__(self):
+        return self.value
+
+    async def __aexit__(self, *exc_info):
+        return None
+
+
+class _Pool:
+    def __init__(self, db):
+        self.db = db
+
+    def acquire(self):
+        return _AsyncContext(self.db)
+
+
 def _make_db(metadata=_DEFAULT, message_found=True, members=None, room_token_valid=True):
     """Fake db routing fetchrow by the table the caller queried."""
     if members is None:
@@ -70,21 +89,36 @@ def _make_db(metadata=_DEFAULT, message_found=True, members=None, room_token_val
 
     fake_db.fetchrow = AsyncMock(side_effect=fetchrow)
     fake_db.execute = AsyncMock(return_value=None)
+    fake_db.transaction = lambda: _AsyncContext()
+    fake_db._operation_status = "pending"
+    fake_db._external_result = None
     return fake_db
 
 
 def _accept(fake_db, monkeypatch, extract, save):
     """Run the accept call against overridden deps; returns the response."""
-    async def _fake_db_dep():
-        yield fake_db
+    operation = SimpleNamespace(
+        status=fake_db._operation_status,
+        external_result=fake_db._external_result,
+    )
+    claim = AsyncMock(return_value=operation)
+    succeed = AsyncMock()
+    fail = AsyncMock()
+    fake_db._claim = claim
+    fake_db._succeed = succeed
+    fake_db._fail = fail
+    fake_db._pool = _Pool(fake_db)
 
-    main_mod.app.dependency_overrides[relay.get_db] = _fake_db_dep
+    main_mod.app.dependency_overrides[relay.get_pool] = lambda: fake_db._pool
     main_mod.app.dependency_overrides[relay.extract_room_token] = lambda: "tok"
     main_mod.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
         user_id=CALLER_ID, email="caller@test", email_verified=True, display_name="Caller",
     )
     monkeypatch.setattr(relay.dc, "extract_article", extract)
     monkeypatch.setattr(relay.reading_mod, "save_reading", save)
+    monkeypatch.setattr(relay, "claim_operation", claim)
+    monkeypatch.setattr(relay, "succeed_operation", succeed)
+    monkeypatch.setattr(relay, "fail_operation", fail)
     try:
         return TestClient(main_mod.app).post(
             f"/rooms/{ROOM_ID}/reading/accept",
@@ -115,7 +149,17 @@ def test_accept_refetches_and_files_the_article(monkeypatch):
     assert kwargs["source"] == "proposal"
     assert kwargs["source_message_id"] == MESSAGE_ID
     assert kwargs["saved_by_user_id"] == CALLER_ID
-    fake_db.execute.assert_awaited_once()
+    fake_db._claim.assert_awaited_once_with(
+        fake_db._pool,
+        room_id=ROOM_ID,
+        kind="reading",
+        operation_key=f"reading:{MESSAGE_ID}:reading_proposal",
+        initiated_by=CALLER_ID,
+        source_message_id=MESSAGE_ID,
+        proposal_slot="reading_proposal",
+    )
+    fake_db._succeed.assert_awaited_once()
+    assert fake_db._succeed.await_args.kwargs["result"] == saved_row
 
 
 def test_second_tap_is_a_conflict(monkeypatch):
@@ -127,6 +171,23 @@ def test_second_tap_is_a_conflict(monkeypatch):
     resp = _accept(fake_db, monkeypatch, extract, save)
 
     assert resp.status_code == 409
+    extract.assert_not_awaited()
+    save.assert_not_awaited()
+    fake_db._fail.assert_awaited_once()
+
+
+def test_succeeded_operation_replays_the_filed_reading(monkeypatch):
+    accepted = {**PROPOSAL, "accepted": True}
+    fake_db = _make_db(metadata={"reading_proposal": accepted})
+    fake_db._operation_status = "succeeded"
+    fake_db._external_result = {"id": "reading-1", "url": PROPOSAL["url"]}
+    extract = AsyncMock()
+    save = AsyncMock()
+
+    resp = _accept(fake_db, monkeypatch, extract, save)
+
+    assert resp.status_code == 200
+    assert resp.json() == fake_db._external_result
     extract.assert_not_awaited()
     save.assert_not_awaited()
 
@@ -157,8 +218,8 @@ def test_sidecar_failure_is_502_and_leaves_the_draft_open(monkeypatch):
 
     assert resp.status_code == 502
     save.assert_not_awaited()
-    # No accepted stamp — a retry after recovery is a fresh accept.
-    fake_db.execute.assert_not_awaited()
+    fake_db._succeed.assert_not_awaited()
+    fake_db._fail.assert_awaited_once()
 
 
 def test_unreadable_refetch_is_422(monkeypatch):
@@ -170,6 +231,7 @@ def test_unreadable_refetch_is_422(monkeypatch):
 
     assert resp.status_code == 422
     save.assert_not_awaited()
+    fake_db._fail.assert_awaited_once()
 
 
 def test_non_member_is_403(monkeypatch):

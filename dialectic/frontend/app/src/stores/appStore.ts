@@ -84,6 +84,8 @@ interface AppState {
   tradingConfig: TradingSnapshot | null;
   /** Right-panel tab, lifted here so a chat card can open a specific tab. */
   rightPanelTab: string;
+  /** Whether desktop reserves space for the contextual rail. */
+  rightPanelOpen: boolean;
   /** Which rail is slid over the stream on small screens, if any. */
   mobileDrawer: 'rooms' | 'panel' | null;
   /** A propose_thesis card's payload, consumed by the Create Thesis form. */
@@ -151,6 +153,7 @@ interface AppState {
   setSurfacedCommitments: (commitments: Commitment[]) => void;
   setActiveCommitments: (commitments: Commitment[]) => void;
   setTradingConfig: (config: TradingSnapshot | null) => void;
+  setRightPanelOpen: (open: boolean) => void;
   setRightPanelTab: (tab: string) => void;
   setMobileDrawer: (drawer: 'rooms' | 'panel' | null) => void;
   setThesisSeed: (seed: { title: string; claim: string; monthlyBudget: number } | null) => void;
@@ -180,6 +183,7 @@ const initialRoomState = {
   surfacedCommitments: [],
   tradingConfig: null,
   rightPanelTab: 'memory',
+  rightPanelOpen: false,
   mobileDrawer: null,
   thesisSeed: null,
   wsSend: null,
@@ -243,6 +247,7 @@ export const useAppStore = create<AppState>()(
           surfacedCommitments: [],
           tradingConfig: null,
           rightPanelTab: 'memory',
+          rightPanelOpen: false,
           thesisSeed: null,
           // Exact-restoration axes (§15.2/TG-E): a Focus selection, scroll
           // offset or open proposal from the room just left has no meaning
@@ -399,7 +404,9 @@ export const useAppStore = create<AppState>()(
 
       setTradingConfig: (config) => set({ tradingConfig: config }),
 
-      setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
+      setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
+
+      setRightPanelTab: (tab) => set({ rightPanelTab: tab, rightPanelOpen: true }),
 
       setMobileDrawer: (drawer) => set({ mobileDrawer: drawer }),
 

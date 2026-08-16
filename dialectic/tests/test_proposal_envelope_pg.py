@@ -39,6 +39,25 @@ TEST_DATABASE_URL = os.environ.get(
 )
 
 
+class _BorrowedConnection:
+    def __init__(self, connection: asyncpg.Connection) -> None:
+        self.connection = connection
+
+    async def __aenter__(self) -> asyncpg.Connection:
+        return self.connection
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        return None
+
+
+class _BorrowedPool:
+    def __init__(self, connection: asyncpg.Connection) -> None:
+        self.connection = connection
+
+    def acquire(self) -> _BorrowedConnection:
+        return _BorrowedConnection(self.connection)
+
+
 def _uid(n: int) -> UUID:
     return UUID(f"00000000-0000-4000-8000-{n:012x}")
 
@@ -299,16 +318,14 @@ async def test_failed_is_in_the_vocabulary_though_no_row_records_it():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_accepting_through_the_relay_disarms_the_envelope(proposed, monkeypatch):
+async def test_accepting_through_the_relay_disarms_and_replays(proposed, monkeypatch):
     """The relay's own write, then the envelope, then the relay again.
 
     Nothing here stamps the flag by hand: that would only prove the envelope
     agrees with my copy of the relay's rule. The relay writes, the envelope
-    must SEE it, and the second tap must be a conflict rather than a second
-    prediction on the desk.
+    must SEE it, and the second tap must replay the recorded result rather
+    than create a second prediction on the desk.
     """
-    from fastapi import HTTPException
-
     import api.prediction_relay as relay
     from api.auth.dependencies import AuthenticatedUser
 
@@ -331,7 +348,7 @@ async def test_accepting_through_the_relay_disarms_the_envelope(proposed, monkey
     await relay.accept_prediction(
         room_id=ROOM,
         request=relay.AcceptPredictionRequest(message_id=M_DRAFTS),
-        token=token, current_user=caller, db=proposed,
+        token=token, current_user=caller, pool=_BorrowedPool(proposed),
     )
     assert len(posted) == 1
 
@@ -342,13 +359,12 @@ async def test_accepting_through_the_relay_disarms_the_envelope(proposed, monkey
     assert "inspect" in after["prediction_draft"].available_actions
     assert after["prediction_draft"].payload["statement"] == "Brent over 90"
 
-    with pytest.raises(HTTPException) as second:
-        await relay.accept_prediction(
-            room_id=ROOM,
-            request=relay.AcceptPredictionRequest(message_id=M_DRAFTS),
-            token=token, current_user=caller, db=proposed,
-        )
-    assert second.value.status_code == 409
+    second = await relay.accept_prediction(
+        room_id=ROOM,
+        request=relay.AcceptPredictionRequest(message_id=M_DRAFTS),
+        token=token, current_user=caller, pool=_BorrowedPool(proposed),
+    )
+    assert second["id"] == "pred-1"
     assert len(posted) == 1, "a second tap reached tradingDesk"
 
 
@@ -420,7 +436,7 @@ async def test_accepting_a_prediction_records_who_did_it(proposed, monkeypatch):
     await relay.accept_prediction(
         room_id=ROOM,
         request=relay.AcceptPredictionRequest(message_id=M_DRAFTS),
-        token=token, current_user=caller, db=proposed,
+        token=token, current_user=caller, pool=_BorrowedPool(proposed),
     )
 
     envelope = _by_kind(await ProposalEnvelopeService(proposed).build(ROOM))["prediction_draft"]
@@ -445,7 +461,7 @@ async def test_accepting_a_resolution_records_who_did_it(proposed, monkeypatch):
     await relay.resolve_accept(
         room_id=ROOM, prediction_id="p1",
         request=relay.ResolveAcceptRequest(verdict="correct"),
-        token=token, current_user=caller, db=proposed,
+        token=token, current_user=caller, pool=_BorrowedPool(proposed),
     )
 
     envelope = _by_kind(await ProposalEnvelopeService(proposed).build(ROOM))["prediction_resolution"]

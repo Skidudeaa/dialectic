@@ -34,6 +34,13 @@ const SCENE_HINTS: Record<ImplementedWorkspaceScene, string> = {
   atlas: 'The whole house mapped — rooms, artifacts, echoes, and their crossings.',
 }
 
+const PRIMARY_SCENES = new Set<ImplementedWorkspaceScene>([
+  'house',
+  'record',
+  'bench',
+  'field',
+])
+
 interface SceneSwitcherProps {
   scene: ImplementedWorkspaceScene
   scenes: readonly ImplementedWorkspaceScene[]
@@ -44,6 +51,8 @@ export function SceneSwitcher({ scene, scenes, onSelect }: SceneSwitcherProps) {
   // A single choice is not a choice — an ordinary room shows no switcher at all
   // rather than a lone disabled-looking tab.
   if (scenes.length < 2) return null
+  const overflow = scenes.filter((candidate) => !PRIMARY_SCENES.has(candidate))
+  const overflowActive = overflow.includes(scene)
 
   return (
     <nav className="scene-switcher-wrap" aria-label="Room views">
@@ -52,7 +61,7 @@ export function SceneSwitcher({ scene, scenes, onSelect }: SceneSwitcherProps) {
           <button
             key={candidate}
             type="button"
-            className={`scene-switcher-action${candidate === scene ? ' is-active' : ''}`}
+            className={`scene-switcher-action scene-switcher-${PRIMARY_SCENES.has(candidate) ? 'primary' : 'secondary'}${candidate === scene ? ' is-active' : ''}`}
             aria-current={candidate === scene ? 'page' : undefined}
             title={SCENE_HINTS[candidate]}
             onClick={() => {
@@ -64,6 +73,28 @@ export function SceneSwitcher({ scene, scenes, onSelect }: SceneSwitcherProps) {
             {SCENE_LABELS[candidate]}
           </button>
         ))}
+        {overflow.length > 0 && (
+          <details className="scene-switcher-more">
+            <summary aria-current={overflowActive ? 'page' : undefined}>
+              {overflowActive ? `More views · ${SCENE_LABELS[scene]}` : 'More views'}
+            </summary>
+            <div className="scene-switcher-menu" role="menu" aria-label="More room views">
+              {overflow.map((candidate) => (
+                <button
+                  key={candidate}
+                  type="button"
+                  role="menuitem"
+                  aria-current={candidate === scene ? 'page' : undefined}
+                  onClick={() => {
+                    if (candidate !== scene) onSelect(candidate)
+                  }}
+                >
+                  {SCENE_LABELS[candidate]}
+                </button>
+              ))}
+            </div>
+          </details>
+        )}
       </div>
       <p className="scene-switcher-hint" aria-live="polite">{SCENE_HINTS[scene]}</p>
     </nav>

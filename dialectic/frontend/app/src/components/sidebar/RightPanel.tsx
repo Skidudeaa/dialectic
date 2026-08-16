@@ -3,7 +3,6 @@ import type { ImplementedWorkspaceScene, Memory, ThreadNode } from '../../types'
 import { useAppStore } from '../../stores/appStore.ts'
 import { MemoryPanel } from './MemoryPanel'
 import { ThreadPanel } from './ThreadPanel'
-import { UsersPanel } from './UsersPanel'
 import { SharePanel } from './SharePanel'
 import { AnalyticsPanel } from '../analytics/AnalyticsPanel'
 import { IdentityViewer } from '../analytics/IdentityViewer'
@@ -12,7 +11,7 @@ import { CommitmentDashboard } from '../stakes/CommitmentDashboard'
 import { HomeSettingsPanel } from '../home/HomeSettingsPanel'
 import './RightPanel.css'
 
-type TabId = 'users' | 'memory' | 'threads' | 'analytics' | 'stakes' | 'history' | 'identity' | 'share' | 'home'
+type TabId = 'memory' | 'threads' | 'analytics' | 'stakes' | 'history' | 'identity' | 'share' | 'home'
 
 interface RightPanelProps {
   memories: Memory[]
@@ -44,7 +43,6 @@ interface RightPanelProps {
 }
 
 const BASE_TABS: { id: TabId; label: string }[] = [
-  { id: 'users', label: 'Users' },
   { id: 'memory', label: 'Memory' },
   { id: 'threads', label: 'Branches' },
   { id: 'analytics', label: 'Insights' },
@@ -108,8 +106,8 @@ export function RightPanel({
   // worse than its absence.
   const OWNED_BY_A_SCENE: TabId[] = ['memory', 'stakes']
 
-  // THE RAIL FOLLOWS THE SCENE. Some panels are about the room (who is here,
-  // how to invite someone) and belong everywhere; others are about ONE scene
+  // THE RAIL FOLLOWS THE SCENE. Some panels are about the room (branches and
+  // sharing) and belong everywhere; others are about ONE scene
   // and were previously offered in all of them.
   //
   // Insights and History read the transcript, so they belong where the
@@ -120,7 +118,7 @@ export function RightPanel({
     record: ['analytics', 'history'],
     ledger: ['identity'],
   }
-  const ROOM_WIDE: TabId[] = ['users', 'threads', 'share']
+  const ROOM_WIDE: TabId[] = ['threads', 'share']
 
   const roomTabs = isHome
     ? [
@@ -142,7 +140,8 @@ export function RightPanel({
   // leave it by. Found in a screenshot; every assertion had passed.
   const activeTab: TabId = tabs.some((tab) => tab.id === requestedTab)
     ? requestedTab
-    : (tabs[0]?.id ?? 'users')
+    : (tabs[0]?.id ?? 'threads')
+  const activeLabel = tabs.find((tab) => tab.id === activeTab)?.label ?? 'Context'
 
   // Nine tabs overflow the rail, and the active one can sit clipped out of
   // sight (a card can select Trading from outside). Keep it in view.
@@ -153,22 +152,27 @@ export function RightPanel({
 
   return (
     <>
-      <div className="sidebar-tabs">
+      <div className="sidebar-tabs" role="tablist" aria-label="Context panels">
         {tabs.map((tab, index) => (
           <span key={tab.id} className="sidebar-tab-slot">
             {isHome && index === 1 && <span className="sidebar-tab-break" aria-hidden="true" />}
             <button
               ref={tab.id === activeTab ? activeTabRef : null}
-              className={`sidebar-tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+              className={`sidebar-tab-btn${activeTab === tab.id ? ' active' : ''}`}
               onClick={() => chooseTab(tab.id)}
+              role="tab"
+              aria-selected={activeTab === tab.id}
             >
               {tab.label}
             </button>
           </span>
         ))}
       </div>
-      <div className="sidebar-panel active">
-        {activeTab === 'users' && <UsersPanel users={users} />}
+      <div
+        className="sidebar-panel active"
+        role="tabpanel"
+        aria-label={`${activeLabel} panel`}
+      >
         {activeTab === 'memory' && (
           <MemoryPanel
             memories={memories}

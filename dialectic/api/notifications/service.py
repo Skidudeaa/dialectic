@@ -201,8 +201,8 @@ async def calculate_badge_count(db, user_id: str) -> int:
         JOIN threads t ON m.thread_id = t.id
         JOIN room_memberships rm ON t.room_id = rm.room_id
         WHERE rm.user_id = $1
-          AND m.user_id != $1
-          AND m.speaker_type != 'SYSTEM'
+          AND m.user_id IS DISTINCT FROM $1
+          AND m.speaker_type != 'system'
           AND NOT EXISTS (
               SELECT 1 FROM message_receipts mr
               WHERE mr.message_id = m.id
@@ -225,8 +225,8 @@ async def get_room_unread_count(db, user_id: str, room_id: str) -> int:
         FROM messages m
         JOIN threads t ON m.thread_id = t.id
         WHERE t.room_id = $1
-          AND m.user_id != $2
-          AND m.speaker_type != 'SYSTEM'
+          AND m.user_id IS DISTINCT FROM $2
+          AND m.speaker_type != 'system'
           AND NOT EXISTS (
               SELECT 1 FROM message_receipts mr
               WHERE mr.message_id = m.id
@@ -251,8 +251,8 @@ async def get_all_room_unread_counts(db, user_id: str) -> Dict[str, int]:
         JOIN threads t ON m.thread_id = t.id
         JOIN room_memberships rm ON t.room_id = rm.room_id
         WHERE rm.user_id = $1
-          AND m.user_id != $1
-          AND m.speaker_type != 'SYSTEM'
+          AND m.user_id IS DISTINCT FROM $1
+          AND m.speaker_type != 'system'
           AND NOT EXISTS (
               SELECT 1 FROM message_receipts mr
               WHERE mr.message_id = m.id

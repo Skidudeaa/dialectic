@@ -65,7 +65,7 @@
     align-items: center;
     gap: 0.35rem;
     font-family: var(--font-mono);
-    font-size: 0.72rem;
+    font-size: 0.75rem;
     color: var(--color-faint);
 }
 .conn-dot {
@@ -77,11 +77,13 @@
 }
 .conn-dot.connected { background: var(--sev-stable); }   /* olive green for connected */
 
-/* Drawer toggles — the only route into the rails on small screens */
-.drawer-toggle { display: none; }
+/* Desktop toggles the contextual column; tablet/phone toggles fixed drawers. */
+.mobile-drawer-toggle { display: none; }
+.desktop-panel-toggle { display: inline-flex; }
 
-@media (max-width: 1023.98px) {
-    .drawer-toggle { display: inline-flex; }
+@media (max-width: 1279.98px) {
+    .mobile-drawer-toggle { display: inline-flex; }
+    .desktop-panel-toggle { display: none; }
     /* The dot alone says connected; the word costs room the toggles need. */
     .conn-label { display: none; }
 }
@@ -137,5 +139,4 @@
 @media (max-width: 600px) {
     .room-header .btn-label { display: none; }
     .room-header-left { gap: 0.5rem; }
-}
 }

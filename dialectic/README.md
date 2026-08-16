@@ -153,7 +153,7 @@ createdb dialectic && psql dialectic < schema.sql
 cp .env.example .env   # DATABASE_URL, ANTHROPIC_API_KEY, JWT_SECRET_KEY required
 PORT=8002 python3 run.py                      # backend on :8002
 cd frontend/app && npm install && npm run dev # frontend on :3000
-python3 -m pytest tests/ -q                   # ~1335 tests
+python3 -m pytest tests/ -q
 ```
 
 `frontend/app` (React/Vite/TS) is the only live frontend; the legacy
@@ -192,9 +192,9 @@ stakes/      commitments + Brier calibration
 analytics/   conversation DNA, briefings, knowledge graph
 replay/      event replay + state materialization
 frontend/app React PWA
-migrations/  017 current; schema.sql = fresh-DB baseline (014's reading_items
+migrations/  018 current; schema.sql = fresh-DB baseline (014's reading_items
              is migration-only — a fresh DB needs the migrations too)
-tests/       pytest (~1335) incl. real-Postgres integration tests
+tests/       pytest incl. real-Postgres integration tests
 ```
 
 Task board: [`TODOS.md`](TODOS.md) · Quarter plan + Amendment 1: `../docs/plans/`

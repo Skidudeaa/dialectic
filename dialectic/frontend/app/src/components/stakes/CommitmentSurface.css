@@ -27,7 +27,7 @@
 }
 .surfaced-card .surfaced-label {
     font-family: var(--font-stencil);
-    font-size: 8.5px;
+    font-size: 12px;
     color: var(--color-amber);
     text-transform: uppercase;
     letter-spacing: .06em;
@@ -42,7 +42,7 @@
     display: flex;
     gap: 8px;
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     color: var(--color-secondary);
 }
 .surfaced-card .surfaced-actions {
@@ -54,7 +54,7 @@
     background: transparent;
     border: none;
     font-family: var(--font-stencil);
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: .04em;
     text-transform: uppercase;
     cursor: pointer;

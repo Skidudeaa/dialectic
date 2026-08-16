@@ -32,7 +32,7 @@
 .replay-controls .play-btn:hover { background: var(--color-amber-hot); }
 .replay-timestamp {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     color: var(--color-secondary);
     min-width: 140px;
 }
@@ -50,7 +50,7 @@
     border: none;
     border-radius: var(--radius-sm);
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     cursor: pointer;
     background: transparent;
     color: var(--color-faint);
@@ -100,7 +100,7 @@
     padding: 16px;
     color: var(--color-ghost);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
 }

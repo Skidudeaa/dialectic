@@ -31,8 +31,8 @@
     --color-bone:     #F3E9DC;   /* section headlines, emphasized text */
     --color-ink:      #E3D2B4;   /* ALL body/dispatch text (workhorse) */
     --color-secondary:#AC8F66;   /* labels, metadata */
-    --color-faint:    #7D6347;   /* timestamps, gutter numbers */
-    --color-ghost:    #5A4732;   /* ultra-dim gutter */
+    --color-faint:    #B09670;   /* timestamps, gutter numbers; >= 4.5:1 */
+    --color-ghost:    #A38865;   /* lowest readable ink tier; >= 4.5:1 */
 
     /* Accents — hotter than v1 across the board */
     --color-amber:      #F2A24A;  /* primary accent, CTAs, cursor */

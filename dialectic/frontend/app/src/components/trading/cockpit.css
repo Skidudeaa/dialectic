@@ -40,7 +40,7 @@
 }
 .cockpit-title {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: .18em;
@@ -53,7 +53,7 @@
 }
 .cockpit-freshness {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     color: var(--color-ghost);
     white-space: nowrap;
 }
@@ -96,7 +96,7 @@
     align-items: center;
     gap: 0.4rem;
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     color: var(--color-error);
 }
 .cockpit-error-line::before {
@@ -105,7 +105,7 @@
 }
 .cockpit-stale-note {
     font-family: var(--font-mono);
-    font-size: 8.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--color-warning);
@@ -114,7 +114,7 @@
 /* --- Empty: one calm line --- */
 .cockpit-empty-line {
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     color: var(--color-ghost);
     font-style: italic;
     padding: 0.4rem 0;
@@ -135,7 +135,7 @@
     border-radius: var(--radius-sm);
     background: var(--color-cacao);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.4;
     max-width: 100%;
 }
@@ -152,7 +152,7 @@
 }
 .cockpit-chip-sub {
     color: var(--color-faint);
-    font-size: 9px;
+    font-size: 12px;
 }
 
 /* --- Tables (OpenTradesTable, ScenarioWhatIf mini-table) --- */
@@ -165,13 +165,13 @@
     min-width: 340px;
     border-collapse: collapse;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
 }
 .cockpit-table th {
     text-align: left;
     text-transform: uppercase;
     letter-spacing: .1em;
-    font-size: 8.5px;
+    font-size: 12px;
     font-weight: normal;
     color: var(--color-ghost);
     padding: 4px 6px;
@@ -210,7 +210,7 @@
     display: flex;
     flex-direction: column;
     gap: 3px;
-    font-size: 9.5px;
+    font-size: 12px;
     color: var(--color-secondary);
     list-style: disc;
 }
@@ -226,7 +226,7 @@
     min-width: 40px;
     padding: 0 12px;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .08em;
     border: 1px solid var(--color-bean);
@@ -265,7 +265,7 @@
     border-radius: var(--radius-sm);
     color: var(--color-secondary);
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .08em;
     cursor: pointer;
@@ -280,7 +280,7 @@
     white-space: pre-wrap;
     word-break: break-word;
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: 12px;
     line-height: 1.55;
     color: var(--color-ink);
     background: var(--color-cacao);
@@ -299,7 +299,7 @@
 }
 .cockpit-diff-line {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     color: var(--color-ink);
     display: flex;
     flex-wrap: wrap;
@@ -323,7 +323,7 @@
 }
 .cockpit-diff-compact {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     color: var(--color-secondary);
     word-break: break-word;
 }
@@ -361,7 +361,7 @@
     display: block;
     margin-top: 2px;
     font-family: var(--font-mono);
-    font-size: 8.5px;
+    font-size: 12px;
     color: var(--color-faint);
 }
 
@@ -378,7 +378,7 @@
     padding: 4px 2px;
     border-bottom: 1px solid rgba(60, 42, 30, .4);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
 }
 .cockpit-alert-row:last-child {
     border-bottom: none;
@@ -404,7 +404,7 @@
     padding: 2px 5px;
     border-radius: var(--radius-sm);
     font-family: var(--font-stencil);
-    font-size: 8.5px;
+    font-size: 12px;
     letter-spacing: .03em;
     text-transform: uppercase;
     border: 1px solid currentColor;
@@ -437,7 +437,7 @@
 }
 .cockpit-scenario-name {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     color: var(--color-bone);
     flex: 1 1 auto;
     min-width: 120px;
@@ -447,11 +447,11 @@
     align-items: baseline;
     gap: 0.5rem;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
 }
 .cockpit-scenario-prob-label {
     color: var(--color-ghost);
-    font-size: 8.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .06em;
     margin-right: 0.25em;
@@ -464,7 +464,7 @@
 .cockpit-scenario-notes {
     margin-top: 0.3rem;
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     color: var(--color-secondary);
     line-height: 1.4;
 }
@@ -485,7 +485,7 @@
 }
 .cockpit-scenario-result-label {
     font-family: var(--font-mono);
-    font-size: 8.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--color-warning);
@@ -493,7 +493,7 @@
 }
 .cockpit-scenario-result-prob {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     color: var(--color-amber);
     margin-bottom: 0.35rem;
 }
@@ -511,7 +511,7 @@
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     color: var(--color-ink);
     background: var(--color-espresso);
 }
@@ -520,13 +520,13 @@
     min-width: 300px;
     border-collapse: collapse;
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
 }
 .cockpit-mini-table th {
     text-align: left;
     text-transform: uppercase;
     letter-spacing: .08em;
-    font-size: 8px;
+    font-size: 12px;
     font-weight: normal;
     color: var(--color-ghost);
     padding: 3px 5px;

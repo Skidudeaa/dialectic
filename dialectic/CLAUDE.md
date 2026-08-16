@@ -23,6 +23,11 @@ psql dialectic < dialectic/schema.sql
 
 # Run tests
 cd dialectic && python3 -m pytest tests/ -q
+DATABASE_URL=postgresql://localhost/dialectic_test python3 -m pytest \
+  tests/test_external_operations_pg.py \
+  tests/test_message_ancestry_pagination_pg.py -q
+cd ../trading && python3 -m pytest web/ tools/ -q
+cd ../dialectic/frontend/app && npm test -- --run && npm run lint && npm run build
 ```
 
 ## Required Environment Variables
@@ -71,6 +76,7 @@ silence follow-ups), `DIALECTIC_TOOLS_ENABLED`, `DIALECTIC_VISION_ENABLED`,
 | `llm/reading_echo.py` | `reading_echo` job (30 min, `READING_ECHO_ENABLED`, default on): new `reading_items` are Haiku-checked against OTHER active thesis-holding rooms (cap 3/reading); a hit posts one annotator note (`metadata.source='reading_echo'`, dedup on (room, url), cap 6/room/day) + a cross-session memory reference from the origin reading's twin — a citation, never a copy; the cross_session auto-injection gate is untouched |
 | `llm/thesis_drafter.py` | Claude drafts a thesis's causal DAG (builder-format, validated, one retry); consumed by the stateless draft endpoint in `api/thesis_relay.py` |
 | `api/prediction_relay.py` | Human-Accept relay: proposal in message metadata → POST to tradingDesk on the tap |
+| `api/external_operations.py` | Migration 018 operation leases for prediction, resolution, reading, and thesis acceptance. Claims/finalizes use short PostgreSQL transactions; stable operation keys cross the external boundary; succeeded retries replay the recorded result; the original initiating user owns the acceptance stamp. No relay holds a database connection during HTTP or model work. |
 | `scheduler.py` | asyncio job scheduler — advisory lock, `scheduled_job_runs` ledger, interval buckets + wall-clock daily slots (`daily_at`/`daily_tz`) |
 | `memory/manager.py` | Three-lane recall (dense + FTS + entity/speaker, RRF-fused) + versioned room memories + write-path dedup |
 | `api/notifications/` | Dual-channel push: Web Push/VAPID (`webpush.py`, the live channel for the installed PWA) + Expo (dormant until a native app ships) |
@@ -175,6 +181,12 @@ after the baseline was cut, **`reading_items` is not in `schema.sql`** — a fre
 DB needs the migration run, not just the baseline. The line above stays for the
 history of when 012/013 landed.
 
+**Amended 2026-08-16:** **`018_external_operations.sql` is the current source
+migration.** It adds the lease ledger used to make external acceptance retries
+idempotent and attributable. Apply it explicitly to existing databases before
+activating this code. The local stabilization gate applied it only to
+`dialectic_test`; production migration state is unchanged.
+
 **Home Base (2026-08-12)**: one real `is_home` room is every founder's
 default landing. `home_activity.py` builds the membership-intersection
 activity projection (one service feeds `GET /users/me/home/activity` AND
@@ -223,7 +235,7 @@ dialectic/
 │   ├── app/                # React (Vite + TS) SPA — the live frontend (PWA)
 │   └── app.html            # RETIRED single-file SPA (kept for history only)
 ├── migrations/             # incremental DB changes
-└── tests/                  # pytest test suite (913 tests)
+└── tests/                  # pytest suite, including real-Postgres tests
 ```
 
 ## Project Conventions
@@ -233,7 +245,9 @@ dialectic/
 - All LLM calls through `ModelRouter` (retry, fallback, provider abstraction)
 - JSONB columns: pass dict directly to asyncpg — pool codec handles serialization
 - Message role alternation: Anthropic API requires last message to be `user` role — `prompts.py` strips trailing assistant messages before API call
-- Tests: pytest + pytest-asyncio, 913 tests, incl. real-Postgres integration tests (test_memory_recall_pg.py needs `createdb dialectic_test && psql dialectic_test -f schema.sql`; skips cleanly without it)
+- Tests: pytest + pytest-asyncio, including real-Postgres integration tests.
+  A skipped PostgreSQL test is not proof: initialize `dialectic_test`, apply
+  migrations through 018, and run the named PostgreSQL commands from Quick Start.
 
 ## Amendment 2026-08-15 — the volume controls (amend-beside)
 

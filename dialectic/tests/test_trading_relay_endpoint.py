@@ -28,6 +28,25 @@ ROOM_TOKEN = "room-token-secret"
 BOOK_ID = "iran-hormuz-graph"
 
 
+class _AsyncContext:
+    def __init__(self, value=None):
+        self.value = value
+
+    async def __aenter__(self):
+        return self.value
+
+    async def __aexit__(self, *exc_info):
+        return None
+
+
+class _Pool:
+    def __init__(self, db):
+        self.db = db
+
+    def acquire(self):
+        return _AsyncContext(self.db)
+
+
 def _make_db(room_found=True, linked_book_id=BOOK_ID, trading_config=None,
              members=None):
     if members is None:
@@ -50,10 +69,9 @@ def _make_db(room_found=True, linked_book_id=BOOK_ID, trading_config=None,
 
 
 def _call(fake_db, monkeypatch, path, *, method="GET", td_mocks=None):
-    async def _fake_db_dep():
-        yield fake_db
+    fake_db._pool = _Pool(fake_db)
 
-    main_mod.app.dependency_overrides[relay.get_db] = _fake_db_dep
+    main_mod.app.dependency_overrides[relay.get_pool] = lambda: fake_db._pool
     main_mod.app.dependency_overrides[relay.extract_room_token] = lambda: ROOM_TOKEN
     main_mod.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
         user_id=CALLER_ID, email="caller@test", email_verified=True,

@@ -5,21 +5,28 @@
 # proposal and the orchestrator hoists it to messages.metadata.proposal.
 # This endpoint is the only write path — a room member taps Accept, and we
 # relay the proposal to tradingDesk's prediction tracker as the dialectic
-# service principal (TRADINGDESK_USER/TRADINGDESK_PASSWORD), then mark the
-# proposal accepted so a second tap is a conflict, not a duplicate.
+# service principal (TRADINGDESK_USER/TRADINGDESK_PASSWORD), then atomically
+# record the acceptance and response so later taps replay without duplicating.
 
 import logging
 from datetime import date
 from typing import Literal
 from uuid import UUID
 
+import asyncpg
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.auth.dependencies import AuthenticatedUser, get_current_user
+from api.external_operations import (
+    ExternalOperation,
+    OperationBusy,
+    claim_operation,
+    fail_operation,
+    succeed_operation,
+)
 from api.token_utils import extract_room_token
 from llm import tradingdesk_client as td
-from proposal_envelope import ACCEPT_SLOT_SQL, acceptance_stamp
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +35,15 @@ router = APIRouter(tags=["predictions"])
 _db_pool = None
 
 
-def set_prediction_relay_db_pool(pool):
+def set_prediction_relay_db_pool(pool: asyncpg.Pool) -> None:
     global _db_pool
     _db_pool = pool
 
 
-async def get_db():
-    async with _db_pool.acquire() as conn:
-        yield conn
+async def get_pool() -> asyncpg.Pool:
+    if _db_pool is None:
+        raise RuntimeError("prediction relay database pool is not initialized")
+    return _db_pool
 
 
 async def _verify_room_token(room_id: UUID, token: str, db) -> None:
@@ -56,6 +64,38 @@ async def _verify_room_member(room_id: UUID, user_id: UUID, db) -> None:
         raise HTTPException(status_code=403, detail="User is not a member of this room")
 
 
+async def _claim(
+    pool: asyncpg.Pool,
+    *,
+    room_id: UUID,
+    kind: str,
+    operation_key: str,
+    user_id: UUID,
+    message_id: UUID,
+    proposal_slot: str,
+) -> ExternalOperation:
+    try:
+        return await claim_operation(
+            pool,
+            room_id=room_id,
+            kind=kind,
+            operation_key=operation_key,
+            initiated_by=user_id,
+            source_message_id=message_id,
+            proposal_slot=proposal_slot,
+        )
+    except (OperationBusy, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+def _replayed_result(operation: ExternalOperation) -> dict | None:
+    if operation.status != "succeeded":
+        return None
+    if operation.external_result is None:
+        raise RuntimeError("Succeeded external operation has no recorded result")
+    return operation.external_result
+
+
 class AcceptPredictionRequest(BaseModel):
     message_id: UUID
 
@@ -66,19 +106,20 @@ async def accept_prediction(
     request: AcceptPredictionRequest,
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
     """Log a drafted prediction to tradingDesk. The human tap IS the write."""
-    await _verify_room_token(room_id, token, db)
-    await _verify_room_member(room_id, current_user.user_id, db)
-
-    row = await db.fetchrow(
-        """SELECT m.id, m.metadata
-           FROM messages m
-           JOIN threads t ON t.id = m.thread_id
-           WHERE m.id = $1 AND t.room_id = $2 AND NOT m.is_deleted""",
-        request.message_id, room_id,
-    )
+    async with pool.acquire() as db:
+        await _verify_room_token(room_id, token, db)
+        await _verify_room_member(room_id, current_user.user_id, db)
+        row = await db.fetchrow(
+            """SELECT m.id, m.metadata
+               FROM messages m
+               JOIN threads t ON t.id = m.thread_id
+               WHERE m.id = $1 AND t.room_id = $2 AND NOT m.is_deleted""",
+            request.message_id,
+            room_id,
+        )
     if not row:
         raise HTTPException(status_code=404, detail="Message not found in this room")
 
@@ -88,19 +129,15 @@ async def accept_prediction(
         raise HTTPException(
             status_code=404, detail="This message carries no prediction draft"
         )
-    if proposal.get("accepted"):
-        raise HTTPException(
-            status_code=409, detail="Prediction already logged to tradingDesk"
-        )
-
     # The tool validated these at draft time, but metadata is a document, not
     # a trust boundary — re-check at the write. Body shape is tradingDesk's
     # PredictionCreate (trading/web/models.py).
     statement = str(proposal.get("statement") or "").strip()
     deadline = str(proposal.get("deadline") or "").strip()
     malformed = not statement
+    confidence = -1.0
     try:
-        confidence = float(proposal.get("confidence"))
+        confidence = float(str(proposal.get("confidence")))
         malformed = malformed or not 0.0 <= confidence <= 1.0
         date.fromisoformat(deadline)
     except (TypeError, ValueError):
@@ -120,23 +157,44 @@ async def accept_prediction(
     if book:
         body["linked_book_id"] = book
 
+    operation_key = f"prediction:{request.message_id}:proposal"
+    operation = await _claim(
+        pool,
+        room_id=room_id,
+        kind="prediction",
+        operation_key=operation_key,
+        user_id=current_user.user_id,
+        message_id=request.message_id,
+        proposal_slot="proposal",
+    )
+    replayed = _replayed_result(operation)
+    if replayed is not None:
+        return replayed
+    if proposal.get("accepted"):
+        await fail_operation(pool, operation, error="proposal was already accepted")
+        raise HTTPException(
+            status_code=409, detail="Prediction already logged to tradingDesk"
+        )
+    body["source_key"] = operation_key
+
     try:
         created = await td.post("/api/predictions", json_body=body)
     except td.TradingDeskError as e:
-        # The proposal stays unaccepted, so a retry once the desk recovers is
-        # a fresh accept, not a conflict.
+        await fail_operation(pool, operation, error=str(e))
         logger.warning("prediction relay to tradingDesk failed: %s", e)
         raise HTTPException(
             status_code=502, detail=f"tradingDesk refused the prediction: {e}"
+        ) from e
+    if not isinstance(created, dict):
+        await fail_operation(pool, operation, error="tradingDesk returned a non-object")
+        raise HTTPException(
+            status_code=502,
+            detail="tradingDesk returned an invalid prediction",
         )
 
-    # Spec §9.3: the acceptance records WHO, in the same patch that records
-    # THAT — one event, one write, so a proposal can never end up accepted by
-    # nobody. tradingDesk holds the prediction; this row holds the human.
-    await db.execute(
-        ACCEPT_SLOT_SQL, request.message_id, "proposal",
-        acceptance_stamp(current_user.user_id),
-    )
+    async with pool.acquire() as db:
+        async with db.transaction():
+            await succeed_operation(db, operation, result=created)
     return created
 
 
@@ -151,7 +209,7 @@ async def resolve_accept(
     request: ResolveAcceptRequest,
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
     """Relay the human's verdict on a deadline proposal to tradingDesk.
 
@@ -161,19 +219,20 @@ async def resolve_accept(
     machine's proposed verdict still settles the prediction their way. The
     server only requires a valid verdict literal and a live proposal.
     """
-    await _verify_room_token(room_id, token, db)
-    await _verify_room_member(room_id, current_user.user_id, db)
-
-    row = await db.fetchrow(
-        """SELECT m.id, m.metadata
-           FROM messages m
-           JOIN threads t ON t.id = m.thread_id
-           WHERE t.room_id = $1 AND NOT m.is_deleted
-           AND m.metadata->>'source' = 'prediction_watch'
-           AND m.metadata->'resolution_proposal'->>'prediction_id' = $2
-           ORDER BY m.created_at DESC LIMIT 1""",
-        room_id, prediction_id,
-    )
+    async with pool.acquire() as db:
+        await _verify_room_token(room_id, token, db)
+        await _verify_room_member(room_id, current_user.user_id, db)
+        row = await db.fetchrow(
+            """SELECT m.id, m.metadata
+               FROM messages m
+               JOIN threads t ON t.id = m.thread_id
+               WHERE t.room_id = $1 AND NOT m.is_deleted
+               AND m.metadata->>'source' = 'prediction_watch'
+               AND m.metadata->'resolution_proposal'->>'prediction_id' = $2
+               ORDER BY m.created_at DESC LIMIT 1""",
+            room_id,
+            prediction_id,
+        )
     if not row:
         raise HTTPException(
             status_code=404, detail="No resolution proposal for this prediction"
@@ -185,7 +244,21 @@ async def resolve_accept(
         raise HTTPException(
             status_code=404, detail="No resolution proposal for this prediction"
         )
+    operation_key = f"resolution:{row['id']}:resolution_proposal"
+    operation = await _claim(
+        pool,
+        room_id=room_id,
+        kind="resolution",
+        operation_key=operation_key,
+        user_id=current_user.user_id,
+        message_id=row["id"],
+        proposal_slot="resolution_proposal",
+    )
+    replayed = _replayed_result(operation)
+    if replayed is not None:
+        return replayed
     if proposal.get("accepted"):
+        await fail_operation(pool, operation, error="proposal was already accepted")
         raise HTTPException(
             status_code=409, detail="Resolution already logged to tradingDesk"
         )
@@ -193,20 +266,22 @@ async def resolve_accept(
     try:
         resolved = await td.post(
             f"/api/predictions/{prediction_id}/resolve",
-            json_body={"resolution": request.verdict},
+            json_body={"resolution": request.verdict, "source_key": operation_key},
         )
     except td.TradingDeskError as e:
-        # The proposal stays unaccepted, so a retry once the desk recovers is
-        # a fresh accept, not a conflict.
+        await fail_operation(pool, operation, error=str(e))
         logger.warning("resolution relay to tradingDesk failed: %s", e)
         raise HTTPException(
             status_code=502, detail=f"tradingDesk refused the resolution: {e}"
+        ) from e
+    if not isinstance(resolved, dict):
+        await fail_operation(pool, operation, error="tradingDesk returned a non-object")
+        raise HTTPException(
+            status_code=502,
+            detail="tradingDesk returned an invalid resolution",
         )
 
-    # The verdict that was relayed is the HUMAN's, so the human is exactly
-    # what has to survive here (§9.3).
-    await db.execute(
-        ACCEPT_SLOT_SQL, row["id"], "resolution_proposal",
-        acceptance_stamp(current_user.user_id),
-    )
+    async with pool.acquire() as db:
+        async with db.transaction():
+            await succeed_operation(db, operation, result=resolved)
     return resolved

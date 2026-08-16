@@ -10,7 +10,9 @@ import os
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+from api.rate_limit import check_account_rate_limit, check_ip_rate_limit
 
 from .schemas import (
     SignUpRequest,
@@ -114,6 +116,7 @@ def _signups_enabled() -> bool:
 
 @router.post("/signup", response_model=TokenResponse)
 async def signup(
+    http_request: Request,
     request: SignUpRequest,
     db=Depends(get_db),
 ):
@@ -125,6 +128,13 @@ async def signup(
     Creates user record, credentials, generates verification code, and returns tokens.
     Note: Email sending is out of scope - verification code is logged for now.
     """
+    check_ip_rate_limit(
+        http_request,
+        scope="signup",
+        limit=5,
+        window_seconds=3600,
+    )
+
     # Checked before ANY database work: a refusal must not create rows, consume
     # a uuid, or reveal whether an email is already registered.
     if not _signups_enabled():
@@ -199,6 +209,7 @@ async def signup(
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
+    http_request: Request,
     request: SignInRequest,
     db=Depends(get_db),
 ):
@@ -207,6 +218,14 @@ async def login(
 
     Returns access and refresh tokens on success.
     """
+    check_account_rate_limit(
+        http_request,
+        request.email,
+        scope="login",
+        limit=5,
+        window_seconds=900,
+    )
+
     # Find user by email
     row = await db.fetchrow(
         """
@@ -352,6 +371,7 @@ async def logout(
 
 @router.post("/verify-email", response_model=MessageResponse)
 async def verify_email(
+    http_request: Request,
     request: VerifyEmailRequest,
     db=Depends(get_db),
     current_user: AuthenticatedUser = Depends(get_current_user),
@@ -361,6 +381,14 @@ async def verify_email(
 
     Requires authentication (user must be logged in).
     """
+    check_account_rate_limit(
+        http_request,
+        str(current_user.user_id),
+        scope="verify-email",
+        limit=5,
+        window_seconds=900,
+    )
+
     # Find valid, unused code for this user
     code_row = await db.fetchrow(
         """
@@ -402,55 +430,28 @@ async def verify_email(
 
 @router.post("/forgot-password", response_model=MessageResponse)
 async def forgot_password(
+    http_request: Request,
     request: ForgotPasswordRequest,
-    db=Depends(get_db),
 ):
     """
-    Request a password reset code.
-
-    Per CONTEXT.md: Returns 404 if no account exists (explicit error).
+    Report that password recovery is unavailable without email delivery.
     """
-    # Find user by email
-    user_row = await db.fetchrow(
-        "SELECT user_id FROM user_credentials WHERE email = $1",
-        request.email.lower()
+    check_account_rate_limit(
+        http_request,
+        request.email,
+        scope="forgot-password",
+        limit=3,
+        window_seconds=900,
     )
-
-    if user_row is None:
-        # SECURITY: Always return success to prevent email enumeration.
-        # An attacker cannot distinguish "email exists" from "email doesn't exist."
-        return MessageResponse(
-            message="Password reset code sent",
-            detail="If an account exists with this email, a reset code has been sent"
-        )
-
-    user_id = user_row["user_id"]
-    now = datetime.now(timezone.utc)
-
-    # Generate reset code (30 min expiry)
-    reset_code = generate_verification_code()
-    expires_at = now + timedelta(minutes=30)
-
-    await db.execute(
-        """
-        INSERT INTO verification_codes (user_id, code, purpose, created_at, expires_at)
-        VALUES ($1, $2, $3, $4, $5)
-        """,
-        user_id, reset_code, "password_reset", now, expires_at
-    )
-
-    # NOTE: Email delivery not yet implemented. Code stored in DB for verification.
-    # SECURITY: Never log reset codes — they are one-time auth credentials.
-    logger.debug("Password reset code generated for user %s", user_id)
-
-    return MessageResponse(
-        message="Password reset code sent",
-        detail="Check your email for the 6-digit code"
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Password recovery is unavailable because email delivery is not configured",
     )
 
 
 @router.post("/reset-password", response_model=TokenResponse)
 async def reset_password(
+    http_request: Request,
     request: ResetPasswordRequest,
     db=Depends(get_db),
 ):
@@ -460,6 +461,14 @@ async def reset_password(
     Per CONTEXT.md: Auto-login after successful reset.
     Revokes all existing sessions for security.
     """
+    check_account_rate_limit(
+        http_request,
+        request.email,
+        scope="reset-password",
+        limit=5,
+        window_seconds=900,
+    )
+
     # Find user by email
     user_row = await db.fetchrow(
         "SELECT user_id FROM user_credentials WHERE email = $1",
@@ -468,8 +477,8 @@ async def reset_password(
 
     if user_row is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No account found with this email address"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset code"
         )
 
     user_id = user_row["user_id"]

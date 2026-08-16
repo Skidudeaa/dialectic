@@ -16,13 +16,14 @@ interface AppLayoutProps {
 
 /**
  * Three-column cockpit on desktop; on small screens the rails become
- * slide-over drawers (WHY: below 1024px they used to be display:none with
+ * slide-over drawers (WHY: compact work surfaces used to reserve both rails,
  * no toggle at all — the PWA is the reach strategy, and every phone user
  * was locked out of memory, trading, stakes, everything).
  */
 export function AppLayout({ sidebar, main, rightPanel, isHome = false, homeTalking = false, workspaceScene }: AppLayoutProps) {
   const mobileDrawer = useAppStore((s) => s.mobileDrawer)
   const setMobileDrawer = useAppStore((s) => s.setMobileDrawer)
+  const rightPanelOpen = useAppStore((s) => s.rightPanelOpen)
 
   // Destination-driven close lives in useRoomNavigation's successful
   // install (including branch changes); Escape and the scrim stay here.
@@ -36,10 +37,10 @@ export function AppLayout({ sidebar, main, rightPanel, isHome = false, homeTalki
   }, [mobileDrawer, setMobileDrawer])
 
   return (
-    <div className={`app-layout${mobileDrawer ? ` drawer-open drawer-${mobileDrawer}` : ''}`}>
-      <div className="app-sidebar">{sidebar}</div>
+    <div className={`app-layout right-panel-${rightPanelOpen ? 'open' : 'closed'}${mobileDrawer ? ` drawer-open drawer-${mobileDrawer}` : ''}`}>
+      <div className="app-sidebar" id="room-list-panel">{sidebar}</div>
       <div className={`app-main${isHome ? ' app-main-home' : ''}${workspaceScene ? ` app-main-scene-${workspaceScene}` : ''}${homeTalking ? ' app-main-home-talking' : ''}`}>{main}</div>
-      <div className="app-right-panel">{rightPanel}</div>
+      <div className="app-right-panel" id="context-panel">{rightPanel}</div>
       {mobileDrawer && (
         <div
           className="app-drawer-scrim"

@@ -34,7 +34,7 @@
 .room-subtitle {
     color: var(--color-secondary);
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
     margin-top: 0.2rem;
@@ -45,7 +45,7 @@
     border: 1px solid rgba(199,91,57,.25);
     color: var(--color-error);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     padding: 7px 10px;
     border-radius: var(--radius-sm);
     margin-bottom: 1rem;
@@ -77,7 +77,7 @@
 }
 .room-list-title {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     color: var(--color-faint);
     text-transform: uppercase;
     letter-spacing: .1em;
@@ -86,7 +86,7 @@
 .room-empty {
     color: var(--color-faint);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     padding: 1rem 0;
     text-align: center;
 }
@@ -125,7 +125,7 @@
     background: var(--color-amber);
     color: var(--color-void);
     font-family: var(--font-stencil);
-    font-size: 8px;
+    font-size: 12px;
     padding: 1px 5px;
     border-radius: var(--radius-sm);
     min-width: 1.2rem;
@@ -133,7 +133,7 @@
 }
 .room-item-preview {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     color: var(--color-faint);
     overflow: hidden;
     text-overflow: ellipsis;

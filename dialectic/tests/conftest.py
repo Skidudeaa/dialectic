@@ -5,6 +5,8 @@ from uuid import uuid4
 
 import pytest
 
+from api.rate_limit import rate_limiter
+
 from models import (
     Message,
     Room,
@@ -119,6 +121,12 @@ def make_memory(
 
 
 # ── Pytest fixtures ──
+
+
+@pytest.fixture(autouse=True)
+def reset_auth_rate_limiter() -> None:
+    """Keep process-global auth buckets isolated between behavioral tests."""
+    rate_limiter._requests.clear()
 
 
 @pytest.fixture

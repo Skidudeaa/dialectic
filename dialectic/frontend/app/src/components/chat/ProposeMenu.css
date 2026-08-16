@@ -19,7 +19,7 @@
     border-radius: var(--radius-sm);
     color: var(--color-secondary);
     font-family: var(--font-stencil);
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: .06em;
     text-transform: uppercase;
     cursor: pointer;
@@ -54,7 +54,7 @@
     margin: 0 0 8px;
     color: var(--color-faint);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: 12px;
     line-height: 1.4;
 }
 
@@ -82,7 +82,7 @@
 .propose-field label {
     color: var(--color-faint);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .05em;
 }
@@ -110,7 +110,7 @@
     margin: 0;
     color: var(--error);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
 }
 
 .propose-actions {
@@ -126,7 +126,7 @@
     border-radius: var(--radius-sm);
     color: var(--color-faint);
     font-family: var(--font-stencil);
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: .05em;
     cursor: pointer;
 }
@@ -140,7 +140,7 @@
     border-radius: var(--radius-sm);
     color: var(--color-void);
     font-family: var(--font-stencil);
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: .05em;
     cursor: pointer;
     transition: background 0.15s;

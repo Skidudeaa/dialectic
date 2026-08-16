@@ -30,7 +30,7 @@
 .protocol-picker .picker-subtitle {
     margin: 0 0 18px;
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--color-faint);
@@ -77,7 +77,7 @@
 /* Phase tags — outline chips */
 .protocol-card .phase-tag {
     font-family: var(--font-stencil);
-    font-size: 7.5px;
+    font-size: 12px;
     padding: 1px 5px;
     border-radius: var(--radius-sm);
     background: transparent;
@@ -90,7 +90,7 @@
 .protocol-config label {
     display: block;
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--color-secondary);
@@ -121,7 +121,7 @@
     padding: 6px 16px;
     border-radius: var(--radius-sm);
     font-family: var(--font-stencil);
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: .04em;
     text-transform: uppercase;
     cursor: pointer;

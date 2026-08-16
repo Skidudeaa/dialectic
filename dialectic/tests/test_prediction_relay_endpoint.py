@@ -8,15 +8,19 @@ queried. tradingDesk itself is mocked at prediction_relay.td.post; no live
 Postgres, no live desk.
 """
 
+import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import api.main as main_mod
 import api.prediction_relay as relay
 from api.auth.dependencies import AuthenticatedUser, get_current_user
+from api.external_operations import OperationBusy
 from llm.tradingdesk_client import TradingDeskError
 
 ROOM_ID = UUID("00000000-0000-0000-0000-000000000042")
@@ -37,10 +41,30 @@ EXPECTED_TD_BODY = {
     "deadline": "2026-09-30",
     "tags": ["dialectic"],
     "linked_book_id": "iran-hormuz-graph",
+    "source_key": f"prediction:{MESSAGE_ID}:proposal",
 }
 
 
 _DEFAULT = object()
+
+
+class _AsyncContext:
+    def __init__(self, value=None):
+        self.value = value
+
+    async def __aenter__(self):
+        return self.value
+
+    async def __aexit__(self, *exc_info):
+        return None
+
+
+class _Pool:
+    def __init__(self, db):
+        self.db = db
+
+    def acquire(self):
+        return _AsyncContext(self.db)
 
 
 def _make_db(metadata=_DEFAULT, message_found=True, members=None, room_token_valid=True):
@@ -65,20 +89,35 @@ def _make_db(metadata=_DEFAULT, message_found=True, members=None, room_token_val
 
     fake_db.fetchrow = AsyncMock(side_effect=fetchrow)
     fake_db.execute = AsyncMock(return_value=None)
+    fake_db.transaction = lambda: _AsyncContext()
+    fake_db._operation_status = "pending"
+    fake_db._external_result = None
     return fake_db
 
 
 def _accept(fake_db, monkeypatch, td_post):
     """Run the accept call against overridden deps; returns the response."""
-    async def _fake_db_dep():
-        yield fake_db
+    operation = SimpleNamespace(
+        status=fake_db._operation_status,
+        external_result=fake_db._external_result,
+    )
+    claim = AsyncMock(return_value=operation)
+    succeed = AsyncMock()
+    fail = AsyncMock()
+    fake_db._claim = claim
+    fake_db._succeed = succeed
+    fake_db._fail = fail
+    fake_db._pool = _Pool(fake_db)
 
-    main_mod.app.dependency_overrides[relay.get_db] = _fake_db_dep
+    main_mod.app.dependency_overrides[relay.get_pool] = lambda: fake_db._pool
     main_mod.app.dependency_overrides[relay.extract_room_token] = lambda: "tok"
     main_mod.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
         user_id=CALLER_ID, email="caller@test", email_verified=True, display_name="Caller",
     )
     monkeypatch.setattr(relay.td, "post", td_post)
+    monkeypatch.setattr(relay, "claim_operation", claim)
+    monkeypatch.setattr(relay, "succeed_operation", succeed)
+    monkeypatch.setattr(relay, "fail_operation", fail)
     try:
         return TestClient(main_mod.app).post(
             f"/rooms/{ROOM_ID}/predictions/accept",
@@ -98,10 +137,17 @@ def test_accept_relays_the_proposal_and_marks_it_accepted(monkeypatch):
     assert resp.status_code == 200
     assert resp.json() == created
     post.assert_awaited_once_with("/api/predictions", json_body=EXPECTED_TD_BODY)
-    fake_db.execute.assert_awaited_once()
-    update_sql = fake_db.execute.await_args.args[0]
-    assert "jsonb_set" in update_sql
-    assert fake_db.execute.await_args.args[1] == MESSAGE_ID
+    fake_db._claim.assert_awaited_once_with(
+        fake_db._pool,
+        room_id=ROOM_ID,
+        kind="prediction",
+        operation_key=f"prediction:{MESSAGE_ID}:proposal",
+        initiated_by=CALLER_ID,
+        source_message_id=MESSAGE_ID,
+        proposal_slot="proposal",
+    )
+    fake_db._succeed.assert_awaited_once()
+    assert fake_db._succeed.await_args.kwargs["result"] == created
 
 
 def test_message_without_a_proposal_is_a_404(monkeypatch):
@@ -112,7 +158,7 @@ def test_message_without_a_proposal_is_a_404(monkeypatch):
 
     assert resp.status_code == 404
     post.assert_not_awaited()
-    fake_db.execute.assert_not_awaited()
+    fake_db._succeed.assert_not_awaited()
 
 
 def test_message_with_no_metadata_at_all_is_a_404(monkeypatch):
@@ -144,7 +190,89 @@ def test_already_accepted_is_a_409_and_never_reposts(monkeypatch):
 
     assert resp.status_code == 409
     post.assert_not_awaited()
-    fake_db.execute.assert_not_awaited()
+    fake_db._succeed.assert_not_awaited()
+    fake_db._fail.assert_awaited_once()
+
+
+def test_succeeded_operation_replays_the_recorded_result(monkeypatch):
+    accepted = {**PROPOSAL, "accepted": True}
+    fake_db = _make_db(metadata={"proposal": accepted})
+    fake_db._operation_status = "succeeded"
+    fake_db._external_result = {"id": "pred-1"}
+    post = AsyncMock()
+
+    resp = _accept(fake_db, monkeypatch, post)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"id": "pred-1"}
+    post.assert_not_awaited()
+    fake_db._fail.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_accept_posts_once_then_replays(monkeypatch):
+    fake_db = _make_db()
+    pool = _Pool(fake_db)
+    operation = SimpleNamespace(
+        status="pending",
+        external_result=None,
+        operation_key=f"prediction:{MESSAGE_ID}:proposal",
+    )
+    post_started = asyncio.Event()
+    release_post = asyncio.Event()
+    claim_count = 0
+
+    async def claim(*args, **kwargs):
+        nonlocal claim_count
+        claim_count += 1
+        if operation.status == "succeeded":
+            return operation
+        if claim_count > 1:
+            raise OperationBusy(operation)
+        return operation
+
+    async def post(*args, **kwargs):
+        post_started.set()
+        await release_post.wait()
+        return {"id": "pred-1"}
+
+    async def succeed(db, claimed, *, result):
+        operation.status = "succeeded"
+        operation.external_result = result
+
+    monkeypatch.setattr(relay, "claim_operation", claim)
+    monkeypatch.setattr(relay, "succeed_operation", succeed)
+    monkeypatch.setattr(relay, "fail_operation", AsyncMock())
+    td_post = AsyncMock(side_effect=post)
+    monkeypatch.setattr(relay.td, "post", td_post)
+    caller = AuthenticatedUser(
+        user_id=CALLER_ID,
+        email="caller@test",
+        email_verified=True,
+        display_name="Caller",
+    )
+    request = relay.AcceptPredictionRequest(message_id=MESSAGE_ID)
+
+    first = asyncio.create_task(
+        relay.accept_prediction(
+            ROOM_ID, request, token="tok", current_user=caller, pool=pool
+        )
+    )
+    await post_started.wait()
+    with pytest.raises(HTTPException) as busy:
+        await relay.accept_prediction(
+            ROOM_ID, request, token="tok", current_user=caller, pool=pool
+        )
+    assert busy.value.status_code == 409
+    release_post.set()
+    first_result = await first
+    replay = await relay.accept_prediction(
+        ROOM_ID, request, token="tok", current_user=caller, pool=pool
+    )
+
+    assert first_result == {"id": "pred-1"}
+    assert replay == first_result
+    td_post.assert_awaited_once()
 
 
 def test_tradingdesk_failure_is_a_502_and_the_draft_stays_open(monkeypatch):
@@ -156,7 +284,8 @@ def test_tradingdesk_failure_is_a_502_and_the_draft_stays_open(monkeypatch):
     resp = _accept(fake_db, monkeypatch, post)
 
     assert resp.status_code == 502
-    fake_db.execute.assert_not_awaited()
+    fake_db._succeed.assert_not_awaited()
+    fake_db._fail.assert_awaited_once()
 
 
 def test_non_member_holding_a_valid_room_token_is_rejected(monkeypatch):

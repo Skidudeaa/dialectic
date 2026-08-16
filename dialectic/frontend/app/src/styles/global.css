@@ -31,6 +31,20 @@ code, pre { font-family: var(--font-mono); }
 *:focus { outline: none; }
 *:focus-visible { outline: 1.5px solid var(--color-amber); outline-offset: 1px; }
 
+/* Every standalone action must remain finger-operable on a tablet. Inline
+   prose links keep their text flow; controls and navigation links get the
+   physical hit area promised by the work-surface contract. */
+button,
+select,
+input,
+textarea,
+summary,
+[role="menuitem"],
+a[href]:not(.prose-body a):not(.msg-content a) {
+    min-width: 44px;
+    min-height: 44px;
+}
+
 /* ── Shared button base ──────────────────────────────────────────────── */
 .btn {
     display: inline-flex;
@@ -53,7 +67,7 @@ code, pre { font-family: var(--font-mono); }
     color: var(--color-void);
     border-color: var(--color-amber);
     font-family: var(--font-stencil);
-    font-size: 11px;
+    font-size: 12px;
     letter-spacing: .06em;
     border-radius: var(--radius-sm);
 }
@@ -106,7 +120,7 @@ code, pre { font-family: var(--font-mono); }
 /* Dense section label */
 .lbl {
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 12px;
     color: var(--color-secondary);
     text-transform: uppercase;
     letter-spacing: .18em;

@@ -9,10 +9,10 @@ queried. tradingDesk itself is mocked at prediction_relay.td.post; no live
 Postgres, no live desk.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from uuid import UUID, uuid4
+from uuid import UUID
 
-import pytest
 from fastapi.testclient import TestClient
 
 import api.main as main_mod
@@ -35,6 +35,25 @@ PROPOSAL = {
 }
 
 _DEFAULT = object()
+
+
+class _AsyncContext:
+    def __init__(self, value=None):
+        self.value = value
+
+    async def __aenter__(self):
+        return self.value
+
+    async def __aexit__(self, *exc_info):
+        return None
+
+
+class _Pool:
+    def __init__(self, db):
+        self.db = db
+
+    def acquire(self):
+        return _AsyncContext(self.db)
 
 
 def _make_db(metadata=_DEFAULT, message_found=True, members=None, room_token_valid=True):
@@ -60,20 +79,35 @@ def _make_db(metadata=_DEFAULT, message_found=True, members=None, room_token_val
 
     fake_db.fetchrow = AsyncMock(side_effect=fetchrow)
     fake_db.execute = AsyncMock(return_value=None)
+    fake_db.transaction = lambda: _AsyncContext()
+    fake_db._operation_status = "pending"
+    fake_db._external_result = None
     return fake_db
 
 
 def _resolve(fake_db, monkeypatch, td_post, verdict="correct", prediction_id=PREDICTION_ID):
     """Run the resolve-accept call against overridden deps."""
-    async def _fake_db_dep():
-        yield fake_db
+    operation = SimpleNamespace(
+        status=fake_db._operation_status,
+        external_result=fake_db._external_result,
+    )
+    claim = AsyncMock(return_value=operation)
+    succeed = AsyncMock()
+    fail = AsyncMock()
+    fake_db._claim = claim
+    fake_db._succeed = succeed
+    fake_db._fail = fail
+    fake_db._pool = _Pool(fake_db)
 
-    main_mod.app.dependency_overrides[relay.get_db] = _fake_db_dep
+    main_mod.app.dependency_overrides[relay.get_pool] = lambda: fake_db._pool
     main_mod.app.dependency_overrides[relay.extract_room_token] = lambda: "tok"
     main_mod.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
         user_id=CALLER_ID, email="caller@test", email_verified=True, display_name="Caller",
     )
     monkeypatch.setattr(relay.td, "post", td_post)
+    monkeypatch.setattr(relay, "claim_operation", claim)
+    monkeypatch.setattr(relay, "succeed_operation", succeed)
+    monkeypatch.setattr(relay, "fail_operation", fail)
     try:
         return TestClient(main_mod.app).post(
             f"/rooms/{ROOM_ID}/predictions/{prediction_id}/resolve-accept",
@@ -95,20 +129,22 @@ def test_resolve_accept_relays_the_verdict_and_stamps_accepted(monkeypatch):
     assert resp.json() == resolved
     post.assert_awaited_once_with(
         f"/api/predictions/{PREDICTION_ID}/resolve",
-        json_body={"resolution": "correct"},
+        json_body={
+            "resolution": "correct",
+            "source_key": f"resolution:{MESSAGE_ID}:resolution_proposal",
+        },
     )
-    fake_db.execute.assert_awaited_once()
-    # Assert the BOUND ARGUMENTS, not the query text. The slot moved from the
-    # SQL string into a parameter when acceptance started recording its human,
-    # and a test that reads the statement cannot tell which slot it will hit.
-    args = fake_db.execute.await_args.args
-    assert "jsonb_set" in args[0]
-    assert args[1] == MESSAGE_ID
-    assert args[2] == "resolution_proposal"
-    # Spec 9.3: who accepted travels with the fact that it was accepted.
-    assert args[3]["accepted"] is True
-    assert args[3]["accepted_by"] == str(CALLER_ID)
-    assert args[3]["accepted_at"]
+    fake_db._claim.assert_awaited_once_with(
+        fake_db._pool,
+        room_id=ROOM_ID,
+        kind="resolution",
+        operation_key=f"resolution:{MESSAGE_ID}:resolution_proposal",
+        initiated_by=CALLER_ID,
+        source_message_id=MESSAGE_ID,
+        proposal_slot="resolution_proposal",
+    )
+    fake_db._succeed.assert_awaited_once()
+    assert fake_db._succeed.await_args.kwargs["result"] == resolved
 
 
 def test_the_humans_verdict_is_what_gets_relayed(monkeypatch):
@@ -123,7 +159,10 @@ def test_the_humans_verdict_is_what_gets_relayed(monkeypatch):
     assert resp.status_code == 200
     post.assert_awaited_once_with(
         f"/api/predictions/{PREDICTION_ID}/resolve",
-        json_body={"resolution": "incorrect"},
+        json_body={
+            "resolution": "incorrect",
+            "source_key": f"resolution:{MESSAGE_ID}:resolution_proposal",
+        },
     )
 
 
@@ -135,7 +174,7 @@ def test_message_without_a_proposal_is_a_404(monkeypatch):
 
     assert resp.status_code == 404
     post.assert_not_awaited()
-    fake_db.execute.assert_not_awaited()
+    fake_db._succeed.assert_not_awaited()
 
 
 def test_unknown_proposal_is_a_404(monkeypatch):
@@ -158,7 +197,25 @@ def test_already_accepted_is_a_409_and_never_reposts(monkeypatch):
 
     assert resp.status_code == 409
     post.assert_not_awaited()
-    fake_db.execute.assert_not_awaited()
+    fake_db._succeed.assert_not_awaited()
+    fake_db._fail.assert_awaited_once()
+
+
+def test_succeeded_resolution_replays_the_recorded_result(monkeypatch):
+    accepted = {**PROPOSAL, "accepted": True}
+    fake_db = _make_db(
+        metadata={"source": "prediction_watch", "resolution_proposal": accepted}
+    )
+    fake_db._operation_status = "succeeded"
+    fake_db._external_result = {"id": PREDICTION_ID, "resolution": "correct"}
+    post = AsyncMock()
+
+    resp = _resolve(fake_db, monkeypatch, post)
+
+    assert resp.status_code == 200
+    assert resp.json() == fake_db._external_result
+    post.assert_not_awaited()
+    fake_db._fail.assert_not_awaited()
 
 
 def test_tradingdesk_failure_is_a_502_and_the_proposal_stays_open(monkeypatch):
@@ -170,7 +227,8 @@ def test_tradingdesk_failure_is_a_502_and_the_proposal_stays_open(monkeypatch):
     resp = _resolve(fake_db, monkeypatch, post)
 
     assert resp.status_code == 502
-    fake_db.execute.assert_not_awaited()
+    fake_db._succeed.assert_not_awaited()
+    fake_db._fail.assert_awaited_once()
 
 
 def test_an_invalid_verdict_literal_is_a_422(monkeypatch):

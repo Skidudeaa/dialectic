@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from web.persistence.repository import Repository
+from web.persistence.repository import PredictionResolutionConflict, Repository
 
 
 @pytest.fixture
@@ -36,10 +36,11 @@ class TestMigrations:
         from web.persistence.migrations import run_migrations
         count = run_migrations(conn)
         # 001 (initial schema) + 002 (audit_log + confirm_tokens) + 003
-        # (message kind+meta) + 004 (drop outbox) + 005 (maintenance_state).
+        # (message kind+meta) + 004 (drop outbox) + 005 (maintenance_state)
+        # + 006 (Dialectic prediction idempotency keys).
         # Bump this when a new numbered migration lands in
         # web/persistence/sql/.
-        assert count == 5
+        assert count == 6
         tables = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         )}
@@ -245,6 +246,64 @@ class TestPredictions:
 
     def test_resolve_missing(self, repo):
         assert repo.resolve_prediction("nonexistent", "correct") is None
+
+    def test_same_prediction_source_returns_one_public_row(self, repo):
+        payload = {
+            "statement": "Brent over 90",
+            "confidence": 0.7,
+            "deadline": "2026-09-30",
+            "source_key": "dialectic:m1:proposal",
+        }
+        first, first_created = repo.save_prediction_once("amo", payload)
+        second, second_created = repo.save_prediction_once("amo", payload)
+
+        assert first_created is True
+        assert second_created is False
+        assert second["id"] == first["id"]
+        assert len(repo.list_predictions()) == 1
+        assert "source_key" not in first
+        assert "resolution_source_key" not in first
+
+    def test_same_resolution_source_is_a_no_op(self, repo):
+        prediction, _ = repo.save_prediction_once("amo", {
+            "statement": "Brent over 90",
+            "confidence": 0.7,
+            "deadline": "2026-09-30",
+        })
+        first, first_changed = repo.resolve_prediction_once(
+            prediction["id"],
+            "correct",
+            "dialectic:resolve:p1",
+        )
+        second, second_changed = repo.resolve_prediction_once(
+            prediction["id"],
+            "correct",
+            "dialectic:resolve:p1",
+        )
+
+        assert first_changed is True
+        assert second_changed is False
+        assert second["resolved_at"] == first["resolved_at"]
+        assert "source_key" not in second
+        assert "resolution_source_key" not in second
+
+    def test_conflicting_second_resolution_is_rejected(self, repo):
+        prediction, _ = repo.save_prediction_once("amo", {
+            "statement": "Brent over 90",
+            "confidence": 0.7,
+            "deadline": "2026-09-30",
+        })
+        repo.resolve_prediction_once(
+            prediction["id"],
+            "correct",
+            "dialectic:resolve:p1",
+        )
+        with pytest.raises(PredictionResolutionConflict):
+            repo.resolve_prediction_once(
+                prediction["id"],
+                "incorrect",
+                "dialectic:resolve:p2",
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════

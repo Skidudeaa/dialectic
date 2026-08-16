@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import threading
 import uuid
 from datetime import date
 from pathlib import Path
@@ -19,6 +20,7 @@ log = logging.getLogger(__name__)
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
 BOOKS_DIR = _ROOT / "books"
+_BOUND_BOOK_CREATE_LOCK = threading.Lock()
 
 router = APIRouter(
     prefix="/api/thesis/builder",
@@ -31,6 +33,15 @@ def _sanitize_id(title: str) -> str:
     """Turn a human title into a safe filesystem ID."""
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
     return slug[:60] or f"thesis-{uuid.uuid4().hex[:8]}"
+
+
+def find_book_for_dialectic_room(room_id: str) -> dict | None:
+    """Return the one existing book bound to a Dialectic room, if any."""
+    for path in sorted(BOOKS_DIR.glob("*.json")):
+        config = json.loads(path.read_text())
+        if config.get("meta", {}).get("dialecticRoomId") == room_id:
+            return {"id": path.stem, "filename": path.name}
+    return None
 class BookMeta(BaseModel):
     title: str = ""
     claim: str = ""
@@ -307,34 +318,48 @@ async def create_book(req: SaveBookRequest, request: Request) -> dict:
         stem = slug if n == 0 else f"{slug}-{n}"
         return f"{stem}-graph" if bound else stem
 
-    counter = 0
-    book_id = _candidate(0)
-    config_path = BOOKS_DIR / f"{book_id}.json"
-
-    # Avoid overwriting
-    while config_path.exists():
-        counter += 1
-        book_id = _candidate(counter)
+    def _create_new() -> dict:
+        counter = 0
+        book_id = _candidate(0)
         config_path = BOOKS_DIR / f"{book_id}.json"
 
-    cfg = _book_to_engine_format(req, book_id)
+        # Avoid overwriting
+        while config_path.exists():
+            counter += 1
+            book_id = _candidate(counter)
+            config_path = BOOKS_DIR / f"{book_id}.json"
 
-    # Save builder positions into the config for round-tripping
-    for node_data, cfg_node in zip(req.nodes, cfg["nodes"]):
-        cfg_node["_builderX"] = node_data.x
-        cfg_node["_builderY"] = node_data.y
+        cfg = _book_to_engine_format(req, book_id)
 
-    BOOKS_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = config_path.with_suffix(".tmp")
-    with open(tmp, "w") as f:
-        json.dump(cfg, f, indent=2)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(str(tmp), str(config_path))
+        # Save builder positions into the config for round-tripping
+        for node_data, cfg_node in zip(req.nodes, cfg["nodes"]):
+            cfg_node["_builderX"] = node_data.x
+            cfg_node["_builderY"] = node_data.y
 
-    _adopt_into_runtime(request, book_id)
-    log.info("Created book: %s", book_id)
-    return {"id": book_id, "filename": f"{book_id}.json"}
+        BOOKS_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = config_path.with_suffix(".tmp")
+        with open(tmp, "w") as f:
+            json.dump(cfg, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(str(tmp), str(config_path))
+
+        _adopt_into_runtime(request, book_id)
+        log.info("Created book: %s", book_id)
+        return {"id": book_id, "filename": f"{book_id}.json"}
+
+    if not bound:
+        return _create_new()
+
+    # The scan, decision, and atomic rename are one critical section. This
+    # service runs one application process; the room ID is the durable key.
+    with _BOUND_BOOK_CREATE_LOCK:
+        existing = find_book_for_dialectic_room(req.meta.dialecticRoomId)
+        if existing is not None:
+            # Re-adoption heals a crash after rename but before runtime wiring.
+            _adopt_into_runtime(request, existing["id"])
+            return existing
+        return _create_new()
 
 
 @router.put("/books/{book_id}")

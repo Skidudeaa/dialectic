@@ -537,6 +537,9 @@ class DialecticAPI {
   async login(email: string, password: string) {
     return this.authFetch('/auth/login', { email, password });
   }
+  async forgotPassword(email: string): Promise<{ message: string; detail?: string }> {
+    return this.authFetch('/auth/forgot-password', { email });
+  }
   async refreshSession(refreshToken: string) {
     return this.authFetch('/auth/refresh', { refresh_token: refreshToken });
   }

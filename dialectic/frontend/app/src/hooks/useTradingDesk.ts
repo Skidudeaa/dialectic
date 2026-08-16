@@ -169,14 +169,20 @@ export function useTradingDesk(roomId: string | null): TradingDeskState {
   // business surviving onscreen while the new one loads.
   const stampRef = useRef<string | undefined>(undefined)
   useEffect(() => {
-    if (!roomId) {
-      setSlices(emptySlices(false))
-      return
-    }
-    stampRef.current = undefined
     const ticket = ++requestRef.current
-    setSlices(loadingSlices())
-    void runCycle(roomId, ['structure', ...ALL_FAN_OUT_KEYS], ticket)
+    stampRef.current = undefined
+    if (!roomId) {
+      const timeout = window.setTimeout(() => {
+        if (requestRef.current === ticket) setSlices(emptySlices(false))
+      }, 0)
+      return () => window.clearTimeout(timeout)
+    }
+    const timeout = window.setTimeout(() => {
+      if (requestRef.current !== ticket) return
+      setSlices(loadingSlices())
+      void runCycle(roomId, ['structure', ...ALL_FAN_OUT_KEYS], ticket)
+    }, 0)
+    return () => window.clearTimeout(timeout)
   }, [roomId, runCycle])
 
   // Manual refresh() re-runs the full cycle for the SAME room, in the
@@ -201,8 +207,11 @@ export function useTradingDesk(roomId: string | null): TradingDeskState {
     stampRef.current = stamp
     if (prevStamp === undefined) return
     if (stamp !== undefined && stamp !== prevStamp) {
-      const ticket = ++requestRef.current
-      void runCycle(roomId, SNAPSHOT_KEYS, ticket)
+      const timeout = window.setTimeout(() => {
+        const ticket = ++requestRef.current
+        void runCycle(roomId, SNAPSHOT_KEYS, ticket)
+      }, 0)
+      return () => window.clearTimeout(timeout)
     }
   }, [tradingConfig, roomId, runCycle])
 

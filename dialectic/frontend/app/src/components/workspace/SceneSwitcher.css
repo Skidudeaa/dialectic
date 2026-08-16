@@ -5,28 +5,29 @@
 }
 
 .scene-switcher {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 18px;
-    min-height: 34px;
+    min-height: 44px;
     padding: 0 18px;
 }
 
 /* The active scene's one-line hint — visible, not tooltip-only. */
 .scene-switcher-hint {
     padding: 0 18px 6px;
-    font: italic 11px/1.4 var(--font-serif);
+    font: italic 14px/1.4 var(--font-serif);
     color: var(--color-faint);
 }
 
 .scene-switcher-action {
     position: relative;
-    height: 34px;
+    min-height: 44px;
     padding: 0;
     border: 0;
     background: transparent;
     color: var(--color-secondary);
-    font: 10px/1 var(--font-mono);
+    font: 12px/1 var(--font-mono);
     letter-spacing: .16em;
     text-transform: uppercase;
     cursor: pointer;
@@ -49,4 +50,62 @@
 
 .scene-switcher-action.is-active::after {
     background: var(--color-amber);
+}
+
+.scene-switcher-more {
+    display: none;
+    margin-left: auto;
+    color: var(--color-secondary);
+    font: 12px/1 var(--font-mono);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.scene-switcher-more summary,
+.scene-switcher-menu [role="menuitem"] {
+    min-height: 44px;
+    color: var(--color-secondary);
+    font: 12px/1.2 var(--font-mono);
+    cursor: pointer;
+}
+
+.scene-switcher-more summary {
+    display: flex;
+    align-items: center;
+    list-style: none;
+}
+.scene-switcher-more summary::-webkit-details-marker { display: none; }
+.scene-switcher-more summary:hover,
+.scene-switcher-more summary[aria-current="page"] {
+    color: var(--color-bone);
+}
+
+.scene-switcher-menu {
+    position: absolute;
+    top: calc(100% - 2px);
+    right: 12px;
+    z-index: 30;
+    min-width: 160px;
+    padding: 4px;
+    border: 1px solid var(--color-bean);
+    background: var(--color-cacao);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, .45);
+}
+.scene-switcher-menu [role="menuitem"] {
+    display: block;
+    width: 100%;
+    padding: 0 12px;
+    border: 0;
+    background: transparent;
+    text-align: left;
+}
+.scene-switcher-menu [role="menuitem"]:hover,
+.scene-switcher-menu [role="menuitem"][aria-current="page"] {
+    color: var(--color-bone);
+    background: var(--amber-08);
+}
+
+@media (max-width: 1279.98px) {
+    .scene-switcher-secondary { display: none; }
+    .scene-switcher-more { display: block; }
 }

@@ -16,6 +16,7 @@
 import logging
 from uuid import UUID
 
+import asyncpg
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.auth.dependencies import AuthenticatedUser, get_current_user
@@ -42,14 +43,15 @@ QUOTES_TIMEOUT_S = 25.0
 NEWS_TIMEOUT_S = 25.0
 
 
-def set_trading_relay_db_pool(pool):
+def set_trading_relay_db_pool(pool: asyncpg.Pool) -> None:
     global _db_pool
     _db_pool = pool
 
 
-async def get_db():
-    async with _db_pool.acquire() as conn:
-        yield conn
+async def get_pool() -> asyncpg.Pool:
+    if _db_pool is None:
+        raise RuntimeError("trading relay database pool is not initialized")
+    return _db_pool
 
 
 async def _verify_room_member(room_id: UUID, user_id: UUID, db) -> None:
@@ -90,6 +92,17 @@ async def _room_book(room_id: UUID, token: str, user_id: UUID, db) -> str:
     )
 
 
+async def _resolve_room_book(
+    room_id: UUID,
+    token: str,
+    user_id: UUID,
+    pool: asyncpg.Pool,
+) -> str:
+    """Resolve the room binding while holding a connection only for SQL."""
+    async with pool.acquire() as db:
+        return await _room_book(room_id, token, user_id, db)
+
+
 def _bad_gateway(context: str, e: td.TradingDeskError) -> HTTPException:
     logger.warning("trading relay %s: %s", context, e)
     return HTTPException(status_code=502, detail=f"tradingDesk: {e}")
@@ -100,7 +113,7 @@ async def get_structure(
     room_id: UUID,
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
     """The authored causal DAG — nodes with positions, edges with mechanism.
 
@@ -109,7 +122,7 @@ async def get_structure(
     client overlays it. Two sources because they are two truths — the
     structure is authored, the states are evaluated.
     """
-    book_id = await _room_book(room_id, token, current_user.user_id, db)
+    book_id = await _resolve_room_book(room_id, token, current_user.user_id, pool)
     try:
         return await td.service_get(f"/api/bridge/structure/{book_id}")
     except td.TradingDeskError as e:
@@ -121,9 +134,9 @@ async def get_quotes(
     room_id: UUID,
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
-    await _room_book(room_id, token, current_user.user_id, db)
+    await _resolve_room_book(room_id, token, current_user.user_id, pool)
     try:
         return await td.get("/api/market/quotes", timeout=QUOTES_TIMEOUT_S)
     except td.TradingDeskError as e:
@@ -135,9 +148,9 @@ async def get_polymarket(
     room_id: UUID,
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
-    await _room_book(room_id, token, current_user.user_id, db)
+    await _resolve_room_book(room_id, token, current_user.user_id, pool)
     try:
         return await td.get("/api/market/polymarket")
     except td.TradingDeskError as e:
@@ -149,9 +162,9 @@ async def get_diff(
     room_id: UUID,
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
-    book_id = await _room_book(room_id, token, current_user.user_id, db)
+    book_id = await _resolve_room_book(room_id, token, current_user.user_id, pool)
     try:
         return await td.run_command(
             "thesis.diff.last_hour", {"book_id": book_id}
@@ -165,14 +178,14 @@ async def get_trades(
     room_id: UUID,
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
     """Open trades desk-wide, not per-book — exposure is one pool of money.
 
     Same shape the LLM's get_open_trades tool reads; the room gate is about
     who may look, not about filtering what they see.
     """
-    await _room_book(room_id, token, current_user.user_id, db)
+    await _resolve_room_book(room_id, token, current_user.user_id, pool)
     try:
         return await td.run_command("outcomes.open_trades", {})
     except td.TradingDeskError as e:
@@ -184,9 +197,9 @@ async def get_brief(
     room_id: UUID,
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
-    book_id = await _room_book(room_id, token, current_user.user_id, db)
+    book_id = await _resolve_room_book(room_id, token, current_user.user_id, pool)
     try:
         return await td.run_command(
             "outcomes.morning_brief", {"book_id": book_id}
@@ -200,9 +213,9 @@ async def get_news(
     room_id: UUID,
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
-    book_id = await _room_book(room_id, token, current_user.user_id, db)
+    book_id = await _resolve_room_book(room_id, token, current_user.user_id, pool)
     try:
         return await td.service_get(
             f"/api/bridge/news/{book_id}", timeout=NEWS_TIMEOUT_S
@@ -217,10 +230,10 @@ async def evaluate_scenario(
     scenario_id: str,
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
+    pool: asyncpg.Pool = Depends(get_pool),
 ):
     """A pure what-if against the live snapshot — evaluated, never placed."""
-    book_id = await _room_book(room_id, token, current_user.user_id, db)
+    book_id = await _resolve_room_book(room_id, token, current_user.user_id, pool)
     try:
         return await td.post(
             f"/api/v1/theses/{book_id}/scenarios/{scenario_id}/evaluate",

@@ -48,7 +48,7 @@
 
 .branch-node-count {
     flex-shrink: 0;
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     color: var(--color-faint);
 }
 
@@ -60,5 +60,5 @@
 .branch-tree-compact .branch-node {
     padding-top: 2px;
     padding-bottom: 2px;
-    font-size: 0.72rem;
+    font-size: 0.75rem;
 }
