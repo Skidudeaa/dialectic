@@ -361,7 +361,11 @@ def _build_trading_tools(room) -> list[Tool]:
 
     async def get_thesis_news(args: dict) -> dict:
         book_id = resolve_book_id(room, args.get("book_id"))
-        news = await td.service_get(f"/api/bridge/news/{book_id}")
+        # WHY an explicit budget: the bare default is 10s, and a cold GDELT
+        # pull takes 15-29s — so this tool could only ever succeed on a warm
+        # cache. See td.NEWS_TIMEOUT_S.
+        news = await td.service_get(f"/api/bridge/news/{book_id}",
+                                    timeout=td.NEWS_TIMEOUT_S)
         if not isinstance(news, dict):
             return {"articles": [], "book_id": book_id,
                     "note": "tradingDesk returned an unexpected shape."}

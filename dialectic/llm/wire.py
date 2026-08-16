@@ -290,9 +290,14 @@ async def wire_watch(ctx: SchedulerContext) -> dict:
                 try:
                     news = await td.service_get(
                         f"/api/bridge/news/{room['linked_book_id']}",
-                        # GDELT queries routinely take longer than the 10s
-                        # client default; a slow feed must not read as down.
-                        timeout=30.0,
+                        # td.NEWS_TIMEOUT_S, not a local guess — see the
+                        # constant for the law and the measurement. This job
+                        # is also phase-locked to the cold cache: td's news
+                        # TTL is 900s and wire's interval is 900s, so it
+                        # arrives just as the entry expires and pays the full
+                        # pull every run. It holds an advisory lock, so a slow
+                        # run delays nothing but itself.
+                        timeout=td.NEWS_TIMEOUT_S,
                     )
                 except td.TradingDeskError as e:
                     logger.warning("wire news fetch failed for room %s: %s",

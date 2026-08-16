@@ -117,7 +117,11 @@ async def _gather_evidence(book_id: str) -> list:
     a deadline verdict with no evidence is still worth asking about.
     """
     try:
-        news = await td.service_get(f"/api/bridge/news/{book_id}")
+        # Explicit budget, not the bare 10s default — a cold GDELT pull runs
+        # 15-29s, so on the default this evidence step could only succeed
+        # against a warm cache. See td.NEWS_TIMEOUT_S.
+        news = await td.service_get(f"/api/bridge/news/{book_id}",
+                                    timeout=td.NEWS_TIMEOUT_S)
     except td.TradingDeskError as e:
         logger.info("evidence news fetch failed for book %s: %s", book_id, e)
         return []
