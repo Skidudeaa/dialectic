@@ -42,7 +42,7 @@ import { scenesForDestination } from './lib/workspaceRoute.ts'
 import { useWorkspaceObjects } from './hooks/useWorkspaceObjects.ts'
 import { useFieldMarks } from './hooks/useFieldMarks.ts'
 import { useAtlas } from './hooks/useAtlas.ts'
-import type { FieldReviewRequest } from './types/workspace.ts'
+import type { FieldMark, FieldReviewRequest } from './types/workspace.ts'
 import { rememberSceneAxes, restoreSceneAxes } from './lib/sceneContinuity.ts'
 
 function RoomBriefing({ roomId }: { roomId: string }) {
@@ -510,6 +510,31 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // "signed in and at Home", the inverse of the two room projections above.
   const atlas = useAtlas(Boolean(accessToken) && isHome)
 
+  /**
+   * The room's marks, indexed by the message each one points at, so the
+   * transcript can show a mark beside the words it is about.
+   *
+   * A mark can name several subjects (claim_group, merges); it appears under
+   * every message it names, because "this mark is about your sentence" is
+   * true for each of them. No mark_kind filter is needed — FieldProjection
+   * returns relation marks only, with reviews inline on each.
+   */
+  const marksByMessage = useMemo(() => {
+    const index: Record<string, FieldMark[]> = {}
+    if (fieldMarks.status !== 'ready') return index
+    for (const mark of fieldMarks.marks) {
+      for (const subject of mark.subjects) {
+        if (subject.entity !== 'messages') continue
+        ;(index[subject.id] ??= []).push(mark)
+      }
+    }
+    return index
+  }, [fieldMarks])
+
+  const refreshField = useCallback(() => {
+    if (fieldMarks.status === 'ready') fieldMarks.refresh()
+  }, [fieldMarks])
+
   useAwayAlerts({
     messages,
     currentUserId: user?.id ?? null,
@@ -625,6 +650,8 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
             }}
             streamingMessageId={isLLMStreaming ? STREAMING_ID : null}
             userNames={userNames}
+            marksByMessage={marksByMessage}
+            onFieldChanged={refreshField}
             unreadSince={unreadSince}
             onSeen={handleSeen}
             jumpTarget={jumpTarget}

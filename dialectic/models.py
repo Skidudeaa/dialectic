@@ -74,6 +74,7 @@ class EventType(str, Enum):
     # lowercase (§1.16).
     FIELD_MARK_INFERRED = "field_mark_inferred"
     FIELD_MARK_REVIEWED = "field_mark_reviewed"
+    FIELD_MARK_CREATED = "field_mark_created"
 
 
 class CommitmentStatus(str, Enum):

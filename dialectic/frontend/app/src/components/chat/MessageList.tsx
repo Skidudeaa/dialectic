@@ -4,6 +4,7 @@ import type { Attachment, Message, Reaction , ThesisSeed } from '../../types'
 import { useDocumentVisibility } from '../../hooks/useDocumentVisibility'
 import { MessageBubble } from './MessageBubble'
 import type { MentionContext } from '../../lib/mentions'
+import type { FieldMark } from '../../types/workspace.ts'
 import './MessageList.css'
 
 interface MessageListProps {
@@ -13,6 +14,10 @@ interface MessageListProps {
   onReply?: (messageId: string) => void
   streamingMessageId?: string | null
   userNames?: Record<string, string>
+  /** Field marks indexed by the message they point at (App builds it). */
+  marksByMessage?: Record<string, FieldMark[]>
+  /** Re-read the Field after a mark or review lands in the transcript. */
+  onFieldChanged?: () => void
   /**
    * Timestamp of the reader's last read receipt in this room (or their join
    * time). Everything after it that someone else wrote is new since they were
@@ -114,6 +119,8 @@ export function MessageList({
   onReply,
   streamingMessageId,
   userNames = {},
+  marksByMessage = {},
+  onFieldChanged,
   unreadSince,
   onSeen,
   jumpTarget,
@@ -316,6 +323,8 @@ export function MessageList({
                     isSelf={msg.user_id === currentUserId}
                     authorName={getAuthorName(msg, userNames)}
                     mentionContext={mentionContext}
+                    marks={marksByMessage[msg.id]}
+                    onFieldChanged={onFieldChanged}
                     onFork={onFork}
                     onReply={onReply}
                     isStreaming={msg.id === streamingMessageId}

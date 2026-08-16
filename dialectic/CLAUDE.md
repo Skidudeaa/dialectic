@@ -529,3 +529,94 @@ two-human room is usually for the other human, and rung 0 only catches the ones
 that say so with an `@`.
 
 Suites at this gate: backend 1381.
+
+## Amendment 2026-08-16 — legibility, the meta tag, and a Field a human can reach
+
+Three asks from the room, and the finding that shaped all three: **most of
+what was asked for already existed and was sitting outside the flow.**
+Reconnaissance against the live DB, not the docs:
+
+| capability | state before this work |
+|---|---|
+| `message_reactions` (table, pills, names, toggle) | **0 rows, ever** |
+| `field_marks` confirm/contest + derived review state | 85 marks, **all `origin=inferred`, 0 human reviews ever** |
+| `reading_items` (the Library) | 32 rows: `wire` 19, `night_shift` 13 — **0 human-filed** |
+| mention rendering in the transcript | did not exist — `@amo` was plain text |
+| `rooms.interjection_turn_threshold` / `.semantic_novelty_threshold` | stored, validated, sliders in the UI, **read by nothing** (fixed the night before) |
+
+### Phase 1 — legibility (`865398d`)
+
+- **`lib/mentions.ts`** decorates the SANITIZED DOM by walking text nodes, not
+  by string-replacing HTML — a replace over markup lands inside an attribute
+  eventually, and that is how a highlighter becomes an injection. Code and
+  links are skipped; an unresolvable handle stays plain text.
+- Three chip kinds: another human quiet, Dialectic amber, **you** teal and
+  bolder. Not a walk-back of F1 — §16.4 forbids color encoding WHO IS
+  SPEAKING; this encodes who a message is ADDRESSED TO. Weight and underline
+  differ too, so the three survive grayscale.
+- The **address line** (`→ Dan`) renders what rung 0 has parsed server-side
+  since 2026-08-15 and never showed.
+- **`GET /rooms/{id}/members`** is new and is why the @-picker works: every
+  roster was `onlineUsers` + self, so a member who had never spoken and was
+  not connected appeared nowhere — exactly the new third human.
+  **Membership is not presence**; this route returns the former.
+- The alias list now exists on both sides of the wire; `tests/test_mentions_contract.py`
+  pins them by matching the Python STATEMENT, not prose about it.
+
+### Phase 2 — the meta tag (`f6f4554`)
+
+- `messages.metadata.tags`, fixed vocabulary `meta` / `bug` / `idea`,
+  validated at the door by `proposal_intake.validate_tags`. **Not a Field
+  relation**: `FIELD_RELATIONS` is the guard that stops `field_inference`
+  minting relations, and product-meta is not a claim about the subject.
+- **Tags ride the WS send, not the REST proposal door.** That door stores and
+  logs but does **not broadcast and does not trigger the LLM** — routing a tag
+  through it would make product notes invisible to everyone else.
+- `GET /messages/search` grew `tag`, and `q` became **optional**: "everything
+  filed under #bug" has no text to search for. One of the two is required.
+- `tests/test_propose_surface_ws_door.py` asserted that door took NO client
+  metadata; its docstring said a red there is a SIGNAL, not a regression to
+  silence. Rewritten to the new narrower contract.
+
+### Phase 3 — weight, votes, evidence (this commit)
+
+- **`POST /rooms/{id}/field/marks`** — the Field's second write door, and the
+  one it never had: a human can now ORIGINATE a mark, not only review one the
+  inference engine proposed. The INSERT is the one correction replacements
+  already used (`origin='explicit'`, `provenance='human'`).
+  **`ON CONFLICT` repeats the partial index's own `WHERE dedup_key IS NOT
+  NULL`** — Postgres raises `InvalidColumnReferenceError` rather than
+  deduplicating otherwise. Mutation-proven.
+- **The passage highlighter** anchors on `{entity, id, field}` where `field`
+  is `quote:<occurrence>:<hash>`. This works only because
+  `field_marks._subject_token` folds `field` into the dedup key — otherwise
+  every highlight on one message would collide with the first. Anchors match
+  on QUOTE TEXT, never offsets: messages are editable and markdown→HTML means
+  source offsets address nothing in the DOM. A quote that no longer matches
+  degrades visibly rather than painting a range on words nobody wrote.
+- **Confirm/contest in the transcript.** `FieldScene`'s own comment says it
+  navigates rather than reviews, and Focus is two destinations away — which
+  is why the machinery had 85 marks and zero reviews. `MessageMarks` reuses
+  `ReviewChip` and the existing review route; no second voting system.
+- **`POST /rooms/{id}/reading/file`** — a human files a link THEY pasted,
+  `source='human'`, sharing `is_thin()` with every automated path. This is the
+  literal answer to "it should not give everything we paste equal weight":
+  everything pasted carried the same weight because none of it became an
+  object that could carry any.
+
+**Browser acceptance earned its keep three times**, each a defect every unit
+test missed: the @-picker stayed open after choosing (stale caret, would have
+eaten the next Enter); a tag-only search ran, returned hits and rendered
+nothing (`showResults` still gated on typed text); and the passage menu was
+un-clickable because `position:absolute` trapped it in `.msg`'s stacking
+context, where a later message's byline painted over it — `position:fixed`
+now, dismissed on scroll.
+
+Suites at this gate: backend **1425**, frontend **308**; browser 23/23 (Phase 1),
+11/11 (Phase 2), 15/15 (Phase 3). No migration — every phase writes to columns
+that already exist.
+
+**Left deliberately undone:** `supports`/`challenges` need a second subject
+(a target-picking flow, not a highlighter), so the passage menu offers only
+single-subject relations. Weight is derived from confirms rather than
+authored — no `weight` column, by design.
