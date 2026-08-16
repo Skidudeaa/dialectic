@@ -1,9 +1,15 @@
+import { lookup } from 'node:dns/promises';
+
 import { parseHTML } from 'linkedom';
 import { Defuddle } from 'defuddle/node';
+import ipaddr from 'ipaddr.js';
+import { Agent, fetch as undiciFetch } from 'undici';
 
 
 const FETCH_TIMEOUT_MS = 15000;
+const MAX_REDIRECTS = 20;
 const READER_BASE_URL = 'https://r.jina.ai/';
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 // Sites frequently 403 a bare Node UA; a Safari UA is what defuddle's own
 // CLI recommends for exactly this reason.
@@ -20,21 +26,120 @@ export class HttpError extends Error {
 }
 
 
-// The LLM can be handed any URL; the sidecar must not become a proxy into
-// loopback/RFC1918 services (the desk, postgres, cloud metadata, ...).
-function isPrivateHost(hostname) {
-  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  return (
-    h === 'localhost'
-    || h === '::1'
-    || h.endsWith('.local')
-    || /^127\./.test(h)
-    || /^10\./.test(h)
-    || /^192\.168\./.test(h)
-    || /^169\.254\./.test(h)
-    || /^172\.(1[6-9]|2\d|3[01])\./.test(h)
-    || /^0\./.test(h)
-  );
+function bareHostname(hostname) {
+  return hostname.toLowerCase().replace(/^\[|\]$/g, '');
+}
+
+
+function isPublicAddress(address) {
+  if (!ipaddr.isValid(address)) return false;
+  return ipaddr.parse(address).range() === 'unicast';
+}
+
+
+async function resolvePublicAddresses(parsed, lookupImpl, privateMessage) {
+  const hostname = bareHostname(parsed.hostname);
+  if (hostname === 'localhost' || hostname.endsWith('.local')) {
+    throw new HttpError(400, privateMessage);
+  }
+
+  const records = ipaddr.isValid(hostname)
+    ? [{ address: hostname, family: ipaddr.parse(hostname).kind() === 'ipv4' ? 4 : 6 }]
+    : await lookupImpl(hostname, { all: true, verbatim: true });
+  if (!Array.isArray(records) || records.length === 0) {
+    throw new Error(`DNS returned no addresses for ${hostname}`);
+  }
+  if (records.some((record) => !isPublicAddress(record.address))) {
+    throw new HttpError(400, privateMessage);
+  }
+  return records.map((record) => ({
+    address: record.address,
+    family: Number(record.family),
+  }));
+}
+
+
+function pinnedDispatcher(records) {
+  return new Agent({
+    connect: {
+      lookup(_hostname, options, callback) {
+        const requestedFamily = typeof options === 'number'
+          ? options
+          : Number(options?.family || 0);
+        const candidates = requestedFamily
+          ? records.filter((record) => record.family === requestedFamily)
+          : records;
+        if (candidates.length === 0) {
+          callback(new Error(`no validated DNS address for family ${requestedFamily}`));
+          return;
+        }
+        if (typeof options === 'object' && options?.all) {
+          callback(null, candidates);
+          return;
+        }
+        callback(null, candidates[0].address, candidates[0].family);
+      },
+    },
+  });
+}
+
+
+async function discardResponse(response) {
+  if (response.body && !response.bodyUsed) {
+    await response.body.cancel();
+  }
+}
+
+
+async function fetchPublic(
+  url,
+  { fetchImpl, lookupImpl, headers, signal, initialPrivateMessage },
+) {
+  let current = new URL(url);
+  for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount += 1) {
+    if (current.protocol !== 'http:' && current.protocol !== 'https:') {
+      throw new HttpError(
+        400,
+        redirectCount === 0
+          ? 'only http(s) URLs are supported'
+          : 'redirect used an unsupported protocol',
+      );
+    }
+    const addresses = await resolvePublicAddresses(
+      current,
+      lookupImpl,
+      redirectCount === 0
+        ? initialPrivateMessage
+        : 'redirect led to a private or loopback address',
+    );
+    const dispatcher = pinnedDispatcher(addresses);
+
+    let response;
+    try {
+      response = await fetchImpl(current.href, {
+        headers,
+        redirect: 'manual',
+        signal,
+        dispatcher,
+      });
+    } catch (error) {
+      await dispatcher.close();
+      throw error;
+    }
+
+    const location = response.headers.get('location');
+    if (REDIRECT_STATUSES.has(response.status) && location) {
+      await discardResponse(response);
+      await dispatcher.close();
+      if (redirectCount === MAX_REDIRECTS) {
+        throw new Error(`too many redirects (>${MAX_REDIRECTS})`);
+      }
+      current = new URL(location, current);
+      continue;
+    }
+    return { response, dispatcher };
+  }
+  throw new Error(`too many redirects (>${MAX_REDIRECTS})`);
 }
 
 
@@ -50,48 +155,65 @@ function sanitizedReaderTarget(parsed) {
 }
 
 
-function readerField(body, name) {
-  const match = body.match(new RegExp(`^${name}:\\s*(.*)$`, 'mi'));
+function readerField(header, name) {
+  const match = header.match(new RegExp(`^${name}:\\s*(.*)$`, 'mi'));
   return match?.[1]?.trim() || null;
 }
 
 
-async function extractWithReader(parsed, originalUrl, fetchImpl, signal) {
+async function extractWithReader(
+  parsed,
+  originalUrl,
+  fetchImpl,
+  lookupImpl,
+  signal,
+) {
   try {
-    const response = await fetchImpl(
+    const { response, dispatcher } = await fetchPublic(
       `${READER_BASE_URL}${sanitizedReaderTarget(parsed)}`,
       {
+        fetchImpl,
+        lookupImpl,
         headers: { accept: 'text/plain' },
-        redirect: 'follow',
         signal,
+        initialPrivateMessage: 'reader resolved to a private or loopback address',
       },
     );
-    if (!response.ok) {
-      throw new Error(`reader returned HTTP ${response.status}`);
-    }
+    try {
+      if (!response.ok) {
+        await discardResponse(response);
+        throw new Error(`reader returned HTTP ${response.status}`);
+      }
 
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.toLowerCase().startsWith('text/plain')) {
-      throw new Error(`reader returned ${contentType || 'no content type'}, not text/plain`);
-    }
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.toLowerCase().startsWith('text/plain')) {
+        await discardResponse(response);
+        throw new Error(
+          `reader returned ${contentType || 'no content type'}, not text/plain`,
+        );
+      }
 
-    const body = await response.text();
-    const match = body.match(/(?:^|\r?\n)Markdown Content:\s*\r?\n([\s\S]*)$/);
-    const content = match?.[1]?.trim() || '';
-    if (!content) {
-      throw new Error('reader returned no article content');
-    }
+      const body = await response.text();
+      const match = body.match(/(?:^|\r?\n)Markdown Content:\s*\r?\n([\s\S]*)$/);
+      const content = match?.[1]?.trim() || '';
+      if (!content) {
+        throw new Error('reader returned no article content');
+      }
+      const header = body.slice(0, match.index);
 
-    return {
-      title: readerField(body, 'Title'),
-      author: null,
-      description: null,
-      site: parsed.hostname,
-      published: readerField(body, 'Published Time'),
-      word_count: content.split(/\s+/).length,
-      url: originalUrl,
-      content,
-    };
+      return {
+        title: readerField(header, 'Title'),
+        author: null,
+        description: null,
+        site: parsed.hostname,
+        published: readerField(header, 'Published Time'),
+        word_count: content.split(/\s+/).length,
+        url: originalUrl,
+        content,
+      };
+    } finally {
+      await dispatcher.close();
+    }
   } catch (error) {
     const detail = error.name === 'TimeoutError' || error.name === 'AbortError'
       ? `reader fetch timed out within ${FETCH_TIMEOUT_MS}ms budget`
@@ -104,7 +226,7 @@ async function extractWithReader(parsed, originalUrl, fetchImpl, signal) {
 }
 
 
-export async function extract(url, fetchImpl = fetch) {
+export async function extract(url, fetchImpl = undiciFetch, lookupImpl = lookup) {
   let parsed;
   try {
     parsed = new URL(url);
@@ -114,48 +236,50 @@ export async function extract(url, fetchImpl = fetch) {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new HttpError(400, 'only http(s) URLs are supported');
   }
-  if (isPrivateHost(parsed.hostname)) {
-    throw new HttpError(400, 'refusing to fetch a private or loopback address');
-  }
 
   const signal = AbortSignal.timeout(FETCH_TIMEOUT_MS);
-  let response;
+  let fetched;
   try {
-    response = await fetchImpl(url, {
+    fetched = await fetchPublic(url, {
+      fetchImpl,
+      lookupImpl,
       headers: {
         'user-agent': USER_AGENT,
         accept: 'text/html,application/xhtml+xml',
       },
-      redirect: 'follow',
       signal,
+      initialPrivateMessage: 'refusing to fetch a private or loopback address',
     });
   } catch (error) {
+    if (error instanceof HttpError) throw error;
     if (error.name === 'TimeoutError' || error.name === 'AbortError') {
       throw new HttpError(504, `upstream fetch timed out after ${FETCH_TIMEOUT_MS}ms`);
     }
     throw new HttpError(502, `upstream fetch failed: ${error.message}`);
   }
+
+  const { response, dispatcher } = fetched;
   if (!response.ok) {
+    await discardResponse(response);
+    await dispatcher.close();
     if (response.status === 403) {
-      return extractWithReader(parsed, url, fetchImpl, signal);
+      return extractWithReader(parsed, url, fetchImpl, lookupImpl, signal);
     }
     throw new HttpError(502, `upstream returned HTTP ${response.status}`);
   }
 
-  // A redirect can still land on a private address even when the original
-  // URL was public — re-check where we actually ended up.
-  if (response.url) {
-    try {
-      const landed = new URL(response.url);
-      if (isPrivateHost(landed.hostname)) {
-        throw new HttpError(400, 'redirect led to a private or loopback address');
-      }
-    } catch (error) {
-      if (error instanceof HttpError) throw error;
+  let html;
+  try {
+    html = await response.text();
+  } catch (error) {
+    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+      throw new HttpError(504, `upstream fetch timed out after ${FETCH_TIMEOUT_MS}ms`);
     }
+    throw new HttpError(502, `upstream fetch failed: ${error.message}`);
+  } finally {
+    await dispatcher.close();
   }
 
-  const html = await response.text();
   const { document } = parseHTML(html);
   const result = await Defuddle(document, url, { markdown: true });
 

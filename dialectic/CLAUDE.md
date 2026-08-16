@@ -446,8 +446,9 @@ hand `fetchrow` a dict and so assert the shape of a query that never ran.
 
 - `defuddle.service` remains direct-first. A publisher HTTP 403 alone triggers
   one tracking-sanitized Jina Reader request inside the same 15-second budget;
-  all consumers keep the existing article JSON contract. Pasted/model text is
-  still not filing provenance.
+  every network hop resolves and pins public addresses before a manual redirect
+  can be followed. All consumers keep the existing article JSON contract.
+  Pasted/model text is still not filing provenance.
 - Wire cools extraction failures and thin shells for six hours in process
   memory, scans at most six fresh feed entries, and sends at most two readable
   articles to relevance scoring per room/run. Interactive retries ignore this

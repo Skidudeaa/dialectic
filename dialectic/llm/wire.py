@@ -95,6 +95,15 @@ def _cool_fetch(url: str) -> None:
     _fetch_cooldowns[url] = time.monotonic() + WIRE_FETCH_COOLDOWN_SECONDS
 
 
+def _prune_fetch_cooldowns() -> None:
+    """Drop expired URLs even when rotating feeds never present them again."""
+    now = time.monotonic()
+    expired = [url for url, deadline in _fetch_cooldowns.items()
+               if deadline <= now]
+    for url in expired:
+        del _fetch_cooldowns[url]
+
+
 async def _linked_rooms(pool):
     """Rooms wired to a trading book (news_night._linked_rooms pattern),
     carrying the interjection toggle so the job never speaks where the room
@@ -259,6 +268,7 @@ async def _interject(ctx: SchedulerContext, conn, room_id, article, verdict):
 
 async def wire_watch(ctx: SchedulerContext) -> dict:
     """One pass over every linked room's news feed."""
+    _prune_fetch_cooldowns()
     if in_quiet_hours():
         return {"skipped": "quiet_hours"}
 

@@ -378,6 +378,24 @@ class TestWireWatch:
         ]
         assert wire._fetch_cooldowns == {}
 
+    async def test_job_prunes_expired_cooldowns_for_rotated_urls(
+        self, mocks, monkeypatch,
+    ) -> None:
+        now = 1000.0
+        monkeypatch.setattr(wire.time, "monotonic", lambda: now)
+        wire._fetch_cooldowns.update({
+            "https://gone.example/old": now - 1,
+            "https://blocked.example/current": now + 60,
+        })
+        mocks.articles = []
+        db = make_wire_db(rooms=[make_room_row()])
+
+        await wire.wire_watch(_ctx(db)[0])
+
+        assert wire._fetch_cooldowns == {
+            "https://blocked.example/current": now + 60,
+        }
+
     async def test_thin_content_never_scores_files_or_interrupts(
         self, mocks, monkeypatch, interjection_calls,
     ):
@@ -398,6 +416,12 @@ class TestWireWatch:
         assert interjection_calls == []
         assert all(s["reason"] == "thin_content"
                    for s in detail[str(ROOM_ID)]["skipped"])
+
+        mocks.extract_calls.clear()
+        second = await wire.wire_watch(_ctx(db)[0])
+        assert mocks.extract_calls == []
+        assert all(s["reason"] == "fetch_cooldown"
+                   for s in second[str(ROOM_ID)]["skipped"])
 
     async def test_empty_content_is_thin_even_with_a_word_count(
         self, mocks, monkeypatch, interjection_calls,
