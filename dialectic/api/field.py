@@ -105,6 +105,15 @@ VALUES ($1, $2, $3, 'relation', $4, 'explicit', 'human',
         $5, $6, $7, $8, $9, $10, $11, $12)
 """
 
+# Repeats idx_field_marks_dedup's OWN partial predicate. Postgres will not
+# infer a match against a partial unique index otherwise — it raises
+# InvalidColumnReferenceError ("no unique or exclusion constraint matching the
+# ON CONFLICT specification") rather than deduplicating. Same clause as
+# llm/field_inference._INSERT_CANDIDATE_SQL, for the same reason.
+_ON_CONFLICT_DEDUP = """
+ON CONFLICT (room_id, dedup_key) WHERE dedup_key IS NOT NULL DO NOTHING
+"""
+
 _INSERT_EVENT_SQL = """
 INSERT INTO events (id, timestamp, event_type, room_id, thread_id, user_id, payload)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -143,6 +152,103 @@ async def get_field(
     — Focus needs both (§5.1). Projects; never writes."""
     await _authorize(room_id, token, current_user.user_id, db)
     return await FieldMarkService(db).build(room_id)
+
+
+class FieldMarkCreateRequest(BaseModel):
+    """A mark a human writes from nothing.
+
+    Deliberately the same four fields as FieldReplacementRequest — a mark is
+    a mark, whether it arrives as a correction of the machine's guess or as
+    somebody's own observation. `thread_id` is optional because a mark about
+    a reading or a memory belongs to no particular branch.
+    """
+    relation: str
+    subjects: list[FieldSubjectRef] = Field(min_length=1)
+    title: str = ""
+    payload: dict = {}
+    thread_id: Optional[UUID] = None
+
+
+@router.post("/rooms/{room_id}/field/marks", response_model=FieldMark, status_code=201)
+async def create_field_mark(
+    room_id: UUID,
+    request: FieldMarkCreateRequest,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db=Depends(get_db),
+) -> FieldMark:
+    """A human originates a mark — the door the Field never had.
+
+    WHY it did not exist: Release 3 shipped review (confirm/contest/correct/
+    supersede/split/merge), which acts on a mark the INFERENCE engine already
+    proposed. Production bears out the consequence exactly — 85 marks, every
+    one `origin='inferred'`, and not a single human review in the room's
+    whole history. A human could disagree with the machine's reading and
+    could not say anything the machine had not thought of first.
+
+    The INSERT is the one already used for correction replacements
+    (`_INSERT_RELATION_SQL`, `origin='explicit'`, `provenance='human'`), so
+    this adds a door rather than a second way to write a mark.
+
+    ON CONFLICT DO NOTHING repeats the partial index's own WHERE predicate —
+    the index is `WHERE dedup_key IS NOT NULL`, and an ON CONFLICT that omits
+    it does not match the index at all. Re-marking the same relation over the
+    same subjects is idempotent, which is what makes a highlighter safe to
+    double-tap.
+    """
+    await _authorize(room_id, token, current_user.user_id, db)
+
+    if request.relation not in FIELD_RELATIONS:
+        raise HTTPException(
+            status_code=422, detail=f"Unknown relation: {request.relation}",
+        )
+    subjects = [s.model_dump() for s in request.subjects]
+    # Client payloads are documents, not trust boundaries (§5.1): a subject
+    # naming a row this room does not own fails closed.
+    if not await resolve_subjects_in_room(db, room_id, subjects):
+        raise HTTPException(
+            status_code=422,
+            detail="subjects do not resolve to rows in this room",
+        )
+    if request.thread_id is not None:
+        owns_thread = await db.fetchval(
+            "SELECT 1 FROM threads WHERE id = $1 AND room_id = $2",
+            request.thread_id, room_id,
+        )
+        if not owns_thread:
+            raise HTTPException(
+                status_code=422, detail="thread does not belong to this room",
+            )
+
+    now = datetime.now(timezone.utc)
+    mark_id = uuid4()
+    dedup_key = compute_dedup_key(request.relation, subjects)
+
+    async with db.transaction():
+        await db.execute(
+            _INSERT_RELATION_SQL + _ON_CONFLICT_DEDUP,
+            mark_id, room_id, request.thread_id, request.relation, subjects,
+            request.title, request.payload, None, None,
+            current_user.user_id, now, dedup_key,
+        )
+        # DO NOTHING means an identical mark already exists; the caller asked
+        # for that mark, so return it rather than a 409 they cannot act on.
+        existing_id = await db.fetchval(
+            "SELECT id FROM field_marks WHERE room_id = $1 AND dedup_key = $2",
+            room_id, dedup_key,
+        )
+        resolved_id = existing_id or mark_id
+        await db.execute(
+            _INSERT_EVENT_SQL, uuid4(), now, EventType.FIELD_MARK_CREATED.value,
+            room_id, request.thread_id, current_user.user_id,
+            {"mark_id": str(resolved_id), "relation": request.relation,
+             "origin": "explicit"},
+        )
+
+    mark = await build_single_mark(db, room_id, resolved_id)
+    if mark is None:
+        raise HTTPException(status_code=500, detail="mark did not persist")
+    return mark
 
 
 async def _validate_replacement(db, room_id: UUID, replacement: FieldReplacementRequest) -> None:

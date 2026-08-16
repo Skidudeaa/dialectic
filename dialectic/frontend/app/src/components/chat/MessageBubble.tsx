@@ -3,11 +3,14 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { addressBlock, decorateMentions, type MentionContext } from '../../lib/mentions'
 import type { Attachment, CommitmentProposal, Message, Reaction, ThesisSeed } from '../../types'
+import type { FieldMark } from '../../types/workspace.ts'
 import { api } from '../../lib/api'
 import { localProposals, type LocalProposal } from '../../lib/proposalEnvelope'
 import { useAppStore } from '../../stores/appStore'
 import { MessageAttachments } from './MessageAttachments'
 import { SignatureMark } from './SignatureMark'
+import { PassageMarker } from './PassageMarker'
+import { MessageMarks } from './MessageMarks'
 import './MessageBubble.css'
 
 /** Small, deliberately boring set — a picker is more chrome than this needs. */
@@ -51,6 +54,10 @@ interface MessageBubbleProps {
    * mention chip for somebody the room does not have is worse than none.
    */
   mentionContext?: MentionContext
+  /** Field marks whose subject is THIS message, with their review state. */
+  marks?: FieldMark[]
+  /** Re-read the Field projection after a mark or a review lands. */
+  onFieldChanged?: () => void
   /** Same speaker continuing — avatar and byline are suppressed as repetition. */
   isContinuation?: boolean
   /** Media carried by this message, if any. */
@@ -66,6 +73,19 @@ interface MessageBubbleProps {
    * at Home the destination is a room that does not exist yet.
    */
   onOpenBench?: (seed: ThesisSeed) => void
+}
+
+/**
+ * The first link in a message, so it can be filed into the library.
+ *
+ * Mirrors `first_url` in llm/claim_check.py — which is already what decides
+ * whether a message gets claim-checked, so the two agree on what "this
+ * message has a link" means.
+ */
+const URL_RE = /https?:\/\/[^\s<>"')]+/
+
+function firstUrl(content: string): string | null {
+  return URL_RE.exec(content)?.[0] ?? null
 }
 
 /** Quoted parents are a glance, not a re-read. */
@@ -122,6 +142,8 @@ export function MessageBubble({
   onEdit,
   onDelete,
   mentionContext,
+  marks = [],
+  onFieldChanged,
   isContinuation,
   attachments = [],
   onOpenBench,
@@ -134,7 +156,9 @@ export function MessageBubble({
   const [acceptState, setAcceptState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
   const [readingAcceptState, setReadingAcceptState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
   const [resolutionState, setResolutionState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
+  const [fileState, setFileState] = useState<'idle' | 'filing' | 'filed' | 'error'>('idle')
   const editRef = useRef<HTMLTextAreaElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const currentRoomId = useAppStore((s) => s.currentRoom?.id)
 
   const html = useMemo(() => {
@@ -179,6 +203,24 @@ export function MessageBubble({
     }
     onEdit?.(message.id, trimmed)
     setIsEditing(false)
+  }
+
+  // A link in a HUMAN message can be filed into the library by anyone in the
+  // room. Claude's own messages already have save_reading; the gap was that a
+  // person pasting an article had no way to keep it.
+  const pastedUrl = message.speaker_type === 'human' ? firstUrl(message.content) : null
+
+  const fileReading = async () => {
+    if (!pastedUrl || !currentRoomId) return
+    setFileState('filing')
+    try {
+      await api.fileReading(currentRoomId, { message_id: message.id, url: pastedUrl })
+      setFileState('filed')
+    } catch {
+      // Say so. A silent failure reads as "filed", which is the one thing it
+      // must not imply about something you meant to keep.
+      setFileState('error')
+    }
   }
 
   const cls = speakerClass(message.speaker_type, isSelf)
@@ -390,10 +432,29 @@ export function MessageBubble({
               </div>
             </div>
           ) : (
-            <div className="msg-content" dangerouslySetInnerHTML={{ __html: html }} />
+            <div
+              ref={contentRef}
+              className="msg-content"
+              dangerouslySetInnerHTML={{ __html: html }}
+            />
           )}
           {isFolded && <div className="msg-fold-veil" aria-hidden="true" />}
+          {/* Only real, persisted, unfolded prose can be marked: a streaming
+              placeholder has no row to point a subject at, and a folded body
+              would anchor a quote the reader cannot see. */}
+          {currentRoomId && !isStreaming && !isEditing && !isFolded && (
+            <PassageMarker
+              roomId={currentRoomId}
+              threadId={message.thread_id}
+              messageId={message.id}
+              containerRef={contentRef}
+              onMarked={onFieldChanged}
+            />
+          )}
         </div>
+        {currentRoomId && (
+          <MessageMarks roomId={currentRoomId} marks={marks} onReviewed={onFieldChanged} />
+        )}
 
         {foldable && (
           <button
@@ -637,6 +698,17 @@ export function MessageBubble({
       </div>
 
       <div className="msg-actions">
+        {pastedUrl && !isStreaming && (
+          <button
+            className="msg-action-btn"
+            onClick={fileReading}
+            disabled={fileState === 'filing' || fileState === 'filed'}
+            title={fileState === 'filed' ? 'In the library' : `File ${pastedUrl} into the library`}
+          >
+            {fileState === 'filed' ? 'FILED' : fileState === 'filing' ? 'FILING…'
+              : fileState === 'error' ? 'RETRY FILE' : 'FILE'}
+          </button>
+        )}
         {onToggleReaction && !isStreaming && (
           <div className="msg-react-wrap">
             <button

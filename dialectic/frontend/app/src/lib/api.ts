@@ -1,6 +1,7 @@
 import type { Attachment, HomeActivityProjection, Memory, Thread, ThreadNode, UserRoom } from '../types/index.ts';
 import type { AtlasProjection } from '../types/atlas.ts';
 import type {
+  FieldMark,
   FieldProjection,
   FieldReviewRequest,
   FieldReviewResponse,
@@ -189,6 +190,43 @@ class DialecticAPI {
    */
   async getFieldMarks(roomId: string): Promise<FieldProjection> {
     return this.fetch(`/rooms/${roomId}/field`);
+  }
+
+  /**
+   * A human ORIGINATES a mark — the Field's second write door.
+   *
+   * Idempotent by dedup key on the server, so a double-tap on a highlighter
+   * returns the existing mark rather than a duplicate or an error.
+   */
+  /**
+   * File a link a HUMAN pasted — no draft, no proposal. The library's only
+   * other doors are the wire and the night digest, which is why production
+   * holds not one reading a person filed.
+   */
+  async fileReading(
+    roomId: string,
+    body: { message_id: string; url: string; summary?: string },
+  ): Promise<{ reading: Record<string, unknown> }> {
+    return this.fetch(`/rooms/${roomId}/reading/file`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async createFieldMark(
+    roomId: string,
+    body: {
+      relation: string
+      subjects: { entity: string; id: string; field?: string }[]
+      title?: string
+      payload?: Record<string, unknown>
+      thread_id?: string | null
+    },
+  ): Promise<FieldMark> {
+    return this.fetch(`/rooms/${roomId}/field/marks`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
   }
   /**
    * One human action on one mark -- confirm/contest/correct/split/merge/

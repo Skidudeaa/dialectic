@@ -59,6 +59,13 @@ class AcceptReadingRequest(BaseModel):
     message_id: UUID
 
 
+class FileReadingRequest(BaseModel):
+    """A human files a link THEY pasted — no draft, no proposal, no LLM."""
+    message_id: UUID
+    url: str
+    summary: str = ""
+
+
 @router.post("/rooms/{room_id}/reading/accept")
 async def accept_reading(
     room_id: UUID,
@@ -132,3 +139,88 @@ async def accept_reading(
         acceptance_stamp(current_user.user_id),
     )
     return saved
+
+
+@router.post("/rooms/{room_id}/reading/file")
+async def file_reading(
+    room_id: UUID,
+    request: FileReadingRequest,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """File a link a human pasted, without waiting to be offered it.
+
+    WHY this exists: the library had exactly two ways in — the wire and the
+    night digest — and production shows it. Every reading_items row is
+    `source='wire'` or `source='night_shift'`; not one was filed by a person.
+    `save_reading` was reachable only through an LLM proposal a human then
+    accepted, so an article somebody pasted and discussed was read aloud into
+    the conversation and then evaporated.
+
+    That is also the real answer to "it should not give everything we paste
+    equal weight": everything pasted carries the same weight because none of
+    it becomes an object that could carry any. This is the door that makes it
+    one; what the room then does with it (evidence marks, confirms) is what
+    makes weights differ.
+
+    The URL must appear in the named message. Not for security — the caller
+    is already a member and could paste it themselves — but because a reading
+    filed from a message it does not appear in has a provenance link that
+    lies, and `source_message_id` is what the Field's evidence marks point at.
+    """
+    await _verify_room_token(room_id, token, db)
+    await _verify_room_member(room_id, current_user.user_id, db)
+
+    row = await db.fetchrow(
+        """SELECT m.id, m.content
+           FROM messages m
+           JOIN threads t ON t.id = m.thread_id
+           WHERE m.id = $1 AND t.room_id = $2 AND NOT m.is_deleted""",
+        request.message_id, room_id,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Message not found in this room")
+
+    url = request.url.strip()
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=422, detail="Not a fetchable URL")
+    if url not in (row["content"] or ""):
+        raise HTTPException(
+            status_code=422, detail="That URL does not appear in this message",
+        )
+
+    summary = request.summary.strip()
+    if len(summary) > 1000:
+        raise HTTPException(status_code=422, detail="Summary is too long")
+
+    try:
+        article = await dc.extract_article(url)
+    except dc.DefuddleError as e:
+        logger.warning("reading file re-fetch failed: %s", e)
+        raise HTTPException(
+            status_code=502, detail=f"article extractor refused the fetch: {e}"
+        )
+    if not isinstance(article, dict) or not str(article.get("content") or "").strip():
+        raise HTTPException(
+            status_code=422, detail="The URL no longer yields a readable article"
+        )
+    # The SAME thin-content gate every automated filing path shares — a
+    # cookie wall filed by a human is as useless as one filed by the wire.
+    if reading_mod.is_thin(article):
+        raise HTTPException(
+            status_code=422,
+            detail="That page came back too thin to file — a paywall or a bot check",
+        )
+
+    saved = await reading_mod.save_reading(
+        db,
+        room_id=room_id,
+        article=article,
+        summary=summary or str(article.get("title") or url)[:280],
+        key_claims=[],
+        source="human",
+        source_message_id=request.message_id,
+        saved_by_user_id=current_user.user_id,
+    )
+    return {"reading": saved}

@@ -130,15 +130,34 @@ def test_review_refuses_an_unknown_action():
     assert resp.status_code == 422
 
 
-def test_the_router_exposes_no_write_route_beyond_the_one_post():
-    """C4-style guard, asserted where it lives: exactly one mutating route."""
+def test_the_routers_write_surface_is_exactly_these_two():
+    """C4-style guard, asserted where it lives: the mutating routes are
+    ENUMERATED, so a third arrives as a failing test rather than a surprise.
+
+    AMENDED 2026-08-16: was "exactly one". Human origination
+    (POST .../field/marks) is the second, and it had to exist — Release 3
+    gave humans review only, so production accumulated 85 marks, every one
+    `origin='inferred'`, with no way for a person to assert anything the
+    inference engine had not proposed first.
+
+    Still no PUT, PATCH or DELETE anywhere: field_marks is append-only, and
+    that is the invariant this guard actually protects.
+    """
     write_methods = {"POST", "PUT", "PATCH", "DELETE"}
-    mutating_routes = [
-        route for route in field_mod.router.routes
+    mutating = {
+        (route.path, tuple(sorted(route.methods & write_methods)))
+        for route in field_mod.router.routes
         if getattr(route, "methods", set()) & write_methods
-    ]
-    assert len(mutating_routes) == 1
-    assert mutating_routes[0].path == "/rooms/{room_id}/field/marks/{mark_id}/review"
+    }
+    assert mutating == {
+        ("/rooms/{room_id}/field/marks/{mark_id}/review", ("POST",)),
+        ("/rooms/{room_id}/field/marks", ("POST",)),
+    }
+    assert not any(
+        m in route.methods for route in field_mod.router.routes
+        for m in ("PUT", "PATCH", "DELETE")
+        if getattr(route, "methods", None)
+    ), "field_marks is append-only — nothing here may update or delete"
 
 
 # ---------------------------------------------------------------------------

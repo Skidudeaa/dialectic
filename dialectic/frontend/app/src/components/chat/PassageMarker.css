@@ -1,0 +1,80 @@
+/* The passage marker: a small menu that appears over a selection. */
+.passage-marker {
+    /* FIXED, not absolute: inside the message it is trapped in `.msg`'s
+       stacking context and a later message's byline paints over it. */
+    position: fixed;
+    z-index: 400;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    white-space: nowrap;
+}
+.passage-marker-btn {
+    padding: 3px 8px;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+}
+.passage-marker-btn:hover:not(:disabled) { color: var(--color-amber); background: var(--amber-08); }
+.passage-marker-btn:disabled { opacity: 0.5; cursor: progress; }
+.passage-marker-error {
+    padding: 0 6px;
+    color: var(--error);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+}
+
+/* Marks sitting under the message they are about. */
+.msg-marks {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 6px;
+    padding-left: 10px;
+    border-left: 1px solid var(--color-bean);
+}
+.msg-mark {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-faint);
+}
+/* Contested marks are dimmed AND chipped — the chip is the non-color signal. */
+.msg-mark.is-contested { opacity: 0.75; }
+.msg-mark.is-superseded { opacity: 0.55; text-decoration: line-through; }
+.msg-mark-relation { color: var(--color-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+.msg-mark-title {
+    color: var(--color-ink);
+    font-family: var(--font-serif);
+    font-size: 0.8rem;
+    max-width: 42ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.msg-mark-action {
+    padding: 1px 7px;
+    background: none;
+    border: 1px solid var(--color-bean);
+    border-radius: 999px;
+    color: var(--color-secondary);
+    font-family: inherit;
+    font-size: 0.66rem;
+    cursor: pointer;
+}
+.msg-mark-action:hover:not(:disabled) { color: var(--color-teal); border-color: var(--teal-30); }
+.msg-mark-action:disabled { opacity: 0.5; cursor: progress; }
+.msg-mark-error { color: var(--error); }
