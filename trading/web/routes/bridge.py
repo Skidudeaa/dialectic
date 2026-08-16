@@ -23,10 +23,11 @@ import logging
 import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -528,13 +529,15 @@ NEWS_ERROR_TTL_SECONDS = 120.0
 # GdeltRateLimitError for hours while each probe drew a fresh 429.
 NEWS_RATE_LIMIT_MAX_DOUBLINGS = 8
 
-# thesis_id -> consecutive rate-limited fetches
-_news_rate_limit_streak: dict[str, int] = {}
+# GDELT rate-limits by caller IP, so the cooldown must span books and queries.
+_news_rate_limit_streak = 0
+_news_rate_limit_until = 0.0
 
 NEWS_MAX_HEADLINES = 15
+NEWS_CACHE_MAX_ENTRIES = 64
 
-# thesis_id -> (expires_at_monotonic, payload)
-_news_cache: dict[str, tuple[float, dict]] = {}
+# (thesis_id, exact query or "") -> (expires_at_monotonic, payload)
+_news_cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
 
 
 def _book_path(thesis_id: str) -> Optional[Path]:
@@ -619,77 +622,147 @@ def _gdelt_query_for_book(book: dict) -> Optional[str]:
     return None
 
 
-def _fetch_news_sync(thesis_id: str, book: dict) -> tuple[dict, float]:
-    """Blocking headline fetch. Returns (payload, ttl_seconds)."""
-    query = _gdelt_query_for_book(book)
+def _news_payload(
+    status: str,
+    query: Optional[str],
+    *,
+    articles: Optional[list[dict[str, Any]]] = None,
+    note: Optional[str] = None,
+    retry_after_seconds: Optional[int] = None,
+) -> dict[str, Any]:
+    """Build the stable GDELT response contract for every source state."""
+    payload: dict[str, Any] = {
+        "status": status,
+        "source": "gdelt",
+        "query": query,
+        "articles": articles if articles is not None else [],
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "cache_hit": False,
+    }
+    if note is not None:
+        payload["note"] = note
+    if retry_after_seconds is not None:
+        payload["retry_after_seconds"] = retry_after_seconds
+    return payload
+
+
+def _fetch_news_sync(
+    thesis_id: str,
+    book: dict[str, Any],
+    query_override: Optional[str] = None,
+) -> tuple[dict[str, Any], float]:
+    """Fetch headlines and return their explicit source state plus cache TTL."""
+    global _news_rate_limit_streak, _news_rate_limit_until
+
+    query = query_override or _gdelt_query_for_book(book)
     if not query:
-        return {"articles": [], "note": "no gdelt config"}, NEWS_TTL_SECONDS
+        return (
+            _news_payload(
+                "not_configured", None, note="no gdelt config",
+            ),
+            NEWS_TTL_SECONDS,
+        )
+
+    now = time.monotonic()
+    if _news_rate_limit_until > now:
+        remaining = max(1, int(_news_rate_limit_until - now + 0.999))
+        return (
+            _news_payload(
+                "rate_limited",
+                query,
+                note="GDELT source cooldown active",
+                retry_after_seconds=remaining,
+            ),
+            float(remaining),
+        )
 
     from tools.data_fetch import gdelt
 
     try:
         articles = gdelt.fetch_articles(query, max_records=NEWS_MAX_HEADLINES)
     except gdelt.GdeltRateLimitError as exc:
-        streak = _news_rate_limit_streak.get(thesis_id, 0) + 1
-        _news_rate_limit_streak[thesis_id] = streak
+        _news_rate_limit_streak += 1
         ttl = min(
             NEWS_TTL_SECONDS,
             NEWS_ERROR_TTL_SECONDS
-            * (2 ** min(streak - 1, NEWS_RATE_LIMIT_MAX_DOUBLINGS)),
+            * (2 ** min(
+                _news_rate_limit_streak - 1,
+                NEWS_RATE_LIMIT_MAX_DOUBLINGS,
+            )),
         )
+        _news_rate_limit_until = time.monotonic() + ttl
         log.warning(
-            "GDELT rate-limited for %s (streak %d) — holding the empty "
-            "answer %.0fs so the throttle can lift: %s",
-            thesis_id, streak, ttl, exc,
+            "GDELT rate-limited for %s (source streak %d) — holding requests "
+            "%.0fs so the per-IP throttle can lift: %s",
+            thesis_id, _news_rate_limit_streak, ttl, exc,
         )
         return (
-            {"articles": [], "note": f"gdelt unavailable: {type(exc).__name__}"},
+            _news_payload(
+                "rate_limited",
+                query,
+                note=f"gdelt unavailable: {type(exc).__name__}",
+                retry_after_seconds=int(ttl),
+            ),
             ttl,
         )
-    except Exception as exc:  # noqa: BLE001 — a dark feed is not a 500
-        log.warning("GDELT fetch failed for %s: %s: %s",
-                    thesis_id, type(exc).__name__, exc)
+    except Exception as exc:  # noqa: BLE001 — preserve source state in the 200
+        log.warning(
+            "GDELT fetch failed for %s: %s: %s",
+            thesis_id, type(exc).__name__, exc,
+        )
         return (
-            {"articles": [], "note": f"gdelt unavailable: {type(exc).__name__}"},
+            _news_payload(
+                "unavailable",
+                query,
+                note=f"gdelt unavailable: {type(exc).__name__}",
+                retry_after_seconds=int(NEWS_ERROR_TTL_SECONDS),
+            ),
             NEWS_ERROR_TTL_SECONDS,
         )
 
-    _news_rate_limit_streak.pop(thesis_id, None)
-
+    _news_rate_limit_streak = 0
+    _news_rate_limit_until = 0.0
     headlines: list[dict[str, Any]] = [
         {
-            "title": a.title,
-            "url": a.url,
-            "seendate": a.seendate,
-            "domain": a.domain,
+            "title": article.title,
+            "url": article.url,
+            "seendate": article.seendate,
+            "domain": article.domain,
         }
-        for a in articles[:NEWS_MAX_HEADLINES]
+        for article in articles[:NEWS_MAX_HEADLINES]
     ]
-    return {"articles": headlines}, NEWS_TTL_SECONDS
+    status = "ok" if headlines else "no_matches"
+    return _news_payload(status, query, articles=headlines), NEWS_TTL_SECONDS
+
+
+def _store_news_cache(
+    key: tuple[str, str],
+    payload: dict[str, Any],
+    ttl: float,
+) -> None:
+    """Store one bounded query result after pruning expired entries."""
+    now = time.monotonic()
+    for expired_key, (expires_at, _value) in list(_news_cache.items()):
+        if expires_at <= now:
+            _news_cache.pop(expired_key, None)
+    if key not in _news_cache and len(_news_cache) >= NEWS_CACHE_MAX_ENTRIES:
+        evict = min(_news_cache, key=lambda candidate: _news_cache[candidate][0])
+        _news_cache.pop(evict)
+    _news_cache[key] = (now + ttl, payload)
 
 
 @router.get("/news/{thesis_id}")
 async def get_thesis_news(
     thesis_id: str,
+    query: Optional[str] = Query(default=None, min_length=5, max_length=500),
     _svc: None = Depends(require_service_token),
 ) -> JSONResponse:
-    """Recent GDELT headlines for a thesis book, capped at 15 and TTL-cached.
-
-    A book with no GDELT feed is not an error — most books have none. It
-    answers 200 with an empty list and a `note` so the caller can tell
-    "nothing configured" from "configured but quiet".
-    """
+    """Return status-rich GDELT headlines for a standing or focused query."""
     path = _book_path(thesis_id)
     if path is None:
         raise HTTPException(
             status_code=404, detail=f"No book for thesis {thesis_id!r}",
         )
-
-    now = time.monotonic()
-    cached = _news_cache.get(thesis_id)
-    if cached and cached[0] > now:
-        return JSONResponse(content=cached[1], media_type="application/json")
-
     try:
         book = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
@@ -697,8 +770,25 @@ async def get_thesis_news(
             status_code=500, detail=f"Book {thesis_id!r} is unreadable: {exc}",
         )
 
-    payload, ttl = await asyncio.to_thread(_fetch_news_sync, thesis_id, book)
-    _news_cache[thesis_id] = (time.monotonic() + ttl, payload)
+    focused_query = query.strip() if query is not None else None
+    if focused_query is not None and not 5 <= len(focused_query) <= 500:
+        raise HTTPException(
+            status_code=422,
+            detail="query must be between 5 and 500 characters after trimming",
+        )
+    resolved_query = focused_query or _gdelt_query_for_book(book)
+    cache_key = (thesis_id, resolved_query or "")
+    now = time.monotonic()
+    cached = _news_cache.get(cache_key)
+    if cached and cached[0] > now:
+        cached_payload = dict(cached[1])
+        cached_payload["cache_hit"] = True
+        return JSONResponse(content=cached_payload, media_type="application/json")
+
+    payload, ttl = await asyncio.to_thread(
+        _fetch_news_sync, thesis_id, book, focused_query,
+    )
+    _store_news_cache(cache_key, payload, ttl)
     return JSONResponse(content=payload, media_type="application/json")
 
 
