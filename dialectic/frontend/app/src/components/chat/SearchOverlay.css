@@ -136,7 +136,7 @@
     border-radius: 999px;
     color: var(--color-secondary);
     font-family: var(--font-mono);
-    font-size: 0.72rem;
+    font-size: 12px;
     cursor: pointer;
 }
 .search-tag-btn.active {

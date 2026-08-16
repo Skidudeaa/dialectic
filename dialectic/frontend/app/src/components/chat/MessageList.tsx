@@ -56,6 +56,10 @@ const GROUPING_WINDOW_MS = 5 * 60 * 1000
 
 function continuesPrevious(current: Message, previous: Message | undefined): boolean {
   if (!previous) return false
+  // Tags are filing decisions rendered in the byline. Grouping this message
+  // would suppress that entire row and make the tag exist only after search
+  // or reload, so a tagged contribution always starts a visible entry.
+  if ((current.metadata?.tags?.length ?? 0) > 0) return false
   if (current.speaker_type !== previous.speaker_type) return false
   // Distinguishes the two humans; both are null for Claude, whose speaker_type
   // has already separated primary from provoker from annotator.
