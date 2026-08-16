@@ -12,6 +12,7 @@ Mirrors tests/test_news_night.py + the sweep tests in
 tests/test_participation_fsm.py.
 """
 
+from collections.abc import Generator
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -28,6 +29,17 @@ from tests.conftest import make_message, make_room, make_thread, make_user
 
 ROOM_ID = uuid4()
 BOOK = "iran-war"
+
+
+@pytest.fixture(autouse=True)
+def clear_wire_fetch_cooldowns() -> Generator[None, None, None]:
+    """The production cooldown is process-local; tests must not share it."""
+    cooldowns = getattr(wire, "_fetch_cooldowns", None)
+    if cooldowns is not None:
+        cooldowns.clear()
+    yield
+    if cooldowns is not None:
+        cooldowns.clear()
 
 
 def make_room_row(**overrides):
@@ -273,11 +285,98 @@ class TestWireWatch:
         db = make_wire_db(rooms=[make_room_row()])
         detail = await wire.wire_watch(_ctx(db)[0])
 
-        assert [s["url"] for s in mocks.saved] == ["https://reuters.com/s2"]
-        assert len(interjection_calls) == 1
+        assert mocks.extract_calls == [
+            "https://reuters.com/s1",
+            "https://reuters.com/s2",
+            "https://reuters.com/s3",
+        ]
+        assert [s["url"] for s in mocks.saved] == [
+            "https://reuters.com/s2",
+            "https://reuters.com/s3",
+        ]
+        assert len(interjection_calls) == 2
         assert detail[str(ROOM_ID)]["skipped"] == [
             {"url": "https://reuters.com/s1", "reason": "extract_failed"},
         ]
+
+    async def test_extract_failure_cools_url_then_retries_after_expiry(
+        self, mocks, monkeypatch, interjection_calls,
+    ) -> None:
+        from llm.defuddle_client import DefuddleError
+
+        now = 1000.0
+        monkeypatch.setattr(wire.time, "monotonic", lambda: now)
+        failed_url = "https://reuters.com/s1"
+        mocks.extract_errors[failed_url] = DefuddleError("blocked")
+        db = make_wire_db(rooms=[make_room_row()])
+
+        first = await wire.wire_watch(_ctx(db)[0])
+        assert mocks.extract_calls == [
+            "https://reuters.com/s1",
+            "https://reuters.com/s2",
+            "https://reuters.com/s3",
+        ]
+        assert first[str(ROOM_ID)]["skipped"][0] == {
+            "url": failed_url,
+            "reason": "extract_failed",
+        }
+
+        mocks.extract_calls.clear()
+        second = await wire.wire_watch(_ctx(db)[0])
+        assert mocks.extract_calls == [
+            "https://reuters.com/s2",
+            "https://reuters.com/s3",
+        ]
+        assert second[str(ROOM_ID)]["skipped"][0] == {
+            "url": failed_url,
+            "reason": "fetch_cooldown",
+        }
+
+        now += wire.WIRE_FETCH_COOLDOWN_SECONDS + 1
+        mocks.extract_calls.clear()
+        del mocks.extract_errors[failed_url]
+        await wire.wire_watch(_ctx(db)[0])
+        assert mocks.extract_calls[:2] == [
+            "https://reuters.com/s1",
+            "https://reuters.com/s2",
+        ]
+
+    async def test_scan_cap_bounds_unreadable_feed_work(
+        self, mocks, interjection_calls,
+    ) -> None:
+        from llm.defuddle_client import DefuddleError
+
+        mocks.articles = make_articles(8)
+        mocks.extract_errors = {
+            article["url"]: DefuddleError("blocked")
+            for article in mocks.articles
+        }
+        db = make_wire_db(rooms=[make_room_row()])
+
+        detail = await wire.wire_watch(_ctx(db)[0])
+
+        assert mocks.extract_calls == [
+            f"https://reuters.com/s{i}" for i in range(1, 7)
+        ]
+        assert mocks.score_calls == []
+        assert len(detail[str(ROOM_ID)]["skipped"]) == 6
+
+    async def test_below_threshold_article_is_not_cooled(
+        self, mocks, interjection_calls,
+    ) -> None:
+        mocks.score = {"score": wire.WIRE_THRESHOLD - 0.1, "why": "peripheral"}
+        db = make_wire_db(rooms=[make_room_row()])
+
+        await wire.wire_watch(_ctx(db)[0])
+        await wire.wire_watch(_ctx(db)[0])
+
+        assert mocks.extract_calls == [
+            "https://reuters.com/s1",
+            "https://reuters.com/s2",
+            "https://reuters.com/s1",
+            "https://reuters.com/s2",
+        ]
+        assert wire._fetch_cooldowns == {}
 
     async def test_thin_content_never_scores_files_or_interrupts(
         self, mocks, monkeypatch, interjection_calls,
