@@ -8,7 +8,7 @@ polymarket.fetch_markets into consistent API-friendly dicts.
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
 log = logging.getLogger(__name__)
 
@@ -46,8 +46,30 @@ def _iter_instruments(cfg: dict):
                 yield inst.get("id", ""), inst.get("role", inst.get("id", ""))
 
 
+def _polymarket_feed_id(feed: dict[str, Any]) -> str:
+    """Return the authored Polymarket ID, preferring current `market` syntax."""
+    for key in ("market", "slug"):
+        value = feed.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
+def polymarket_markets_from_book(cfg: dict[str, Any]) -> list[str]:
+    """Return unique Polymarket IDs from one book in authored order."""
+    market_ids: list[str] = []
+    for node in cfg.get("nodes", []) or []:
+        for feed in node.get("feeds", []) or []:
+            if not isinstance(feed, dict) or feed.get("source") != "polymarket":
+                continue
+            market_id = _polymarket_feed_id(feed)
+            if market_id and market_id not in market_ids:
+                market_ids.append(market_id)
+    return market_ids
+
+
 def _collect_symbols_from_books() -> tuple[Set[str], List[str]]:
-    """Scan all book configs for Yahoo Finance symbols and Polymarket slugs."""
+    """Scan all book configs for Yahoo symbols and Polymarket market IDs."""
     yahoo_symbols: Set[str] = set()
     poly_slugs: List[str] = []
 
@@ -63,12 +85,9 @@ def _collect_symbols_from_books() -> tuple[Set[str], List[str]]:
             if ticker:
                 yahoo_symbols.add(ticker)
 
-        for node in cfg.get("nodes", []):
-            for feed in node.get("feeds", []):
-                if feed.get("source") == "polymarket":
-                    slug = feed.get("slug", "")
-                    if slug and slug not in poly_slugs:
-                        poly_slugs.append(slug)
+        for market_id in polymarket_markets_from_book(cfg):
+            if market_id not in poly_slugs:
+                poly_slugs.append(market_id)
 
     return yahoo_symbols, poly_slugs
 
@@ -148,18 +167,21 @@ def fetch_quotes(force_refresh: bool = False) -> List[Dict[str, Any]]:
     return results
 
 
-def fetch_polymarket_probs() -> List[Dict[str, Any]]:
-    """Fetch Polymarket probabilities for all configured slugs."""
-    _, poly_slugs = _collect_symbols_from_books()
-    if not poly_slugs:
+def fetch_polymarket_probs(
+    market_ids: Optional[list[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Fetch numeric probabilities for explicit IDs or every configured market."""
+    if market_ids is None:
+        _, market_ids = _collect_symbols_from_books()
+    if not market_ids:
         return []
 
-    try:
-        probs = polymarket_mod.fetch_markets(poly_slugs)
-        return [{"slug": slug, "probability": prob} for slug, prob in probs.items()]
-    except Exception as e:
-        log.warning("Polymarket fetch failed: %s", e)
-        return []
+    probabilities = polymarket_mod.fetch_markets(market_ids)
+    return [
+        {"slug": market_id, "probability": probability}
+        for market_id, probability in probabilities.items()
+        if isinstance(probability, (int, float))
+    ]
 
 
 def get_watchlist() -> List[Dict[str, Any]]:
@@ -189,12 +211,12 @@ def get_watchlist() -> List[Dict[str, Any]]:
         for node in cfg.get("nodes", []):
             for feed in node.get("feeds", []):
                 if feed.get("source") == "polymarket":
-                    slug = feed.get("slug", "")
-                    if slug and slug not in seen:
-                        seen.add(slug)
+                    market_id = _polymarket_feed_id(feed)
+                    if market_id and market_id not in seen:
+                        seen.add(market_id)
                         items.append({
-                            "symbol": slug,
-                            "label": feed.get("label", slug),
+                            "symbol": market_id,
+                            "label": feed.get("label", market_id),
                             "last_price": None,
                             "change_pct": None,
                             "source": "polymarket",
