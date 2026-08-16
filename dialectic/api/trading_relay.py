@@ -160,10 +160,15 @@ async def get_polymarket(
     token: str = Depends(extract_room_token),
     current_user: AuthenticatedUser = Depends(get_current_user),
     pool: asyncpg.Pool = Depends(get_pool),
-):
-    await _resolve_room_book(room_id, token, current_user.user_id, pool)
+) -> list:
+    book_id = await _resolve_room_book(room_id, token, current_user.user_id, pool)
     try:
-        return await td.get("/api/market/polymarket")
+        result = await td.service_get(f"/api/bridge/polymarket/{book_id}")
+        if not isinstance(result, dict) or not isinstance(result.get("markets"), list):
+            raise td.TradingDeskError(
+                "tradingDesk polymarket bridge returned an unexpected shape"
+            )
+        return result["markets"]
     except td.TradingDeskError as e:
         raise _bad_gateway("polymarket", e)
 

@@ -109,11 +109,24 @@ def test_quotes_uses_the_cold_path_timeout(monkeypatch):
                                  timeout=relay.QUOTES_TIMEOUT_S)
 
 
-def test_polymarket_proxies(monkeypatch):
-    get = AsyncMock(return_value={"markets": []})
-    resp = _call(_make_db(), monkeypatch, "polymarket", td_mocks={"get": get})
+def test_polymarket_is_book_scoped_but_remains_list_shaped(monkeypatch):
+    markets = [{"slug": "m", "probability": 0.4}]
+    service_get = AsyncMock(return_value={
+        "status": "ok",
+        "configured_markets": ["m"],
+        "markets": markets,
+    })
+
+    resp = _call(
+        _make_db(), monkeypatch, "polymarket",
+        td_mocks={"service_get": service_get},
+    )
+
     assert resp.status_code == 200
-    get.assert_awaited_once_with("/api/market/polymarket")
+    assert resp.json() == markets
+    service_get.assert_awaited_once_with(
+        f"/api/bridge/polymarket/{BOOK_ID}",
+    )
 
 
 def test_diff_and_brief_pass_the_book_id(monkeypatch):

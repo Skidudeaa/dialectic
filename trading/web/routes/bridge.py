@@ -553,6 +553,45 @@ def _book_path(thesis_id: str) -> Optional[Path]:
     return candidate if candidate.is_file() else None
 
 
+@router.get("/polymarket/{thesis_id}")
+async def get_thesis_polymarket(
+    thesis_id: str,
+    _svc: None = Depends(require_service_token),
+) -> JSONResponse:
+    """Return book-scoped Polymarket coverage and live probabilities."""
+    path = _book_path(thesis_id)
+    if path is None:
+        raise HTTPException(
+            status_code=404, detail=f"No book for thesis {thesis_id!r}",
+        )
+    try:
+        book = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Book {thesis_id!r} is unreadable: {exc}",
+        )
+
+    from web.adapters import market as market_adapter
+
+    market_ids = market_adapter.polymarket_markets_from_book(book)
+    if not market_ids:
+        payload = {
+            "status": "not_configured",
+            "configured_markets": [],
+            "markets": [],
+        }
+    else:
+        markets = await asyncio.to_thread(
+            market_adapter.fetch_polymarket_probs, market_ids,
+        )
+        payload = {
+            "status": "ok" if markets else "no_data",
+            "configured_markets": market_ids,
+            "markets": markets,
+        }
+    return JSONResponse(content=payload, media_type="application/json")
+
+
 def _gdelt_query_for_book(book: dict) -> Optional[str]:
     """Find the book's GDELT query, if it declares one.
 

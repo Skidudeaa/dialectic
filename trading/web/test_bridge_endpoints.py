@@ -245,6 +245,77 @@ class TestBookPathContainment:
         assert bridge_mod._book_path("absent") is None
 
 
+class TestPolymarketEndpoint:
+    def test_is_service_token_gated(self, client):
+        resp = client.get(f"/api/bridge/polymarket/{THESIS_ID}")
+
+        assert resp.status_code == 401
+
+    def test_unknown_book_is_404(self, client):
+        resp = client.get(
+            "/api/bridge/polymarket/no-such-book", headers=svc_headers(),
+        )
+
+        assert resp.status_code == 404
+
+    def test_book_without_markets_is_named(self, client):
+        resp = client.get(
+            "/api/bridge/polymarket/china-property-cascade-graph",
+            headers=svc_headers(),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "status": "not_configured",
+            "configured_markets": [],
+            "markets": [],
+        }
+
+    def test_configured_book_with_no_live_data_is_named(self, client, monkeypatch):
+        from web.adapters import market as market_adapter
+
+        monkeypatch.setattr(market_adapter, "fetch_polymarket_probs", lambda _ids: [])
+        resp = client.get(
+            f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "no_data"
+        assert resp.json()["configured_markets"] == ["us-iran-april-30"]
+        assert resp.json()["markets"] == []
+
+    def test_configured_book_returns_live_markets(self, client, monkeypatch):
+        from web.adapters import market as market_adapter
+
+        markets = [{"slug": "us-iran-april-30", "probability": 0.42}]
+        monkeypatch.setattr(
+            market_adapter, "fetch_polymarket_probs", lambda _ids: markets,
+        )
+        resp = client.get(
+            f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "status": "ok",
+            "configured_markets": ["us-iran-april-30"],
+            "markets": markets,
+        }
+
+    def test_fetch_failure_is_not_no_data(self, client, monkeypatch):
+        from web.adapters import market as market_adapter
+
+        def fail(_ids):
+            raise RuntimeError("polymarket unavailable")
+
+        monkeypatch.setattr(market_adapter, "fetch_polymarket_probs", fail)
+
+        with pytest.raises(RuntimeError, match="polymarket unavailable"):
+            client.get(
+                f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+            )
+
+
 class TestNewsEndpoint:
     def test_unknown_book_is_404(self, client):
         resp = client.get("/api/bridge/news/no-such-book", headers=svc_headers())
