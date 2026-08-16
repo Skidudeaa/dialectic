@@ -356,10 +356,16 @@ class LLMOrchestrator:
                 except Exception as e:
                     logger.debug("Unsurfaced memory count unavailable: %s", e)
 
+            # The room's own dials, read at last. Both columns have existed
+            # and been settable since the beginning and neither reached the
+            # engine: it is constructed with no arguments, so every room ran
+            # the module defaults no matter what its row said.
             decision = self.heuristics.decide(
                 messages=messages,
                 mentioned=mentioned,
                 semantic_novelty=semantic_novelty,
+                turn_threshold=room.interjection_turn_threshold,
+                novelty_threshold=room.semantic_novelty_threshold,
                 unsurfaced_memory_count=unsurfaced_memory_count,
                 speaker_balance=speaker_balance,
             )

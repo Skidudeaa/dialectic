@@ -203,3 +203,64 @@ Unchanged by tonight's work; recorded so the next session does not re-derive it.
   three.
 - The working tree also holds `trading/snapshots/*.json` (tradingDesk's own
   runtime churn) and an untracked `IMG_0197.PNG` — neither is this session's.
+
+---
+
+## 7. Round two — "its not nearly tight enough" (same night, `e4fd5e3`)
+
+The owner came back after §1 shipped. Measured again, and the answer was
+partly that **the dials they could see were not connected to anything.**
+
+Replaying the week's **146 real `llm_decisions`** with each row's own stored
+inputs and the real message stream up to its trigger:
+
+| arm | speaks | of decisions |
+|---|---|---|
+| before this session (turn=4, novelty 0.70) | 67 | 46% |
+| after §1 (turn=4, novelty 0.85) | 26 | 18% |
+| **now** (turn=8, novelty 0.85, no stagnation) | **16** | **11%** |
+| tightened further (turn=12) | 16 | 11% |
+
+Tonight's Home window alone (41 decisions): **23 → 4**.
+
+1. **`rooms.interjection_turn_threshold` / `.semantic_novelty_threshold` reached
+   nothing.** `decide()` accepted a `turn_threshold` parameter and read
+   `self.turn_threshold`; the orchestrator never passed one; the engine is
+   built with no arguments. Those columns are stored, range-validated by
+   `PATCH /rooms/{id}/config` (2–12, 0.3–0.95), reported by
+   `/auth/capabilities`, **and exposed as two sliders in
+   `RoomSettingsDialog.tsx`**. Dragging them did nothing. Fixed by passing
+   `room.*` at the call site — the orchestrator already receives the whole
+   `Room`.
+2. **Stagnation removed.** It tested six consecutive TEXT messages averaging
+   <100 chars, with no repetition test despite its docstring. All five
+   production firings interrupted somebody telling a story in short beats; a
+   sixth fired on "Dam even the AI be talking back". `_detect_stagnation` is a
+   `return False` stub carrying the history — a real detector belongs there.
+3. **`INTERJECTION_TURN_THRESHOLD` 4 → 8.** All 10 weekly firings were
+   triggered by "Yes", "N", "Yep getting notification pushed to me".
+
+**Deploy order mattered and is worth repeating:** wiring the columns would have
+*loosened* every room (rows said 0.70; 0.85 was in force via env). The
+production `UPDATE rooms SET interjection_turn_threshold=8,
+semantic_novelty_threshold=0.85` (24 rows) ran BEFORE the restart. Data, then
+code. Backend restarted 23:52:48 CDT, health 200, suite **1381**.
+
+Verified live against Home's real transcript after the restart: novelty 0.72
+now stays silent where 0.70 would have spoken, 0.86 speaks, and a deliberately
+loosened config (turn=2) flips the verdict back — the dial moves in both
+directions.
+
+### What is left, and it is now the whole story
+
+`question_detected` is **9 of the 16** remaining speaks. Rungs 1–7 still vote
+only YES. If the room wants quieter than this, that rung is next: a question in
+a two-human room is usually for the other human, and rung 0 only catches the
+ones that say so with an `@`. Options, cheapest first — gate it on the room
+having been quiet for N seconds (let the other human answer first); require the
+question to be the thread's last message after a short delay; or the real
+re-shaping, where rungs can argue for silence and confidence decides.
+
+**The owner now has working dials** for everything except that: Room Settings →
+"Turns before Dialectic considers joining" (2–12) and "Topic-shift sensitivity"
+(30–95%), per room, no deploy.

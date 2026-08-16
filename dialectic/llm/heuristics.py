@@ -16,6 +16,13 @@ logger = logging.getLogger(__name__)
 # right value is a room-culture question the owner should be able to turn
 # without a deploy. See the docstrings on each for the measurement.
 NOVELTY_THRESHOLD = float(os.getenv("INTERJECTION_NOVELTY_THRESHOLD", "0.85"))
+# WHY 8 (was 4): this is the "nobody has heard from me in a while" rung, the
+# only one with no content justification at all — it fires on turn COUNT.
+# Replaying the week's 143 real decisions, all 10 of its firings were
+# triggered by messages like "Yes", "N", "Yep getting notification pushed to
+# me". At 6 it fires zero times; 8 leaves the safety valve for a genuinely
+# long human-only stretch without making the participant a metronome.
+TURN_THRESHOLD = int(os.getenv("INTERJECTION_TURN_THRESHOLD", "8"))
 BALANCE_MIN_SPEAKERS = int(os.getenv("INTERJECTION_BALANCE_MIN_SPEAKERS", "3"))
 
 
@@ -41,12 +48,16 @@ class InterjectionEngine:
     Heuristics evaluated in priority order:
       0. Addressed to others       (SILENCE — outranks the mention)
       1. Explicit mention          (confidence 1.0)
-      2. Turn threshold            (confidence 0.8)
+      2. Turn threshold            (confidence 0.8, room-tunable)
       3. Question detection        (confidence 0.7)
       4. Information gap           (confidence 0.65)
-      5. Semantic novelty spike    (confidence varies, provoker)
-      6. Stagnation detection      (confidence 0.6, provoker)
+      5. Semantic novelty spike    (confidence varies, provoker, room-tunable)
+      6. Stagnation detection      (REMOVED 2026-08-15 — it fired on brevity)
       7. Speaker balance redirect  (confidence 0.55, 3+ speakers only)
+
+    Rungs 2 and 5 read the ROOM's values when the caller passes them, which
+    the orchestrator now does. Both columns existed from the beginning and
+    reached nothing until then.
 
     NOTE ON SHAPE (2026-08-15): rungs 1-7 vote only YES — the first match
     returns immediately and none of them can vote against speaking, so
@@ -65,7 +76,7 @@ class InterjectionEngine:
 
     def __init__(
         self,
-        turn_threshold: int = 4,
+        turn_threshold: int = TURN_THRESHOLD,
         semantic_novelty_threshold: float = NOVELTY_THRESHOLD,
     ):
         self.turn_threshold = turn_threshold
@@ -82,7 +93,8 @@ class InterjectionEngine:
         messages: list[Message],
         mentioned: bool = False,
         semantic_novelty: Optional[float] = None,
-        turn_threshold: int = 4,
+        turn_threshold: Optional[int] = None,
+        novelty_threshold: Optional[float] = None,
         unsurfaced_memory_count: Optional[int] = None,
         speaker_balance: Optional[dict[str, int]] = None,
     ) -> InterjectionDecision:
@@ -133,10 +145,20 @@ class InterjectionEngine:
             if msg.speaker_type == SpeakerType.HUMAN:
                 human_turns += 1
 
-        if human_turns >= self.turn_threshold:
+        # The PARAMETER wins when given. It was accepted and ignored until
+        # 2026-08-15 — the body read self.turn_threshold, the caller never
+        # passed it, and the engine was built with no arguments at all, so
+        # rooms.interjection_turn_threshold (stored, range-validated 2-12 by
+        # PATCH /rooms/{id}/config, reported by /auth/capabilities) reached
+        # nothing. A settings knob that changes nothing is worse than no
+        # knob: it answers "we already turned that down" with a yes.
+        effective_turn_threshold = (
+            turn_threshold if turn_threshold is not None else self.turn_threshold
+        )
+        if human_turns >= effective_turn_threshold:
             return InterjectionDecision(
                 should_interject=True,
-                reason=f"turn_threshold_exceeded ({human_turns} >= {self.turn_threshold})",
+                reason=f"turn_threshold_exceeded ({human_turns} >= {effective_turn_threshold})",
                 confidence=0.8,
                 use_provoker=False,
                 considered_reasons=considered_reasons,
@@ -179,7 +201,11 @@ class InterjectionEngine:
         #    firings hugged the line. It was the single largest source of speech
         #    (28 of 71). 0.85 puts the bar in the actual tail. Tune via
         #    INTERJECTION_NOVELTY_THRESHOLD.
-        if semantic_novelty is not None and semantic_novelty >= self.semantic_novelty_threshold:
+        effective_novelty_threshold = (
+            novelty_threshold if novelty_threshold is not None
+            else self.semantic_novelty_threshold
+        )
+        if semantic_novelty is not None and semantic_novelty >= effective_novelty_threshold:
             return InterjectionDecision(
                 should_interject=True,
                 reason=f"semantic_novelty_spike ({semantic_novelty:.2f})",
@@ -190,17 +216,8 @@ class InterjectionEngine:
         else:
             considered_reasons.append("semantic_novelty")
 
-        # 6. Stagnation — short, repetitive messages indicate the conversation is stuck
-        if self._detect_stagnation(messages):
-            return InterjectionDecision(
-                should_interject=True,
-                reason="stagnation_detected",
-                confidence=0.6,
-                use_provoker=True,
-                considered_reasons=considered_reasons,
-            )
-        else:
-            considered_reasons.append("stagnation")
+        # 6. Stagnation — REMOVED 2026-08-15, see _detect_stagnation's stub.
+        considered_reasons.append("stagnation")
 
         # 7. Speaker balance redirect — one human dominates, engage the quieter one
         #    ARCHITECTURE: Tracks per-speaker message counts to detect imbalance.
@@ -240,18 +257,30 @@ class InterjectionEngine:
         return False
 
     def _detect_stagnation(self, messages: list[Message], window: int = 6) -> bool:
-        """Detect conversational stagnation."""
-        recent = messages[-window:] if len(messages) >= window else messages
+        """Always False. The rung it fed was removed 2026-08-15.
 
-        if len(recent) < window:
-            return False
+        WHY REMOVED: it never detected stagnation. Its docstring promised
+        "short, repetitive messages", but the body tested ONE thing — six
+        consecutive TEXT messages averaging under 100 characters — with no
+        repetition test anywhere. That is not a conversation that is stuck,
+        it is the definition of ordinary chat, and worse, of somebody
+        TELLING A STORY. All five production firings in 2026-08-08..15
+        interrupted exactly that:
 
-        types = {m.message_type for m in recent}
-        if types == {MessageType.TEXT}:
-            avg_length = sum(len(m.content) for m in recent) / len(recent)
-            if avg_length < 100:
-                return True
+            "I read about 2 Utah bro's who went to Zaire to stage a coup"
+            "They got caught and sentenced to death"
+            "But then they started a war with their neighbor..."
 
+        — a person narrating in short beats, cut off by the participant
+        every sixth message. A sixth firing was triggered by "Dam even the
+        AI be talking back", i.e. the complaint about the noise produced
+        more of it.
+
+        Kept as a stub rather than deleted because the NAME is worth
+        keeping: a real stagnation detector (repetition, circling, no new
+        entities across a window) is a reasonable thing to want, and this
+        is where it goes. What it must not do is fire on brevity.
+        """
         return False
 
     def _detect_speaker_imbalance(self, speaker_balance: dict[str, int]) -> bool:
