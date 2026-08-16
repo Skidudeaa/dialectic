@@ -78,6 +78,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const attachments = useAppStore((s) => s.attachments)
   const typingUsers = useAppStore((s) => s.typingUsers)
   const onlineUsers = useAppStore((s) => s.onlineUsers)
+  const [roomMembers, setRoomMembers] = useState<{ user_id: string; display_name: string }[]>([])
   const isLLMThinking = useAppStore((s) => s.isLLMThinking)
   const isLLMStreaming = useAppStore((s) => s.isLLMStreaming)
   const isDeepDiveActive = useAppStore((s) => s.isDeepDiveActive)
@@ -278,6 +279,20 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
     loadGenealogy()
   }, [loadGenealogy, threads])
 
+  // Who belongs to this room. Presence arrives over the socket; MEMBERSHIP
+  // does not, and the @-picker needs the member who has not spoken yet.
+  useEffect(() => {
+    if (!currentRoom || !roomToken) return
+    api.setRoomToken(roomToken)
+    let cancelled = false
+    api.getRoomMembers(currentRoom.id)
+      .then((members) => { if (!cancelled) setRoomMembers(members) })
+      // A roster that fails to load degrades the picker to whoever is online
+      // and whoever has spoken — never blocks the composer.
+      .catch(() => { if (!cancelled) setRoomMembers([]) })
+    return () => { cancelled = true }
+  }, [currentRoom, roomToken])
+
   // Trading is an optional room extension.
   useEffect(() => {
     if (!currentRoom || !roomToken) return
@@ -374,10 +389,15 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
 
   const userNames = useMemo(() => {
     const names: Record<string, string> = {}
+    // Membership first, presence over the top — a member who has never
+    // spoken and is not connected still has a name worth knowing.
+    for (const member of roomMembers) names[member.user_id] = member.display_name
     for (const participant of onlineUsers) names[participant.user_id] = participant.display_name
     if (user) names[user.id] = user.display_name
     return names
-  }, [onlineUsers, user])
+  }, [roomMembers, onlineUsers, user])
+
+  const memberNames = useMemo(() => Object.values(userNames), [userNames])
 
   // A reply target belongs to the branch it was written in. Rather than clearing
   // it from an effect on thread change, resolve it against the messages actually
@@ -568,6 +588,7 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
           <TypingIndicator typingUsers={typingDisplay} activityLabel={toolActivityLabel} />
           <MessageInput
             roomId={currentRoom.id}
+            memberNames={memberNames}
             initialValue={composerDraft}
             onSend={(content, messageType, files) => {
               // The ids travel with the send itself: the server binds them in

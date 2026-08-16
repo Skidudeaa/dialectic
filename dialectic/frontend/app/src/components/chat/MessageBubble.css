@@ -576,3 +576,54 @@
         background-color: var(--amber-18);
     }
 }
+
+/* ── @mentions ─────────────────────────────────────────────────────────
+ *
+ * NOT a walk-back of F1. Design v2 §16.4 forbids color encoding WHO IS
+ * SPEAKING — that is why the avatar hues went. These encode a different
+ * axis entirely: who a message is ADDRESSED TO, which with three humans in
+ * the room stopped being inferable from prose ("too hard to tell when users
+ * are talking to each other"). The speaker is still a letter and a name.
+ *
+ * Color is never the only signal — each kind also differs in weight and in
+ * its underline, so the three stay distinguishable in grayscale and to a
+ * reader who cannot separate amber from teal.
+ */
+.mention {
+    font-family: var(--font-mono);
+    font-size: 0.94em;
+    padding: 0 0.15em;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+}
+
+/* Another human: quiet. Most mentions are these, and they must not shout. */
+.mention-human {
+    color: var(--color-bone);
+    border-bottom: 1px dotted var(--color-faint);
+}
+
+/* Dialectic — "make the @llm a different color", verbatim from the room. */
+.mention-participant {
+    color: var(--color-amber);
+    background: var(--amber-08);
+    border-bottom: 1px solid var(--amber-30);
+}
+
+/* You. The loudest of the three: this is the "was that for me" signal. */
+.mention-self {
+    color: var(--color-teal);
+    background: var(--teal-10);
+    border-bottom: 1.5px solid var(--teal-30);
+    font-weight: 600;
+}
+
+/* Who the message opens by addressing — the same address block rung 0 of the
+ * interjection ladder reads on the server. Sits in the byline, not the body:
+ * it is metadata about the turn, not part of what was said. */
+.msg-addressed {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-faint);
+    letter-spacing: 0.02em;
+}

@@ -585,6 +585,17 @@ class UpdateRoomSettingsRequest(BaseModel):
     auto_interjection_enabled: Optional[bool] = None
 
 
+class RoomMemberResponse(BaseModel):
+    """A room's membership, deliberately without presence.
+
+    Presence is a separate, faster-moving fact (`user_presence`) that the
+    client already receives over the socket. Folding them together here would
+    make a roster that goes stale the moment someone closes a tab.
+    """
+    user_id: UUID
+    display_name: str
+
+
 class RoomSettingsResponse(BaseModel):
     """Current room LLM heuristic settings."""
     interjection_turn_threshold: int
@@ -862,6 +873,39 @@ async def get_room_settings(
         last_trading_push_at=room.last_trading_push_at,
         trading_push_count=room.trading_push_count,
     )
+
+
+@app.get("/rooms/{room_id}/members", response_model=List[RoomMemberResponse])
+async def get_room_members(
+    room_id: UUID,
+    token: str = Depends(extract_room_token),
+    db=Depends(get_db),
+):
+    """Who belongs to this room — MEMBERSHIP, which is not presence.
+
+    WHY this exists: every roster the client had was built from
+    `onlineUsers` plus yourself, so a member who has never spoken and is not
+    currently connected did not appear anywhere. The @-mention picker cannot
+    offer someone it has never heard of, and the moment that matters most is
+    a NEW member — exactly the person with no messages and no presence row.
+    (2026-08-16: the room gained a third human who had posted nothing.)
+
+    Room-token authorized like every other room-scoped read here; the
+    membership list is not more sensitive than the transcript it belongs to.
+    """
+    await verify_room_token(room_id, token, db)
+    rows = await db.fetch(
+        """SELECT u.id, u.display_name
+           FROM users u
+           JOIN room_memberships rm ON rm.user_id = u.id
+           WHERE rm.room_id = $1
+           ORDER BY rm.joined_at NULLS LAST, u.display_name""",
+        room_id,
+    )
+    return [
+        RoomMemberResponse(user_id=r["id"], display_name=r["display_name"])
+        for r in rows
+    ]
 
 
 @app.patch("/rooms/{room_id}/settings", response_model=RoomSettingsResponse)

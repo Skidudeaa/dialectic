@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { addressBlock, decorateMentions, type MentionContext } from '../../lib/mentions'
 import type { Attachment, CommitmentProposal, Message, Reaction, ThesisSeed } from '../../types'
 import { api } from '../../lib/api'
 import { localProposals, type LocalProposal } from '../../lib/proposalEnvelope'
@@ -44,6 +45,12 @@ interface MessageBubbleProps {
   onToggleReaction?: (messageId: string, emoji: string, isOn: boolean) => void
   onEdit?: (messageId: string, content: string) => void
   onDelete?: (messageId: string) => void
+  /**
+   * The room's humans and the reader's own name, so @mentions can be
+   * resolved and painted. Absent means render the text undecorated — a
+   * mention chip for somebody the room does not have is worse than none.
+   */
+  mentionContext?: MentionContext
   /** Same speaker continuing — avatar and byline are suppressed as repetition. */
   isContinuation?: boolean
   /** Media carried by this message, if any. */
@@ -114,6 +121,7 @@ export function MessageBubble({
   onToggleReaction,
   onEdit,
   onDelete,
+  mentionContext,
   isContinuation,
   attachments = [],
   onOpenBench,
@@ -131,8 +139,21 @@ export function MessageBubble({
 
   const html = useMemo(() => {
     const raw = marked.parse(message.content, { async: false }) as string
-    return DOMPurify.sanitize(raw)
-  }, [message.content])
+    const clean = DOMPurify.sanitize(raw)
+    // AFTER sanitize, never before: decorateMentions walks text nodes and adds
+    // spans of its own making, so it cannot reintroduce anything DOMPurify
+    // just removed. Running it first would hand DOMPurify our markup to strip.
+    return mentionContext ? decorateMentions(clean, mentionContext) : clean
+  }, [message.content, mentionContext])
+
+  // Who this message opens by addressing — the same parse rung 0 of the
+  // interjection ladder reads on the server (llm/mentions.addresses_someone_else).
+  // With three humans in the room, "who is this for" stopped being inferable
+  // from prose.
+  const addressedTo = useMemo(
+    () => (mentionContext ? addressBlock(message.content, mentionContext) : []),
+    [message.content, mentionContext],
+  )
 
   useEffect(() => {
     if (!isEditing) return
@@ -324,6 +345,11 @@ export function MessageBubble({
               <span className="msg-type-badge">{message.message_type}</span>
             )}
             {message.edited_at && <span className="msg-edited" title="This message was edited">edited</span>}
+            {addressedTo.length > 0 && (
+              <span className="msg-addressed" title={`Addressed to ${addressedTo.join(', ')}`}>
+                <span aria-hidden="true">→</span> {addressedTo.join(', ')}
+              </span>
+            )}
           </div>
         )}
         <div className={`msg-content-frame${isFolded ? ' msg-folded' : ''}`}>

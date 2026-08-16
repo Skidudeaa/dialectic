@@ -89,6 +89,14 @@ class DialecticAPI {
   async createRoom(name?: string) { return this.fetch('/rooms', { method: 'POST', body: JSON.stringify({ name }) }); }
   async joinRoom(roomId: string, userId: string) { return this.fetch(`/rooms/${roomId}/join`, { method: 'POST', body: JSON.stringify({ user_id: userId }) }); }
   async getThreads(roomId: string): Promise<Thread[]> { return this.fetch(`/rooms/${roomId}/threads`); }
+
+  /**
+   * Room MEMBERSHIP, which is not presence. The @-picker needs a member who
+   * has never spoken and is not connected — presence rosters cannot see them.
+   */
+  async getRoomMembers(roomId: string): Promise<{ user_id: string; display_name: string }[]> {
+    return this.fetch(`/rooms/${roomId}/members`);
+  }
   async getGenealogy(roomId: string): Promise<ThreadNode[]> {
     return this.fetch(`/rooms/${roomId}/genealogy`);
   }
