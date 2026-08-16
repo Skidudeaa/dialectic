@@ -652,18 +652,62 @@ class TestTradingTools:
         assert out == {"count": 1, "trades": [{"ticker": "XOP"}]}
 
     @pytest.mark.asyncio
-    async def test_html_catchall_is_rejected_not_parsed(self, room, td_env):
+    async def test_html_catchall_is_rejected_not_parsed(
+        self, room, td_env, monkeypatch,
+    ):
         """A 200 + text/html is tradingDesk's SPA shell, not data."""
+        monkeypatch.setenv("TD_SERVICE_TOKEN", "svc-token")
+
         def handler(request):
-            if request.url.path == "/api/auth/login":
-                return json_response({"access_token": "jwt"})
             return httpx.Response(200, text="<!doctype html><div id=root>",
                                   headers={"content-type": "text/html"})
 
         install_transport(handler)
         tool = build_registry(room, FakeDB()).get("get_polymarket_odds")
         with pytest.raises(td.TradingDeskError, match="not JSON"):
-            await tool.execute({})
+            await tool.execute({"book_id": "b"})
+
+    @pytest.mark.asyncio
+    async def test_polymarket_is_scoped_to_the_room_book(self, td_env, monkeypatch):
+        monkeypatch.setenv("TD_SERVICE_TOKEN", "svc-token")
+        room = SimpleNamespace(id=uuid4(), linked_book_id="iran-hormuz-graph",
+                               trading_config=None)
+
+        def handler(request):
+            assert request.url.path == "/api/bridge/polymarket/iran-hormuz-graph"
+            assert request.headers["x-service-token"] == "svc-token"
+            assert "authorization" not in request.headers
+            return json_response({
+                "status": "ok",
+                "configured_markets": ["market-a"],
+                "markets": [{"slug": "market-a", "probability": 0.42}],
+            })
+
+        install_transport(handler)
+        tool = build_registry(room, FakeDB()).get("get_polymarket_odds")
+        out = await tool.execute({})
+
+        assert out["status"] == "ok"
+        assert out["book_id"] == "iran-hormuz-graph"
+        assert out["count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_polymarket_not_configured_is_a_success(self, td_env, monkeypatch):
+        monkeypatch.setenv("TD_SERVICE_TOKEN", "svc-token")
+        room = SimpleNamespace(id=uuid4(), linked_book_id="china-property-cascade-graph",
+                               trading_config=None)
+        install_transport(lambda _request: json_response({
+            "status": "not_configured",
+            "configured_markets": [],
+            "markets": [],
+        }))
+
+        tool = build_registry(room, FakeDB()).get("get_polymarket_odds")
+        out = await tool.execute({})
+
+        assert out["status"] == "not_configured"
+        assert out["book_id"] == "china-property-cascade-graph"
+        assert out["count"] == 0
 
 
 class TestThesisNewsTool:
@@ -683,37 +727,96 @@ class TestThesisNewsTool:
             assert request.url.path == "/api/bridge/news/iran-hormuz-graph"
             assert request.headers["x-service-token"] == "svc-token"
             assert "authorization" not in request.headers
-            return json_response({"articles": [
-                {"title": "Tankers divert", "url": "https://ex.com/1",
-                 "seendate": "20260809", "domain": "ex.com"},
-            ]})
+            return json_response({
+                "status": "ok",
+                "source": "gdelt",
+                "query": "Hormuz closure",
+                "articles": [{
+                    "title": "Tankers divert", "url": "https://ex.com/1",
+                    "seendate": "20260809", "domain": "ex.com",
+                }],
+                "fetched_at": "2026-08-16T10:00:00+00:00",
+                "cache_hit": False,
+            })
 
         install_transport(handler)
         tool = build_registry(room, FakeDB()).get("get_thesis_news")
         out = await tool.execute({})
 
         assert out["count"] == 1
+        assert out["status"] == "ok"
         assert out["articles"][0]["title"] == "Tankers divert"
         assert out["book_id"] == "iran-hormuz-graph"
 
     @pytest.mark.asyncio
-    async def test_note_only_degradation_is_not_an_error(self, svc_env):
-        """GDELT unavailable answers 200 with articles [] + note — the model
-        must get that note, not a tool failure it will paper over."""
+    async def test_no_matches_is_a_success_with_exact_query(self, svc_env):
         room = SimpleNamespace(id=uuid4(), linked_book_id="b", trading_config=None)
 
         def handler(request):
-            return json_response({"articles": [],
-                                  "note": "gdelt unavailable: ConnectError"})
+            return json_response({
+                "status": "no_matches",
+                "source": "gdelt",
+                "query": "specific claim",
+                "articles": [],
+                "fetched_at": "2026-08-16T10:00:00+00:00",
+                "cache_hit": False,
+            })
 
         install_transport(handler)
         tool = build_registry(room, FakeDB()).get("get_thesis_news")
-        out = await tool.execute({})
+        out = await tool.execute({"query": "specific claim"})
 
+        assert out["status"] == "no_matches"
+        assert out["query"] == "specific claim"
         assert out["articles"] == []
         assert out["count"] == 0
-        assert "gdelt unavailable" in out["note"]
         assert out["book_id"] == "b"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status", ["rate_limited", "unavailable"])
+    async def test_source_degradation_is_a_failed_tool_call(self, svc_env, status):
+        room = SimpleNamespace(id=uuid4(), linked_book_id="b", trading_config=None)
+
+        def handler(request):
+            return json_response({
+                "status": status,
+                "source": "gdelt",
+                "query": "specific claim",
+                "articles": [],
+                "fetched_at": "2026-08-16T10:00:00+00:00",
+                "cache_hit": False,
+                "retry_after_seconds": 120,
+            })
+
+        install_transport(handler)
+        tool = build_registry(room, FakeDB()).get("get_thesis_news")
+
+        with pytest.raises(
+            td.TradingDeskError,
+            match=rf"{status}.*specific claim.*retry after 120s",
+        ):
+            await tool.execute({"query": "specific claim"})
+
+    @pytest.mark.asyncio
+    async def test_focused_query_is_forwarded_as_a_request_parameter(self, svc_env):
+        room = SimpleNamespace(id=uuid4(), linked_book_id="b", trading_config=None)
+
+        def handler(request):
+            assert request.url.params["query"] == "China new yuan loans"
+            return json_response({
+                "status": "no_matches",
+                "source": "gdelt",
+                "query": "China new yuan loans",
+                "articles": [],
+                "fetched_at": "2026-08-16T10:00:00+00:00",
+                "cache_hit": False,
+            })
+
+        install_transport(handler)
+        tool = build_registry(room, FakeDB()).get("get_thesis_news")
+        out = await tool.execute({"query": "China new yuan loans"})
+
+        assert out["query"] == "China new yuan loans"
 
     @pytest.mark.asyncio
     async def test_unknown_book_raises(self, svc_env):
@@ -747,6 +850,25 @@ class TestThesisNewsTool:
 
 
 class TestTradingDeskClient:
+    @pytest.mark.asyncio
+    async def test_service_get_forwards_query_params_with_service_token(
+        self, td_env, monkeypatch,
+    ):
+        monkeypatch.setenv("TD_SERVICE_TOKEN", "svc-token")
+
+        def handler(request):
+            assert request.headers["x-service-token"] == "svc-token"
+            assert request.url.params["query"] == "new yuan loans"
+            return json_response({"status": "no_matches", "articles": []})
+
+        install_transport(handler)
+        result = await td.service_get(
+            "/api/bridge/news/b",
+            params={"query": "new yuan loans"},
+        )
+
+        assert result["status"] == "no_matches"
+
     @pytest.mark.asyncio
     async def test_logs_in_once_and_reuses_the_token(self, td_env):
         calls = {"login": 0, "data": 0}

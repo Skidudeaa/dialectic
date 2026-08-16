@@ -184,7 +184,12 @@ async def request_json(
     return _require_json(response, f"tradingDesk {path}")
 
 
-async def service_get(path: str, *, timeout: Optional[float] = None) -> Any:
+async def service_get(
+    path: str,
+    *,
+    params: Optional[dict] = None,
+    timeout: Optional[float] = None,
+) -> Any:
     """Service-token GET for the /api/bridge/* endpoints (X-Service-Token,
     not the user JWT everything else here carries).
 
@@ -205,6 +210,7 @@ async def service_get(path: str, *, timeout: Optional[float] = None) -> Any:
         response = await client.get(
             f"{_base_url()}{path}",
             headers={"X-Service-Token": token},
+            params=params,
             timeout=timeout if timeout is not None else DEFAULT_TIMEOUT_S,
         )
     except httpx.TimeoutException as e:

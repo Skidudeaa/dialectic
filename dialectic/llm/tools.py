@@ -294,13 +294,20 @@ def _build_trading_tools(room) -> list[Tool]:
         return _shrink(out, THESIS_CHAR_CAP)
 
     async def get_polymarket_odds(args: dict) -> dict:
-        odds = await td.get("/api/market/polymarket")
-        if not isinstance(odds, list):
-            return {"markets": [], "note": "tradingDesk returned an unexpected shape."}
-        out: dict = {"count": len(odds), "markets": odds}
-        if not odds:
-            out["note"] = "No Polymarket slugs are configured or the feed is down."
-        return _shrink(out, THESIS_CHAR_CAP)
+        book_id = resolve_book_id(room, args.get("book_id"))
+        result = await td.service_get(f"/api/bridge/polymarket/{book_id}")
+        if not isinstance(result, dict) or not isinstance(result.get("markets"), list):
+            raise td.TradingDeskError(
+                "tradingDesk polymarket bridge returned an unexpected shape"
+            )
+        out = _shrink(result, THESIS_CHAR_CAP)
+        if not isinstance(out, dict):
+            raise td.TradingDeskError(
+                "tradingDesk polymarket result could not be represented"
+            )
+        out["book_id"] = book_id
+        out["count"] = len(result["markets"])
+        return out
 
     async def get_thesis_state(args: dict) -> dict:
         book_id = resolve_book_id(room, args.get("book_id"))
@@ -361,17 +368,22 @@ def _build_trading_tools(room) -> list[Tool]:
 
     async def get_thesis_news(args: dict) -> dict:
         book_id = resolve_book_id(room, args.get("book_id"))
+        query = str(args.get("query") or "").strip() or None
         # WHY an explicit budget: the bare default is 10s, and a cold GDELT
         # pull takes 15-29s — so this tool could only ever succeed on a warm
         # cache. See td.NEWS_TIMEOUT_S.
         news = await td.service_get(f"/api/bridge/news/{book_id}",
+                                    params={"query": query} if query else None,
                                     timeout=td.NEWS_TIMEOUT_S)
         if not isinstance(news, dict):
             return {"articles": [], "book_id": book_id,
                     "note": "tradingDesk returned an unexpected shape."}
-        # A note-only answer (GDELT unconfigured or down, articles []) is NOT
-        # an error — pass it through so the model can say "feed's quiet"
-        # instead of inventing headlines.
+        if news.get("status") in {"rate_limited", "unavailable"}:
+            retry = news.get("retry_after_seconds")
+            suffix = f"; retry after {retry}s" if retry is not None else ""
+            raise td.TradingDeskError(
+                f"GDELT {news['status']} for query {news.get('query')!r}{suffix}"
+            )
         shrunk = _shrink(news, THESIS_CHAR_CAP)
         if isinstance(shrunk, dict):
             shrunk["book_id"] = book_id
@@ -409,11 +421,10 @@ def _build_trading_tools(room) -> list[Tool]:
         Tool(
             name="get_polymarket_odds",
             description=(
-                "Current Polymarket probabilities for the prediction markets the "
-                "books track. Use it when the conversation turns on how likely an "
-                "event is — the market's number is evidence you do not have to "
-                "guess at, and it is the honest counterweight when one of us is "
-                "talking a scenario up."
+                "Current Polymarket probabilities configured for this room's thesis "
+                "book. The status distinguishes live data, configured markets with "
+                "no current data, and a book with no Polymarket coverage. Use it as "
+                "probability evidence only when the book actually tracks a market."
             ),
             input_schema={"type": "object", "properties": {}},
             execute=get_polymarket_odds,
@@ -529,11 +540,11 @@ def _build_trading_tools(room) -> list[Tool]:
             description=(
                 "Recent news headlines for a thesis book, pulled from the desk's "
                 "GDELT feed and capped at 15 with title, url, date and source "
-                "domain. Use it when the conversation turns on what is actually "
-                "happening out there around a thesis — fresh events, not the "
-                "thesis structure itself. An empty articles list with a note "
-                "means the feed is unconfigured or down, NOT that nothing "
-                "happened; report the note rather than inventing headlines."
+                "domain. Omit query for the book's standing watch; provide one "
+                "focused GDELT query when asked to verify a specific external "
+                "claim outside that watch. Report the exact query and status. "
+                "no_matches means only that GDELT returned no matches — it is not "
+                "evidence that the event did not happen."
             ),
             input_schema={
                 "type": "object",
@@ -541,7 +552,16 @@ def _build_trading_tools(room) -> list[Tool]:
                     "book_id": {
                         "type": "string",
                         "description": "Book slug. Defaults to this room's book.",
-                    }
+                    },
+                    "query": {
+                        "type": "string",
+                        "minLength": 5,
+                        "maxLength": 500,
+                        "description": (
+                            "One focused GDELT query for a specific claim. Omit to "
+                            "use the book's standing watch query."
+                        ),
+                    },
                 },
             },
             execute=get_thesis_news,
