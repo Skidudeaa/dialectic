@@ -79,7 +79,9 @@
 .attach-input { display: none; }
 .attach-btn {
     height: 42px;
-    width: 34px;
+    /* 34px was under the 44px touch minimum, and it sits directly beside the
+       textarea — the worst place on the composer for a thumb to miss. */
+    width: 42px;
     display: flex;
     align-items: center;
     justify-content: center;
