@@ -21,6 +21,7 @@ Usage standalone:
 import json
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -233,11 +234,13 @@ def fetch_single_market(
     slug: str,
     timeout: int = DEFAULT_TIMEOUT,
     retries: int = DEFAULT_RETRIES,
+    raise_on_error: bool = False,
 ) -> Tuple[str, Optional[float]]:
     """Fetch probability for a single market by slug.
 
-    Returns (slug, probability) where probability is None on failure.
-    Never raises — all errors are caught and logged to stderr.
+    Returns (slug, probability) where probability is None on failure. Existing
+    batch callers keep the best-effort behavior; service callers may request
+    APIError so an outage cannot be mislabeled as a genuine empty result.
 
     WHY tuple return: the caller needs to know which slug this result
     is for, especially when fetching multiple markets in parallel.
@@ -265,16 +268,14 @@ def fetch_single_market(
                 if prob is not None:
                     return (slug, prob)
 
-            # WHY: if we got API responses but no match, don't retry —
-            # the market genuinely doesn't exist or doesn't match.
-            # Only retry on network errors.
-            if events or markets:
-                print(
-                    f"  polymarket: no match for slug '{slug}' "
-                    f"(searched {len(events)} events, {len(markets)} markets)",
-                    file=sys.stderr,
-                )
-                return (slug, None)
+            # Both API calls completed, so empty lists are a valid no-data
+            # answer too. Only transport failures reach another attempt.
+            print(
+                f"  polymarket: no match for slug '{slug}' "
+                f"(searched {len(events)} events, {len(markets)} markets)",
+                file=sys.stderr,
+            )
+            return (slug, None)
 
         except (URLError, TimeoutError, OSError) as e:
             last_error = e
@@ -293,8 +294,17 @@ def fetch_single_market(
             # WHY broad catch: API changes (new response shapes, field
             # renames) shouldn't crash the graph generator. Log and move on.
             print(f"  polymarket: unexpected error for '{slug}': {e}", file=sys.stderr)
+            if raise_on_error:
+                raise APIError(
+                    f"Polymarket returned invalid data for '{slug}'"
+                ) from e
             return (slug, None)
 
+    if raise_on_error and last_error is not None:
+        unit = "attempt" if retries == 1 else "attempts"
+        raise APIError(
+            f"Polymarket fetch for '{slug}' failed after {retries} {unit}"
+        ) from last_error
     return (slug, None)
 
 
@@ -302,6 +312,8 @@ def fetch_markets(
     slugs: List[str],
     timeout: int = DEFAULT_TIMEOUT,
     retries: int = DEFAULT_RETRIES,
+    raise_on_error: bool = False,
+    parallel: bool = False,
 ) -> Dict[str, Optional[float]]:
     """Fetch probabilities for multiple markets.
 
@@ -314,8 +326,30 @@ def fetch_markets(
     """
     results: Dict[str, Optional[float]] = {}
 
+    if parallel and slugs:
+        def fetch_one(slug: str) -> Tuple[str, Optional[float]]:
+            return fetch_single_market(
+                slug,
+                timeout=timeout,
+                retries=retries,
+                raise_on_error=raise_on_error,
+            )
+
+        # WHY bounded parallelism: interactive book verification has a 60s
+        # whole-turn budget. Sequential retry ceilings exceed it, while the
+        # checked-in books need at most three independent public API reads.
+        with ThreadPoolExecutor(max_workers=len(slugs)) as pool:
+            for slug_result, prob in pool.map(fetch_one, slugs):
+                results[slug_result] = prob
+        return results
+
     for i, slug in enumerate(slugs):
-        slug_result, prob = fetch_single_market(slug, timeout=timeout, retries=retries)
+        slug_result, prob = fetch_single_market(
+            slug,
+            timeout=timeout,
+            retries=retries,
+            raise_on_error=raise_on_error,
+        )
         results[slug_result] = prob
 
         # WHY delay between requests: be polite to the API. Skip delay

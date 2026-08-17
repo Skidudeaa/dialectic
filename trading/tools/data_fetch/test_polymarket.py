@@ -292,6 +292,19 @@ class TestFetchSingleMarket:
         assert prob is None
 
     @patch("polymarket._make_request")
+    def test_valid_empty_responses_do_not_retry(self, mock_req):
+        """Two empty endpoint responses are a completed no-data lookup."""
+        mock_req.side_effect = [
+            json.dumps([]).encode(),
+            json.dumps([]).encode(),
+        ]
+
+        slug, prob = fetch_single_market("nonexistent-market", retries=2)
+
+        assert (slug, prob) == ("nonexistent-market", None)
+        assert mock_req.call_count == 2
+
+    @patch("polymarket._make_request")
     def test_network_failure_retries(self, mock_req):
         """Network failure triggers retries, then returns None."""
         mock_req.side_effect = URLError("Connection refused")
@@ -304,6 +317,16 @@ class TestFetchSingleMarket:
         assert mock_req.call_count == 2
 
     @patch("polymarket._make_request")
+    def test_strict_network_failure_raises(self, mock_req):
+        """Bridge callers can distinguish an outage from a real no-match."""
+        mock_req.side_effect = URLError("Connection refused")
+
+        with pytest.raises(APIError, match="failed after 1 attempt"):
+            fetch_single_market(
+                "us-iran-april-30", retries=1, raise_on_error=True,
+            )
+
+    @patch("polymarket._make_request")
     def test_network_recovery_on_retry(self, mock_req):
         """First attempt fails, second succeeds."""
         event = make_event(markets=[make_market(slug="us-iran-april-30")])
@@ -313,6 +336,21 @@ class TestFetchSingleMarket:
         ]
         slug, prob = fetch_single_market("us-iran-april-30", retries=2)
         assert prob == pytest.approx(0.685)
+
+    @patch("polymarket._make_request")
+    def test_strict_retry_can_recover_to_valid_no_data(self, mock_req):
+        mock_req.side_effect = [
+            URLError("timeout"),
+            json.dumps([]).encode(),
+            json.dumps([]).encode(),
+        ]
+
+        result = fetch_single_market(
+            "us-iran-april-30", retries=2, raise_on_error=True,
+        )
+
+        assert result == ("us-iran-april-30", None)
+        assert mock_req.call_count == 3
 
     @patch("polymarket._make_request")
     def test_unexpected_exception(self, mock_req):
@@ -364,6 +402,28 @@ class TestFetchMarkets:
         results = fetch_markets([])
         assert results == {}
         assert mock_fetch.call_count == 0
+
+    @patch("polymarket.fetch_single_market")
+    def test_strict_mode_is_forwarded_to_each_market(self, mock_fetch):
+        mock_fetch.return_value = ("slug-a", 0.7)
+
+        assert fetch_markets(["slug-a"], raise_on_error=True) == {"slug-a": 0.7}
+        mock_fetch.assert_called_once_with(
+            "slug-a", timeout=15, retries=2, raise_on_error=True,
+        )
+
+    @patch("polymarket.fetch_single_market")
+    def test_parallel_mode_preserves_authored_order(self, mock_fetch):
+        mock_fetch.side_effect = lambda slug, **_kwargs: (
+            slug, {"slug-a": 0.7, "slug-b": 0.3}[slug],
+        )
+
+        results = fetch_markets(
+            ["slug-a", "slug-b"], parallel=True, raise_on_error=True,
+        )
+
+        assert list(results) == ["slug-a", "slug-b"]
+        assert results == {"slug-a": 0.7, "slug-b": 0.3}
 
 
 # =========================================================================

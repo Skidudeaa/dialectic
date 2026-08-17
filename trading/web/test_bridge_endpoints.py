@@ -14,7 +14,8 @@ these routes would look like a passing 200 to a naive test.
 
 import json
 import os
-import time
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 
 import pytest
 from fastapi.testclient import TestClient
@@ -72,10 +73,20 @@ def client(repo, monkeypatch):
 def clear_news_cache():
     """The news TTL cache is module-global — never leak between tests."""
     bridge_mod._news_cache.clear()
-    bridge_mod._news_rate_limit_streak.clear()
+    if isinstance(bridge_mod._news_rate_limit_streak, dict):
+        bridge_mod._news_rate_limit_streak.clear()
+    else:
+        bridge_mod._news_rate_limit_streak = 0
+    if hasattr(bridge_mod, "_news_rate_limit_until"):
+        bridge_mod._news_rate_limit_until = 0.0
     yield
     bridge_mod._news_cache.clear()
-    bridge_mod._news_rate_limit_streak.clear()
+    if isinstance(bridge_mod._news_rate_limit_streak, dict):
+        bridge_mod._news_rate_limit_streak.clear()
+    else:
+        bridge_mod._news_rate_limit_streak = 0
+    if hasattr(bridge_mod, "_news_rate_limit_until"):
+        bridge_mod._news_rate_limit_until = 0.0
 
 
 def svc_headers(token: str = SERVICE_TOKEN) -> dict:
@@ -245,6 +256,77 @@ class TestBookPathContainment:
         assert bridge_mod._book_path("absent") is None
 
 
+class TestPolymarketEndpoint:
+    def test_is_service_token_gated(self, client):
+        resp = client.get(f"/api/bridge/polymarket/{THESIS_ID}")
+
+        assert resp.status_code == 401
+
+    def test_unknown_book_is_404(self, client):
+        resp = client.get(
+            "/api/bridge/polymarket/no-such-book", headers=svc_headers(),
+        )
+
+        assert resp.status_code == 404
+
+    def test_book_without_markets_is_named(self, client):
+        resp = client.get(
+            "/api/bridge/polymarket/china-property-cascade-graph",
+            headers=svc_headers(),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "status": "not_configured",
+            "configured_markets": [],
+            "markets": [],
+        }
+
+    def test_configured_book_with_no_live_data_is_named(self, client, monkeypatch):
+        from web.adapters import market as market_adapter
+
+        monkeypatch.setattr(market_adapter, "fetch_polymarket_probs", lambda _ids: [])
+        resp = client.get(
+            f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "no_data"
+        assert resp.json()["configured_markets"] == ["us-iran-april-30"]
+        assert resp.json()["markets"] == []
+
+    def test_configured_book_returns_live_markets(self, client, monkeypatch):
+        from web.adapters import market as market_adapter
+
+        markets = [{"slug": "us-iran-april-30", "probability": 0.42}]
+        monkeypatch.setattr(
+            market_adapter, "fetch_polymarket_probs", lambda _ids: markets,
+        )
+        resp = client.get(
+            f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "status": "ok",
+            "configured_markets": ["us-iran-april-30"],
+            "markets": markets,
+        }
+
+    def test_fetch_failure_is_not_no_data(self, client, monkeypatch):
+        from web.adapters import market as market_adapter
+
+        def fail(_ids):
+            raise RuntimeError("polymarket unavailable")
+
+        monkeypatch.setattr(market_adapter, "fetch_polymarket_probs", fail)
+
+        with pytest.raises(RuntimeError, match="polymarket unavailable"):
+            client.get(
+                f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+            )
+
+
 class TestNewsEndpoint:
     def test_unknown_book_is_404(self, client):
         resp = client.get("/api/bridge/news/no-such-book", headers=svc_headers())
@@ -277,7 +359,13 @@ class TestNewsEndpoint:
         )
         assert resp.status_code == 200
         assert resp.headers["content-type"].startswith("application/json")
-        articles = resp.json()["articles"]
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert body["source"] == "gdelt"
+        assert body["query"] == gdelt.get_standard_query("iran-hormuz-event")
+        assert body["cache_hit"] is False
+        assert body["fetched_at"].endswith("+00:00")
+        articles = body["articles"]
         assert len(articles) == 15
         assert articles[0] == {
             "title": "Headline 0",
@@ -298,21 +386,30 @@ class TestNewsEndpoint:
             return []
 
         monkeypatch.setattr(gdelt, "fetch_articles", _capture)
-        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
+        body = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
         assert seen["query"] == gdelt.get_standard_query("iran-hormuz-event")
         assert "Hormuz" in seen["query"]
+        assert body["status"] == "no_matches"
+        assert body["query"] == seen["query"]
 
-    def test_book_without_gdelt_feed_returns_note(self, client, monkeypatch, tmp_path):
+    def test_book_without_gdelt_feed_is_not_configured(self, client, monkeypatch, tmp_path):
         book = tmp_path / "quiet-book.json"
         book.write_text(json.dumps({"meta": {}, "nodes": [{"id": "a"}]}))
         monkeypatch.setattr(bridge_mod, "_BOOKS_DIR", tmp_path)
 
         resp = client.get("/api/bridge/news/quiet-book", headers=svc_headers())
         assert resp.status_code == 200
-        assert resp.json() == {"articles": [], "note": "no gdelt config"}
+        body = resp.json()
+        assert body["status"] == "not_configured"
+        assert body["source"] == "gdelt"
+        assert body["query"] is None
+        assert body["articles"] == []
+        assert body["cache_hit"] is False
+        assert body["note"] == "no gdelt config"
 
-    def test_gdelt_failure_is_not_a_500(self, client, monkeypatch):
-        """A dark upstream feed degrades to an empty list with a note."""
+    def test_gdelt_rate_limit_is_named(self, client, monkeypatch):
         from tools.data_fetch import gdelt
 
         def _boom(*a, **k):
@@ -322,102 +419,272 @@ class TestNewsEndpoint:
         resp = client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
         assert resp.status_code == 200
         body = resp.json()
+        assert body["status"] == "rate_limited"
         assert body["articles"] == []
-        assert "gdelt unavailable" in body["note"]
+        assert body["retry_after_seconds"] == 120
+        assert "GdeltRateLimitError" in body["note"]
 
-    def test_consecutive_rate_limits_back_off(self, client, monkeypatch):
-        """A 429 is the upstream saying we ask too often — hold the miss longer.
-
-        WHY this is not the same as any other failure: on the flat 120s error
-        TTL, five books re-attempt roughly every 24s between them, which is
-        what keeps a per-IP throttle warm. Observed 2026-08-10: four of five
-        books sat rate-limited for hours and the retries were the reason.
-        """
-        from tools.data_fetch import gdelt
-
-        def _boom(*a, **k):
-            raise gdelt.GdeltRateLimitError("429")
-
-        monkeypatch.setattr(gdelt, "fetch_articles", _boom)
-
-        holds = []
-        for _ in range(4):
-            client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
-            expires_at, _payload = bridge_mod._news_cache[THESIS_ID]
-            holds.append(round(expires_at - time.monotonic()))
-            bridge_mod._news_cache.clear()  # simulate the hold elapsing
-
-        assert holds == [120, 240, 480, 900]
-        assert max(holds) <= bridge_mod.NEWS_TTL_SECONDS, \
-            "a throttled feed must never be polled harder than a healthy one"
-
-    def test_a_non_rate_limit_error_keeps_the_short_ttl(self, client, monkeypatch):
-        """Only a 429 earns the long hold — other errors are still guesses."""
+    def test_non_rate_limit_failure_is_unavailable(self, client, monkeypatch):
         from tools.data_fetch import gdelt
 
         def _boom(*a, **k):
             raise gdelt.GdeltAPIError("malformed body")
 
         monkeypatch.setattr(gdelt, "fetch_articles", _boom)
-        for _ in range(3):
-            client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
-            expires_at, _payload = bridge_mod._news_cache[THESIS_ID]
-            assert round(expires_at - time.monotonic()) == 120
-            bridge_mod._news_cache.clear()
+        body = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
 
-    def test_one_good_fetch_clears_the_streak(self, client, monkeypatch):
+        assert body["status"] == "unavailable"
+        assert body["retry_after_seconds"] == 120
+        assert "GdeltAPIError" in body["note"]
+
+    def test_focused_query_is_sent_and_reported_exactly(self, client, monkeypatch):
         from tools.data_fetch import gdelt
 
-        def _boom(*a, **k):
+        seen = []
+
+        def _capture(query, **kwargs):
+            seen.append(query)
+            return []
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _capture)
+        query = "China new yuan loans contraction"
+        body = client.get(
+            f"/api/bridge/news/{THESIS_ID}",
+            headers=svc_headers(),
+            params={"query": query},
+        ).json()
+
+        assert seen == [query]
+        assert body["status"] == "no_matches"
+        assert body["query"] == query
+
+    def test_query_bounds_apply_after_trimming(self, client, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        monkeypatch.setattr(gdelt, "fetch_articles", lambda *_args, **_kwargs: [])
+        trimmed = "x" * 499
+        body = client.get(
+            f"/api/bridge/news/{THESIS_ID}",
+            headers=svc_headers(),
+            params={"query": f"  {trimmed}  "},
+        ).json()
+
+        assert body["status"] == "no_matches"
+        assert body["query"] == trimmed
+
+    @pytest.mark.parametrize("query", ["tiny", "x" * 501, "  abc  "])
+    def test_focused_query_length_is_bounded(self, client, monkeypatch, query):
+        from tools.data_fetch import gdelt
+
+        monkeypatch.setattr(gdelt, "fetch_articles", lambda *_args, **_kwargs: [])
+        resp = client.get(
+            f"/api/bridge/news/{THESIS_ID}",
+            headers=svc_headers(),
+            params={"query": query},
+        )
+
+        assert resp.status_code == 422
+
+    def test_focused_query_works_without_a_standing_query(
+        self, client, monkeypatch, tmp_path,
+    ):
+        from tools.data_fetch import gdelt
+
+        (tmp_path / "quiet-book.json").write_text(json.dumps({"nodes": []}))
+        monkeypatch.setattr(bridge_mod, "_BOOKS_DIR", tmp_path)
+        seen = []
+        monkeypatch.setattr(
+            gdelt, "fetch_articles", lambda query, **_kwargs: seen.append(query) or [],
+        )
+
+        body = client.get(
+            "/api/bridge/news/quiet-book",
+            headers=svc_headers(),
+            params={"query": "specific external claim"},
+        ).json()
+
+        assert seen == ["specific external claim"]
+        assert body["status"] == "no_matches"
+        assert body["query"] == "specific external claim"
+
+    def test_cached_response_preserves_fetch_time_and_names_hit(
+        self, client, monkeypatch,
+    ):
+        from tools.data_fetch import gdelt
+
+        calls = []
+        monkeypatch.setattr(
+            gdelt, "fetch_articles", lambda query, **_kwargs: calls.append(query) or [],
+        )
+        first = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+        second = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert len(calls) == 1
+        assert first["cache_hit"] is False
+        assert second["cache_hit"] is True
+        assert second["fetched_at"] == first["fetched_at"]
+
+    def test_default_and_focused_queries_have_distinct_cache_entries(
+        self, client, monkeypatch,
+    ):
+        from tools.data_fetch import gdelt
+
+        calls = []
+        monkeypatch.setattr(
+            gdelt, "fetch_articles", lambda query, **_kwargs: calls.append(query) or [],
+        )
+        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
+        client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+            params={"query": "focused verification query"},
+        )
+
+        assert len(calls) == 2
+        assert len(bridge_mod._news_cache) == 2
+
+    def test_concurrent_same_query_is_single_flight(self, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        book = json.loads(bridge_mod._book_path(THESIS_ID).read_text())
+        calls = []
+
+        def _fetch(query, **_kwargs):
+            calls.append(query)
+            return []
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
+        query = "concurrent verification query"
+        key = (THESIS_ID, query)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(
+                lambda _index: bridge_mod._fetch_and_cache_news_sync(
+                    THESIS_ID, book, query, key,
+                ),
+                range(2),
+            ))
+
+        assert len(calls) == 1
+        assert sorted(result["cache_hit"] for result in results) == [False, True]
+
+    def test_concurrent_success_cannot_erase_rate_limit(self, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        book = json.loads(bridge_mod._book_path(THESIS_ID).read_text())
+        rate_fetch_started = Event()
+        release_rate_fetch = Event()
+        calls = []
+
+        def _fetch(query, **_kwargs):
+            calls.append(query)
+            if query == "rate limited query":
+                rate_fetch_started.set()
+                assert release_rate_fetch.wait(timeout=1)
+                raise gdelt.GdeltRateLimitError("429")
+            return []
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            rate_future = pool.submit(
+                bridge_mod._fetch_and_cache_news_sync,
+                THESIS_ID,
+                book,
+                "rate limited query",
+                (THESIS_ID, "rate limited query"),
+            )
+            assert rate_fetch_started.wait(timeout=1)
+            success_future = pool.submit(
+                bridge_mod._fetch_and_cache_news_sync,
+                THESIS_ID,
+                book,
+                "would otherwise succeed",
+                (THESIS_ID, "would otherwise succeed"),
+            )
+            release_rate_fetch.set()
+            rate_result = rate_future.result(timeout=1)
+            second_result = success_future.result(timeout=1)
+
+        assert calls == ["rate limited query"]
+        assert rate_result["status"] == "rate_limited"
+        assert second_result["status"] == "rate_limited"
+        assert bridge_mod._news_rate_limit_streak == 1
+        assert bridge_mod._news_rate_limit_until > 0.0
+
+    def test_query_cache_is_bounded_to_64_entries(self, client, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        monkeypatch.setattr(gdelt, "fetch_articles", lambda *_args, **_kwargs: [])
+        for number in range(65):
+            client.get(
+                f"/api/bridge/news/{THESIS_ID}",
+                headers=svc_headers(),
+                params={"query": f"claim-{number:02d}"},
+            )
+
+        assert len(bridge_mod._news_cache) == 64
+
+    def test_rate_limit_cooldown_is_global_across_queries_and_books(
+        self, client, monkeypatch,
+    ):
+        from tools.data_fetch import gdelt
+
+        calls = []
+
+        def _rate_limit(query, **_kwargs):
+            calls.append(query)
             raise gdelt.GdeltRateLimitError("429")
 
-        monkeypatch.setattr(gdelt, "fetch_articles", _boom)
-        for _ in range(3):
-            client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
-            bridge_mod._news_cache.clear()
-        assert bridge_mod._news_rate_limit_streak[THESIS_ID] == 3
+        monkeypatch.setattr(gdelt, "fetch_articles", _rate_limit)
+        first = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+        second = client.get(
+            "/api/bridge/news/china-property-cascade-graph",
+            headers=svc_headers(),
+            params={"query": "different book and query"},
+        ).json()
 
-        monkeypatch.setattr(gdelt, "fetch_articles", lambda *a, **k: [])
-        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
-        assert THESIS_ID not in bridge_mod._news_rate_limit_streak
-
-        bridge_mod._news_cache.clear()
-        monkeypatch.setattr(gdelt, "fetch_articles", _boom)
-        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
-        expires_at, _payload = bridge_mod._news_cache[THESIS_ID]
-        assert round(expires_at - time.monotonic()) == 120, "back to the base hold"
-
-    def test_second_request_is_served_from_cache(self, client, monkeypatch):
-        """GDELT asks for ~1 req/sec; a chatty room must not hammer it."""
-        from tools.data_fetch import gdelt
-
-        calls = []
-
-        def _count(query, **kwargs):
-            calls.append(query)
-            return []
-
-        monkeypatch.setattr(gdelt, "fetch_articles", _count)
-        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
-        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
         assert len(calls) == 1
+        assert first["status"] == "rate_limited"
+        assert second["status"] == "rate_limited"
+        assert second["query"] == "different book and query"
 
-    def test_expired_cache_refetches(self, client, monkeypatch):
+    def test_consecutive_rate_limits_back_off_and_success_resets(
+        self, client, monkeypatch,
+    ):
         from tools.data_fetch import gdelt
 
-        calls = []
+        def _rate_limit(*_args, **_kwargs):
+            raise gdelt.GdeltRateLimitError("429")
 
-        def _count(query, **kwargs):
-            calls.append(query)
-            return []
+        monkeypatch.setattr(gdelt, "fetch_articles", _rate_limit)
+        holds = []
+        for number in range(4):
+            bridge_mod._news_rate_limit_until = 0.0
+            body = client.get(
+                f"/api/bridge/news/{THESIS_ID}",
+                headers=svc_headers(),
+                params={"query": f"rate-limit-{number}"},
+            ).json()
+            holds.append(body["retry_after_seconds"])
 
-        monkeypatch.setattr(gdelt, "fetch_articles", _count)
-        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
-        # Expire the entry rather than sleeping 15 minutes.
-        expires, payload = bridge_mod._news_cache[THESIS_ID]
-        bridge_mod._news_cache[THESIS_ID] = (0.0, payload)
-        client.get(f"/api/bridge/news/{THESIS_ID}", headers=svc_headers())
-        assert len(calls) == 2
+        assert holds == [120, 240, 480, 900]
+        assert bridge_mod._news_rate_limit_streak == 4
+
+        bridge_mod._news_rate_limit_until = 0.0
+        monkeypatch.setattr(gdelt, "fetch_articles", lambda *_args, **_kwargs: [])
+        body = client.get(
+            f"/api/bridge/news/{THESIS_ID}",
+            headers=svc_headers(),
+            params={"query": "successful reset query"},
+        ).json()
+        assert body["status"] == "no_matches"
+        assert bridge_mod._news_rate_limit_streak == 0
 
 
 # =========================================================================

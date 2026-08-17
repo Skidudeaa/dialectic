@@ -30,6 +30,11 @@ DEFAULT_BASE_URL = "http://127.0.0.1:8006"
 # default, meaning the LLM's own news tool could only succeed on a warm cache.
 NEWS_TIMEOUT_S = 60.0
 
+# The bridge reads every configured Polymarket ID concurrently. Each ID gets
+# two attempts; an attempt can make two sequential 5s requests, with a 1.5s
+# retry delay. 25s clears that 21.5s cold ceiling inside the LLM's 60s turn.
+POLYMARKET_TIMEOUT_S = 25.0
+
 
 class TradingDeskError(Exception):
     """Any failure talking to tradingDesk — unreachable, non-200, non-JSON,
@@ -184,7 +189,12 @@ async def request_json(
     return _require_json(response, f"tradingDesk {path}")
 
 
-async def service_get(path: str, *, timeout: Optional[float] = None) -> Any:
+async def service_get(
+    path: str,
+    *,
+    params: Optional[dict] = None,
+    timeout: Optional[float] = None,
+) -> Any:
     """Service-token GET for the /api/bridge/* endpoints (X-Service-Token,
     not the user JWT everything else here carries).
 
@@ -205,6 +215,7 @@ async def service_get(path: str, *, timeout: Optional[float] = None) -> Any:
         response = await client.get(
             f"{_base_url()}{path}",
             headers={"X-Service-Token": token},
+            params=params,
             timeout=timeout if timeout is not None else DEFAULT_TIMEOUT_S,
         )
     except httpx.TimeoutException as e:

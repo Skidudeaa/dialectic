@@ -116,7 +116,7 @@ def test_upstream_failure_raises_instead_of_returning_empty(monkeypatch):
     Returning [] here is what made "Polymarket is down" and "no markets are
     configured" the same observable, which is the whole complaint.
     """
-    def boom(_markets):
+    def boom(_markets, **_kwargs):
         raise RuntimeError("gamma-api unreachable")
 
     monkeypatch.setattr(market.polymarket_mod, "fetch_markets", boom)
@@ -141,7 +141,9 @@ def test_probabilities_pass_through_on_the_slug_wire_key(monkeypatch):
         market, "_collect_symbols_from_books", lambda: (set(), ["us-iran-april-30"])
     )
     monkeypatch.setattr(
-        market.polymarket_mod, "fetch_markets", lambda ids: {"us-iran-april-30": 0.42}
+        market.polymarket_mod,
+        "fetch_markets",
+        lambda ids, **_kwargs: {"us-iran-april-30": 0.42},
     )
     assert market.fetch_polymarket_probs() == [
         {"slug": "us-iran-april-30", "probability": 0.42}

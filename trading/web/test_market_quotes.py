@@ -109,3 +109,59 @@ class TestFetchQuotes:
                             lambda p: (_ for _ in ()).throw(RuntimeError("boom")))
         assert market.fetch_quotes() == []
         assert market._QUOTES_CACHE["data"] is None
+
+
+class TestPolymarketCollection:
+    def test_market_is_canonical_and_slug_is_legacy(self):
+        cfg = {"nodes": [{"feeds": [
+            {"source": "polymarket", "market": "canonical", "slug": "legacy"},
+            {"source": "polymarket", "slug": "legacy-only"},
+            {"source": "polymarket", "market": "canonical"},
+            {"source": "yahoo", "symbol": "SPY"},
+        ]}]}
+
+        assert market.polymarket_markets_from_book(cfg) == [
+            "canonical", "legacy-only",
+        ]
+
+    def test_checked_in_books_expose_four_markets(self):
+        _symbols, market_ids = market._collect_symbols_from_books()
+
+        assert market_ids == [
+            "us-iran-april-30",
+            "us-tariff-rate-china-march-31",
+            "trump-visit-china-by-june-30",
+            "us-recession-by-end-of-2026",
+        ]
+
+    def test_fetch_omits_markets_without_a_probability(self, monkeypatch):
+        seen = {}
+
+        def fetch(market_ids, **kwargs):
+            seen.update(kwargs)
+            return {market_ids[0]: 0.42, market_ids[1]: None}
+
+        monkeypatch.setattr(
+            market.polymarket_mod,
+            "fetch_markets",
+            fetch,
+        )
+
+        assert market.fetch_polymarket_probs(["priced", "missing"]) == [
+            {"slug": "priced", "probability": 0.42},
+        ]
+        assert seen == {
+            "timeout": 5,
+            "retries": 2,
+            "raise_on_error": True,
+            "parallel": True,
+        }
+
+    def test_fetch_failure_is_not_an_empty_success(self, monkeypatch):
+        def fail(_market_ids, **_kwargs):
+            raise RuntimeError("upstream broke")
+
+        monkeypatch.setattr(market.polymarket_mod, "fetch_markets", fail)
+
+        with pytest.raises(RuntimeError, match="upstream broke"):
+            market.fetch_polymarket_probs(["configured"])

@@ -8,7 +8,7 @@ polymarket.fetch_markets into consistent API-friendly dicts.
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def _iter_instruments(cfg: dict):
                 yield inst.get("id", ""), inst.get("role", inst.get("id", ""))
 
 
-def _polymarket_feed_id(feed: dict) -> str:
+def _polymarket_feed_id(feed: dict[str, Any]) -> str:
     """The ONE place a Polymarket feed's market id is resolved.
 
     ARCHITECTURE (design 2026-08-16 §3.1): `market` first, legacy `slug`
@@ -72,8 +72,21 @@ def _polymarket_feed_id(feed: dict) -> str:
     return ""
 
 
+def polymarket_markets_from_book(cfg: dict[str, Any]) -> list[str]:
+    """Return unique Polymarket IDs from one book in authored order."""
+    market_ids: list[str] = []
+    for node in cfg.get("nodes", []) or []:
+        for feed in node.get("feeds", []) or []:
+            if not isinstance(feed, dict) or feed.get("source") != "polymarket":
+                continue
+            market_id = _polymarket_feed_id(feed)
+            if market_id and market_id not in market_ids:
+                market_ids.append(market_id)
+    return market_ids
+
+
 def _collect_symbols_from_books() -> tuple[Set[str], List[str]]:
-    """Scan all book configs for Yahoo Finance symbols and Polymarket market ids."""
+    """Scan all book configs for Yahoo symbols and Polymarket market IDs."""
     yahoo_symbols: Set[str] = set()
     poly_slugs: List[str] = []
 
@@ -89,12 +102,9 @@ def _collect_symbols_from_books() -> tuple[Set[str], List[str]]:
             if ticker:
                 yahoo_symbols.add(ticker)
 
-        for node in cfg.get("nodes", []):
-            for feed in node.get("feeds", []):
-                if feed.get("source") == "polymarket":
-                    market_id = _polymarket_feed_id(feed)
-                    if market_id and market_id not in poly_slugs:
-                        poly_slugs.append(market_id)
+        for market_id in polymarket_markets_from_book(cfg):
+            if market_id not in poly_slugs:
+                poly_slugs.append(market_id)
 
     return yahoo_symbols, poly_slugs
 
@@ -174,29 +184,37 @@ def fetch_quotes(force_refresh: bool = False) -> List[Dict[str, Any]]:
     return results
 
 
-def fetch_polymarket_probs() -> List[Dict[str, Any]]:
-    """Fetch Polymarket probabilities for every configured market.
+def fetch_polymarket_probs(
+    market_ids: Optional[list[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Fetch numeric probabilities for explicit IDs or all authored markets.
 
-    An empty list means exactly one thing: no book declares a Polymarket feed.
-    It does NOT mean the fetch failed.
+    A configured market without current data is omitted; the book-scoped bridge
+    retains its ID in `configured_markets`, so callers can distinguish that
+    state from no configured coverage. Transport and API failures raise.
 
-    WHY the blanket `except Exception: return []` is gone (design §3.1): it
-    made an upstream failure indistinguishable from "nothing configured", and
-    both indistinguishable from "no current data". Downstream that collapse
-    reached the room as a flat "Polymarket is empty" — an operational failure
-    reported as a fact about the world. The only caller is
-    web/routes/market.py, which awaits this in a thread, so a real fetch
-    failure now surfaces as a failed request instead of a confident [].
-
-    The response key stays `slug` — that is the wire contract the browser and
-    the bridge already read; only the BOOK-side key was ever ambiguous.
+    The response key remains `slug` because that is the existing wire contract;
+    only the book-side key was ever ambiguous.
     """
-    _, poly_markets = _collect_symbols_from_books()
-    if not poly_markets:
+    if market_ids is None:
+        _, market_ids = _collect_symbols_from_books()
+    if not market_ids:
         return []
 
-    probs = polymarket_mod.fetch_markets(poly_markets)
-    return [{"slug": slug, "probability": prob} for slug, prob in probs.items()]
+    # WHY strict here: this backs a verification tool. A transport/API failure
+    # must fail the tool call, not turn into a successful "no_data" claim.
+    probabilities = polymarket_mod.fetch_markets(
+        market_ids,
+        timeout=5,
+        retries=2,
+        raise_on_error=True,
+        parallel=True,
+    )
+    return [
+        {"slug": market_id, "probability": probability}
+        for market_id, probability in probabilities.items()
+        if isinstance(probability, (int, float))
+    ]
 
 
 def get_watchlist() -> List[Dict[str, Any]]:
