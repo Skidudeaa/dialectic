@@ -187,19 +187,28 @@ def fetch_quotes(force_refresh: bool = False) -> List[Dict[str, Any]]:
 def fetch_polymarket_probs(
     market_ids: Optional[list[str]] = None,
 ) -> List[Dict[str, Any]]:
-    """Fetch numeric probabilities for explicit IDs or all authored markets.
+    """Fetch strict explicit probabilities or the legacy global market list.
 
-    A configured market without current data is omitted; the book-scoped bridge
-    retains its ID in `configured_markets`, so callers can distinguish that
-    state from no configured coverage. Transport and API failures raise.
+    Explicit IDs are the book-scoped verification path: missing values are
+    omitted and transport/API failures raise. With no IDs, preserve the global
+    browser contract: use the client's 15-second best-effort defaults and keep
+    every authored market, including null probabilities.
 
     The response key remains `slug` because that is the existing wire contract;
     only the book-side key was ever ambiguous.
     """
-    if market_ids is None:
+    global_read = market_ids is None
+    if global_read:
         _, market_ids = _collect_symbols_from_books()
     if not market_ids:
         return []
+
+    if global_read:
+        probabilities = polymarket_mod.fetch_markets(market_ids)
+        return [
+            {"slug": market_id, "probability": probabilities.get(market_id)}
+            for market_id in market_ids
+        ]
 
     # WHY strict here: this backs a verification tool. A transport/API failure
     # must fail the tool call, not turn into a successful "no_data" claim.

@@ -114,7 +114,9 @@ def test_polymarket_is_book_scoped_but_remains_list_shaped(monkeypatch):
     service_get = AsyncMock(return_value={
         "status": "ok",
         "configured_markets": ["m"],
+        "missing_markets": [],
         "markets": markets,
+        "freshness": {"state": "live"},
     })
 
     resp = _call(
@@ -128,6 +130,55 @@ def test_polymarket_is_book_scoped_but_remains_list_shaped(monkeypatch):
         f"/api/bridge/polymarket/{BOOK_ID}",
         timeout=relay.POLYMARKET_TIMEOUT_S,
     )
+
+
+@pytest.mark.parametrize("payload", [
+    [],
+    {"status": "ok", "configured_markets": ["m"]},
+    {"status": "mystery", "markets": []},
+    {
+        "status": "unavailable",
+        "markets": [{"slug": "m", "probability": 0.4}],
+        "freshness": {"state": "stale"},
+    },
+    {
+        "status": "no_data",
+        "markets": [],
+        "freshness": {"state": "stale"},
+    },
+])
+def test_polymarket_rejects_legacy_or_incomplete_shapes(monkeypatch, payload):
+    service_get = AsyncMock(return_value=payload)
+
+    resp = _call(
+        _make_db(), monkeypatch, "polymarket",
+        td_mocks={"service_get": service_get},
+    )
+
+    assert resp.status_code == 502
+    assert "unexpected shape" in resp.json()["detail"]
+
+
+def test_polymarket_unavailable_never_unwraps_stale_history(monkeypatch):
+    service_get = AsyncMock(return_value={
+        "status": "unavailable",
+        "configured_markets": ["m"],
+        "missing_markets": ["m"],
+        "markets": [],
+        "freshness": {"state": "stale"},
+        "last_observation": {
+            "markets": [{"slug": "m", "probability": 0.4}],
+            "observed_at": "2026-08-17T01:00:00+00:00",
+        },
+    })
+
+    resp = _call(
+        _make_db(), monkeypatch, "polymarket",
+        td_mocks={"service_get": service_get},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == []
 
 
 def test_diff_and_brief_pass_the_book_id(monkeypatch):

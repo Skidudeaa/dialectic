@@ -165,3 +165,28 @@ class TestPolymarketCollection:
 
         with pytest.raises(RuntimeError, match="upstream broke"):
             market.fetch_polymarket_probs(["configured"])
+
+    def test_global_fetch_preserves_null_membership_and_client_defaults(
+        self, monkeypatch,
+    ):
+        seen = {}
+
+        def fetch(market_ids, **kwargs):
+            seen["market_ids"] = market_ids
+            seen["kwargs"] = kwargs
+            return {"priced": 0.42, "missing": None}
+
+        monkeypatch.setattr(
+            market, "_collect_symbols_from_books",
+            lambda: (set(), ["priced", "missing"]),
+        )
+        monkeypatch.setattr(market.polymarket_mod, "fetch_markets", fetch)
+
+        assert market.fetch_polymarket_probs() == [
+            {"slug": "priced", "probability": 0.42},
+            {"slug": "missing", "probability": None},
+        ]
+        assert seen == {
+            "market_ids": ["priced", "missing"],
+            "kwargs": {},
+        }
