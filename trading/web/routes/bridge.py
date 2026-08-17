@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -557,6 +557,23 @@ _news_inflight: dict[
     tuple[str, str], asyncio.Task[dict[str, Any]]
 ] = {}
 
+POLYMARKET_TTL_SECONDS = 900.0
+POLYMARKET_CACHE_MAX_ENTRIES = 64
+_polymarket_state_lock = Lock()
+
+
+@dataclass
+class _PolymarketCacheEntry:
+    """One successful book-scoped market observation and its age clock."""
+
+    expires_at: float
+    observed_monotonic: float
+    payload: dict[str, Any]
+
+
+_polymarket_cache: dict[str, _PolymarketCacheEntry] = {}
+_polymarket_inflight: dict[str, asyncio.Task[dict[str, Any]]] = {}
+
 
 def _book_path(thesis_id: str) -> Optional[Path]:
     """Resolve books/{thesis_id}.json, refusing anything that escapes the dir.
@@ -596,21 +613,221 @@ async def get_thesis_polymarket(
 
     market_ids = market_adapter.polymarket_markets_from_book(book)
     if not market_ids:
+        served_at = datetime.now(timezone.utc).isoformat()
         payload = {
             "status": "not_configured",
             "configured_markets": [],
+            "missing_markets": [],
             "markets": [],
+            "freshness": _freshness_payload(
+                state="not_applicable",
+                attempted_at=None,
+                observed_at=None,
+                served_at=served_at,
+                age_seconds=None,
+                ttl_seconds=int(POLYMARKET_TTL_SECONDS),
+            ),
         }
     else:
-        markets = await asyncio.to_thread(
-            market_adapter.fetch_polymarket_probs, market_ids,
+        payload = await _get_polymarket_payload(
+            thesis_id, market_ids, market_adapter.fetch_polymarket_probs,
         )
-        payload = {
-            "status": "ok" if markets else "no_data",
-            "configured_markets": market_ids,
-            "markets": markets,
-        }
     return JSONResponse(content=payload, media_type="application/json")
+
+
+def _validate_polymarket_rows(
+    configured_markets: list[str],
+    rows: Any,
+) -> list[dict[str, Any]]:
+    """Validate and restore authored order for current numeric market rows."""
+    from tools.data_fetch import polymarket as polymarket_mod
+
+    if not isinstance(rows, list):
+        raise polymarket_mod.APIError("Polymarket returned invalid data: markets")
+    by_slug: dict[str, dict[str, Any]] = {}
+    configured = set(configured_markets)
+    for row in rows:
+        if not isinstance(row, dict):
+            raise polymarket_mod.APIError("Polymarket returned invalid data: market row")
+        slug = row.get("slug")
+        probability = row.get("probability")
+        if not isinstance(slug, str) or slug not in configured or slug in by_slug:
+            raise polymarket_mod.APIError("Polymarket returned invalid data: market slug")
+        if (
+            isinstance(probability, bool)
+            or not isinstance(probability, (int, float))
+            or not 0.0 <= probability <= 1.0
+        ):
+            raise polymarket_mod.APIError(
+                "Polymarket returned invalid data: probability",
+            )
+        by_slug[slug] = {"slug": slug, "probability": probability}
+    return [by_slug[slug] for slug in configured_markets if slug in by_slug]
+
+
+def _polymarket_live_payload(
+    configured_markets: list[str],
+    markets: list[dict[str, Any]],
+    attempted_at: str,
+    observed_at: str,
+) -> dict[str, Any]:
+    """Build a successful current observation with explicit coverage."""
+    present = {row["slug"] for row in markets}
+    missing = [slug for slug in configured_markets if slug not in present]
+    status = "ok" if not missing else "partial" if markets else "no_data"
+    return {
+        "status": status,
+        "configured_markets": configured_markets,
+        "missing_markets": missing,
+        "markets": markets,
+        "freshness": _freshness_payload(
+            state="live",
+            attempted_at=attempted_at,
+            observed_at=observed_at,
+            served_at=observed_at,
+            age_seconds=0,
+            ttl_seconds=int(POLYMARKET_TTL_SECONDS),
+        ),
+    }
+
+
+def _cached_polymarket_payload(
+    entry: _PolymarketCacheEntry,
+    now: float,
+) -> dict[str, Any]:
+    """Serve a successful market observation without changing its timestamp."""
+    payload = dict(entry.payload)
+    original = entry.payload["freshness"]
+    payload["freshness"] = _freshness_payload(
+        state="cached",
+        attempted_at=original["attempted_at"],
+        observed_at=original["observed_at"],
+        served_at=datetime.now(timezone.utc).isoformat(),
+        age_seconds=max(0, int(now - entry.observed_monotonic)),
+        ttl_seconds=original["ttl_seconds"],
+    )
+    return payload
+
+
+def _unavailable_polymarket_payload(
+    configured_markets: list[str],
+    attempted_at: str,
+    previous: Optional[_PolymarketCacheEntry],
+    error: Exception,
+) -> dict[str, Any]:
+    """Keep failed current evidence separate from a prior observation."""
+    now = time.monotonic()
+    served_at = datetime.now(timezone.utc).isoformat()
+    observed_at = (
+        previous.payload["freshness"]["observed_at"]
+        if previous is not None
+        else None
+    )
+    payload: dict[str, Any] = {
+        "status": "unavailable",
+        "configured_markets": configured_markets,
+        "missing_markets": list(configured_markets),
+        "markets": [],
+        "freshness": _freshness_payload(
+            state="stale",
+            attempted_at=attempted_at,
+            observed_at=observed_at,
+            served_at=served_at,
+            age_seconds=(
+                max(0, int(now - previous.observed_monotonic))
+                if previous is not None
+                else None
+            ),
+            ttl_seconds=int(POLYMARKET_TTL_SECONDS),
+        ),
+        "note": f"polymarket unavailable: {type(error).__name__}",
+    }
+    if previous is not None:
+        payload["last_observation"] = {
+            "status": previous.payload["status"],
+            "observed_at": observed_at,
+            "markets": previous.payload["markets"],
+        }
+    return payload
+
+
+async def _fetch_and_cache_polymarket(
+    thesis_id: str,
+    configured_markets: list[str],
+    fetch: Callable[[list[str]], list[dict[str, Any]]],
+) -> dict[str, Any]:
+    """Run one strict book fetch, retaining only successful observations."""
+    from tools.data_fetch import polymarket as polymarket_mod
+
+    attempted_at = datetime.now(timezone.utc).isoformat()
+    try:
+        rows = await asyncio.to_thread(fetch, configured_markets)
+        markets = _validate_polymarket_rows(configured_markets, rows)
+    except polymarket_mod.PolymarketError as exc:
+        with _polymarket_state_lock:
+            previous = _polymarket_cache.get(thesis_id)
+        return _unavailable_polymarket_payload(
+            configured_markets, attempted_at, previous, exc,
+        )
+
+    observed_at = datetime.now(timezone.utc).isoformat()
+    payload = _polymarket_live_payload(
+        configured_markets, markets, attempted_at, observed_at,
+    )
+    now = time.monotonic()
+    with _polymarket_state_lock:
+        if (
+            thesis_id not in _polymarket_cache
+            and len(_polymarket_cache) >= POLYMARKET_CACHE_MAX_ENTRIES
+        ):
+            evict = min(
+                _polymarket_cache,
+                key=lambda key: _polymarket_cache[key].expires_at,
+            )
+            _polymarket_cache.pop(evict)
+        _polymarket_cache[thesis_id] = _PolymarketCacheEntry(
+            expires_at=now + POLYMARKET_TTL_SECONDS,
+            observed_monotonic=now,
+            payload=payload,
+        )
+    return payload
+
+
+async def _produce_polymarket(
+    thesis_id: str,
+    configured_markets: list[str],
+    fetch: Callable[[list[str]], list[dict[str, Any]]],
+) -> dict[str, Any]:
+    """Own one in-flight producer and always clear its book slot."""
+    try:
+        return await _fetch_and_cache_polymarket(
+            thesis_id, configured_markets, fetch,
+        )
+    finally:
+        current = asyncio.current_task()
+        with _polymarket_state_lock:
+            if _polymarket_inflight.get(thesis_id) is current:
+                _polymarket_inflight.pop(thesis_id, None)
+
+
+async def _get_polymarket_payload(
+    thesis_id: str,
+    configured_markets: list[str],
+    fetch: Callable[[list[str]], list[dict[str, Any]]],
+) -> dict[str, Any]:
+    """Return a warm book observation or share its one current producer."""
+    with _polymarket_state_lock:
+        now = time.monotonic()
+        cached = _polymarket_cache.get(thesis_id)
+        if cached is not None and cached.expires_at > now:
+            return _cached_polymarket_payload(cached, now)
+        task = _polymarket_inflight.get(thesis_id)
+        if task is None:
+            task = asyncio.create_task(
+                _produce_polymarket(thesis_id, configured_markets, fetch),
+            )
+            _polymarket_inflight[thesis_id] = task
+    return await asyncio.shield(task)
 
 
 def _gdelt_query_for_book(book: dict) -> Optional[str]:

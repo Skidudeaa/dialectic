@@ -82,6 +82,10 @@ def clear_news_cache():
         bridge_mod._news_rate_limit_until = 0.0
     if hasattr(bridge_mod, "_news_inflight"):
         bridge_mod._news_inflight.clear()
+    if hasattr(bridge_mod, "_polymarket_cache"):
+        bridge_mod._polymarket_cache.clear()
+    if hasattr(bridge_mod, "_polymarket_inflight"):
+        bridge_mod._polymarket_inflight.clear()
     yield
     bridge_mod._news_cache.clear()
     if isinstance(bridge_mod._news_rate_limit_streak, dict):
@@ -92,6 +96,10 @@ def clear_news_cache():
         bridge_mod._news_rate_limit_until = 0.0
     if hasattr(bridge_mod, "_news_inflight"):
         bridge_mod._news_inflight.clear()
+    if hasattr(bridge_mod, "_polymarket_cache"):
+        bridge_mod._polymarket_cache.clear()
+    if hasattr(bridge_mod, "_polymarket_inflight"):
+        bridge_mod._polymarket_inflight.clear()
 
 
 def svc_headers(token: str = SERVICE_TOKEN) -> dict:
@@ -101,6 +109,12 @@ def svc_headers(token: str = SERVICE_TOKEN) -> dict:
 async def _direct_news(query: str | None) -> dict[str, object]:
     """Exercise the real async route without TestClient's per-request loop."""
     response = await bridge_mod.get_thesis_news(THESIS_ID, query, None)
+    return json.loads(response.body)
+
+
+async def _direct_polymarket(thesis_id: str) -> dict[str, object]:
+    """Exercise the real scoped-market route in one shared event loop."""
+    response = await bridge_mod.get_thesis_polymarket(thesis_id, None)
     return json.loads(response.body)
 
 
@@ -287,11 +301,12 @@ class TestPolymarketEndpoint:
         )
 
         assert resp.status_code == 200
-        assert resp.json() == {
-            "status": "not_configured",
-            "configured_markets": [],
-            "markets": [],
-        }
+        body = resp.json()
+        assert body["status"] == "not_configured"
+        assert body["configured_markets"] == []
+        assert body["missing_markets"] == []
+        assert body["markets"] == []
+        assert body["freshness"]["state"] == "not_applicable"
 
     def test_configured_book_with_no_live_data_is_named(self, client, monkeypatch):
         from web.adapters import market as market_adapter
@@ -302,9 +317,12 @@ class TestPolymarketEndpoint:
         )
 
         assert resp.status_code == 200
-        assert resp.json()["status"] == "no_data"
-        assert resp.json()["configured_markets"] == ["us-iran-april-30"]
-        assert resp.json()["markets"] == []
+        body = resp.json()
+        assert body["status"] == "no_data"
+        assert body["configured_markets"] == ["us-iran-april-30"]
+        assert body["missing_markets"] == ["us-iran-april-30"]
+        assert body["markets"] == []
+        assert body["freshness"]["state"] == "live"
 
     def test_configured_book_returns_live_markets(self, client, monkeypatch):
         from web.adapters import market as market_adapter
@@ -318,11 +336,169 @@ class TestPolymarketEndpoint:
         )
 
         assert resp.status_code == 200
-        assert resp.json() == {
-            "status": "ok",
-            "configured_markets": ["us-iran-april-30"],
-            "markets": markets,
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert body["configured_markets"] == ["us-iran-april-30"]
+        assert body["missing_markets"] == []
+        assert body["markets"] == markets
+        assert body["freshness"]["state"] == "live"
+
+    def test_mixed_coverage_is_partial_and_names_missing_markets(
+        self, client, monkeypatch, tmp_path,
+    ):
+        from web.adapters import market as market_adapter
+
+        (tmp_path / "mixed.json").write_text(json.dumps({
+            "nodes": [{"feeds": [
+                {"source": "polymarket", "market": "priced"},
+                {"source": "polymarket", "market": "missing"},
+            ]}],
+        }))
+        monkeypatch.setattr(bridge_mod, "_BOOKS_DIR", tmp_path)
+        monkeypatch.setattr(
+            market_adapter,
+            "fetch_polymarket_probs",
+            lambda _ids: [{"slug": "priced", "probability": 0.42}],
+        )
+
+        body = client.get(
+            "/api/bridge/polymarket/mixed", headers=svc_headers(),
+        ).json()
+
+        assert body["status"] == "partial"
+        assert body["configured_markets"] == ["priced", "missing"]
+        assert body["missing_markets"] == ["missing"]
+        assert body["markets"] == [{"slug": "priced", "probability": 0.42}]
+        assert body["freshness"]["state"] == "live"
+
+    @pytest.mark.parametrize(
+        "rows",
+        [
+            [{"slug": "priced", "probability": True}],
+            [{"slug": "priced", "probability": 1.01}],
+            [
+                {"slug": "priced", "probability": 0.4},
+                {"slug": "priced", "probability": 0.5},
+            ],
+            [{"slug": "not-configured", "probability": 0.4}],
+        ],
+        ids=["boolean", "out-of-range", "duplicate", "unconfigured"],
+    )
+    def test_invalid_probability_rows_are_unavailable(
+        self, client, monkeypatch, rows,
+    ):
+        from web.adapters import market as market_adapter
+
+        monkeypatch.setattr(
+            market_adapter, "fetch_polymarket_probs", lambda _ids: rows,
+        )
+
+        body = client.get(
+            f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert body["status"] == "unavailable"
+        assert body["markets"] == []
+        assert body["freshness"]["state"] == "stale"
+
+    @pytest.mark.asyncio
+    async def test_concurrent_same_book_is_single_flight(self, monkeypatch):
+        from web.adapters import market as market_adapter
+
+        started = Event()
+        release = Event()
+        calls = 0
+
+        def _fetch(_ids: list[str]) -> list[dict[str, object]]:
+            nonlocal calls
+            calls += 1
+            started.set()
+            assert release.wait(timeout=2)
+            return [{"slug": "us-iran-april-30", "probability": 0.42}]
+
+        monkeypatch.setattr(market_adapter, "fetch_polymarket_probs", _fetch)
+        tasks = [
+            asyncio.create_task(_direct_polymarket(THESIS_ID))
+            for _index in range(2)
+        ]
+        assert await asyncio.to_thread(started.wait, 1)
+        await asyncio.sleep(0)
+        release.set()
+        results = await asyncio.gather(*tasks)
+
+        assert calls == 1
+        assert [result["status"] for result in results] == ["ok", "ok"]
+
+    def test_failed_poll_keeps_prior_observation_separate(
+        self, client, monkeypatch,
+    ):
+        from tools.data_fetch import polymarket as polymarket_mod
+        from web.adapters import market as market_adapter
+
+        elapsed = {"seconds": 0}
+        base = datetime(2026, 8, 17, 1, 0, tzinfo=timezone.utc)
+
+        class FrozenDateTime:
+            @classmethod
+            def now(cls, tz: timezone | None = None) -> datetime:
+                value = base + timedelta(seconds=elapsed["seconds"])
+                return value if tz is not None else value.replace(tzinfo=None)
+
+        def _success(_ids: list[str]) -> list[dict[str, object]]:
+            return [{"slug": "us-iran-april-30", "probability": 0.42}]
+
+        monkeypatch.setattr(bridge_mod, "datetime", FrozenDateTime)
+        monkeypatch.setattr(
+            bridge_mod.time, "monotonic", lambda: 100.0 + elapsed["seconds"],
+        )
+        monkeypatch.setattr(market_adapter, "fetch_polymarket_probs", _success)
+        live = client.get(
+            f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+        elapsed["seconds"] = 901
+
+        def _fail(_ids: list[str]) -> list[dict[str, object]]:
+            raise polymarket_mod.APIError("gamma unavailable")
+
+        monkeypatch.setattr(market_adapter, "fetch_polymarket_probs", _fail)
+        failed = client.get(
+            f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert live["freshness"]["state"] == "live"
+        assert failed["status"] == "unavailable"
+        assert failed["markets"] == []
+        assert failed["freshness"] == {
+            "state": "stale",
+            "attempted_at": "2026-08-17T01:15:01+00:00",
+            "observed_at": "2026-08-17T01:00:00+00:00",
+            "served_at": "2026-08-17T01:15:01+00:00",
+            "age_seconds": 901,
+            "ttl_seconds": 900,
         }
+        assert failed["last_observation"] == {
+            "status": "ok",
+            "observed_at": "2026-08-17T01:00:00+00:00",
+            "markets": [{"slug": "us-iran-april-30", "probability": 0.42}],
+        }
+
+    def test_failed_poll_without_prior_has_no_last_observation(
+        self, client, monkeypatch,
+    ):
+        from tools.data_fetch import polymarket as polymarket_mod
+        from web.adapters import market as market_adapter
+
+        def _fail(_ids: list[str]) -> list[dict[str, object]]:
+            raise polymarket_mod.APIError("gamma unavailable")
+
+        monkeypatch.setattr(market_adapter, "fetch_polymarket_probs", _fail)
+        body = client.get(
+            f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert body["status"] == "unavailable"
+        assert body["markets"] == []
+        assert "last_observation" not in body
 
     def test_fetch_failure_is_not_no_data(self, client, monkeypatch):
         from web.adapters import market as market_adapter

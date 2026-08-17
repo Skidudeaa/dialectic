@@ -295,12 +295,19 @@ def fetch_single_market(
             # renames) shouldn't crash the graph generator. Log and move on.
             print(f"  polymarket: unexpected error for '{slug}': {e}", file=sys.stderr)
             if raise_on_error:
-                raise APIError(
-                    f"Polymarket returned invalid data for '{slug}'"
-                ) from e
+                last_error = e
+                if attempt < retries:
+                    time.sleep(RETRY_DELAY)
+                    continue
+                break
             return (slug, None)
 
     if raise_on_error and last_error is not None:
+        if not isinstance(last_error, (URLError, TimeoutError, OSError)):
+            raise APIError(
+                f"Polymarket returned invalid data for '{slug}' after "
+                f"{retries} attempts"
+            ) from last_error
         unit = "attempt" if retries == 1 else "attempts"
         raise APIError(
             f"Polymarket fetch for '{slug}' failed after {retries} {unit}"
@@ -338,7 +345,7 @@ def fetch_markets(
         # WHY bounded parallelism: interactive book verification has a 60s
         # whole-turn budget. Sequential retry ceilings exceed it, while the
         # checked-in books need at most three independent public API reads.
-        with ThreadPoolExecutor(max_workers=len(slugs)) as pool:
+        with ThreadPoolExecutor(max_workers=min(len(slugs), 8)) as pool:
             for slug_result, prob in pool.map(fetch_one, slugs):
                 results[slug_result] = prob
         return results
