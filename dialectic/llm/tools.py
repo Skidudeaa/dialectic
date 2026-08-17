@@ -3,8 +3,8 @@
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import date
-from typing import Any, Awaitable, Callable, Optional
+from datetime import date, datetime, timedelta
+from typing import Any, Awaitable, Callable, Optional, cast
 from uuid import UUID
 
 from . import cairn_client as cn
@@ -44,6 +44,7 @@ QUOTES_TIMEOUT_S = 20.0
 # The tool loop's asyncio timeout must outlive the HTTP client's complete
 # Polymarket budget and stay under half the 60s whole-turn budget.
 POLYMARKET_TOOL_TIMEOUT_S = td.POLYMARKET_TIMEOUT_S + 4.0
+NEWS_TOOL_TIMEOUT_S = 29.0
 
 # Keys dropped from any tradingDesk payload before it reaches the model:
 # per-tick traces and history arrays are the bulk of the bytes and none of
@@ -59,6 +60,17 @@ _THESIS_CORE_KEYS = frozenset({
     "confluenceScores", "countdowns", "marketSnapshot",
     "scenarioImpacts", "portfolioSummary", "feedFreshness",
 })
+_POLYMARKET_CORE_KEYS = frozenset({
+    "status", "freshness", "configured_markets", "missing_markets",
+})
+_NEWS_CORE_KEYS = frozenset({"status", "source", "query", "freshness"})
+_FRESHNESS_STATES = {"live", "cached", "stale", "not_applicable"}
+_POLYMARKET_STATUSES = {
+    "ok", "partial", "no_data", "not_configured", "unavailable",
+}
+_NEWS_STATUSES = {
+    "ok", "no_matches", "not_configured", "rate_limited", "unavailable",
+}
 
 
 @dataclass
@@ -174,6 +186,189 @@ def serialize_tool_result(value: Any, limit: int = TOOL_RESULT_CHAR_CAP) -> str:
     if len(text) > limit:
         return text[:limit] + f"\n…[truncated at {limit} characters]"
     return text
+
+
+def _is_utc_timestamp(value: Any) -> bool:
+    """Return whether a value is an ISO-8601 timestamp at UTC offset zero."""
+    if not isinstance(value, str):
+        return False
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None and parsed.utcoffset() == timedelta(0)
+
+
+def _shape_error(source: str, detail: str) -> td.TradingDeskError:
+    return td.TradingDeskError(
+        f"tradingDesk {source} bridge returned an unexpected shape: {detail}",
+    )
+
+
+def _validate_freshness(value: Any, source: str) -> dict[str, Any]:
+    """Validate the shared provider-observation clock before it reaches the model."""
+    if not isinstance(value, dict):
+        raise _shape_error(source, "freshness must be an object")
+    required = {
+        "state", "attempted_at", "observed_at", "served_at",
+        "age_seconds", "ttl_seconds",
+    }
+    if not required.issubset(value):
+        raise _shape_error(source, "freshness fields are incomplete")
+    state = value.get("state")
+    attempted = value.get("attempted_at")
+    observed = value.get("observed_at")
+    served = value.get("served_at")
+    age = value.get("age_seconds")
+    ttl = value.get("ttl_seconds")
+    if state not in _FRESHNESS_STATES or not _is_utc_timestamp(served):
+        raise _shape_error(source, "freshness state or served_at is invalid")
+    if attempted is not None and not _is_utc_timestamp(attempted):
+        raise _shape_error(source, "freshness attempted_at is invalid")
+    if observed is not None and not _is_utc_timestamp(observed):
+        raise _shape_error(source, "freshness observed_at is invalid")
+    if age is not None and (
+        isinstance(age, bool) or not isinstance(age, int) or age < 0
+    ):
+        raise _shape_error(source, "freshness age_seconds is invalid")
+    if isinstance(ttl, bool) or not isinstance(ttl, (int, float)) or ttl <= 0:
+        raise _shape_error(source, "freshness ttl_seconds is invalid")
+    if state == "live" and not (
+        _is_utc_timestamp(attempted) and _is_utc_timestamp(observed) and age == 0
+    ):
+        raise _shape_error(source, "live freshness lacks a current observation")
+    if state == "cached" and not (
+        _is_utc_timestamp(attempted)
+        and _is_utc_timestamp(observed)
+        and isinstance(age, int)
+    ):
+        raise _shape_error(source, "cached freshness lacks an aged observation")
+    if state == "stale" and ((observed is None) != (age is None)):
+        raise _shape_error(source, "stale freshness observation and age disagree")
+    if state == "not_applicable" and any(
+        item is not None for item in (attempted, observed, age)
+    ):
+        raise _shape_error(source, "not-applicable freshness claims an observation")
+    return value
+
+
+def _validate_polymarket_payload(payload: Any) -> dict[str, Any]:
+    """Enforce scoped market status, coverage, numeric, and freshness invariants."""
+    source = "polymarket"
+    if not isinstance(payload, dict) or payload.get("status") not in _POLYMARKET_STATUSES:
+        raise _shape_error(source, "status is missing or unknown")
+    configured = payload.get("configured_markets")
+    missing = payload.get("missing_markets")
+    markets = payload.get("markets")
+    if not all(isinstance(value, list) for value in (configured, missing, markets)):
+        raise _shape_error(source, "coverage fields must be lists")
+    configured = cast(list[Any], configured)
+    missing = cast(list[Any], missing)
+    markets = cast(list[Any], markets)
+    if (
+        any(not isinstance(slug, str) or not slug for slug in configured)
+        or len(set(configured)) != len(configured)
+        or any(not isinstance(slug, str) or slug not in configured for slug in missing)
+        or len(set(missing)) != len(missing)
+    ):
+        raise _shape_error(source, "configured or missing market ids are invalid")
+    seen: set[str] = set()
+    for row in markets:
+        if not isinstance(row, dict):
+            raise _shape_error(source, "market row must be an object")
+        slug = row.get("slug")
+        probability = row.get("probability")
+        if not isinstance(slug, str) or slug not in configured or slug in seen:
+            raise _shape_error(source, "market slug is unconfigured or duplicated")
+        if (
+            isinstance(probability, bool)
+            or not isinstance(probability, (int, float))
+            or not 0.0 <= probability <= 1.0
+        ):
+            raise _shape_error(source, "market probability is invalid")
+        seen.add(slug)
+    expected_missing = [slug for slug in configured if slug not in seen]
+    if missing != expected_missing:
+        raise _shape_error(source, "missing_markets disagrees with current rows")
+
+    status = payload["status"]
+    if status == "ok" and (not configured or expected_missing):
+        raise _shape_error(source, "ok status lacks complete coverage")
+    if status == "partial" and (not markets or not expected_missing):
+        raise _shape_error(source, "partial status lacks mixed coverage")
+    if status == "no_data" and (not configured or markets):
+        raise _shape_error(source, "no_data status is inconsistent")
+    if status == "not_configured" and (configured or missing or markets):
+        raise _shape_error(source, "not_configured status has market data")
+    if status == "unavailable" and (markets or missing != configured):
+        raise _shape_error(source, "unavailable status has current data")
+
+    freshness = _validate_freshness(payload.get("freshness"), source)
+    state = freshness["state"]
+    if status in {"ok", "partial", "no_data"} and state not in {"live", "cached"}:
+        raise _shape_error(source, "current status has stale freshness")
+    if status == "not_configured" and state != "not_applicable":
+        raise _shape_error(source, "not_configured freshness is not applicable")
+    if status == "unavailable" and state != "stale":
+        raise _shape_error(source, "unavailable freshness is not stale")
+    return payload
+
+
+def _validate_news_payload(
+    payload: Any,
+    focused_query: Optional[str],
+) -> dict[str, Any]:
+    """Enforce GDELT source, query echo, status, list, and freshness contracts."""
+    source = "news"
+    if not isinstance(payload, dict) or payload.get("status") not in _NEWS_STATUSES:
+        raise _shape_error(source, "status is missing or unknown")
+    if payload.get("source") != "gdelt" or not isinstance(payload.get("articles"), list):
+        raise _shape_error(source, "source or articles is invalid")
+    query = payload.get("query")
+    if query is not None and not isinstance(query, str):
+        raise _shape_error(source, "query is invalid")
+    if focused_query is not None and query != focused_query:
+        raise td.TradingDeskError(
+            "tradingDesk news query echo mismatch: "
+            f"requested {focused_query!r}, received {query!r}",
+        )
+    status = payload["status"]
+    articles = payload["articles"]
+    if status == "ok" and not articles:
+        raise _shape_error(source, "ok status has no articles")
+    if status in {"no_matches", "not_configured", "rate_limited", "unavailable"} and articles:
+        raise _shape_error(source, f"{status} status has current articles")
+    if status == "not_configured" and query is not None:
+        raise _shape_error(source, "not_configured status has a query")
+
+    freshness = _validate_freshness(payload.get("freshness"), source)
+    state = freshness["state"]
+    if status in {"ok", "no_matches"} and state not in {"live", "cached"}:
+        raise _shape_error(source, "current status has stale freshness")
+    if status == "not_configured" and state != "not_applicable":
+        raise _shape_error(source, "not_configured freshness is not applicable")
+    if status in {"rate_limited", "unavailable"} and state != "stale":
+        raise _shape_error(source, "degraded status is not stale")
+    return payload
+
+
+def _degraded_evidence_message(source: str, payload: dict[str, Any]) -> str:
+    """Name a failed current check and any timestamped historical observation."""
+    status = payload["status"]
+    freshness = payload["freshness"]
+    query = f" for query {payload.get('query')!r}" if source == "GDELT" else ""
+    parts = [f"{source} {status}{query}"]
+    retry = payload.get("retry_after_seconds")
+    if retry is not None:
+        parts.append(f"retry after {retry}s")
+    observed = freshness.get("observed_at")
+    age = freshness.get("age_seconds")
+    if observed is not None:
+        parts.append(f"last observed at {observed} ({age}s old)")
+    prior = payload.get("last_observation")
+    if isinstance(prior, dict):
+        parts.append(f"last observation: {json.dumps(prior, default=str)}")
+    return "; ".join(parts)
 
 
 # ── book id resolution ───────────────────────────────────────────────
@@ -303,17 +498,21 @@ def _build_trading_tools(room) -> list[Tool]:
             f"/api/bridge/polymarket/{book_id}",
             timeout=td.POLYMARKET_TIMEOUT_S,
         )
-        if not isinstance(result, dict) or not isinstance(result.get("markets"), list):
+        validated = _validate_polymarket_payload(result)
+        if validated["status"] == "unavailable":
             raise td.TradingDeskError(
-                "tradingDesk polymarket bridge returned an unexpected shape"
+                _degraded_evidence_message("Polymarket", validated),
             )
-        out = _shrink(result, THESIS_CHAR_CAP)
+        out = _shrink(
+            validated, THESIS_CHAR_CAP, core=_POLYMARKET_CORE_KEYS,
+        )
         if not isinstance(out, dict):
             raise td.TradingDeskError(
                 "tradingDesk polymarket result could not be represented"
             )
         out["book_id"] = book_id
-        out["count"] = len(result["markets"])
+        visible_markets = out.get("markets")
+        out["count"] = len(visible_markets) if isinstance(visible_markets, list) else 0
         return out
 
     async def get_thesis_state(args: dict) -> dict:
@@ -376,22 +575,21 @@ def _build_trading_tools(room) -> list[Tool]:
     async def get_thesis_news(args: dict) -> dict:
         book_id = resolve_book_id(room, args.get("book_id"))
         query = str(args.get("query") or "").strip() or None
-        # WHY an explicit budget: the bare default is 10s, and a cold GDELT
-        # pull takes 15-29s — so this tool could only ever succeed on a warm
-        # cache. See td.NEWS_TIMEOUT_S.
+        if query is not None and not 5 <= len(query) <= 500:
+            raise ValueError(
+                "query must be between 5 and 500 characters after trimming",
+            )
+        # The 25s HTTP budget clears the bridge's one 20s provider attempt;
+        # this tool's 29s guard remains below half the whole-turn budget.
         news = await td.service_get(f"/api/bridge/news/{book_id}",
                                     params={"query": query} if query else None,
                                     timeout=td.NEWS_TIMEOUT_S)
-        if not isinstance(news, dict):
-            return {"articles": [], "book_id": book_id,
-                    "note": "tradingDesk returned an unexpected shape."}
-        if news.get("status") in {"rate_limited", "unavailable"}:
-            retry = news.get("retry_after_seconds")
-            suffix = f"; retry after {retry}s" if retry is not None else ""
+        validated = _validate_news_payload(news, query)
+        if validated["status"] in {"rate_limited", "unavailable"}:
             raise td.TradingDeskError(
-                f"GDELT {news['status']} for query {news.get('query')!r}{suffix}"
+                _degraded_evidence_message("GDELT", validated),
             )
-        shrunk = _shrink(news, THESIS_CHAR_CAP)
+        shrunk = _shrink(validated, THESIS_CHAR_CAP, core=_NEWS_CORE_KEYS)
         if isinstance(shrunk, dict):
             shrunk["book_id"] = book_id
             articles = shrunk.get("articles")
@@ -433,7 +631,17 @@ def _build_trading_tools(room) -> list[Tool]:
                 "no current data, and a book with no Polymarket coverage. Use it as "
                 "probability evidence only when the book actually tracks a market."
             ),
-            input_schema={"type": "object", "properties": {}},
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "book_id": {
+                        "type": "string",
+                        "description": (
+                            "Book slug. Defaults to this room's bound book."
+                        ),
+                    },
+                },
+            },
             execute=get_polymarket_odds,
             label="checking Polymarket odds",
             timeout_s=POLYMARKET_TOOL_TIMEOUT_S,
@@ -574,6 +782,7 @@ def _build_trading_tools(room) -> list[Tool]:
             },
             execute=get_thesis_news,
             label="checking latest headlines",
+            timeout_s=NEWS_TOOL_TIMEOUT_S,
         ),
     ]
 

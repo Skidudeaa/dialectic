@@ -41,6 +41,31 @@ EXPECTED_TOOLS = {
     "search_dev_insights",
 }
 
+LIVE_FRESHNESS = {
+    "state": "live",
+    "attempted_at": "2026-08-17T01:00:00+00:00",
+    "observed_at": "2026-08-17T01:00:00+00:00",
+    "served_at": "2026-08-17T01:00:00+00:00",
+    "age_seconds": 0,
+    "ttl_seconds": 900,
+}
+STALE_FRESHNESS = {
+    "state": "stale",
+    "attempted_at": "2026-08-17T01:15:00+00:00",
+    "observed_at": "2026-08-17T01:00:00+00:00",
+    "served_at": "2026-08-17T01:15:00+00:00",
+    "age_seconds": 900,
+    "ttl_seconds": 900,
+}
+NOT_APPLICABLE_FRESHNESS = {
+    "state": "not_applicable",
+    "attempted_at": None,
+    "observed_at": None,
+    "served_at": "2026-08-17T01:00:00+00:00",
+    "age_seconds": None,
+    "ttl_seconds": 900,
+}
+
 
 class FakeDB:
     """Minimal asyncpg-connection stand-in: scripted rows per fetch()."""
@@ -680,7 +705,9 @@ class TestTradingTools:
             return json_response({
                 "status": "ok",
                 "configured_markets": ["market-a"],
+                "missing_markets": [],
                 "markets": [{"slug": "market-a", "probability": 0.42}],
+                "freshness": LIVE_FRESHNESS,
             })
 
         install_transport(handler)
@@ -699,7 +726,9 @@ class TestTradingTools:
         install_transport(lambda _request: json_response({
             "status": "not_configured",
             "configured_markets": [],
+            "missing_markets": [],
             "markets": [],
+            "freshness": NOT_APPLICABLE_FRESHNESS,
         }))
 
         tool = build_registry(room, FakeDB()).get("get_polymarket_odds")
@@ -717,10 +746,11 @@ class TestTradingTools:
                                trading_config=None)
         seen = {}
 
-        async def service_get(path, **kwargs):
+        async def service_get(path: str, **kwargs: object) -> dict[str, object]:
             seen.update(path=path, **kwargs)
             return {"status": "no_data", "configured_markets": ["market-a"],
-                    "markets": []}
+                    "missing_markets": ["market-a"], "markets": [],
+                    "freshness": LIVE_FRESHNESS}
 
         monkeypatch.setattr(td, "service_get", service_get)
         tool = build_registry(room, FakeDB()).get("get_polymarket_odds")
@@ -728,6 +758,123 @@ class TestTradingTools:
 
         assert seen["timeout"] == td.POLYMARKET_TIMEOUT_S
         assert tool.timeout_s > td.POLYMARKET_TIMEOUT_S
+
+    def test_polymarket_book_id_schema_is_optional(self, registry):
+        schema = registry.get("get_polymarket_odds").input_schema
+
+        assert schema["properties"]["book_id"]["type"] == "string"
+        assert "book_id" not in schema.get("required", [])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {
+                "status": "mystery", "configured_markets": ["market-a"],
+                "missing_markets": [], "markets": [],
+                "freshness": LIVE_FRESHNESS,
+            },
+            {
+                "status": "ok", "configured_markets": ["market-a"],
+                "missing_markets": [],
+                "markets": [{"slug": "market-a", "probability": True}],
+                "freshness": LIVE_FRESHNESS,
+            },
+            {
+                "status": "ok", "configured_markets": ["market-a"],
+                "missing_markets": [],
+                "markets": [{"slug": "market-a", "probability": 1.1}],
+                "freshness": LIVE_FRESHNESS,
+            },
+            {
+                "status": "ok", "configured_markets": ["market-a"],
+                "missing_markets": [],
+                "markets": [{"slug": "market-a", "probability": 0.4}],
+                "freshness": {"state": "live"},
+            },
+            {
+                "status": "ok", "configured_markets": ["market-a", "market-b"],
+                "missing_markets": [],
+                "markets": [{"slug": "market-a", "probability": 0.4}],
+                "freshness": LIVE_FRESHNESS,
+            },
+        ],
+        ids=["unknown-status", "boolean", "out-of-range", "freshness", "status-count"],
+    )
+    async def test_polymarket_shape_failures_are_loud(
+        self, room, monkeypatch, payload,
+    ):
+        async def service_get(
+            _path: str, **_kwargs: object,
+        ) -> dict[str, object]:
+            return payload
+
+        monkeypatch.setattr(td, "service_get", service_get)
+        tool = build_registry(room, FakeDB()).get("get_polymarket_odds")
+
+        with pytest.raises(td.TradingDeskError, match="polymarket.*shape"):
+            await tool.execute({"book_id": "b"})
+
+    @pytest.mark.asyncio
+    async def test_polymarket_stale_failure_names_prior_observation(
+        self, room, monkeypatch,
+    ):
+        async def service_get(
+            _path: str, **_kwargs: object,
+        ) -> dict[str, object]:
+            return {
+                "status": "unavailable",
+                "configured_markets": ["market-a"],
+                "missing_markets": ["market-a"],
+                "markets": [],
+                "freshness": STALE_FRESHNESS,
+                "last_observation": {
+                    "status": "ok",
+                    "observed_at": "2026-08-17T01:00:00+00:00",
+                    "markets": [{"slug": "market-a", "probability": 0.42}],
+                },
+            }
+
+        monkeypatch.setattr(td, "service_get", service_get)
+        tool = build_registry(room, FakeDB()).get("get_polymarket_odds")
+
+        with pytest.raises(
+            td.TradingDeskError,
+            match=r"unavailable.*last observed.*01:00:00.*900s.*0.42",
+        ):
+            await tool.execute({"book_id": "b"})
+
+    @pytest.mark.asyncio
+    async def test_polymarket_shrink_preserves_epistemic_fields_and_visible_count(
+        self, room, monkeypatch,
+    ):
+        configured = [f"m-{number}" for number in range(40)]
+        rows = [
+            {"slug": slug, "probability": 0.5, "detail": "x" * 300}
+            for slug in configured
+        ]
+
+        async def service_get(
+            _path: str, **_kwargs: object,
+        ) -> dict[str, object]:
+            return {
+                "status": "ok",
+                "configured_markets": configured,
+                "missing_markets": [],
+                "markets": rows,
+                "freshness": LIVE_FRESHNESS,
+            }
+
+        monkeypatch.setattr(td, "service_get", service_get)
+        tool = build_registry(room, FakeDB()).get("get_polymarket_odds")
+        out = await tool.execute({"book_id": "b"})
+
+        assert out["status"] == "ok"
+        assert out["freshness"] == LIVE_FRESHNESS
+        assert out["configured_markets"] == configured
+        assert out["missing_markets"] == []
+        assert out["count"] == len(out.get("markets", []))
+        assert "markets" in out["_truncated"]
 
 
 class TestThesisNewsTool:
@@ -755,6 +902,7 @@ class TestThesisNewsTool:
                     "title": "Tankers divert", "url": "https://ex.com/1",
                     "seendate": "20260809", "domain": "ex.com",
                 }],
+                "freshness": LIVE_FRESHNESS,
                 "fetched_at": "2026-08-16T10:00:00+00:00",
                 "cache_hit": False,
             })
@@ -778,6 +926,7 @@ class TestThesisNewsTool:
                 "source": "gdelt",
                 "query": "specific claim",
                 "articles": [],
+                "freshness": LIVE_FRESHNESS,
                 "fetched_at": "2026-08-16T10:00:00+00:00",
                 "cache_hit": False,
             })
@@ -803,9 +952,15 @@ class TestThesisNewsTool:
                 "source": "gdelt",
                 "query": "specific claim",
                 "articles": [],
+                "freshness": STALE_FRESHNESS,
                 "fetched_at": "2026-08-16T10:00:00+00:00",
                 "cache_hit": False,
                 "retry_after_seconds": 120,
+                "last_observation": {
+                    "status": "no_matches",
+                    "observed_at": "2026-08-17T01:00:00+00:00",
+                    "articles": [],
+                },
             })
 
         install_transport(handler)
@@ -813,7 +968,7 @@ class TestThesisNewsTool:
 
         with pytest.raises(
             td.TradingDeskError,
-            match=rf"{status}.*specific claim.*retry after 120s",
+            match=rf"{status}.*specific claim.*retry after 120s.*last observed.*900s",
         ):
             await tool.execute({"query": "specific claim"})
 
@@ -828,6 +983,7 @@ class TestThesisNewsTool:
                 "source": "gdelt",
                 "query": "China new yuan loans",
                 "articles": [],
+                "freshness": LIVE_FRESHNESS,
                 "fetched_at": "2026-08-16T10:00:00+00:00",
                 "cache_hit": False,
             })
@@ -837,6 +993,113 @@ class TestThesisNewsTool:
         out = await tool.execute({"query": "China new yuan loans"})
 
         assert out["query"] == "China new yuan loans"
+
+    @pytest.mark.asyncio
+    async def test_news_timeout_ordering(self, room, monkeypatch):
+        seen: dict[str, object] = {}
+
+        async def service_get(
+            path: str, **kwargs: object,
+        ) -> dict[str, object]:
+            seen.update(path=path, **kwargs)
+            return {
+                "status": "no_matches", "source": "gdelt", "query": "watch",
+                "articles": [], "freshness": LIVE_FRESHNESS,
+            }
+
+        monkeypatch.setattr(td, "service_get", service_get)
+        tool = build_registry(room, FakeDB()).get("get_thesis_news")
+        await tool.execute({"book_id": "b"})
+
+        from llm.tool_loop import DEFAULT_LOOP_BUDGET_S
+        assert seen["timeout"] == 25.0
+        assert tool.timeout_s == 29.0
+        assert seen["timeout"] < tool.timeout_s < DEFAULT_LOOP_BUDGET_S / 2
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {
+                "source": "gdelt", "query": "specific claim",
+                "articles": [], "freshness": LIVE_FRESHNESS,
+            },
+            {
+                "status": "mystery", "source": "gdelt", "query": "specific claim",
+                "articles": [], "freshness": LIVE_FRESHNESS,
+            },
+            {
+                "status": "no_matches", "source": "gdelt",
+                "query": "specific claim", "articles": {},
+                "freshness": LIVE_FRESHNESS,
+            },
+            {
+                "status": "no_matches", "source": "gdelt",
+                "query": "specific claim", "articles": [],
+                "freshness": {"state": "live"},
+            },
+            {
+                "status": "no_matches", "source": "gdelt",
+                "query": "specific claim", "articles": [],
+                "freshness": {
+                    **LIVE_FRESHNESS,
+                    "served_at": "2026-08-17T02:00:00+01:00",
+                },
+            },
+        ],
+        ids=["missing-status", "unknown-status", "articles", "freshness", "utc"],
+    )
+    async def test_news_shape_failures_are_loud(
+        self, room, monkeypatch, payload,
+    ):
+        async def service_get(
+            _path: str, **_kwargs: object,
+        ) -> dict[str, object]:
+            return payload
+
+        monkeypatch.setattr(td, "service_get", service_get)
+        tool = build_registry(room, FakeDB()).get("get_thesis_news")
+
+        with pytest.raises(td.TradingDeskError, match="news.*shape"):
+            await tool.execute({"book_id": "b", "query": "specific claim"})
+
+    @pytest.mark.asyncio
+    async def test_news_query_echo_mismatch_is_loud(self, room, monkeypatch):
+        async def service_get(
+            _path: str, **_kwargs: object,
+        ) -> dict[str, object]:
+            return {
+                "status": "no_matches", "source": "gdelt",
+                "query": "different claim", "articles": [],
+                "freshness": LIVE_FRESHNESS,
+            }
+
+        monkeypatch.setattr(td, "service_get", service_get)
+        tool = build_registry(room, FakeDB()).get("get_thesis_news")
+
+        with pytest.raises(td.TradingDeskError, match="query echo"):
+            await tool.execute({"book_id": "b", "query": "specific claim"})
+
+    @pytest.mark.asyncio
+    async def test_news_query_bounds_fail_before_http(self, room, monkeypatch):
+        calls = 0
+
+        async def service_get(
+            _path: str, **_kwargs: object,
+        ) -> dict[str, object]:
+            nonlocal calls
+            calls += 1
+            return {}
+
+        monkeypatch.setattr(td, "service_get", service_get)
+        tool = build_registry(room, FakeDB()).get("get_thesis_news")
+
+        with pytest.raises(
+            ValueError,
+            match="query must be between 5 and 500 characters after trimming",
+        ):
+            await tool.execute({"book_id": "b", "query": "tiny"})
+        assert calls == 0
 
     @pytest.mark.asyncio
     async def test_unknown_book_raises(self, svc_env):
