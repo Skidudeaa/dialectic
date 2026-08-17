@@ -585,6 +585,63 @@ class TestNewsEndpoint:
         assert cached["fetched_at"] == first["fetched_at"]
         assert cached["cache_hit"] is True
 
+    def test_failed_poll_exposes_timestamped_prior_news_observation(
+        self, client, monkeypatch,
+    ):
+        from tools.data_fetch import gdelt
+
+        elapsed = {"seconds": 0}
+        base = datetime(2026, 8, 17, 1, 0, tzinfo=timezone.utc)
+
+        class FrozenDateTime:
+            @classmethod
+            def now(cls, tz: timezone | None = None) -> datetime:
+                value = base + timedelta(seconds=elapsed["seconds"])
+                return value if tz is not None else value.replace(tzinfo=None)
+
+        def _fetch(*_args: object, **_kwargs: object) -> list[object]:
+            if elapsed["seconds"] == 0:
+                return []
+            raise gdelt.GdeltAPIError("malformed body")
+
+        monkeypatch.setattr(bridge_mod, "datetime", FrozenDateTime)
+        monkeypatch.setattr(
+            bridge_mod.time, "monotonic", lambda: 100.0 + elapsed["seconds"],
+        )
+        monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
+
+        first = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+        elapsed["seconds"] = 901
+        failed = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+        elapsed["seconds"] = 910
+        cached_failure = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert first["status"] == "no_matches"
+        assert failed["status"] == "unavailable"
+        assert failed["articles"] == []
+        assert failed["freshness"] == {
+            "state": "stale",
+            "attempted_at": "2026-08-17T01:15:01+00:00",
+            "observed_at": "2026-08-17T01:00:00+00:00",
+            "served_at": "2026-08-17T01:15:01+00:00",
+            "age_seconds": 901,
+            "ttl_seconds": 900,
+        }
+        assert failed["last_observation"] == {
+            "status": "no_matches",
+            "observed_at": "2026-08-17T01:00:00+00:00",
+            "query": first["query"],
+            "articles": [],
+        }
+        assert cached_failure["freshness"]["age_seconds"] == 910
+        assert cached_failure["last_observation"] == failed["last_observation"]
+
     def test_not_configured_freshness_is_not_applicable(
         self, client, monkeypatch, tmp_path,
     ):
@@ -720,6 +777,7 @@ class TestNewsEndpoint:
         assert body["status"] == "unavailable"
         assert body["retry_after_seconds"] == 120
         assert "GdeltAPIError" in body["note"]
+        assert "last_observation" not in body
 
     def test_focused_query_is_sent_and_reported_exactly(self, client, monkeypatch):
         from tools.data_fetch import gdelt

@@ -1061,8 +1061,8 @@ def _store_news_cache(
     key: tuple[str, str],
     payload: dict[str, Any],
     ttl: float,
-) -> None:
-    """Store one bounded query result after pruning expired entries."""
+) -> dict[str, Any]:
+    """Store and return one bounded response with prior observation context."""
     now = time.monotonic()
     if key not in _news_cache and len(_news_cache) >= NEWS_CACHE_MAX_ENTRIES:
         evict = min(
@@ -1073,10 +1073,25 @@ def _store_news_cache(
     previous = _news_cache.get(key)
     is_live = payload["freshness"]["state"] == "live"
     last_observation = (
-        dict(payload) if is_live
+        {
+            "status": payload["status"],
+            "observed_at": payload["freshness"]["observed_at"],
+            "query": payload["query"],
+            "articles": list(payload["articles"]),
+        } if is_live
         else previous.last_observation if previous is not None
         else None
     )
+    stored_payload = dict(payload)
+    if not is_live and last_observation is not None and previous is not None:
+        freshness = dict(payload["freshness"])
+        freshness["observed_at"] = last_observation["observed_at"]
+        freshness["age_seconds"] = max(
+            0, int(now - previous.observed_monotonic),
+        ) if previous.observed_monotonic is not None else None
+        stored_payload["freshness"] = freshness
+        stored_payload["fetched_at"] = freshness["observed_at"]
+        stored_payload["last_observation"] = dict(last_observation)
     _news_cache[key] = _NewsCacheEntry(
         expires_at=now + ttl,
         observed_monotonic=(
@@ -1084,9 +1099,10 @@ def _store_news_cache(
             else previous.observed_monotonic if previous is not None
             else None
         ),
-        payload=payload,
+        payload=stored_payload,
         last_observation=last_observation,
     )
+    return stored_payload
 
 
 def _cached_news_payload(
@@ -1135,7 +1151,7 @@ async def _fetch_and_cache_news(
             focused_query,
         )
         with _news_state_lock:
-            _store_news_cache(cache_key, payload, ttl)
+            payload = _store_news_cache(cache_key, payload, ttl)
         return payload
     finally:
         current = asyncio.current_task()
