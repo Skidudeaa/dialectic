@@ -1158,9 +1158,13 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
                 "the draft is shown to the humans with an Accept button, and "
                 "only their tap writes it to the tradingDesk prediction "
                 "tracker. Use it when the conversation produces a real "
-                "forecast ('Brent closes above $90 by end of Q3'), not for "
-                "hypotheticals or scenario talk. Never claim the prediction "
-                "is logged until a human accepts it — say you drafted it."
+                "forecast ('Brent closes above $90 by end of Q3') — a "
+                "falsifiable statement with a deadline that the room is "
+                "actually debating is the trigger, at any horizon: a "
+                "two-day aggressive call and a two-year rotation both "
+                "belong here. Never for hypotheticals or scenario talk. "
+                "Never claim the prediction is logged until a human accepts "
+                "it — say you drafted it."
             ),
             input_schema={
                 "type": "object",

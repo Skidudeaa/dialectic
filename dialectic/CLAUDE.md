@@ -620,3 +620,30 @@ that already exist.
 (a target-picking flow, not a highlighter), so the passage menu offers only
 single-subject relations. Weight is derived from confirms rather than
 authored — no `weight` column, by design.
+
+
+## Amendment 2026-08-17 — the three standing disciplines (amend-beside)
+
+The room pinned three disciplines for the LLM participant after a meta
+thread about research posts fragmenting discussion. They live in the prompt
+layer, not in new machinery — "a discipline, not a UI feature":
+
+- **Article → node mapping** and **falsifiable + dated ⇒ `draft_prediction`**
+  ride `TOOLS_SECTION` in `llm/prompts.py` (tool-enabled primary turns only —
+  provoker/protocol/forced turns never see them, which matches intent). An
+  article gets sorted to a thesis node, a confluence move, or an explicit
+  "touches no tracked node"; a dated falsifiable claim gets drafted, at any
+  horizon, instead of narrated. The `draft_prediction` tool description in
+  `llm/tools.py` carries the same trigger on the API side.
+- **Meta ≠ analysis** rides `BASE_IDENTITY` — every primary turn, tools or
+  not. A direct question in either mode gets a direct answer in that mode;
+  no deflecting a meta question into thesis diagnostics.
+- `llm/research.py`'s `RESEARCH_IDENTITY` restates the discipline for deep
+  dives (research mode bypasses the evolved identity), and
+  `llm/identity.py`'s `IDENTITY_DISTILLATION_PROMPT` gained a
+  **Standing Commitments** section so pinned disciplines survive the
+  on-disconnect rewrite instead of being compressed away under the word cap.
+
+Pinned by `TestStandingDisciplines` in `tests/test_prompts.py`. No
+migration, no new endpoints, no changes to the proposal/accept write path —
+the human tap is still the only write.

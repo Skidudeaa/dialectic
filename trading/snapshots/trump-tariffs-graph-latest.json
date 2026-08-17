@@ -1,6 +1,6 @@
 {
   "v": 2,
-  "timestamp": "2026-08-15T04:02:27Z",
+  "timestamp": "2026-08-15T22:02:48Z",
   "title": "Trump Tariff Escalation Thesis — March 2026",
   "nodeStates": {
     "tariff-shock": "fired",
@@ -75,25 +75,25 @@
   "feedFreshness": {
     "yahoo": {
       "source": "yahoo",
-      "fetchedAt": "2026-08-15T04:02:20Z",
+      "fetchedAt": "2026-08-15T22:02:41Z",
       "ttlSeconds": 300,
       "detail": "21/26 symbols"
     },
     "polymarket": {
       "source": "polymarket",
-      "fetchedAt": "2026-08-15T04:02:23Z",
+      "fetchedAt": "2026-08-15T22:02:45Z",
       "ttlSeconds": 900,
       "detail": "1/3 markets"
     },
     "fred": {
       "source": "fred",
-      "fetchedAt": "2026-08-15T04:02:26Z",
+      "fetchedAt": "2026-08-15T22:02:47Z",
       "ttlSeconds": 3600,
       "detail": "5/5 series"
     },
     "derived": {
       "source": "derived",
-      "fetchedAt": "2026-08-15T04:02:27Z",
+      "fetchedAt": "2026-08-15T22:02:48Z",
       "ttlSeconds": 86400,
       "detail": "3 node(s)"
     }
@@ -179,21 +179,21 @@
   },
   "tvIndicators": {
     "input-costs": {
-      "rsi14": 61.25,
-      "atr14": 2.69,
-      "sma50": 180.95,
+      "rsi14": 60.18,
+      "atr14": 2.81,
+      "sma50": 180.61,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-15T04:02:27Z"
+      "computedAt": "2026-08-15T22:02:48Z"
     },
     "auto-sector": {
       "rsi14": 56.01,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-15T04:02:27Z"
+      "computedAt": "2026-08-15T22:02:48Z"
     },
     "usd-cny": {
-      "rsi14": 28.73,
+      "rsi14": 23.49,
       "source": "derived_from_yahoo",
-      "computedAt": "2026-08-15T04:02:27Z"
+      "computedAt": "2026-08-15T22:02:48Z"
     }
   }
 }
