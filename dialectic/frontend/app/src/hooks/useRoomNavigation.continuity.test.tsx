@@ -160,7 +160,7 @@ describe('warm notification navigation', () => {
           messageId: 'message-warm',
         },
         ports: [{ postMessage: acknowledge }],
-      } as MessageEvent)
+      } as unknown as MessageEvent)
     })
 
     await waitFor(() => expect(result.current.messageId).toBe('message-warm'))
