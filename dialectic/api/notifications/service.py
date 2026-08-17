@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 # CONTEXT.md: Full message preview (up to ~200 chars)
 MAX_BODY_LENGTH = 200
-# CONTEXT.md: LLM messages distinguished with emoji
-LLM_EMOJI = "\U0001F916"  # Robot emoji
+# LLM messages remain visibly distinct inside the room-qualified title.
+LLM_MARKER = "✦"
 
 
 class PushNotificationService:
@@ -54,6 +54,7 @@ class PushNotificationService:
         db,
         recipient_user_ids: List[str],
         room_id: str,
+        room_name: str,
         thread_id: str,
         message_id: str,
         sender_name: str,
@@ -68,18 +69,27 @@ class PushNotificationService:
             db: Database connection
             recipient_user_ids: Users to notify (excluding sender)
             room_id, thread_id, message_id: For deep linking
-            sender_name: CONTEXT.md: Title shows sender name only
+            room_name: Canonical server-owned room name
+            sender_name: Human sender name or Claude for an LLM message
             content: CONTEXT.md: Full message preview (up to ~200 chars)
             is_llm: CONTEXT.md: LLM messages distinguished with emoji
             badge_counts: CONTEXT.md: Badge = rooms with unread (per user)
         """
-        # CONTEXT.md: Title shows sender name, LLM has emoji prefix
-        title = f"{LLM_EMOJI} {sender_name}" if is_llm else sender_name
+        participant = f"{LLM_MARKER} Claude" if is_llm else sender_name
+        title = f"{room_name} · {participant}"
 
         # CONTEXT.md: Full message preview (up to ~200 chars)
         body = content[:MAX_BODY_LENGTH]
         if len(content) > MAX_BODY_LENGTH:
             body = body.rsplit(' ', 1)[0] + '...'
+
+        notification_data = {
+            'room_id': room_id,
+            'room_name': room_name,
+            'thread_id': thread_id,
+            'message_id': message_id,
+            'type': 'new_message',
+        }
 
         # Web Push channel (the installed PWA — the only channel with live
         # registrations today). A failure here must never block the Expo path,
@@ -91,12 +101,7 @@ class PushNotificationService:
                 recipient_user_ids=recipient_user_ids,
                 title=title,
                 body=body,
-                data={
-                    'room_id': room_id,
-                    'thread_id': thread_id,
-                    'message_id': message_id,
-                    'type': 'new_message',
-                },
+                data=notification_data,
                 tag=f"room_{room_id}",
             )
         except Exception as e:
@@ -131,15 +136,8 @@ class PushNotificationService:
                 body=body,
                 sound=sound,
                 badge=badge,
-                data={
-                    'room_id': room_id,
-                    'thread_id': thread_id,
-                    'message_id': message_id,
-                    'type': 'new_message',
-                },
+                data=notification_data,
                 channel_id=channel_id,
-                # CONTEXT.md: Multiple messages group per room
-                thread_id=f"room_{room_id}",  # iOS grouping
             ))
 
         expo_result = await self._send_batch(db, messages)

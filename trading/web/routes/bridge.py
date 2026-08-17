@@ -23,10 +23,12 @@ import logging
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -533,13 +535,44 @@ NEWS_RATE_LIMIT_MAX_DOUBLINGS = 8
 # GDELT rate-limits by caller IP, so the cooldown must span books and queries.
 _news_rate_limit_streak = 0
 _news_rate_limit_until = 0.0
-_news_fetch_lock = Lock()
+_news_state_lock = Lock()
 
 NEWS_MAX_HEADLINES = 15
 NEWS_CACHE_MAX_ENTRIES = 64
+_NEWS_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="gdelt")
 
-# (thesis_id, exact query or "") -> (expires_at_monotonic, payload)
-_news_cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
+@dataclass
+class _NewsCacheEntry:
+    """One scoped response plus the clock needed to age its observation."""
+
+    expires_at: float
+    observed_monotonic: Optional[float]
+    payload: dict[str, Any]
+    last_observation: Optional[dict[str, Any]]
+
+
+# (thesis_id, exact query or "") -> scoped provider observation
+_news_cache: dict[tuple[str, str], _NewsCacheEntry] = {}
+_news_inflight: dict[
+    tuple[str, str], asyncio.Task[dict[str, Any]]
+] = {}
+
+POLYMARKET_TTL_SECONDS = 900.0
+POLYMARKET_CACHE_MAX_ENTRIES = 64
+_polymarket_state_lock = Lock()
+
+
+@dataclass
+class _PolymarketCacheEntry:
+    """One successful book-scoped market observation and its age clock."""
+
+    expires_at: float
+    observed_monotonic: float
+    payload: dict[str, Any]
+
+
+_polymarket_cache: dict[str, _PolymarketCacheEntry] = {}
+_polymarket_inflight: dict[str, asyncio.Task[dict[str, Any]]] = {}
 
 
 def _book_path(thesis_id: str) -> Optional[Path]:
@@ -580,21 +613,221 @@ async def get_thesis_polymarket(
 
     market_ids = market_adapter.polymarket_markets_from_book(book)
     if not market_ids:
+        served_at = datetime.now(timezone.utc).isoformat()
         payload = {
             "status": "not_configured",
             "configured_markets": [],
+            "missing_markets": [],
             "markets": [],
+            "freshness": _freshness_payload(
+                state="not_applicable",
+                attempted_at=None,
+                observed_at=None,
+                served_at=served_at,
+                age_seconds=None,
+                ttl_seconds=int(POLYMARKET_TTL_SECONDS),
+            ),
         }
     else:
-        markets = await asyncio.to_thread(
-            market_adapter.fetch_polymarket_probs, market_ids,
+        payload = await _get_polymarket_payload(
+            thesis_id, market_ids, market_adapter.fetch_polymarket_probs,
         )
-        payload = {
-            "status": "ok" if markets else "no_data",
-            "configured_markets": market_ids,
-            "markets": markets,
-        }
     return JSONResponse(content=payload, media_type="application/json")
+
+
+def _validate_polymarket_rows(
+    configured_markets: list[str],
+    rows: Any,
+) -> list[dict[str, Any]]:
+    """Validate and restore authored order for current numeric market rows."""
+    from tools.data_fetch import polymarket as polymarket_mod
+
+    if not isinstance(rows, list):
+        raise polymarket_mod.APIError("Polymarket returned invalid data: markets")
+    by_slug: dict[str, dict[str, Any]] = {}
+    configured = set(configured_markets)
+    for row in rows:
+        if not isinstance(row, dict):
+            raise polymarket_mod.APIError("Polymarket returned invalid data: market row")
+        slug = row.get("slug")
+        probability = row.get("probability")
+        if not isinstance(slug, str) or slug not in configured or slug in by_slug:
+            raise polymarket_mod.APIError("Polymarket returned invalid data: market slug")
+        if (
+            isinstance(probability, bool)
+            or not isinstance(probability, (int, float))
+            or not 0.0 <= probability <= 1.0
+        ):
+            raise polymarket_mod.APIError(
+                "Polymarket returned invalid data: probability",
+            )
+        by_slug[slug] = {"slug": slug, "probability": probability}
+    return [by_slug[slug] for slug in configured_markets if slug in by_slug]
+
+
+def _polymarket_live_payload(
+    configured_markets: list[str],
+    markets: list[dict[str, Any]],
+    attempted_at: str,
+    observed_at: str,
+) -> dict[str, Any]:
+    """Build a successful current observation with explicit coverage."""
+    present = {row["slug"] for row in markets}
+    missing = [slug for slug in configured_markets if slug not in present]
+    status = "ok" if not missing else "partial" if markets else "no_data"
+    return {
+        "status": status,
+        "configured_markets": configured_markets,
+        "missing_markets": missing,
+        "markets": markets,
+        "freshness": _freshness_payload(
+            state="live",
+            attempted_at=attempted_at,
+            observed_at=observed_at,
+            served_at=observed_at,
+            age_seconds=0,
+            ttl_seconds=int(POLYMARKET_TTL_SECONDS),
+        ),
+    }
+
+
+def _cached_polymarket_payload(
+    entry: _PolymarketCacheEntry,
+    now: float,
+) -> dict[str, Any]:
+    """Serve a successful market observation without changing its timestamp."""
+    payload = dict(entry.payload)
+    original = entry.payload["freshness"]
+    payload["freshness"] = _freshness_payload(
+        state="cached",
+        attempted_at=original["attempted_at"],
+        observed_at=original["observed_at"],
+        served_at=datetime.now(timezone.utc).isoformat(),
+        age_seconds=max(0, int(now - entry.observed_monotonic)),
+        ttl_seconds=original["ttl_seconds"],
+    )
+    return payload
+
+
+def _unavailable_polymarket_payload(
+    configured_markets: list[str],
+    attempted_at: str,
+    previous: Optional[_PolymarketCacheEntry],
+    error: Exception,
+) -> dict[str, Any]:
+    """Keep failed current evidence separate from a prior observation."""
+    now = time.monotonic()
+    served_at = datetime.now(timezone.utc).isoformat()
+    observed_at = (
+        previous.payload["freshness"]["observed_at"]
+        if previous is not None
+        else None
+    )
+    payload: dict[str, Any] = {
+        "status": "unavailable",
+        "configured_markets": configured_markets,
+        "missing_markets": list(configured_markets),
+        "markets": [],
+        "freshness": _freshness_payload(
+            state="stale",
+            attempted_at=attempted_at,
+            observed_at=observed_at,
+            served_at=served_at,
+            age_seconds=(
+                max(0, int(now - previous.observed_monotonic))
+                if previous is not None
+                else None
+            ),
+            ttl_seconds=int(POLYMARKET_TTL_SECONDS),
+        ),
+        "note": f"polymarket unavailable: {type(error).__name__}",
+    }
+    if previous is not None:
+        payload["last_observation"] = {
+            "status": previous.payload["status"],
+            "observed_at": observed_at,
+            "markets": previous.payload["markets"],
+        }
+    return payload
+
+
+async def _fetch_and_cache_polymarket(
+    thesis_id: str,
+    configured_markets: list[str],
+    fetch: Callable[[list[str]], list[dict[str, Any]]],
+) -> dict[str, Any]:
+    """Run one strict book fetch, retaining only successful observations."""
+    from tools.data_fetch import polymarket as polymarket_mod
+
+    attempted_at = datetime.now(timezone.utc).isoformat()
+    try:
+        rows = await asyncio.to_thread(fetch, configured_markets)
+        markets = _validate_polymarket_rows(configured_markets, rows)
+    except polymarket_mod.PolymarketError as exc:
+        with _polymarket_state_lock:
+            previous = _polymarket_cache.get(thesis_id)
+        return _unavailable_polymarket_payload(
+            configured_markets, attempted_at, previous, exc,
+        )
+
+    observed_at = datetime.now(timezone.utc).isoformat()
+    payload = _polymarket_live_payload(
+        configured_markets, markets, attempted_at, observed_at,
+    )
+    now = time.monotonic()
+    with _polymarket_state_lock:
+        if (
+            thesis_id not in _polymarket_cache
+            and len(_polymarket_cache) >= POLYMARKET_CACHE_MAX_ENTRIES
+        ):
+            evict = min(
+                _polymarket_cache,
+                key=lambda key: _polymarket_cache[key].expires_at,
+            )
+            _polymarket_cache.pop(evict)
+        _polymarket_cache[thesis_id] = _PolymarketCacheEntry(
+            expires_at=now + POLYMARKET_TTL_SECONDS,
+            observed_monotonic=now,
+            payload=payload,
+        )
+    return payload
+
+
+async def _produce_polymarket(
+    thesis_id: str,
+    configured_markets: list[str],
+    fetch: Callable[[list[str]], list[dict[str, Any]]],
+) -> dict[str, Any]:
+    """Own one in-flight producer and always clear its book slot."""
+    try:
+        return await _fetch_and_cache_polymarket(
+            thesis_id, configured_markets, fetch,
+        )
+    finally:
+        current = asyncio.current_task()
+        with _polymarket_state_lock:
+            if _polymarket_inflight.get(thesis_id) is current:
+                _polymarket_inflight.pop(thesis_id, None)
+
+
+async def _get_polymarket_payload(
+    thesis_id: str,
+    configured_markets: list[str],
+    fetch: Callable[[list[str]], list[dict[str, Any]]],
+) -> dict[str, Any]:
+    """Return a warm book observation or share its one current producer."""
+    with _polymarket_state_lock:
+        now = time.monotonic()
+        cached = _polymarket_cache.get(thesis_id)
+        if cached is not None and cached.expires_at > now:
+            return _cached_polymarket_payload(cached, now)
+        task = _polymarket_inflight.get(thesis_id)
+        if task is None:
+            task = asyncio.create_task(
+                _produce_polymarket(thesis_id, configured_markets, fetch),
+            )
+            _polymarket_inflight[thesis_id] = task
+    return await asyncio.shield(task)
 
 
 def _gdelt_query_for_book(book: dict) -> Optional[str]:
@@ -624,10 +857,31 @@ def _gdelt_query_for_book(book: dict) -> Optional[str]:
     return None
 
 
+def _freshness_payload(
+    *,
+    state: str,
+    attempted_at: Optional[str],
+    observed_at: Optional[str],
+    served_at: str,
+    age_seconds: Optional[int],
+    ttl_seconds: int,
+) -> dict[str, Any]:
+    """Describe when evidence was attempted, observed, and served."""
+    return {
+        "state": state,
+        "attempted_at": attempted_at,
+        "observed_at": observed_at,
+        "served_at": served_at,
+        "age_seconds": age_seconds,
+        "ttl_seconds": ttl_seconds,
+    }
+
+
 def _news_payload(
     status: str,
     query: Optional[str],
     *,
+    freshness: dict[str, Any],
     articles: Optional[list[dict[str, Any]]] = None,
     note: Optional[str] = None,
     retry_after_seconds: Optional[int] = None,
@@ -638,8 +892,10 @@ def _news_payload(
         "source": "gdelt",
         "query": query,
         "articles": articles if articles is not None else [],
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
-        "cache_hit": False,
+        "freshness": freshness,
+        # Compatibility aliases for consumers being upgraded separately.
+        "fetched_at": freshness["observed_at"],
+        "cache_hit": freshness["state"] == "cached",
     }
     if note is not None:
         payload["note"] = note
@@ -658,20 +914,43 @@ def _fetch_news_sync(
 
     query = query_override or _gdelt_query_for_book(book)
     if not query:
+        served_at = datetime.now(timezone.utc).isoformat()
         return (
             _news_payload(
-                "not_configured", None, note="no gdelt config",
+                "not_configured",
+                None,
+                freshness=_freshness_payload(
+                    state="not_applicable",
+                    attempted_at=None,
+                    observed_at=None,
+                    served_at=served_at,
+                    age_seconds=None,
+                    ttl_seconds=int(NEWS_TTL_SECONDS),
+                ),
+                note="no gdelt config",
             ),
             NEWS_TTL_SECONDS,
         )
 
-    now = time.monotonic()
-    if _news_rate_limit_until > now:
-        remaining = max(1, int(_news_rate_limit_until - now + 0.999))
+    with _news_state_lock:
+        now = time.monotonic()
+        cooldown_until = _news_rate_limit_until
+        starting_streak = _news_rate_limit_streak
+    if cooldown_until > now:
+        remaining = max(1, int(cooldown_until - now + 0.999))
+        served_at = datetime.now(timezone.utc).isoformat()
         return (
             _news_payload(
                 "rate_limited",
                 query,
+                freshness=_freshness_payload(
+                    state="stale",
+                    attempted_at=None,
+                    observed_at=None,
+                    served_at=served_at,
+                    age_seconds=None,
+                    ttl_seconds=int(NEWS_TTL_SECONDS),
+                ),
                 note="GDELT source cooldown active",
                 retry_after_seconds=remaining,
             ),
@@ -680,28 +959,41 @@ def _fetch_news_sync(
 
     from tools.data_fetch import gdelt
 
+    attempted_at = datetime.now(timezone.utc).isoformat()
     try:
-        articles = gdelt.fetch_articles(query, max_records=NEWS_MAX_HEADLINES)
-    except gdelt.GdeltRateLimitError as exc:
-        _news_rate_limit_streak += 1
-        ttl = min(
-            NEWS_TTL_SECONDS,
-            NEWS_ERROR_TTL_SECONDS
-            * (2 ** min(
-                _news_rate_limit_streak - 1,
-                NEWS_RATE_LIMIT_MAX_DOUBLINGS,
-            )),
+        articles = gdelt.fetch_articles(
+            query, max_records=NEWS_MAX_HEADLINES, retries=0,
         )
-        _news_rate_limit_until = time.monotonic() + ttl
+    except gdelt.GdeltRateLimitError as exc:
+        with _news_state_lock:
+            _news_rate_limit_streak += 1
+            current_streak = _news_rate_limit_streak
+            ttl = min(
+                NEWS_TTL_SECONDS,
+                NEWS_ERROR_TTL_SECONDS
+                * (2 ** min(
+                    current_streak - 1,
+                    NEWS_RATE_LIMIT_MAX_DOUBLINGS,
+                )),
+            )
+            _news_rate_limit_until = time.monotonic() + ttl
         log.warning(
             "GDELT rate-limited for %s (source streak %d) — holding requests "
             "%.0fs so the per-IP throttle can lift: %s",
-            thesis_id, _news_rate_limit_streak, ttl, exc,
+            thesis_id, current_streak, ttl, exc,
         )
         return (
             _news_payload(
                 "rate_limited",
                 query,
+                freshness=_freshness_payload(
+                    state="stale",
+                    attempted_at=attempted_at,
+                    observed_at=None,
+                    served_at=datetime.now(timezone.utc).isoformat(),
+                    age_seconds=None,
+                    ttl_seconds=int(NEWS_TTL_SECONDS),
+                ),
                 note=f"gdelt unavailable: {type(exc).__name__}",
                 retry_after_seconds=int(ttl),
             ),
@@ -716,14 +1008,26 @@ def _fetch_news_sync(
             _news_payload(
                 "unavailable",
                 query,
+                freshness=_freshness_payload(
+                    state="stale",
+                    attempted_at=attempted_at,
+                    observed_at=None,
+                    served_at=datetime.now(timezone.utc).isoformat(),
+                    age_seconds=None,
+                    ttl_seconds=int(NEWS_TTL_SECONDS),
+                ),
                 note=f"gdelt unavailable: {type(exc).__name__}",
                 retry_after_seconds=int(NEWS_ERROR_TTL_SECONDS),
             ),
             NEWS_ERROR_TTL_SECONDS,
         )
 
-    _news_rate_limit_streak = 0
-    _news_rate_limit_until = 0.0
+    # A success may overlap a later 429. It may clear only the source state it
+    # observed when its own attempt began, never a newer failure.
+    with _news_state_lock:
+        if _news_rate_limit_streak == starting_streak:
+            _news_rate_limit_streak = 0
+            _news_rate_limit_until = 0.0
     headlines: list[dict[str, Any]] = [
         {
             "title": article.title,
@@ -734,47 +1038,149 @@ def _fetch_news_sync(
         for article in articles[:NEWS_MAX_HEADLINES]
     ]
     status = "ok" if headlines else "no_matches"
-    return _news_payload(status, query, articles=headlines), NEWS_TTL_SECONDS
+    observed_at = datetime.now(timezone.utc).isoformat()
+    return (
+        _news_payload(
+            status,
+            query,
+            freshness=_freshness_payload(
+                state="live",
+                attempted_at=attempted_at,
+                observed_at=observed_at,
+                served_at=observed_at,
+                age_seconds=0,
+                ttl_seconds=int(NEWS_TTL_SECONDS),
+            ),
+            articles=headlines,
+        ),
+        NEWS_TTL_SECONDS,
+    )
 
 
 def _store_news_cache(
     key: tuple[str, str],
     payload: dict[str, Any],
     ttl: float,
-) -> None:
-    """Store one bounded query result after pruning expired entries."""
+) -> dict[str, Any]:
+    """Store and return one bounded response with prior observation context."""
     now = time.monotonic()
-    for expired_key, (expires_at, _value) in list(_news_cache.items()):
-        if expires_at <= now:
-            _news_cache.pop(expired_key, None)
     if key not in _news_cache and len(_news_cache) >= NEWS_CACHE_MAX_ENTRIES:
-        evict = min(_news_cache, key=lambda candidate: _news_cache[candidate][0])
+        evict = min(
+            _news_cache,
+            key=lambda candidate: _news_cache[candidate].expires_at,
+        )
         _news_cache.pop(evict)
-    _news_cache[key] = (now + ttl, payload)
+    previous = _news_cache.get(key)
+    is_live = payload["freshness"]["state"] == "live"
+    last_observation = (
+        {
+            "status": payload["status"],
+            "observed_at": payload["freshness"]["observed_at"],
+            "query": payload["query"],
+            "articles": list(payload["articles"]),
+        } if is_live
+        else previous.last_observation if previous is not None
+        else None
+    )
+    stored_payload = dict(payload)
+    if not is_live and last_observation is not None and previous is not None:
+        freshness = dict(payload["freshness"])
+        freshness["observed_at"] = last_observation["observed_at"]
+        freshness["age_seconds"] = max(
+            0, int(now - previous.observed_monotonic),
+        ) if previous.observed_monotonic is not None else None
+        stored_payload["freshness"] = freshness
+        stored_payload["fetched_at"] = freshness["observed_at"]
+        stored_payload["last_observation"] = dict(last_observation)
+    _news_cache[key] = _NewsCacheEntry(
+        expires_at=now + ttl,
+        observed_monotonic=(
+            now if is_live
+            else previous.observed_monotonic if previous is not None
+            else None
+        ),
+        payload=stored_payload,
+        last_observation=last_observation,
+    )
+    return stored_payload
 
 
-def _fetch_and_cache_news_sync(
+def _cached_news_payload(
+    cached: _NewsCacheEntry,
+    now: float,
+) -> dict[str, Any]:
+    """Serve one cache entry without restamping its evidence as current."""
+    cached_payload = dict(cached.payload)
+    original = cached.payload["freshness"]
+    state = "cached" if original["state"] == "live" else original["state"]
+    cached_payload["freshness"] = _freshness_payload(
+        state=state,
+        attempted_at=original["attempted_at"],
+        observed_at=original["observed_at"],
+        served_at=datetime.now(timezone.utc).isoformat(),
+        age_seconds=(
+            max(0, int(now - cached.observed_monotonic))
+            if cached.observed_monotonic is not None
+            else None
+        ),
+        ttl_seconds=original["ttl_seconds"],
+    )
+    cached_payload["fetched_at"] = cached_payload["freshness"]["observed_at"]
+    cached_payload["cache_hit"] = state == "cached"
+    if "retry_after_seconds" in cached_payload:
+        cached_payload["retry_after_seconds"] = max(
+            1, int(cached.expires_at - now + 0.999),
+        )
+    return cached_payload
+
+
+async def _fetch_and_cache_news(
     thesis_id: str,
     book: dict[str, Any],
     focused_query: Optional[str],
     cache_key: tuple[str, str],
 ) -> dict[str, Any]:
-    """Single-flight GDELT fetch with atomic cache and cooldown state."""
-    # WHY one process-wide lock: GDELT throttles by source IP. Letting focused
-    # queries race can stampede upstream, and a concurrent success can erase a
-    # 429 cooldown after another request sets it. Rechecking the cache inside
-    # the lock also collapses concurrent calls for the same exact query.
-    with _news_fetch_lock:
+    """Run one provider attempt and publish it atomically to the scoped cache."""
+    try:
+        loop = asyncio.get_running_loop()
+        payload, ttl = await loop.run_in_executor(
+            _NEWS_EXECUTOR,
+            _fetch_news_sync,
+            thesis_id,
+            book,
+            focused_query,
+        )
+        with _news_state_lock:
+            payload = _store_news_cache(cache_key, payload, ttl)
+        return payload
+    finally:
+        current = asyncio.current_task()
+        with _news_state_lock:
+            if _news_inflight.get(cache_key) is current:
+                _news_inflight.pop(cache_key, None)
+
+
+async def _get_news_payload(
+    thesis_id: str,
+    book: dict[str, Any],
+    focused_query: Optional[str],
+    cache_key: tuple[str, str],
+) -> dict[str, Any]:
+    """Return a warm result immediately or share one same-query producer."""
+    with _news_state_lock:
         now = time.monotonic()
         cached = _news_cache.get(cache_key)
-        if cached and cached[0] > now:
-            cached_payload = dict(cached[1])
-            cached_payload["cache_hit"] = True
-            return cached_payload
-
-        payload, ttl = _fetch_news_sync(thesis_id, book, focused_query)
-        _store_news_cache(cache_key, payload, ttl)
-        return payload
+        if cached and cached.expires_at > now:
+            return _cached_news_payload(cached, now)
+        task = _news_inflight.get(cache_key)
+        if task is None:
+            task = asyncio.create_task(
+                _fetch_and_cache_news(
+                    thesis_id, book, focused_query, cache_key,
+                ),
+            )
+            _news_inflight[cache_key] = task
+    return await asyncio.shield(task)
 
 
 @router.get("/news/{thesis_id}")
@@ -804,8 +1210,7 @@ async def get_thesis_news(
         )
     resolved_query = focused_query or _gdelt_query_for_book(book)
     cache_key = (thesis_id, resolved_query or "")
-    payload = await asyncio.to_thread(
-        _fetch_and_cache_news_sync,
+    payload = await _get_news_payload(
         thesis_id,
         book,
         focused_query,

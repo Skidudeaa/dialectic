@@ -65,7 +65,7 @@ function accessTokenExpiry(token: string | null): number {
   }
 }
 
-function ChatLayout({ nav }: { nav: RoomNavigation }) {
+export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const user = useAppStore((s) => s.user)
   const accessToken = useAppStore((s) => s.accessToken)
   const refreshToken = useAppStore((s) => s.refreshToken)
@@ -239,26 +239,67 @@ function ChatLayout({ nav }: { nav: RoomNavigation }) {
     void refreshPresence()
   }, [currentRoom, roomToken, refreshMemories, refreshPresence])
 
-  // Load the selected branch's persisted history. Socket events then append live
-  // messages, while the store deduplicates by message ID.
+  // Load exactly one persisted window for the installed destination. A push
+  // target needs server context around that message; an ordinary destination
+  // needs the latest branch history. The cancellation fence prevents a slower
+  // previous destination from overwriting the room/thread reached afterward.
   useEffect(() => {
     if (!currentThread || !roomToken) return
     api.setRoomToken(roomToken)
-    api.getMessages(currentThread.id, 200)
-      .then((res) => {
-        const data = res as { messages?: Message[] } | Message[]
-        const history = Array.isArray(data) ? data : data.messages
-        if (Array.isArray(history)) setMessages(history)
-        // Attachments are not projected onto messages, so the media a branch
-        // carries has to be read separately. This is the exact fill — the live
-        // probe in the socket hook only covers what arrives while connected.
-        void refreshAttachments()
-      })
-      .catch((error) => console.error('Failed to load message history:', error))
-    // Live reaction_updated events only cover changes made while connected, so
-    // the existing set has to be fetched alongside the history.
-    void refreshReactions()
-  }, [currentThread, roomToken, setMessages, refreshReactions, refreshAttachments])
+    let cancelled = false
+    const loadHistory = async () => {
+      let targeted = false
+      let data: { messages?: Message[] } | Message[]
+      if (nav.messageId) {
+        try {
+          const context = await api.getMessageContext(
+            currentThread.id, nav.messageId,
+          )
+          if (cancelled) return
+          data = context as Message[]
+          targeted = Array.isArray(context)
+            && context.some((message) => message.id === nav.messageId)
+          if (!targeted) {
+            data = await api.getMessages(currentThread.id, 200) as (
+              { messages?: Message[] } | Message[]
+            )
+          }
+        } catch {
+          if (cancelled) return
+          data = await api.getMessages(currentThread.id, 200) as (
+            { messages?: Message[] } | Message[]
+          )
+        }
+      } else {
+        data = await api.getMessages(currentThread.id, 200) as (
+          { messages?: Message[] } | Message[]
+        )
+      }
+      if (cancelled) return
+
+      const history = Array.isArray(data) ? data : data.messages
+      if (Array.isArray(history)) {
+        setMessages(history)
+        if (targeted && nav.messageId) {
+          setJumpTarget({ id: nav.messageId, nonce: Date.now() })
+        }
+      }
+      // Attachments are not projected onto messages, so the media a branch
+      // carries has to be read separately. This is the exact fill — the live
+      // probe in the socket hook only covers what arrives while connected.
+      await Promise.all([
+        refreshAttachments(currentThread.id),
+        refreshReactions(currentThread.id),
+      ])
+    }
+    void loadHistory().catch((error) => {
+      if (!cancelled) console.error('Failed to load message history:', error)
+    })
+    return () => { cancelled = true }
+  }, [
+    currentThread, roomToken, nav.messageId, setMessages,
+    refreshReactions, refreshAttachments,
+  ])
 
   // Genealogy refreshes when the room changes and when `threads` gains a
   // fork (refreshThreads updates it on every thread_created/forked event).

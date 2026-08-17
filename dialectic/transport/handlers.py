@@ -1792,7 +1792,7 @@ class MessageHandler:
         message: Message,
         sender_name: str,
         sender_id: UUID,
-        annotation_summary: str = None,
+        annotation_summary: Optional[str] = None,
     ) -> None:
         """
         Send push notifications to offline/away room members.
@@ -1807,7 +1807,9 @@ class MessageHandler:
         # Get room members except sender, respecting mute settings
         members = await self.db.fetch(
             """
-            SELECT rm.user_id FROM room_memberships rm
+            SELECT rm.user_id, r.name AS room_name
+            FROM room_memberships rm
+            JOIN rooms r ON r.id = rm.room_id
             LEFT JOIN room_notification_settings rns
                 ON rm.user_id = rns.user_id AND rm.room_id = rns.room_id
             WHERE rm.room_id = $1
@@ -1820,6 +1822,7 @@ class MessageHandler:
 
         if not members:
             return
+        room_name = str(members[0]['room_name'] or "Unnamed Room")
 
         # Filter to users who should receive push (not actively connected)
         recipients = []
@@ -1849,6 +1852,7 @@ class MessageHandler:
                 db=self.db,
                 recipient_user_ids=recipients,
                 room_id=str(room_id),
+                room_name=room_name,
                 thread_id=str(thread_id),
                 message_id=str(message.id),
                 sender_name=display_name,

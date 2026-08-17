@@ -31,12 +31,21 @@ const branch = {
 } as Pick<Thread, 'id' | 'parent_thread_id'>
 
 describe('destinationFromSearch', () => {
+  it('reads an exact message destination', () => {
+    expect(destinationFromSearch('?room=r&thread=t&message=m')).toMatchObject({
+      roomId: 'r',
+      threadId: 't',
+      messageId: 'm',
+    })
+  })
+
   it('treats a bare URL as the canonical Home destination', () => {
     expect(destinationFromSearch('')).toEqual({
       roomId: null,
       threadId: null,
       scene: null,
       object: null,
+      messageId: null,
     })
   })
 
@@ -46,12 +55,14 @@ describe('destinationFromSearch', () => {
       threadId: null,
       scene: null,
       object: null,
+      messageId: null,
     })
     expect(destinationFromSearch('?room=scheme-room&thread=branch-thread')).toEqual({
       roomId: 'scheme-room',
       threadId: 'branch-thread',
       scene: null,
       object: null,
+      messageId: null,
     })
   })
 
@@ -63,6 +74,7 @@ describe('destinationFromSearch', () => {
       threadId: 'branch-thread',
       scene: null,
       object: null,
+      messageId: null,
     })
   })
 })
@@ -74,6 +86,7 @@ describe('the object axis (§1.18)', () => {
       threadId: null,
       scene: null,
       object: 'field_mark:abc',
+      messageId: null,
     })
   })
 
@@ -88,6 +101,7 @@ describe('the object axis (§1.18)', () => {
       threadId: null,
       scene: 'field',
       object: 'field_mark:abc',
+      messageId: null,
     })
   })
 
@@ -97,6 +111,21 @@ describe('the object axis (§1.18)', () => {
 })
 
 describe('destinationUrl', () => {
+  it('serializes an exact message without changing legacy destinations', () => {
+    expect(destinationUrl(scheme, branch, 'record', null, 'message-id')).toBe(
+      '/?room=scheme-room&thread=branch-thread&message=message-id',
+    )
+    expect(destinationUrl(scheme, branch)).toBe(
+      '/?room=scheme-room&thread=branch-thread',
+    )
+    expect(destinationUrl(scheme, root, 'record', null, 'root-message')).toBe(
+      '/?room=scheme-room&thread=main-thread&message=root-message',
+    )
+    expect(destinationUrl(home, root, 'house', null, 'home-message')).toBe(
+      '/?room=home-room&thread=main-thread&message=home-message',
+    )
+  })
+
   it('canonicalizes only the Home root to a bare slash', () => {
     expect(destinationUrl(home, root)).toBe('/')
     expect(destinationUrl(home, branch)).toBe(
@@ -119,12 +148,14 @@ describe('workspace scenes', () => {
       threadId: null,
       scene: 'record',
       object: null,
+      messageId: null,
     })
     expect(destinationFromSearch('?scene=made-up')).toEqual({
       roomId: null,
       threadId: null,
       scene: null,
       object: null,
+      messageId: null,
     })
   })
 
@@ -190,6 +221,7 @@ describe('entryDestination', () => {
       threadId: null,
       scene: 'record',
       object: null,
+      messageId: null,
     })
   })
 
@@ -199,6 +231,7 @@ describe('entryDestination', () => {
       threadId: null,
       scene: null,
       object: null,
+      messageId: null,
     })
   })
 
@@ -213,6 +246,7 @@ describe('entryDestination', () => {
       threadId: null,
       scene: null,
       object: 'house_movement:x',
+      messageId: null,
     })
   })
 })

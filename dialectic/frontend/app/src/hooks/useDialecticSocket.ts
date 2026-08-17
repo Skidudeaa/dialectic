@@ -148,14 +148,22 @@ export function useDialecticSocket(options?: {
    * and fails the whole batch with it, which would cost every real message in
    * the window its attachments.
    */
-  const fetchAttachmentsFor = useCallback(async (messageIds: string[]) => {
+  const fetchAttachmentsFor = useCallback(async (
+    messageIds: string[], expectedThreadId: string,
+  ) => {
     const state = useAppStore.getState();
     if (!state.currentRoom || !state.roomToken) return;
+    const roomId = state.currentRoom.id;
     const ids = messageIds.filter(isUuid);
     if (ids.length === 0) return;
     api.setToken(state.roomToken);
     try {
-      const records = await api.listAttachments(state.currentRoom.id, ids);
+      const records = await api.listAttachments(roomId, ids);
+      const active = useAppStore.getState();
+      if (
+        active.currentRoom?.id !== roomId
+        || active.currentThread?.id !== expectedThreadId
+      ) return;
       if (records.length > 0) setAllAttachments(groupAttachmentsByMessage(records));
     } catch (error) {
       console.error('[WS] Failed to load attachments:', error);
@@ -163,8 +171,13 @@ export function useDialecticSocket(options?: {
   }, [setAllAttachments]);
 
   /** Media for every message currently loaded — called after a history load. */
-  const refreshAttachments = useCallback(async () => {
-    await fetchAttachmentsFor(useAppStore.getState().messages.map((message) => message.id));
+  const refreshAttachments = useCallback(async (expectedThreadId?: string) => {
+    const state = useAppStore.getState();
+    const threadId = expectedThreadId ?? state.currentThread?.id;
+    if (!threadId) return;
+    await fetchAttachmentsFor(
+      state.messages.map((message) => message.id), threadId,
+    );
   }, [fetchAttachmentsFor]);
 
   const payloadMatchesActiveThread = useCallback((payload: Record<string, unknown>): boolean => {
@@ -691,13 +704,15 @@ export function useDialecticSocket(options?: {
     [send],
   );
 
-  const refreshReactions = useCallback(async () => {
+  const refreshReactions = useCallback(async (expectedThreadId?: string) => {
     const state = useAppStore.getState();
     if (!state.currentThread || !state.roomToken) return;
+    const threadId = expectedThreadId ?? state.currentThread.id;
     api.setToken(state.roomToken);
     try {
-      const rows = await api.getThreadReactions(state.currentThread.id) as
+      const rows = await api.getThreadReactions(threadId) as
         { message_id: string; emoji: string; user_ids: string[]; user_names: string[] }[];
+      if (useAppStore.getState().currentThread?.id !== threadId) return;
       const grouped: Record<string, Reaction[]> = {};
       for (const row of rows) {
         (grouped[row.message_id] ??= []).push({

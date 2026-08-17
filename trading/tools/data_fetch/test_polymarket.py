@@ -12,6 +12,7 @@ parsing, matching, and error handling without hitting the real API.
 import json
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor as RealThreadPoolExecutor
 from unittest.mock import patch, MagicMock
 from urllib.error import URLError
 
@@ -19,6 +20,7 @@ import pytest
 
 # Add parent dir to path so we can import the module
 sys.path.insert(0, os.path.dirname(__file__))
+import polymarket as polymarket_module  # noqa: E402
 from polymarket import (
     _parse_outcome_prices,
     _extract_probability_from_market,
@@ -366,6 +368,35 @@ class TestFetchSingleMarket:
         slug, prob = fetch_single_market("us-iran-april-30", retries=1)
         assert prob is None
 
+    @patch("polymarket.time.sleep", lambda *_args, **_kwargs: None)
+    @patch("polymarket._make_request")
+    def test_strict_invalid_data_retries_before_terminal_error(self, mock_req):
+        """Returning on the first malformed body defeats the strict retry budget."""
+        mock_req.return_value = b"<html>not gamma json</html>"
+
+        with pytest.raises(APIError, match="invalid data"):
+            fetch_single_market(
+                "us-iran-april-30", retries=2, raise_on_error=True,
+            )
+
+        assert mock_req.call_count == 2
+
+    @patch("polymarket._make_request")
+    def test_strict_matched_market_with_invalid_probability_raises(
+        self, mock_req: MagicMock,
+    ) -> None:
+        """A matched malformed market is upstream failure, not confirmed empty."""
+        malformed = make_market(outcomePrices='["not-a-number", "0.5"]')
+        mock_req.side_effect = [
+            json.dumps([make_event(markets=[malformed])]).encode(),
+            json.dumps([malformed]).encode(),
+        ]
+
+        with pytest.raises(APIError, match="invalid data"):
+            fetch_single_market(
+                "us-iran-april-30", retries=1, raise_on_error=True,
+            )
+
 
 # =========================================================================
 # Tests: fetch_markets (batch fetching)
@@ -424,6 +455,39 @@ class TestFetchMarkets:
 
         assert list(results) == ["slug-a", "slug-b"]
         assert results == {"slug-a": 0.7, "slug-b": 0.3}
+
+    @patch("polymarket.fetch_single_market")
+    def test_parallel_strict_failure_propagates(self, mock_fetch):
+        """Suppressing a worker APIError would relabel an outage as no data."""
+        mock_fetch.side_effect = APIError("gamma unavailable")
+
+        with pytest.raises(APIError, match="gamma unavailable"):
+            fetch_markets(
+                ["slug-a", "slug-b"], parallel=True, raise_on_error=True,
+            )
+
+    @patch("polymarket.fetch_single_market")
+    def test_parallel_worker_count_is_capped_at_eight(
+        self, mock_fetch, monkeypatch,
+    ):
+        """Using len(slugs) workers lets one edited book fan out without bound."""
+        recorded: list[int] = []
+
+        def _executor(*, max_workers: int) -> RealThreadPoolExecutor:
+            recorded.append(max_workers)
+            return RealThreadPoolExecutor(max_workers=max_workers)
+
+        mock_fetch.side_effect = lambda slug, **_kwargs: (slug, 0.5)
+        monkeypatch.setattr(polymarket_module, "ThreadPoolExecutor", _executor)
+
+        result = fetch_markets(
+            [f"market-{number}" for number in range(50)],
+            parallel=True,
+            raise_on_error=True,
+        )
+
+        assert len(result) == 50
+        assert recorded == [8]
 
 
 # =========================================================================

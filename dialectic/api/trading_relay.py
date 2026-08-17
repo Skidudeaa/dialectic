@@ -175,7 +175,31 @@ async def get_polymarket(
             raise td.TradingDeskError(
                 "tradingDesk polymarket bridge returned an unexpected shape"
             )
-        return result["markets"]
+        status = result.get("status")
+        markets = result["markets"]
+        freshness = result.get("freshness")
+        state = freshness.get("state") if isinstance(freshness, dict) else None
+        if status in {"ok", "partial", "no_data"}:
+            if state not in {"live", "cached"}:
+                raise td.TradingDeskError(
+                    "tradingDesk polymarket bridge returned an unexpected shape"
+                )
+            return markets
+        if status == "not_configured":
+            if state != "not_applicable" or markets:
+                raise td.TradingDeskError(
+                    "tradingDesk polymarket bridge returned an unexpected shape"
+                )
+            return []
+        if status == "unavailable":
+            if state != "stale" or markets:
+                raise td.TradingDeskError(
+                    "tradingDesk polymarket bridge returned an unexpected shape"
+                )
+            return []
+        raise td.TradingDeskError(
+            "tradingDesk polymarket bridge returned an unexpected shape"
+        )
     except td.TradingDeskError as e:
         raise _bad_gateway("polymarket", e)
 

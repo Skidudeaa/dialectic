@@ -12,9 +12,10 @@ WHY content-type is asserted explicitly: this app answers unknown paths with
 these routes would look like a passing 200 to a naive test.
 """
 
+import asyncio
 import json
 import os
-from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from threading import Event
 
 import pytest
@@ -79,6 +80,12 @@ def clear_news_cache():
         bridge_mod._news_rate_limit_streak = 0
     if hasattr(bridge_mod, "_news_rate_limit_until"):
         bridge_mod._news_rate_limit_until = 0.0
+    if hasattr(bridge_mod, "_news_inflight"):
+        bridge_mod._news_inflight.clear()
+    if hasattr(bridge_mod, "_polymarket_cache"):
+        bridge_mod._polymarket_cache.clear()
+    if hasattr(bridge_mod, "_polymarket_inflight"):
+        bridge_mod._polymarket_inflight.clear()
     yield
     bridge_mod._news_cache.clear()
     if isinstance(bridge_mod._news_rate_limit_streak, dict):
@@ -87,10 +94,28 @@ def clear_news_cache():
         bridge_mod._news_rate_limit_streak = 0
     if hasattr(bridge_mod, "_news_rate_limit_until"):
         bridge_mod._news_rate_limit_until = 0.0
+    if hasattr(bridge_mod, "_news_inflight"):
+        bridge_mod._news_inflight.clear()
+    if hasattr(bridge_mod, "_polymarket_cache"):
+        bridge_mod._polymarket_cache.clear()
+    if hasattr(bridge_mod, "_polymarket_inflight"):
+        bridge_mod._polymarket_inflight.clear()
 
 
 def svc_headers(token: str = SERVICE_TOKEN) -> dict:
     return {"X-Service-Token": token}
+
+
+async def _direct_news(query: str | None) -> dict[str, object]:
+    """Exercise the real async route without TestClient's per-request loop."""
+    response = await bridge_mod.get_thesis_news(THESIS_ID, query, None)
+    return json.loads(response.body)
+
+
+async def _direct_polymarket(thesis_id: str) -> dict[str, object]:
+    """Exercise the real scoped-market route in one shared event loop."""
+    response = await bridge_mod.get_thesis_polymarket(thesis_id, None)
+    return json.loads(response.body)
 
 
 # =========================================================================
@@ -276,11 +301,12 @@ class TestPolymarketEndpoint:
         )
 
         assert resp.status_code == 200
-        assert resp.json() == {
-            "status": "not_configured",
-            "configured_markets": [],
-            "markets": [],
-        }
+        body = resp.json()
+        assert body["status"] == "not_configured"
+        assert body["configured_markets"] == []
+        assert body["missing_markets"] == []
+        assert body["markets"] == []
+        assert body["freshness"]["state"] == "not_applicable"
 
     def test_configured_book_with_no_live_data_is_named(self, client, monkeypatch):
         from web.adapters import market as market_adapter
@@ -291,9 +317,12 @@ class TestPolymarketEndpoint:
         )
 
         assert resp.status_code == 200
-        assert resp.json()["status"] == "no_data"
-        assert resp.json()["configured_markets"] == ["us-iran-april-30"]
-        assert resp.json()["markets"] == []
+        body = resp.json()
+        assert body["status"] == "no_data"
+        assert body["configured_markets"] == ["us-iran-april-30"]
+        assert body["missing_markets"] == ["us-iran-april-30"]
+        assert body["markets"] == []
+        assert body["freshness"]["state"] == "live"
 
     def test_configured_book_returns_live_markets(self, client, monkeypatch):
         from web.adapters import market as market_adapter
@@ -307,11 +336,169 @@ class TestPolymarketEndpoint:
         )
 
         assert resp.status_code == 200
-        assert resp.json() == {
-            "status": "ok",
-            "configured_markets": ["us-iran-april-30"],
-            "markets": markets,
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert body["configured_markets"] == ["us-iran-april-30"]
+        assert body["missing_markets"] == []
+        assert body["markets"] == markets
+        assert body["freshness"]["state"] == "live"
+
+    def test_mixed_coverage_is_partial_and_names_missing_markets(
+        self, client, monkeypatch, tmp_path,
+    ):
+        from web.adapters import market as market_adapter
+
+        (tmp_path / "mixed.json").write_text(json.dumps({
+            "nodes": [{"feeds": [
+                {"source": "polymarket", "market": "priced"},
+                {"source": "polymarket", "market": "missing"},
+            ]}],
+        }))
+        monkeypatch.setattr(bridge_mod, "_BOOKS_DIR", tmp_path)
+        monkeypatch.setattr(
+            market_adapter,
+            "fetch_polymarket_probs",
+            lambda _ids: [{"slug": "priced", "probability": 0.42}],
+        )
+
+        body = client.get(
+            "/api/bridge/polymarket/mixed", headers=svc_headers(),
+        ).json()
+
+        assert body["status"] == "partial"
+        assert body["configured_markets"] == ["priced", "missing"]
+        assert body["missing_markets"] == ["missing"]
+        assert body["markets"] == [{"slug": "priced", "probability": 0.42}]
+        assert body["freshness"]["state"] == "live"
+
+    @pytest.mark.parametrize(
+        "rows",
+        [
+            [{"slug": "priced", "probability": True}],
+            [{"slug": "priced", "probability": 1.01}],
+            [
+                {"slug": "priced", "probability": 0.4},
+                {"slug": "priced", "probability": 0.5},
+            ],
+            [{"slug": "not-configured", "probability": 0.4}],
+        ],
+        ids=["boolean", "out-of-range", "duplicate", "unconfigured"],
+    )
+    def test_invalid_probability_rows_are_unavailable(
+        self, client, monkeypatch, rows,
+    ):
+        from web.adapters import market as market_adapter
+
+        monkeypatch.setattr(
+            market_adapter, "fetch_polymarket_probs", lambda _ids: rows,
+        )
+
+        body = client.get(
+            f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert body["status"] == "unavailable"
+        assert body["markets"] == []
+        assert body["freshness"]["state"] == "stale"
+
+    @pytest.mark.asyncio
+    async def test_concurrent_same_book_is_single_flight(self, monkeypatch):
+        from web.adapters import market as market_adapter
+
+        started = Event()
+        release = Event()
+        calls = 0
+
+        def _fetch(_ids: list[str]) -> list[dict[str, object]]:
+            nonlocal calls
+            calls += 1
+            started.set()
+            assert release.wait(timeout=2)
+            return [{"slug": "us-iran-april-30", "probability": 0.42}]
+
+        monkeypatch.setattr(market_adapter, "fetch_polymarket_probs", _fetch)
+        tasks = [
+            asyncio.create_task(_direct_polymarket(THESIS_ID))
+            for _index in range(2)
+        ]
+        assert await asyncio.to_thread(started.wait, 1)
+        await asyncio.sleep(0)
+        release.set()
+        results = await asyncio.gather(*tasks)
+
+        assert calls == 1
+        assert [result["status"] for result in results] == ["ok", "ok"]
+
+    def test_failed_poll_keeps_prior_observation_separate(
+        self, client, monkeypatch,
+    ):
+        from tools.data_fetch import polymarket as polymarket_mod
+        from web.adapters import market as market_adapter
+
+        elapsed = {"seconds": 0}
+        base = datetime(2026, 8, 17, 1, 0, tzinfo=timezone.utc)
+
+        class FrozenDateTime:
+            @classmethod
+            def now(cls, tz: timezone | None = None) -> datetime:
+                value = base + timedelta(seconds=elapsed["seconds"])
+                return value if tz is not None else value.replace(tzinfo=None)
+
+        def _success(_ids: list[str]) -> list[dict[str, object]]:
+            return [{"slug": "us-iran-april-30", "probability": 0.42}]
+
+        monkeypatch.setattr(bridge_mod, "datetime", FrozenDateTime)
+        monkeypatch.setattr(
+            bridge_mod.time, "monotonic", lambda: 100.0 + elapsed["seconds"],
+        )
+        monkeypatch.setattr(market_adapter, "fetch_polymarket_probs", _success)
+        live = client.get(
+            f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+        elapsed["seconds"] = 901
+
+        def _fail(_ids: list[str]) -> list[dict[str, object]]:
+            raise polymarket_mod.APIError("gamma unavailable")
+
+        monkeypatch.setattr(market_adapter, "fetch_polymarket_probs", _fail)
+        failed = client.get(
+            f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert live["freshness"]["state"] == "live"
+        assert failed["status"] == "unavailable"
+        assert failed["markets"] == []
+        assert failed["freshness"] == {
+            "state": "stale",
+            "attempted_at": "2026-08-17T01:15:01+00:00",
+            "observed_at": "2026-08-17T01:00:00+00:00",
+            "served_at": "2026-08-17T01:15:01+00:00",
+            "age_seconds": 901,
+            "ttl_seconds": 900,
         }
+        assert failed["last_observation"] == {
+            "status": "ok",
+            "observed_at": "2026-08-17T01:00:00+00:00",
+            "markets": [{"slug": "us-iran-april-30", "probability": 0.42}],
+        }
+
+    def test_failed_poll_without_prior_has_no_last_observation(
+        self, client, monkeypatch,
+    ):
+        from tools.data_fetch import polymarket as polymarket_mod
+        from web.adapters import market as market_adapter
+
+        def _fail(_ids: list[str]) -> list[dict[str, object]]:
+            raise polymarket_mod.APIError("gamma unavailable")
+
+        monkeypatch.setattr(market_adapter, "fetch_polymarket_probs", _fail)
+        body = client.get(
+            f"/api/bridge/polymarket/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert body["status"] == "unavailable"
+        assert body["markets"] == []
+        assert "last_observation" not in body
 
     def test_fetch_failure_is_not_no_data(self, client, monkeypatch):
         from web.adapters import market as market_adapter
@@ -328,6 +515,158 @@ class TestPolymarketEndpoint:
 
 
 class TestNewsEndpoint:
+    def test_live_freshness_identifies_the_provider_observation(
+        self, client, monkeypatch,
+    ):
+        """Removing the live freshness stamp must make confirmed-empty ambiguous."""
+        from tools.data_fetch import gdelt
+
+        frozen = datetime(2026, 8, 17, 1, 0, tzinfo=timezone.utc)
+
+        class FrozenDateTime:
+            @classmethod
+            def now(cls, tz: timezone | None = None) -> datetime:
+                return frozen if tz is not None else frozen.replace(tzinfo=None)
+
+        monkeypatch.setattr(bridge_mod, "datetime", FrozenDateTime)
+        monkeypatch.setattr(bridge_mod.time, "monotonic", lambda: 100.0)
+        monkeypatch.setattr(gdelt, "fetch_articles", lambda *_args, **_kwargs: [])
+
+        body = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert body["status"] == "no_matches"
+        assert body["freshness"] == {
+            "state": "live",
+            "attempted_at": "2026-08-17T01:00:00+00:00",
+            "observed_at": "2026-08-17T01:00:00+00:00",
+            "served_at": "2026-08-17T01:00:00+00:00",
+            "age_seconds": 0,
+            "ttl_seconds": 900,
+        }
+        assert body["fetched_at"] == body["freshness"]["observed_at"]
+        assert body["cache_hit"] is False
+
+    def test_cached_freshness_preserves_observation_and_reports_age(
+        self, client, monkeypatch,
+    ):
+        """Restamping a cache hit as live must lose the age of confirmed emptiness."""
+        from tools.data_fetch import gdelt
+
+        elapsed = {"seconds": 0}
+        base = datetime(2026, 8, 17, 1, 0, tzinfo=timezone.utc)
+
+        class FrozenDateTime:
+            @classmethod
+            def now(cls, tz: timezone | None = None) -> datetime:
+                value = base + timedelta(seconds=elapsed["seconds"])
+                return value if tz is not None else value.replace(tzinfo=None)
+
+        monkeypatch.setattr(bridge_mod, "datetime", FrozenDateTime)
+        monkeypatch.setattr(
+            bridge_mod.time, "monotonic", lambda: 100.0 + elapsed["seconds"],
+        )
+        monkeypatch.setattr(gdelt, "fetch_articles", lambda *_args, **_kwargs: [])
+
+        first = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+        elapsed["seconds"] = 37
+        cached = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert cached["freshness"]["state"] == "cached"
+        assert cached["freshness"]["attempted_at"] == first["freshness"]["attempted_at"]
+        assert cached["freshness"]["observed_at"] == first["freshness"]["observed_at"]
+        assert cached["freshness"]["served_at"] == "2026-08-17T01:00:37+00:00"
+        assert cached["freshness"]["age_seconds"] == 37
+        assert cached["fetched_at"] == first["fetched_at"]
+        assert cached["cache_hit"] is True
+
+    def test_failed_poll_exposes_timestamped_prior_news_observation(
+        self, client, monkeypatch,
+    ):
+        from tools.data_fetch import gdelt
+
+        elapsed = {"seconds": 0}
+        base = datetime(2026, 8, 17, 1, 0, tzinfo=timezone.utc)
+
+        class FrozenDateTime:
+            @classmethod
+            def now(cls, tz: timezone | None = None) -> datetime:
+                value = base + timedelta(seconds=elapsed["seconds"])
+                return value if tz is not None else value.replace(tzinfo=None)
+
+        def _fetch(*_args: object, **_kwargs: object) -> list[object]:
+            if elapsed["seconds"] == 0:
+                return []
+            raise gdelt.GdeltAPIError("malformed body")
+
+        monkeypatch.setattr(bridge_mod, "datetime", FrozenDateTime)
+        monkeypatch.setattr(
+            bridge_mod.time, "monotonic", lambda: 100.0 + elapsed["seconds"],
+        )
+        monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
+
+        first = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+        elapsed["seconds"] = 901
+        failed = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+        elapsed["seconds"] = 910
+        cached_failure = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert first["status"] == "no_matches"
+        assert failed["status"] == "unavailable"
+        assert failed["articles"] == []
+        assert failed["freshness"] == {
+            "state": "stale",
+            "attempted_at": "2026-08-17T01:15:01+00:00",
+            "observed_at": "2026-08-17T01:00:00+00:00",
+            "served_at": "2026-08-17T01:15:01+00:00",
+            "age_seconds": 901,
+            "ttl_seconds": 900,
+        }
+        assert failed["last_observation"] == {
+            "status": "no_matches",
+            "observed_at": "2026-08-17T01:00:00+00:00",
+            "query": first["query"],
+            "articles": [],
+        }
+        assert cached_failure["freshness"]["age_seconds"] == 910
+        assert cached_failure["last_observation"] == failed["last_observation"]
+
+    def test_not_configured_freshness_is_not_applicable(
+        self, client, monkeypatch, tmp_path,
+    ):
+        """A missing feed must never imply that a provider attempt occurred."""
+        book = tmp_path / "quiet-book.json"
+        book.write_text(json.dumps({"meta": {}, "nodes": [{"id": "a"}]}))
+        monkeypatch.setattr(bridge_mod, "_BOOKS_DIR", tmp_path)
+
+        body = client.get(
+            "/api/bridge/news/quiet-book", headers=svc_headers(),
+        ).json()
+
+        assert body["status"] == "not_configured"
+        assert body["freshness"] == {
+            "state": "not_applicable",
+            "attempted_at": None,
+            "observed_at": None,
+            "served_at": body["freshness"]["served_at"],
+            "age_seconds": None,
+            "ttl_seconds": 900,
+        }
+        assert body["freshness"]["served_at"].endswith("+00:00")
+        assert body["fetched_at"] is None
+        assert body["cache_hit"] is False
+
     def test_unknown_book_is_404(self, client):
         resp = client.get("/api/bridge/news/no-such-book", headers=svc_headers())
         assert resp.status_code == 404
@@ -438,6 +777,7 @@ class TestNewsEndpoint:
         assert body["status"] == "unavailable"
         assert body["retry_after_seconds"] == 120
         assert "GdeltAPIError" in body["note"]
+        assert "last_observation" not in body
 
     def test_focused_query_is_sent_and_reported_exactly(self, client, monkeypatch):
         from tools.data_fetch import gdelt
@@ -548,72 +888,148 @@ class TestNewsEndpoint:
         assert len(calls) == 2
         assert len(bridge_mod._news_cache) == 2
 
-    def test_concurrent_same_query_is_single_flight(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_warm_cache_bypasses_an_unrelated_blocked_fetch(
+        self, monkeypatch,
+    ):
         from tools.data_fetch import gdelt
 
-        book = json.loads(bridge_mod._book_path(THESIS_ID).read_text())
-        calls = []
+        monkeypatch.setattr(gdelt, "fetch_articles", lambda *_args, **_kwargs: [])
+        warm = await _direct_news("warm cache verification")
+        assert warm["status"] == "no_matches"
 
-        def _fetch(query, **_kwargs):
+        cold_started = Event()
+        release_cold = Event()
+
+        def _fetch(query: str, **_kwargs: object) -> list[object]:
+            if query == "blocked cold verification":
+                cold_started.set()
+                assert release_cold.wait(timeout=2)
+            return []
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
+        cold_task = asyncio.create_task(_direct_news("blocked cold verification"))
+        assert await asyncio.to_thread(cold_started.wait, 1)
+        warm_task = asyncio.create_task(_direct_news("warm cache verification"))
+        returned_before_release = True
+        try:
+            await asyncio.wait_for(asyncio.shield(warm_task), timeout=0.25)
+        except TimeoutError:
+            returned_before_release = False
+        finally:
+            release_cold.set()
+        cold, cached = await asyncio.gather(cold_task, warm_task)
+
+        assert returned_before_release
+        assert cold["status"] == "no_matches"
+        assert cached["freshness"]["state"] == "cached"
+
+    @pytest.mark.asyncio
+    async def test_independent_queries_overlap(self, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        entered: set[str] = set()
+        both_entered = Event()
+        release = Event()
+
+        def _fetch(query: str, **_kwargs: object) -> list[object]:
+            entered.add(query)
+            if len(entered) == 2:
+                both_entered.set()
+            assert release.wait(timeout=2)
+            return []
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
+        tasks = [
+            asyncio.create_task(_direct_news("independent query alpha")),
+            asyncio.create_task(_direct_news("independent query beta")),
+        ]
+        overlapped = await asyncio.to_thread(both_entered.wait, 0.25)
+        release.set()
+        results = await asyncio.gather(*tasks)
+
+        assert overlapped
+        assert entered == {"independent query alpha", "independent query beta"}
+        assert [result["status"] for result in results] == ["no_matches", "no_matches"]
+
+    @pytest.mark.asyncio
+    async def test_concurrent_same_query_is_single_flight(self, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        started = Event()
+        release = Event()
+        calls: list[str] = []
+
+        def _fetch(query: str, **_kwargs: object) -> list[object]:
             calls.append(query)
+            started.set()
+            assert release.wait(timeout=2)
             return []
 
         monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
         query = "concurrent verification query"
-        key = (THESIS_ID, query)
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            results = list(pool.map(
-                lambda _index: bridge_mod._fetch_and_cache_news_sync(
-                    THESIS_ID, book, query, key,
-                ),
-                range(2),
-            ))
+        tasks = [asyncio.create_task(_direct_news(query)) for _index in range(2)]
+        assert await asyncio.to_thread(started.wait, 1)
+        await asyncio.sleep(0)
+        release.set()
+        results = await asyncio.gather(*tasks)
 
         assert len(calls) == 1
-        assert sorted(result["cache_hit"] for result in results) == [False, True]
+        assert [result["status"] for result in results] == ["no_matches", "no_matches"]
 
-    def test_concurrent_success_cannot_erase_rate_limit(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_concurrent_success_cannot_erase_rate_limit(self, monkeypatch):
         from tools.data_fetch import gdelt
 
-        book = json.loads(bridge_mod._book_path(THESIS_ID).read_text())
         rate_fetch_started = Event()
         release_rate_fetch = Event()
-        calls = []
+        success_fetch_started = Event()
+        calls: list[str] = []
 
-        def _fetch(query, **_kwargs):
+        def _fetch(query: str, **_kwargs: object) -> list[object]:
             calls.append(query)
             if query == "rate limited query":
                 rate_fetch_started.set()
-                assert release_rate_fetch.wait(timeout=1)
+                assert release_rate_fetch.wait(timeout=2)
                 raise gdelt.GdeltRateLimitError("429")
+            success_fetch_started.set()
             return []
 
         monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            rate_future = pool.submit(
-                bridge_mod._fetch_and_cache_news_sync,
-                THESIS_ID,
-                book,
-                "rate limited query",
-                (THESIS_ID, "rate limited query"),
-            )
-            assert rate_fetch_started.wait(timeout=1)
-            success_future = pool.submit(
-                bridge_mod._fetch_and_cache_news_sync,
-                THESIS_ID,
-                book,
-                "would otherwise succeed",
-                (THESIS_ID, "would otherwise succeed"),
-            )
-            release_rate_fetch.set()
-            rate_result = rate_future.result(timeout=1)
-            second_result = success_future.result(timeout=1)
+        rate_task = asyncio.create_task(_direct_news("rate limited query"))
+        assert await asyncio.to_thread(rate_fetch_started.wait, 1)
+        success_task = asyncio.create_task(_direct_news("would otherwise succeed"))
+        success_overlapped = await asyncio.to_thread(success_fetch_started.wait, 0.25)
+        release_rate_fetch.set()
+        rate_result, second_result = await asyncio.gather(rate_task, success_task)
 
-        assert calls == ["rate limited query"]
+        assert success_overlapped
+        assert calls == ["rate limited query", "would otherwise succeed"]
         assert rate_result["status"] == "rate_limited"
-        assert second_result["status"] == "rate_limited"
+        assert second_result["status"] == "no_matches"
         assert bridge_mod._news_rate_limit_streak == 1
         assert bridge_mod._news_rate_limit_until > 0.0
+
+    def test_cached_cooldown_reports_remaining_seconds(self, client, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        now = {"value": 100.0}
+
+        def _rate_limit(*_args: object, **_kwargs: object) -> list[object]:
+            raise gdelt.GdeltRateLimitError("429")
+
+        monkeypatch.setattr(bridge_mod.time, "monotonic", lambda: now["value"])
+        monkeypatch.setattr(gdelt, "fetch_articles", _rate_limit)
+        first = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+        now["value"] += 37.0
+        cached = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert first["retry_after_seconds"] == 120
+        assert cached["retry_after_seconds"] == 83
 
     def test_query_cache_is_bounded_to_64_entries(self, client, monkeypatch):
         from tools.data_fetch import gdelt

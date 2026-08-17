@@ -31,6 +31,7 @@ export function destinationFromSearch(search: string): RoomDestination {
     // module cannot answer. An id that does not resolve is Focus's own
     // unavailable state (§1.18), never dropped silently like an unknown scene.
     object: params.get('object'),
+    messageId: params.get('message'),
   }
 }
 
@@ -113,6 +114,7 @@ export function destinationUrl(
   thread: Pick<Thread, 'id' | 'parent_thread_id'>,
   scene: ImplementedWorkspaceScene = defaultWorkspaceScene(room, thread),
   object: string | null = null,
+  message: string | null = null,
 ): string {
   // Only Home's root canonicalizes to bare `/`; a Home branch carries both ids,
   // and an ordinary room root is `/?room=<id>`. The default scene is OMITTED so
@@ -121,10 +123,13 @@ export function destinationUrl(
   const defaultScene = defaultWorkspaceScene(room, thread)
   const params = new URLSearchParams()
 
-  if (!rootHome) params.set('room', room.id)
-  if (thread.parent_thread_id !== null) params.set('thread', thread.id)
+  if (!rootHome || message) params.set('room', room.id)
+  // A message makes even the root thread an explicit destination. Omitting it
+  // loses the message axis when the URL is reloaded or traversed via history.
+  if (thread.parent_thread_id !== null || message) params.set('thread', thread.id)
   if (scene !== defaultScene) params.set('scene', scene)
   if (object) params.set('object', object)
+  if (message) params.set('message', message)
 
   const query = params.toString()
   return query ? `/?${query}` : '/'
@@ -146,5 +151,6 @@ export function entryDestination(parsed: RoomDestination): RoomDestination {
     threadId: null,
     scene: parsed.scene ?? null,
     object: parsed.object ?? null,
+    messageId: parsed.messageId ?? null,
   }
 }
