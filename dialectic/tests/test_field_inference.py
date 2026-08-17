@@ -305,10 +305,18 @@ async def test_room_cap_is_honored(inference_room, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_daily_cap_skips_before_any_llm_call(inference_room, monkeypatch):
-    # Older than the fixture's messages (so the fresh-content gate alone
-    # would NOT skip the room) but still within today (so the daily cap,
-    # counted by UTC calendar day, catches them).
-    today = datetime.now(timezone.utc) - timedelta(hours=1)
+    # Anchor inside the current UTC day even during its first hour. The old
+    # `now - 1 hour` crossed into yesterday from 00:00–00:59 UTC and made the
+    # test deterministic red despite inserting FIELD_INFERENCE_DAILY_CAP rows.
+    today = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0,
+    )
+    # Keep a message after the cap rows so the fresh-content gate cannot be the
+    # reason this room skips; this assertion is specifically about daily_cap.
+    await inference_room.execute(
+        "UPDATE messages SET created_at = $1 WHERE id = $2",
+        today + timedelta(microseconds=1), MSG_B,
+    )
     for i in range(field_inference.FIELD_INFERENCE_DAILY_CAP):
         await inference_room.execute(
             """INSERT INTO field_marks
