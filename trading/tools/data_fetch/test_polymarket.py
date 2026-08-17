@@ -381,6 +381,22 @@ class TestFetchSingleMarket:
 
         assert mock_req.call_count == 2
 
+    @patch("polymarket._make_request")
+    def test_strict_matched_market_with_invalid_probability_raises(
+        self, mock_req: MagicMock,
+    ) -> None:
+        """A matched malformed market is upstream failure, not confirmed empty."""
+        malformed = make_market(outcomePrices='["not-a-number", "0.5"]')
+        mock_req.side_effect = [
+            json.dumps([make_event(markets=[malformed])]).encode(),
+            json.dumps([malformed]).encode(),
+        ]
+
+        with pytest.raises(APIError, match="invalid data"):
+            fetch_single_market(
+                "us-iran-april-30", retries=1, raise_on_error=True,
+            )
+
 
 # =========================================================================
 # Tests: fetch_markets (batch fetching)

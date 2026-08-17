@@ -1822,7 +1822,7 @@ class MessageHandler:
 
         if not members:
             return
-        room_name = str(members[0]['room_name'])
+        room_name = str(members[0]['room_name'] or "Unnamed Room")
 
         # Filter to users who should receive push (not actively connected)
         recipients = []

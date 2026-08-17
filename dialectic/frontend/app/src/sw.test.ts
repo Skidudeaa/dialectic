@@ -71,7 +71,10 @@ describe('notification message destinations', () => {
     const visible = {
       visibilityState: 'visible',
       focus: vi.fn().mockResolvedValue(undefined),
-      postMessage: vi.fn(),
+      postMessage: vi.fn((_data, ports: MessagePort[]) => {
+        ports[0]?.postMessage({ type: 'navigation-received' })
+      }),
+      navigate: vi.fn(),
     }
     matchAll.mockResolvedValue([hidden, visible])
 
@@ -79,12 +82,16 @@ describe('notification message destinations', () => {
 
     expect(hidden.focus).not.toHaveBeenCalled()
     expect(visible.focus).toHaveBeenCalledOnce()
-    expect(visible.postMessage).toHaveBeenCalledWith({
-      type: 'open-message',
-      roomId: 'r',
-      threadId: 't',
-      messageId: 'm',
-    })
+    expect(visible.postMessage).toHaveBeenCalledWith(
+      {
+        type: 'open-message',
+        roomId: 'r',
+        threadId: 't',
+        messageId: 'm',
+      },
+      [expect.any(MessagePort)],
+    )
+    expect(visible.navigate).not.toHaveBeenCalled()
     expect(openWindow).not.toHaveBeenCalled()
   })
 
@@ -102,18 +109,40 @@ describe('notification message destinations', () => {
     )
   })
 
-  it('keeps legacy room-only warm and cold taps working', async () => {
+  it('navigates a warm client when no mounted listener acknowledges the tap', async () => {
+    vi.useFakeTimers()
     const visible = {
       visibilityState: 'visible',
       focus: vi.fn().mockResolvedValue(undefined),
       postMessage: vi.fn(),
+      navigate: vi.fn().mockResolvedValue(undefined),
+    }
+    matchAll.mockResolvedValue([visible])
+
+    const pending = click({ room_id: 'r', thread_id: 't', message_id: 'm' })
+    await vi.runAllTimersAsync()
+    await pending
+
+    expect(visible.navigate).toHaveBeenCalledWith('/?room=r&thread=t&message=m')
+    vi.useRealTimers()
+  })
+
+  it('keeps legacy room-only warm and cold taps working', async () => {
+    const visible = {
+      visibilityState: 'visible',
+      focus: vi.fn().mockResolvedValue(undefined),
+      postMessage: vi.fn((_data, ports: MessagePort[]) => {
+        ports[0]?.postMessage({ type: 'navigation-received' })
+      }),
+      navigate: vi.fn(),
     }
     matchAll.mockResolvedValueOnce([visible]).mockResolvedValueOnce([])
 
     await click({ room_id: 'legacy room' })
-    expect(visible.postMessage).toHaveBeenCalledWith({
-      type: 'open-room', roomId: 'legacy room',
-    })
+    expect(visible.postMessage).toHaveBeenCalledWith(
+      { type: 'open-room', roomId: 'legacy room' },
+      [expect.any(MessagePort)],
+    )
 
     await click({ room_id: 'legacy room' })
     expect(openWindow).toHaveBeenCalledWith('/?room=legacy+room')

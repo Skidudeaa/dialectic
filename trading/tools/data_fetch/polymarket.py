@@ -249,6 +249,7 @@ def fetch_single_market(
 
     for attempt in range(1, retries + 1):
         try:
+            matched_invalid = False
             # Strategy 1: search events (markets grouped under events)
             events = _search_events(slug, timeout=timeout)
             for event in events:
@@ -259,6 +260,7 @@ def fetch_single_market(
                     prob = _extract_probability_from_market(matched)
                     if prob is not None:
                         return (slug, prob)
+                    matched_invalid = True
 
             # Strategy 2: search markets directly
             markets = _search_markets(slug, timeout=timeout)
@@ -267,6 +269,10 @@ def fetch_single_market(
                 prob = _extract_probability_from_market(matched)
                 if prob is not None:
                     return (slug, prob)
+                matched_invalid = True
+
+            if raise_on_error and matched_invalid:
+                raise ValueError(f"matched market '{slug}' has no valid probability")
 
             # Both API calls completed, so empty lists are a valid no-data
             # answer too. Only transport failures reach another attempt.

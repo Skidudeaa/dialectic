@@ -124,7 +124,9 @@ export function destinationUrl(
   const params = new URLSearchParams()
 
   if (!rootHome) params.set('room', room.id)
-  if (thread.parent_thread_id !== null) params.set('thread', thread.id)
+  // A message makes even the root thread an explicit destination. Omitting it
+  // loses the message axis when the URL is reloaded or traversed via history.
+  if (thread.parent_thread_id !== null || message) params.set('thread', thread.id)
   if (scene !== defaultScene) params.set('scene', scene)
   if (object) params.set('object', object)
   if (message) params.set('message', message)

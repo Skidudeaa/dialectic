@@ -363,12 +363,14 @@ export function useRoomNavigation(): RoomNavigation {
         && data.threadId
         && data.messageId
       ) {
+        event.ports[0]?.postMessage({ type: 'navigation-received' })
         void navigateRef.current({
           roomId: data.roomId,
           threadId: data.threadId,
           messageId: data.messageId,
         }, 'push')
       } else if (data?.type === 'open-room' && data.roomId) {
+        event.ports[0]?.postMessage({ type: 'navigation-received' })
         void navigateRef.current({ roomId: data.roomId }, 'push')
       }
     }

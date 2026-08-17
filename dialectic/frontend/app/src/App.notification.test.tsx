@@ -200,6 +200,18 @@ describe('notification message hydration', () => {
     expect(socket.refreshReactions).toHaveBeenCalled()
   })
 
+  it('falls back when a context response omits the deleted target', async () => {
+    vi.spyOn(api, 'getMessageContext').mockResolvedValue([message('old-context')])
+    const latest = [message('latest')]
+    const getMessages = vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: latest })
+
+    render(<ChatLayout nav={navigation('deleted')} />)
+
+    await waitFor(() => expect(getMessages).toHaveBeenCalledWith(thread.id, 200))
+    await waitFor(() => expect(useAppStore.getState().messages).toEqual(latest))
+    expect(screen.getByTestId('message-list')).toHaveAttribute('data-jump-target', '')
+  })
+
   it('does not let a slower prior destination overwrite the next one', async () => {
     const nextThread = {
       ...thread,
@@ -240,5 +252,9 @@ describe('notification message hydration', () => {
     expect(screen.getByTestId('message-list')).toHaveAttribute(
       'data-jump-target', 'target-2',
     )
+    expect(socket.refreshReactions).toHaveBeenCalledWith(nextThread.id)
+    expect(socket.refreshReactions).not.toHaveBeenCalledWith(thread.id)
+    expect(socket.refreshAttachments).toHaveBeenCalledWith(nextThread.id)
+    expect(socket.refreshAttachments).not.toHaveBeenCalledWith(thread.id)
   })
 })

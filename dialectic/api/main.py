@@ -2094,7 +2094,8 @@ async def get_message_context(
 
     # Get target message sequence
     target = await db.fetchrow(
-        "SELECT sequence FROM messages WHERE id = $1 AND thread_id = $2",
+        """SELECT sequence FROM messages
+           WHERE id = $1 AND thread_id = $2 AND NOT is_deleted""",
         message_id, thread_id
     )
     if not target:

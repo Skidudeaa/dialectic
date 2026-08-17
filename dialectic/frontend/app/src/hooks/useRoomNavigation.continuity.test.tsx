@@ -150,6 +150,7 @@ describe('warm notification navigation', () => {
     const { result } = renderHook(() => useRoomNavigation())
     await waitFor(() => expect(result.current.ready).toBe(true))
 
+    const acknowledge = vi.fn()
     act(() => {
       serviceWorkerMessage?.({
         data: {
@@ -158,6 +159,7 @@ describe('warm notification navigation', () => {
           threadId: `${SCHEME.id}-branch`,
           messageId: 'message-warm',
         },
+        ports: [{ postMessage: acknowledge }],
       } as MessageEvent)
     })
 
@@ -165,6 +167,7 @@ describe('warm notification navigation', () => {
     expect(useAppStore.getState().currentRoom?.id).toBe(SCHEME.id)
     expect(useAppStore.getState().currentThread?.id).toBe(`${SCHEME.id}-branch`)
     expect(window.location.search).toContain('message=message-warm')
+    expect(acknowledge).toHaveBeenCalledWith({ type: 'navigation-received' })
   })
 
   it('drops a message for a missing branch and on ordinary navigation', async () => {

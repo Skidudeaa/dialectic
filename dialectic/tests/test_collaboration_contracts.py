@@ -132,7 +132,15 @@ async def test_send_message_uses_validated_payload_thread_and_canonical_type():
 
 
 @pytest.mark.asyncio
-async def test_push_uses_the_canonical_room_name(monkeypatch):
+@pytest.mark.parametrize(
+    ("stored_name", "expected_name"),
+    [("Iran/Hormuz Trading Room", "Iran/Hormuz Trading Room"), (None, "Unnamed Room")],
+)
+async def test_push_uses_the_canonical_room_name(
+    monkeypatch: pytest.MonkeyPatch,
+    stored_name: str | None,
+    expected_name: str,
+) -> None:
     import api.notifications.service as notification_service
 
     room_id = uuid4()
@@ -151,7 +159,7 @@ async def test_push_uses_the_canonical_room_name(monkeypatch):
     )
     db = SimpleNamespace(fetch=AsyncMock(return_value=[{
         "user_id": recipient_id,
-        "room_name": "Iran/Hormuz Trading Room",
+        "room_name": stored_name,
     }]))
     send = AsyncMock(return_value={"sent": 1, "errors": []})
     monkeypatch.setattr(
@@ -174,7 +182,7 @@ async def test_push_uses_the_canonical_room_name(monkeypatch):
     query = db.fetch.await_args.args[0]
     assert "JOIN rooms" in query
     assert "r.name AS room_name" in query
-    assert send.await_args.kwargs["room_name"] == "Iran/Hormuz Trading Room"
+    assert send.await_args.kwargs["room_name"] == expected_name
 
 
 @pytest.mark.asyncio

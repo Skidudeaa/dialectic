@@ -259,6 +259,11 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
           data = context as Message[]
           targeted = Array.isArray(context)
             && context.some((message) => message.id === nav.messageId)
+          if (!targeted) {
+            data = await api.getMessages(currentThread.id, 200) as (
+              { messages?: Message[] } | Message[]
+            )
+          }
         } catch {
           if (cancelled) return
           data = await api.getMessages(currentThread.id, 200) as (
@@ -282,14 +287,14 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
       // Attachments are not projected onto messages, so the media a branch
       // carries has to be read separately. This is the exact fill — the live
       // probe in the socket hook only covers what arrives while connected.
-      void refreshAttachments()
+      await Promise.all([
+        refreshAttachments(currentThread.id),
+        refreshReactions(currentThread.id),
+      ])
     }
     void loadHistory().catch((error) => {
       if (!cancelled) console.error('Failed to load message history:', error)
     })
-    // Live reaction_updated events only cover changes made while connected, so
-    // the existing set has to be fetched alongside the history.
-    void refreshReactions()
     return () => { cancelled = true }
   }, [
     currentThread, roomToken, nav.messageId, setMessages,

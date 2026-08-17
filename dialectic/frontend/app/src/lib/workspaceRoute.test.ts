@@ -118,6 +118,9 @@ describe('destinationUrl', () => {
     expect(destinationUrl(scheme, branch)).toBe(
       '/?room=scheme-room&thread=branch-thread',
     )
+    expect(destinationUrl(scheme, root, 'record', null, 'root-message')).toBe(
+      '/?room=scheme-room&thread=main-thread&message=root-message',
+    )
   })
 
   it('canonicalizes only the Home root to a bare slash', () => {

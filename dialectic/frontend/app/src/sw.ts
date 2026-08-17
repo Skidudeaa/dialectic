@@ -84,25 +84,46 @@ self.addEventListener('notificationclick', (event) => {
   const threadId: string | undefined = event.notification.data?.thread_id
   const messageId: string | undefined = event.notification.data?.message_id
   event.waitUntil((async () => {
-    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-    if (clients.length > 0) {
-      const client = clients.find(candidate => candidate.visibilityState === 'visible') ?? clients[0]
-      await client.focus()
-      if (roomId && threadId && messageId) {
-        client.postMessage({
-          type: 'open-message', roomId, threadId, messageId,
-        })
-      } else if (roomId) {
-        // Legacy notifications carried only the room destination.
-        client.postMessage({ type: 'open-room', roomId })
-      }
-      return
-    }
     const params = new URLSearchParams()
     if (roomId) params.set('room', roomId)
     if (threadId) params.set('thread', threadId)
     if (messageId) params.set('message', messageId)
     const query = params.toString()
-    await self.clients.openWindow(query ? `/?${query}` : '/')
+    const destination = query ? `/?${query}` : '/'
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    if (clients.length > 0) {
+      const client = clients.find(candidate => candidate.visibilityState === 'visible') ?? clients[0]
+      await client.focus()
+      let payload: Record<string, string> | null = null
+      if (roomId && threadId && messageId) {
+        payload = {
+          type: 'open-message', roomId, threadId, messageId,
+        }
+      } else if (roomId) {
+        // Legacy notifications carried only the room destination.
+        payload = { type: 'open-room', roomId }
+      }
+      if (!payload) return
+
+      const channel = new MessageChannel()
+      const acknowledged = new Promise<boolean>((resolve) => {
+        let settled = false
+        const finish = (received: boolean) => {
+          if (settled) return
+          settled = true
+          channel.port1.close()
+          resolve(received)
+        }
+        const timeout = setTimeout(() => finish(false), 200)
+        channel.port1.onmessage = () => {
+          clearTimeout(timeout)
+          finish(true)
+        }
+      })
+      client.postMessage(payload, [channel.port2])
+      if (!await acknowledged) await client.navigate(destination)
+      return
+    }
+    await self.clients.openWindow(destination)
   })())
 })

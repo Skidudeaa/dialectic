@@ -217,3 +217,31 @@ async def test_broadcast_failure_does_not_turn_a_committed_send_into_a_retryable
     assert db.persisted_messages == 1
     assert db.commits == 1
     broadcast.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_message_context_rejects_a_soft_deleted_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = AsyncMock()
+
+    async def fetchrow(query: str, *params: object) -> object | None:
+        if "FROM threads WHERE id" in query:
+            return {"id": THREAD_ID, "room_id": ROOM_ID}
+        if "SELECT sequence FROM messages" in query:
+            assert "NOT is_deleted" in query
+            return None
+        raise AssertionError(f"Unexpected query: {query}")
+
+    db.fetchrow = AsyncMock(side_effect=fetchrow)
+    monkeypatch.setattr(main_mod, "verify_room_token", AsyncMock())
+
+    with pytest.raises(HTTPException) as exc_info:
+        await main_mod.get_message_context(
+            THREAD_ID,
+            message_id=MESSAGE_ID,
+            context=25,
+            token="room-token",
+            db=db,
+        )
+    assert exc_info.value.status_code == 404
