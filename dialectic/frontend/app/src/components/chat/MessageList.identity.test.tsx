@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { MessageList } from './MessageList'
 import type { Message } from '../../types'
 import { participantDisplayName } from '../../lib/productIdentity.ts'
@@ -51,5 +51,27 @@ describe('MessageList — who is speaking', () => {
       />,
     )
     expect(container.textContent).not.toMatch(/\bClaude\b/)
+  })
+
+  it('centers and flashes an exact notification target', () => {
+    if (!globalThis.CSS) vi.stubGlobal('CSS', {})
+    Object.defineProperty(globalThis.CSS, 'escape', {
+      configurable: true,
+      value: (value: string) => value,
+    })
+    const { container } = render(
+      <MessageList
+        messages={[message('human', 'before'), message('human', 'target')]}
+        currentUserId="u1"
+        jumpTarget={{ id: 'target', nonce: 1 }}
+      />,
+    )
+
+    const target = container.querySelector('[data-message-id="target"]')
+    expect(target).not.toBeNull()
+    expect(target).toHaveClass('msg-flash')
+    expect(target?.scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'smooth', block: 'center',
+    })
   })
 })

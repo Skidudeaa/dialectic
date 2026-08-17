@@ -76,6 +76,9 @@ export interface RoomNavigation {
    *  never this hook's concern (§5.2). Resets to null on any navigate call
    *  that does not carry one, same as every other destination axis. */
   objectId: string | null
+  /** Exact message target installed with this destination. It survives only
+   *  when the requested thread was actually reached. */
+  messageId: string | null
 }
 
 export function useRoomNavigation(): RoomNavigation {
@@ -91,6 +94,7 @@ export function useRoomNavigation(): RoomNavigation {
   const [error, setError] = useState<string | null>(null)
   const [accessError, setAccessError] = useState<string | null>(null)
   const [objectId, setObjectId] = useState<string | null>(null)
+  const [messageId, setMessageId] = useState<string | null>(null)
 
   const roomsRef = useRef<UserRoom[]>([])
   const loadRef = useRef<Promise<UserRoom[]> | null>(null)
@@ -226,6 +230,9 @@ export function useRoomNavigation(): RoomNavigation {
     // Focus on an unrelated navigation without any extra code at the call
     // sites that don't care about it.
     const object = destination.object ?? null
+    const message = requested && requested.id === thread.id
+      ? destination.messageId ?? null
+      : null
 
     if (state.currentRoom?.id !== room.id) {
       setRoom(
@@ -239,8 +246,9 @@ export function useRoomNavigation(): RoomNavigation {
     setWorkspaceScene(scene)
 
     setObjectId(object)
+    setMessageId(message)
 
-    const url = destinationUrl(room, thread, scene, object)
+    const url = destinationUrl(room, thread, scene, object, message)
     if (historyMode === 'push') window.history.pushState(null, '', url)
     else if (historyMode === 'replace') window.history.replaceState(null, '', url)
     // 'none' (popstate, initial entry) mutates no history.
@@ -338,13 +346,29 @@ export function useRoomNavigation(): RoomNavigation {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
-  // A tapped push notification: the service worker posts open-room into a
-  // live window (cold starts arrive as /?room=<id> through initial entry).
+  // A tapped push notification: the service worker posts the full destination
+  // into a live window; cold starts carry the same axes in the entry URL.
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
     const onMessage = (event: MessageEvent) => {
-      const data = event.data as { type?: string; roomId?: string } | null
-      if (data?.type === 'open-room' && data.roomId) {
+      const data = event.data as {
+        type?: string
+        roomId?: string
+        threadId?: string
+        messageId?: string
+      } | null
+      if (
+        data?.type === 'open-message'
+        && data.roomId
+        && data.threadId
+        && data.messageId
+      ) {
+        void navigateRef.current({
+          roomId: data.roomId,
+          threadId: data.threadId,
+          messageId: data.messageId,
+        }, 'push')
+      } else if (data?.type === 'open-room' && data.roomId) {
         void navigateRef.current({ roomId: data.roomId }, 'push')
       }
     }
@@ -365,5 +389,6 @@ export function useRoomNavigation(): RoomNavigation {
     navigate,
     enterGrantedRoom,
     objectId,
+    messageId,
   }
 }

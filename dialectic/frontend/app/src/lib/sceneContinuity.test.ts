@@ -102,6 +102,7 @@ describe('startup precedence', () => {
       // entryDestination started preserving it the same way it already
       // preserved scene (workspaceRoute.ts) — not a behavior change here.
       roomId: null, threadId: null, scene: null, object: null,
+      messageId: null,
     })
   })
 
@@ -109,7 +110,10 @@ describe('startup precedence', () => {
     const chosen = chooseEntryDestination(
       { roomId: null, threadId: null, scene: 'record' }, restored,
     )
-    expect(chosen).toEqual({ roomId: null, threadId: null, scene: 'record', object: null })
+    expect(chosen).toEqual({
+      roomId: null, threadId: null, scene: 'record', object: null,
+      messageId: null,
+    })
   })
 })
 

@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRoomNavigation } from './useRoomNavigation.ts'
 import { useAppStore } from '../stores/appStore.ts'
@@ -30,6 +30,7 @@ function room(over: Partial<UserRoom> = {}): UserRoom {
 const HOME = room({ id: 'room-home', name: 'Home', is_home: true, token: 'tok-h' })
 const SCHEME = room()
 const OTHER = room({ id: 'room-2', name: 'Other', token: 'tok-2' })
+let serviceWorkerMessage: ((event: MessageEvent) => void) | null = null
 
 function threads(roomId: string): Thread[] {
   return [
@@ -60,6 +61,16 @@ beforeEach(() => {
     async (roomId: string) => threads(roomId),
   )
   vi.spyOn(api, 'setRoomToken').mockImplementation(() => undefined)
+  serviceWorkerMessage = null
+  Object.defineProperty(navigator, 'serviceWorker', {
+    configurable: true,
+    value: {
+      addEventListener: vi.fn((type: string, listener: (event: MessageEvent) => void) => {
+        if (type === 'message') serviceWorkerMessage = listener
+      }),
+      removeEventListener: vi.fn(),
+    },
+  })
 })
 
 afterEach(() => {
@@ -119,15 +130,71 @@ describe('boot with a stored scene', () => {
   })
 
   it('lets a notification entry win over it', async () => {
-    // A cold-started notification arrives as /?room=<id>. Landing the user
+    // A cold-started notification arrives as a complete URL. Landing the user
     // where they were last instead of on the thing they were notified about
     // is the failure this guards.
     rememberScene(USER_ID, { roomId: SCHEME.id, threadId: null, scene: 'record' })
     vi.mocked(api.getRooms).mockResolvedValue([HOME, SCHEME, OTHER])
-    enter(`/?room=${OTHER.id}`)
+    enter(`/?room=${OTHER.id}&thread=${OTHER.id}-branch&message=message-cold`)
     const { result } = renderHook(() => useRoomNavigation())
     await waitFor(() => expect(result.current.ready).toBe(true))
     expect(useAppStore.getState().currentRoom?.id).toBe(OTHER.id)
+    expect(useAppStore.getState().currentThread?.id).toBe(`${OTHER.id}-branch`)
+    expect(result.current.messageId).toBe('message-cold')
+    expect(window.location.search).toContain('message=message-cold')
+  })
+})
+
+describe('warm notification navigation', () => {
+  it('installs every axis through navigate and writes exact history', async () => {
+    const { result } = renderHook(() => useRoomNavigation())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    act(() => {
+      serviceWorkerMessage?.({
+        data: {
+          type: 'open-message',
+          roomId: SCHEME.id,
+          threadId: `${SCHEME.id}-branch`,
+          messageId: 'message-warm',
+        },
+      } as MessageEvent)
+    })
+
+    await waitFor(() => expect(result.current.messageId).toBe('message-warm'))
+    expect(useAppStore.getState().currentRoom?.id).toBe(SCHEME.id)
+    expect(useAppStore.getState().currentThread?.id).toBe(`${SCHEME.id}-branch`)
+    expect(window.location.search).toContain('message=message-warm')
+  })
+
+  it('drops a message for a missing branch and on ordinary navigation', async () => {
+    const { result } = renderHook(() => useRoomNavigation())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    await act(async () => {
+      await result.current.navigate({
+        roomId: SCHEME.id,
+        threadId: 'ghost-branch',
+        messageId: 'message-ghost',
+      })
+    })
+    expect(result.current.messageId).toBeNull()
+    expect(window.location.search).not.toContain('message=')
+
+    await act(async () => {
+      await result.current.navigate({
+        roomId: SCHEME.id,
+        threadId: `${SCHEME.id}-branch`,
+        messageId: 'message-real',
+      })
+    })
+    expect(result.current.messageId).toBe('message-real')
+
+    await act(async () => {
+      await result.current.navigate({ roomId: SCHEME.id })
+    })
+    expect(result.current.messageId).toBeNull()
+    expect(window.location.search).not.toContain('message=')
   })
 })
 
