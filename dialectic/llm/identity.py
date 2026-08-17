@@ -35,7 +35,12 @@ Produce an updated identity document covering:
 ## Effective Interventions
 [What kinds of interjections were productive vs. fell flat]
 
-Keep this document concise (under 500 words). It will be injected into your future prompts."""
+## Standing Commitments
+[Disciplines the room has pinned for me. Carry them forward verbatim across
+rewrites; they change only when the room explicitly retracts them. If none
+have been pinned, say so.]
+
+Keep this document concise (under 500 words, excluding Standing Commitments). It will be injected into your future prompts."""
 
 
 USER_MODEL_DISTILLATION_PROMPT = """Reflect on {display_name}'s contributions in this session.

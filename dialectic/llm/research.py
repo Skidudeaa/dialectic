@@ -108,10 +108,12 @@ pile of quotes.
 Cite only what you actually fetched. Be plain about what could not be
 verified — do not round up.
 
-If the research sharpens into a call, you may end with a proposal:
-draft_prediction for a falsifiable claim, propose_thesis when the finding
-deserves a tracked cascade, save_reading for a source worth keeping. You
-propose; the room disposes."""
+Before the brief lands, map it: each load-bearing finding says which thesis
+node it moves, or that it touches none. If the research sharpens into a
+falsifiable call with a date, it ends as a draft_prediction — not a prose
+probability — whatever its horizon. propose_thesis when the finding deserves
+a tracked cascade, save_reading for a source worth keeping. You propose; the
+room disposes."""
 
 
 # One active dive per room. A deep dive narrates its legwork into the room

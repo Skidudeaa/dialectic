@@ -724,3 +724,40 @@ class TestToolsSection:
             "Reminder: cite only values from Trading Thesis State for all financial figures."
         )
         assert "## Your Tools" in prompt.system
+
+
+class TestStandingDisciplines:
+    """The room's three standing disciplines ride the prompt layer.
+
+    Pinned 2026-08-17: article→node mapping and the draft_prediction rule
+    live in TOOLS_SECTION (tool-enabled turns only); the meta/analysis mode
+    split lives in BASE_IDENTITY (every primary turn).
+    """
+
+    def test_base_identity_names_the_two_modes(self, builder):
+        """Meta vs analysis is an every-turn discipline, not a tool rule."""
+        prompt = builder.build(make_room(), [], [], [])
+        assert "meta" in prompt.system
+        assert "thesis diagnostics" in prompt.system
+
+    def test_tools_section_carries_the_node_mapping_rule(self, builder):
+        """Articles get mapped to a node — or explicitly to none."""
+        prompt = builder.build(make_room(), [], [], [], tools_enabled=True)
+        flat = " ".join(prompt.system.split())
+        assert "Touches no tracked node" in flat
+        assert "confluence" in flat
+
+    def test_tools_section_carries_the_prediction_rule(self, builder):
+        """Falsifiable + dated ⇒ draft_prediction, at any horizon."""
+        prompt = builder.build(make_room(), [], [], [], tools_enabled=True)
+        flat = " ".join(prompt.system.split())
+        assert "draft_prediction" in flat
+        assert "deadline" in flat
+        assert "Horizon is no filter" in flat
+
+    def test_tool_disciplines_absent_without_tools(self, builder):
+        """No tool channel -> no rules that demand tool calls."""
+        prompt = builder.build(make_room(), [], [], [])
+        flat = " ".join(prompt.system.split())
+        assert "Touches no tracked node" not in flat
+        assert "draft_prediction" not in flat
