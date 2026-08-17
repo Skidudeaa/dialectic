@@ -51,7 +51,13 @@ interface PushPayload {
   title?: string
   body?: string
   tag?: string
-  data?: { room_id?: string; thread_id?: string; message_id?: string; type?: string }
+  data?: {
+    room_id?: string
+    room_name?: string
+    thread_id?: string
+    message_id?: string
+    type?: string
+  }
 }
 
 self.addEventListener('push', (event) => {
@@ -75,15 +81,28 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const roomId: string | undefined = event.notification.data?.room_id
+  const threadId: string | undefined = event.notification.data?.thread_id
+  const messageId: string | undefined = event.notification.data?.message_id
   event.waitUntil((async () => {
     const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     if (clients.length > 0) {
-      const client = clients[0]
+      const client = clients.find(candidate => candidate.visibilityState === 'visible') ?? clients[0]
       await client.focus()
-      // An open app switches rooms in place — the page listens for this.
-      if (roomId) client.postMessage({ type: 'open-room', roomId })
+      if (roomId && threadId && messageId) {
+        client.postMessage({
+          type: 'open-message', roomId, threadId, messageId,
+        })
+      } else if (roomId) {
+        // Legacy notifications carried only the room destination.
+        client.postMessage({ type: 'open-room', roomId })
+      }
       return
     }
-    await self.clients.openWindow(roomId ? `/?room=${roomId}` : '/')
+    const params = new URLSearchParams()
+    if (roomId) params.set('room', roomId)
+    if (threadId) params.set('thread', threadId)
+    if (messageId) params.set('message', messageId)
+    const query = params.toString()
+    await self.clients.openWindow(query ? `/?${query}` : '/')
   })())
 })

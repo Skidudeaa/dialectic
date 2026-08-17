@@ -27,6 +27,7 @@ export interface RoomDestination {
   threadId?: string | null;
   scene?: WorkspaceScene | null;
   object?: string | null;
+  messageId?: string | null;
 }
 
 export interface User {
