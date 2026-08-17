@@ -15,6 +15,7 @@ these routes would look like a passing 200 to a naive test.
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from threading import Event
 
 import pytest
@@ -328,6 +329,101 @@ class TestPolymarketEndpoint:
 
 
 class TestNewsEndpoint:
+    def test_live_freshness_identifies_the_provider_observation(
+        self, client, monkeypatch,
+    ):
+        """Removing the live freshness stamp must make confirmed-empty ambiguous."""
+        from tools.data_fetch import gdelt
+
+        frozen = datetime(2026, 8, 17, 1, 0, tzinfo=timezone.utc)
+
+        class FrozenDateTime:
+            @classmethod
+            def now(cls, tz: timezone | None = None) -> datetime:
+                return frozen if tz is not None else frozen.replace(tzinfo=None)
+
+        monkeypatch.setattr(bridge_mod, "datetime", FrozenDateTime)
+        monkeypatch.setattr(bridge_mod.time, "monotonic", lambda: 100.0)
+        monkeypatch.setattr(gdelt, "fetch_articles", lambda *_args, **_kwargs: [])
+
+        body = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert body["status"] == "no_matches"
+        assert body["freshness"] == {
+            "state": "live",
+            "attempted_at": "2026-08-17T01:00:00+00:00",
+            "observed_at": "2026-08-17T01:00:00+00:00",
+            "served_at": "2026-08-17T01:00:00+00:00",
+            "age_seconds": 0,
+            "ttl_seconds": 900,
+        }
+        assert body["fetched_at"] == body["freshness"]["observed_at"]
+        assert body["cache_hit"] is False
+
+    def test_cached_freshness_preserves_observation_and_reports_age(
+        self, client, monkeypatch,
+    ):
+        """Restamping a cache hit as live must lose the age of confirmed emptiness."""
+        from tools.data_fetch import gdelt
+
+        elapsed = {"seconds": 0}
+        base = datetime(2026, 8, 17, 1, 0, tzinfo=timezone.utc)
+
+        class FrozenDateTime:
+            @classmethod
+            def now(cls, tz: timezone | None = None) -> datetime:
+                value = base + timedelta(seconds=elapsed["seconds"])
+                return value if tz is not None else value.replace(tzinfo=None)
+
+        monkeypatch.setattr(bridge_mod, "datetime", FrozenDateTime)
+        monkeypatch.setattr(
+            bridge_mod.time, "monotonic", lambda: 100.0 + elapsed["seconds"],
+        )
+        monkeypatch.setattr(gdelt, "fetch_articles", lambda *_args, **_kwargs: [])
+
+        first = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+        elapsed["seconds"] = 37
+        cached = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert cached["freshness"]["state"] == "cached"
+        assert cached["freshness"]["attempted_at"] == first["freshness"]["attempted_at"]
+        assert cached["freshness"]["observed_at"] == first["freshness"]["observed_at"]
+        assert cached["freshness"]["served_at"] == "2026-08-17T01:00:37+00:00"
+        assert cached["freshness"]["age_seconds"] == 37
+        assert cached["fetched_at"] == first["fetched_at"]
+        assert cached["cache_hit"] is True
+
+    def test_not_configured_freshness_is_not_applicable(
+        self, client, monkeypatch, tmp_path,
+    ):
+        """A missing feed must never imply that a provider attempt occurred."""
+        book = tmp_path / "quiet-book.json"
+        book.write_text(json.dumps({"meta": {}, "nodes": [{"id": "a"}]}))
+        monkeypatch.setattr(bridge_mod, "_BOOKS_DIR", tmp_path)
+
+        body = client.get(
+            "/api/bridge/news/quiet-book", headers=svc_headers(),
+        ).json()
+
+        assert body["status"] == "not_configured"
+        assert body["freshness"] == {
+            "state": "not_applicable",
+            "attempted_at": None,
+            "observed_at": None,
+            "served_at": body["freshness"]["served_at"],
+            "age_seconds": None,
+            "ttl_seconds": 900,
+        }
+        assert body["freshness"]["served_at"].endswith("+00:00")
+        assert body["fetched_at"] is None
+        assert body["cache_hit"] is False
+
     def test_unknown_book_is_404(self, client):
         resp = client.get("/api/bridge/news/no-such-book", headers=svc_headers())
         assert resp.status_code == 404

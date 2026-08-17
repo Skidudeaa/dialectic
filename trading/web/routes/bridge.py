@@ -23,6 +23,7 @@ import logging
 import os
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
@@ -538,8 +539,18 @@ _news_fetch_lock = Lock()
 NEWS_MAX_HEADLINES = 15
 NEWS_CACHE_MAX_ENTRIES = 64
 
-# (thesis_id, exact query or "") -> (expires_at_monotonic, payload)
-_news_cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
+@dataclass
+class _NewsCacheEntry:
+    """One scoped response plus the clock needed to age its observation."""
+
+    expires_at: float
+    observed_monotonic: Optional[float]
+    payload: dict[str, Any]
+    last_observation: Optional[dict[str, Any]]
+
+
+# (thesis_id, exact query or "") -> scoped provider observation
+_news_cache: dict[tuple[str, str], _NewsCacheEntry] = {}
 
 
 def _book_path(thesis_id: str) -> Optional[Path]:
@@ -624,10 +635,31 @@ def _gdelt_query_for_book(book: dict) -> Optional[str]:
     return None
 
 
+def _freshness_payload(
+    *,
+    state: str,
+    attempted_at: Optional[str],
+    observed_at: Optional[str],
+    served_at: str,
+    age_seconds: Optional[int],
+    ttl_seconds: int,
+) -> dict[str, Any]:
+    """Describe when evidence was attempted, observed, and served."""
+    return {
+        "state": state,
+        "attempted_at": attempted_at,
+        "observed_at": observed_at,
+        "served_at": served_at,
+        "age_seconds": age_seconds,
+        "ttl_seconds": ttl_seconds,
+    }
+
+
 def _news_payload(
     status: str,
     query: Optional[str],
     *,
+    freshness: dict[str, Any],
     articles: Optional[list[dict[str, Any]]] = None,
     note: Optional[str] = None,
     retry_after_seconds: Optional[int] = None,
@@ -638,8 +670,10 @@ def _news_payload(
         "source": "gdelt",
         "query": query,
         "articles": articles if articles is not None else [],
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
-        "cache_hit": False,
+        "freshness": freshness,
+        # Compatibility aliases for consumers being upgraded separately.
+        "fetched_at": freshness["observed_at"],
+        "cache_hit": freshness["state"] == "cached",
     }
     if note is not None:
         payload["note"] = note
@@ -658,9 +692,20 @@ def _fetch_news_sync(
 
     query = query_override or _gdelt_query_for_book(book)
     if not query:
+        served_at = datetime.now(timezone.utc).isoformat()
         return (
             _news_payload(
-                "not_configured", None, note="no gdelt config",
+                "not_configured",
+                None,
+                freshness=_freshness_payload(
+                    state="not_applicable",
+                    attempted_at=None,
+                    observed_at=None,
+                    served_at=served_at,
+                    age_seconds=None,
+                    ttl_seconds=int(NEWS_TTL_SECONDS),
+                ),
+                note="no gdelt config",
             ),
             NEWS_TTL_SECONDS,
         )
@@ -668,10 +713,19 @@ def _fetch_news_sync(
     now = time.monotonic()
     if _news_rate_limit_until > now:
         remaining = max(1, int(_news_rate_limit_until - now + 0.999))
+        served_at = datetime.now(timezone.utc).isoformat()
         return (
             _news_payload(
                 "rate_limited",
                 query,
+                freshness=_freshness_payload(
+                    state="stale",
+                    attempted_at=None,
+                    observed_at=None,
+                    served_at=served_at,
+                    age_seconds=None,
+                    ttl_seconds=int(NEWS_TTL_SECONDS),
+                ),
                 note="GDELT source cooldown active",
                 retry_after_seconds=remaining,
             ),
@@ -680,6 +734,7 @@ def _fetch_news_sync(
 
     from tools.data_fetch import gdelt
 
+    attempted_at = datetime.now(timezone.utc).isoformat()
     try:
         articles = gdelt.fetch_articles(query, max_records=NEWS_MAX_HEADLINES)
     except gdelt.GdeltRateLimitError as exc:
@@ -702,6 +757,14 @@ def _fetch_news_sync(
             _news_payload(
                 "rate_limited",
                 query,
+                freshness=_freshness_payload(
+                    state="stale",
+                    attempted_at=attempted_at,
+                    observed_at=None,
+                    served_at=datetime.now(timezone.utc).isoformat(),
+                    age_seconds=None,
+                    ttl_seconds=int(NEWS_TTL_SECONDS),
+                ),
                 note=f"gdelt unavailable: {type(exc).__name__}",
                 retry_after_seconds=int(ttl),
             ),
@@ -716,6 +779,14 @@ def _fetch_news_sync(
             _news_payload(
                 "unavailable",
                 query,
+                freshness=_freshness_payload(
+                    state="stale",
+                    attempted_at=attempted_at,
+                    observed_at=None,
+                    served_at=datetime.now(timezone.utc).isoformat(),
+                    age_seconds=None,
+                    ttl_seconds=int(NEWS_TTL_SECONDS),
+                ),
                 note=f"gdelt unavailable: {type(exc).__name__}",
                 retry_after_seconds=int(NEWS_ERROR_TTL_SECONDS),
             ),
@@ -734,7 +805,23 @@ def _fetch_news_sync(
         for article in articles[:NEWS_MAX_HEADLINES]
     ]
     status = "ok" if headlines else "no_matches"
-    return _news_payload(status, query, articles=headlines), NEWS_TTL_SECONDS
+    observed_at = datetime.now(timezone.utc).isoformat()
+    return (
+        _news_payload(
+            status,
+            query,
+            freshness=_freshness_payload(
+                state="live",
+                attempted_at=attempted_at,
+                observed_at=observed_at,
+                served_at=observed_at,
+                age_seconds=0,
+                ttl_seconds=int(NEWS_TTL_SECONDS),
+            ),
+            articles=headlines,
+        ),
+        NEWS_TTL_SECONDS,
+    )
 
 
 def _store_news_cache(
@@ -744,13 +831,29 @@ def _store_news_cache(
 ) -> None:
     """Store one bounded query result after pruning expired entries."""
     now = time.monotonic()
-    for expired_key, (expires_at, _value) in list(_news_cache.items()):
-        if expires_at <= now:
-            _news_cache.pop(expired_key, None)
     if key not in _news_cache and len(_news_cache) >= NEWS_CACHE_MAX_ENTRIES:
-        evict = min(_news_cache, key=lambda candidate: _news_cache[candidate][0])
+        evict = min(
+            _news_cache,
+            key=lambda candidate: _news_cache[candidate].expires_at,
+        )
         _news_cache.pop(evict)
-    _news_cache[key] = (now + ttl, payload)
+    previous = _news_cache.get(key)
+    is_live = payload["freshness"]["state"] == "live"
+    last_observation = (
+        dict(payload) if is_live
+        else previous.last_observation if previous is not None
+        else None
+    )
+    _news_cache[key] = _NewsCacheEntry(
+        expires_at=now + ttl,
+        observed_monotonic=(
+            now if is_live
+            else previous.observed_monotonic if previous is not None
+            else None
+        ),
+        payload=payload,
+        last_observation=last_observation,
+    )
 
 
 def _fetch_and_cache_news_sync(
@@ -767,9 +870,27 @@ def _fetch_and_cache_news_sync(
     with _news_fetch_lock:
         now = time.monotonic()
         cached = _news_cache.get(cache_key)
-        if cached and cached[0] > now:
-            cached_payload = dict(cached[1])
-            cached_payload["cache_hit"] = True
+        if cached and cached.expires_at > now:
+            cached_payload = dict(cached.payload)
+            original = cached.payload["freshness"]
+            state = (
+                "cached" if original["state"] == "live"
+                else original["state"]
+            )
+            cached_payload["freshness"] = _freshness_payload(
+                state=state,
+                attempted_at=original["attempted_at"],
+                observed_at=original["observed_at"],
+                served_at=datetime.now(timezone.utc).isoformat(),
+                age_seconds=(
+                    max(0, int(now - cached.observed_monotonic))
+                    if cached.observed_monotonic is not None
+                    else None
+                ),
+                ttl_seconds=original["ttl_seconds"],
+            )
+            cached_payload["fetched_at"] = cached_payload["freshness"]["observed_at"]
+            cached_payload["cache_hit"] = state == "cached"
             return cached_payload
 
         payload, ttl = _fetch_news_sync(thesis_id, book, focused_query)
