@@ -23,6 +23,7 @@ import logging
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -534,10 +535,11 @@ NEWS_RATE_LIMIT_MAX_DOUBLINGS = 8
 # GDELT rate-limits by caller IP, so the cooldown must span books and queries.
 _news_rate_limit_streak = 0
 _news_rate_limit_until = 0.0
-_news_fetch_lock = Lock()
+_news_state_lock = Lock()
 
 NEWS_MAX_HEADLINES = 15
 NEWS_CACHE_MAX_ENTRIES = 64
+_NEWS_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="gdelt")
 
 @dataclass
 class _NewsCacheEntry:
@@ -551,6 +553,9 @@ class _NewsCacheEntry:
 
 # (thesis_id, exact query or "") -> scoped provider observation
 _news_cache: dict[tuple[str, str], _NewsCacheEntry] = {}
+_news_inflight: dict[
+    tuple[str, str], asyncio.Task[dict[str, Any]]
+] = {}
 
 
 def _book_path(thesis_id: str) -> Optional[Path]:
@@ -710,9 +715,12 @@ def _fetch_news_sync(
             NEWS_TTL_SECONDS,
         )
 
-    now = time.monotonic()
-    if _news_rate_limit_until > now:
-        remaining = max(1, int(_news_rate_limit_until - now + 0.999))
+    with _news_state_lock:
+        now = time.monotonic()
+        cooldown_until = _news_rate_limit_until
+        starting_streak = _news_rate_limit_streak
+    if cooldown_until > now:
+        remaining = max(1, int(cooldown_until - now + 0.999))
         served_at = datetime.now(timezone.utc).isoformat()
         return (
             _news_payload(
@@ -736,22 +744,26 @@ def _fetch_news_sync(
 
     attempted_at = datetime.now(timezone.utc).isoformat()
     try:
-        articles = gdelt.fetch_articles(query, max_records=NEWS_MAX_HEADLINES)
-    except gdelt.GdeltRateLimitError as exc:
-        _news_rate_limit_streak += 1
-        ttl = min(
-            NEWS_TTL_SECONDS,
-            NEWS_ERROR_TTL_SECONDS
-            * (2 ** min(
-                _news_rate_limit_streak - 1,
-                NEWS_RATE_LIMIT_MAX_DOUBLINGS,
-            )),
+        articles = gdelt.fetch_articles(
+            query, max_records=NEWS_MAX_HEADLINES, retries=0,
         )
-        _news_rate_limit_until = time.monotonic() + ttl
+    except gdelt.GdeltRateLimitError as exc:
+        with _news_state_lock:
+            _news_rate_limit_streak += 1
+            current_streak = _news_rate_limit_streak
+            ttl = min(
+                NEWS_TTL_SECONDS,
+                NEWS_ERROR_TTL_SECONDS
+                * (2 ** min(
+                    current_streak - 1,
+                    NEWS_RATE_LIMIT_MAX_DOUBLINGS,
+                )),
+            )
+            _news_rate_limit_until = time.monotonic() + ttl
         log.warning(
             "GDELT rate-limited for %s (source streak %d) — holding requests "
             "%.0fs so the per-IP throttle can lift: %s",
-            thesis_id, _news_rate_limit_streak, ttl, exc,
+            thesis_id, current_streak, ttl, exc,
         )
         return (
             _news_payload(
@@ -793,8 +805,12 @@ def _fetch_news_sync(
             NEWS_ERROR_TTL_SECONDS,
         )
 
-    _news_rate_limit_streak = 0
-    _news_rate_limit_until = 0.0
+    # A success may overlap a later 429. It may clear only the source state it
+    # observed when its own attempt began, never a newer failure.
+    with _news_state_lock:
+        if _news_rate_limit_streak == starting_streak:
+            _news_rate_limit_streak = 0
+            _news_rate_limit_until = 0.0
     headlines: list[dict[str, Any]] = [
         {
             "title": article.title,
@@ -856,46 +872,82 @@ def _store_news_cache(
     )
 
 
-def _fetch_and_cache_news_sync(
+def _cached_news_payload(
+    cached: _NewsCacheEntry,
+    now: float,
+) -> dict[str, Any]:
+    """Serve one cache entry without restamping its evidence as current."""
+    cached_payload = dict(cached.payload)
+    original = cached.payload["freshness"]
+    state = "cached" if original["state"] == "live" else original["state"]
+    cached_payload["freshness"] = _freshness_payload(
+        state=state,
+        attempted_at=original["attempted_at"],
+        observed_at=original["observed_at"],
+        served_at=datetime.now(timezone.utc).isoformat(),
+        age_seconds=(
+            max(0, int(now - cached.observed_monotonic))
+            if cached.observed_monotonic is not None
+            else None
+        ),
+        ttl_seconds=original["ttl_seconds"],
+    )
+    cached_payload["fetched_at"] = cached_payload["freshness"]["observed_at"]
+    cached_payload["cache_hit"] = state == "cached"
+    if "retry_after_seconds" in cached_payload:
+        cached_payload["retry_after_seconds"] = max(
+            1, int(cached.expires_at - now + 0.999),
+        )
+    return cached_payload
+
+
+async def _fetch_and_cache_news(
     thesis_id: str,
     book: dict[str, Any],
     focused_query: Optional[str],
     cache_key: tuple[str, str],
 ) -> dict[str, Any]:
-    """Single-flight GDELT fetch with atomic cache and cooldown state."""
-    # WHY one process-wide lock: GDELT throttles by source IP. Letting focused
-    # queries race can stampede upstream, and a concurrent success can erase a
-    # 429 cooldown after another request sets it. Rechecking the cache inside
-    # the lock also collapses concurrent calls for the same exact query.
-    with _news_fetch_lock:
+    """Run one provider attempt and publish it atomically to the scoped cache."""
+    try:
+        loop = asyncio.get_running_loop()
+        payload, ttl = await loop.run_in_executor(
+            _NEWS_EXECUTOR,
+            _fetch_news_sync,
+            thesis_id,
+            book,
+            focused_query,
+        )
+        with _news_state_lock:
+            _store_news_cache(cache_key, payload, ttl)
+        return payload
+    finally:
+        current = asyncio.current_task()
+        with _news_state_lock:
+            if _news_inflight.get(cache_key) is current:
+                _news_inflight.pop(cache_key, None)
+
+
+async def _get_news_payload(
+    thesis_id: str,
+    book: dict[str, Any],
+    focused_query: Optional[str],
+    cache_key: tuple[str, str],
+) -> dict[str, Any]:
+    """Return a warm result immediately or share one same-query producer."""
+    with _news_state_lock:
         now = time.monotonic()
         cached = _news_cache.get(cache_key)
         if cached and cached.expires_at > now:
-            cached_payload = dict(cached.payload)
-            original = cached.payload["freshness"]
-            state = (
-                "cached" if original["state"] == "live"
-                else original["state"]
-            )
-            cached_payload["freshness"] = _freshness_payload(
-                state=state,
-                attempted_at=original["attempted_at"],
-                observed_at=original["observed_at"],
-                served_at=datetime.now(timezone.utc).isoformat(),
-                age_seconds=(
-                    max(0, int(now - cached.observed_monotonic))
-                    if cached.observed_monotonic is not None
-                    else None
+            return _cached_news_payload(cached, now)
+        task = _news_inflight.get(cache_key)
+        if task is None:
+            task = asyncio.create_task(
+                _fetch_and_cache_news(
+                    thesis_id, book, focused_query, cache_key,
                 ),
-                ttl_seconds=original["ttl_seconds"],
             )
-            cached_payload["fetched_at"] = cached_payload["freshness"]["observed_at"]
-            cached_payload["cache_hit"] = state == "cached"
-            return cached_payload
-
-        payload, ttl = _fetch_news_sync(thesis_id, book, focused_query)
-        _store_news_cache(cache_key, payload, ttl)
-        return payload
+            _news_inflight[cache_key] = task
+    return await asyncio.shield(task)
 
 
 @router.get("/news/{thesis_id}")
@@ -925,8 +977,7 @@ async def get_thesis_news(
         )
     resolved_query = focused_query or _gdelt_query_for_book(book)
     cache_key = (thesis_id, resolved_query or "")
-    payload = await asyncio.to_thread(
-        _fetch_and_cache_news_sync,
+    payload = await _get_news_payload(
         thesis_id,
         book,
         focused_query,

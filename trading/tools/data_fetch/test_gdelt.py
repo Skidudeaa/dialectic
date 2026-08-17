@@ -10,6 +10,7 @@ import os
 import sys
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -83,6 +84,17 @@ class TestBuildUrl:
         )
         assert "startdatetime=20260501000000" in url
         assert "enddatetime=20260510235959" in url
+
+    @patch("gdelt._make_request")
+    def test_caller_query_encoding_remains_one_parameter(self, mock_req):
+        """Replacing urlencode with interpolation must split operator-bearing queries."""
+        raw_query = 'China & tariffs = escalation #1 sourcelang:eng'
+        mock_req.return_value = b'{"articles": []}'
+
+        fetch_articles(raw_query, retries=0)
+
+        captured_url = mock_req.call_args.args[0]
+        assert parse_qs(urlsplit(captured_url).query)["query"] == [raw_query]
 
 
 # =========================================================================
@@ -221,6 +233,22 @@ class TestArticles:
 # =========================================================================
 
 class TestRateLimit:
+    @patch("gdelt.time.sleep")
+    @patch("gdelt._make_request")
+    def test_first_rate_limit_is_terminal_when_retries_are_disabled(
+        self, mock_req, mock_sleep,
+    ):
+        """A bridge attempt with retries=0 must surface its first 429 immediately."""
+        mock_req.side_effect = HTTPError(
+            url="x", code=429, msg="Too Many", hdrs=None, fp=None,
+        )
+
+        with pytest.raises(GdeltRateLimitError):
+            fetch_articles("interactive verification", retries=0)
+
+        assert mock_req.call_count == 1
+        mock_sleep.assert_not_called()
+
     @patch("gdelt.time.sleep", lambda *_a, **_k: None)
     @patch("gdelt._make_request")
     def test_429_then_success(self, mock_req):

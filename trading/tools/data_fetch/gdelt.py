@@ -88,7 +88,7 @@ class GdeltError(Exception):
 
 
 class GdeltRateLimitError(GdeltError):
-    """Raised when GDELT returns 429 twice in a row (caller is hammering)."""
+    """Raised when GDELT exhausts the caller's 429 attempt budget."""
     pass
 
 
@@ -161,9 +161,9 @@ def _fetch_with_retry(
 ) -> dict:
     """Make request with retry + dedicated 429 handling.
 
-    WHY 429 is special: GDELT 429 means "you're going too fast" — the
-    polite response is a long sleep then exactly one retry. A second 429
-    means we're definitively over budget; raise GdeltRateLimitError.
+    WHY 429 is special: GDELT 429 means "you're going too fast". Batch callers
+    retain one polite delayed retry; an interactive caller with retries=0 gets
+    the first 429 immediately so its source-wide cooldown can take over.
     """
     last_error: Optional[Exception] = None
     rate_limit_hits = 0
@@ -175,9 +175,9 @@ def _fetch_with_retry(
         except HTTPError as e:
             if e.code == 429:
                 rate_limit_hits += 1
-                if rate_limit_hits >= 2:
+                if retries == 0 or rate_limit_hits >= 2 or attempt >= retries:
                     raise GdeltRateLimitError(
-                        f"GDELT rate-limited twice for query {query!r}; "
+                        f"GDELT rate-limited for query {query!r}; "
                         "back off polling cadence"
                     ) from e
                 print(

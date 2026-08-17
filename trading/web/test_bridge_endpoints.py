@@ -12,9 +12,9 @@ WHY content-type is asserted explicitly: this app answers unknown paths with
 these routes would look like a passing 200 to a naive test.
 """
 
+import asyncio
 import json
 import os
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from threading import Event
 
@@ -80,6 +80,8 @@ def clear_news_cache():
         bridge_mod._news_rate_limit_streak = 0
     if hasattr(bridge_mod, "_news_rate_limit_until"):
         bridge_mod._news_rate_limit_until = 0.0
+    if hasattr(bridge_mod, "_news_inflight"):
+        bridge_mod._news_inflight.clear()
     yield
     bridge_mod._news_cache.clear()
     if isinstance(bridge_mod._news_rate_limit_streak, dict):
@@ -88,10 +90,18 @@ def clear_news_cache():
         bridge_mod._news_rate_limit_streak = 0
     if hasattr(bridge_mod, "_news_rate_limit_until"):
         bridge_mod._news_rate_limit_until = 0.0
+    if hasattr(bridge_mod, "_news_inflight"):
+        bridge_mod._news_inflight.clear()
 
 
 def svc_headers(token: str = SERVICE_TOKEN) -> dict:
     return {"X-Service-Token": token}
+
+
+async def _direct_news(query: str | None) -> dict[str, object]:
+    """Exercise the real async route without TestClient's per-request loop."""
+    response = await bridge_mod.get_thesis_news(THESIS_ID, query, None)
+    return json.loads(response.body)
 
 
 # =========================================================================
@@ -644,72 +654,148 @@ class TestNewsEndpoint:
         assert len(calls) == 2
         assert len(bridge_mod._news_cache) == 2
 
-    def test_concurrent_same_query_is_single_flight(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_warm_cache_bypasses_an_unrelated_blocked_fetch(
+        self, monkeypatch,
+    ):
         from tools.data_fetch import gdelt
 
-        book = json.loads(bridge_mod._book_path(THESIS_ID).read_text())
-        calls = []
+        monkeypatch.setattr(gdelt, "fetch_articles", lambda *_args, **_kwargs: [])
+        warm = await _direct_news("warm cache verification")
+        assert warm["status"] == "no_matches"
 
-        def _fetch(query, **_kwargs):
+        cold_started = Event()
+        release_cold = Event()
+
+        def _fetch(query: str, **_kwargs: object) -> list[object]:
+            if query == "blocked cold verification":
+                cold_started.set()
+                assert release_cold.wait(timeout=2)
+            return []
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
+        cold_task = asyncio.create_task(_direct_news("blocked cold verification"))
+        assert await asyncio.to_thread(cold_started.wait, 1)
+        warm_task = asyncio.create_task(_direct_news("warm cache verification"))
+        returned_before_release = True
+        try:
+            await asyncio.wait_for(asyncio.shield(warm_task), timeout=0.25)
+        except TimeoutError:
+            returned_before_release = False
+        finally:
+            release_cold.set()
+        cold, cached = await asyncio.gather(cold_task, warm_task)
+
+        assert returned_before_release
+        assert cold["status"] == "no_matches"
+        assert cached["freshness"]["state"] == "cached"
+
+    @pytest.mark.asyncio
+    async def test_independent_queries_overlap(self, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        entered: set[str] = set()
+        both_entered = Event()
+        release = Event()
+
+        def _fetch(query: str, **_kwargs: object) -> list[object]:
+            entered.add(query)
+            if len(entered) == 2:
+                both_entered.set()
+            assert release.wait(timeout=2)
+            return []
+
+        monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
+        tasks = [
+            asyncio.create_task(_direct_news("independent query alpha")),
+            asyncio.create_task(_direct_news("independent query beta")),
+        ]
+        overlapped = await asyncio.to_thread(both_entered.wait, 0.25)
+        release.set()
+        results = await asyncio.gather(*tasks)
+
+        assert overlapped
+        assert entered == {"independent query alpha", "independent query beta"}
+        assert [result["status"] for result in results] == ["no_matches", "no_matches"]
+
+    @pytest.mark.asyncio
+    async def test_concurrent_same_query_is_single_flight(self, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        started = Event()
+        release = Event()
+        calls: list[str] = []
+
+        def _fetch(query: str, **_kwargs: object) -> list[object]:
             calls.append(query)
+            started.set()
+            assert release.wait(timeout=2)
             return []
 
         monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
         query = "concurrent verification query"
-        key = (THESIS_ID, query)
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            results = list(pool.map(
-                lambda _index: bridge_mod._fetch_and_cache_news_sync(
-                    THESIS_ID, book, query, key,
-                ),
-                range(2),
-            ))
+        tasks = [asyncio.create_task(_direct_news(query)) for _index in range(2)]
+        assert await asyncio.to_thread(started.wait, 1)
+        await asyncio.sleep(0)
+        release.set()
+        results = await asyncio.gather(*tasks)
 
         assert len(calls) == 1
-        assert sorted(result["cache_hit"] for result in results) == [False, True]
+        assert [result["status"] for result in results] == ["no_matches", "no_matches"]
 
-    def test_concurrent_success_cannot_erase_rate_limit(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_concurrent_success_cannot_erase_rate_limit(self, monkeypatch):
         from tools.data_fetch import gdelt
 
-        book = json.loads(bridge_mod._book_path(THESIS_ID).read_text())
         rate_fetch_started = Event()
         release_rate_fetch = Event()
-        calls = []
+        success_fetch_started = Event()
+        calls: list[str] = []
 
-        def _fetch(query, **_kwargs):
+        def _fetch(query: str, **_kwargs: object) -> list[object]:
             calls.append(query)
             if query == "rate limited query":
                 rate_fetch_started.set()
-                assert release_rate_fetch.wait(timeout=1)
+                assert release_rate_fetch.wait(timeout=2)
                 raise gdelt.GdeltRateLimitError("429")
+            success_fetch_started.set()
             return []
 
         monkeypatch.setattr(gdelt, "fetch_articles", _fetch)
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            rate_future = pool.submit(
-                bridge_mod._fetch_and_cache_news_sync,
-                THESIS_ID,
-                book,
-                "rate limited query",
-                (THESIS_ID, "rate limited query"),
-            )
-            assert rate_fetch_started.wait(timeout=1)
-            success_future = pool.submit(
-                bridge_mod._fetch_and_cache_news_sync,
-                THESIS_ID,
-                book,
-                "would otherwise succeed",
-                (THESIS_ID, "would otherwise succeed"),
-            )
-            release_rate_fetch.set()
-            rate_result = rate_future.result(timeout=1)
-            second_result = success_future.result(timeout=1)
+        rate_task = asyncio.create_task(_direct_news("rate limited query"))
+        assert await asyncio.to_thread(rate_fetch_started.wait, 1)
+        success_task = asyncio.create_task(_direct_news("would otherwise succeed"))
+        success_overlapped = await asyncio.to_thread(success_fetch_started.wait, 0.25)
+        release_rate_fetch.set()
+        rate_result, second_result = await asyncio.gather(rate_task, success_task)
 
-        assert calls == ["rate limited query"]
+        assert success_overlapped
+        assert calls == ["rate limited query", "would otherwise succeed"]
         assert rate_result["status"] == "rate_limited"
-        assert second_result["status"] == "rate_limited"
+        assert second_result["status"] == "no_matches"
         assert bridge_mod._news_rate_limit_streak == 1
         assert bridge_mod._news_rate_limit_until > 0.0
+
+    def test_cached_cooldown_reports_remaining_seconds(self, client, monkeypatch):
+        from tools.data_fetch import gdelt
+
+        now = {"value": 100.0}
+
+        def _rate_limit(*_args: object, **_kwargs: object) -> list[object]:
+            raise gdelt.GdeltRateLimitError("429")
+
+        monkeypatch.setattr(bridge_mod.time, "monotonic", lambda: now["value"])
+        monkeypatch.setattr(gdelt, "fetch_articles", _rate_limit)
+        first = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+        now["value"] += 37.0
+        cached = client.get(
+            f"/api/bridge/news/{THESIS_ID}", headers=svc_headers(),
+        ).json()
+
+        assert first["retry_after_seconds"] == 120
+        assert cached["retry_after_seconds"] == 83
 
     def test_query_cache_is_bounded_to_64_entries(self, client, monkeypatch):
         from tools.data_fetch import gdelt
