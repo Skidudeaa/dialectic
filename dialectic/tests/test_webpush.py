@@ -1,7 +1,10 @@
-"""Web Push channel: send, prune-on-410, and unconfigured-disable behavior."""
+"""Web Push channel and room-aware message notification contracts."""
+
+from unittest.mock import AsyncMock
 
 import pytest
 
+from api.notifications.service import PushNotificationService
 from api.notifications import webpush
 
 
@@ -81,3 +84,49 @@ async def test_unconfigured_vapid_disables_cleanly(monkeypatch):
     result = await webpush.send_web_notifications(
         db, ["u1"], "Amo", "hello", {})
     assert result == {"sent": 0, "errors": ["vapid_unconfigured"]}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "is_llm,sender_name,expected_title",
+    [
+        (False, "Amo", "Iran/Hormuz Trading Room · Amo"),
+        (True, "Claude", "Iran/Hormuz Trading Room · ✦ Claude"),
+    ],
+)
+async def test_message_notification_title_and_data_name_the_room(
+    monkeypatch, is_llm, sender_name, expected_title,
+):
+    send_web = AsyncMock(return_value={"sent": 1, "errors": []})
+    monkeypatch.setattr(webpush, "send_web_notifications", send_web)
+    db = FakeDB([{
+        "user_id": "u1",
+        "expo_push_token": "ExponentPushToken[test]",
+    }])
+    service = PushNotificationService()
+    service._send_batch = AsyncMock(return_value={"sent": 1, "errors": []})
+
+    await service.send_message_notification(
+        db=db,
+        recipient_user_ids=["u1"],
+        room_id="r1",
+        room_name="Iran/Hormuz Trading Room",
+        thread_id="t1",
+        message_id="m1",
+        sender_name=sender_name,
+        content="A current message",
+        is_llm=is_llm,
+    )
+
+    web_kwargs = send_web.await_args.kwargs
+    assert web_kwargs["title"] == expected_title
+    assert web_kwargs["data"] == {
+        "room_id": "r1",
+        "room_name": "Iran/Hormuz Trading Room",
+        "thread_id": "t1",
+        "message_id": "m1",
+        "type": "new_message",
+    }
+    expo_message = service._send_batch.await_args.args[1][0]
+    assert expo_message.title == expected_title
+    assert expo_message.data == web_kwargs["data"]

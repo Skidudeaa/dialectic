@@ -132,6 +132,52 @@ async def test_send_message_uses_validated_payload_thread_and_canonical_type():
 
 
 @pytest.mark.asyncio
+async def test_push_uses_the_canonical_room_name(monkeypatch):
+    import api.notifications.service as notification_service
+
+    room_id = uuid4()
+    thread_id = uuid4()
+    sender_id = uuid4()
+    recipient_id = uuid4()
+    message = Message(
+        id=uuid4(),
+        thread_id=thread_id,
+        sequence=1,
+        created_at=datetime.now(timezone.utc),
+        speaker_type=SpeakerType.HUMAN,
+        user_id=sender_id,
+        message_type=MessageType.TEXT,
+        content="A current message",
+    )
+    db = SimpleNamespace(fetch=AsyncMock(return_value=[{
+        "user_id": recipient_id,
+        "room_name": "Iran/Hormuz Trading Room",
+    }]))
+    send = AsyncMock(return_value={"sent": 1, "errors": []})
+    monkeypatch.setattr(
+        notification_service.push_service, "send_message_notification", send,
+    )
+    monkeypatch.setattr(
+        notification_service, "calculate_badge_count", AsyncMock(return_value=2),
+    )
+    handler, _ = make_handler(db=db)
+    handler._should_send_push = AsyncMock(return_value=True)
+
+    await handler._trigger_push_notifications(
+        room_id=room_id,
+        thread_id=thread_id,
+        message=message,
+        sender_name="Amo",
+        sender_id=sender_id,
+    )
+
+    query = db.fetch.await_args.args[0]
+    assert "JOIN rooms" in query
+    assert "r.name AS room_name" in query
+    assert send.await_args.kwargs["room_name"] == "Iran/Hormuz Trading Room"
+
+
+@pytest.mark.asyncio
 async def test_send_message_with_attachment_ids_binds_and_broadcasts_attachments(monkeypatch):
     room_id = uuid4()
     thread_id = uuid4()
