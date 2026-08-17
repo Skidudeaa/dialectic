@@ -266,6 +266,16 @@
 
 @media (max-width: 768px) {
     .input-area { padding: 0.5rem 0.75rem 0.75rem; }
+
+    /* Phone: four fixed-width buttons (attach, send, propose, research)
+       shared one no-wrap flex row with the textarea and crushed it to a
+       ~30px sliver. Wrap the row: the textarea takes its own full-width
+       line first, the buttons share a second line below it. */
+    .input-row { flex-wrap: wrap; }
+    .msg-textarea {
+        flex: 1 1 100%;
+        order: -1;
+    }
 }
 
 /* ── The @-picker ──────────────────────────────────────────────────────
