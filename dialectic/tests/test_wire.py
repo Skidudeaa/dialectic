@@ -55,9 +55,20 @@ def make_room_row(**overrides):
 
 
 def make_articles(n):
+    # One domain PER article: these fixtures exercise the scan/readable-slot
+    # and cooldown laws, which are orthogonal to publisher diversity. The
+    # per-domain cap (Phase 7) has its own same-domain fixtures below.
     return [
         {"title": f"Story {i}", "url": f"https://reuters.com/s{i}",
-         "seendate": "20260812140000", "domain": "reuters.com"}
+         "seendate": "20260812140000", "domain": f"site{i}.example"}
+        for i in range(1, n + 1)
+    ]
+
+
+def make_same_domain_articles(n, domain="loudoutlet.com"):
+    return [
+        {"title": f"Syndicated {i}", "url": f"https://{domain}/s{i}",
+         "seendate": "20260812140000", "domain": domain}
         for i in range(1, n + 1)
     ]
 
@@ -568,6 +579,78 @@ class TestWireWatch:
         # The second room ran the pipeline to completion.
         assert "filed" in detail[str(other_id)]
 
+    # ---- the per-domain cap, wired end to end (Phase 7) -----------------
+
+    async def test_domain_cap_bounds_one_loud_outlet(
+        self, mocks, interjection_calls, caplog,
+    ):
+        """THE mutation fence for the cap: five same-domain headlines, all
+        unreadable (so the readable cap never engages) — without
+        cap_by_domain all five would be extracted; with it, exactly two."""
+        mocks.articles = make_same_domain_articles(5)
+        mocks.extract_errors = {
+            a["url"]: wire.dc.DefuddleError("blocked") for a in mocks.articles
+        }
+        db = make_wire_db(rooms=[make_room_row()])
+        with caplog.at_level("INFO", logger="llm.wire"):
+            detail = await wire.wire_watch(_ctx(db)[0])
+
+        assert mocks.extract_calls == [
+            "https://loudoutlet.com/s1", "https://loudoutlet.com/s2",
+        ]
+        assert len(detail[str(ROOM_ID)]["skipped"]) == 2
+        # The drop is logged with counts — never silently eaten.
+        assert any("domain cap" in r.message and "loudoutlet.com" in r.message
+                   for r in caplog.records)
+
+    async def test_domain_cap_promotes_a_second_voice_into_the_window(
+        self, mocks, interjection_calls,
+    ):
+        """The point of capping at the FRESH list rather than the scan
+        loop: seven headlines, six from one bot-walled outlet, the seventh
+        from a quieter domain. Uncapped, the six fill WIRE_FEED_SCAN_CAP
+        and the quiet voice is never scanned; capped, it is reached, scored
+        and filed."""
+        loud = make_same_domain_articles(6)
+        quiet = {"title": "Other voice", "url": "https://quiet.org/q1",
+                 "seendate": "20260812140000", "domain": "quiet.org"}
+        mocks.articles = loud + [quiet]
+        mocks.extract_errors = {
+            a["url"]: wire.dc.DefuddleError("blocked") for a in loud
+        }
+        db = make_wire_db(rooms=[make_room_row()])
+        detail = await wire.wire_watch(_ctx(db)[0])
+
+        assert "https://quiet.org/q1" in mocks.extract_calls
+        assert [f["url"] for f in detail[str(ROOM_ID)]["filed"]] == [
+            "https://quiet.org/q1",
+        ]
+
+    async def test_stance_rides_the_filed_summary(
+        self, mocks, interjection_calls,
+    ):
+        mocks.score = {"score": 0.9, "why": "Cuts against node 2.",
+                       "stance": "contradicts"}
+        db = make_wire_db(rooms=[make_room_row()])
+        detail = await wire.wire_watch(_ctx(db)[0])
+
+        assert all(
+            s["summary"] == "Cuts against node 2. [stance: contradicts]"
+            for s in mocks.saved
+        )
+        assert all(f["stance"] == "contradicts"
+                   for f in detail[str(ROOM_ID)]["filed"])
+
+    async def test_neutral_stance_leaves_the_summary_alone(
+        self, mocks, interjection_calls,
+    ):
+        db = make_wire_db(rooms=[make_room_row()])
+        await wire.wire_watch(_ctx(db)[0])
+        # The default mock verdict carries no stance at all — the legacy
+        # shape must keep filing unmarked summaries.
+        assert all(s["summary"] == "Bears on node 2's trigger."
+                   for s in mocks.saved)
+
 
 # =========================================================================
 # _parse_score — tolerant JSON parsing
@@ -596,3 +679,116 @@ class TestParseScore:
         assert wire._parse_score('{"why": "no score"}') is None
         assert wire._parse_score('{"score": "high"}') is None
         assert wire._parse_score("[0.9]") is None
+
+    @pytest.mark.parametrize("stance", ["supports", "contradicts", "neutral"])
+    def test_stance_all_three_values(self, stance):
+        parsed = wire._parse_score(
+            f'{{"score": 0.8, "why": "x", "stance": "{stance}"}}'
+        )
+        assert parsed["stance"] == stance
+
+    def test_stance_is_case_and_whitespace_tolerant(self):
+        parsed = wire._parse_score(
+            '{"score": 0.8, "why": "x", "stance": " Contradicts "}'
+        )
+        assert parsed["stance"] == "contradicts"
+
+    @pytest.mark.parametrize(
+        "raw",
+        ['"strongly agrees"', "0.9", "null", '["supports"]'],
+        ids=["invented", "number", "null", "list"],
+    )
+    def test_invalid_stance_degrades_to_neutral(self, raw):
+        """Stance must never fail an otherwise-good score — the wire's
+        artifact is the relevance verdict; stance is annotation."""
+        parsed = wire._parse_score(f'{{"score": 0.8, "stance": {raw}}}')
+        assert parsed is not None
+        assert parsed["score"] == 0.8
+        assert parsed["stance"] == "neutral"
+
+    def test_missing_stance_defaults_to_neutral(self):
+        parsed = wire._parse_score('{"score": 0.8, "why": "x"}')
+        assert parsed["stance"] == "neutral"
+
+
+# =========================================================================
+# cap_by_domain — the Phase 7 bias control, pure
+# =========================================================================
+
+
+class TestCapByDomain:
+    def test_first_n_per_domain_stable_order(self):
+        items = [
+            {"url": "https://a.com/1", "domain": "a.com"},
+            {"url": "https://b.com/1", "domain": "b.com"},
+            {"url": "https://a.com/2", "domain": "a.com"},
+            {"url": "https://a.com/3", "domain": "a.com"},
+            {"url": "https://b.com/2", "domain": "b.com"},
+        ]
+        kept, dropped = wire.cap_by_domain(items, 2)
+        assert [i["url"] for i in kept] == [
+            "https://a.com/1", "https://b.com/1",
+            "https://a.com/2", "https://b.com/2",
+        ]
+        assert dropped == {"a.com": 1}
+
+    def test_under_cap_passes_everything_and_drops_nothing(self):
+        items = [{"url": f"https://s{i}.com/x", "domain": f"s{i}.com"}
+                 for i in range(5)]
+        kept, dropped = wire.cap_by_domain(items, 2)
+        assert kept == items
+        assert dropped == {}
+
+    def test_missing_domain_field_falls_back_to_url_netloc(self):
+        """RSS items ship no domain field — the link's host is the domain."""
+        items = [{"url": f"https://onefeed.example/p{i}"} for i in range(4)]
+        kept, dropped = wire.cap_by_domain(items, 2)
+        assert [i["url"] for i in kept] == [
+            "https://onefeed.example/p0", "https://onefeed.example/p1",
+        ]
+        assert dropped == {"onefeed.example": 2}
+
+    def test_undiagnosable_items_share_one_bucket(self):
+        """No domain and no parseable host is itself ONE source — not an
+        exemption from the cap."""
+        items = [{"url": "not-a-url"}, {"url": ""}, {"title": "no url"}]
+        kept, dropped = wire.cap_by_domain(items, 2)
+        assert len(kept) == 2
+        assert dropped == {"": 1}
+
+    def test_domain_matching_is_case_insensitive(self):
+        items = [
+            {"url": "https://a.com/1", "domain": "A.com"},
+            {"url": "https://a.com/2", "domain": "a.COM"},
+            {"url": "https://a.com/3", "domain": "a.com"},
+        ]
+        kept, dropped = wire.cap_by_domain(items, 2)
+        assert len(kept) == 2
+        assert dropped == {"a.com": 1}
+
+    def test_env_override_reaches_the_cap(self, monkeypatch):
+        monkeypatch.setenv("WIRE_DOMAIN_CAP", "1")
+        assert wire._domain_cap() == 1
+        monkeypatch.delenv("WIRE_DOMAIN_CAP")
+        assert wire._domain_cap() == wire.WIRE_DOMAIN_CAP
+
+
+# =========================================================================
+# Stance persistence — the reading's summary is the durable home
+# =========================================================================
+
+
+class TestStanceSummary:
+    def test_neutral_and_missing_stance_add_nothing(self):
+        assert wire._stance_summary("why line", "neutral") == "why line"
+        assert wire._stance_summary("why line", None) == "why line"
+
+    @pytest.mark.parametrize("stance", ["supports", "contradicts"])
+    def test_non_neutral_stance_rides_the_summary(self, stance):
+        out = wire._stance_summary("why line", stance)
+        assert out == f"why line [stance: {stance}]"
+
+    def test_truncation_never_eats_the_marker(self):
+        out = wire._stance_summary("x" * 2000, "contradicts")
+        assert len(out) <= wire.SUMMARY_CAP
+        assert out.endswith(" [stance: contradicts]")

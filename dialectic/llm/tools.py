@@ -71,6 +71,10 @@ _POLYMARKET_STATUSES = {
 _NEWS_STATUSES = {
     "ok", "no_matches", "not_configured", "rate_limited", "unavailable",
 }
+# The news payload's provenance vocabulary — gdelt today, rss reserved so
+# the watchlist wire can flow through the same tool contract later. A small
+# allowed set, not a dropped check: an unnamed source still fails loudly.
+_NEWS_ALLOWED_SOURCES = frozenset({"gdelt", "rss"})
 
 
 @dataclass
@@ -322,7 +326,8 @@ def _validate_news_payload(
     source = "news"
     if not isinstance(payload, dict) or payload.get("status") not in _NEWS_STATUSES:
         raise _shape_error(source, "status is missing or unknown")
-    if payload.get("source") != "gdelt" or not isinstance(payload.get("articles"), list):
+    if (payload.get("source") not in _NEWS_ALLOWED_SOURCES
+            or not isinstance(payload.get("articles"), list)):
         raise _shape_error(source, "source or articles is invalid")
     query = payload.get("query")
     if query is not None and not isinstance(query, str):

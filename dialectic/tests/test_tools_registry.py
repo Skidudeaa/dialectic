@@ -1118,6 +1118,34 @@ class TestThesisNewsTool:
         assert out["book_id"] == "b"
 
     @pytest.mark.asyncio
+    async def test_rss_source_flows_through_the_same_contract(self, svc_env):
+        """Phase 7: the watchlist wire may serve this payload shape later —
+        'rss' is in the allowed source set, everything else stays strict."""
+        room = SimpleNamespace(id=uuid4(), linked_book_id="b", trading_config=None)
+
+        def handler(request):
+            return json_response({
+                "status": "ok",
+                "source": "rss",
+                "query": None,
+                "articles": [{
+                    "title": "Watchlist item", "url": "https://ex.com/rss1",
+                    "seendate": "20260818", "domain": "ex.com",
+                }],
+                "freshness": LIVE_FRESHNESS,
+                "fetched_at": "2026-08-18T10:00:00+00:00",
+                "cache_hit": False,
+            })
+
+        install_transport(handler)
+        tool = build_registry(room, FakeDB()).get("get_thesis_news")
+        out = await tool.execute({})
+
+        assert out["status"] == "ok"
+        assert out["source"] == "rss"
+        assert out["count"] == 1
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize("status", ["rate_limited", "unavailable"])
     async def test_source_degradation_is_a_failed_tool_call(self, svc_env, status):
         room = SimpleNamespace(id=uuid4(), linked_book_id="b", trading_config=None)
@@ -1222,8 +1250,16 @@ class TestThesisNewsTool:
                     "served_at": "2026-08-17T02:00:00+01:00",
                 },
             },
+            {
+                # An allowed SET, not a dropped check (Phase 7): gdelt and
+                # rss pass, anything unnamed still fails loudly.
+                "status": "no_matches", "source": "bloomberg",
+                "query": "specific claim", "articles": [],
+                "freshness": LIVE_FRESHNESS,
+            },
         ],
-        ids=["missing-status", "unknown-status", "articles", "freshness", "utc"],
+        ids=["missing-status", "unknown-status", "articles", "freshness",
+             "utc", "unknown-source"],
     )
     async def test_news_shape_failures_are_loud(
         self, room, monkeypatch, payload,

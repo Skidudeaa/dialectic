@@ -11,13 +11,13 @@ skips), the cap leaking (spend), and the 07:00 brief missing the section.
 
 from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 
 from scheduler import Scheduler, SchedulerContext
-from llm import news_night
+from llm import news_night, wire
 from llm.briefing import BriefingResponse, build_briefing
 from llm.night_shift import _render_brief
 from llm.defuddle_client import DefuddleError
@@ -94,11 +94,13 @@ def mocks(monkeypatch):
         articles=make_articles(4),
         news_error=None,
         extract_errors={},
-        news_calls=[], extract_calls=[], distill_calls=[], saved=[],
+        news_calls=[], news_params=[], extract_calls=[], distill_calls=[],
+        saved=[],
     )
 
     async def _service_get(path, **kwargs):
         m.news_calls.append(path)
+        m.news_params.append(kwargs.get("params"))
         if m.news_error is not None:
             raise m.news_error
         return {"articles": m.articles}
@@ -172,6 +174,13 @@ class TestNewsJobRegistration:
 
 @pytest.mark.asyncio
 class TestThesisNewsDigest:
+    @pytest.fixture(autouse=True)
+    def no_exploration(self, monkeypatch):
+        """These tests pin the THESIS lane; the exploration pull (default
+        on) has its own class below and would add a news call + a save to
+        every fixture here."""
+        monkeypatch.setenv("NEWS_EXPLORATION_ENABLED", "0")
+
     async def test_new_articles_fetched_distilled_saved(self, mocks):
         db = make_digest_db(rooms=[make_room()])
         detail = await news_night.thesis_news_digest(_ctx(db))
@@ -195,7 +204,7 @@ class TestThesisNewsDigest:
     async def test_seen_urls_skipped_without_extract(self, mocks):
         seen = {"https://reuters.com/s1", "https://reuters.com/s2"}
         db = make_digest_db(rooms=[make_room()], seen=seen)
-        detail = await news_night.thesis_news_digest(_ctx(db))
+        await news_night.thesis_news_digest(_ctx(db))
 
         assert "https://reuters.com/s1" not in mocks.extract_calls
         assert mocks.extract_calls == [
@@ -324,6 +333,230 @@ class TestParseDistill:
         )
         assert len(parsed["key_claims"]) == news_night.KEY_CLAIMS_CAP
 
+    @pytest.mark.parametrize("stance", ["supports", "contradicts", "neutral"])
+    def test_stance_all_three_values(self, stance):
+        parsed = news_night._parse_distill(
+            f'{{"summary": "s", "stance": "{stance}"}}'
+        )
+        assert parsed["stance"] == stance
+
+    @pytest.mark.parametrize(
+        "raw", ['"mostly agrees"', "0.4", "null"],
+        ids=["invented", "number", "null"],
+    )
+    def test_invalid_stance_degrades_to_neutral(self, raw):
+        """Stance must never fail an otherwise-good distill."""
+        parsed = news_night._parse_distill(
+            f'{{"summary": "s", "stance": {raw}}}'
+        )
+        assert parsed is not None
+        assert parsed["stance"] == "neutral"
+
+    def test_missing_stance_defaults_to_neutral(self):
+        assert news_night._parse_distill('{"summary": "s"}')["stance"] == "neutral"
+
+    def test_stance_vocabulary_is_wires(self):
+        """Identity, not equality: one stance vocabulary across the wire's
+        scorer and the digest's distiller, or a later consumer querying
+        '[stance: contradicts]' splits into two dialects."""
+        assert news_night.WIRE_STANCES is wire.WIRE_STANCES
+
+
+# =========================================================================
+# assemble_digest — the dissent contract (Phase 7)
+# =========================================================================
+
+
+class TestAssembleDigest:
+    def test_contradicting_item_is_labeled_counter(self):
+        lines = news_night.assemble_digest([
+            {"title": "Oil up", "stance": "supports"},
+            {"title": "Oil demand collapsing", "stance": "contradicts"},
+        ])
+        assert lines == [
+            "Oil up",
+            f"{news_night.COUNTER_LABEL}Oil demand collapsing",
+        ]
+        assert news_night.NO_DISSENT_LINE not in lines
+
+    def test_no_dissent_is_stated_never_manufactured(self):
+        lines = news_night.assemble_digest([
+            {"title": "Oil up", "stance": "supports"},
+            {"title": "Tankers fine", "stance": "neutral"},
+        ])
+        assert lines[-1] == news_night.NO_DISSENT_LINE
+        assert not any(
+            line.startswith(news_night.COUNTER_LABEL) for line in lines)
+
+    def test_empty_corpus_still_states_the_absence(self):
+        assert news_night.assemble_digest([]) == [news_night.NO_DISSENT_LINE]
+
+    def test_title_falls_back_to_url(self):
+        lines = news_night.assemble_digest(
+            [{"url": "https://x.com/a", "stance": "contradicts"}])
+        assert lines[0] == f"{news_night.COUNTER_LABEL}https://x.com/a"
+
+
+# =========================================================================
+# The dissent contract, end to end — the mutation fence
+# =========================================================================
+
+
+@pytest.mark.asyncio
+class TestDigestDissent:
+    @pytest.fixture(autouse=True)
+    def no_exploration(self, monkeypatch):
+        monkeypatch.setenv("NEWS_EXPLORATION_ENABLED", "0")
+
+    async def test_contradicts_item_is_labeled_in_summary_and_digest(
+        self, mocks, monkeypatch,
+    ):
+        """THE mutation fence: a contradicts-carrying corpus MUST surface a
+        labeled COUNTER item — in the filed summary (what the brief and
+        recall render) and in the digest lines. Strip the labeling and this
+        goes red."""
+        async def _distill(article, thesis_context):
+            stance = ("contradicts" if article["url"].endswith("/s2")
+                      else "supports")
+            return {"summary": f"Summary of {article['url']}.",
+                    "key_claims": [], "relevance": "", "stance": stance}
+
+        monkeypatch.setattr(news_night, "_distill", _distill)
+        db = make_digest_db(rooms=[make_room()])
+        detail = await news_night.thesis_news_digest(_ctx(db))
+
+        counter_saves = [
+            s for s in mocks.saved
+            if s["summary"].startswith(news_night.COUNTER_LABEL)
+        ]
+        assert len(counter_saves) == 1
+        assert counter_saves[0]["url"] == "https://reuters.com/s2"
+
+        digest = detail[str(ROOM_ID)]["digest"]
+        assert any(line.startswith(news_night.COUNTER_LABEL)
+                   for line in digest)
+        assert news_night.NO_DISSENT_LINE not in digest
+
+    async def test_absence_of_dissent_is_stated_in_the_digest(self, mocks):
+        # The default mock distill carries no stance — all neutral.
+        db = make_digest_db(rooms=[make_room()])
+        detail = await news_night.thesis_news_digest(_ctx(db))
+        digest = detail[str(ROOM_ID)]["digest"]
+        assert digest[-1] == news_night.NO_DISSENT_LINE
+        assert not any(line.startswith(news_night.COUNTER_LABEL)
+                       for line in digest)
+        # And no filed summary was decorated.
+        assert not any(
+            s["summary"].startswith(news_night.COUNTER_LABEL)
+            for s in mocks.saved
+        )
+
+
+# =========================================================================
+# The exploration budget (Phase 7) — one broad pull per run
+# =========================================================================
+
+
+@pytest.mark.asyncio
+class TestExploration:
+    async def test_files_one_labeled_thesis_independent_reading(
+        self, mocks, monkeypatch,
+    ):
+        monkeypatch.setenv("NEWS_EXPLORATION_ENABLED", "1")
+        contexts = []
+
+        async def _distill(article, thesis_context):
+            contexts.append(thesis_context)
+            return {"summary": f"Summary of {article['url']}.",
+                    "key_claims": ["claim one"], "relevance": "",
+                    "stance": "neutral"}
+
+        monkeypatch.setattr(news_night, "_distill", _distill)
+        db = make_digest_db(rooms=[make_room()])
+        detail = await news_night.thesis_news_digest(_ctx(db))
+
+        # Exactly ONE extra reading beyond the per-room lane, labeled and
+        # filed like the others (source night_shift → brief + cap gauge).
+        exploration_saves = [
+            s for s in mocks.saved
+            if s["summary"].startswith(news_night.EXPLORATION_LABEL)
+        ]
+        assert len(exploration_saves) == 1
+        assert exploration_saves[0]["source"] == "night_shift"
+        # It did not double-file a URL the thesis lane already saved.
+        assert exploration_saves[0]["url"] == "https://reuters.com/s4"
+
+        # Thesis-INDEPENDENT by construction: empty snapshot context.
+        assert contexts[-1] == ""
+
+        # The broad query rode the bridge call as a query override.
+        assert mocks.news_params[-1] == {
+            "query": news_night.exploration_query()}
+
+        entry = detail["exploration"]
+        assert entry["query"] == news_night.exploration_query()
+        assert entry["line"].startswith(news_night.EXPLORATION_LABEL)
+        # The host room's digest carries the exploration line.
+        assert entry["line"] in detail[str(ROOM_ID)]["digest"]
+
+    async def test_flag_off_skips_the_pull(self, mocks, monkeypatch):
+        monkeypatch.setenv("NEWS_EXPLORATION_ENABLED", "0")
+        db = make_digest_db(rooms=[make_room()])
+        detail = await news_night.thesis_news_digest(_ctx(db))
+        assert detail["exploration"] == "disabled"
+        assert len(mocks.news_calls) == 1  # the thesis pull only
+        assert len(mocks.saved) == 3
+
+    async def test_daily_llm_cap_blocks_the_pull(self, mocks, monkeypatch):
+        monkeypatch.setenv("NEWS_EXPLORATION_ENABLED", "1")
+        db = make_digest_db(
+            rooms=[make_room()],
+            saved_today=news_night.NEWS_DIGEST_DAILY_LLM_CAP,
+        )
+        detail = await news_night.thesis_news_digest(_ctx(db))
+        assert detail["exploration"] == "cap_reached"
+        assert mocks.saved == []
+
+    async def test_no_linked_rooms_means_no_pull(self, mocks, monkeypatch):
+        monkeypatch.setenv("NEWS_EXPLORATION_ENABLED", "1")
+        db = make_digest_db(rooms=[])
+        detail = await news_night.thesis_news_digest(_ctx(db))
+        assert detail["exploration"] == "no_rooms"
+        assert mocks.news_calls == []
+
+    async def test_unreadable_broad_feed_spends_nothing(
+        self, mocks, monkeypatch,
+    ):
+        monkeypatch.setenv("NEWS_EXPLORATION_ENABLED", "1")
+        mocks.articles = make_articles(4)
+        mocks.extract_errors = {
+            "https://reuters.com/s4": news_night.dc.DefuddleError("blocked"),
+        }
+        db = make_digest_db(rooms=[make_room()])
+        detail = await news_night.thesis_news_digest(_ctx(db))
+        # s1-s3 went to the thesis lane; the only fresh exploration
+        # candidate failed extraction — no distill, honest reason.
+        assert detail["exploration"] == {
+            "query": news_night.exploration_query(),
+            "reason": "no_readable_article",
+        }
+        assert len(mocks.distill_calls) == 3
+
+
+class TestExplorationRotation:
+    def test_same_day_same_query(self):
+        d = datetime(2026, 3, 5, 2, 0, tzinfo=timezone.utc)
+        assert (news_night.exploration_query(d)
+                == news_night.exploration_query(d.replace(hour=23)))
+
+    def test_rotation_walks_the_whole_list_then_wraps(self):
+        base = datetime(2026, 3, 5, tzinfo=timezone.utc)
+        n = len(news_night.EXPLORATION_QUERIES)
+        picks = [news_night.exploration_query(base + timedelta(days=i))
+                 for i in range(n)]
+        assert sorted(picks) == sorted(news_night.EXPLORATION_QUERIES)
+        assert news_night.exploration_query(base + timedelta(days=n)) == picks[0]
+
 
 # =========================================================================
 # Briefing — the digest surfaces in the response and the rendered brief
@@ -407,6 +640,20 @@ class TestRenderBriefNewsSection:
         # First sentence only — the rest of the summary stays out.
         assert "Traffic through the strait fell overnight." in text
         assert "More detail follows." not in text
+        # No item carried dissent → the brief SAYS so (Phase 7: report the
+        # absence, never manufacture balance).
+        assert news_night.NO_DISSENT_LINE in text
+
+    def test_render_brief_absence_line_suppressed_by_counter_item(self):
+        briefing = make_briefing(news_digest=[{
+            "url": "https://ft.com/s2",
+            "title": "Hormuz traffic normalizes",
+            "site": "FT",
+            "summary": "COUNTER — Transit counts recovered to baseline. [stance: contradicts]",
+        }])
+        text = _render_brief(briefing)
+        assert news_night.NO_DISSENT_LINE not in text
+        assert "COUNTER" in text
 
     def test_render_brief_omits_section_when_empty(self):
         text = _render_brief(make_briefing())

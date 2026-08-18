@@ -27,12 +27,24 @@ GUARDRAILS:
     parse) skip that room/article and are recorded in the job's
     detail dict — the job itself never raises
 
+BIAS CONTROLS (Phase 7): each distill also takes a STANCE toward the thesis
+(supports/contradicts/neutral, invalid degrades to neutral). A contradicting
+item is filed with its summary prefixed COUNTER so the brief and recall
+cannot render dissent as just another headline; when the night carried no
+dissent, assemble_digest says so explicitly (NO_DISSENT_LINE) instead of
+promoting a weak counter-pick — absence of opposition is reported, never
+manufactured. And one EXPLORATION pull per run (NEWS_EXPLORATION_ENABLED,
+default on) reads a broad, thesis-independent query — a deterministic
+day-of-year rotation over EXPLORATION_QUERIES — so the room's diet is not
+purely the thing it already believes.
+
 CONNECTIONS: the job body acquires its own connections from ctx.pool and
 never touches the scheduler's ledger connection (the scheduler caution —
 a long job holding the ledger conn stalls every other tick).
 """
 
 import logging
+import os
 import re
 from datetime import datetime, timezone
 from typing import Optional
@@ -41,11 +53,28 @@ from scheduler import Job, SchedulerContext
 from llm import defuddle_client as dc
 from llm import tradingdesk_client as td
 from llm.reading import is_thin, save_reading, seen_urls
+from llm.wire import WIRE_STANCES
 
 logger = logging.getLogger(__name__)
 
 NEWS_DIGEST_PER_ROOM_CAP = 3
 NEWS_DIGEST_DAILY_LLM_CAP = 20
+COUNTER_LABEL = "COUNTER — "
+NO_DISSENT_LINE = ("no credible contradicting coverage cleared the "
+                   "threshold this run")
+EXPLORATION_LABEL = "EXPLORATION — "
+# Broad beats deliberately OUTSIDE any one book's frame — macro,
+# cross-asset, geopolitics beyond the current theses. Rotation is
+# day-of-year modulo len (exploration_query), so the pick is deterministic
+# and every beat comes around.
+EXPLORATION_QUERIES = (
+    "global macro economy",
+    "central bank policy shift",
+    "commodity markets shock",
+    "emerging markets crisis",
+    "sovereign debt stress",
+    "global supply chain disruption",
+)
 # The thesis snapshot goes into the prompt truncated: a trading_config JSON
 # can carry whole orderbooks; the model needs the posture, not the ticks.
 THESIS_CONTEXT_CAP = 4000
@@ -107,10 +136,17 @@ def _parse_distill(text: str) -> Optional[dict]:
     if not isinstance(parsed, dict) or not parsed.get("summary"):
         return None
     claims = parsed.get("key_claims") or []
+    # Stance is advisory, never disqualifying: a missing or invented value
+    # degrades to neutral rather than failing an otherwise-good distill.
+    stance = parsed.get("stance")
+    stance = stance.strip().lower() if isinstance(stance, str) else ""
+    if stance not in WIRE_STANCES:
+        stance = "neutral"
     return {
         "summary": str(parsed["summary"]),
         "key_claims": [str(c) for c in claims if c][:KEY_CLAIMS_CAP],
         "relevance": str(parsed.get("relevance") or ""),
+        "stance": stance,
     }
 
 
@@ -134,10 +170,13 @@ async def _distill(article: dict, thesis_context: str) -> Optional[dict]:
                 f" ({article.get('site') or 'unknown site'}):\n"
                 f"{str(article.get('content') or '')[:ARTICLE_CONTEXT_CAP]}\n\n"
                 "Respond with ONLY JSON: {\"summary\": \"...\", "
-                "\"key_claims\": [\"...\"], \"relevance\": \"...\"}. "
+                "\"key_claims\": [\"...\"], \"relevance\": \"...\", "
+                "\"stance\": \"supports|contradicts|neutral\"}. "
                 f"Summary under {SUMMARY_CAP} characters; at most "
                 f"{KEY_CLAIMS_CAP} key claims; relevance is one line on how "
-                "the article bears on the thesis."
+                "the article bears on the thesis; stance is whether the "
+                "article's facts support, contradict, or sit neutral to the "
+                "thesis's central claim."
             ),
         }],
         system="You distill news articles against a trading thesis. Be terse, factual, and output only the JSON object asked for.",
@@ -151,6 +190,102 @@ async def _distill(article: dict, thesis_context: str) -> Optional[dict]:
         logger.info("news distill LLM call failed: %s", e)
         return None
     return _parse_distill(response.content or "")
+
+
+def assemble_digest(items: list[dict]) -> list[str]:
+    """The digest's dissent contract (Phase 7 bias controls).
+
+    One line per filed item, filing order kept. Any item whose stance is
+    'contradicts' is labeled COUNTER — when the night's coverage carried
+    dissent, the digest MUST show it, not average it away. When none did,
+    the digest states NO_DISSENT_LINE rather than promoting a low-quality
+    counter-pick: balance is reported, never manufactured.
+    """
+    lines: list[str] = []
+    dissent = False
+    for item in items:
+        title = str(item.get("title") or item.get("url") or "untitled")
+        if item.get("stance") == "contradicts":
+            dissent = True
+            lines.append(f"{COUNTER_LABEL}{title}")
+        else:
+            lines.append(title)
+    if not dissent:
+        lines.append(NO_DISSENT_LINE)
+    return lines
+
+
+def exploration_enabled() -> bool:
+    """NEWS_EXPLORATION_ENABLED, default ON — read at run time, not import
+    time, so operators and tests flip it without a reload dance."""
+    raw = os.environ.get("NEWS_EXPLORATION_ENABLED", "1").strip().lower()
+    return raw in ("1", "true", "yes")
+
+
+def exploration_query(now: Optional[datetime] = None) -> str:
+    """Deterministic rotation: day-of-year modulo the query list. No
+    random — a rerun on the same day explores the same beat, and every
+    beat comes around on the calendar."""
+    now = now or datetime.now(timezone.utc)
+    return EXPLORATION_QUERIES[now.timetuple().tm_yday % len(EXPLORATION_QUERIES)]
+
+
+async def _explore(conn, room, filed_this_run: set) -> tuple:
+    """The exploration budget: ONE broad, thesis-independent article per
+    digest run — the fix for thematic self-selection ("look up nothing but
+    oil and gold and you get oil and gold reflected back").
+
+    The pull rides the host room's bridge route with a query override, so
+    no new endpoint; the distill sees an EMPTY thesis context by
+    construction, so the summary cannot be bent toward the book; the same
+    defuddle + thin gates apply. Returns (detail entry, llm_calls) —
+    llm_calls separately so the caller charges the daily budget even when
+    the distill parse fails (the money is spent either way).
+    """
+    query = exploration_query()
+    try:
+        news = await td.service_get(
+            f"/api/bridge/news/{room['linked_book_id']}",
+            params={"query": query},
+            timeout=td.NEWS_TIMEOUT_S,
+        )
+    except td.TradingDeskError as e:
+        logger.warning("exploration news fetch failed: %s", e)
+        return f"news_unavailable: {e}", 0
+    articles = news.get("articles") if isinstance(news, dict) else None
+    if not articles:
+        return "no_articles", 0
+
+    seen = await seen_urls(conn, room["id"])
+    fresh = [a for a in articles
+             if a.get("url") and a["url"] not in seen
+             and a["url"] not in filed_this_run]
+    # Exactly one article; the scan bound reuses the per-room cap so an
+    # unreadable broad feed cannot balloon the run.
+    for headline in fresh[:NEWS_DIGEST_PER_ROOM_CAP]:
+        url = headline["url"]
+        try:
+            article = await dc.extract_article(url)
+        except dc.DefuddleError as e:
+            logger.info("defuddle failed for %s: %s", url, e)
+            continue
+        if is_thin(article):
+            continue
+        distill = await _distill(article, "")
+        if distill is None:
+            return {"query": query, "url": url,
+                    "reason": "distill_failed"}, 1
+        summary = f"{EXPLORATION_LABEL}{distill['summary']}"
+        row = await save_reading(
+            conn, room_id=room["id"], article=article,
+            summary=summary[:SUMMARY_CAP],
+            key_claims=distill["key_claims"],
+            source="night_shift",
+        )
+        title = str(row.get("title") or url)
+        return {"query": query, "url": url, "title": title,
+                "line": f"{EXPLORATION_LABEL}{title}"}, 1
+    return {"query": query, "reason": "no_readable_article"}, 0
 
 
 async def thesis_news_digest(ctx: SchedulerContext) -> dict:
@@ -226,18 +361,50 @@ async def thesis_news_digest(ctx: SchedulerContext) -> dict:
                         # The relevance note rides inside the summary (capped)
                         # so the brief and recall see it without a schema change.
                         summary = f"{summary} Relevance: {distill['relevance']}"
+                    stance = distill.get("stance") or "neutral"
+                    if stance == "contradicts":
+                        # The label is a PREFIX so neither the cap below nor
+                        # the brief's first-sentence render can eat it —
+                        # dissent must survive every downstream truncation.
+                        summary = f"{COUNTER_LABEL}{summary}"
                     row = await save_reading(
                         conn, room_id=room["id"], article=article,
                         summary=summary[:SUMMARY_CAP],
                         key_claims=distill["key_claims"],
                         source="night_shift",
                     )
-                    saved.append({"url": url, "title": row.get("title")})
-                detail[room_key] = {"saved": saved, "skipped": skipped}
+                    saved.append({"url": url, "title": row.get("title"),
+                                  "stance": stance})
+                detail[room_key] = {"saved": saved, "skipped": skipped,
+                                    "digest": assemble_digest(saved)}
             except Exception as e:
                 # A broken room must not sink the digest for the others.
                 logger.exception("news digest failed for room %s", room_key)
                 detail[room_key] = f"error: {type(e).__name__}"
+
+        # The exploration pull runs LAST so a broad-beat failure can never
+        # starve the thesis lane, and only when the budget has room left.
+        if not exploration_enabled():
+            detail["exploration"] = "disabled"
+        elif not rooms:
+            detail["exploration"] = "no_rooms"
+        elif spent >= NEWS_DIGEST_DAILY_LLM_CAP:
+            detail["exploration"] = "cap_reached"
+        else:
+            host = rooms[0]
+            host_entry = detail.get(str(host["id"]))
+            host_filed = ({s["url"] for s in host_entry["saved"]}
+                          if isinstance(host_entry, dict) else set())
+            try:
+                entry, llm_calls = await _explore(conn, host, host_filed)
+            except Exception as e:
+                logger.exception("exploration pull failed")
+                entry, llm_calls = f"error: {type(e).__name__}", 0
+            spent += llm_calls
+            detail["exploration"] = entry
+            if (isinstance(entry, dict) and entry.get("line")
+                    and isinstance(host_entry, dict)):
+                host_entry["digest"].append(entry["line"])
     return detail
 
 

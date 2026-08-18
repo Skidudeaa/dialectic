@@ -55,6 +55,16 @@ RSS2_FEED = b"""<?xml version="1.0"?>
 </channel></rss>
 """
 
+def make_flood_feed(host: str, n: int) -> bytes:
+    """An RSS 2.0 feed of n items, all on one host — the domain-cap fixture."""
+    items = "".join(
+        f"<item><title>S{i}</title><link>https://{host}/p{i}</link></item>"
+        for i in range(1, n + 1)
+    )
+    return (f'<?xml version="1.0"?><rss version="2.0"><channel>'
+            f"{items}</channel></rss>").encode()
+
+
 ATOM_FEED = b"""<?xml version="1.0"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
   <title>Atom Wire</title>
@@ -199,6 +209,16 @@ class TestSharedBudget:
         assert rss_wire.WIRE_DAILY_CAP is wire.WIRE_DAILY_CAP
         assert rss_wire.WIRE_PER_ROOM_CAP is wire.WIRE_PER_ROOM_CAP
         assert rss_wire.WIRE_FEED_SCAN_CAP is wire.WIRE_FEED_SCAN_CAP
+
+    def test_domain_cap_is_wires_helper(self):
+        """Identity again: a local cap_by_domain (or a local cap constant)
+        could drift to its own N and split the Phase 7 bias control into
+        two rules. Imported, never copied."""
+        assert rss_wire.cap_by_domain is wire.cap_by_domain
+        assert rss_wire._domain_cap is wire._domain_cap
+
+    def test_stance_summary_is_wires_helper(self):
+        assert rss_wire._stance_summary is wire._stance_summary
 
 
 # =========================================================================
@@ -403,8 +423,11 @@ class TestRssWireWatch:
         db = make_db(rooms=[make_room_row()])
         detail = await rss_wire.rss_wire_watch(_ctx(db))
         assert rss_wire._in_fetch_cooldown("https://example.com/one")
-        # The failure did not consume a readable slot: two others still filed.
-        assert len(mocks.saved) == 2
+        # The failure did not consume a READABLE slot — but the feed is
+        # single-host, so the Phase 7 domain cap (2/domain) admitted only
+        # items one and two; item two alone survives to filing.
+        assert len(mocks.saved) == 1
+        assert mocks.saved[0]["url"] == "https://example.com/two"
         skipped = detail[str(ROOM_ID)]["skipped"]
         assert {"url": "https://example.com/one",
                 "reason": "extract_failed"} in skipped
@@ -478,6 +501,41 @@ class TestRssWireWatch:
         assert mocks.saved == []
         reasons = {s["reason"] for s in detail[str(ROOM_ID)]["skipped"]}
         assert reasons == {"thin_content"}
+
+    # ---- the per-domain cap, through the netloc path (Phase 7) ----------
+
+    async def test_domain_cap_lets_a_second_feed_into_the_window(self, mocks):
+        """Behaviorally: six unreadable items from one prolific host would
+        fill wire.WIRE_FEED_SCAN_CAP on their own; the shared domain cap
+        (netloc-derived — RSS items carry no domain field) holds the host
+        to two, so the quieter feed's story is reached and filed."""
+        prolific = "https://prolific.example/feed.xml"
+        quiet = "https://quiet.example/feed.xml"
+        room = make_room_row(watchlist=[
+            {"type": "rss", "value": prolific},
+            {"type": "rss", "value": quiet},
+        ])
+        mocks.feeds[prolific] = make_flood_feed("prolific.example", 6)
+        mocks.feeds[quiet] = make_flood_feed("quiet.example", 1)
+        for i in range(1, 7):
+            mocks.extract_errors[f"https://prolific.example/p{i}"] = (
+                rss_wire.dc.DefuddleError("blocked"))
+        db = make_db(rooms=[room])
+        await rss_wire.rss_wire_watch(_ctx(db))
+
+        assert "https://quiet.example/p1" in mocks.extract_calls
+        assert [s["url"] for s in mocks.saved] == [
+            "https://quiet.example/p1"]
+
+    async def test_stance_marker_rides_the_filed_summary(self, mocks):
+        mocks.score = {"score": 0.9, "why": "Cuts against node 2.",
+                       "stance": "contradicts"}
+        db = make_db(rooms=[make_room_row()])
+        await rss_wire.rss_wire_watch(_ctx(db))
+        assert all(
+            s["summary"] == "Cuts against node 2. [stance: contradicts]"
+            for s in mocks.saved
+        )
 
     # ---- resilience -----------------------------------------------------
 

@@ -30,6 +30,10 @@ GUARDRAILS:
     already writes that row, so the cap needs no new plumbing
   - WIRE_PER_ROOM_CAP readable articles per room per run, found within the
     first WIRE_FEED_SCAN_CAP unseen headlines in feed freshness order
+  - WIRE_DOMAIN_CAP fresh headlines per publisher domain per room per run
+    (env-overridable), applied BEFORE the scan window so one loud outlet
+    cannot fill it — the bias control the domain field was shipped for.
+    Excess drops are logged with per-domain counts, never silently eaten
   - fetch failures and thin bodies cool that exact URL for six hours so a
     blocked lead story cannot consume every scheduled run
   - a failed relevance parse scores below threshold (silence, never a bad
@@ -47,6 +51,7 @@ import re
 import time
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from scheduler import Job, SchedulerContext
@@ -57,6 +62,7 @@ from llm.orchestrator import LLMOrchestrator
 from llm.reading import is_thin, save_reading, seen_urls
 from llm.silence_sweep import (
     _broadcast_follow_up,
+    _env_int,
     _load_room_context,
     in_quiet_hours,
 )
@@ -67,8 +73,10 @@ INTERJECTION_REASON = "wire_interjection"
 WIRE_DAILY_CAP = 4
 WIRE_PER_ROOM_CAP = 2
 WIRE_FEED_SCAN_CAP = 6
+WIRE_DOMAIN_CAP = 2
 WIRE_FETCH_COOLDOWN_SECONDS = 6 * 60 * 60
 WIRE_THRESHOLD = 0.7
+WIRE_STANCES = ("supports", "contradicts", "neutral")
 # The thesis snapshot goes into the prompt truncated: a trading_config JSON
 # can carry whole orderbooks; the model needs the posture, not the ticks.
 THESIS_CONTEXT_CAP = 4000
@@ -102,6 +110,46 @@ def _prune_fetch_cooldowns() -> None:
                if deadline <= now]
     for url in expired:
         del _fetch_cooldowns[url]
+
+
+def _domain_cap() -> int:
+    return _env_int("WIRE_DOMAIN_CAP", WIRE_DOMAIN_CAP)
+
+
+def _item_domain(item: dict) -> str:
+    """A headline's publisher domain: the feed's own field when it ships one
+    (GDELT does), the link's netloc otherwise (RSS items). Items with
+    neither share the '' bucket — undiagnosable provenance is itself one
+    source, not an exemption from the cap."""
+    domain = str(item.get("domain") or "").strip().lower()
+    if domain:
+        return domain
+    return urlparse(str(item.get("url") or "")).netloc.lower()
+
+
+def cap_by_domain(items: list[dict], cap: int) -> tuple[list[dict], dict]:
+    """First `cap` items per publisher domain, original order preserved.
+
+    WHY at the fresh list rather than the scan loop: the point is diversity
+    of the scan WINDOW — a single outlet syndicating one story six ways
+    would otherwise fill WIRE_FEED_SCAN_CAP before a second voice appears.
+    Pure function, shared with rss_wire (imported, never copied — the cap
+    must stay ONE rule across both wires).
+
+    Returns (kept, dropped) where dropped maps domain -> how many fell;
+    callers log it — a silent cap reads as full coverage.
+    """
+    kept: list[dict] = []
+    dropped: dict[str, int] = {}
+    counts: dict[str, int] = {}
+    for item in items:
+        domain = _item_domain(item)
+        counts[domain] = counts.get(domain, 0) + 1
+        if counts[domain] <= cap:
+            kept.append(item)
+        else:
+            dropped[domain] = dropped.get(domain, 0) + 1
+    return kept, dropped
 
 
 async def _linked_rooms(pool):
@@ -161,8 +209,15 @@ def _parse_score(text: str) -> Optional[dict]:
         score = float(parsed["score"])
     except (KeyError, TypeError, ValueError):
         return None
+    # Stance is advisory, never disqualifying: a missing or invented value
+    # degrades to neutral rather than failing an otherwise-good score.
+    stance = parsed.get("stance")
+    stance = stance.strip().lower() if isinstance(stance, str) else ""
+    if stance not in WIRE_STANCES:
+        stance = "neutral"
     return {"score": max(0.0, min(1.0, score)),
-            "why": str(parsed.get("why") or "")}
+            "why": str(parsed.get("why") or ""),
+            "stance": stance}
 
 
 async def _score(article: dict, thesis_context: str) -> Optional[dict]:
@@ -186,9 +241,11 @@ async def _score(article: dict, thesis_context: str) -> Optional[dict]:
                 f"ARTICLE — {article.get('title') or 'untitled'}"
                 f" ({article.get('site') or 'unknown site'}):\n"
                 f"{str(article.get('content') or '')[:ARTICLE_CONTEXT_CAP]}\n\n"
-                "Respond with ONLY JSON: {\"score\": 0.0, \"why\": \"...\"}. "
+                "Respond with ONLY JSON: {\"score\": 0.0, \"why\": \"...\", "
+                "\"stance\": \"supports|contradicts|neutral\"}. "
                 "score is 0..1 (1 = directly moves a thesis trigger); why is "
-                "one sentence."
+                "one sentence; stance is whether the article's facts support, "
+                "contradict, or sit neutral to the thesis's central claim."
             ),
         }],
         system="You score breaking news against a trading thesis. Be terse, factual, and output only the JSON object asked for.",
@@ -202,6 +259,23 @@ async def _score(article: dict, thesis_context: str) -> Optional[dict]:
         logger.info("wire relevance LLM call failed: %s", e)
         return None
     return _parse_score(response.content or "")
+
+
+def _stance_summary(why: str, stance: Optional[str]) -> str:
+    """The reading's filed summary, carrying a non-neutral stance marker.
+
+    WHY the summary and not somewhere else: reading_items has no stance
+    column, and the summary is the one field every consumer already reads —
+    the morning brief, recall via the memory twin, and a later
+    `summary LIKE '%[stance: contradicts]%'` query. Chosen over patching the
+    interjection message's metadata because the reading is filed even when
+    the interjection fails or is capped, so the stance survives with it.
+    The suffix is appended AFTER the cap so truncation can never eat it.
+    """
+    if not stance or stance == "neutral":
+        return why[:SUMMARY_CAP]
+    suffix = f" [stance: {stance}]"
+    return why[:SUMMARY_CAP - len(suffix)] + suffix
 
 
 def _wire_context_message(thread_id, sequence, article, verdict) -> Message:
@@ -318,6 +392,13 @@ async def wire_watch(ctx: SchedulerContext) -> dict:
                     detail[room_key] = "all_seen"
                     continue
 
+                fresh, domain_drops = cap_by_domain(fresh, _domain_cap())
+                if domain_drops:
+                    logger.info(
+                        "wire domain cap dropped headlines for room %s: %s",
+                        room_key, domain_drops,
+                    )
+
                 thesis_context = str(room["trading_config"] or "")[:THESIS_CONTEXT_CAP]
                 filed, interjected, skipped = [], [], []
                 readable_count = 0
@@ -356,13 +437,17 @@ async def wire_watch(ctx: SchedulerContext) -> dict:
                     # artifact is the interruption, not a full distillation.
                     row = await save_reading(
                         conn, room_id=room["id"], article=article,
-                        summary=(verdict["why"] or article.get("title")
-                                 or "wire hit")[:SUMMARY_CAP],
+                        summary=_stance_summary(
+                            verdict["why"] or article.get("title")
+                            or "wire hit",
+                            verdict.get("stance"),
+                        ),
                         key_claims=[],
                         source="wire",
                     )
                     filed.append({"url": url, "title": row.get("title"),
-                                  "score": verdict["score"]})
+                                  "score": verdict["score"],
+                                  "stance": verdict.get("stance", "neutral")})
 
                     # A dead interjection must not cost the room its second
                     # article — the reading is already filed either way.

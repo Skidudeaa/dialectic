@@ -38,6 +38,9 @@ GUARDRAILS (the GDELT wire's, reused not mirrored):
     consume every run, and wire's map stays wire's)
   - at most wire.WIRE_FEED_SCAN_CAP fresh items scored per room per run,
     wire.WIRE_PER_ROOM_CAP readable articles, feed order = freshness order
+  - wire.cap_by_domain on the fresh list (domain from each link's netloc —
+    RSS items carry no domain field), so one prolific feed cannot fill the
+    scan window when a room watches several; drops are logged with counts
   - per-room/per-item failures skip and record; the job never raises
 
 TRADEOFF: urllib.urlopen is blocking, so the fetch runs in
@@ -57,15 +60,17 @@ from llm import defuddle_client as dc
 from llm.reading import is_thin, save_reading, seen_urls
 from llm.silence_sweep import in_quiet_hours
 from llm.wire import (
-    SUMMARY_CAP,
     THESIS_CONTEXT_CAP,
     WIRE_DAILY_CAP,
     WIRE_FEED_SCAN_CAP,
     WIRE_PER_ROOM_CAP,
     WIRE_THRESHOLD,
+    _domain_cap,
     _interject,
     _interjections_today,
     _score,
+    _stance_summary,
+    cap_by_domain,
 )
 
 logger = logging.getLogger(__name__)
@@ -287,6 +292,16 @@ async def rss_wire_watch(ctx: SchedulerContext) -> dict:
                     detail[room_key] = "all_seen"
                     continue
 
+                # wire's cap, wire's helper — imported, never copied. Domain
+                # falls back to each link's netloc since RSS items carry no
+                # domain field of their own.
+                fresh, domain_drops = cap_by_domain(fresh, _domain_cap())
+                if domain_drops:
+                    logger.info(
+                        "rss wire domain cap dropped items for room %s: %s",
+                        room_key, domain_drops,
+                    )
+
                 thesis_context = str(room["trading_config"] or "")[:THESIS_CONTEXT_CAP]
                 filed, interjected = [], []
                 skipped = list(failed_feeds)
@@ -324,13 +339,17 @@ async def rss_wire_watch(ctx: SchedulerContext) -> dict:
 
                     row = await save_reading(
                         conn, room_id=room["id"], article=article,
-                        summary=(verdict["why"] or article.get("title")
-                                 or "wire hit")[:SUMMARY_CAP],
+                        summary=_stance_summary(
+                            verdict["why"] or article.get("title")
+                            or "wire hit",
+                            verdict.get("stance"),
+                        ),
                         key_claims=[],
                         source="wire",
                     )
                     filed.append({"url": url, "title": row.get("title"),
-                                  "score": verdict["score"]})
+                                  "score": verdict["score"],
+                                  "stance": verdict.get("stance", "neutral")})
 
                     # wire._interject: force_response writes the ledger row
                     # (reason='wire_interjection') the shared cap counts.

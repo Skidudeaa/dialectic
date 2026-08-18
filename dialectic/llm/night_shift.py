@@ -32,6 +32,7 @@ from uuid import uuid4
 from scheduler import Job, SchedulerContext
 from models import SpeakerType, MessageType, EventType
 from transport.websocket import OutboundMessage, MessageTypes
+from llm import news_night
 from llm.briefing import BriefingResponse, build_briefing
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,15 @@ def _render_brief(briefing: BriefingResponse) -> str:
             title = item.get("title") or item.get("url") or "untitled"
             site = item.get("site") or "unknown site"
             lines.append(f"📰 {title} — {site}: {_first_sentence(item.get('summary') or '')}")
+        # The dissent check (Phase 7 bias controls): when nothing the night
+        # filed contradicts the thesis, the brief SAYS so — reporting the
+        # absence beats manufacturing balance, and silence would read as
+        # "everything agrees with us" without ever being checked.
+        summaries = " ".join(
+            (item.get("summary") or "") for item in briefing.news_digest[:5]
+        )
+        if "contradicts" not in summaries and "COUNTER" not in summaries:
+            lines.append(f"📰 {news_night.NO_DISSENT_LINE}")
     return "\n".join(lines)
 
 
