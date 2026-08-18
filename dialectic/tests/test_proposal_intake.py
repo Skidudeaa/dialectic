@@ -37,10 +37,16 @@ def test_a_non_dict_metadata_is_rejected():
 # The four human-submittable kinds — mirrors PROPOSAL_SLOTS exactly
 # ---------------------------------------------------------------------------
 
-def test_allowed_slots_are_exactly_proposal_slots_minus_resolution():
+def test_allowed_slots_are_exactly_proposal_slots_minus_system_owned():
+    """resolution_proposal is the deadline watcher's; trade_proposal is the
+    propose_trade tool's (its forecast-XOR-discretionary gate would be
+    dodged by a raw human metadata door, and no _SLOT_VALIDATORS entry
+    exists for it)."""
     from proposal_envelope import PROPOSAL_SLOTS
 
-    assert set(ALLOWED_HUMAN_PROPOSAL_SLOTS) == set(PROPOSAL_SLOTS) - {"resolution_proposal"}
+    assert set(ALLOWED_HUMAN_PROPOSAL_SLOTS) == (
+        set(PROPOSAL_SLOTS) - {"resolution_proposal", "trade_proposal"}
+    )
 
 
 def test_a_valid_prediction_draft_passes_and_is_reshaped():

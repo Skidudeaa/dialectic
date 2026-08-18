@@ -55,13 +55,16 @@ def fresh_cache():
 
 @pytest.mark.asyncio
 async def test_fetch_reads_claude_calibration_and_portfolio(monkeypatch):
-    get = AsyncMock(side_effect=[dict(CALIBRATION), {"equity": 105000, "benchmark": 101000}])
+    portfolio = {"books": {"iran-hormuz-graph": {
+        "equity": 105000, "spy_baseline_now": 101000,
+    }}}
+    get = AsyncMock(side_effect=[dict(CALIBRATION), portfolio])
     monkeypatch.setattr(self_model.td, "get", get)
 
     record = await fetch_track_record()
 
     assert record["calibration"]["brier_score"] == 0.18
-    assert record["portfolio"]["equity"] == 105000
+    assert record["portfolio"]["books"]["iran-hormuz-graph"]["equity"] == 105000
     first = get.await_args_list[0]
     assert first.args == ("/api/predictions/calibration",)
     assert first.kwargs["params"] == {"source_label": "Claude"}
@@ -120,13 +123,31 @@ def test_golden_block_with_reference_and_unscored(monkeypatch):
 
 
 def test_book_line_renders_when_the_portfolio_exists():
+    # td's real shape: {books: {id: {...}}}. Two books aggregate.
     text = SelfModel(db=None).render_self_awareness(
         _snapshot({
             "calibration": dict(CALIBRATION),
-            "portfolio": {"equity": 105000, "benchmark": 101000},
+            "portfolio": {"books": {
+                "iran-hormuz-graph": {"equity": 105000, "spy_baseline_now": 101000},
+                "trump-tariffs-graph": {"equity": 50000, "spy_baseline_now": 52000},
+            }},
         })
     )
-    assert "- Book: equity $105,000 vs SPY benchmark $101,000." in text
+    assert ("- Book: equity $155,000 vs SPY benchmark $153,000 "
+            "(price return only).") in text
+
+
+def test_book_line_omitted_without_a_benchmark():
+    # An unfunded book (equity but no spy units yet) must not overclaim.
+    text = SelfModel(db=None).render_self_awareness(
+        _snapshot({
+            "calibration": dict(CALIBRATION),
+            "portfolio": {"books": {
+                "iran-hormuz-graph": {"equity": 0.0, "spy_baseline_now": None},
+            }},
+        })
+    )
+    assert "Book:" not in text
 
 
 def test_none_track_record_omits_the_section_entirely():

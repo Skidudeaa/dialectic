@@ -10,6 +10,7 @@ import { MarketStrip } from '../../trading/MarketStrip'
 import { PolymarketStrip } from '../../trading/PolymarketStrip'
 import { OpenTradesTable } from '../../trading/OpenTradesTable'
 import { HourlyDiff } from '../../trading/HourlyDiff'
+import { PortfolioPanel } from '../../trading/PortfolioPanel'
 import { MorningBriefCard } from '../../trading/MorningBriefCard'
 import { ThesisNewsList } from '../../trading/ThesisNewsList'
 import { AlertEventsList } from '../../trading/AlertEventsList'
@@ -96,9 +97,12 @@ export function BenchScene({
         <PolymarketStrip slice={desk.polymarket} />
         <AlertEventsList events={tradingConfig?.alertEvents} />
       </div>
+      <HourlyDiff slice={desk.diff} />
+      {/* The two money views share a row: desk-wide exposure beside this
+          room's paper book (Phase 5 — belief carrying a position). */}
       <div className="cockpit-duo">
-        <HourlyDiff slice={desk.diff} />
         <OpenTradesTable slice={desk.trades} />
+        <PortfolioPanel slice={desk.portfolio} />
       </div>
       {desk.structure.status === 'ready' && desk.structure.data && roomId ? (
         <ScenarioWhatIf

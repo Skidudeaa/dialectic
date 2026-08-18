@@ -33,6 +33,7 @@ EXPECTED_TOOLS = {
     "search_transcript",
     "draft_prediction",
     "propose_thesis",
+    "propose_trade",
     "read_article",
     "save_reading",
     "search_reading",
@@ -96,9 +97,9 @@ def registry(room, db):
 
 
 class TestRegistryContract:
-    def test_registers_all_nineteen_tools(self, registry):
+    def test_registers_all_twenty_tools(self, registry):
         assert set(registry.names()) == EXPECTED_TOOLS
-        assert len(registry.tools) == 19
+        assert len(registry.tools) == 20
 
     def test_names_match_anthropic_pattern(self, registry):
         for tool in registry.tools:
@@ -450,6 +451,155 @@ class TestDraftPredictionTool:
         tool = build_registry(room, FakeDB()).get("draft_prediction")
         with pytest.raises(ValueError, match="deadline"):
             await tool.execute({**self.DRAFT, "deadline": "end of Q3"})
+
+
+class TestProposeTradeTool:
+    """propose_trade validates and shapes a paper-trade proposal and writes
+    NOTHING — the Accept tap (api/trading_relay.py trades/accept) is the
+    only write path. Every trade is a scored forecast OR an explicit
+    unscored-discretionary label, never silently unevaluable."""
+
+    FORECAST = {"statement": "XOP closes above $150 by end of Q3",
+                "confidence": 0.65, "deadline": "2026-09-30"}
+    TRADE = {"symbol": "XOP", "side": "buy", "dollars": 2000,
+             "rationale": "brent node fired, refiners lag"}
+
+    def _tool(self, room=None):
+        bound = room or make_room(linked_book_id="iran-hormuz-graph")
+        return build_registry(bound, FakeDB()).get("propose_trade")
+
+    @pytest.mark.asyncio
+    async def test_forecast_trade_shapes_with_trade_provenance(self):
+        out = await self._tool().execute(
+            {**self.TRADE, "node_id": "brent", "prediction": dict(self.FORECAST)})
+        assert out["provenance"] == {"kind": "trade_proposal"}
+        assert out["proposal"] == {
+            "symbol": "XOP", "side": "buy", "dollars": 2000.0,
+            "rationale": "brent node fired, refiners lag",
+            "node_id": "brent",
+            "prediction": dict(self.FORECAST),
+        }
+
+    @pytest.mark.asyncio
+    async def test_discretionary_trade_carries_the_explicit_label(self):
+        out = await self._tool().execute({**self.TRADE, "discretionary": True})
+        assert out["proposal"]["discretionary"] is True
+        assert "prediction" not in out["proposal"]
+
+    @pytest.mark.asyncio
+    async def test_neither_forecast_nor_label_is_rejected(self):
+        """The unevaluable trade — the whole gate exists for this case."""
+        with pytest.raises(ValueError, match="exactly one"):
+            await self._tool().execute(dict(self.TRADE))
+
+    @pytest.mark.asyncio
+    async def test_both_forecast_and_label_is_rejected(self):
+        with pytest.raises(ValueError, match="exactly one"):
+            await self._tool().execute(
+                {**self.TRADE, "prediction": dict(self.FORECAST),
+                 "discretionary": True})
+
+    @pytest.mark.asyncio
+    async def test_unbound_room_is_refused(self, room):
+        # conftest room has no linked_book_id — mirror of propose_thesis's
+        # refusal, inverted: a trade needs the book a thesis creates.
+        assert getattr(room, "linked_book_id", None) is None
+        tool = build_registry(room, FakeDB()).get("propose_trade")
+        with pytest.raises(ValueError, match="no thesis book"):
+            await tool.execute({**self.TRADE, "discretionary": True})
+
+    @pytest.mark.asyncio
+    async def test_sell_is_allowed(self):
+        """Exits are human-managed sells; td's door enforces long-only."""
+        out = await self._tool().execute(
+            {**self.TRADE, "side": "sell", "discretionary": True})
+        assert out["proposal"]["side"] == "sell"
+
+    @pytest.mark.asyncio
+    async def test_symbol_normalizes_and_cash_is_refused(self):
+        out = await self._tool().execute(
+            {**self.TRADE, "symbol": " xop ", "discretionary": True})
+        assert out["proposal"]["symbol"] == "XOP"
+        with pytest.raises(ValueError, match="CASH"):
+            await self._tool().execute(
+                {**self.TRADE, "symbol": "cash", "discretionary": True})
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad", [
+        {"symbol": "  "},
+        {"side": "short"},
+        {"dollars": 0},
+        {"dollars": -50},
+        {"dollars": "a lot"},
+        {"rationale": "   "},
+    ])
+    async def test_malformed_trade_fields_rejected(self, bad):
+        with pytest.raises(ValueError):
+            await self._tool().execute(
+                {**self.TRADE, "discretionary": True, **bad})
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad", [
+        {"statement": " "},
+        {"confidence": 1.4},
+        {"confidence": "high"},
+        {"deadline": "end of Q3"},
+    ])
+    async def test_malformed_forecast_fields_rejected(self, bad):
+        with pytest.raises(ValueError):
+            await self._tool().execute(
+                {**self.TRADE, "prediction": {**self.FORECAST, **bad}})
+
+    @pytest.mark.asyncio
+    async def test_valid_price_cross_spec_passes_through(self):
+        spec = {"kind": "price_cross", "symbol": "XOP",
+                "comparator": "above", "threshold": 150.0}
+        out = await self._tool().execute(
+            {**self.TRADE,
+             "prediction": {**self.FORECAST, "resolution_spec": dict(spec)}})
+        assert out["proposal"]["prediction"]["resolution_spec"] == spec
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("spec", [
+        {"kind": "coin_flip"},
+        {"kind": "price_cross", "symbol": "XOP", "comparator": "above"},
+        {"kind": "price_cross", "symbol": "XOP", "comparator": "above",
+         "threshold": 150.0, "extra": 1},
+        {"kind": "price_cross", "symbol": "", "comparator": "above",
+         "threshold": 150.0},
+        {"kind": "price_cross", "symbol": "XOP", "comparator": "crosses",
+         "threshold": 150.0},
+        {"kind": "price_cross", "symbol": "XOP", "comparator": "above",
+         "threshold": "150"},
+        {"kind": "price_cross", "symbol": "XOP", "comparator": "above",
+         "threshold": True},
+        {"kind": "polymarket", "market_id": ""},
+    ])
+    async def test_malformed_resolution_spec_rejected(self, spec):
+        """Strict mirror of td's door — a spec that would never auto-resolve
+        dies at draft time, not at the human's Accept tap."""
+        with pytest.raises(ValueError, match="resolution_spec"):
+            await self._tool().execute(
+                {**self.TRADE,
+                 "prediction": {**self.FORECAST, "resolution_spec": spec}})
+
+    @pytest.mark.asyncio
+    async def test_makes_no_network_call_and_no_db_write(self, td_env):
+        requests = []
+
+        def handler(request):
+            requests.append(request)
+            return json_response({})
+
+        class RecordingDB(FakeDB):
+            async def execute(self, *args):
+                raise AssertionError("propose_trade wrote to the database")
+
+        install_transport(handler)
+        bound = make_room(linked_book_id="iran-hormuz-graph")
+        tool = build_registry(bound, RecordingDB()).get("propose_trade")
+        await tool.execute({**self.TRADE, "discretionary": True})
+        assert requests == []
 
 
 # ── tradingDesk-backed executors ─────────────────────────────────────

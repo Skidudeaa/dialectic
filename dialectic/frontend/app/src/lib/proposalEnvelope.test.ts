@@ -30,6 +30,12 @@ const RAW: MessageMetadata = {
     prediction_id: 'p1', statement: 'Brent over 90', verdict: 'correct',
     rationale: 'r', accepted: false,
   },
+  trade_proposal: {
+    symbol: 'XOP', side: 'buy', dollars: 2000, rationale: 'r',
+    prediction: { statement: 'XOP above 150', confidence: 0.65,
+                  deadline: '2026-09-30' },
+    accepted: false,
+  },
   commitment_proposals: [
     { claim: 'I close before CPI', resolution_criteria: 'flat',
       category: 'commitment', accepted: false },
@@ -44,6 +50,7 @@ describe('localProposals', () => {
     expect(found.map(p => p.kind).sort()).toEqual([
       'commitment_proposal', 'commitment_proposal', 'prediction_draft',
       'prediction_resolution', 'reading_draft', 'thesis_proposal',
+      'trade_proposal',
     ])
   })
 

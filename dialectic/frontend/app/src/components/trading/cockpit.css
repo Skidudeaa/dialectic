@@ -111,6 +111,17 @@
     color: var(--color-warning);
 }
 
+/* --- One-line facts (PortfolioPanel: cash, equity vs benchmark) --- */
+.cockpit-line {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-ink);
+    padding: 0.25rem 0;
+}
+.cockpit-note {
+    color: var(--color-ghost);
+}
+
 /* --- Empty: one calm line --- */
 .cockpit-empty-line {
     font-family: var(--font-mono);

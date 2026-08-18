@@ -115,6 +115,25 @@ def _hoisted_reading_proposal(calls: list[dict]) -> Optional[dict]:
     return None
 
 
+def _hoisted_trade_proposal(calls: list[dict]) -> Optional[dict]:
+    """The propose_trade proposal from a tool trace, if this turn made one.
+
+    Same hoist as predictions: the trade card renders off
+    metadata.trade_proposal, and the write happens only when a human taps
+    Accept (api/trading_relay.py trades/accept) — Claude proposes, a human
+    disposes, tradingDesk prices the fill.
+    """
+    for entry in calls:
+        if not entry.get("ok"):
+            continue
+        if (entry.get("provenance") or {}).get("kind") != "trade_proposal":
+            continue
+        proposal = dict(entry.get("input") or {})
+        proposal["accepted"] = False
+        return proposal
+    return None
+
+
 @dataclass
 class OrchestrationResult:
     """
@@ -502,6 +521,9 @@ class LLMOrchestrator:
                 reading = _hoisted_reading_proposal(loop_result.tool_trace)
                 if reading is not None:
                     tool_metadata["reading_proposal"] = reading
+                trade = _hoisted_trade_proposal(loop_result.tool_trace)
+                if trade is not None:
+                    tool_metadata["trade_proposal"] = trade
         else:
             routing = await router.route(request)
 
@@ -944,6 +966,9 @@ class LLMOrchestrator:
                             reading = _hoisted_reading_proposal(trace)
                             if reading is not None:
                                 tool_metadata["reading_proposal"] = reading
+                            trade = _hoisted_trade_proposal(trace)
+                            if trade is not None:
+                                tool_metadata["trade_proposal"] = trade
             else:
                 async for event_type, data in router.stream(request):
                     if event_type == "attempt":

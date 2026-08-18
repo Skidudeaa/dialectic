@@ -156,6 +156,7 @@ export function MessageBubble({
   const [acceptState, setAcceptState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
   const [readingAcceptState, setReadingAcceptState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
   const [resolutionState, setResolutionState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
+  const [tradeState, setTradeState] = useState<'idle' | 'accepting' | 'accepted' | 'error'>('idle')
   const [fileState, setFileState] = useState<'idle' | 'filing' | 'filed' | 'error'>('idle')
   const editRef = useRef<HTMLTextAreaElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -264,8 +265,9 @@ export function MessageBubble({
     mark('proposal', acceptState)
     mark('reading_proposal', readingAcceptState)
     mark('resolution_proposal', resolutionState)
+    mark('trade_proposal', tradeState)
     return { accepted, failed }
-  }, [message.id, acceptState, readingAcceptState, resolutionState])
+  }, [message.id, acceptState, readingAcceptState, resolutionState, tradeState])
 
   const proposalsBySlot = useMemo(() => {
     const map = new Map<string, LocalProposal>()
@@ -352,6 +354,24 @@ export function MessageBubble({
       setReadingAcceptState('accepted')
     } catch {
       setReadingAcceptState('error')
+    }
+  }
+
+  // A proposed paper trade, if this turn made one. The Accept tap is the
+  // ONLY write — the desk logs the paired forecast into the claims ledger
+  // first, then records the fill (or just the fill, when the proposal
+  // carries the explicit DISCRETIONARY label instead of a forecast).
+  const tradeProposal = message.metadata?.trade_proposal
+  const tradeFilled = proposalsBySlot.get('trade_proposal')?.status === 'accepted'
+
+  const acceptTrade = async () => {
+    if (!currentRoomId || tradeState === 'accepting' || tradeFilled) return
+    setTradeState('accepting')
+    try {
+      await api.acceptTrade(currentRoomId, message.id)
+      setTradeState('accepted')
+    } catch {
+      setTradeState('error')
     }
   }
 
@@ -526,6 +546,43 @@ export function MessageBubble({
             )}
             {acceptState === 'error' && !proposalLogged && (
               <span className="msg-proposal-error">could not log — try again</span>
+            )}
+          </div>
+        )}
+
+        {tradeProposal && (
+          <div className="msg-proposal">
+            <div className="msg-proposal-title">Proposed paper trade</div>
+            <div className="msg-proposal-statement">
+              {tradeProposal.side === 'sell' ? 'Sell' : 'Buy'}{' '}
+              ${tradeProposal.dollars.toLocaleString()} {tradeProposal.symbol}
+              {tradeProposal.node_id && ` · ${tradeProposal.node_id}`}
+            </div>
+            <div className="msg-proposal-meta">{tradeProposal.rationale}</div>
+            {tradeProposal.prediction ? (
+              <div className="msg-proposal-meta">
+                stakes: {tradeProposal.prediction.statement} —{' '}
+                {Math.round(tradeProposal.prediction.confidence * 100)}% by{' '}
+                {tradeProposal.prediction.deadline}
+              </div>
+            ) : (
+              <div className="msg-proposal-meta">
+                DISCRETIONARY — unscored by the claims ledger
+              </div>
+            )}
+            {tradeFilled ? (
+              <span className="msg-proposal-logged">filled on the paper book</span>
+            ) : (
+              <button
+                className="msg-proposal-accept"
+                disabled={tradeState === 'accepting'}
+                onClick={acceptTrade}
+              >
+                {tradeState === 'accepting' ? 'Filling…' : 'Accept'}
+              </button>
+            )}
+            {tradeState === 'error' && !tradeFilled && (
+              <span className="msg-proposal-error">could not fill — try again</span>
             )}
           </div>
         )}

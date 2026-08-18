@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { useAppStore } from '../../stores/appStore'
+import type { Portfolio } from '../../types/trading'
 import '../stakes/CommitmentDashboard.css'
 import './TrackRecordPanel.css'
 
@@ -57,7 +58,12 @@ type PanelState =
   | { status: 'loading' }
   | { status: 'hidden' }
   | { status: 'empty' }
-  | { status: 'ready'; calibration: CalibrationSummary; leaderboard: LeaderboardRow[] }
+  | {
+      status: 'ready'
+      calibration: CalibrationSummary
+      leaderboard: LeaderboardRow[]
+      portfolio: Portfolio | null
+    }
 
 function leaderboardRows(data: unknown): LeaderboardRow[] {
   if (Array.isArray(data)) return data as LeaderboardRow[]
@@ -77,15 +83,18 @@ export function TrackRecordPanel() {
     Promise.all([
       api.getTradingCalibration(roomId),
       api.getTradingLeaderboard(roomId, 'source_label'),
+      // The equity curve is garnish here, not the meal: a failed portfolio
+      // read must not hide the scoreboard, so it degrades to null alone.
+      api.getTradingPortfolio(roomId).catch(() => null),
     ])
-      .then(([calibrationData, leaderboardData]) => {
+      .then(([calibrationData, leaderboardData, portfolioData]) => {
         if (cancelled) return
         const calibration = (calibrationData ?? {}) as CalibrationSummary
         const leaderboard = leaderboardRows(leaderboardData)
         const state: PanelState =
           !(calibration.total_predictions ?? 0) && leaderboard.length === 0
             ? { status: 'empty' }
-            : { status: 'ready', calibration, leaderboard }
+            : { status: 'ready', calibration, leaderboard, portfolio: portfolioData }
         setSettled({ roomId, state })
       })
       .catch(() => {
@@ -122,12 +131,22 @@ export function TrackRecordPanel() {
     )
   }
 
-  const { calibration, leaderboard } = state
+  const { calibration, leaderboard, portfolio } = state
   const points: CalibrationPoint[] = (calibration.calibration ?? [])
     .filter((bucket) => bucket.accuracy !== null && bucket.total > 0)
     .map((bucket) => ({ confidence: bucket.midpoint, accuracy: bucket.accuracy as number }))
   const brier = calibration.brier_score
   const bss = calibration.brier_skill_score ?? calibration.bss
+
+  // Equity vs unitized SPY, joined on mark_date — only dates BOTH series
+  // hold draw, so a mark before the first deposit (no benchmark units yet)
+  // cannot bend the comparison. Null-safe throughout: no portfolio, no line.
+  const spyByDate = new Map(
+    (portfolio?.spy_baseline ?? []).map((b) => [b.mark_date, b.value]),
+  )
+  const sparkPoints = (portfolio?.marks ?? [])
+    .filter((m) => typeof m.equity === 'number' && spyByDate.has(m.mark_date))
+    .map((m) => ({ equity: m.equity, benchmark: spyByDate.get(m.mark_date) as number }))
 
   return (
     <div className="track-record-panel" data-testid="track-record-panel">
@@ -218,9 +237,10 @@ export function TrackRecordPanel() {
         </div>
       )}
 
-      {/* Equity vs SPY — Phase 4's portfolio feed fills this; until the
-          relay serves it there is nothing honest to draw. */}
-      <EquitySparkline points={[]} />
+      {/* Equity vs SPY (dashed) off the relay's portfolio read — the
+          unitized benchmark, price-return-only on both sides. Renders
+          nothing until two marks exist; a curve needs two points. */}
+      <EquitySparkline points={sparkPoints} />
     </div>
   )
 }

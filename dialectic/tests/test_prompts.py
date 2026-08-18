@@ -755,9 +755,19 @@ class TestStandingDisciplines:
         assert "deadline" in flat
         assert "Horizon is no filter" in flat
 
+    def test_tools_section_carries_the_trade_pairing_rule(self, builder):
+        """A trade normally carries its falsifiable forecast; discretionary
+        is the labeled exception — never the silent default."""
+        prompt = builder.build(make_room(), [], [], [], tools_enabled=True)
+        flat = " ".join(prompt.system.split())
+        assert "propose_trade" in flat
+        assert "discretionary" in flat
+        assert "never the silent default" in flat
+
     def test_tool_disciplines_absent_without_tools(self, builder):
         """No tool channel -> no rules that demand tool calls."""
         prompt = builder.build(make_room(), [], [], [])
         flat = " ".join(prompt.system.split())
         assert "Touches no tracked node" not in flat
         assert "draft_prediction" not in flat
+        assert "propose_trade" not in flat

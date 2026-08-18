@@ -1,7 +1,24 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Message, MessageMetadata } from '../../types'
 import { MessageBubble } from './MessageBubble'
+import { api } from '../../lib/api'
+import { useAppStore } from '../../stores/appStore'
+
+// The accept-wiring test needs the api mocked (the tap must POST to the
+// trade relay, not the network); everything else in this file renders only.
+vi.mock('../../lib/api', async () => {
+  const actual = await vi.importActual<typeof import('../../lib/api')>('../../lib/api')
+  return {
+    ...actual,
+    api: { acceptTrade: vi.fn() },
+  }
+})
+
+afterEach(() => {
+  useAppStore.setState({ currentRoom: null } as never)
+  vi.clearAllMocks()
+})
 
 /**
  * D4 — migration safety, asserted on the real component.
@@ -48,6 +65,13 @@ const RAW = {
     prediction_id: 'p1', statement: 'Brent over 90', verdict: 'correct',
     rationale: 'settled above 90 all week', accepted: false,
   },
+  trade_proposal: {
+    symbol: 'XOP', side: 'buy', dollars: 2000,
+    rationale: 'brent node fired, refiners lag',
+    prediction: { statement: 'XOP above 150', confidence: 0.65,
+                  deadline: '2026-09-30' },
+    accepted: false,
+  },
   commitment_proposals: [
     { claim: 'I close before CPI', resolution_criteria: 'flat',
       category: 'commitment', accepted: false },
@@ -67,12 +91,13 @@ describe('a message carrying today raw proposal metadata', () => {
     expect(screen.getByText('Proposed thesis')).toBeInTheDocument()
     expect(screen.getByText('File in the library')).toBeInTheDocument()
     expect(screen.getByText('Prediction resolution')).toBeInTheDocument()
+    expect(screen.getByText('Proposed paper trade')).toBeInTheDocument()
     expect(screen.getByText('Heard a commitment')).toBeInTheDocument()
   })
 
   it('offers the action on what is still open', () => {
     renderBubble(RAW)
-    expect(screen.getAllByRole('button', { name: 'Accept' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Accept' })).toHaveLength(3)
     expect(screen.getByRole('button', { name: /Put it on record/ }))
       .toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Draft the cascade/ }))
@@ -90,7 +115,41 @@ describe('a message carrying today raw proposal metadata', () => {
     expect(screen.getByText('Drafted prediction')).toBeInTheDocument()
     expect(screen.getByText('Brent over 90 by October')).toBeInTheDocument()
     expect(screen.getByText('logged to tradingDesk')).toBeInTheDocument()
-    expect(screen.queryAllByRole('button', { name: 'Accept' })).toHaveLength(1)
+    expect(screen.queryAllByRole('button', { name: 'Accept' })).toHaveLength(2)
+  })
+
+  it('renders the trade card with its paired forecast, armed', () => {
+    renderBubble(RAW)
+    expect(screen.getByText(/Buy \$2,000 XOP/)).toBeInTheDocument()
+    expect(screen.getByText('brent node fired, refiners lag')).toBeInTheDocument()
+    expect(screen.getByText(/stakes: XOP above 150 — 65% by 2026-09-30/))
+      .toBeInTheDocument()
+    expect(screen.queryByText(/DISCRETIONARY/)).toBeNull()
+  })
+
+  it('labels a discretionary trade unscored instead of inventing a forecast', () => {
+    renderBubble({
+      trade_proposal: {
+        symbol: 'CF', side: 'sell', dollars: 500,
+        rationale: 'trim into strength', discretionary: true, accepted: false,
+      },
+    } as unknown as MessageMetadata)
+    expect(screen.getByText(/Sell \$500 CF/)).toBeInTheDocument()
+    expect(screen.getByText(/DISCRETIONARY — unscored/)).toBeInTheDocument()
+    expect(screen.queryByText(/stakes:/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument()
+  })
+
+  it('disarms a filled trade and keeps it visible', () => {
+    renderBubble({
+      trade_proposal: {
+        ...(RAW as never as Record<string, Record<string, unknown>>).trade_proposal,
+        accepted: true,
+      },
+    } as unknown as MessageMetadata)
+    expect(screen.getByText('Proposed paper trade')).toBeInTheDocument()
+    expect(screen.getByText('filled on the paper book')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull()
   })
 
   it('disarms the right entry of a list, by coordinate', () => {
@@ -108,6 +167,46 @@ describe('a message carrying today raw proposal metadata', () => {
     expect(screen.getByText('on the record')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /Put it on record/ }))
       .toHaveLength(1)
+  })
+
+  it('Accept on a trade posts to the relay and disarms optimistically', async () => {
+    // The tap is the ONLY write; the card must address the accept by the
+    // room in the store and THIS message's id.
+    useAppStore.setState({
+      currentRoom: { id: 'room-1', name: 'Scheme', token: 't', is_home: false },
+    } as never)
+    vi.mocked(api.acceptTrade).mockResolvedValue({ fill: { id: 7 }, prediction: null })
+    renderBubble({
+      trade_proposal: {
+        symbol: 'XOP', side: 'buy', dollars: 2000, rationale: 'r',
+        discretionary: true, accepted: false,
+      },
+    } as unknown as MessageMetadata)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+
+    await waitFor(() => expect(api.acceptTrade).toHaveBeenCalledWith('room-1', MID))
+    expect(await screen.findByText('filled on the paper book')).toBeInTheDocument()
+  })
+
+  it('a failed trade accept keeps the button armed for a fresh retry', async () => {
+    // The server deliberately leaves `accepted` false on a relay failure —
+    // the card must offer retry, not strand the human.
+    useAppStore.setState({
+      currentRoom: { id: 'room-1', name: 'Scheme', token: 't', is_home: false },
+    } as never)
+    vi.mocked(api.acceptTrade).mockRejectedValue(new Error('502'))
+    renderBubble({
+      trade_proposal: {
+        symbol: 'XOP', side: 'buy', dollars: 2000, rationale: 'r',
+        discretionary: true, accepted: false,
+      },
+    } as unknown as MessageMetadata)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+
+    expect(await screen.findByText(/could not fill/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument()
   })
 
   it('gives a claim check no action at all', () => {

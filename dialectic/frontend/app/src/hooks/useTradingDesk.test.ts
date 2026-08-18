@@ -7,6 +7,7 @@ import type {
   MorningBrief,
   OpenTrades,
   PolymarketOdd,
+  Portfolio,
   Quote,
   ThesisDiff,
   ThesisNews,
@@ -26,6 +27,7 @@ vi.mock('../lib/api.ts', async (importOriginal) => {
       getOpenTrades: vi.fn(),
       getMorningBrief: vi.fn(),
       getThesisNews: vi.fn(),
+      getTradingPortfolio: vi.fn(),
     },
   }
 })
@@ -63,6 +65,10 @@ const diffData: ThesisDiff = {
 const tradesData: OpenTrades = { count: 0, trades: [] }
 const briefData: MorningBrief = { book_id: 'book-1', brief: 'quiet morning' }
 const newsData: ThesisNews = { articles: [] }
+const portfolioData: Portfolio = {
+  cash: 1000, positions: [], equity: 1000, marks: [], spy_baseline: [],
+  spy_baseline_now: null, price_return_only: true,
+}
 
 function mockAllSuccess() {
   vi.mocked(api.getThesisStructure).mockResolvedValue(structureData)
@@ -72,6 +78,7 @@ function mockAllSuccess() {
   vi.mocked(api.getOpenTrades).mockResolvedValue(tradesData)
   vi.mocked(api.getMorningBrief).mockResolvedValue(briefData)
   vi.mocked(api.getThesisNews).mockResolvedValue(newsData)
+  vi.mocked(api.getTradingPortfolio).mockResolvedValue(portfolioData)
 }
 
 async function waitForAllReady(result: { current: ReturnType<typeof useTradingDesk> }) {
@@ -83,6 +90,7 @@ async function waitForAllReady(result: { current: ReturnType<typeof useTradingDe
     expect(result.current.trades.status).toBe('ready')
     expect(result.current.brief.status).toBe('ready')
     expect(result.current.news.status).toBe('ready')
+    expect(result.current.portfolio.status).toBe('ready')
   })
 }
 
@@ -117,15 +125,17 @@ describe('useTradingDesk', () => {
     expect(result.current.trades.status).toBe('empty')
     expect(result.current.brief.status).toBe('empty')
     expect(result.current.news.status).toBe('empty')
+    expect(result.current.portfolio.status).toBe('empty')
 
     // The short-circuit: a room already known unbound must not hammer the
-    // other six routes.
+    // other seven routes.
     expect(api.getTradingQuotes).not.toHaveBeenCalled()
     expect(api.getPolymarketOdds).not.toHaveBeenCalled()
     expect(api.getTradingDiff).not.toHaveBeenCalled()
     expect(api.getOpenTrades).not.toHaveBeenCalled()
     expect(api.getMorningBrief).not.toHaveBeenCalled()
     expect(api.getThesisNews).not.toHaveBeenCalled()
+    expect(api.getTradingPortfolio).not.toHaveBeenCalled()
   })
 
   it('happy path: all slices ready with data, bound stays true', async () => {
@@ -137,6 +147,7 @@ describe('useTradingDesk', () => {
     expect(result.current.structure.data).toEqual(structureData)
     expect(result.current.quotes.data).toEqual(quotesData)
     expect(result.current.news.data).toEqual(newsData)
+    expect(result.current.portfolio.data).toEqual(portfolioData)
   })
 
   it('structure only fetched once bound is known: fan-out waits on the probe', async () => {
@@ -150,6 +161,7 @@ describe('useTradingDesk', () => {
     vi.mocked(api.getOpenTrades).mockResolvedValue(tradesData)
     vi.mocked(api.getMorningBrief).mockResolvedValue(briefData)
     vi.mocked(api.getThesisNews).mockResolvedValue(newsData)
+    vi.mocked(api.getTradingPortfolio).mockResolvedValue(portfolioData)
 
     renderHook(() => useTradingDesk('r1'))
     await waitFor(() => expect(api.getThesisStructure).toHaveBeenCalled())
@@ -186,12 +198,14 @@ describe('useTradingDesk', () => {
     vi.mocked(api.getOpenTrades).mockResolvedValue(tradesData)
     vi.mocked(api.getMorningBrief).mockResolvedValue(briefData)
     vi.mocked(api.getThesisNews).mockResolvedValue(newsData)
+    vi.mocked(api.getTradingPortfolio).mockResolvedValue(portfolioData)
 
     const { result } = renderHook(() => useTradingDesk('r1'))
     await waitFor(() => expect(result.current.bound).toBe(false))
     expect(result.current.structure.status).toBe('empty')
     expect(result.current.quotes.status).toBe('empty')
     expect(result.current.trades.status).toBe('empty')
+    expect(result.current.portfolio.status).toBe('empty')
   })
 
   it('a store stamp change refetches (structure called twice), initial hydration does not double-fetch', async () => {
@@ -211,6 +225,8 @@ describe('useTradingDesk', () => {
     await waitFor(() => expect(api.getThesisStructure).toHaveBeenCalledTimes(2))
     // Quotes are on their own clock — a snapshot refetch never touches them.
     expect(api.getTradingQuotes).toHaveBeenCalledTimes(1)
+    // The book moves on fills and nightly marks, not snapshot pushes.
+    expect(api.getTradingPortfolio).toHaveBeenCalledTimes(1)
   })
 
   it('room change abandons the previous room\'s in-flight response', async () => {
@@ -225,6 +241,7 @@ describe('useTradingDesk', () => {
     vi.mocked(api.getOpenTrades).mockResolvedValue(tradesData)
     vi.mocked(api.getMorningBrief).mockResolvedValue(briefData)
     vi.mocked(api.getThesisNews).mockResolvedValue(newsData)
+    vi.mocked(api.getTradingPortfolio).mockResolvedValue(portfolioData)
 
     const { result, rerender } = renderHook(({ room }) => useTradingDesk(room), {
       initialProps: { room: 'r1' as string | null },

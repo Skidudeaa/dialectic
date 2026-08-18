@@ -47,11 +47,15 @@ _MAX_COMMITMENT_PROPOSALS = 3
 
 # Slots a HUMAN may open the "Make a move" form for — every
 # proposal_envelope.PROPOSAL_SLOTS entry except resolution_proposal (see
-# module header). Built from the one table rather than copied, so this
-# cannot drift into a second definition of what a proposal slot is.
+# module header) and trade_proposal (the propose_trade tool owns its shape
+# discipline — the forecast-XOR-discretionary gate — and the accept relay
+# re-validates; a human raw-metadata door would dodge both, and no
+# _SLOT_VALIDATORS entry exists for it). Built from the one table rather
+# than copied, so this cannot drift into a second definition of what a
+# proposal slot is.
 ALLOWED_HUMAN_PROPOSAL_SLOTS = {
     slot: kind for slot, kind in PROPOSAL_SLOTS.items()
-    if slot != "resolution_proposal"
+    if slot not in ("resolution_proposal", "trade_proposal")
 }
 
 # ── Tags ──────────────────────────────────────────────────────────────
@@ -268,7 +272,7 @@ def validate_human_proposal_metadata(metadata: Any) -> dict:
         if kind is None:
             if slot in PROPOSAL_SLOTS:
                 # A real proposal slot, just not one a human may open —
-                # today that is exactly resolution_proposal.
+                # today that is resolution_proposal and trade_proposal.
                 raise ProposalMetadataError(
                     f"'{slot}' is not a human-submittable proposal kind"
                 )

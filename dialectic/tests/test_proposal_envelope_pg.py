@@ -122,7 +122,7 @@ async def proposed(db):
             "INSERT INTO threads (id,room_id,created_at,title) VALUES ($1,$2,now(),'Main')",
             tid, rid)
 
-    # Four slots on one message — today's exact hoisted shapes.
+    # Five slots on one message — today's exact hoisted shapes.
     await _msg(db, M_DRAFTS, TH, 1, {
         "proposal": {"statement": "Brent over 90", "confidence": 0.6,
                      "deadline": FUTURE, "accepted": False},
@@ -130,6 +130,12 @@ async def proposed(db):
                             "monthly_budget": 5000},
         "reading_proposal": {"url": DRAFT_URL, "title": "Drafted reading",
                              "summary": "what it argues", "accepted": False},
+        "trade_proposal": {"symbol": "XOP", "side": "buy", "dollars": 2000,
+                           "rationale": "brent node fired",
+                           "prediction": {"statement": "XOP above 150",
+                                          "confidence": 0.65,
+                                          "deadline": FUTURE},
+                           "accepted": False},
         "commitment_proposals": [
             {"claim": "I close before CPI", "resolution_criteria": "flat",
              "category": "commitment", "accepted": False},
@@ -179,7 +185,7 @@ async def test_every_stored_proposal_shape_normalizes(proposed):
     kinds = {e.proposal_kind for e in envelopes}
     assert kinds == {
         "prediction_draft", "thesis_proposal", "reading_draft",
-        "commitment_proposal", "prediction_resolution",
+        "commitment_proposal", "prediction_resolution", "trade_proposal",
     }, kinds
     for e in envelopes:
         assert e.proposal_kind in PROPOSAL_KINDS
@@ -261,6 +267,26 @@ async def test_a_past_deadline_expires_a_prediction_draft(proposed):
     assert envelopes["prediction_draft"].status == "expired"
     assert "accept" not in envelopes["prediction_draft"].available_actions
     assert "inspect" in envelopes["prediction_draft"].available_actions
+
+
+@pytest.mark.asyncio
+async def test_a_past_forecast_deadline_expires_a_trade_proposal(proposed):
+    """The deadline lives on the PAIRED forecast, nested — filling a trade
+    whose forecast window has closed would stake a claim already decided.
+    (A discretionary trade has no deadline and never expires this way.)"""
+    before = _by_kind(await ProposalEnvelopeService(proposed).build(ROOM))
+    assert before["trade_proposal"].status == "proposed"
+
+    await proposed.execute(
+        """UPDATE messages
+           SET metadata = jsonb_set(metadata,
+                                    '{trade_proposal,prediction,deadline}',
+                                    to_jsonb($2::text))
+           WHERE id = $1""",
+        M_DRAFTS, PAST)
+    envelopes = _by_kind(await ProposalEnvelopeService(proposed).build(ROOM))
+    assert envelopes["trade_proposal"].status == "expired"
+    assert "accept" not in envelopes["trade_proposal"].available_actions
 
 
 @pytest.mark.asyncio

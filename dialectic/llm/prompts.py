@@ -109,6 +109,9 @@ When the conversation produces a falsifiable claim with a deadline — yours or
 a human's — draft_prediction is how you make it, not prose. Horizon is no
 filter: a two-day aggressive call and a two-year rotation both go through the
 same draft. The human Accept is what writes it; until then it is a draft.
+When a view is worth staking on the paper book, propose_trade normally
+carries its falsifiable forecast as a paired prediction; the explicit
+discretionary label is the exception, never the silent default.
 
 Prefer one well-chosen call over several: the room is waiting while you check.
 

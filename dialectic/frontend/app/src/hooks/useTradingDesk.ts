@@ -6,6 +6,7 @@ import type {
   MorningBrief,
   OpenTrades,
   PolymarketOdd,
+  Portfolio,
   Quote,
   ThesisDiff,
   ThesisNews,
@@ -18,13 +19,14 @@ import type {
 // faster than the desk's own refresh cadence.
 const QUOTES_POLL_MS = 300_000
 
-type SliceKey = 'structure' | 'quotes' | 'polymarket' | 'diff' | 'trades' | 'brief' | 'news'
+type SliceKey = 'structure' | 'quotes' | 'polymarket' | 'diff' | 'trades' | 'brief' | 'news' | 'portfolio'
 type FanOutKey = Exclude<SliceKey, 'structure'>
 
 // The stamp-triggered refetch (a new trading snapshot landed) touches every
-// slice EXCEPT quotes (own clock) and polymarket (not snapshot-derived).
+// slice EXCEPT quotes (own clock), polymarket and portfolio (not
+// snapshot-derived — the book moves on fills and nightly marks, not pushes).
 const SNAPSHOT_KEYS: SliceKey[] = ['structure', 'diff', 'trades', 'brief', 'news']
-const ALL_FAN_OUT_KEYS: FanOutKey[] = ['quotes', 'polymarket', 'diff', 'trades', 'brief', 'news']
+const ALL_FAN_OUT_KEYS: FanOutKey[] = ['quotes', 'polymarket', 'diff', 'trades', 'brief', 'news', 'portfolio']
 
 interface Slices {
   structure: TradingSlice<ThesisStructure>;
@@ -34,6 +36,7 @@ interface Slices {
   trades: TradingSlice<OpenTrades>;
   brief: TradingSlice<MorningBrief>;
   news: TradingSlice<ThesisNews>;
+  portfolio: TradingSlice<Portfolio>;
   bound: boolean;
 }
 
@@ -50,6 +53,7 @@ function emptySlices(bound: boolean): Slices {
     trades: { status: 'empty' },
     brief: { status: 'empty' },
     news: { status: 'empty' },
+    portfolio: { status: 'empty' },
     bound,
   }
 }
@@ -67,6 +71,7 @@ function loadingSlices(): Slices {
     trades: { status: 'loading' },
     brief: { status: 'loading' },
     news: { status: 'loading' },
+    portfolio: { status: 'loading' },
     bound: true,
   }
 }
@@ -84,12 +89,13 @@ function sliceCalls(roomId: string): Record<SliceKey, () => Promise<unknown>> {
     trades: () => api.getOpenTrades(roomId),
     brief: () => api.getMorningBrief(roomId),
     news: () => api.getThesisNews(roomId),
+    portfolio: () => api.getTradingPortfolio(roomId),
   }
 }
 
 /**
  * useTradingDesk — the cockpit's one data source, fanning out across the
- * seven trading-relay reads with the tri-state every slice must report
+ * eight trading-relay reads with the tri-state every slice must report
  * (design v2 §12.4: loading / ready / empty / unavailable are distinct —
  * "empty" is a positive "nothing here", never a stand-in for "the fetch
  * failed"). Components decide how to render an empty slice; this hook only

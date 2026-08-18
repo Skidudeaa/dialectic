@@ -371,6 +371,52 @@ def _degraded_evidence_message(source: str, payload: dict[str, Any]) -> str:
     return "; ".join(parts)
 
 
+# ── resolution spec validation ───────────────────────────────────────
+
+# Mirror of tradingDesk's PredictionCreate._validate_resolution_spec
+# (trading/web/models.py) — the strict shape check at td's own door.
+# Mirrored here so a malformed spec dies at DRAFT time with a message the
+# model can act on, and re-checked at the Accept write (metadata is a
+# document, not a trust boundary). td stays authoritative: whatever passes
+# here is forwarded verbatim and judged again at its door.
+RESOLUTION_SPEC_KEYS = {
+    "price_cross": {"kind", "symbol", "comparator", "threshold"},
+    "polymarket": {"kind", "market_id"},
+}
+
+
+def validate_resolution_spec(spec: Any) -> dict:
+    """Strict resolution_spec shape check; raises ValueError on any drift.
+
+    An unknown or misspelled key silently ignored here would surface as a
+    claim that never auto-resolves — the exact evasion the deterministic
+    resolver exists to close.
+    """
+    if not isinstance(spec, dict):
+        raise ValueError("resolution_spec must be an object.")
+    kind = spec.get("kind")
+    expected = RESOLUTION_SPEC_KEYS.get(kind)
+    if expected is None:
+        raise ValueError(
+            f"resolution_spec.kind must be one of {sorted(RESOLUTION_SPEC_KEYS)}."
+        )
+    if set(spec) != expected:
+        raise ValueError(
+            f"resolution_spec for kind={kind!r} requires exactly keys {sorted(expected)}."
+        )
+    if kind == "price_cross":
+        if not isinstance(spec["symbol"], str) or not spec["symbol"]:
+            raise ValueError("resolution_spec.symbol must be a non-empty string.")
+        if spec["comparator"] not in ("above", "below"):
+            raise ValueError("resolution_spec.comparator must be 'above' or 'below'.")
+        if not isinstance(spec["threshold"], (int, float)) or isinstance(spec["threshold"], bool):
+            raise ValueError("resolution_spec.threshold must be a number.")
+    elif kind == "polymarket":
+        if not isinstance(spec["market_id"], str) or not spec["market_id"]:
+            raise ValueError("resolution_spec.market_id must be a non-empty string.")
+    return dict(spec)
+
+
 # ── book id resolution ───────────────────────────────────────────────
 
 
@@ -988,6 +1034,118 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
             "provenance": {"kind": "thesis_proposal"},
         }
 
+    async def propose_trade(args: dict) -> dict:
+        """Validate and shape a paper-trade proposal. NO write — ever.
+
+        Same trust shape as draft_prediction: the proposal is hoisted to
+        metadata.trade_proposal, the room renders an Accept button, and only
+        the human's tap (api/trading_relay.py trades/accept) fills it on the
+        paper book — logging the paired forecast into the claims ledger
+        first, so the fill carries its prediction_id.
+
+        WHY prediction XOR discretionary: a trade with neither is silently
+        unevaluable — it moves paper money while dodging the scoreboard. The
+        75.0-confidence poison taught the other half: never auto-mint a
+        forecast the model did not actually state.
+        """
+        if not getattr(room, "linked_book_id", None):
+            # Mirror of propose_thesis's refusal, inverted: a trade needs
+            # the book a thesis creates, and Home never has one.
+            raise ValueError(
+                "this room holds no thesis book — a paper trade needs one. "
+                "Propose the thesis first (propose_thesis); trades ride its "
+                "book."
+            )
+        symbol = str(args.get("symbol") or "").strip().upper()
+        if not symbol:
+            raise ValueError("symbol is required — the instrument to trade, e.g. 'XOP'.")
+        if len(symbol) > 32:
+            raise ValueError("symbol must be 32 characters or fewer.")
+        if symbol == "CASH":
+            raise ValueError(
+                "'CASH' is the deposit sentinel, not a tradable symbol."
+            )
+        side = args.get("side")
+        if side not in ("buy", "sell"):
+            raise ValueError("side must be 'buy' or 'sell'.")
+        try:
+            dollars = float(args.get("dollars"))
+        except (TypeError, ValueError):
+            raise ValueError("dollars must be a number — the position size, e.g. 2000.")
+        if not 0 < dollars <= 10_000_000:
+            raise ValueError("dollars must be between 0 and 10,000,000.")
+        rationale = str(args.get("rationale") or "").strip()
+        if not rationale:
+            raise ValueError(
+                "rationale is required — why this trade, in your own words."
+            )
+        if len(rationale) > 2000:
+            raise ValueError("rationale must be 2000 characters or fewer.")
+        node_id = str(args.get("node_id") or "").strip()
+
+        prediction = args.get("prediction")
+        discretionary = bool(args.get("discretionary"))
+        if prediction is not None and not isinstance(prediction, dict):
+            raise ValueError("prediction must be an object.")
+        has_prediction = isinstance(prediction, dict) and bool(prediction)
+        if has_prediction == discretionary:
+            raise ValueError(
+                "every trade is either a scored forecast or labeled "
+                "unscored: pass exactly one of `prediction` (statement, "
+                "confidence, deadline — the claim this trade stakes) or "
+                "`discretionary: true` (an explicit unscored-discretionary "
+                "trade). Neither means the trade dodges the scoreboard; "
+                "both contradict each other."
+            )
+
+        proposal: dict = {
+            "symbol": symbol,
+            "side": side,
+            "dollars": dollars,
+            "rationale": rationale,
+        }
+        if node_id:
+            proposal["node_id"] = node_id
+        if has_prediction:
+            statement = str(prediction.get("statement") or "").strip()
+            if not statement:
+                raise ValueError(
+                    "prediction.statement is required — the claim being put on record."
+                )
+            try:
+                confidence = float(prediction.get("confidence"))
+            except (TypeError, ValueError):
+                raise ValueError(
+                    "prediction.confidence must be a number between 0 and 1 (0.7 = 70%)."
+                )
+            if not 0.0 <= confidence <= 1.0:
+                raise ValueError(
+                    "prediction.confidence must be between 0 and 1 (0.7 = 70%)."
+                )
+            deadline = str(prediction.get("deadline") or "").strip()
+            try:
+                date.fromisoformat(deadline)
+            except ValueError:
+                raise ValueError(
+                    "prediction.deadline must be an ISO date, e.g. 2026-09-30."
+                )
+            forecast: dict = {
+                "statement": statement,
+                "confidence": confidence,
+                "deadline": deadline,
+            }
+            spec = prediction.get("resolution_spec")
+            if spec is not None:
+                forecast["resolution_spec"] = validate_resolution_spec(spec)
+            proposal["prediction"] = forecast
+        else:
+            proposal["discretionary"] = True
+
+        return {
+            "proposal": proposal,
+            "provenance": {"kind": "trade_proposal"},
+        }
+
     async def read_article(args: dict) -> dict:
         """Fetch a URL via the defuddle sidecar and shape the article.
 
@@ -1240,6 +1398,79 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
             },
             execute=propose_thesis,
             label="proposing a thesis",
+        ),
+        Tool(
+            name="propose_trade",
+            description=(
+                "Propose a paper trade on this room's book — symbol, side, "
+                "dollar size, and why. Calling this places NOTHING: the "
+                "proposal is shown to the humans with an Accept button, and "
+                "only their tap fills it (tradingDesk prices the fill off "
+                "its own quote feed). A trade must carry exactly one of: a "
+                "`prediction` (statement, confidence, deadline — the "
+                "falsifiable forecast this trade stakes, logged to the "
+                "claims ledger on Accept, auto-resolvable when it carries a "
+                "price_cross resolution_spec) or `discretionary: true` (an "
+                "explicit label that this trade is unscored). Use it when "
+                "the room's argument produces a position worth actual "
+                "paper money, not for every view. Sells close or trim an "
+                "existing position — the book is long-only, so a sell past "
+                "flat is refused at fill time. Never claim a trade is "
+                "filled until a human accepts it."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "The instrument to trade, e.g. 'XOP' or 'CL=F'.",
+                    },
+                    "side": {
+                        "type": "string",
+                        "enum": ["buy", "sell"],
+                        "description": "buy opens/adds; sell closes/trims (long-only book).",
+                    },
+                    "dollars": {
+                        "type": "number",
+                        "description": "Position size in dollars; the desk computes shares at fill time.",
+                    },
+                    "rationale": {
+                        "type": "string",
+                        "description": "Why this trade, in your own words. Max 2000 characters.",
+                    },
+                    "node_id": {
+                        "type": "string",
+                        "description": "Optional thesis node this trade expresses, e.g. 'brent'.",
+                    },
+                    "prediction": {
+                        "type": "object",
+                        "description": (
+                            "The falsifiable forecast this trade stakes: "
+                            "{statement, confidence 0-1, deadline ISO date, "
+                            "optional resolution_spec {kind:'price_cross', "
+                            "symbol, comparator:'above'|'below', threshold}}."
+                        ),
+                        "properties": {
+                            "statement": {"type": "string"},
+                            "confidence": {"type": "number"},
+                            "deadline": {"type": "string"},
+                            "resolution_spec": {"type": "object"},
+                        },
+                        "required": ["statement", "confidence", "deadline"],
+                    },
+                    "discretionary": {
+                        "type": "boolean",
+                        "description": (
+                            "true labels the trade explicitly unscored — the "
+                            "exception, never the default. Mutually exclusive "
+                            "with prediction."
+                        ),
+                    },
+                },
+                "required": ["symbol", "side", "dollars", "rationale"],
+            },
+            execute=propose_trade,
+            label="proposing a paper trade",
         ),
         Tool(
             name="read_article",

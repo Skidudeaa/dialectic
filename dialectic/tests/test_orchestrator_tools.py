@@ -556,6 +556,11 @@ def draft_registry():
 DRAFT_INPUT = {"statement": "Brent closes above $90 by end of Q3",
                "confidence": 0.7, "deadline": "2026-09-30"}
 
+TRADE_INPUT = {"symbol": "XOP", "side": "buy", "dollars": 2000,
+               "rationale": "brent node fired",
+               "prediction": {"statement": "XOP above $150 by Q3 end",
+                              "confidence": 0.65, "deadline": "2026-09-30"}}
+
 
 class TestProposalHoisting:
     """A prediction draft rides the trace into metadata.proposal — the Accept
@@ -597,6 +602,62 @@ class TestProposalHoisting:
         metadata = orch._persist_response.call_args.kwargs["metadata"]
         assert set(metadata) == {"tools", "proposal"}
         assert metadata["proposal"] == {**DRAFT_INPUT, "accepted": False}
+
+    @pytest.mark.asyncio
+    async def test_streaming_path_hoists_a_trade_proposal(self, monkeypatch):
+        """propose_trade rides the same hoist into metadata.trade_proposal."""
+        async def trade(args):
+            return {"proposal": {**args}, "provenance": {"kind": "trade_proposal"}}
+
+        registry = ToolRegistry(tools=[
+            Tool(name="propose_trade", description="d",
+                 label="proposing a paper trade",
+                 input_schema={"type": "object", "properties": {}},
+                 execute=trade),
+        ])
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = FakeRouter(event_scripts=[
+            tool_script("propose_trade", TRADE_INPUT),
+            text_script("proposed the trade"),
+        ])
+        orch = make_orchestrator(router, monkeypatch, registry=registry)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+
+        events = await run_stream(orch, thread)
+
+        metadata = orch._persist_response.call_args.kwargs["metadata"]
+        assert set(metadata) == {"tools", "trade_proposal"}
+        assert metadata["trade_proposal"] == {**TRADE_INPUT, "accepted": False}
+        done = next(data for kind, data in events if kind == "done")
+        assert done["metadata"]["trade_proposal"] == metadata["trade_proposal"]
+
+    @pytest.mark.asyncio
+    async def test_non_streaming_path_hoists_a_trade_proposal(self, monkeypatch):
+        async def trade(args):
+            return {"proposal": {**args}, "provenance": {"kind": "trade_proposal"}}
+
+        registry = ToolRegistry(tools=[
+            Tool(name="propose_trade", description="d",
+                 label="proposing a paper trade",
+                 input_schema={"type": "object", "properties": {}},
+                 execute=trade),
+        ])
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = LoopRouter(results=[
+            loop_ok(tool_use_response([("propose_trade", TRADE_INPUT)])),
+            loop_ok(text_response("proposed it")),
+        ])
+        orch = make_orchestrator(router, monkeypatch, registry=registry)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        orch._self_model.log_decision = AsyncMock(return_value=42)
+
+        await run_on_message(orch, thread)
+
+        metadata = orch._persist_response.call_args.kwargs["metadata"]
+        assert set(metadata) == {"tools", "trade_proposal"}
+        assert metadata["trade_proposal"] == {**TRADE_INPUT, "accepted": False}
 
     @pytest.mark.asyncio
     async def test_failed_draft_is_not_hoisted(self, monkeypatch):

@@ -199,6 +199,7 @@ export const PROPOSAL_KINDS = [
   'commitment_proposal',
   'reading_draft',
   'prediction_resolution',
+  'trade_proposal',
 ] as const
 
 export type ProposalKind = (typeof PROPOSAL_KINDS)[number]
@@ -234,6 +235,7 @@ export const PROPOSAL_SLOTS: Record<string, ProposalKind> = {
   thesis_proposal: 'thesis_proposal',
   reading_proposal: 'reading_draft',
   resolution_proposal: 'prediction_resolution',
+  trade_proposal: 'trade_proposal',
 }
 
 /** The one slot holding a LIST — the detector may hoist up to three. */

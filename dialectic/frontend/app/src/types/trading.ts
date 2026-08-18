@@ -145,6 +145,49 @@ export interface ScenarioEvaluation {
   [k: string]: unknown;
 }
 
+/** One derived position row from td's _book_view — replayed from the fill
+ * ledger, priced off the desk's quote cache (fallback chain: live quote →
+ * latest mark close → entry basis). */
+export interface PortfolioPosition {
+  symbol: string;
+  qty: number;
+  avg_cost: number;
+  price: number;
+  value: number;
+  unrealized: number;
+}
+
+/** One nightly equity mark. The relay strips book_id before this reaches
+ * the browser; the row shape is otherwise td's own. */
+export interface PortfolioMark {
+  mark_date: string;
+  equity: number;
+  spy_close?: number | null;
+  positions?: Record<string, unknown>;
+  [k: string]: unknown;
+}
+
+export interface PortfolioBenchmarkPoint {
+  mark_date: string;
+  value: number;
+}
+
+/** The room's paper book, filtered out of td's all-books read by the relay.
+ * `spy_baseline` is the UNITIZED benchmark — dated cash flows buy SPY units
+ * at each mark — and `price_return_only` says no dividends are modeled on
+ * either side of the comparison. */
+export interface Portfolio {
+  cash: number;
+  positions: PortfolioPosition[];
+  equity: number;
+  inception?: string | null;
+  flows?: { date: string; amount: number }[];
+  marks: PortfolioMark[];
+  spy_baseline: PortfolioBenchmarkPoint[];
+  spy_baseline_now?: number | null;
+  price_return_only?: boolean;
+}
+
 /** The v3 snapshot's alert events — shape per td's build_v3_payload:
  * [{event_type, severity, node_id, old_value, new_value}]. Typed here
  * because the snapshot type predates them. */

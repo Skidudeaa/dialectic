@@ -341,6 +341,20 @@ class DialecticAPI {
   // the shape and TrackRecordPanel reads it defensively).
   async getTradingCalibration(roomId: string, sourceLabel?: string) { return this.fetch(`/rooms/${roomId}/trading/calibration${sourceLabel ? `?source_label=${encodeURIComponent(sourceLabel)}` : ''}`); }
   async getTradingLeaderboard(roomId: string, splitBy: string = 'source_label') { return this.fetch(`/rooms/${roomId}/trading/leaderboard?split_by=${encodeURIComponent(splitBy)}`); }
+  async getTradingPortfolio(roomId: string) { return this.fetch<import('../types/trading').Portfolio>(`/rooms/${roomId}/trading/portfolio`); }
+
+  /**
+   * The human tap that fills Claude's proposed paper trade. The server
+   * re-validates the stored proposal, logs the paired forecast to the
+   * claims ledger first (when one rides along), then records the fill —
+   * both idempotent, so a second tap replays the recorded result.
+   */
+  async acceptTrade(roomId: string, messageId: string): Promise<Record<string, unknown>> {
+    return this.fetch(`/rooms/${roomId}/trading/trades/accept`, {
+      method: 'POST',
+      body: JSON.stringify({ message_id: messageId }),
+    });
+  }
 
   // Analytics
   async getThreadDNA(threadId: string) { return this.fetch(`/analytics/threads/${threadId}/dna`); }

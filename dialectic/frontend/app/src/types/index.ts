@@ -79,6 +79,9 @@ export interface MessageMetadata {
   claim_check?: ClaimCheck;
   /** A deadline-watch resolution proposal awaiting the human's verdict tap. */
   resolution_proposal?: ResolutionProposal;
+  /** A propose_trade card — its Accept fills the paper trade on tradingDesk,
+   *  logging the paired forecast into the claims ledger first. */
+  trade_proposal?: TradeProposal;
 }
 
 /**
@@ -171,6 +174,35 @@ export interface ResolutionProposal {
   verdict: 'correct' | 'incorrect' | 'unclear';
   rationale: string;
   evidence?: { url: string; title?: string | null }[];
+  accepted?: boolean;
+}
+
+/** The falsifiable forecast a proposed trade stakes. */
+export interface TradeForecast {
+  statement: string;
+  /** Probability 0–1, e.g. 0.65. */
+  confidence: number;
+  /** ISO date (YYYY-MM-DD) the forecast resolves by. */
+  deadline: string;
+  /** price_cross/polymarket spec making the claim auto-resolvable. */
+  resolution_spec?: Record<string, unknown>;
+}
+
+/**
+ * Claude's proposed paper trade. The proposal writes nothing; a human
+ * tapping Accept relays it to tradingDesk (prediction first when a forecast
+ * rides along, then the fill) and the server flips `accepted`. Exactly one
+ * of `prediction` / `discretionary` is present — the tool's gate: every
+ * trade is a scored forecast or an explicit unscored label.
+ */
+export interface TradeProposal {
+  symbol: string;
+  side: 'buy' | 'sell';
+  dollars: number;
+  rationale: string;
+  node_id?: string;
+  prediction?: TradeForecast;
+  discretionary?: boolean;
   accepted?: boolean;
 }
 

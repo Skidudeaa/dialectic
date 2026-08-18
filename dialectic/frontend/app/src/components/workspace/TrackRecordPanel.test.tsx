@@ -20,6 +20,7 @@ vi.mock('../../lib/api', async () => {
     api: {
       getTradingCalibration: vi.fn(),
       getTradingLeaderboard: vi.fn(),
+      getTradingPortfolio: vi.fn(),
     },
   }
 })
@@ -52,6 +53,9 @@ const LEADERBOARD = {
 beforeEach(() => {
   vi.clearAllMocks()
   useAppStore.setState({ currentRoom: ROOM })
+  // The equity curve is garnish: most tests run without a portfolio, and
+  // the panel must render identically to before the feed existed.
+  vi.mocked(api.getTradingPortfolio).mockRejectedValue(new Error('409'))
 })
 
 afterEach(() => {
@@ -107,6 +111,45 @@ describe('TrackRecordPanel — states', () => {
     vi.mocked(api.getTradingLeaderboard).mockRejectedValue(new Error('409'))
     const { container } = render(<TrackRecordPanel />)
     await waitFor(() => expect(container).toBeEmptyDOMElement())
+  })
+
+  it('draws the equity-vs-SPY sparkline from marks joined to the unitized baseline', async () => {
+    vi.mocked(api.getTradingCalibration).mockResolvedValue(CALIBRATION)
+    vi.mocked(api.getTradingLeaderboard).mockResolvedValue(LEADERBOARD)
+    vi.mocked(api.getTradingPortfolio).mockResolvedValue({
+      cash: 100, positions: [], equity: 3300, price_return_only: true,
+      marks: [
+        { mark_date: '2026-08-15', equity: 3000, spy_close: 555 },
+        { mark_date: '2026-08-16', equity: 3300, spy_close: 560 },
+        // A mark with no matching baseline point must be dropped, not
+        // drawn against a phantom benchmark.
+        { mark_date: '2026-08-17', equity: 3400, spy_close: null },
+      ],
+      spy_baseline: [
+        { mark_date: '2026-08-15', value: 3000 },
+        { mark_date: '2026-08-16', value: 3020 },
+      ],
+      spy_baseline_now: 3025,
+    })
+    render(<TrackRecordPanel />)
+    await waitFor(() =>
+      expect(screen.getByTestId('track-record-sparkline')).toBeInTheDocument(),
+    )
+    // Two joined points, two paths (equity solid, benchmark dashed).
+    expect(
+      screen.getByTestId('track-record-sparkline').querySelectorAll('path'),
+    ).toHaveLength(2)
+  })
+
+  it('a failed portfolio read never hides the scoreboard', async () => {
+    vi.mocked(api.getTradingCalibration).mockResolvedValue(CALIBRATION)
+    vi.mocked(api.getTradingLeaderboard).mockResolvedValue(LEADERBOARD)
+    vi.mocked(api.getTradingPortfolio).mockRejectedValue(new Error('502'))
+    render(<TrackRecordPanel />)
+    await waitFor(() =>
+      expect(screen.getByTestId('track-record-panel')).toBeInTheDocument(),
+    )
+    expect(screen.queryByTestId('track-record-sparkline')).toBeNull()
   })
 })
 

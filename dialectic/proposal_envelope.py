@@ -50,6 +50,7 @@ PROPOSAL_KINDS = (
     "commitment_proposal",
     "reading_draft",
     "prediction_resolution",
+    "trade_proposal",
 )
 
 # The visible lifecycle of §8.4. The spec writes the third state as "rejected or
@@ -75,6 +76,7 @@ PROPOSAL_SLOTS = {
     "thesis_proposal": "thesis_proposal",
     "reading_proposal": "reading_draft",
     "resolution_proposal": "prediction_resolution",
+    "trade_proposal": "trade_proposal",
 }
 # One slot holds a LIST — the commitment detector may hoist up to three.
 PROPOSAL_LIST_SLOT = "commitment_proposals"
@@ -97,6 +99,7 @@ WHERE t.room_id = $1 AND NOT m.is_deleted
        OR m.metadata ? 'thesis_proposal'
        OR m.metadata ? 'reading_proposal'
        OR m.metadata ? 'resolution_proposal'
+       OR m.metadata ? 'trade_proposal'
        OR m.metadata ? 'commitment_proposals')
 ORDER BY m.created_at DESC
 LIMIT $2
@@ -346,6 +349,16 @@ class ProposalEnvelopeService:
 
         elif kind == "prediction_draft":
             if not accepted and _deadline_passed(payload):
+                status = "expired"
+
+        elif kind == "trade_proposal":
+            # The deadline lives on the PAIRED forecast, nested — filling a
+            # trade whose forecast window has already closed would stake a
+            # claim already decided. A discretionary trade carries no
+            # deadline and never expires this way.
+            forecast = payload.get("prediction")
+            if (not accepted and isinstance(forecast, dict)
+                    and _deadline_passed(forecast)):
                 status = "expired"
 
         return ProposalEnvelope(

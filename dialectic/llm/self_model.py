@@ -129,13 +129,26 @@ def _render_track_record(track_record: dict) -> list[str]:
 
     portfolio = track_record.get("portfolio")
     if isinstance(portfolio, dict):
-        equity = portfolio.get("equity")
-        benchmark = portfolio.get("benchmark") or portfolio.get("spy_benchmark")
-        if isinstance(equity, (int, float)) and isinstance(benchmark, (int, float)):
-            lines.append(
-                f"- Book: equity ${equity:,.0f} vs SPY benchmark "
-                f"${benchmark:,.0f}."
-            )
+        # td's GET /api/portfolio shape: {books: {book_id: {equity,
+        # spy_baseline_now, ...}}}. Aggregate across books; render only
+        # when a book actually holds capital AND the benchmark exists —
+        # a half-line ("equity vs nothing") would overclaim.
+        books = portfolio.get("books")
+        if isinstance(books, dict):
+            equities = [
+                b.get("equity") for b in books.values()
+                if isinstance(b, dict) and isinstance(b.get("equity"), (int, float))
+            ]
+            benches = [
+                b.get("spy_baseline_now") for b in books.values()
+                if isinstance(b, dict)
+                and isinstance(b.get("spy_baseline_now"), (int, float))
+            ]
+            if equities and benches:
+                lines.append(
+                    f"- Book: equity ${sum(equities):,.0f} vs SPY benchmark "
+                    f"${sum(benches):,.0f} (price return only)."
+                )
     return lines
 
 

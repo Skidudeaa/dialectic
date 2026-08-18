@@ -10,18 +10,31 @@
 # here (rooms.linked_book_id, then the snapshot's thesisId — the same order
 # as llm.tools.resolve_book_id).
 #
-# Read-only by construction: the one POST (scenario evaluate) is a pure
-# what-if on tradingDesk's side. Order placement stays categorically out.
+# Reads plus exactly TWO write-shaped routes: the scenario evaluate POST is
+# a pure what-if on tradingDesk's side, and trades/accept is the human tap
+# that fills Claude's proposed PAPER trade (propose_trade writes nothing;
+# the tap is the write, idempotent through external_operations). Real order
+# placement stays categorically out — the paper book is a scoreboard.
 
 import logging
+from datetime import date
 from uuid import UUID
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from api.auth.dependencies import AuthenticatedUser, get_current_user
+from api.external_operations import (
+    ExternalOperation,
+    OperationBusy,
+    claim_operation,
+    fail_operation,
+    succeed_operation,
+)
 from api.token_utils import extract_room_token
 from llm import tradingdesk_client as td
+from llm.tools import validate_resolution_spec
 
 logger = logging.getLogger(__name__)
 
@@ -330,3 +343,277 @@ async def evaluate_scenario(
         )
     except td.TradingDeskError as e:
         raise _bad_gateway("scenario evaluate", e)
+
+
+# ── the paper book: portfolio read + the trade Accept ────────────────────
+
+# The empty-book shape, mirroring td's _book_view keys exactly — a bound
+# book with no fills yet is a calm "nothing here", never an error: seeding
+# the first deposit is an operator act, not something a render should nag.
+_EMPTY_BOOK = {
+    "cash": 0.0,
+    "positions": [],
+    "equity": 0.0,
+    "inception": None,
+    "flows": [],
+    "marks": [],
+    "spy_baseline": [],
+    "spy_baseline_now": None,
+    "price_return_only": True,
+}
+
+
+def _strip_book_ids(view: dict) -> dict:
+    """The relay's house rule: the book id never reaches the browser.
+
+    td's equity-mark rows are SELECT * and carry book_id; everything else
+    in the book view is already clean (fills are reshaped into flows).
+    """
+    marks = view.get("marks")
+    if isinstance(marks, list):
+        view = {**view, "marks": [
+            {k: v for k, v in m.items() if k != "book_id"}
+            if isinstance(m, dict) else m
+            for m in marks
+        ]}
+    return view
+
+
+@router.get("/rooms/{room_id}/trading/portfolio")
+async def get_portfolio(
+    room_id: UUID,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """This room's paper book: cash, derived positions, equity, and the
+    unitized SPY benchmark (price-return-only, labeled as such by td).
+
+    td's GET /api/portfolio returns EVERY book; the room's binding filters
+    it here so the browser addresses everything by room, like the rest of
+    the relay. Unbound room: 409 (the Bench's calm create state).
+    """
+    book_id = await _resolve_room_book(room_id, token, current_user.user_id, pool)
+    try:
+        # Same seam law as quotes: td values positions off its quote cache,
+        # so a cold cache pays the ~18.5s Yahoo path — the proxy must not
+        # cancel first.
+        data = await td.get("/api/portfolio", timeout=QUOTES_TIMEOUT_S)
+    except td.TradingDeskError as e:
+        raise _bad_gateway("portfolio", e)
+    books = data.get("books") if isinstance(data, dict) else None
+    view = books.get(book_id) if isinstance(books, dict) else None
+    if not isinstance(view, dict):
+        return dict(_EMPTY_BOOK)
+    return _strip_book_ids(view)
+
+
+class AcceptTradeRequest(BaseModel):
+    message_id: UUID
+
+
+def _malformed(reason: str) -> HTTPException:
+    return HTTPException(
+        status_code=422, detail=f"The stored trade proposal is malformed: {reason}"
+    )
+
+
+def _validated_trade(proposal: dict) -> dict:
+    """Re-validate the stored proposal at the write.
+
+    The propose_trade tool validated these at draft time, but metadata is a
+    document, not a trust boundary — same rule as prediction_relay. Returns
+    the normalized trade; raises 422 on anything the tool would have
+    refused, including the forecast-XOR-discretionary gate.
+    """
+    symbol = str(proposal.get("symbol") or "").strip().upper()
+    if not symbol or len(symbol) > 32 or symbol == "CASH":
+        raise _malformed("symbol")
+    side = proposal.get("side")
+    if side not in ("buy", "sell"):
+        raise _malformed("side")
+    try:
+        dollars = float(proposal.get("dollars"))
+    except (TypeError, ValueError):
+        raise _malformed("dollars")
+    if not 0 < dollars <= 10_000_000:
+        raise _malformed("dollars")
+    rationale = str(proposal.get("rationale") or "").strip()
+    if not rationale or len(rationale) > 2000:
+        raise _malformed("rationale")
+
+    trade: dict = {"symbol": symbol, "side": side, "dollars": dollars,
+                   "rationale": rationale}
+    node_id = str(proposal.get("node_id") or "").strip()
+    if node_id:
+        trade["node_id"] = node_id
+
+    forecast = proposal.get("prediction")
+    discretionary = bool(proposal.get("discretionary"))
+    has_forecast = isinstance(forecast, dict) and bool(forecast)
+    if has_forecast == discretionary:
+        # Neither (unevaluable) or both (contradictory) — the tool's gate,
+        # re-asserted at the write.
+        raise _malformed("exactly one of prediction or discretionary")
+    if has_forecast:
+        statement = str(forecast.get("statement") or "").strip()
+        deadline = str(forecast.get("deadline") or "").strip()
+        try:
+            confidence = float(forecast.get("confidence"))
+            date.fromisoformat(deadline)
+        except (TypeError, ValueError):
+            raise _malformed("prediction")
+        if not statement or not 0.0 <= confidence <= 1.0:
+            raise _malformed("prediction")
+        checked: dict = {"statement": statement, "confidence": confidence,
+                         "deadline": deadline}
+        spec = forecast.get("resolution_spec")
+        if spec is not None:
+            try:
+                checked["resolution_spec"] = validate_resolution_spec(spec)
+            except ValueError:
+                raise _malformed("resolution_spec")
+        trade["prediction"] = checked
+    else:
+        trade["discretionary"] = True
+    return trade
+
+
+@router.post("/rooms/{room_id}/trading/trades/accept")
+async def accept_trade(
+    room_id: UUID,
+    request: AcceptTradeRequest,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """Fill Claude's proposed paper trade. The human tap IS the write.
+
+    Two idempotent td writes in ORDER when a forecast rides along: the
+    prediction first (the claims ledger is the point of the whole loop),
+    then the fill carrying its id. Both source_keys derive from ONE
+    operation_key, so a crash between the two writes replays cleanly —
+    td's INSERT OR IGNORE on source_key makes the re-POST of the
+    prediction return the same row, and the fill lands on the retry.
+    A discretionary trade skips the prediction write entirely: an explicit
+    unscored label, never a fabricated confidence.
+    """
+    async with pool.acquire() as db:
+        book_id = await _room_book(room_id, token, current_user.user_id, db)
+        row = await db.fetchrow(
+            """SELECT m.id, m.metadata
+               FROM messages m
+               JOIN threads t ON t.id = m.thread_id
+               WHERE m.id = $1 AND t.room_id = $2 AND NOT m.is_deleted""",
+            request.message_id,
+            room_id,
+        )
+    if not row:
+        raise HTTPException(status_code=404, detail="Message not found in this room")
+
+    metadata = row["metadata"]
+    proposal = metadata.get("trade_proposal") if isinstance(metadata, dict) else None
+    if not isinstance(proposal, dict):
+        raise HTTPException(
+            status_code=404, detail="This message carries no trade proposal"
+        )
+    trade = _validated_trade(proposal)
+
+    operation_key = f"trade:{request.message_id}:trade_proposal"
+    try:
+        operation: ExternalOperation = await claim_operation(
+            pool,
+            room_id=room_id,
+            kind="trade",
+            operation_key=operation_key,
+            initiated_by=current_user.user_id,
+            source_message_id=request.message_id,
+            proposal_slot="trade_proposal",
+        )
+    except (OperationBusy, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if operation.status == "succeeded":
+        if operation.external_result is None:
+            raise RuntimeError("Succeeded external operation has no recorded result")
+        return operation.external_result
+    if proposal.get("accepted"):
+        await fail_operation(pool, operation, error="proposal was already accepted")
+        raise HTTPException(
+            status_code=409, detail="Trade already filled on the paper book"
+        )
+
+    forecast = trade.get("prediction")
+    rationale = trade["rationale"]
+    if "discretionary" in trade:
+        # The fill's own record says it dodged no scoreboard — it was
+        # labeled out of it.
+        rationale = f"[unscored discretionary] {rationale}"
+
+    prediction_row: dict | None = None
+    try:
+        if forecast is not None:
+            prediction_body = {
+                "statement": forecast["statement"],
+                "confidence": forecast["confidence"],
+                "deadline": forecast["deadline"],
+                "tags": ["dialectic"],
+                # Provenance stamped HERE, as in prediction_relay: the tool
+                # is metadata.trade_proposal's only writer, so authorship is
+                # a property of this path, not of the payload.
+                "source_type": "llm",
+                "source_label": "Claude",
+                "linked_book_id": book_id,
+                "source_key": f"{operation_key}:prediction",
+            }
+            if "resolution_spec" in forecast:
+                prediction_body["resolution_spec"] = forecast["resolution_spec"]
+            prediction_row = await td.post("/api/predictions", json_body=prediction_body)
+            if not isinstance(prediction_row, dict) or not prediction_row.get("id"):
+                raise td.TradingDeskError("tradingDesk returned an invalid prediction")
+        fill_body = {
+            "book_id": book_id,
+            "kind": "trade",
+            "symbol": trade["symbol"],
+            "side": trade["side"],
+            "dollars": trade["dollars"],
+            "rationale": rationale,
+            "node_id": trade.get("node_id"),
+            "prediction_id": prediction_row["id"] if prediction_row else None,
+            "source_key": operation_key,
+        }
+        # Seam law: td prices the fill off its quote cache, and the cold
+        # path re-fetches Yahoo (~18.5s measured) — the 10s client default
+        # would 502 exactly then, after td may still land the fill. The
+        # source_key makes that retry-safe, but the margin makes it rare.
+        fill = await td.post("/api/portfolio/fills", json_body=fill_body,
+                             timeout=QUOTES_TIMEOUT_S)
+        if not isinstance(fill, dict):
+            raise td.TradingDeskError("tradingDesk returned an invalid fill")
+    except td.TradingDeskError as e:
+        # The operation is released, not finalized — a retry is a fresh
+        # accept, and both td writes replay off their source_keys.
+        await fail_operation(pool, operation, error=str(e))
+        logger.warning("trade relay to tradingDesk failed: %s", e)
+        if "HTTP 422" in str(e):
+            # td's own guards: no live quote for the symbol, or a sell past
+            # flat on the long-only book. A client error, not a dead desk.
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"tradingDesk refused the trade: {e}. Most likely the desk "
+                    f"has no live quote for {trade['symbol']!r}, or the sell "
+                    "exceeds what the book holds."
+                ),
+            ) from e
+        raise HTTPException(
+            status_code=502, detail=f"tradingDesk refused the trade: {e}"
+        ) from e
+
+    result = {"fill": fill, "prediction": prediction_row}
+    async with pool.acquire() as db:
+        async with db.transaction():
+            # succeed_operation also writes the acceptance stamp into
+            # metadata.trade_proposal (acceptance_stamp via ACCEPT_SLOT_SQL)
+            # — accepted/accepted_by/accepted_at in one patch, per §9.3.
+            await succeed_operation(db, operation, result=result)
+    return result

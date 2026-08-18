@@ -314,6 +314,7 @@ def test_dead_desk_is_a_502_with_the_reason(monkeypatch):
     ("news", "GET", "service_get"),
     ("calibration", "GET", "get"),
     ("leaderboard", "GET", "get"),
+    ("portfolio", "GET", "get"),
     ("scenarios/s1/evaluate", "POST", "post"),
 ])
 def test_every_route_maps_desk_failure_to_502(monkeypatch, path, method,
@@ -322,3 +323,68 @@ def test_every_route_maps_desk_failure_to_502(monkeypatch, path, method,
     resp = _call(_make_db(), monkeypatch, path, method=method,
                  td_mocks={mock_name: mock})
     assert resp.status_code == 502
+
+
+# ---------------------------------------------------------------- portfolio
+
+_PORTFOLIO_VIEW = {
+    "cash": 1200.0,
+    "positions": [{"symbol": "XOP", "qty": 14.2, "avg_cost": 140.8,
+                   "price": 143.1, "value": 2032.0, "unrealized": 32.7}],
+    "equity": 3232.0,
+    "inception": "2026-08-16T14:00:00",
+    "flows": [{"date": "2026-08-16", "amount": 3000.0}],
+    "marks": [{"book_id": BOOK_ID, "mark_date": "2026-08-16",
+               "equity": 3200.0, "spy_close": 560.0, "positions": {}}],
+    "spy_baseline": [{"mark_date": "2026-08-16", "value": 3000.0}],
+    "spy_baseline_now": 3010.0,
+    "price_return_only": True,
+}
+
+
+def test_portfolio_filters_to_the_room_book_and_strips_book_ids(monkeypatch):
+    """td returns EVERY book; the room binding picks one, and the relay's
+    house rule holds — the book id never reaches the browser (td's mark
+    rows are SELECT * and carry it)."""
+    get = AsyncMock(return_value={"books": {
+        BOOK_ID: _PORTFOLIO_VIEW,
+        "trump-tariffs-graph": {"cash": 9.0, "positions": [], "equity": 9.0,
+                                "marks": [], "spy_baseline": []},
+    }})
+
+    resp = _call(_make_db(), monkeypatch, "portfolio", td_mocks={"get": get})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["equity"] == 3232.0
+    assert body["positions"][0]["symbol"] == "XOP"
+    assert body["marks"][0]["mark_date"] == "2026-08-16"
+    assert "book_id" not in body["marks"][0]
+    assert BOOK_ID not in resp.text
+    get.assert_awaited_once_with("/api/portfolio",
+                                 timeout=relay.QUOTES_TIMEOUT_S)
+
+
+def test_portfolio_of_a_book_with_no_fills_is_the_calm_empty_shape(monkeypatch):
+    """A bound book td has never seen a fill for is 'nothing here yet',
+    never an error — seeding the first deposit is an operator act."""
+    get = AsyncMock(return_value={"books": {}})
+
+    resp = _call(_make_db(), monkeypatch, "portfolio", td_mocks={"get": get})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["cash"] == 0.0
+    assert body["positions"] == []
+    assert body["equity"] == 0.0
+    assert body["marks"] == []
+    assert body["spy_baseline"] == []
+    assert body["price_return_only"] is True
+
+
+def test_portfolio_unbound_room_is_409(monkeypatch):
+    get = AsyncMock()
+    resp = _call(_make_db(linked_book_id=None), monkeypatch, "portfolio",
+                 td_mocks={"get": get})
+    assert resp.status_code == 409
+    get.assert_not_awaited()
