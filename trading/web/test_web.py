@@ -388,7 +388,7 @@ class TestRoutes:
     def test_leaderboard_route_hand_computed(self, auth_headers):
         pred = client.post("/api/predictions", json={
             "statement": "Oil hits $120", "confidence": 0.8,
-            "deadline": "2026-06-01",
+            "deadline": "2026-12-31",
         }, headers=auth_headers).json()
         client.post(f"/api/predictions/{pred['id']}/resolve",
                     json={"resolution": "correct"}, headers=auth_headers)
@@ -413,7 +413,7 @@ class TestRoutes:
         for label, conf in (("amo", 0.8), ("capex-insider", 0.6)):
             pred = client.post("/api/predictions", json={
                 "statement": f"claim by {label}", "confidence": conf,
-                "deadline": "2026-06-01", "source_label": label,
+                "deadline": "2026-12-31", "source_label": label,
             }, headers=auth_headers).json()
             client.post(f"/api/predictions/{pred['id']}/resolve",
                         json={"resolution": "correct"}, headers=auth_headers)

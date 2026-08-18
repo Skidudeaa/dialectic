@@ -67,11 +67,12 @@ def _row(
 class TestPrimitives:
     def test_outcome_values(self):
         assert scoring.outcome_value("correct") == 1.0
-        assert scoring.outcome_value("partial") == 0.5
         assert scoring.outcome_value("incorrect") == 0.0
 
-    def test_voided_and_unresolved_score_nowhere(self):
+    def test_voided_partial_and_unresolved_score_nowhere(self):
+        # partial names an ambiguous proposition, not one that was 50% true
         assert scoring.outcome_value("voided") is None
+        assert scoring.outcome_value("partial") is None
         assert scoring.outcome_value(None) is None
 
     def test_brier_hand_computed(self):
@@ -101,6 +102,7 @@ class TestScoringConfidence:
     def test_last_row_at_or_before_resolved_at_wins(self):
         row = _row(
             confidence=0.9,  # current column must NOT be what scores
+            deadline="2026-04-01",  # resolved_at is the binding boundary
             resolved_at="2026-03-01T00:00:00+00:00",
             history=[
                 {"confidence": 0.9, "recorded_at": "2026-03-02T00:00:00+00:00"},
@@ -112,6 +114,7 @@ class TestScoringConfidence:
 
     def test_history_order_does_not_matter(self):
         row = _row(
+            deadline="2026-04-01",
             resolved_at="2026-03-01T00:00:00+00:00",
             history=[
                 {"confidence": 0.8, "recorded_at": "2026-01-01T00:00:00+00:00"},
@@ -123,8 +126,35 @@ class TestScoringConfidence:
 
     def test_row_exactly_at_resolved_at_qualifies(self):
         row = _row(
+            deadline="2026-02-15",
             resolved_at="2026-02-15T00:00:00+00:00",
             history=[{"confidence": 0.7, "recorded_at": "2026-02-15T00:00:00+00:00"}],
+        )
+        assert scoring.scoring_confidence(row) == 0.7
+
+    def test_deadline_bounds_late_resolution_leak(self):
+        # The leak the boundary exists to close: outcome knowable by the
+        # deadline, human tap three days later, belief pumped to 0.99 in
+        # between. The pre-deadline 0.6 scores; hindsight does not.
+        row = _row(
+            deadline="2026-02-10",
+            resolved_at="2026-02-13T00:00:00+00:00",
+            history=[
+                {"confidence": 0.99, "recorded_at": "2026-02-12T00:00:00+00:00"},
+                {"confidence": 0.6, "recorded_at": "2026-02-01T00:00:00+00:00"},
+            ],
+        )
+        assert scoring.scoring_confidence(row) == 0.6
+
+    def test_update_on_deadline_day_still_scores(self):
+        # The boundary is END of the deadline day, not its midnight.
+        row = _row(
+            deadline="2026-02-10",
+            resolved_at="2026-02-13T00:00:00+00:00",
+            history=[
+                {"confidence": 0.7, "recorded_at": "2026-02-10T18:00:00+00:00"},
+                {"confidence": 0.5, "recorded_at": "2026-02-01T00:00:00+00:00"},
+            ],
         )
         assert scoring.scoring_confidence(row) == 0.7
 
@@ -144,6 +174,7 @@ class TestScoringConfidence:
         row = _row(
             confidence=0.9,
             resolution="incorrect",
+            deadline="2026-04-01",
             resolved_at="2026-03-01T00:00:00+00:00",
             history=[
                 {"confidence": 0.9, "recorded_at": "2026-03-05T00:00:00+00:00"},
@@ -197,8 +228,36 @@ class TestLeaderboard:
         [group] = scoring.leaderboard(rows)
         assert group["n"] == 1
 
-    def test_group_of_only_voided_rows_is_absent(self):
-        assert scoring.leaderboard([_row(resolution="voided")]) == []
+    def test_group_of_only_voided_rows_shows_coverage_not_grades(self):
+        # The group must APPEAR — a source whose claims all void (or never
+        # resolve) would otherwise game the table by absence.
+        [group] = scoring.leaderboard([_row(resolution="voided")])
+        assert group["n"] == 0
+        assert group["voided"] == 1
+        assert group["brier"] is None
+        assert group["bss"] is None
+
+    def test_open_claims_counted_per_group(self):
+        rows = [
+            _row(confidence=0.8, resolution="correct", source_label="amo"),
+            _row(resolution=None, resolved_at=None, source_label="capex-insider"),
+            _row(resolution=None, resolved_at=None, source_label="capex-insider"),
+        ]
+        groups = {g["group"]: g for g in scoring.leaderboard(rows)}
+        assert groups["amo"]["n"] == 1 and groups["amo"]["open"] == 0
+        assert groups["capex-insider"]["n"] == 0
+        assert groups["capex-insider"]["open"] == 2
+        # graded groups sort ahead of coverage-only groups
+        assert [g["group"] for g in scoring.leaderboard(rows)] == ["amo", "capex-insider"]
+
+    def test_resolved_without_preboundary_confidence_is_unscorable(self):
+        row = _row(
+            resolved_at="2026-01-01T00:00:00+00:00",
+            history=[{"confidence": 0.9, "recorded_at": "2026-02-01T00:00:00+00:00"}],
+        )
+        [group] = scoring.leaderboard([row])
+        assert group["n"] == 0
+        assert group["unscorable"] == 1
 
     def test_signed_bias_positive_means_overconfident(self):
         [group] = scoring.leaderboard([_row(confidence=0.8, resolution="incorrect")])
@@ -206,10 +265,12 @@ class TestLeaderboard:
         [group] = scoring.leaderboard([_row(confidence=0.3, resolution="correct")])
         assert group["bias"] == pytest.approx(-0.7)
 
-    def test_partial_outcome_half_credit(self):
+    def test_partial_outcome_counted_never_graded(self):
         [group] = scoring.leaderboard([_row(confidence=0.7, resolution="partial")])
-        assert group["accuracy"] == pytest.approx(0.5)
-        assert group["brier"] == pytest.approx(0.04)  # (0.7 - 0.5)^2
+        assert group["n"] == 0
+        assert group["partials"] == 1
+        assert group["brier"] is None
+        assert group["accuracy"] is None
 
     def test_empirical_provenance_at_exactly_ten(self):
         def rows(n):
@@ -297,12 +358,12 @@ class TestCalibrationBuckets:
         assert result["total_correct"] == pytest.approx(1.0)
         assert result["brier_score"] == pytest.approx(0.20)
 
-    def test_partial_counts_half_correct(self):
+    def test_partial_surfaced_never_graded(self):
         result = scoring.calibration_buckets([_row(confidence=0.75, resolution="partial")])
         bucket = {b["bucket"]: b for b in result["calibration"]}["0.7-0.8"]
-        assert bucket["total"] == 1
-        assert bucket["correct"] == pytest.approx(0.5)
-        assert bucket["accuracy"] == pytest.approx(0.5)
+        assert bucket["total"] == 0
+        assert result["total_predictions"] == 0
+        assert result["total_partial"] == 1
 
     def test_voided_and_unresolved_excluded(self):
         rows = [
@@ -310,7 +371,9 @@ class TestCalibrationBuckets:
             _row(resolution=None, resolved_at=None),
             _row(confidence=0.8, resolution="correct"),
         ]
-        assert scoring.calibration_buckets(rows)["total_predictions"] == 1
+        result = scoring.calibration_buckets(rows)
+        assert result["total_predictions"] == 1
+        assert result["total_voided"] == 1
 
     def test_bucket_shape_matches_dialectic_scorer(self):
         # The Ledger frontend renders both scorers with one component —
