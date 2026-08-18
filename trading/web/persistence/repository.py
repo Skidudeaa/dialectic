@@ -29,6 +29,15 @@ class PredictionResolutionConflict(RuntimeError):
     """A resolved prediction cannot be changed to the opposite verdict."""
 
 
+class PredictionAlreadyResolved(RuntimeError):
+    """Confidence history is frozen once a prediction is resolved or voided.
+
+    WHY: post-resolution appends would let a bad forecast rewrite what was
+    believed before the outcome was known — the one thing an append-only
+    calibration ledger exists to prevent.
+    """
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -401,7 +410,11 @@ class Repository:
             rows = conn.execute(
                 "SELECT * FROM predictions ORDER BY created_at"
             ).fetchall()
-            return [self._prediction_from_row(r) for r in rows]
+            history = self._confidence_history(conn)
+            return [
+                self._prediction_from_row(r, history.get(r["id"], []))
+                for r in rows
+            ]
         finally:
             conn.close()
 
@@ -410,7 +423,14 @@ class Repository:
         return record
 
     def save_prediction_once(self, user: str, prediction: dict) -> tuple[dict, bool]:
-        """Insert once per optional source key and return the public record."""
+        """Insert once per optional source key and return the public record.
+
+        The first confidence-history row is written in the SAME transaction
+        as the prediction, so no claim can exist without a belief record.
+        WHY actor = source_label: the label names whose forecast this is
+        (Claude's, a newsletter's), which the creating user merely accepted.
+        """
+        source_label = prediction.get("source_label") or user
         record = {
             "id": _gen_id(),
             "user": user,
@@ -424,20 +444,35 @@ class Repository:
             "created_at": _now_iso(),
         }
         source_key = prediction.get("source_key")
+        resolution_spec = prediction.get("resolution_spec")
         conn = self._conn()
         try:
             insert = "INSERT" if source_key is None else "INSERT OR IGNORE"
             cursor = conn.execute(
                 f"""{insert} INTO predictions
                    (id, user, statement, confidence, deadline, resolution,
-                    resolved_at, linked_book_id, tags, created_at, source_key)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    resolved_at, linked_book_id, tags, created_at, source_key,
+                    source_type, source_label, source_ref, base_rate,
+                    base_rate_source, resolution_spec)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (record["id"], user, record["statement"], record["confidence"],
                  record["deadline"], None, None, record["linked_book_id"],
-                 json.dumps(record["tags"]), record["created_at"], source_key),
+                 json.dumps(record["tags"]), record["created_at"], source_key,
+                 prediction.get("source_type", "human"), source_label,
+                 prediction.get("source_ref"), prediction.get("base_rate"),
+                 prediction.get("base_rate_source"),
+                 json.dumps(resolution_spec) if resolution_spec is not None else None),
             )
-            conn.commit()
             created = cursor.rowcount == 1
+            if created:
+                conn.execute(
+                    """INSERT INTO prediction_confidence
+                       (id, prediction_id, actor, confidence, reasoning, recorded_at)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (_gen_id(), record["id"], source_label,
+                     record["confidence"], None, record["created_at"]),
+                )
+            conn.commit()
             if created:
                 row = conn.execute(
                     "SELECT * FROM predictions WHERE id = ?", (record["id"],)
@@ -448,7 +483,52 @@ class Repository:
                 ).fetchone()
             if row is None:
                 raise RuntimeError("Prediction insert was ignored without an existing source row")
-            return self._prediction_from_row(row), created
+            history = self._confidence_history(conn, row["id"])
+            return self._prediction_from_row(row, history.get(row["id"], [])), created
+        finally:
+            conn.close()
+
+    def record_prediction_confidence(
+        self,
+        prediction_id: str,
+        actor: str,
+        confidence: float,
+        reasoning: Optional[str] = None,
+    ) -> Optional[dict]:
+        """Append one belief-update; None if the prediction doesn't exist.
+
+        Raises PredictionAlreadyResolved for resolved OR voided claims —
+        the history is what calibration scores read, so it freezes the
+        moment an outcome is known.
+        """
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                "SELECT resolution FROM predictions WHERE id = ?", (prediction_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            if row["resolution"] is not None:
+                raise PredictionAlreadyResolved(
+                    "Confidence cannot be updated on a resolved prediction"
+                )
+            entry = {
+                "id": _gen_id(),
+                "prediction_id": prediction_id,
+                "actor": actor,
+                "confidence": confidence,
+                "reasoning": reasoning,
+                "recorded_at": _now_iso(),
+            }
+            conn.execute(
+                """INSERT INTO prediction_confidence
+                   (id, prediction_id, actor, confidence, reasoning, recorded_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (entry["id"], prediction_id, actor, confidence, reasoning,
+                 entry["recorded_at"]),
+            )
+            conn.commit()
+            return entry
         finally:
             conn.close()
 
@@ -465,8 +545,13 @@ class Repository:
         prediction_id: str,
         resolution: str,
         source_key: Optional[str],
+        resolution_notes: Optional[str] = None,
     ) -> tuple[Optional[dict], bool]:
-        """Resolve once; identical retries are no-ops and conflicts are loud."""
+        """Resolve once; identical retries are no-ops and conflicts are loud.
+
+        Notes ride only the winning resolution — a no-op retry's notes are
+        dropped rather than overwriting the record of the first verdict.
+        """
         conn = self._conn()
         try:
             row = conn.execute(
@@ -475,7 +560,7 @@ class Repository:
             if not row:
                 return None, False
             if row["resolution"] is not None:
-                record = self._prediction_from_row(row)
+                record = self._prediction_with_history(conn, row)
                 if row["resolution"] != resolution:
                     raise PredictionResolutionConflict(
                         "Prediction is already resolved with a different verdict"
@@ -484,9 +569,10 @@ class Repository:
             now = _now_iso()
             cursor = conn.execute(
                 """UPDATE predictions
-                   SET resolution = ?, resolved_at = ?, resolution_source_key = ?
+                   SET resolution = ?, resolved_at = ?, resolution_source_key = ?,
+                       resolution_notes = ?
                    WHERE id = ? AND resolution IS NULL""",
-                (resolution, now, source_key, prediction_id),
+                (resolution, now, source_key, resolution_notes, prediction_id),
             )
             if cursor.rowcount != 1:
                 current = conn.execute(
@@ -498,19 +584,48 @@ class Repository:
                     raise PredictionResolutionConflict(
                         "Prediction is already resolved with a different verdict"
                     )
-                return self._prediction_from_row(current), False
+                return self._prediction_with_history(conn, current), False
             conn.commit()
             updated = conn.execute(
                 "SELECT * FROM predictions WHERE id = ?", (prediction_id,)
             ).fetchone()
-            return self._prediction_from_row(updated), True
+            return self._prediction_with_history(conn, updated), True
         finally:
             conn.close()
 
     @staticmethod
-    def _prediction_from_row(row) -> dict:
+    def _confidence_history(conn, prediction_id: Optional[str] = None) -> Dict[str, List[dict]]:
+        """History rows grouped by prediction id, newest first.
+
+        One query for the whole table (or one prediction) rather than N+1 —
+        list_predictions is the hot read path for the leaderboard.
+        """
+        sql = """SELECT id, prediction_id, actor, confidence, reasoning, recorded_at
+                 FROM prediction_confidence"""
+        params: tuple = ()
+        if prediction_id is not None:
+            sql += " WHERE prediction_id = ?"
+            params = (prediction_id,)
+        sql += " ORDER BY recorded_at DESC, rowid DESC"
+        grouped: Dict[str, List[dict]] = {}
+        for row in conn.execute(sql, params):
+            entry = dict(row)
+            grouped.setdefault(entry.pop("prediction_id"), []).append(entry)
+        return grouped
+
+    def _prediction_with_history(self, conn, row) -> dict:
+        history = self._confidence_history(conn, row["id"])
+        return self._prediction_from_row(row, history.get(row["id"], []))
+
+    @staticmethod
+    def _prediction_from_row(row, confidence_history: Optional[List[dict]] = None) -> dict:
         d = dict(row)
         d["tags"] = json.loads(d["tags"]) if d.get("tags") else []
+        if d.get("resolution_spec"):
+            d["resolution_spec"] = json.loads(d["resolution_spec"])
+        else:
+            d["resolution_spec"] = None
+        d["confidence_history"] = confidence_history or []
         d.pop("source_key", None)
         d.pop("resolution_source_key", None)
         return d

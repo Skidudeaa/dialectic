@@ -69,13 +69,58 @@ class WatchlistItem(BaseModel):
 
 # ── Predictions ───────────────────────────────────────────────────────────
 
+#: Shapes a resolution_spec may take. Validated at the door so Phase 2's
+#: deterministic auto-resolver never has to defend against malformed specs.
+_RESOLUTION_SPEC_KEYS = {
+    "price_cross": {"kind", "symbol", "comparator", "threshold"},
+    "polymarket": {"kind", "market_id"},
+}
+
+
 class PredictionCreate(BaseModel):
     statement: str
-    confidence: float  # 0.0 – 1.0
+    confidence: float = Field(ge=0.0, le=1.0)
     deadline: str  # ISO date
     linked_book_id: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
     source_key: Optional[str] = None
+    # Provenance: who/what originated the claim. source_label is the
+    # leaderboard grouping key (defaults to the creating user server-side).
+    source_type: Literal[
+        "human", "llm", "dialectic_commitment", "newsletter", "polymarket"
+    ] = "human"
+    source_label: Optional[str] = None
+    source_ref: Optional[str] = None
+    # Captured reference forecast (Polymarket price when linkable) — the
+    # baseline that Brier skill scores are computed against.
+    base_rate: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    base_rate_source: Optional[str] = None
+    resolution_spec: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def _validate_resolution_spec(self) -> "PredictionCreate":
+        """Strict shape check: an unknown or misspelled key silently ignored
+        here would surface as a claim that never auto-resolves."""
+        spec = self.resolution_spec
+        if spec is None:
+            return self
+        kind = spec.get("kind")
+        expected = _RESOLUTION_SPEC_KEYS.get(kind)
+        if expected is None:
+            raise ValueError(f"resolution_spec.kind must be one of {sorted(_RESOLUTION_SPEC_KEYS)}")
+        if set(spec) != expected:
+            raise ValueError(f"resolution_spec for kind={kind!r} requires exactly keys {sorted(expected)}")
+        if kind == "price_cross":
+            if not isinstance(spec["symbol"], str) or not spec["symbol"]:
+                raise ValueError("resolution_spec.symbol must be a non-empty string")
+            if spec["comparator"] not in ("above", "below"):
+                raise ValueError("resolution_spec.comparator must be 'above' or 'below'")
+            if not isinstance(spec["threshold"], (int, float)) or isinstance(spec["threshold"], bool):
+                raise ValueError("resolution_spec.threshold must be a number")
+        elif kind == "polymarket":
+            if not isinstance(spec["market_id"], str) or not spec["market_id"]:
+                raise ValueError("resolution_spec.market_id must be a non-empty string")
+        return self
 
 
 class Prediction(BaseModel):
@@ -84,16 +129,31 @@ class Prediction(BaseModel):
     statement: str
     confidence: float
     deadline: str
-    resolution: Optional[str] = None  # "correct" | "incorrect" | None
+    resolution: Optional[str] = None  # "correct" | "incorrect" | "partial" | "voided" | None
     resolved_at: Optional[str] = None
+    resolution_notes: Optional[str] = None
+    resolution_spec: Optional[Dict[str, Any]] = None
     linked_book_id: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
+    source_type: str = "human"
+    source_label: Optional[str] = None
+    source_ref: Optional[str] = None
+    base_rate: Optional[float] = None
+    base_rate_source: Optional[str] = None
+    confidence_history: List[Dict[str, Any]] = Field(default_factory=list)  # newest first
     created_at: str
 
 
 class PredictionResolve(BaseModel):
-    resolution: Literal["correct", "incorrect"]
+    resolution: Literal["correct", "incorrect", "partial", "voided"]
     source_key: Optional[str] = None
+    resolution_notes: Optional[str] = None
+
+
+class PredictionConfidenceCreate(BaseModel):
+    """One appended belief-update on an open claim."""
+    confidence: float = Field(ge=0.0, le=1.0)
+    reasoning: Optional[str] = None
 
 
 # ── Trade Journal ─────────────────────────────────────────────────────────

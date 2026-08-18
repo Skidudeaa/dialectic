@@ -37,10 +37,11 @@ class TestMigrations:
         count = run_migrations(conn)
         # 001 (initial schema) + 002 (audit_log + confirm_tokens) + 003
         # (message kind+meta) + 004 (drop outbox) + 005 (maintenance_state)
-        # + 006 (Dialectic prediction idempotency keys).
+        # + 006 (Dialectic prediction idempotency keys) + 007 (claims
+        # ledger: provenance columns + prediction_confidence history).
         # Bump this when a new numbered migration lands in
         # web/persistence/sql/.
-        assert count == 6
+        assert count == 7
         tables = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         )}
@@ -50,6 +51,7 @@ class TestMigrations:
             "thesis_snapshots", "alert_events", "manual_overrides",
             "close_observations", "fetch_runs",
             "audit_log", "confirm_tokens", "maintenance_state",
+            "prediction_confidence",
         }
         assert expected.issubset(tables)
         conn.close()
@@ -58,6 +60,97 @@ class TestMigrations:
         """Running migrations twice applies nothing the second time."""
         count = repo.initialize()
         assert count == 0  # already applied in fixture
+
+
+class TestClaimsLedgerMigration:
+    """007 over a pre-007 database with real (including poisoned) rows.
+
+    WHY seeded, not fresh: the live DB carries a percent-scale 75.0
+    confidence row, and 007's whole ordering contract is repair-BEFORE-seed.
+    If the seed ran first, the poisoned copy would hit prediction_confidence's
+    CHECK (confidence <= 1) and fail the migration loudly — so this test is
+    also the mutation-proof of the statement order.
+    """
+
+    @pytest.fixture
+    def pre_007_conn(self, tmp_path):
+        """A file-backed DB migrated through 006 with schema_migrations
+        recorded exactly as the runner records them."""
+        from web.persistence.connection import get_connection
+        from web.persistence.migrations import MIGRATIONS_DIR
+
+        conn = get_connection(str(tmp_path / "seed.db"))
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version  INTEGER PRIMARY KEY,
+                name     TEXT NOT NULL,
+                applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
+            version = int(path.stem.split("_", 1)[0])
+            if version > 6:
+                continue
+            conn.executescript(path.read_text())
+            conn.execute(
+                "INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
+                (version, path.stem),
+            )
+        conn.commit()
+        yield conn
+        conn.close()
+
+    def test_repairs_poison_then_seeds_clean_history(self, pre_007_conn):
+        from web.persistence.migrations import run_migrations
+
+        conn = pre_007_conn
+        conn.execute(
+            """INSERT INTO predictions
+               (id, user, statement, confidence, deadline, resolution,
+                resolved_at, linked_book_id, tags, created_at, source_key)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ("poisoned", "amo", "Brent above 100", 75.0, "2026-05-01",
+             None, None, None, "[]", "2026-01-01T00:00:00+00:00", None),
+        )
+        conn.execute(
+            """INSERT INTO predictions
+               (id, user, statement, confidence, deadline, resolution,
+                resolved_at, linked_book_id, tags, created_at, source_key)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ("clean", "dan", "SPY below 500", 0.6, "2026-06-01",
+             None, None, None, "[]", "2026-02-01T00:00:00+00:00", None),
+        )
+        conn.commit()
+
+        run_migrations(conn)
+
+        # The poisoned row is repaired, the clean one untouched.
+        confs = dict(conn.execute("SELECT id, confidence FROM predictions"))
+        assert confs["poisoned"] == 0.75
+        assert confs["clean"] == 0.6
+
+        # The seeded history rows carry the REPAIRED value, stamped at
+        # creation time, actor = the row's user.
+        history = {
+            row["prediction_id"]: dict(row)
+            for row in conn.execute(
+                "SELECT * FROM prediction_confidence"
+            )
+        }
+        assert history["poisoned"]["confidence"] == 0.75
+        assert history["poisoned"]["actor"] == "amo"
+        assert history["poisoned"]["recorded_at"] == "2026-01-01T00:00:00+00:00"
+        assert history["clean"]["confidence"] == 0.6
+        rows = conn.execute(
+            "SELECT COUNT(*) FROM prediction_confidence"
+        ).fetchone()[0]
+        assert rows == 2  # exactly one seed per prediction
+
+        # Backfill: existing rows were human-entered by their user.
+        labels = dict(conn.execute("SELECT id, source_label FROM predictions"))
+        assert labels == {"poisoned": "amo", "clean": "dan"}
+        types = {row[0] for row in conn.execute("SELECT source_type FROM predictions")}
+        assert types == {"human"}
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -304,6 +397,117 @@ class TestPredictions:
                 "incorrect",
                 "dialectic:resolve:p2",
             )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# CLAIMS LEDGER — confidence history + provenance
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestClaimsLedger:
+    def _create(self, repo, **overrides):
+        payload = {
+            "statement": "Brent above 100",
+            "confidence": 0.7,
+            "deadline": "2026-09-30",
+        }
+        payload.update(overrides)
+        record, created = repo.save_prediction_once("amo", payload)
+        return record, created
+
+    def test_create_seeds_first_history_row(self, repo):
+        record, _ = self._create(repo)
+        history = record["confidence_history"]
+        assert len(history) == 1
+        assert history[0]["confidence"] == 0.7
+        assert history[0]["actor"] == "amo"  # defaults to the creating user
+        assert history[0]["recorded_at"] == record["created_at"]
+
+    def test_replay_does_not_double_seed_history(self, repo):
+        self._create(repo, source_key="dialectic:m1:proposal")
+        record, created = self._create(repo, source_key="dialectic:m1:proposal")
+        assert created is False
+        assert len(record["confidence_history"]) == 1
+
+    def test_history_actor_is_source_label_when_given(self, repo):
+        record, _ = self._create(repo, source_type="llm", source_label="Claude")
+        assert record["source_label"] == "Claude"
+        assert record["confidence_history"][0]["actor"] == "Claude"
+
+    def test_provenance_fields_round_trip(self, repo):
+        record, _ = self._create(
+            repo,
+            source_type="newsletter",
+            source_label="capex-insider",
+            source_ref="newsletter://capex-insider/2026-08-01",
+            base_rate=0.35,
+            base_rate_source="polymarket",
+            resolution_spec={"kind": "price_cross", "symbol": "XOP",
+                             "comparator": "above", "threshold": 150.0},
+        )
+        assert record["source_type"] == "newsletter"
+        assert record["source_ref"] == "newsletter://capex-insider/2026-08-01"
+        assert record["base_rate"] == 0.35
+        assert record["base_rate_source"] == "polymarket"
+        # resolution_spec comes back as a parsed dict, not a JSON string.
+        assert record["resolution_spec"] == {
+            "kind": "price_cross", "symbol": "XOP",
+            "comparator": "above", "threshold": 150.0,
+        }
+        # The internal keys stay stripped from the public record.
+        assert "source_key" not in record
+        assert "resolution_source_key" not in record
+
+    def test_append_confidence_newest_first(self, repo):
+        record, _ = self._create(repo)
+        entry = repo.record_prediction_confidence(
+            record["id"], "dan", 0.9, "tanker traffic collapsed"
+        )
+        assert entry["confidence"] == 0.9
+        [listed] = repo.list_predictions()
+        history = listed["confidence_history"]
+        assert [h["confidence"] for h in history] == [0.9, 0.7]  # newest first
+        assert history[0]["actor"] == "dan"
+        assert history[0]["reasoning"] == "tanker traffic collapsed"
+        # The append is history, not an edit — the column keeps the
+        # creation-time value.
+        assert listed["confidence"] == 0.7
+
+    def test_append_rejected_on_resolved(self, repo):
+        from web.persistence.repository import PredictionAlreadyResolved
+        record, _ = self._create(repo)
+        repo.resolve_prediction_once(record["id"], "correct", None)
+        with pytest.raises(PredictionAlreadyResolved):
+            repo.record_prediction_confidence(record["id"], "amo", 0.95, None)
+
+    def test_append_rejected_on_voided(self, repo):
+        from web.persistence.repository import PredictionAlreadyResolved
+        record, _ = self._create(repo)
+        repo.resolve_prediction_once(record["id"], "voided", None)
+        with pytest.raises(PredictionAlreadyResolved):
+            repo.record_prediction_confidence(record["id"], "amo", 0.1, None)
+
+    def test_append_on_missing_prediction_is_none(self, repo):
+        assert repo.record_prediction_confidence("nonexistent", "amo", 0.5, None) is None
+
+    def test_resolve_stores_notes_and_widened_vocabulary(self, repo):
+        record, _ = self._create(repo)
+        resolved, changed = repo.resolve_prediction_once(
+            record["id"], "partial", None, "crossed after the deadline"
+        )
+        assert changed is True
+        assert resolved["resolution"] == "partial"
+        assert resolved["resolution_notes"] == "crossed after the deadline"
+        [listed] = repo.list_predictions()
+        assert listed["resolution_notes"] == "crossed after the deadline"
+
+    def test_noop_retry_does_not_overwrite_notes(self, repo):
+        record, _ = self._create(repo)
+        repo.resolve_prediction_once(record["id"], "correct", None, "first notes")
+        retried, changed = repo.resolve_prediction_once(
+            record["id"], "correct", None, "second notes"
+        )
+        assert changed is False
+        assert retried["resolution_notes"] == "first notes"
 
 
 # ═══════════════════════════════════════════════════════════════════════

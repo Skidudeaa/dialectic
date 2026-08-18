@@ -332,6 +332,144 @@ class TestRoutes:
         assert first.status_code == 200
         assert conflict.status_code == 409
 
+    def test_prediction_door_rejects_percent_scale_confidence(self, auth_headers):
+        """The 75.0 poison can never enter through the door again."""
+        resp = client.post("/api/predictions", json={
+            "statement": "test", "confidence": 75.0, "deadline": "2026-12-31",
+        }, headers=auth_headers)
+        assert resp.status_code == 422
+
+    def test_prediction_create_with_provenance_and_spec(self, auth_headers):
+        resp = client.post("/api/predictions", json={
+            "statement": "XOP above 150 by October",
+            "confidence": 0.7,
+            "deadline": "2026-10-01",
+            "source_type": "newsletter",
+            "source_label": "capex-insider",
+            "base_rate": 0.4,
+            "base_rate_source": "polymarket",
+            "resolution_spec": {"kind": "price_cross", "symbol": "XOP",
+                                "comparator": "above", "threshold": 150},
+        }, headers=auth_headers)
+        assert resp.status_code == 200
+        pred = resp.json()
+        assert pred["source_type"] == "newsletter"
+        assert pred["source_label"] == "capex-insider"
+        assert pred["resolution_spec"]["comparator"] == "above"
+        assert len(pred["confidence_history"]) == 1
+        assert pred["confidence_history"][0]["actor"] == "capex-insider"
+
+    def test_prediction_malformed_resolution_spec_rejected(self, auth_headers):
+        base = {"statement": "t", "confidence": 0.5, "deadline": "2026-12-31"}
+        for bad_spec in (
+            {"kind": "coin_flip"},
+            {"kind": "price_cross", "symbol": "XOP", "comparator": "over",
+             "threshold": 150},  # bad comparator
+            {"kind": "price_cross", "symbol": "XOP",
+             "comparator": "above"},  # missing threshold
+            {"kind": "polymarket"},  # missing market_id
+            {"kind": "polymarket", "market_id": "m1", "extra": True},
+        ):
+            resp = client.post("/api/predictions",
+                               json={**base, "resolution_spec": bad_spec},
+                               headers=auth_headers)
+            assert resp.status_code == 422, bad_spec
+
+    def test_calibration_route_is_not_a_prediction_id(self, auth_headers):
+        """Route-order proof: /calibration must return the calibration
+        shape, never fall through to GET /{prediction_id}'s 404."""
+        resp = client.get("/api/predictions/calibration", headers=auth_headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["calibration"]) == 10
+        assert body["total_predictions"] == 0
+        assert body["brier_score"] is None
+
+    def test_leaderboard_route_hand_computed(self, auth_headers):
+        pred = client.post("/api/predictions", json={
+            "statement": "Oil hits $120", "confidence": 0.8,
+            "deadline": "2026-06-01",
+        }, headers=auth_headers).json()
+        client.post(f"/api/predictions/{pred['id']}/resolve",
+                    json={"resolution": "correct"}, headers=auth_headers)
+
+        resp = client.get("/api/predictions/leaderboard", headers=auth_headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["split_by"] == "source_label"
+        [group] = body["groups"]
+        assert group["group"] == "amo"
+        assert group["brier"] == pytest.approx(0.04)   # (0.8 - 1.0)^2
+        assert group["bss"] == pytest.approx(0.84)     # 1 - 0.04/0.25
+        assert group["bss_vs"] == "ignorance"
+        assert group["provenance"] == "UNVERIFIED_INSUFFICIENT_SAMPLES"
+
+    def test_leaderboard_invalid_split_rejected(self, auth_headers):
+        resp = client.get("/api/predictions/leaderboard?split_by=bogus",
+                          headers=auth_headers)
+        assert resp.status_code == 422
+
+    def test_calibration_source_label_filter(self, auth_headers):
+        for label, conf in (("amo", 0.8), ("capex-insider", 0.6)):
+            pred = client.post("/api/predictions", json={
+                "statement": f"claim by {label}", "confidence": conf,
+                "deadline": "2026-06-01", "source_label": label,
+            }, headers=auth_headers).json()
+            client.post(f"/api/predictions/{pred['id']}/resolve",
+                        json={"resolution": "correct"}, headers=auth_headers)
+
+        resp = client.get("/api/predictions/calibration?source_label=capex-insider",
+                          headers=auth_headers)
+        body = resp.json()
+        assert body["total_predictions"] == 1
+        assert body["source_label"] == "capex-insider"
+        assert body["brier_score"] == pytest.approx(0.16)  # (0.6 - 1.0)^2
+
+    def test_confidence_append_then_locked_after_resolve(self, auth_headers):
+        pred = client.post("/api/predictions", json={
+            "statement": "test", "confidence": 0.5, "deadline": "2026-12-31",
+        }, headers=auth_headers).json()
+
+        resp = client.post(f"/api/predictions/{pred['id']}/confidence",
+                           json={"confidence": 0.9, "reasoning": "new evidence"},
+                           headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["confidence"] == 0.9
+
+        listed = client.get("/api/predictions", headers=auth_headers).json()
+        history = listed[0]["confidence_history"]
+        assert [h["confidence"] for h in history] == [0.9, 0.5]  # newest first
+
+        client.post(f"/api/predictions/{pred['id']}/resolve",
+                    json={"resolution": "voided"}, headers=auth_headers)
+        locked = client.post(f"/api/predictions/{pred['id']}/confidence",
+                             json={"confidence": 0.1}, headers=auth_headers)
+        assert locked.status_code == 409
+
+    def test_confidence_append_range_validated_and_404(self, auth_headers):
+        pred = client.post("/api/predictions", json={
+            "statement": "test", "confidence": 0.5, "deadline": "2026-12-31",
+        }, headers=auth_headers).json()
+        resp = client.post(f"/api/predictions/{pred['id']}/confidence",
+                           json={"confidence": 75.0}, headers=auth_headers)
+        assert resp.status_code == 422
+        resp = client.post("/api/predictions/nonexistent/confidence",
+                           json={"confidence": 0.5}, headers=auth_headers)
+        assert resp.status_code == 404
+
+    def test_resolve_partial_with_notes(self, auth_headers):
+        pred = client.post("/api/predictions", json={
+            "statement": "test", "confidence": 0.5, "deadline": "2026-12-31",
+        }, headers=auth_headers).json()
+        resp = client.post(f"/api/predictions/{pred['id']}/resolve", json={
+            "resolution": "partial",
+            "resolution_notes": "crossed two days late",
+        }, headers=auth_headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["resolution"] == "partial"
+        assert body["resolution_notes"] == "crossed two days late"
+
     def test_journal_crud(self, auth_headers):
         resp = client.post("/api/journal", json={
             "thesis": "oil shock",
