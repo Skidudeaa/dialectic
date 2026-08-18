@@ -521,17 +521,11 @@ class ClaimResolver:
         """First post-deadline cross on an incorrect claim → durable flag.
 
         The resolution stands untouched — this records "right but early"
-        for the Phase-8 per-source split, nothing more.
-
-        # ponytail: the plan wants a `{"late_cross": {...}}` object merged
-        # into resolution_notes, but the Repository exposes no public write
-        # path for notes on a resolved row (resolve_prediction_once correctly
-        # refuses to re-write) and repository.py is owned elsewhere. Until a
-        # public seam exists (e.g. Repository.stamp_late_cross(prediction_id,
-        # date)), the durable record is an audit_log row per flagged claim
-        # (action=LATE_CROSS_ACTION, target=prediction id, reason carries the
-        # exact JSON stamp) — same data, different table; the notes check
-        # below is kept so a future backfill dedupes cleanly.
+        for the Phase-8 per-source split, nothing more. Two durable homes,
+        deliberately: Repository.stamp_late_cross merges the JSON into
+        resolution_notes (the queryable field Phase 8 splits on), and the
+        audit row keeps the evidence (spec + observed price) beside every
+        other resolver action.
         """
         if "late_cross" in (row.get("resolution_notes") or ""):
             return False
@@ -544,10 +538,18 @@ class ClaimResolver:
             return False
         deadline = _parse_deadline(row.get("deadline"))
         today = datetime.now(timezone.utc).date()
-        stamp = json.dumps({"late_cross": {
+        stamp_obj = {
             "date": today.isoformat(),
             "delay_days": (today - deadline).days if deadline else None,
-        }})
+        }
+        stamp = json.dumps({"late_cross": stamp_obj})
+        try:
+            await asyncio.to_thread(
+                self._repo.stamp_late_cross, row["id"], stamp_obj,
+            )
+        except Exception:  # noqa: BLE001 — the audit row below still records it
+            log.warning("claim_resolver: late-cross notes stamp failed for %s",
+                        row["id"], exc_info=True)
         try:
             await asyncio.to_thread(
                 self._repo.add_audit_row,

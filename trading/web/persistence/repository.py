@@ -1315,6 +1315,51 @@ class Repository:
     # AUDIT LOG (Unit 12)
     # ════════════════════════════════════════════════════════════════
 
+    def stamp_late_cross(self, prediction_id: str, stamp: dict) -> bool:
+        """Merge {"late_cross": {...}} into a resolved claim's
+        resolution_notes, once. Returns True only when the stamp was written.
+
+        WHY this narrow seam exists: resolve_prediction_once correctly
+        refuses to re-write a resolved claim, but the late-cross flag
+        ("right but early" — the resolution stands, the timing was the
+        error) is an ANNOTATION on the resolution, not a change to it.
+        This is the only sanctioned post-resolution notes write, and it
+        cannot touch the verdict columns.
+        """
+        conn = self._conn()
+        try:
+            row = conn.execute(
+                "SELECT resolution, resolution_notes FROM predictions WHERE id = ?",
+                (prediction_id,),
+            ).fetchone()
+            if row is None or row["resolution"] is None:
+                return False
+            notes = row["resolution_notes"]
+            if notes and "late_cross" in notes:
+                return False
+            addition = {"late_cross": stamp}
+            if not notes:
+                merged = json.dumps(addition)
+            else:
+                try:
+                    parsed = json.loads(notes)
+                except ValueError:
+                    parsed = None
+                if isinstance(parsed, dict):
+                    parsed.update(addition)
+                    merged = json.dumps(parsed)
+                else:
+                    # Prose notes (human resolutions): append, never rewrite.
+                    merged = f"{notes}\n{json.dumps(addition)}"
+            conn.execute(
+                "UPDATE predictions SET resolution_notes = ? WHERE id = ?",
+                (merged, prediction_id),
+            )
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+
     def add_audit_row(self, actor: str, action: str, target: str,
                       reason: Optional[str] = None,
                       confirm_token: Optional[str] = None,

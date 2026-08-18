@@ -328,6 +328,11 @@ async def test_past_deadline_spot_cross_is_not_the_oracle(repo):
     assert stamp == {"late_cross": {"date": TODAY.isoformat(), "delay_days": 2}}
     # The resolution itself stands untouched.
     assert get_prediction(repo, claim["id"])["resolution"] == "incorrect"
+    # And the queryable notes field carries the same structured stamp,
+    # merged into the auto-resolve evidence JSON without destroying it.
+    notes = json.loads(get_prediction(repo, claim["id"])["resolution_notes"])
+    assert notes["late_cross"] == {"date": TODAY.isoformat(), "delay_days": 2}
+    assert notes.get("auto") == "price_cross"  # evidence survived the merge
 
 
 @pytest.mark.asyncio

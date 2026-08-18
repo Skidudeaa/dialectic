@@ -510,6 +510,47 @@ class TestClaimsLedger:
         assert changed is False
         assert retried["resolution_notes"] == "first notes"
 
+    def test_stamp_late_cross_on_empty_notes(self, repo):
+        record, _ = self._create(repo)
+        repo.resolve_prediction_once(record["id"], "incorrect", None, None)
+        assert repo.stamp_late_cross(record["id"], {"date": "2026-08-20", "delay_days": 2}) is True
+        [row] = repo.list_predictions()
+        assert json.loads(row["resolution_notes"]) == {
+            "late_cross": {"date": "2026-08-20", "delay_days": 2}
+        }
+
+    def test_stamp_late_cross_merges_into_evidence_json(self, repo):
+        record, _ = self._create(repo)
+        evidence = json.dumps({"auto": "price_cross", "observed": {"high": 99.0}})
+        repo.resolve_prediction_once(record["id"], "incorrect", None, evidence)
+        assert repo.stamp_late_cross(record["id"], {"date": "2026-08-20", "delay_days": 2}) is True
+        [row] = repo.list_predictions()
+        merged = json.loads(row["resolution_notes"])
+        assert merged["auto"] == "price_cross"  # evidence preserved
+        assert merged["late_cross"]["delay_days"] == 2
+
+    def test_stamp_late_cross_appends_to_prose_notes(self, repo):
+        record, _ = self._create(repo)
+        repo.resolve_prediction_once(record["id"], "incorrect", None, "human prose")
+        assert repo.stamp_late_cross(record["id"], {"date": "2026-08-20", "delay_days": 2}) is True
+        [row] = repo.list_predictions()
+        prose, stamp_line = row["resolution_notes"].split("\n", 1)
+        assert prose == "human prose"
+        assert json.loads(stamp_line)["late_cross"]["date"] == "2026-08-20"
+
+    def test_stamp_late_cross_once_and_only_on_resolved(self, repo):
+        record, _ = self._create(repo)
+        # unresolved: refused
+        assert repo.stamp_late_cross(record["id"], {"date": "d", "delay_days": 1}) is False
+        repo.resolve_prediction_once(record["id"], "incorrect", None, None)
+        assert repo.stamp_late_cross(record["id"], {"date": "d", "delay_days": 1}) is True
+        # second stamp: refused, notes unchanged
+        assert repo.stamp_late_cross(record["id"], {"date": "e", "delay_days": 9}) is False
+        [row] = repo.list_predictions()
+        assert json.loads(row["resolution_notes"])["late_cross"]["date"] == "d"
+        # missing claim: refused
+        assert repo.stamp_late_cross("nope", {"date": "d", "delay_days": 1}) is False
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # PAPER BOOK — fills, derived positions, equity marks
