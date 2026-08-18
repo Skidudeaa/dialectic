@@ -74,13 +74,17 @@ def quote_spy():
 
 
 def bars(*rows):
-    """bar_fetcher from (iso_date, high, low) tuples; records windows on
-    .windows so tests can assert what the resolver actually asked for."""
+    """bar_fetcher from (iso_date, high, low) tuples. Filters to the
+    requested window exactly as the real fetcher does — so one fixture can
+    serve both the resolution window and the late-cross watch window — and
+    records the windows on .windows so tests can assert what the resolver
+    actually asked for."""
     def fetch(symbol, start, end):
         fetch.windows.append((symbol, start, end))
         return [
             {"date": date.fromisoformat(d), "high": h, "low": l}
             for (d, h, l) in rows
+            if start <= date.fromisoformat(d) <= end
         ]
     fetch.windows = []
     return fetch
@@ -307,13 +311,18 @@ async def test_past_deadline_bar_cross_resolves_correct_retroactively(repo):
 @pytest.mark.asyncio
 async def test_past_deadline_spot_cross_is_not_the_oracle(repo):
     """Spot sits across the threshold NOW, but the pre-deadline bars show no
-    cross → incorrect; the NEXT sweep flags it as a late cross with the
-    structured stamp (the right-but-early laboratory hook)."""
+    cross → incorrect; the NEXT sweep flags the post-deadline crossing BAR
+    as a late cross, stamped with the bar's own date (the right-but-early
+    laboratory hook)."""
     claim = price_claim(repo, deadline=PAST, created_at=CREATED_PAST)
+    hit_day = (TODAY - timedelta(days=1)).isoformat()  # one day past deadline+0
     resolver = resolver_for(
         repo,
         quote_fetcher=quotes(XOP=150.0),
-        bar_fetcher=bars(((TODAY - timedelta(days=8)).isoformat(), 110.0, 100.0)),
+        bar_fetcher=bars(
+            ((TODAY - timedelta(days=8)).isoformat(), 110.0, 100.0),  # in-window, no cross
+            (hit_day, 150.0, 140.0),                                   # post-deadline cross
+        ),
     )
 
     first = await resolver.run_once()
@@ -325,13 +334,14 @@ async def test_past_deadline_spot_cross_is_not_the_oracle(repo):
     flags = repo.list_audit(action=LATE_CROSS_ACTION)
     assert len(flags) == 1 and flags[0]["target"] == claim["id"]
     stamp = json.loads(flags[0]["reason"])
-    assert stamp == {"late_cross": {"date": TODAY.isoformat(), "delay_days": 2}}
+    # delay_days dates from the crossing BAR, not from today.
+    assert stamp == {"late_cross": {"date": hit_day, "delay_days": 1}}
     # The resolution itself stands untouched.
     assert get_prediction(repo, claim["id"])["resolution"] == "incorrect"
     # And the queryable notes field carries the same structured stamp,
     # merged into the auto-resolve evidence JSON without destroying it.
     notes = json.loads(get_prediction(repo, claim["id"])["resolution_notes"])
-    assert notes["late_cross"] == {"date": TODAY.isoformat(), "delay_days": 2}
+    assert notes["late_cross"] == {"date": hit_day, "delay_days": 1}
     assert notes.get("auto") == "price_cross"  # evidence survived the merge
 
 
@@ -574,41 +584,93 @@ async def test_human_resolved_rows_never_reach_apply(repo):
 # ════════════════════════════════════════════════════════════════════
 
 @pytest.mark.asyncio
+async def test_late_cross_bar_catches_spike_spot_missed(repo):
+    """MANDATED FIXTURE: the post-deadline spike fell back before any spot
+    tick saw it. The daily bar's high is the watch's oracle, and the stamp
+    carries the BAR's date — today's date would overstate the delay."""
+    claim = price_claim(repo, deadline=PAST, created_at=CREATED_PAST)
+    repo.resolve_prediction_once(claim["id"], "incorrect", None, "expired")
+    hit_day = (TODAY - timedelta(days=1)).isoformat()
+    summary = await resolver_for(
+        repo,
+        quote_fetcher=quotes(XOP=98.0),  # spot sits back below threshold
+        bar_fetcher=bars((hit_day, 115.5, 97.0)),
+    ).run_once()
+
+    assert summary["late_crosses"] == 1
+    flags = repo.list_audit(action=LATE_CROSS_ACTION)
+    assert len(flags) == 1 and flags[0]["target"] == claim["id"]
+    assert json.loads(flags[0]["reason"]) == {
+        "late_cross": {"date": hit_day, "delay_days": 1}
+    }
+    assert flags[0]["payload"]["bar"] == {"date": hit_day, "high": 115.5}
+    row = get_prediction(repo, claim["id"])
+    assert row["resolution"] == "incorrect"  # the verdict stands
+    # Prose human notes get the stamp appended, never rewritten.
+    assert row["resolution_notes"].startswith("expired")
+    assert '"late_cross"' in row["resolution_notes"]
+
+
+@pytest.mark.asyncio
+async def test_late_cross_watch_window_is_post_deadline_only(repo):
+    """The watch asks for (deadline, min(today, deadline+30d)] — an
+    at-or-before-deadline bar belongs to resolution, not the watch."""
+    claim = price_claim(repo, deadline=PAST, created_at=CREATED_PAST)
+    repo.resolve_prediction_once(claim["id"], "incorrect", None, "expired")
+    bar_fetch = bars()
+    await resolver_for(repo, bar_fetcher=bar_fetch).run_once()
+    deadline = TODAY - timedelta(days=2)
+    assert bar_fetch.windows == [("XOP", deadline + timedelta(days=1), TODAY)]
+
+
+@pytest.mark.asyncio
 async def test_late_cross_flagged_once_across_restarts(repo):
     claim = price_claim(repo, deadline=PAST, created_at=CREATED_PAST)
     repo.resolve_prediction_once(claim["id"], "incorrect", None, "expired")
+    hit_day = (TODAY - timedelta(days=1)).isoformat()
 
-    first = resolver_for(repo, quote_fetcher=quotes(XOP=150.0))
+    first = resolver_for(repo, bar_fetcher=bars((hit_day, 150.0, 140.0)))
     assert (await first.run_once())["late_crosses"] == 1
     assert (await first.run_once())["late_crosses"] == 0
 
     # A fresh resolver (process restart) hydrates the flag set from audit.
-    second = resolver_for(repo, quote_fetcher=quotes(XOP=150.0))
+    second = resolver_for(repo, bar_fetcher=bars((hit_day, 150.0, 140.0)))
     assert (await second.run_once())["late_crosses"] == 0
     flags = repo.list_audit(action=LATE_CROSS_ACTION)
     assert len(flags) == 1
-    assert json.loads(flags[0]["reason"])["late_cross"]["delay_days"] == 2
+    assert json.loads(flags[0]["reason"])["late_cross"]["delay_days"] == 1
 
 
 @pytest.mark.asyncio
-async def test_late_cross_uncrossed_price_not_flagged(repo):
+async def test_late_cross_uncrossed_bars_not_flagged(repo):
     claim = price_claim(repo, deadline=PAST, created_at=CREATED_PAST)
     repo.resolve_prediction_once(claim["id"], "incorrect", None, "expired")
-    summary = await resolver_for(repo, quote_fetcher=quotes(XOP=100.0)).run_once()
+    uncrossed = ((TODAY - timedelta(days=1)).isoformat(), 110.0, 100.0)
+    summary = await resolver_for(repo, bar_fetcher=bars(uncrossed)).run_once()
+    assert summary["late_crosses"] == 0
+    assert repo.list_audit(action=LATE_CROSS_ACTION) == []
+
+
+@pytest.mark.asyncio
+async def test_late_cross_bars_unavailable_not_flagged(repo):
+    claim = price_claim(repo, deadline=PAST, created_at=CREATED_PAST)
+    repo.resolve_prediction_once(claim["id"], "incorrect", None, "expired")
+    summary = await resolver_for(repo, bar_fetcher=bars_unavailable).run_once()
     assert summary["late_crosses"] == 0
     assert repo.list_audit(action=LATE_CROSS_ACTION) == []
 
 
 @pytest.mark.asyncio
 async def test_late_cross_existing_notes_stamp_respected(repo):
-    """A row whose notes already carry a late_cross object (e.g. a future
-    backfill once the repository seam exists) must not be double-flagged."""
+    """A row whose notes already carry a late_cross object (a backfill, or
+    the stamp seam itself) must not be double-flagged."""
     claim = price_claim(repo, deadline=PAST, created_at=CREATED_PAST)
     repo.resolve_prediction_once(
         claim["id"], "incorrect", None,
         json.dumps({"late_cross": {"date": "2026-08-10", "delay_days": 5}}),
     )
-    summary = await resolver_for(repo, quote_fetcher=quotes(XOP=150.0)).run_once()
+    hit = ((TODAY - timedelta(days=1)).isoformat(), 150.0, 140.0)
+    summary = await resolver_for(repo, bar_fetcher=bars(hit)).run_once()
     assert summary["late_crosses"] == 0
     assert repo.list_audit(action=LATE_CROSS_ACTION) == []
 
@@ -618,7 +680,8 @@ async def test_late_cross_window_expires(repo):
     old_deadline = (TODAY - timedelta(days=45)).isoformat()
     claim = price_claim(repo, deadline=old_deadline, created_at=CREATED_PAST)
     repo.resolve_prediction_once(claim["id"], "incorrect", None, "expired")
-    summary = await resolver_for(repo, quote_fetcher=quotes(XOP=150.0)).run_once()
+    hit = ((TODAY - timedelta(days=1)).isoformat(), 150.0, 140.0)
+    summary = await resolver_for(repo, bar_fetcher=bars(hit)).run_once()
     assert summary["late_crosses"] == 0
 
 

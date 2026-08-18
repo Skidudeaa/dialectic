@@ -34,11 +34,12 @@ missing data. Every applied verdict stamps a compact JSON evidence object
 into resolution_notes (the bar that crossed, or the checked window with its
 max-high/min-low) so no resolution rests on an API response that vanished.
 
-TRADEOFF (spot source): the short-circuit and the late-cross watch read
+TRADEOFF (spot source): the short-circuit reads
 web.adapters.market.fetch_quotes — the same 240s-TTL cached path the LLM
 tools and the ticker use — rather than the per-thesis marketSnapshot the
-tick just committed. Snapshots key prices by book-internal ids while specs
-name Yahoo symbols; one shared, symbol-keyed path beats a namespace-mapping
+tick just committed. (The late-cross watch reads bars only; see
+_maybe_flag_late_cross for why spot is excluded there.) Snapshots key
+prices by book-internal ids while specs name Yahoo symbols; one shared, symbol-keyed path beats a namespace-mapping
 layer, and the TTL cache bounds the cost to at most one cold fetch per
 cycle, taken after every thesis lock has been released.
 """
@@ -47,7 +48,7 @@ import asyncio
 import hashlib
 import json
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote as _urlquote
 from urllib.request import Request, urlopen
@@ -298,7 +299,7 @@ class ClaimResolver:
         if not pending and not late_watch:
             return summary
 
-        price_map = await self._price_map_if_needed(pending, late_watch)
+        price_map = await self._price_map_if_needed(pending)
 
         for row in pending:
             kind = row["resolution_spec"].get("kind")
@@ -317,7 +318,7 @@ class ClaimResolver:
                 summary["resolved"] += 1
 
         for row in late_watch:
-            if await self._maybe_flag_late_cross(row, price_map):
+            if await self._maybe_flag_late_cross(row):
                 summary["late_crosses"] += 1
 
         if summary["resolved"] or summary["late_crosses"]:
@@ -330,11 +331,12 @@ class ClaimResolver:
     # ── evaluation ──────────────────────────────────────────────────
 
     async def _price_map_if_needed(
-        self, pending: List[dict], late_watch: List[dict]
+        self, pending: List[dict]
     ) -> Dict[str, float]:
-        """Fetch quotes only when some claim actually needs a price this
-        cycle — a polymarket-only ledger must not touch Yahoo at all."""
-        needs = bool(late_watch) or any(
+        """Fetch quotes only when some claim actually needs a spot price this
+        cycle — a polymarket-only ledger must not touch Yahoo at all. The
+        late-cross watch reads bars, never spot, so it doesn't count."""
+        needs = any(
             r["resolution_spec"].get("kind") == "price_cross" for r in pending
         )
         if not needs:
@@ -515,17 +517,23 @@ class ClaimResolver:
         today = datetime.now(timezone.utc).date()
         return 0 <= (today - deadline).days <= LATE_CROSS_WINDOW_DAYS
 
-    async def _maybe_flag_late_cross(
-        self, row: dict, price_map: Dict[str, float]
-    ) -> bool:
+    async def _maybe_flag_late_cross(self, row: dict) -> bool:
         """First post-deadline cross on an incorrect claim → durable flag.
 
         The resolution stands untouched — this records "right but early"
         for the Phase-8 per-source split, nothing more. Two durable homes,
         deliberately: Repository.stamp_late_cross merges the JSON into
         resolution_notes (the queryable field Phase 8 splits on), and the
-        audit row keeps the evidence (spec + observed price) beside every
+        audit row keeps the evidence (spec + crossing bar) beside every
         other resolver action.
+
+        WHY bars, not spot, with NO spot short-circuit: delay_days is the
+        statistic Phase 8 splits on, and it must date from the FIRST
+        crossing bar — a spot hit stamped "today" overstates the delay
+        whenever the cross happened days ago, and a spot poll misses a
+        spike that falls back between ticks entirely. Today's intraday
+        move already shows in today's (partial) daily bar, so spot would
+        add nothing but a less accurate date.
         """
         if "late_cross" in (row.get("resolution_notes") or ""):
             return False
@@ -533,14 +541,27 @@ class ClaimResolver:
         if row["id"] in flagged:
             return False
         spec = row["resolution_spec"]
-        price = price_map.get(spec["symbol"])
-        if price is None or not _crossed(price, spec["comparator"], spec["threshold"]):
-            return False
         deadline = _parse_deadline(row.get("deadline"))
+        if deadline is None:
+            return False
         today = datetime.now(timezone.utc).date()
+        # Watch window (deadline, min(today, deadline + 30d)] — strictly
+        # post-deadline bars; an at-deadline cross belongs to resolution.
+        bars = await asyncio.to_thread(
+            self._fetch_bars,
+            spec["symbol"],
+            deadline + timedelta(days=1),
+            min(today, deadline + timedelta(days=LATE_CROSS_WINDOW_DAYS)),
+        )
+        if not bars:
+            return False  # fetch failed or no post-deadline bars yet — retry next tick
+        hit = _bar_cross(bars, spec["comparator"], spec["threshold"])
+        if hit is None:
+            return False
+        field = "high" if spec["comparator"] == "above" else "low"
         stamp_obj = {
-            "date": today.isoformat(),
-            "delay_days": (today - deadline).days if deadline else None,
+            "date": hit["date"].isoformat(),
+            "delay_days": (hit["date"] - deadline).days,
         }
         stamp = json.dumps({"late_cross": stamp_obj})
         try:
@@ -557,7 +578,10 @@ class ClaimResolver:
                 action=LATE_CROSS_ACTION,
                 target=row["id"],
                 reason=stamp,
-                payload={"resolution_spec": spec, "price": price},
+                payload={
+                    "resolution_spec": spec,
+                    "bar": {"date": hit["date"].isoformat(), field: hit[field]},
+                },
             )
         except Exception:  # noqa: BLE001
             log.warning("claim_resolver: late-cross audit failed for %s",
@@ -569,10 +593,11 @@ class ClaimResolver:
         return True
 
     def _hydrate_late_cross_flags(self) -> set:
-        """Audit-backed dedup set, loaded once per process. WHY from audit:
-        with the notes stamp unavailable (see above), audit rows are the only
-        durable record — reading them on first use makes the flag idempotent
-        across restarts, not just within one process lifetime."""
+        """Audit-backed dedup set, loaded once per process. WHY from audit
+        (not notes): the audit row and the notes stamp are written by the
+        same pass, but audit rows are queryable by action in one call —
+        reading them on first use makes the flag idempotent across
+        restarts, not just within one process lifetime."""
         if self._late_cross_flagged is None:
             try:
                 rows = self._repo.list_audit(action=LATE_CROSS_ACTION, limit=1000)
