@@ -359,6 +359,20 @@ class TestRoutes:
         assert len(pred["confidence_history"]) == 1
         assert pred["confidence_history"][0]["actor"] == "capex-insider"
 
+    def test_prediction_source_type_vocabulary_pinned(self, auth_headers):
+        """'congress' entered the Literal with the Phase 6 producers; anything
+        outside the vocabulary still 422s at the door."""
+        base = {"statement": "t", "confidence": 0.5, "deadline": "2026-12-31"}
+        ok = client.post("/api/predictions", json={
+            **base, "source_type": "congress", "source_label": "senate-watch",
+        }, headers=auth_headers)
+        assert ok.status_code == 200
+        assert ok.json()["source_type"] == "congress"
+        bad = client.post("/api/predictions", json={
+            **base, "source_type": "carrier_pigeon",
+        }, headers=auth_headers)
+        assert bad.status_code == 422
+
     def test_prediction_malformed_resolution_spec_rejected(self, auth_headers):
         base = {"statement": "t", "confidence": 0.5, "deadline": "2026-12-31"}
         for bad_spec in (

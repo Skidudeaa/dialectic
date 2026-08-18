@@ -73,6 +73,12 @@ class FileReadingRequest(BaseModel):
     summary: str = ""
 
 
+class IngestAttachmentRequest(BaseModel):
+    """A human files a PDF/text attachment THEY dropped — the newsletter door."""
+    attachment_id: UUID
+    summary: str = ""
+
+
 @router.post("/rooms/{room_id}/reading/accept")
 async def accept_reading(
     room_id: UUID,
@@ -253,4 +259,86 @@ async def file_reading(
             source_message_id=request.message_id,
             saved_by_user_id=current_user.user_id,
         )
+    return {"reading": saved}
+
+
+@router.post("/rooms/{room_id}/reading/ingest-attachment")
+async def ingest_attachment(
+    room_id: UUID,
+    request: IngestAttachmentRequest,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_pool),
+) -> dict:
+    """File a dropped PDF/text attachment as a reading — the newsletter door.
+
+    WHY here and not a new router: this is /reading/file's sibling — same
+    auth, same thin gate, same save_reading — with the article coming off
+    the room's own attachment store instead of a re-fetch. The drop IS the
+    transport (owner ruling: forward/drop of emails/PDFs, never IMAP); a
+    Capex Insider issue lands as source='newsletter' with a content-hashed
+    synthetic URL, so re-dropping the same file refreshes rather than
+    duplicates (UNIQUE(room_id, url) + the attachment store's own sha256).
+
+    An UNBOUND attachment (uploaded, never sent) is the uploader's in-flight
+    state — only they may file it; once bound to a message it is the room's.
+    """
+    from api.attachments import media_root
+    from llm import newsletter_ingest
+
+    async with pool.acquire() as db:
+        await _verify_room_token(room_id, token, db)
+        await _verify_room_member(room_id, current_user.user_id, db)
+        row = await db.fetchrow(
+            """SELECT id, message_id, uploader_user_id, mime, sha256,
+                      original_name, storage_path
+               FROM attachments WHERE id = $1 AND room_id = $2""",
+            request.attachment_id, room_id,
+        )
+    if not row:
+        raise HTTPException(status_code=404, detail="Attachment not found in this room")
+    if row["message_id"] is None and row["uploader_user_id"] != current_user.user_id:
+        raise HTTPException(
+            status_code=403, detail="Only the uploader can file an unsent attachment",
+        )
+    if row["mime"] not in newsletter_ingest.INGESTABLE_MIMES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Only PDF and plain-text attachments can be filed "
+                   f"as readings (got {row['mime']})",
+        )
+    summary = request.summary.strip()
+    if len(summary) > 1000:
+        raise HTTPException(status_code=422, detail="Summary is too long")
+
+    # Same containment as GET /attachments/{id}: storage_path is
+    # server-generated, but a corrupted row must not read outside the root.
+    import os
+
+    root = media_root()
+    path = os.path.realpath(os.path.join(root, row["storage_path"]))
+    if os.path.commonpath([path, os.path.realpath(root)]) != os.path.realpath(root):
+        logger.error("attachment %s has an out-of-root storage_path", row["id"])
+        raise HTTPException(status_code=404, detail="Attachment not found in this room")
+    try:
+        with open(path, "rb") as f:
+            blob = f.read()
+    except OSError:
+        raise HTTPException(status_code=404, detail="Attachment file missing")
+
+    try:
+        async with pool.acquire() as db:
+            saved = await newsletter_ingest.ingest_attachment_reading(
+                db,
+                room_id=room_id,
+                blob=blob,
+                mime=row["mime"],
+                sha256=row["sha256"],
+                original_name=row["original_name"],
+                summary=summary,
+                source_message_id=row["message_id"],
+                saved_by_user_id=current_user.user_id,
+            )
+    except newsletter_ingest.NewsletterIngestError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     return {"reading": saved}

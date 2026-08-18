@@ -215,6 +215,8 @@ async def lifespan(app: FastAPI):
         from llm.news_night import register_news_jobs
         from llm.silence_sweep import register_sweep_jobs
         from llm.wire import register_wire_jobs
+        from llm.rss_wire import register_rss_wire_jobs
+        from llm.congress_watch import register_congress_watch_jobs
         from llm.prediction_watch import register_prediction_watch_jobs
         from llm.reading_echo import register_reading_echo_jobs
         from llm.field_inference import register_field_inference_jobs
@@ -231,6 +233,8 @@ async def lifespan(app: FastAPI):
         register_news_jobs(scheduler_instance)
         register_sweep_jobs(scheduler_instance)
         register_wire_jobs(scheduler_instance)
+        register_rss_wire_jobs(scheduler_instance)
+        register_congress_watch_jobs(scheduler_instance)
         register_prediction_watch_jobs(scheduler_instance)
         register_reading_echo_jobs(scheduler_instance)
         register_field_inference_jobs(scheduler_instance)

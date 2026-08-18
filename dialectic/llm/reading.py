@@ -31,14 +31,27 @@ CONTENT_STORE_CAP = 40_000
 # the library -- not of any one job that fills it.
 THIN_CONTENT_MIN_WORDS = 80
 
+# Per-source floors keyed by the SOURCE's declared tag (a watchlist entry's
+# `tag`, never the room). A Truth Social post is legitimately 30 words; a
+# Reuters page that extracts to 30 words is a bot wall. The map is small and
+# explicit ON PURPOSE: every entry is a policy decision that some source's
+# short form is signal, and the global floor above never moves for it.
+SOURCE_THIN_FLOORS = {"social": 25}
+
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
-def is_thin(article: dict) -> bool:
-    """True when an extracted page is too empty to be worth filing."""
+def is_thin(article: dict, source_tag: Optional[str] = None) -> bool:
+    """True when an extracted page is too empty to be worth filing.
+
+    `source_tag` selects a per-source floor from SOURCE_THIN_FLOORS; an
+    unknown or absent tag uses the global THIN_CONTENT_MIN_WORDS, so no
+    caller can lower the gate by inventing a tag.
+    """
     if not str(article.get("content") or "").strip():
         return True
-    return (article.get("word_count") or 0) < THIN_CONTENT_MIN_WORDS
+    floor = SOURCE_THIN_FLOORS.get(source_tag, THIN_CONTENT_MIN_WORDS)
+    return (article.get("word_count") or 0) < floor
 
 
 def _reading_key(article: dict) -> str:

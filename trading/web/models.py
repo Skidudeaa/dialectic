@@ -87,7 +87,8 @@ class PredictionCreate(BaseModel):
     # Provenance: who/what originated the claim. source_label is the
     # leaderboard grouping key (defaults to the creating user server-side).
     source_type: Literal[
-        "human", "llm", "dialectic_commitment", "newsletter", "polymarket"
+        "human", "llm", "dialectic_commitment", "newsletter", "polymarket",
+        "congress",
     ] = "human"
     source_label: Optional[str] = None
     source_ref: Optional[str] = None

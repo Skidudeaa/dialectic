@@ -17,3 +17,4 @@ python-dotenv>=1.0.0
 pytest-asyncio>=0.23.0
 pytest>=7.0.0
 pywebpush>=2.0.0
+pypdf>=4.0.0
