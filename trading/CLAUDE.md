@@ -418,3 +418,56 @@ describe as first-class is now GONE:
 - The dashboard user manual sections describing chat/slash commands
   describe deleted features; the surviving product is: dashboard panels,
   Builder, TradingView integration, outcomes, and the dialectic bridge.
+
+## Amendment 2026-08-18 — the claims ledger + the paper book (amend-beside)
+
+The calibration spine landed (migrations **007 + 008**; prefer this over any
+older prediction/portfolio claims above):
+
+- **`predictions` is now a claims ledger** (007): provenance columns
+  (`source_type` human|llm|dialectic_commitment|newsletter|polymarket|congress,
+  `source_label` — the leaderboard grouping key, `source_ref`), a captured
+  reference forecast (`base_rate` + `base_rate_source`), `resolution_notes`,
+  `resolution_spec` (strict-shape JSON: price_cross | polymarket), and an
+  append-only `prediction_confidence` history (CHECK 0..1; the first row is
+  seeded in the same transaction as every create). Resolution vocabulary is
+  correct|incorrect|partial|voided. The door finally range-validates
+  confidence — 007's FIRST statement repairs the historical 75.0 row, before
+  the history seed (order is load-bearing; the CHECK makes it loud).
+- **`web/scoring.py` is the scorer** and carries the three scoring laws:
+  the graded confidence is the last belief before **min(deadline end,
+  resolved_at)** (leak-safe — a tap that lags the knowable outcome cannot
+  grade hindsight); **partial and voided are counted, never graded**
+  (deliberately diverges from dialectic's stakes scorer); BSS is
+  **cohort-level** (1 − mean/mean, never averaged per-row ratios), vs the
+  captured base_rate where present else the 0.25 ignorance prior.
+  `GET /api/predictions/leaderboard?split_by=source_label|tag|horizon` shows
+  skill AND coverage (partials/voided/open/unscorable — a source whose
+  claims never resolve cannot hide); `GET /api/predictions/calibration`,
+  `POST /api/predictions/{id}/confidence` complete the surface (both GETs
+  registered ABOVE `/{prediction_id}`; order is the route).
+- **`web/runtime/claim_resolver.py`** rides the coordinator tick: claims
+  carrying a resolution_spec resolve deterministically (no LLM — the
+  autonomy fence). **Daily bars are the price oracle, spot is only a
+  short-circuit** — a 300s poll misses intraday crosses. Every applied
+  verdict stamps a JSON evidence object into resolution_notes and an
+  `prediction.auto_resolve` audit row; a human's earlier resolution wins.
+  Incorrect price_cross claims stay on a 30-day bars watch; a post-deadline
+  cross stamps `late_cross` (bar-dated) via `Repository.stamp_late_cross` —
+  the one sanctioned post-resolution notes write.
+- **The paper book** (008): `paper_fills` (append-only; positions and cash
+  DERIVED by replay; **long-only, enforced at the fills door** — sells past
+  flat 422 until short semantics are defined) + `equity_marks` (daily, via
+  the 04:30 UTC maintenance step, one SPY fetch per night).
+  `POST /api/portfolio/fills` prices trades off the desk's own 240s quote
+  cache, never a client number; deposits are cash at par and are the
+  external-flow record. `GET /api/portfolio` marks intraday equity off live
+  quotes and computes the **unitized** SPY benchmark (each dated flow buys
+  units at that mark's close; price-return-only, labeled).
+- PredictionTracker gained provenance badges, partial/voided resolve,
+  structured spec authoring, and the server's Brier (the client-side MAE
+  mislabeled "Brier" is dead).
+- Suite at this gate: **1602 passed, 3 skipped** (was 1377 at the C4 cull).
+- Correction to commit `b339bfa`'s message: its "past-deadline claims
+  resolve incorrect without needing a quote" line describes a superseded
+  draft — the shipped contract requires bar evidence at expiry.

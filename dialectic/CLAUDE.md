@@ -647,3 +647,69 @@ layer, not in new machinery — "a discipline, not a UI feature":
 Pinned by `TestStandingDisciplines` in `tests/test_prompts.py`. No
 migration, no new endpoints, no changes to the proposal/accept write path —
 the human tap is still the only write.
+
+## Amendment 2026-08-18 — the calibration spine: belief connects to capital (amend-beside)
+
+Ten commits (295a28c…0875142) closed the loop the 2026-08-15 memory called
+"never completed a single cycle." Prefer this over older counts above:
+
+- **Twelve scheduled jobs**: `rss_wire` joined (900s, `RSS_WIRE_ENABLED`,
+  the FIRST reader of `rooms.watchlist` — `{type:"rss", value, tag?}`
+  entries; interjections flow through wire's own `_interject`, so the
+  wire_interjection budget is shared BY CONSTRUCTION) and `congress_watch`
+  (3600s, `CONGRESS_WATCH_ENABLED=0` — SHIPS DARK until the community
+  dataset URLs are verified live; readings only, no interjection lane).
+- **Twenty tools**: `propose_trade` — symbol/side/dollars/rationale + the
+  forecast-XOR-discretionary gate (a paired prediction with optional
+  price_cross auto-resolution spec, OR an explicit unscored-discretionary
+  label; neither → refused). Accept:
+  `POST /rooms/{id}/trading/trades/accept` re-validates everything,
+  claims `trade:{message_id}:trade_proposal`, and makes two idempotent td
+  writes prediction-first. `proposal_intake` EXCLUDES trade_proposal from
+  the human raw-metadata door (it would dodge the XOR gate).
+  `draft_prediction` now defaults `linked_book_id` from the room's binding
+  (unlinked predictions were invisible to the deadline sweep forever) and
+  accepted drafts stamp `source_type='llm', source_label='Claude'`.
+- **Stakes mirror into the desk's ONE claims ledger**: `api/stakes_relay.py`
+  fires from `stakes/manager.py` (the layer both doors share) —
+  fire-and-forget, idempotent via `stake:{id}:*` source keys; the desk
+  prediction id is never stored (every event re-POSTs the idempotent
+  create and td replays the row). Commitments with no deadline or no
+  stated confidence are NOT relayed. Backfill CLI:
+  `trading/tools/outcomes/import_dialectic_stakes.py` (re-runnable).
+- **The LLM reads its own track record**: `self_model.fetch_track_record`
+  (15-min TTL) → "## Your Track Record (scored, not self-reported)" in
+  render_self_awareness — Brier/BSS + the book's equity vs the unitized
+  SPY benchmark. `prediction_watch._verdict` deliberately never sees it
+  (the grader must not know its aggregate; pinned by an identity test).
+- **The reading library grew three doors**: watchlist RSS (above);
+  `POST /rooms/{id}/reading/ingest-attachment` (a dropped PDF/text —
+  Capex Insider — becomes a `newsletter://` reading, content-hash
+  idempotent, pypdf now in requirements); `congress://` readings. Per-source
+  thin floors (`SOURCE_THIN_FLOORS`, social=25); the global 80 stands.
+- **Bias controls**: `WIRE_DOMAIN_CAP=2` per scan (wire + rss_wire, one
+  shared helper); stance (supports|contradicts|neutral) rides every wire
+  score and persists in the reading summary; the 07:00 brief labels
+  dissent COUNTER and STATES its absence when none cleared the threshold;
+  one thesis-independent EXPLORATION pull per digest run
+  (`NEWS_EXPLORATION_ENABLED`).
+- **Bench**: PortfolioPanel (the Paper Book) pairs with OpenTradesTable as
+  the cockpit's money duo; the trade card renders forecast or
+  DISCRETIONARY variants. **Ledger**: TrackRecordPanel — Brier/BSS
+  headline, per-source leaderboard, calibration bars, equity-vs-SPY
+  sparkline. `useTradingDesk` gained the `portfolio` slice (fan-out, not
+  snapshot-keyed — the book moves on fills and marks, not pushes).
+- **Scoring laws live desk-side** (see trading/CLAUDE.md's same-day
+  amendment): leak-safe min(deadline, resolved_at) boundary; partial
+  counted-never-graded; bars-not-spot price oracle; long-only book;
+  unitized benchmark. An external review mid-build drove five of those —
+  adjudication recorded in the session plan
+  (`/root/.claude/plans/think-outside-the-box-elegant-acorn.md`).
+- Suites at this gate: dialectic backend **1727**, frontend **~350**
+  (tsc -b clean; batch runs under load show timeout flakes on untouched
+  files, all green in isolation); td **1602 passed, 3 skipped**.
+- Still open, deliberately: Phase 8 (the laboratory — shadow books,
+  competing worlds, the "How We Are Wrong" report) waits on its design
+  gate: frozen policy versions before any shadow arm launches. The
+  stakes relay is fire-and-forget by design; at real volume it earns a
+  durable outbox (adjudicated, revisit trigger recorded).
