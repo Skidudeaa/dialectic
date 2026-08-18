@@ -631,6 +631,189 @@ class Repository:
         return d
 
     # ════════════════════════════════════════════════════════════════
+    # PAPER BOOK — append-only fills, derived positions, equity marks
+    # ════════════════════════════════════════════════════════════════
+
+    def record_fill_once(self, user: str, fill: dict) -> tuple[dict, bool]:
+        """Insert once per optional source key and return the public record.
+
+        Mirrors save_prediction_once: no source_key means a plain insert;
+        with one, a retried write (crash-replay from the accept path, a
+        re-run backfill) lands exactly one fill and returns the original.
+        """
+        record = {
+            "id": _gen_id(),
+            "book_id": fill["book_id"],
+            "user": user,
+            "kind": fill.get("kind", "trade"),
+            "symbol": fill["symbol"],
+            "side": fill["side"],
+            "quantity": fill["quantity"],
+            "price": fill["price"],
+            "rationale": fill.get("rationale", ""),
+            "node_id": fill.get("node_id"),
+            "prediction_id": fill.get("prediction_id"),
+            "created_at": _now_iso(),
+        }
+        source_key = fill.get("source_key")
+        conn = self._conn()
+        try:
+            insert = "INSERT" if source_key is None else "INSERT OR IGNORE"
+            cursor = conn.execute(
+                f"""{insert} INTO paper_fills
+                   (id, book_id, user, kind, symbol, side, quantity, price,
+                    rationale, node_id, prediction_id, source_key, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (record["id"], record["book_id"], user, record["kind"],
+                 record["symbol"], record["side"], record["quantity"],
+                 record["price"], record["rationale"], record["node_id"],
+                 record["prediction_id"], source_key, record["created_at"]),
+            )
+            created = cursor.rowcount == 1
+            conn.commit()
+            if created:
+                row = conn.execute(
+                    "SELECT * FROM paper_fills WHERE id = ?", (record["id"],)
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT * FROM paper_fills WHERE source_key = ?", (source_key,)
+                ).fetchone()
+            if row is None:
+                raise RuntimeError("Fill insert was ignored without an existing source row")
+            return self._fill_from_row(row), created
+        finally:
+            conn.close()
+
+    def list_fills(self, book_id: str) -> List[dict]:
+        """All fills for one book, oldest first — the replayable ledger."""
+        conn = self._conn()
+        try:
+            rows = conn.execute(
+                """SELECT * FROM paper_fills WHERE book_id = ?
+                   ORDER BY created_at, rowid""",
+                (book_id,),
+            ).fetchall()
+            return [self._fill_from_row(r) for r in rows]
+        finally:
+            conn.close()
+
+    def list_fill_books(self) -> List[str]:
+        """Distinct book_ids with at least one fill — what the nightly
+        equity snapshot iterates."""
+        conn = self._conn()
+        try:
+            return [r[0] for r in conn.execute(
+                "SELECT DISTINCT book_id FROM paper_fills ORDER BY book_id"
+            )]
+        finally:
+            conn.close()
+
+    def portfolio_positions(self, book_id: str) -> dict:
+        """Replay the fill ledger into {cash, positions} at read time.
+
+        Rules (paper — long-only, no margin, fees, or partial fills):
+          - deposits add quantity x price to cash (price is 1.0 by
+            convention, so quantity IS the dollar amount);
+          - buys consume cash and add qty at the fill price; sells add
+            cash and reduce qty.
+
+        WHY the avg_cost convention (weighted average on buys): each buy
+        folds into a weighted-average entry basis; a sell reduces qty and
+        leaves the basis untouched (what remains still cost what it cost),
+        so qty x (price - avg_cost) is a sane unrealized number. Realized
+        P&L is deliberately not tracked — the equity curve is the
+        scoreboard.
+
+        Long-only is enforced at the fill DOOR (routes/portfolio.py 422s
+        a sell past flat); this replay is a plain SUM and does not police
+        it, so a rogue direct write would surface as a negative qty
+        rather than being silently repaired — visible beats masked.
+        """
+        cash = 0.0
+        positions: Dict[str, dict] = {}
+        for fill in self.list_fills(book_id):
+            qty, price = fill["quantity"], fill["price"]
+            if fill["kind"] == "deposit":
+                cash += qty * price
+                continue
+            pos = positions.setdefault(fill["symbol"], {"qty": 0.0, "avg_cost": 0.0})
+            if fill["side"] == "buy":
+                cash -= qty * price
+                total = pos["qty"] + qty
+                if total > 0:
+                    pos["avg_cost"] = (
+                        (pos["qty"] * pos["avg_cost"] + qty * price) / total
+                    )
+                pos["qty"] = total
+            else:
+                cash += qty * price
+                pos["qty"] -= qty
+            if pos["qty"] == 0:
+                del positions[fill["symbol"]]
+        return {"cash": cash, "positions": positions}
+
+    def save_equity_mark(self, book_id: str, mark_date: str, *,
+                         equity: float, cash: float, spy_close: float,
+                         positions: Optional[dict] = None) -> dict:
+        """Upsert the (book, day) mark — a re-run night REPLACEs, so the
+        latest computation of a day wins and the series stays one-per-day."""
+        record = {
+            "book_id": book_id,
+            "mark_date": mark_date,
+            "equity": equity,
+            "cash": cash,
+            "spy_close": spy_close,
+            "positions": positions or {},
+            "created_at": _now_iso(),
+        }
+        conn = self._conn()
+        try:
+            conn.execute(
+                """INSERT OR REPLACE INTO equity_marks
+                   (book_id, mark_date, equity, cash, spy_close,
+                    positions_json, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (book_id, mark_date, equity, cash, spy_close,
+                 json.dumps(record["positions"]), record["created_at"]),
+            )
+            conn.commit()
+            return record
+        finally:
+            conn.close()
+
+    def list_equity_marks(self, book_id: str) -> List[dict]:
+        """Marks for one book, ascending by date — chart-ready order."""
+        conn = self._conn()
+        try:
+            rows = conn.execute(
+                """SELECT * FROM equity_marks WHERE book_id = ?
+                   ORDER BY mark_date""",
+                (book_id,),
+            ).fetchall()
+            return [self._equity_mark_from_row(r) for r in rows]
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _fill_from_row(row) -> dict:
+        d = dict(row)
+        # Internal persistence coordinate, never on the public record —
+        # same contract as predictions.
+        d.pop("source_key", None)
+        return d
+
+    @staticmethod
+    def _equity_mark_from_row(row) -> dict:
+        d = dict(row)
+        raw = d.pop("positions_json", None)
+        try:
+            d["positions"] = json.loads(raw) if raw else {}
+        except (ValueError, TypeError):
+            d["positions"] = {}
+        return d
+
+    # ════════════════════════════════════════════════════════════════
     # TRADINGVIEW EVENTS
     # ════════════════════════════════════════════════════════════════
 

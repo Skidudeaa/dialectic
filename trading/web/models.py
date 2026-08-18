@@ -156,6 +156,35 @@ class PredictionConfidenceCreate(BaseModel):
     reasoning: Optional[str] = None
 
 
+# ── Paper portfolio ───────────────────────────────────────────────────────
+
+class PaperFillCreate(BaseModel):
+    """One paper fill request.
+
+    WHY dollars, not shares: the human thinks in position size; td computes
+    quantity = dollars / live quote at fill time, so the desk owns the price
+    and a stale client can never write its own. Deposits seed cash (the
+    server pins symbol='CASH', price=1.0, quantity=dollars).
+    """
+    book_id: str = Field(pattern=r"^[a-zA-Z0-9_:-]+$", max_length=128)
+    kind: Literal["trade", "deposit"] = "trade"
+    symbol: str = Field(default="CASH", max_length=32)
+    side: Literal["buy", "sell"] = "buy"
+    dollars: float = Field(gt=0)
+    rationale: str = ""
+    node_id: Optional[str] = None
+    prediction_id: Optional[str] = None
+    source_key: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _trades_need_a_real_symbol(self) -> "PaperFillCreate":
+        """'CASH' is the deposit sentinel — a trade against it would corrupt
+        the derived cash balance, so it is refused at the door."""
+        if self.kind == "trade" and (not self.symbol or self.symbol.upper() == "CASH"):
+            raise ValueError("trade fills require a quoted symbol ('CASH' is the deposit sentinel)")
+        return self
+
+
 # ── Trade Journal ─────────────────────────────────────────────────────────
 
 class JournalEntryCreate(BaseModel):

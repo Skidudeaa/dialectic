@@ -190,3 +190,61 @@ class TestPolymarketCollection:
             "market_ids": ["priced", "missing"],
             "kwargs": {},
         }
+
+
+class TestFetchDailyClose:
+    """Parse + failure contract for the v8 chart daily-close fetch. The
+    network edge is monkeypatched at market.urlopen; payloads are canned
+    v8 shapes (trailing nulls included — Yahoo pads the current session)."""
+
+    @staticmethod
+    def _payload(closes):
+        return {"chart": {"result": [
+            {"indicators": {"quote": [{"close": closes}]}}
+        ]}}
+
+    def _urlopen(self, monkeypatch, payload):
+        import io
+        import json as _json
+        from contextlib import contextmanager
+        seen = {}
+
+        @contextmanager
+        def fake_urlopen(req, timeout=None):
+            seen["url"] = req.full_url
+            seen["timeout"] = timeout
+            yield io.BytesIO(_json.dumps(payload).encode())
+
+        monkeypatch.setattr(market, "urlopen", fake_urlopen)
+        return seen
+
+    def test_returns_the_last_non_null_close(self, monkeypatch):
+        self._urlopen(monkeypatch, self._payload([100.0, 101.5, None]))
+        assert market.fetch_daily_close("XOP") == 101.5
+
+    def test_url_is_5d_daily_and_symbol_encoded(self, monkeypatch):
+        seen = self._urlopen(monkeypatch, self._payload([99.0]))
+        market.fetch_daily_close("BZ=F")
+        assert "range=5d" in seen["url"]
+        assert "interval=1d" in seen["url"]
+        assert "/v8/finance/chart/BZ=F?" in seen["url"]
+
+    def test_empty_result_is_none(self, monkeypatch):
+        self._urlopen(monkeypatch, {"chart": {"result": [],
+                                              "error": "Not Found"}})
+        assert market.fetch_daily_close("DEAD") is None
+
+    def test_all_null_closes_is_none(self, monkeypatch):
+        self._urlopen(monkeypatch, self._payload([None, None]))
+        assert market.fetch_daily_close("DEAD") is None
+
+    def test_transport_failure_is_none_not_a_raise(self, monkeypatch):
+        def boom(req, timeout=None):
+            raise OSError("connection refused")
+
+        monkeypatch.setattr(market, "urlopen", boom)
+        assert market.fetch_daily_close("XOP") is None
+
+    def test_malformed_payload_is_none(self, monkeypatch):
+        self._urlopen(monkeypatch, {"chart": None})
+        assert market.fetch_daily_close("XOP") is None

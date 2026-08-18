@@ -378,6 +378,9 @@ def fake_repo(*, free=0, pages=1000, last_vacuum=None,
         "freelist_count": free, "page_count": pages, "page_size": 4096,
     }
     repo.get_maintenance_state.return_value = last_vacuum
+    # No paper books unless a test seeds them — keeps the equity step (and
+    # its Yahoo fetches) out of every pre-existing run_once assertion.
+    repo.list_fill_books.return_value = []
     return repo
 
 
@@ -436,6 +439,135 @@ class TestRunOnce:
         await MaintenanceTask(repo).run_once()
         assert order[0] == "prune"
         assert "stats" in order
+
+
+# =========================================================================
+# EQUITY SNAPSHOT
+# =========================================================================
+
+def seed_book(repo, book_id, *, deposit=10_000.0, symbol="XOP",
+              qty=20.0, price=100.0):
+    """A funded book with one long position, via the real fill door."""
+    repo.record_fill_once("amo", {
+        "book_id": book_id, "kind": "deposit", "symbol": "CASH",
+        "side": "buy", "quantity": deposit, "price": 1.0,
+    })
+    repo.record_fill_once("amo", {
+        "book_id": book_id, "kind": "trade", "symbol": symbol,
+        "side": "buy", "quantity": qty, "price": price,
+    })
+
+
+def fake_closes(monkeypatch, closes: dict) -> list:
+    """Route fetch_daily_close through a table; record what was asked for."""
+    import web.adapters.market as market
+    asked = []
+
+    def fetch(symbol):
+        asked.append(symbol)
+        return closes.get(symbol)
+
+    monkeypatch.setattr(market, "fetch_daily_close", fetch)
+    return asked
+
+
+class TestSnapshotEquity:
+    @pytest.mark.asyncio
+    async def test_writes_one_mark_per_book_with_spy(self, repo, monkeypatch):
+        seed_book(repo, "book-a", deposit=10_000, qty=20, price=100)
+        seed_book(repo, "book-b", deposit=5_000, qty=10, price=100)
+        fake_closes(monkeypatch, {"SPY": 500.0, "XOP": 150.0})
+
+        summary = await MaintenanceTask(repo).run_once()
+
+        assert summary["equity_marks_written"] == 2
+        today = datetime.now(UTC).date().isoformat()
+        [mark_a] = repo.list_equity_marks("book-a")
+        # cash 8,000 + 20 x 150 = 11,000, hand-computed.
+        assert mark_a["mark_date"] == today
+        assert mark_a["equity"] == 11_000.0
+        assert mark_a["cash"] == 8_000.0
+        assert mark_a["spy_close"] == 500.0
+        assert mark_a["positions"] == {"XOP": {"qty": 20.0, "close": 150.0}}
+        [mark_b] = repo.list_equity_marks("book-b")
+        assert mark_b["equity"] == 4_000 + 10 * 150.0
+
+    @pytest.mark.asyncio
+    async def test_spy_is_fetched_once_and_symbols_memoized(self, repo, monkeypatch):
+        seed_book(repo, "book-a")
+        seed_book(repo, "book-b")  # same symbol in both books
+        asked = fake_closes(monkeypatch, {"SPY": 500.0, "XOP": 150.0})
+        await MaintenanceTask(repo).run_once()
+        assert asked.count("SPY") == 1
+        assert asked.count("XOP") == 1
+
+    @pytest.mark.asyncio
+    async def test_failed_symbol_falls_back_to_previous_marks_close(
+            self, repo, monkeypatch):
+        seed_book(repo, "book-a", deposit=10_000, qty=20, price=100)
+        repo.save_equity_mark(
+            "book-a", "2026-08-01", equity=10_800, cash=8_000,
+            spy_close=490.0, positions={"XOP": {"qty": 20.0, "close": 140.0}},
+        )
+        fake_closes(monkeypatch, {"SPY": 500.0})  # XOP fetch returns None
+
+        summary = await MaintenanceTask(repo).run_once()
+
+        assert summary["equity_marks_written"] == 1
+        marks = repo.list_equity_marks("book-a")
+        assert marks[-1]["equity"] == 8_000 + 20 * 140.0  # yesterday's close
+        assert marks[-1]["positions"]["XOP"]["close"] == 140.0
+
+    @pytest.mark.asyncio
+    async def test_no_close_anywhere_skips_the_book_not_the_run(
+            self, repo, monkeypatch):
+        seed_book(repo, "book-a", symbol="DEAD")   # no close, no prior mark
+        seed_book(repo, "book-b", symbol="XOP")
+        fake_closes(monkeypatch, {"SPY": 500.0, "XOP": 150.0})
+
+        summary = await MaintenanceTask(repo).run_once()
+
+        assert summary["equity_marks_written"] == 1
+        assert repo.list_equity_marks("book-a") == []
+        assert len(repo.list_equity_marks("book-b")) == 1
+
+    @pytest.mark.asyncio
+    async def test_missing_spy_writes_nothing_and_does_not_raise(
+            self, repo, monkeypatch):
+        seed_book(repo, "book-a")
+        fake_closes(monkeypatch, {"XOP": 150.0})  # SPY unavailable
+        summary = await MaintenanceTask(repo).run_once()
+        assert summary["equity_marks_written"] == 0
+        assert repo.list_equity_marks("book-a") == []
+        # The rest of the night still happened.
+        assert "snapshots_deleted" in summary
+
+    @pytest.mark.asyncio
+    async def test_step_failure_never_breaks_the_other_steps(self):
+        repo = fake_repo()
+        repo.list_fill_books.side_effect = RuntimeError("table missing")
+        summary = await MaintenanceTask(repo).run_once()
+        assert summary["equity_snapshot_error"] is True
+        assert summary["snapshots_deleted"] == 7  # prune already done
+
+    @pytest.mark.asyncio
+    async def test_rerun_same_day_replaces_not_duplicates(self, repo, monkeypatch):
+        seed_book(repo, "book-a")
+        fake_closes(monkeypatch, {"SPY": 500.0, "XOP": 150.0})
+        task = MaintenanceTask(repo)
+        await task.run_once()
+        fake_closes(monkeypatch, {"SPY": 510.0, "XOP": 155.0})
+        await task.run_once()
+        marks = repo.list_equity_marks("book-a")
+        assert len(marks) == 1  # PK (book, date) — REPLACE, not append
+        assert marks[0]["spy_close"] == 510.0
+
+    @pytest.mark.asyncio
+    async def test_no_books_means_no_yahoo_calls(self, repo, monkeypatch):
+        asked = fake_closes(monkeypatch, {"SPY": 500.0})
+        summary = await MaintenanceTask(repo).run_once()
+        assert summary["equity_marks_written"] == 0
+        assert asked == []
 
 
 class TestRealVacuum:

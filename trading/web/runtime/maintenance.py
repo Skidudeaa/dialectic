@@ -212,7 +212,90 @@ class MaintenanceTask:
         )
 
         summary.update(await self._maybe_vacuum())
+        summary.update(await self._snapshot_equity())
         return summary
+
+    async def _snapshot_equity(self) -> dict:
+        """Write today's equity mark for every book with fills.
+
+        Wrapped whole so a bad night here can never take the prune/vacuum
+        half of run_once down with it (and _loop's own guard covers the
+        reverse). The 04:30 UTC window is after the US close by design, so
+        'today's close' is a completed session.
+        """
+        try:
+            return await asyncio.to_thread(self._snapshot_equity_sync)
+        except Exception:  # noqa: BLE001 — one step must not end the night
+            log.exception("Maintenance: equity snapshot failed")
+            return {"equity_marks_written": 0, "equity_snapshot_error": True}
+
+    def _snapshot_equity_sync(self) -> dict:
+        # WHY a local import: the market adapter pulls in the whole thesis
+        # engine at import time; maintenance should not pay that (nor create
+        # an import cycle) unless the step actually runs.
+        from web.adapters.market import fetch_daily_close
+
+        books = self._repo.list_fill_books()
+        if not books:
+            return {"equity_marks_written": 0}
+
+        mark_date = datetime.now(timezone.utc).date().isoformat()
+        spy_close = fetch_daily_close("SPY")
+        if spy_close is None:
+            # equity_marks.spy_close is NOT NULL — without the benchmark
+            # there is no mark tonight; tomorrow's REPLACE-keyed write
+            # covers the same series point if the operator re-runs.
+            log.warning("Maintenance: SPY close unavailable — no equity marks tonight")
+            return {"equity_marks_written": 0}
+
+        closes: dict = {"SPY": spy_close}  # memo — same symbol across books
+        written = 0
+        for book_id in books:
+            try:
+                state = self._repo.portfolio_positions(book_id)
+                marks = self._repo.list_equity_marks(book_id)
+                prev_closes = {}
+                if marks:
+                    for symbol, snap in (marks[-1].get("positions") or {}).items():
+                        if isinstance(snap, dict) and isinstance(
+                                snap.get("close"), (int, float)):
+                            prev_closes[symbol] = snap["close"]
+
+                equity = state["cash"]
+                positions_out = {}
+                skip_reason = None
+                for symbol, pos in state["positions"].items():
+                    if symbol not in closes:
+                        closes[symbol] = fetch_daily_close(symbol)
+                    close = closes[symbol]
+                    if close is None:
+                        # ponytail: yesterday's close beats no mark at all.
+                        close = prev_closes.get(symbol)
+                    if close is None:
+                        skip_reason = f"no close for {symbol}"
+                        break
+                    equity += pos["qty"] * close
+                    positions_out[symbol] = {"qty": pos["qty"], "close": close}
+
+                if skip_reason:
+                    log.warning(
+                        "Maintenance: skipping equity mark for %s (%s)",
+                        book_id, skip_reason,
+                    )
+                    continue
+                self._repo.save_equity_mark(
+                    book_id, mark_date,
+                    equity=equity, cash=state["cash"], spy_close=spy_close,
+                    positions=positions_out,
+                )
+                written += 1
+            except Exception:  # noqa: BLE001 — one book must not stop the rest
+                log.exception("Maintenance: equity mark failed for %s", book_id)
+        log.info(
+            "Maintenance: equity marks written for %d/%d book(s) (%s)",
+            written, len(books), mark_date,
+        )
+        return {"equity_marks_written": written}
 
     async def _maybe_vacuum(self) -> dict:
         stats = await asyncio.to_thread(self._repo.get_page_stats)

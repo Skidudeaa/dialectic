@@ -38,10 +38,11 @@ class TestMigrations:
         # 001 (initial schema) + 002 (audit_log + confirm_tokens) + 003
         # (message kind+meta) + 004 (drop outbox) + 005 (maintenance_state)
         # + 006 (Dialectic prediction idempotency keys) + 007 (claims
-        # ledger: provenance columns + prediction_confidence history).
+        # ledger: provenance columns + prediction_confidence history)
+        # + 008 (paper book: paper_fills + equity_marks).
         # Bump this when a new numbered migration lands in
         # web/persistence/sql/.
-        assert count == 7
+        assert count == 8
         tables = {r[0] for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table'"
         )}
@@ -51,7 +52,7 @@ class TestMigrations:
             "thesis_snapshots", "alert_events", "manual_overrides",
             "close_observations", "fetch_runs",
             "audit_log", "confirm_tokens", "maintenance_state",
-            "prediction_confidence",
+            "prediction_confidence", "paper_fills", "equity_marks",
         }
         assert expected.issubset(tables)
         conn.close()
@@ -508,6 +509,157 @@ class TestClaimsLedger:
         )
         assert changed is False
         assert retried["resolution_notes"] == "first notes"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# PAPER BOOK — fills, derived positions, equity marks
+# ═══════════════════════════════════════════════════════════════════════
+
+def _fill(book="iran-hormuz-graph", kind="trade", symbol="XOP", side="buy",
+          quantity=10.0, price=100.0, **extra):
+    payload = {"book_id": book, "kind": kind, "symbol": symbol, "side": side,
+               "quantity": quantity, "price": price}
+    payload.update(extra)
+    return payload
+
+
+def _deposit(book="iran-hormuz-graph", dollars=10_000.0, **extra):
+    return _fill(book=book, kind="deposit", symbol="CASH", side="buy",
+                 quantity=dollars, price=1.0, **extra)
+
+
+class TestPaperFills:
+    def test_record_and_list_ascending(self, repo):
+        repo.record_fill_once("amo", _deposit())
+        repo.record_fill_once("amo", _fill(quantity=20, price=100))
+        fills = repo.list_fills("iran-hormuz-graph")
+        assert [f["kind"] for f in fills] == ["deposit", "trade"]
+        assert fills[1]["symbol"] == "XOP"
+        assert fills[1]["user"] == "amo"
+
+    def test_source_key_replay_returns_the_original(self, repo):
+        payload = _fill(quantity=20, price=100, source_key="trade:m1:trade_proposal")
+        first, first_created = repo.record_fill_once("amo", payload)
+        second, second_created = repo.record_fill_once("amo", payload)
+        assert first_created is True
+        assert second_created is False
+        assert second["id"] == first["id"]
+        assert len(repo.list_fills("iran-hormuz-graph")) == 1
+        # Internal persistence coordinate stays internal (006's contract).
+        assert "source_key" not in first
+
+    def test_no_source_key_means_plain_inserts(self, repo):
+        repo.record_fill_once("amo", _fill(quantity=5, price=100))
+        repo.record_fill_once("amo", _fill(quantity=5, price=100))
+        assert len(repo.list_fills("iran-hormuz-graph")) == 2
+
+    def test_list_fill_books_is_distinct_and_sorted(self, repo):
+        repo.record_fill_once("amo", _deposit(book="b-book"))
+        repo.record_fill_once("amo", _deposit(book="a-book"))
+        repo.record_fill_once("amo", _fill(book="a-book", quantity=1, price=10))
+        assert repo.list_fill_books() == ["a-book", "b-book"]
+
+    def test_provenance_fields_round_trip(self, repo):
+        record, _ = repo.record_fill_once("amo", _fill(
+            quantity=2, price=50, rationale="hormuz closure risk",
+            node_id="brent", prediction_id="pred-1",
+        ))
+        assert record["rationale"] == "hormuz closure risk"
+        assert record["node_id"] == "brent"
+        assert record["prediction_id"] == "pred-1"
+
+
+class TestPortfolioPositions:
+    """Hand-computed ledger replays — every number derived on paper first."""
+
+    def test_deposit_seeds_cash(self, repo):
+        repo.record_fill_once("amo", _deposit(dollars=2_500.0))
+        state = repo.portfolio_positions("iran-hormuz-graph")
+        assert state == {"cash": 2_500.0, "positions": {}}
+
+    def test_buy_consumes_cash_at_fill_price(self, repo):
+        repo.record_fill_once("amo", _deposit(dollars=10_000))
+        repo.record_fill_once("amo", _fill(quantity=20, price=100))
+        state = repo.portfolio_positions("iran-hormuz-graph")
+        assert state["cash"] == 8_000.0
+        assert state["positions"]["XOP"] == {"qty": 20.0, "avg_cost": 100.0}
+
+    def test_avg_cost_is_weighted_average_on_adds(self, repo):
+        repo.record_fill_once("amo", _deposit(dollars=10_000))
+        repo.record_fill_once("amo", _fill(quantity=20, price=100))
+        repo.record_fill_once("amo", _fill(quantity=10, price=130))
+        state = repo.portfolio_positions("iran-hormuz-graph")
+        # (20*100 + 10*130) / 30 = 110
+        assert state["cash"] == 10_000 - 2_000 - 1_300
+        assert state["positions"]["XOP"] == {"qty": 30.0, "avg_cost": 110.0}
+
+    def test_partial_sell_keeps_the_entry_basis(self, repo):
+        repo.record_fill_once("amo", _deposit(dollars=10_000))
+        repo.record_fill_once("amo", _fill(quantity=20, price=100))
+        repo.record_fill_once("amo", _fill(quantity=10, price=130))
+        repo.record_fill_once("amo", _fill(side="sell", quantity=10, price=140))
+        state = repo.portfolio_positions("iran-hormuz-graph")
+        assert state["cash"] == 6_700 + 1_400
+        assert state["positions"]["XOP"] == {"qty": 20.0, "avg_cost": 110.0}
+
+    def test_rogue_oversell_surfaces_as_negative_qty_not_a_repair(self, repo):
+        """Long-only is enforced at the fill DOOR (routes/portfolio.py 422s
+        it); the replay is a plain SUM. A direct write that oversells must
+        show up as a negative qty — visible beats silently masked."""
+        repo.record_fill_once("amo", _deposit(dollars=10_000))
+        repo.record_fill_once("amo", _fill(quantity=20, price=100))
+        repo.record_fill_once("amo", _fill(side="sell", quantity=30, price=90))
+        state = repo.portfolio_positions("iran-hormuz-graph")
+        assert state["cash"] == 8_000 + 2_700
+        assert state["positions"]["XOP"]["qty"] == -10.0
+
+    def test_selling_exactly_flat_drops_the_position(self, repo):
+        repo.record_fill_once("amo", _deposit(dollars=1_000))
+        repo.record_fill_once("amo", _fill(quantity=5, price=10))
+        repo.record_fill_once("amo", _fill(side="sell", quantity=5, price=12))
+        state = repo.portfolio_positions("iran-hormuz-graph")
+        assert state["cash"] == 1_000 - 50 + 60
+        assert state["positions"] == {}
+
+    def test_books_are_independent(self, repo):
+        repo.record_fill_once("amo", _deposit(book="a", dollars=100))
+        repo.record_fill_once("amo", _deposit(book="b", dollars=900))
+        assert repo.portfolio_positions("a")["cash"] == 100
+        assert repo.portfolio_positions("b")["cash"] == 900
+
+    def test_empty_book_is_zero_not_a_crash(self, repo):
+        assert repo.portfolio_positions("nonexistent") == {
+            "cash": 0.0, "positions": {},
+        }
+
+
+class TestEquityMarks:
+    def test_save_and_list_ascending(self, repo):
+        repo.save_equity_mark("b", "2026-08-02", equity=11_000, cash=1_000,
+                              spy_close=550.0,
+                              positions={"XOP": {"qty": 100, "close": 100.0}})
+        repo.save_equity_mark("b", "2026-08-01", equity=10_000, cash=1_000,
+                              spy_close=500.0)
+        marks = repo.list_equity_marks("b")
+        assert [m["mark_date"] for m in marks] == ["2026-08-01", "2026-08-02"]
+        assert marks[1]["positions"] == {"XOP": {"qty": 100, "close": 100.0}}
+        assert marks[0]["positions"] == {}
+
+    def test_same_book_and_date_replaces(self, repo):
+        """REPLACE semantics: a re-run night's recomputation wins — one row
+        per (book, day), always the latest arithmetic."""
+        repo.save_equity_mark("b", "2026-08-01", equity=10_000, cash=1_000,
+                              spy_close=500.0)
+        repo.save_equity_mark("b", "2026-08-01", equity=10_500, cash=1_000,
+                              spy_close=505.0)
+        marks = repo.list_equity_marks("b")
+        assert len(marks) == 1
+        assert marks[0]["equity"] == 10_500
+        assert marks[0]["spy_close"] == 505.0
+
+    def test_books_do_not_share_marks(self, repo):
+        repo.save_equity_mark("a", "2026-08-01", equity=1, cash=1, spy_close=500.0)
+        assert repo.list_equity_marks("b") == []
 
 
 # ═══════════════════════════════════════════════════════════════════════

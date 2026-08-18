@@ -111,7 +111,7 @@ def get_uptime() -> float:
 
 # ── Route registration ───────────────────────────────────────────────────
 
-from web.routes import auth, health, thesis, market, builder as builder_routes, outcomes, rooms, ws_routes, llm, journal, predictions, tradingview
+from web.routes import auth, health, thesis, market, builder as builder_routes, outcomes, rooms, ws_routes, llm, journal, predictions, portfolio, tradingview
 from web.routes import bridge, relay
 from web.routes.v1 import bootstrap as v1_bootstrap
 from web.routes.v1 import scenarios as v1_scenarios
@@ -131,6 +131,7 @@ app.include_router(ws_routes.router)  # the machine WS lane; chat routes died in
 app.include_router(llm.router)
 app.include_router(journal.router)
 app.include_router(predictions.router)
+app.include_router(portfolio.router)
 # WHY three routers: webhook is HMAC-gated (no JWT), management is
 # JWT-gated under /api/tradingview, binding CRUD lives under /api/thesis.
 for tv_router in tradingview.routers:

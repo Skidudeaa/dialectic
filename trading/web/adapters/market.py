@@ -5,10 +5,13 @@ WHY: Normalizes the raw fetch output from thesisgraph.fetch_prices and
 polymarket.fetch_markets into consistent API-friendly dicts.
 """
 
+import json
 import logging
 import time
+import urllib.parse
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
+from urllib.request import Request, urlopen
 
 log = logging.getLogger(__name__)
 
@@ -182,6 +185,35 @@ def fetch_quotes(force_refresh: bool = False) -> List[Dict[str, Any]]:
         _QUOTES_CACHE["at"] = now
         _QUOTES_CACHE["data"] = results
     return results
+
+
+_YAHOO_CHART_BASE = "https://query1.finance.yahoo.com/v8/finance/chart/"
+
+
+def fetch_daily_close(symbol: str) -> Optional[float]:
+    """Last daily close for one symbol from the Yahoo v8 chart API, or None.
+
+    WHY not fetch_quotes: the nightly equity mark needs the official daily
+    CLOSE, not an intraday spark price — and must not pay fetch_quotes'
+    per-book fan-out for one symbol. range=5d rides out weekends/holidays;
+    the last non-null close is the most recent completed session. Any
+    failure returns None — the caller owns the fallback policy.
+    """
+    encoded = urllib.parse.quote(symbol, safe="=^.-")
+    url = f"{_YAHOO_CHART_BASE}{encoded}?range=5d&interval=1d"
+    try:
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        results = (data.get("chart") or {}).get("result") or []
+        if not results:
+            return None
+        quote = results[0].get("indicators", {}).get("quote", [{}])[0]
+        closes = [c for c in (quote.get("close") or []) if c is not None]
+        return float(closes[-1]) if closes else None
+    except Exception as e:
+        log.warning("fetch_daily_close(%s) failed: %s", symbol, e)
+        return None
 
 
 def fetch_polymarket_probs(
