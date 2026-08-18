@@ -8,6 +8,8 @@ import math
 
 from models import EventType
 
+from api import stakes_relay
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,6 +72,29 @@ class CommitmentManager:
             },
         )
 
+        # Mirror into the desk's claims ledger. Fire-and-forget by contract:
+        # the relay task holds no DB connection (everything it needs is
+        # captured here) and a down desk is a debug log, never a failed
+        # create. Hooked HERE because both doors — stakes/routes.py and
+        # transport/handlers.py — converge on this method.
+        try:
+            stakes_relay.relay_created(
+                {
+                    "id": commitment_id,
+                    "claim": claim,
+                    "resolution_criteria": resolution_criteria,
+                    "category": category,
+                    "deadline": deadline,
+                },
+                source_label=await self._relay_source_label(created_by_user_id),
+                confidence=initial_confidence,
+            )
+        except Exception:
+            logger.debug(
+                "stakes relay scheduling failed for %s", commitment_id,
+                exc_info=True,
+            )
+
         return {
             "id": commitment_id,
             "room_id": room_id,
@@ -85,6 +110,20 @@ class CommitmentManager:
             "initial_confidence": initial_confidence,
         }
 
+    async def _relay_source_label(self, user_id: Optional[UUID]) -> str:
+        """Leaderboard grouping label: display name, or "LLM" for a NULL
+        user (the stakes convention everywhere else in this file)."""
+        if user_id is None:
+            return "LLM"
+        try:
+            row = await self.db.fetchrow(
+                "SELECT display_name FROM users WHERE id = $1", user_id,
+            )
+        except Exception:
+            row = None
+        name = row["display_name"] if row else None
+        return name or "human"
+
     async def record_confidence(
         self,
         commitment_id: UUID,
@@ -95,9 +134,11 @@ class CommitmentManager:
         """Record or update a participant's confidence level."""
         now = datetime.now(timezone.utc)
 
-        # Verify commitment exists and is active
+        # Verify commitment exists and is active. SELECT * because the
+        # ledger relay below needs the claim/criteria/deadline to build an
+        # idempotent ensure-create for the desk.
         row = await self.db.fetchrow(
-            "SELECT room_id, thread_id, status FROM commitments WHERE id = $1",
+            "SELECT * FROM commitments WHERE id = $1",
             commitment_id,
         )
         if not row:
@@ -125,6 +166,32 @@ class CommitmentManager:
             },
         )
 
+        # Mirror the restatement into the ledger's append-only history.
+        # seq comes from the room's own table so the idempotency key is
+        # stable across retries of the SAME event but distinct per event.
+        try:
+            seq_row = await self.db.fetchrow(
+                "SELECT COUNT(*) AS n FROM commitment_confidence WHERE commitment_id = $1",
+                commitment_id,
+            )
+            seq = int(seq_row["n"]) if seq_row and seq_row["n"] is not None else 1
+            commitment = dict(row)
+            commitment.setdefault("id", commitment_id)
+            stakes_relay.relay_confidence(
+                commitment,
+                source_label=await self._relay_source_label(
+                    commitment.get("created_by_user_id")
+                ),
+                seq=seq,
+                confidence=confidence,
+                reasoning=reasoning,
+            )
+        except Exception:
+            logger.debug(
+                "stakes relay scheduling failed for %s", commitment_id,
+                exc_info=True,
+            )
+
         return {
             "commitment_id": commitment_id,
             "user_id": user_id,
@@ -147,8 +214,10 @@ class CommitmentManager:
 
         now = datetime.now(timezone.utc)
 
+        # SELECT * — the ledger relay below needs the full row (see
+        # record_confidence for why).
         row = await self.db.fetchrow(
-            "SELECT room_id, thread_id, status, claim FROM commitments WHERE id = $1",
+            "SELECT * FROM commitments WHERE id = $1",
             commitment_id,
         )
         if not row:
@@ -180,6 +249,34 @@ class CommitmentManager:
                 "resolution_notes": resolution_notes,
             },
         )
+
+        # Mirror the verdict into the ledger. The LAST recorded confidence
+        # travels along only to make the ensure-create possible when the
+        # commitment never reached the desk while active; a commitment with
+        # no confidence at all stays un-relayed (nothing to score).
+        try:
+            conf_row = await self.db.fetchrow(
+                """SELECT confidence FROM commitment_confidence
+                   WHERE commitment_id = $1
+                   ORDER BY recorded_at DESC LIMIT 1""",
+                commitment_id,
+            )
+            commitment = dict(row)
+            commitment.setdefault("id", commitment_id)
+            stakes_relay.relay_resolved(
+                commitment,
+                source_label=await self._relay_source_label(
+                    commitment.get("created_by_user_id")
+                ),
+                resolution=resolution,
+                resolution_notes=resolution_notes,
+                last_confidence=conf_row["confidence"] if conf_row else None,
+            )
+        except Exception:
+            logger.debug(
+                "stakes relay scheduling failed for %s", commitment_id,
+                exc_info=True,
+            )
 
         return {
             "id": commitment_id,

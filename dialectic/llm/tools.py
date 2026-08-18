@@ -925,6 +925,13 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
             "deadline": deadline,
         }
         book = str(args.get("linked_book_id") or "").strip()
+        if not book:
+            # Default to the room's own binding. prediction_watch's deadline
+            # sweep finds the room via linked_book_id, so an unlinked
+            # prediction was the never-resolves evasion — drafted, accepted,
+            # and invisible to the grader forever. An explicit argument
+            # still wins; an unbound room still drafts unlinked.
+            book = str(getattr(room, "linked_book_id", None) or "").strip()
         if book:
             proposal["linked_book_id"] = book
 
@@ -1183,7 +1190,11 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
                     },
                     "linked_book_id": {
                         "type": "string",
-                        "description": "Optional book slug this prediction rides on, e.g. 'iran-hormuz-graph'.",
+                        "description": (
+                            "Optional book slug this prediction rides on, "
+                            "e.g. 'iran-hormuz-graph'. Defaults to this "
+                            "room's bound book when omitted."
+                        ),
                     },
                 },
                 "required": ["statement", "confidence", "deadline"],

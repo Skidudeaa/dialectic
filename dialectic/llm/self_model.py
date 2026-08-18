@@ -18,14 +18,125 @@ is invisible.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
+from . import tradingdesk_client as td
 from .heuristics import InterjectionDecision
 
 logger = logging.getLogger(__name__)
+
+
+# ── the track record (scored, not self-reported) ─────────────────────
+#
+# ARCHITECTURE: the desk's claims ledger scores every resolved prediction
+# (Brier/BSS vs a captured reference). fetch_track_record reads that score
+# back so render_self_awareness can show the LLM its own empirical
+# calibration — the one feedback loop prediction_watch's grader must NEVER
+# see (a grader that knows its aggregate score has a motive).
+#
+# WHY a module-level TTL cache: this runs on the prompt-build path of every
+# primary turn. The desk answers on loopback in milliseconds, but a cache
+# miss against a DOWN desk would otherwise pay the timeout every turn; one
+# probe per 15 minutes bounds that, and a failure caches as None so the
+# section simply disappears rather than degrading the turn.
+
+_TRACK_RECORD_TTL_S = 900.0
+_TRACK_RECORD_TIMEOUT_S = 5.0
+_TRACK_RECORD_SOURCE_LABEL = "Claude"
+
+_track_record_cache: dict[str, Any] = {"at": None, "value": None}
+
+
+def reset_track_record_cache() -> None:
+    """Test seam, mirroring tradingdesk_client.reset()."""
+    _track_record_cache["at"] = None
+    _track_record_cache["value"] = None
+
+
+async def fetch_track_record() -> Optional[dict]:
+    """The LLM's own scored record from the desk ledger, or None.
+
+    None means "no section" — desk down, creds unset, or a non-dict answer.
+    The portfolio read (Phase 4's GET /api/portfolio) is optional by
+    construction: absent or failing, the calibration half still renders.
+    """
+    now = time.monotonic()
+    cached_at = _track_record_cache["at"]
+    if cached_at is not None and now - cached_at < _TRACK_RECORD_TTL_S:
+        return _track_record_cache["value"]
+
+    value: Optional[dict] = None
+    try:
+        calibration = await td.get(
+            "/api/predictions/calibration",
+            params={"source_label": _TRACK_RECORD_SOURCE_LABEL},
+            timeout=_TRACK_RECORD_TIMEOUT_S,
+        )
+        if isinstance(calibration, dict):
+            value = {"calibration": calibration}
+            try:
+                portfolio = await td.get(
+                    "/api/portfolio", timeout=_TRACK_RECORD_TIMEOUT_S,
+                )
+                if isinstance(portfolio, dict):
+                    value["portfolio"] = portfolio
+            except td.TradingDeskError:
+                pass  # Phase 4 not shipped, or degraded — omit the book line
+    except td.TradingDeskError as e:
+        logger.debug("track record unavailable: %s", e)
+    except Exception:
+        logger.debug("track record fetch failed", exc_info=True)
+
+    _track_record_cache["at"] = now
+    _track_record_cache["value"] = value
+    return value
+
+
+def _render_track_record(track_record: dict) -> list[str]:
+    """The two-line block. Defensive against absent keys — the td response
+    shape is Phase 1's contract, tolerated loosely rather than pinned."""
+    calibration = track_record.get("calibration") or {}
+    if not isinstance(calibration, dict):
+        return []
+    lines = ["", "## Your Track Record (scored, not self-reported)"]
+
+    total = calibration.get("total_predictions") or 0
+    brier = calibration.get("brier_score")
+    if brier is None:
+        lines.append(
+            f"- Predictions: {total} resolved — no scored track record yet."
+        )
+    else:
+        line = f"- Predictions: {total} resolved, Brier {brier:.2f}"
+        ref = calibration.get("ref_brier")
+        vs = calibration.get("bss_vs") or calibration.get("vs")
+        bss = calibration.get("brier_skill_score", calibration.get("bss"))
+        if isinstance(ref, (int, float)):
+            line += f" vs {ref:.2f}" + (f" ({vs})" if vs else "")
+        elif isinstance(bss, (int, float)):
+            line += f", BSS {bss:+.2f}" + (f" vs {vs}" if vs else "")
+        line += " — lower is better"
+        unscored = calibration.get("past_deadline_unscored") or calibration.get(
+            "unscored_past_deadline"
+        )
+        if unscored:
+            line += f"; {unscored} past deadline unscored"
+        lines.append(line + ".")
+
+    portfolio = track_record.get("portfolio")
+    if isinstance(portfolio, dict):
+        equity = portfolio.get("equity")
+        benchmark = portfolio.get("benchmark") or portfolio.get("spy_benchmark")
+        if isinstance(equity, (int, float)) and isinstance(benchmark, (int, float)):
+            lines.append(
+                f"- Book: equity ${equity:,.0f} vs SPY benchmark "
+                f"${benchmark:,.0f}."
+            )
+    return lines
 
 
 # Human-readable glosses for render_self_awareness. Keys mirror
@@ -86,6 +197,10 @@ class ParticipationSnapshot:
     fsm_state: Optional[str] = None
     state_entered_at: Optional[datetime] = None
     state_source: Optional[str] = None
+
+    # Scored track record from the desk's claims ledger (fetch_track_record).
+    # None ⇒ the section is omitted entirely — never rendered degraded.
+    track_record: Optional[dict] = None
 
 
 class SelfModel:
@@ -382,6 +497,12 @@ class SelfModel:
             except (KeyError, IndexError, TypeError):
                 fsm_state = state_entered_at = state_source = None
 
+            # The scored track record rides the snapshot so the orchestrator
+            # call sites stay untouched (they already snapshot → render).
+            # fetch_track_record never raises and caches its answer, so this
+            # adds no failure mode and, warm, no latency to the prompt path.
+            track_record = await fetch_track_record()
+
             return ParticipationSnapshot(
                 last_spoke_at=row["last_spoke_at"],
                 turns_since_last_spoke=row["turns_since_last_spoke"] or 0,
@@ -405,6 +526,7 @@ class SelfModel:
                 fsm_state=fsm_state,
                 state_entered_at=state_entered_at,
                 state_source=state_source,
+                track_record=track_record,
             )
 
         except Exception as e:
@@ -592,5 +714,12 @@ class SelfModel:
                     lines.append(
                         f"- Last session was {snapshot.days_since_last_session:.0f} day(s) ago"
                     )
+
+        # Track record — LAST, and only when the ledger answered. This block
+        # reaches the participant's own prompt paths only; prediction_watch's
+        # grader builds its prompt without render_self_awareness and must
+        # stay that way (the grader must not know its aggregate score).
+        if snapshot.track_record:
+            lines.extend(_render_track_record(snapshot.track_record))
 
         return "\n".join(lines)

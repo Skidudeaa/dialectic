@@ -271,6 +271,49 @@ async def get_news(
         raise _bad_gateway("news", e)
 
 
+@router.get("/rooms/{room_id}/trading/calibration")
+async def get_calibration(
+    room_id: UUID,
+    source_label: str | None = None,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """The claims ledger's calibration curve — desk-wide, like trades.
+
+    Optional source_label narrows to one forecaster ("Claude", a human, a
+    newsletter). The room gate is about who may look, not what they see.
+    """
+    await _resolve_room_book(room_id, token, current_user.user_id, pool)
+    try:
+        params = {"source_label": source_label} if source_label else None
+        return await td.get("/api/predictions/calibration", params=params)
+    except td.TradingDeskError as e:
+        raise _bad_gateway("calibration", e)
+
+
+@router.get("/rooms/{room_id}/trading/leaderboard")
+async def get_leaderboard(
+    room_id: UUID,
+    split_by: str = "source_label",
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """Per-source Brier/BSS leaderboard — the de-biasing instrument.
+
+    split_by passes through untouched (source_label | tag | horizon | ...);
+    the desk owns the vocabulary and 422s what it doesn't know.
+    """
+    await _resolve_room_book(room_id, token, current_user.user_id, pool)
+    try:
+        return await td.get(
+            "/api/predictions/leaderboard", params={"split_by": split_by}
+        )
+    except td.TradingDeskError as e:
+        raise _bad_gateway("leaderboard", e)
+
+
 @router.post("/rooms/{room_id}/trading/scenarios/{scenario_id}/evaluate")
 async def evaluate_scenario(
     room_id: UUID,

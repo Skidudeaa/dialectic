@@ -40,6 +40,10 @@ EXPECTED_TD_BODY = {
     "confidence": 0.7,
     "deadline": "2026-09-30",
     "tags": ["dialectic"],
+    # Claims-ledger provenance: every accepted draft was authored by the
+    # LLM participant (draft_prediction is metadata.proposal's only writer).
+    "source_type": "llm",
+    "source_label": "Claude",
     "linked_book_id": "iran-hormuz-graph",
     "source_key": f"prediction:{MESSAGE_ID}:proposal",
 }

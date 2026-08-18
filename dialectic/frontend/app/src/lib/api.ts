@@ -337,6 +337,10 @@ class DialecticAPI {
   async evaluateScenario(roomId: string, scenarioId: string) {
     return this.fetch<import('../types/trading').ScenarioEvaluation>(`/rooms/${roomId}/trading/scenarios/${encodeURIComponent(scenarioId)}/evaluate`, { method: 'POST' });
   }
+  // Claims-ledger reads (untyped like getCalibration below — the desk owns
+  // the shape and TrackRecordPanel reads it defensively).
+  async getTradingCalibration(roomId: string, sourceLabel?: string) { return this.fetch(`/rooms/${roomId}/trading/calibration${sourceLabel ? `?source_label=${encodeURIComponent(sourceLabel)}` : ''}`); }
+  async getTradingLeaderboard(roomId: string, splitBy: string = 'source_label') { return this.fetch(`/rooms/${roomId}/trading/leaderboard?split_by=${encodeURIComponent(splitBy)}`); }
 
   // Analytics
   async getThreadDNA(threadId: string) { return this.fetch(`/analytics/threads/${threadId}/dna`); }

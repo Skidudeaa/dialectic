@@ -15,6 +15,7 @@ from llm import tools as tools_mod
 from llm import tradingdesk_client as td
 from llm.tools import Tool, ToolRegistry, build_registry, resolve_book_id
 from memory.vector_store import SimilarityMatch
+from tests.conftest import make_room
 
 
 NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -382,6 +383,31 @@ class TestDraftPredictionTool:
 
     @pytest.mark.asyncio
     async def test_linked_book_id_is_optional(self, room):
+        tool = build_registry(room, FakeDB()).get("draft_prediction")
+        out = await tool.execute(self.DRAFT)
+        assert "linked_book_id" not in out["proposal"]
+
+    @pytest.mark.asyncio
+    async def test_bound_room_defaults_the_linked_book(self):
+        """An unlinked prediction is invisible to prediction_watch's sweep —
+        the never-resolves evasion. A bound room fills the link itself."""
+        bound = make_room(linked_book_id="iran-hormuz-graph")
+        tool = build_registry(bound, FakeDB()).get("draft_prediction")
+        out = await tool.execute(self.DRAFT)
+        assert out["proposal"]["linked_book_id"] == "iran-hormuz-graph"
+
+    @pytest.mark.asyncio
+    async def test_explicit_book_wins_over_the_binding(self):
+        bound = make_room(linked_book_id="iran-hormuz-graph")
+        tool = build_registry(bound, FakeDB()).get("draft_prediction")
+        out = await tool.execute({**self.DRAFT, "linked_book_id": "other-graph"})
+        assert out["proposal"]["linked_book_id"] == "other-graph"
+
+    @pytest.mark.asyncio
+    async def test_unbound_room_still_drafts_unlinked(self, room):
+        # The conftest room has no binding: same behavior as before the
+        # default landed — absent, not invented.
+        assert getattr(room, "linked_book_id", None) is None
         tool = build_registry(room, FakeDB()).get("draft_prediction")
         out = await tool.execute(self.DRAFT)
         assert "linked_book_id" not in out["proposal"]

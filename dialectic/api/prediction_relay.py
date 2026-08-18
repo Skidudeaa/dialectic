@@ -152,6 +152,13 @@ async def accept_prediction(
         "confidence": confidence,
         "deadline": deadline,
         "tags": ["dialectic"],
+        # Claims-ledger provenance. Stamped HERE rather than in the
+        # draft_prediction tool because draft_prediction is the ONLY writer
+        # of metadata.proposal — authorship is a property of this path, not
+        # of the payload, and the human tap authorizes the write without
+        # becoming its author.
+        "source_type": "llm",
+        "source_label": "Claude",
     }
     book = str(proposal.get("linked_book_id") or "").strip()
     if book:

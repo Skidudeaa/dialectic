@@ -1,0 +1,89 @@
+/* TrackRecordPanel — the ledger scoreboard. Leans on the CSS custom
+   properties the stakes surfaces already use; only layout is new here. */
+
+.track-record-panel {
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  margin-top: 16px;
+}
+
+.track-record-panel h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.track-record-quiet {
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+}
+
+.track-record-headline {
+  display: flex;
+  gap: 14px;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+
+.track-record-vs {
+  color: var(--text-tertiary);
+  font-size: 0.8em;
+}
+
+.track-record-table-wrap {
+  overflow-x: auto;
+}
+
+.track-record-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.track-record-table th,
+.track-record-table td {
+  text-align: left;
+  padding: 3px 8px 3px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.track-record-table th {
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+.track-record-unverified {
+  color: var(--text-ghost);
+}
+
+.track-record-buckets {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 72px;
+}
+
+.track-record-bucket {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  height: 100%;
+  font-size: 0.65rem;
+  color: var(--text-tertiary);
+}
+
+.track-record-bar {
+  width: 100%;
+  max-width: 22px;
+  background: var(--claude-primary);
+  border-radius: 2px 2px 0 0;
+  opacity: 0.85;
+}
+
+.track-record-sparkline {
+  display: block;
+  margin-top: 10px;
+}

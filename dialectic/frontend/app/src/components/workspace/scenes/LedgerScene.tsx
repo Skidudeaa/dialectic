@@ -3,6 +3,7 @@ import type { WorkspaceObject } from '../../../types/workspace.ts'
 import type { WorkspaceObjectsState } from '../../../hooks/useWorkspaceObjects.ts'
 import { PARTICIPANT_NAME } from '../../../lib/productIdentity.ts'
 import { SceneEmpty, SceneLoading, SceneUnavailable } from '../SceneEmpty'
+import { TrackRecordPanel } from '../TrackRecordPanel'
 import { WorkspaceObjectList } from '../WorkspaceObjectList'
 
 /**
@@ -54,6 +55,10 @@ export function LedgerScene({
           <strong>supersedes</strong> the old one rather than sitting beside it,
           and the old one keeps its history.
         </p>
+        {/* The scored track record is house state too — it renders even
+            before the first dossier entry, and stays silent (renders
+            nothing) in rooms with no bound book. */}
+        <TrackRecordPanel />
         {memoryPanel}
       </SceneEmpty>
     )
@@ -62,6 +67,7 @@ export function LedgerScene({
   return (
     <div className="scene-body">
       <WorkspaceObjectList objects={entries} onOpen={onOpen} label="What this room holds" />
+      <TrackRecordPanel />
       {memoryPanel}
     </div>
   )

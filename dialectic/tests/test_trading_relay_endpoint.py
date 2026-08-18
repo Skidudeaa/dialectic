@@ -214,6 +214,37 @@ def test_news_proxies_bridge(monkeypatch):
         f"/api/bridge/news/{BOOK_ID}", timeout=relay.NEWS_TIMEOUT_S)
 
 
+def test_calibration_is_desk_wide_and_forwards_the_filter(monkeypatch):
+    get = AsyncMock(return_value={"calibration": [], "total_predictions": 0})
+    resp = _call(_make_db(), monkeypatch, "calibration",
+                 td_mocks={"get": get})
+    assert resp.status_code == 200
+    get.assert_awaited_once_with("/api/predictions/calibration", params=None)
+
+    get = AsyncMock(return_value={"calibration": []})
+    resp = _call(_make_db(), monkeypatch, "calibration?source_label=Claude",
+                 td_mocks={"get": get})
+    assert resp.status_code == 200
+    get.assert_awaited_once_with(
+        "/api/predictions/calibration", params={"source_label": "Claude"})
+
+
+def test_leaderboard_passes_split_by_through(monkeypatch):
+    get = AsyncMock(return_value={"rows": []})
+    resp = _call(_make_db(), monkeypatch, "leaderboard",
+                 td_mocks={"get": get})
+    assert resp.status_code == 200
+    get.assert_awaited_once_with(
+        "/api/predictions/leaderboard", params={"split_by": "source_label"})
+
+    get = AsyncMock(return_value={"rows": []})
+    resp = _call(_make_db(), monkeypatch, "leaderboard?split_by=tag",
+                 td_mocks={"get": get})
+    assert resp.status_code == 200
+    get.assert_awaited_once_with(
+        "/api/predictions/leaderboard", params={"split_by": "tag"})
+
+
 def test_scenario_evaluate_posts_the_what_if(monkeypatch):
     post = AsyncMock(return_value={"scenario_id": "s1", "impact": 0.4})
     resp = _call(_make_db(), monkeypatch, "scenarios/s1/evaluate",
@@ -281,6 +312,8 @@ def test_dead_desk_is_a_502_with_the_reason(monkeypatch):
     ("trades", "GET", "run_command"),
     ("brief", "GET", "run_command"),
     ("news", "GET", "service_get"),
+    ("calibration", "GET", "get"),
+    ("leaderboard", "GET", "get"),
     ("scenarios/s1/evaluate", "POST", "post"),
 ])
 def test_every_route_maps_desk_failure_to_502(monkeypatch, path, method,
