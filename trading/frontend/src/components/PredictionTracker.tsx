@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, type FormEvent } from "react";
-import { Plus, Check, X, Minus, Target } from "lucide-react";
+import { Plus, Check, X, Minus, Ban, Target, Zap } from "lucide-react";
 import { apiFetch } from "../lib/api";
-import type { Prediction } from "../lib/types";
+import type { CalibrationResponse, Prediction, ResolutionSpec } from "../lib/types";
 
-type Resolution = "correct" | "incorrect" | "partial";
+type Resolution = "correct" | "incorrect" | "partial" | "voided";
+type SpecKind = "none" | "price_cross" | "polymarket";
 
 const MS_PER_DAY = 86_400_000;
 
@@ -29,6 +30,19 @@ function resolutionBadge(res: string | null): string {
   return "bg-elevated text-text-dim";
 }
 
+function specSummary(spec: ResolutionSpec): string {
+  return spec.kind === "price_cross"
+    ? `Auto-resolves: ${spec.symbol} ${spec.comparator} ${spec.threshold}`
+    : `Auto-resolves: Polymarket ${spec.market_id} closes`;
+}
+
+// Provenance badge only when the claim's source differs from the creating
+// user — the server defaults source_label to the user, and stamping every
+// row with its own author is noise.
+function provenanceLabel(p: Prediction): string | null {
+  return p.source_label && p.source_label !== p.user ? p.source_label : null;
+}
+
 export default function PredictionTracker() {
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -36,6 +50,12 @@ export default function PredictionTracker() {
   const [confidence, setConfidence] = useState("0.7");
   const [deadline, setDeadline] = useState("");
   const [showOptional, setShowOptional] = useState(false);
+  const [specKind, setSpecKind] = useState<SpecKind>("none");
+  const [specSymbol, setSpecSymbol] = useState("");
+  const [specComparator, setSpecComparator] = useState<"above" | "below">("above");
+  const [specThreshold, setSpecThreshold] = useState("");
+  const [specMarketId, setSpecMarketId] = useState("");
+  const [brier, setBrier] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -57,11 +77,56 @@ export default function PredictionTracker() {
     } finally {
       setLoading(false);
     }
+    // Server-scored Brier (last confidence before resolution, voided
+    // excluded) — a calibration hiccup must not blank the list itself.
+    try {
+      const cal = await apiFetch<CalibrationResponse>("/api/predictions/calibration");
+      setBrier(cal.brier_score);
+    } catch {
+      setBrier(null);
+    }
+  }
+
+  function resetForm() {
+    setShowForm(false);
+    setStatement("");
+    setConfidence("0.7");
+    setDeadline("");
+    setShowOptional(false);
+    setSpecKind("none");
+    setSpecSymbol("");
+    setSpecComparator("above");
+    setSpecThreshold("");
+    setSpecMarketId("");
+  }
+
+  // Exact strict shapes from web/models.py — extra or missing keys 422.
+  function buildSpec(): ResolutionSpec | null {
+    if (specKind === "price_cross") {
+      const threshold = parseFloat(specThreshold);
+      if (!specSymbol.trim() || Number.isNaN(threshold)) return null;
+      return {
+        kind: "price_cross",
+        symbol: specSymbol.trim(),
+        comparator: specComparator,
+        threshold,
+      };
+    }
+    if (specKind === "polymarket") {
+      if (!specMarketId.trim()) return null;
+      return { kind: "polymarket", market_id: specMarketId.trim() };
+    }
+    return null;
   }
 
   async function create(e: FormEvent) {
     e.preventDefault();
     if (!statement.trim() || !deadline) return;
+    const spec = buildSpec();
+    if (specKind !== "none" && spec === null) {
+      setError("Auto-resolve fields incomplete");
+      return;
+    }
     setSubmitting(true);
     try {
       await apiFetch("/api/predictions", {
@@ -70,13 +135,10 @@ export default function PredictionTracker() {
           statement: statement.trim(),
           confidence: parseFloat(confidence),
           deadline,
+          ...(spec ? { resolution_spec: spec } : {}),
         }),
       });
-      setShowForm(false);
-      setStatement("");
-      setConfidence("0.7");
-      setDeadline("");
-      setShowOptional(false);
+      resetForm();
       await load();
     } catch {
       setError("Failed to create prediction");
@@ -97,26 +159,19 @@ export default function PredictionTracker() {
     }
   }
 
-  const { open, resolved, accuracy, brierLike } = useMemo(() => {
+  const { open, resolved, accuracy, scoredCount } = useMemo(() => {
     const o = predictions
       .filter((p) => !p.resolution)
       .sort((a, b) => daysUntil(a.deadline) - daysUntil(b.deadline));
     const r = predictions
       .filter((p) => p.resolution)
       .sort((a, b) => (b.resolved_at ?? "").localeCompare(a.resolved_at ?? ""));
-    const correct = r.filter((p) => p.resolution === "correct").length;
-    const partial = r.filter((p) => p.resolution === "partial").length;
-    const acc = r.length > 0 ? ((correct + 0.5 * partial) / r.length) * 100 : 0;
-    // Brier-like calibration sample: avg |confidence - outcome|
-    const cal =
-      r.length > 0
-        ? r.reduce((sum, p) => {
-            const outcome =
-              p.resolution === "correct" ? 1 : p.resolution === "partial" ? 0.5 : 0;
-            return sum + Math.abs((p.confidence ?? 0.5) - outcome);
-          }, 0) / r.length
-        : null;
-    return { open: o, resolved: r, accuracy: acc, brierLike: cal };
+    // Voided claims score nowhere (matches web/scoring.py outcome_value).
+    const scored = r.filter((p) => p.resolution !== "voided");
+    const correct = scored.filter((p) => p.resolution === "correct").length;
+    const partial = scored.filter((p) => p.resolution === "partial").length;
+    const acc = scored.length > 0 ? ((correct + 0.5 * partial) / scored.length) * 100 : 0;
+    return { open: o, resolved: r, accuracy: acc, scoredCount: scored.length };
   }, [predictions]);
 
   return (
@@ -152,14 +207,17 @@ export default function PredictionTracker() {
         <div className="flex items-center gap-2 mb-1 text-[10px] font-mono">
           <span className="text-text-dim">acc:</span>
           <span className="text-amber font-bold">
-            {resolved.length > 0 ? `${accuracy.toFixed(0)}%` : "--"}
+            {scoredCount > 0 ? `${accuracy.toFixed(0)}%` : "--"}
           </span>
           <span className="text-text-dim">
-            ({resolved.filter((p) => p.resolution === "correct").length}/{resolved.length})
+            ({resolved.filter((p) => p.resolution === "correct").length}/{scoredCount})
           </span>
-          {brierLike !== null && (
-            <span className="text-text-dim ml-auto" title="Mean |confidence - outcome|">
-              cal {brierLike.toFixed(2)}
+          {brier !== null && (
+            <span
+              className="text-text-dim ml-auto"
+              title="Server-scored Brier (last confidence before resolution; lower is better)"
+            >
+              Brier {brier.toFixed(2)}
             </span>
           )}
         </div>
@@ -198,40 +256,94 @@ export default function PredictionTracker() {
             </button>
           </div>
           {showOptional && (
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] text-text-dim font-mono w-16">conf</span>
-              <input
-                className="input w-16"
-                type="number"
-                min="0"
-                max="1"
-                step="0.05"
-                value={confidence}
-                onChange={(e) => setConfidence(e.target.value)}
-              />
-              <input
-                className="input flex-1"
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={confidence}
-                onChange={(e) => setConfidence(e.target.value)}
-              />
-            </div>
+            <>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-text-dim font-mono w-16">conf</span>
+                <input
+                  className="input w-16"
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={confidence}
+                  onChange={(e) => setConfidence(e.target.value)}
+                />
+                <input
+                  className="input flex-1"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={confidence}
+                  onChange={(e) => setConfidence(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-text-dim font-mono w-16">auto</span>
+                <select
+                  className="input flex-1"
+                  value={specKind}
+                  onChange={(e) => setSpecKind(e.target.value as SpecKind)}
+                  title="Deterministic auto-resolution"
+                  aria-label="Auto-resolve kind"
+                >
+                  <option value="none">manual resolve</option>
+                  <option value="price_cross">price cross</option>
+                  <option value="polymarket">polymarket close</option>
+                </select>
+              </div>
+              {specKind === "price_cross" && (
+                <div className="flex items-center gap-1">
+                  <input
+                    className="input w-20"
+                    placeholder="XOP"
+                    value={specSymbol}
+                    onChange={(e) => setSpecSymbol(e.target.value)}
+                    required
+                    title="Yahoo symbol"
+                    aria-label="Symbol"
+                  />
+                  <select
+                    className="input w-20"
+                    value={specComparator}
+                    onChange={(e) =>
+                      setSpecComparator(e.target.value as "above" | "below")
+                    }
+                    aria-label="Comparator"
+                  >
+                    <option value="above">above</option>
+                    <option value="below">below</option>
+                  </select>
+                  <input
+                    className="input flex-1"
+                    type="number"
+                    step="any"
+                    placeholder="115"
+                    value={specThreshold}
+                    onChange={(e) => setSpecThreshold(e.target.value)}
+                    required
+                    title="Threshold"
+                    aria-label="Threshold"
+                  />
+                </div>
+              )}
+              {specKind === "polymarket" && (
+                <input
+                  className="input w-full"
+                  placeholder="polymarket market slug (claim asserts the Yes side)"
+                  value={specMarketId}
+                  onChange={(e) => setSpecMarketId(e.target.value)}
+                  required
+                  aria-label="Polymarket market id"
+                />
+              )}
+            </>
           )}
           <div className="flex gap-1">
             <button className="btn-primary flex-1" type="submit" disabled={submitting}>
               {submitting ? "..." : "Add"}
             </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                setShowForm(false);
-                setShowOptional(false);
-              }}
-            >
+            <button type="button" className="btn-secondary" onClick={resetForm}>
               Cancel
             </button>
           </div>
@@ -282,10 +394,27 @@ export default function PredictionTracker() {
                   {p.statement}
                 </p>
                 <div className="flex items-center justify-between gap-1">
-                  <div className="flex gap-2 text-[10px] font-mono text-text-dim min-w-0">
+                  <div className="flex items-center gap-2 text-[10px] font-mono text-text-dim min-w-0">
                     <span className="text-amber shrink-0">
                       {(p.confidence * 100).toFixed(0)}%
                     </span>
+                    {provenanceLabel(p) && (
+                      <span
+                        className="badge bg-elevated text-text-dim shrink-0"
+                        title={`Source: ${p.source_label} (${p.source_type})`}
+                      >
+                        {provenanceLabel(p)}
+                      </span>
+                    )}
+                    {p.resolution_spec && (
+                      <span
+                        className="text-teal shrink-0 flex items-center gap-0.5"
+                        title={specSummary(p.resolution_spec)}
+                      >
+                        <Zap size={9} />
+                        auto
+                      </span>
+                    )}
                     <span className={`${deadlineColor(days)} truncate`}>
                       {overdue
                         ? `OVERDUE ${Math.abs(days)}d`
@@ -319,6 +448,14 @@ export default function PredictionTracker() {
                     >
                       <X size={11} />
                     </button>
+                    <button
+                      onClick={() => resolve(p.id, "voided")}
+                      className="p-0.5 text-text-dim hover:bg-elevated rounded"
+                      title="Voided — scores nowhere"
+                      aria-label="Mark voided"
+                    >
+                      <Ban size={11} />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -349,6 +486,14 @@ export default function PredictionTracker() {
                     <p className="text-[10px] text-text-muted leading-tight flex-1 line-through decoration-text-dim/50">
                       {p.statement}
                     </p>
+                    {provenanceLabel(p) && (
+                      <span
+                        className="badge bg-elevated text-text-dim shrink-0"
+                        title={`Source: ${p.source_label} (${p.source_type})`}
+                      >
+                        {provenanceLabel(p)}
+                      </span>
+                    )}
                     <span className="text-[9px] text-text-dim font-mono shrink-0">
                       {(p.confidence * 100).toFixed(0)}%
                     </span>

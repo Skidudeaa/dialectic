@@ -57,6 +57,20 @@ export interface WatchlistItem {
   source: string;
 }
 
+// Strict shapes mirrored from web/models.py _RESOLUTION_SPEC_KEYS — the
+// door 422s anything else, so the create form must emit exactly these keys.
+export type ResolutionSpec =
+  | { kind: "price_cross"; symbol: string; comparator: "above" | "below"; threshold: number }
+  | { kind: "polymarket"; market_id: string };
+
+export interface ConfidenceEntry {
+  id: string;
+  actor: string;
+  confidence: number;
+  reasoning: string | null;
+  recorded_at: string;
+}
+
 export interface Prediction {
   id: string;
   user: string;
@@ -65,9 +79,34 @@ export interface Prediction {
   deadline: string;
   resolution: string | null;
   resolved_at: string | null;
+  resolution_notes: string | null;
+  resolution_spec: ResolutionSpec | null;
   linked_book_id: string | null;
   tags: string[];
+  source_type: string;
+  source_label: string | null;
+  source_ref: string | null;
+  base_rate: number | null;
+  base_rate_source: string | null;
+  confidence_history: ConfidenceEntry[];
   created_at: string;
+}
+
+// GET /api/predictions/calibration — web/scoring.py calibration_buckets shape.
+export interface CalibrationBucket {
+  bucket: string;
+  midpoint: number;
+  total: number;
+  correct: number;
+  accuracy: number | null;
+}
+
+export interface CalibrationResponse {
+  calibration: CalibrationBucket[];
+  total_predictions: number;
+  total_correct: number;
+  brier_score: number | null;
+  source_label?: string | null;
 }
 
 export interface JournalEntry {

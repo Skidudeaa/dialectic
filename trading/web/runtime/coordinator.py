@@ -29,6 +29,7 @@ from tools.thesis_graph import thesisgraph  # type: ignore[import-untyped]
 
 from web.observability import thesis_context
 from web.persistence.repository import Repository
+from web.runtime.claim_resolver import ClaimResolver
 from web.runtime.live_bus import get_live_bus
 from web.runtime.slow_feeds import SlowFeedRefresher
 from web.schemas.snapshots import snapshot_from_export
@@ -95,6 +96,10 @@ class RuntimeCoordinator:
         # eia, econ-calendar). Coordinator-lifetime because the cfg is
         # deep-copied every tick and cannot remember its own last pull.
         self._slow_feeds = slow_feeds if slow_feeds is not None else SlowFeedRefresher()
+
+        # Deterministic auto-resolution of spec-carrying claims — runs at the
+        # tail of every tick sweep, after all thesis locks are released.
+        self._claim_resolver = ClaimResolver(repo, ws_manager)
 
         # Immutable thesis definitions, loaded once at startup
         self._definitions: Dict[str, dict] = {}
@@ -479,6 +484,15 @@ class RuntimeCoordinator:
                     await self._run_cycle(thesis_id)
                 except Exception:
                     log.exception("Tick cycle failed for %s", thesis_id)
+
+        # Claim auto-resolution rides the tail of the sweep — after every
+        # thesis lock is released, since it holds none. WHY wrapped despite
+        # run_once's own guards: mirrors the slow_feeds belt — a resolver
+        # fault must never be able to break the snapshot cycle cadence.
+        try:
+            await self._claim_resolver.run_once()
+        except Exception:  # noqa: BLE001
+            log.warning("claim resolution failed", exc_info=True)
 
     async def _run_cycle(self, thesis_id: str) -> dict:
         """Full fetch → evaluate → snapshot → commit → broadcast cycle.
