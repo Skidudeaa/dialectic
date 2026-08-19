@@ -713,3 +713,33 @@ Ten commits (295a28c…0875142) closed the loop the 2026-08-15 memory called
   gate: frozen policy versions before any shadow arm launches. The
   stakes relay is fire-and-forget by design; at real volume it earns a
   durable outbox (adjudicated, revisit trigger recorded).
+
+## Amendment 2026-08-18 (late) — the Instrument Desk (amend-beside)
+
+The UI rebuild shipped (master `2c33190`, docky-inspired, owner-ruled
+"vintage instrument panel", whole app): **machined chassis with paper on
+it**. Contract changes a future session must know:
+
+- **The scene-switcher band IS the Console.** `SceneSwitcher` gained
+  `signals` (running-dot LEDs per scene tile: Record unread / Bench
+  alerts / Field provisional) and `instruments` (the `Console.tsx`
+  cluster: seven-seg quote tiles, Polymarket LED bar, UP NEXT deadline
+  countdown, the presence lamp). With `instruments` present the switcher
+  renders even for a single scene.
+- **`useTradingDesk` mounts ONCE, in App.tsx's RoomView** — `BenchScene`
+  now takes `desk` as a prop. Entering any bound room runs the full
+  fan-out + 300s quote poll in every scene (the Console's job; a
+  slice-keys filter is the upgrade path).
+- **The presence lamp sets `--energy-level` at runtime** (Console.tsx) —
+  the token was wired-but-never-set since 2026-08-15; `energyPulse`
+  keyframes now scale by the var (they previously overrode it, leaving
+  the scanline faintly always-on).
+- **tokens.css v3**: chassis/well surfaces, `--bezel-*`, `--led-*`,
+  `--engrave`, `--font-seg` (DSEG7, self-hosted in `public/fonts/`,
+  OFL license beside it, in the PWA precache). `.seg` keeps
+  `letter-spacing: .1em` — without it the seven-seg decimal point
+  vanishes at cockpit sizes. Paper surfaces (MessageList, MessageBubble,
+  MessageInput, SignatureMark, fieldDisplay CSS) are deliberately
+  untouched — the dossier sheet stays paper.
+- `Console.test.tsx` carries the app's first real axe gate. Frontend
+  suite 356 at this gate.
