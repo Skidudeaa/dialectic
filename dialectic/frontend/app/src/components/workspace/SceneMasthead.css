@@ -1,0 +1,92 @@
+/* The place-maker. Reads `--scene-accent` / `--scene-tint` from the scene
+   section (WorkspaceSceneFrame.css) so the name, glyph plate and rule are
+   always in the current scene's own color. */
+
+.scene-masthead {
+    flex: 0 0 auto;
+    padding: 16px 22px 0;
+    /* The accent rule: a lit filament under the masthead, fading right. */
+    background:
+        linear-gradient(90deg, var(--scene-accent) 0, var(--scene-tint) 34%, transparent 72%)
+        left bottom / 100% 2px no-repeat;
+    padding-bottom: 12px;
+}
+
+.scene-masthead-inner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    max-width: 1180px;
+    margin-inline: auto;
+}
+
+/* Glyph plate: a small chassis tile carrying the scene's mark. */
+.scene-masthead-glyph {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 auto;
+    font-size: 19px;
+    color: var(--scene-accent);
+    background: var(--color-chassis);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-chassis);
+    box-shadow: var(--bezel-raised);
+    text-shadow: 0 0 6px var(--scene-tint);
+}
+
+.scene-masthead-name {
+    font-family: var(--font-stencil);
+    font-size: 19px;
+    font-weight: 400;
+    letter-spacing: .24em;
+    text-transform: uppercase;
+    color: var(--scene-accent);
+    text-shadow: var(--engrave);
+    line-height: 1.1;
+}
+
+.scene-masthead-purpose {
+    font: italic 13.5px/1.4 var(--font-serif);
+    color: var(--color-faint);
+    margin-top: 2px;
+    text-wrap: pretty;
+}
+
+/* Compact: the transcript surfaces — one quiet line, sheet stays the hero. */
+.scene-masthead-compact { padding: 8px 22px 6px; }
+.scene-masthead-compact .scene-masthead-inner { gap: 9px; max-width: 860px; }
+.scene-masthead-compact .scene-masthead-glyph {
+    width: 22px;
+    height: 22px;
+    font-size: 12px;
+    border-radius: var(--radius-control);
+    box-shadow: none;
+}
+.scene-masthead-compact .scene-masthead-name {
+    font-size: 12px;
+    letter-spacing: .2em;
+    display: inline;
+}
+.scene-masthead-compact .scene-masthead-text {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+}
+.scene-masthead-compact .scene-masthead-purpose {
+    font-size: 12.5px;
+    margin-top: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+@media (max-width: 767.98px) {
+    .scene-masthead { padding: 12px 16px 10px; }
+    .scene-masthead-name { font-size: 16px; }
+    .scene-masthead-glyph { width: 34px; height: 34px; font-size: 16px; }
+    .scene-masthead-compact .scene-masthead-purpose { display: none; }
+}

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { ImplementedWorkspaceScene } from '../../types'
 import { SceneSwitcher, type SceneSignal } from './SceneSwitcher'
+import { SceneMasthead } from './SceneMasthead'
 import './WorkspaceSceneFrame.css'
 
 interface WorkspaceSceneFrameProps {
@@ -50,6 +51,7 @@ export function WorkspaceSceneFrame({
         signals={signals}
         instruments={instruments}
       />
+      <SceneMasthead scene={effectiveScene} />
       <div className="workspace-scene-content">{body}</div>
     </section>
   )

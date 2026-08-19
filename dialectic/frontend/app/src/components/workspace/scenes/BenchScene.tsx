@@ -133,8 +133,8 @@ export function BenchScene({
           error={state.error}
           onRetry={state.retry}
         />
-        <div className="scene-panel">{tradingPanel}</div>
         {cockpit}
+        <div className="scene-panel">{tradingPanel}</div>
       </div>
     )
   }
@@ -143,8 +143,12 @@ export function BenchScene({
 
   return (
     <div className="scene-body">
-      <div className="scene-panel">{tradingPanel}</div>
+      {/* The causal graph leads a bound Bench — the thesis is what this room
+          is FOR; the lifecycle panel follows it. Unbound rooms have a null
+          cockpit, so the panel's create-thesis form still carries the scene
+          alone. */}
       {cockpit}
+      <div className="scene-panel">{tradingPanel}</div>
       {commitments.length > 0 && (
         <WorkspaceObjectList
           objects={commitments}

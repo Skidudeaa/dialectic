@@ -7,6 +7,21 @@
     overflow: hidden;
 }
 
+/* ── Scene identity (2026-08-18, owner: "every page/tab/view feels the
+   same... I don't know where I am") ─────────────────────────────────────
+   Each scene owns an accent drawn from the token counterpoint band, set
+   here ONCE and inherited by everything inside the section: the masthead,
+   the active tray tile and its running-dot, module header rules, and the
+   per-scene silhouettes below. Names and glyphs always accompany the hue
+   (no color-only signals). */
+.workspace-scene-house   { --scene-accent: var(--color-sage);  --scene-tint: var(--sage-12); }
+.workspace-scene-record  { --scene-accent: var(--color-cream); --scene-tint: rgba(246,236,218,.09); }
+.workspace-scene-bench   { --scene-accent: var(--color-amber); --scene-tint: var(--amber-12); }
+.workspace-scene-field   { --scene-accent: var(--color-plum);  --scene-tint: var(--plum-12); }
+.workspace-scene-library { --scene-accent: var(--color-steel); --scene-tint: var(--steel-12); }
+.workspace-scene-ledger  { --scene-accent: var(--color-gold);  --scene-tint: var(--gold-12); }
+.workspace-scene-atlas   { --scene-accent: var(--color-teal);  --scene-tint: var(--teal-10); }
+
 .workspace-scene-content {
     display: flex;
     flex: 1 1 auto;
@@ -46,3 +61,59 @@
 @media (min-width: 1180px) {
     .cockpit-duo { grid-template-columns: 1fr 1fr; align-items: start; }
 }
+
+/* ── Per-scene silhouettes — the same projection, different rooms ──────── */
+
+/* Module header rules pick up the room's accent everywhere. */
+.workspace-scene .cockpit-header { border-bottom-color: var(--scene-tint, var(--color-bean)); }
+
+/* LIBRARY — an index-card shelf, not a stack: two-up cards, each with the
+   steel edge of a filed reference, titles set larger. */
+.workspace-scene-library .object-list {
+    background: none;
+    border-top: none;
+    border-bottom: none;
+    gap: 12px;
+}
+.workspace-scene-library .object-card {
+    border: 1px solid var(--color-bean);
+    border-left: 3px solid var(--scene-accent);
+    border-radius: var(--radius-control);
+    box-shadow: var(--shadow-sm);
+}
+.workspace-scene-library .object-card-title { font-size: 15px; }
+@media (min-width: 980px) {
+    .workspace-scene-library .object-list {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        align-items: stretch;
+    }
+}
+
+/* LEDGER — a bound book: no card fills, gold-ruled lines, entries reading
+   as rows in a record rather than tiles on a desk. */
+.workspace-scene-ledger .object-list {
+    background: none;
+    border-top: 2px solid var(--scene-accent);
+    border-bottom: 1px solid var(--color-bean);
+    gap: 0;
+}
+.workspace-scene-ledger .object-card {
+    background: transparent;
+    border-bottom: 1px solid var(--scene-tint);
+}
+.workspace-scene-ledger .object-card-open:hover { background: var(--scene-tint); }
+
+/* FIELD — marginalia: provisional reasoning carries the plum of a pencil
+   annotation, section labels underlined in it. */
+.workspace-scene-field .field-section-label {
+    color: var(--scene-accent);
+    border-bottom: 1px solid var(--scene-tint);
+    padding-bottom: 4px;
+}
+
+/* ATLAS — the map room: teal is already its language; the frame just keeps
+   the accent consistent with its masthead. */
+
+/* BENCH — the hot work surface; amber is the app's own accent so the bench
+   reads as the room the rest of the house points toward. */
