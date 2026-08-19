@@ -29,6 +29,9 @@
     min-height: 0;
     flex-direction: column;
     overflow: hidden;
+    /* Room lighting: a faint wash from above in the scene's own tint, so a
+       scene switch changes the light, not just the labels. */
+    background: radial-gradient(120% 55% at 50% 0%, var(--scene-tint, transparent), transparent 60%);
 }
 
 /* ── Scene body — the shared canvas every non-Record scene renders into ──

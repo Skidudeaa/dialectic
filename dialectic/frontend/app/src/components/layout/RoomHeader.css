@@ -6,7 +6,7 @@
     justify-content: space-between;
     padding: 0.7rem 1.25rem;
     border-bottom: 1px solid var(--color-bean);
-    background: var(--color-chassis);
+    background: var(--chassis-brush), var(--color-chassis);
     box-shadow: var(--bezel-raised);
     flex-shrink: 0;
     gap: 1rem;

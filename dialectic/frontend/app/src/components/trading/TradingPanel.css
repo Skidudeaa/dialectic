@@ -6,7 +6,7 @@
     gap: 0.6rem;
     /* Same instrument-card surface as the cockpit modules around it —
        v3: the machined chassis face, matching .cockpit-module. */
-    background: var(--color-chassis);
+    background: var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-chassis);
     padding: 14px 16px 16px;

@@ -55,7 +55,7 @@
     background: var(--color-well);
     border-radius: var(--radius-control);
     box-shadow: var(--bezel-well);
-    font-size: 13px;
+    font-size: 14px;
     color: var(--color-amber);
     text-shadow: 0 0 4px rgba(242,162,74,.45);
 }

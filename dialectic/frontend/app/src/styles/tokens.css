@@ -204,6 +204,10 @@
     --engrave: 0 1px 0 rgba(255,249,240,.05), 0 -1px 0 rgba(0,0,0,.6);
     --font-seg: 'DSEG7', var(--font-mono);
 
+    /* Brushed-metal grain — layered OVER a chassis fill:
+       background: var(--chassis-brush), var(--color-chassis); */
+    --chassis-brush: repeating-linear-gradient(90deg, rgba(255,249,240,.014) 0 1px, transparent 1px 3px);
+
     /* Radii — chassis vs controls; paper stays at the 2px radii above */
     --radius-chassis: 5px;
     --radius-control: 3px;

@@ -6,8 +6,10 @@
 .scene-switcher-wrap {
     flex: 0 0 auto;
     border-bottom: 1px solid var(--color-bean);
-    background: var(--color-chassis);
-    box-shadow: var(--bezel-raised);
+    background: var(--chassis-brush), var(--color-chassis);
+    /* The tray's backlight bleeds downward in the CURRENT scene's color —
+       switching rooms visibly changes the lighting. */
+    box-shadow: var(--bezel-raised), 0 8px 22px -8px var(--scene-tint, transparent);
     /* The bezel and LED glows may paint past the band, and the more-views
        popover hangs below it — neither may be clipped. */
     overflow: visible;
