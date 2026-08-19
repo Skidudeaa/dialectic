@@ -42,6 +42,10 @@ import { scenesForDestination } from './lib/workspaceRoute.ts'
 import { useWorkspaceObjects } from './hooks/useWorkspaceObjects.ts'
 import { useFieldMarks } from './hooks/useFieldMarks.ts'
 import { useAtlas } from './hooks/useAtlas.ts'
+import { useTradingDesk } from './hooks/useTradingDesk.ts'
+import { Console } from './components/workspace/Console'
+import type { SceneSignal } from './components/workspace/SceneSwitcher'
+import type { ImplementedWorkspaceScene } from './types/index.ts'
 import type { FieldMark, FieldReviewRequest } from './types/workspace.ts'
 import { rememberSceneAxes, restoreSceneAxes } from './lib/sceneContinuity.ts'
 
@@ -91,6 +95,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const setMemories = useAppStore((s) => s.setMemories)
   const logout = useAppStore((s) => s.logout)
   const setTradingConfig = useAppStore((s) => s.setTradingConfig)
+  const tradingConfig = useAppStore((s) => s.tradingConfig)
 
   // Exact-restoration axes (§15.2, TG-E) that are not part of a destination —
   // homed in appStore (see its own header comment), reset per-room there.
@@ -551,6 +556,40 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // "signed in and at Home", the inverse of the two room projections above.
   const atlas = useAtlas(Boolean(accessToken) && isHome)
 
+  // The ONE trading-desk instance, lifted from BenchScene so the Console's
+  // instrument tiles stay live in every scene. An unbound room short-circuits
+  // at the 409 structure probe (one request); Home mounts none at all.
+  // ponytail: entering a bound room now runs the full fan-out + 300s quote
+  // poll outside the Bench too — that IS the Console's job; a slice-keys
+  // filter on the hook is the upgrade path if it ever matters.
+  const desk = useTradingDesk(!isHome && currentRoom ? currentRoom.id : null)
+
+  // Docky running-dot signals for the scene tiles. Record's baseline is
+  // "messages seen when the Record was last showing" — MessageList's own
+  // missedCount is deliberately local to it, so the tray derives its own.
+  const recordSeenRef = useRef(0)
+  const onRecordSurface = workspaceScene === 'record' || workspaceScene === 'house'
+  useEffect(() => {
+    if (onRecordSurface) recordSeenRef.current = messages.length
+  }, [onRecordSurface, messages.length])
+  // Room switch resets the scene to the default (record/house) via setRoom,
+  // so the baseline re-anchors before any badge can carry across rooms.
+  const sceneSignals = useMemo<Partial<Record<ImplementedWorkspaceScene, SceneSignal>>>(() => {
+    const signals: Partial<Record<ImplementedWorkspaceScene, SceneSignal>> = {}
+    const recordNew = onRecordSurface ? 0 : Math.max(0, messages.length - recordSeenRef.current)
+    if (recordNew > 0) signals.record = { count: recordNew, tone: 'teal' }
+    const alerts = tradingConfig?.alertEvents ?? []
+    if (alerts.length > 0 && workspaceScene !== 'bench') {
+      const worst = alerts.some((a) => a.severity === 'critical') ? 'red' : 'amber'
+      signals.bench = { count: alerts.length, tone: worst }
+    }
+    if (fieldMarks.status === 'ready' && workspaceScene !== 'field') {
+      const pending = fieldMarks.marks.filter((mark) => mark.review === 'provisional').length
+      if (pending > 0) signals.field = { count: pending, tone: 'amber' }
+    }
+    return signals
+  }, [onRecordSurface, messages.length, tradingConfig, workspaceScene, fieldMarks])
+
   /**
    * The room's marks, indexed by the message each one points at, so the
    * transcript can show a mark beside the words it is about.
@@ -838,6 +877,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
         onOpen={openWorkspaceObject}
         tradingPanel={<TradingPanel />}
         roomId={currentRoom?.id ?? null}
+        desk={desk}
       />
     ),
     field: <FieldScene state={fieldMarks} objects={workspaceObjects} onOpen={openWorkspaceObject} />,
@@ -942,6 +982,8 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
                   }, 'push')
                 }}
                 content={sceneContent}
+                signals={sceneSignals}
+                instruments={<Console desk={desk} />}
               />
               {/* Home holds no Field and offers no object-tap surface today
                   (§5.2) — Focus never opens there in practice, but the guard

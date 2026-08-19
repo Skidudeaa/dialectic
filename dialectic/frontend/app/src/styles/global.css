@@ -61,24 +61,30 @@ a[href]:not(.prose-body a):not(.msg-content a) {
     gap: 0.5rem;
 }
 
-/* Primary action: solid amber — the only solid-amber object on the page */
+/* Primary action: the backlit amber key — the only solid-amber object on the
+   page. v3: a physical control — raised bezel at rest, presses down. */
 .btn-primary {
     background: var(--color-amber);
     color: var(--color-void);
-    border-color: var(--color-amber);
+    border-color: var(--color-amber-hot);
     font-family: var(--font-stencil);
     font-size: 12px;
     letter-spacing: .06em;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-key);
 }
 .btn-primary:hover { background: var(--color-amber-hot); border-color: var(--color-amber-hot); }
+.btn-primary:active { transform: translateY(1px); box-shadow: var(--bezel-key-down); }
 
 .btn-secondary {
     background: var(--color-espresso);
     color: var(--color-secondary);
     border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-key);
 }
 .btn-secondary:hover { border-color: var(--color-crater); color: var(--color-ink); }
+.btn-secondary:active { transform: translateY(1px); box-shadow: var(--bezel-key-down); }
 
 .btn-ghost {
     background: transparent;
@@ -87,6 +93,7 @@ a[href]:not(.prose-body a):not(.msg-content a) {
     padding: 4px 8px;
 }
 .btn-ghost:hover { background: var(--color-espresso); color: var(--color-ink); }
+.btn-ghost:active { transform: translateY(1px); }
 
 .btn-full { width: 100%; }
 .btn-sm { padding: 3px 8px; font-size: 0.75rem; }
@@ -96,14 +103,15 @@ a[href]:not(.prose-body a):not(.msg-content a) {
 .form-input {
     width: 100%;
     padding: 7px 10px;
-    background: var(--color-void);
+    background: var(--color-well);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
     color: var(--color-bone);
     font-size: 0.88rem;
     font-family: inherit;
     transition: border-color 0.15s, box-shadow 0.15s;
     outline: none;
+    box-shadow: var(--bezel-well);
 }
 .form-input:focus {
     border-color: var(--amber-30);
@@ -117,14 +125,20 @@ a[href]:not(.prose-body a):not(.msg-content a) {
 .stencil { font-family: var(--font-stencil); }
 .hand    { font-family: var(--font-hand); }
 
-/* Dense section label */
+/* Dense section label — engraved into the chassis */
 .lbl {
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--color-secondary);
     text-transform: uppercase;
     letter-spacing: .18em;
+    text-shadow: var(--engrave);
 }
+
+/* Seven-segment readout face — live numerics only (see tokens.css).
+   Letter-spacing gives each digit cell its own slot so the DSEG decimal
+   point stays visible at 12–14px instead of vanishing between digits. */
+.seg { font-family: var(--font-seg); font-weight: 400; letter-spacing: .1em; }
 
 /* Reading measure — message body prose */
 .prose-body {

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type {
   ImplementedWorkspaceScene,
 } from '../../types'
@@ -41,16 +42,28 @@ const PRIMARY_SCENES = new Set<ImplementedWorkspaceScene>([
   'field',
 ])
 
+/** A docky-style running-dot on a scene tile: an LED plus a visible count.
+ * The count is TEXT inside the button, so the signal is never color-only and
+ * the accessible name reads e.g. "Record 3". */
+export interface SceneSignal {
+  count: number
+  tone: 'red' | 'amber' | 'teal'
+}
+
 interface SceneSwitcherProps {
   scene: ImplementedWorkspaceScene
   scenes: readonly ImplementedWorkspaceScene[]
   onSelect: (scene: ImplementedWorkspaceScene) => void
+  signals?: Partial<Record<ImplementedWorkspaceScene, SceneSignal>>
+  /** The instrument cluster (the Console) — rendered at the tray's right. */
+  instruments?: ReactNode
 }
 
-export function SceneSwitcher({ scene, scenes, onSelect }: SceneSwitcherProps) {
-  // A single choice is not a choice — an ordinary room shows no switcher at all
-  // rather than a lone disabled-looking tab.
-  if (scenes.length < 2) return null
+export function SceneSwitcher({ scene, scenes, onSelect, signals, instruments }: SceneSwitcherProps) {
+  // A single choice is not a choice — an ordinary room shows no switcher at
+  // all rather than a lone disabled-looking tab. An instrument cluster keeps
+  // the tray alive even then: a record-only Home branch still gets the lamp.
+  if (scenes.length < 2 && !instruments) return null
   const overflow = scenes.filter((candidate) => !PRIMARY_SCENES.has(candidate))
   const overflowActive = overflow.includes(scene)
 
@@ -71,6 +84,12 @@ export function SceneSwitcher({ scene, scenes, onSelect }: SceneSwitcherProps) {
             }}
           >
             {SCENE_LABELS[candidate]}
+            {(signals?.[candidate]?.count ?? 0) > 0 && (
+              <span className={`scene-signal scene-signal-${signals![candidate]!.tone}`}>
+                <span className="scene-signal-led" aria-hidden="true" />
+                {signals![candidate]!.count}
+              </span>
+            )}
           </button>
         ))}
         {overflow.length > 0 && (
@@ -95,6 +114,7 @@ export function SceneSwitcher({ scene, scenes, onSelect }: SceneSwitcherProps) {
             </div>
           </details>
         )}
+        {instruments}
       </div>
       <p className="scene-switcher-hint" aria-live="polite">{SCENE_HINTS[scene]}</p>
     </nav>

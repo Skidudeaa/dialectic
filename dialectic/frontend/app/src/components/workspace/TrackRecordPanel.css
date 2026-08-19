@@ -78,9 +78,10 @@
 .track-record-bar {
   width: 100%;
   max-width: 22px;
-  background: var(--claude-primary);
+  background: var(--led-amber);
   border-radius: 2px 2px 0 0;
   opacity: 0.85;
+  box-shadow: 0 0 4px rgba(242,162,74,.35); /* lit segment, calibration as LED meter */
 }
 
 .track-record-sparkline {

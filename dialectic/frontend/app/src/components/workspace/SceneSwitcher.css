@@ -1,7 +1,16 @@
+/* The switcher tray — v3 INSTRUMENT PANEL: the chassis band under the
+   faceplate. Scene tiles are engraved keys; the active tile carries a lit
+   LED segment (the docky running-dot); the Console's instrument cluster
+   docks at the right, behind a machined groove (Console.css). */
+
 .scene-switcher-wrap {
     flex: 0 0 auto;
     border-bottom: 1px solid var(--color-bean);
-    background: var(--color-void);
+    background: var(--color-chassis);
+    box-shadow: var(--bezel-raised);
+    /* The bezel and LED glows may paint past the band, and the more-views
+       popover hangs below it — neither may be clipped. */
+    overflow: visible;
 }
 
 .scene-switcher {
@@ -15,8 +24,8 @@
 
 /* The active scene's one-line hint — visible, not tooltip-only. */
 .scene-switcher-hint {
-    padding: 0 18px 6px;
-    font: italic 14px/1.4 var(--font-serif);
+    padding: 0 18px 5px;
+    font: italic 13px/1.35 var(--font-serif);
     color: var(--color-faint);
 }
 
@@ -30,31 +39,62 @@
     font: 12px/1 var(--font-mono);
     letter-spacing: .16em;
     text-transform: uppercase;
+    text-shadow: var(--engrave);
     cursor: pointer;
 }
 
+/* The running-dot rail: every tile owns the slot; only the active one lights. */
 .scene-switcher-action::after {
     content: '';
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 1px;
-    background: transparent;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 5px;
+    width: 6px;
+    height: 3px;
+    border-radius: 1px;
+    background: var(--led-off);
+    box-shadow: inset 0 1px 1px rgba(0,0,0,.5);
 }
 
 .scene-switcher-action:hover,
 .scene-switcher-action.is-active {
     color: var(--color-bone);
 }
+.scene-switcher-action:active {
+    transform: translateY(1px);
+}
 
 .scene-switcher-action.is-active::after {
-    background: var(--color-amber);
+    background: var(--led-amber);
+    box-shadow: var(--led-glow-amber);
 }
+
+/* Activity signal on a tile: LED + count. Count is text — never color-only. */
+.scene-signal {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-left: 6px;
+    font: 600 10px/1 var(--font-mono);
+    letter-spacing: 0;
+    text-shadow: none;
+    vertical-align: 1px;
+}
+.scene-signal-led {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+}
+.scene-signal-red   { color: var(--led-red); }
+.scene-signal-amber { color: var(--led-amber); }
+.scene-signal-teal  { color: var(--led-teal); }
+.scene-signal-red   .scene-signal-led { background: var(--led-red);   box-shadow: var(--led-glow-red); }
+.scene-signal-amber .scene-signal-led { background: var(--led-amber); box-shadow: var(--led-glow-amber); }
+.scene-signal-teal  .scene-signal-led { background: var(--led-teal);  box-shadow: var(--led-glow-teal); }
 
 .scene-switcher-more {
     display: none;
-    margin-left: auto;
     color: var(--color-secondary);
     font: 12px/1 var(--font-mono);
     letter-spacing: .08em;
@@ -88,8 +128,9 @@
     min-width: 160px;
     padding: 4px;
     border: 1px solid var(--color-bean);
+    border-radius: var(--radius-chassis);
     background: var(--color-cacao);
-    box-shadow: 0 14px 28px rgba(0, 0, 0, .45);
+    box-shadow: var(--bezel-raised), 0 14px 28px rgba(0, 0, 0, .45);
 }
 .scene-switcher-menu [role="menuitem"] {
     display: block;

@@ -100,6 +100,19 @@ describe('WorkspaceSceneFrame', () => {
     expect(screen.getByText('Record content')).toBeInTheDocument()
   })
 
+  it('keeps the tray for a one-scene destination when instruments are present', () => {
+    // A record-only Home branch still gets the presence lamp — the Console
+    // keeps the tray alive even where a lone tab would not earn it.
+    render(
+      <WorkspaceSceneFrame
+        scene="record" scenes={['record'] as const} onSelect={vi.fn()} content={content}
+        instruments={<div>LAMP</div>}
+      />,
+    )
+    expect(screen.getByRole('navigation', { name: 'Room views' })).toBeInTheDocument()
+    expect(screen.getByText('LAMP')).toBeInTheDocument()
+  })
+
   it('falls back to the default when a scene has no body yet', () => {
     render(
       <WorkspaceSceneFrame

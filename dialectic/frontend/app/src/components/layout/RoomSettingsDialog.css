@@ -38,7 +38,48 @@
 }
 
 .settings-fields label { color: var(--color-ink); }
-.settings-fields input[type='range'] { width: 100%; margin-top: 0.5rem; }
+.settings-fields input[type='range'] {
+    width: 100%;
+    margin-top: 0.5rem;
+    /* Hardware fader: recessed track, machined thumb. */
+    appearance: none;
+    height: 22px;
+    background: transparent;
+}
+.settings-fields input[type='range']::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--color-well);
+    box-shadow: var(--bezel-well);
+    border: 1px solid var(--color-bean);
+}
+.settings-fields input[type='range']::-webkit-slider-thumb {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    margin-top: -7px;
+    border-radius: var(--radius-control);
+    background: var(--color-espresso);
+    border: 1px solid var(--color-crater);
+    box-shadow: var(--bezel-key);
+    cursor: grab;
+}
+.settings-fields input[type='range']::-moz-range-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--color-well);
+    box-shadow: var(--bezel-well);
+    border: 1px solid var(--color-bean);
+}
+.settings-fields input[type='range']::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: var(--radius-control);
+    background: var(--color-espresso);
+    border: 1px solid var(--color-crater);
+    box-shadow: var(--bezel-key);
+    cursor: grab;
+}
 .settings-toggle { justify-content: flex-start; }
 .settings-toggle span { display: grid; }
 .settings-error { margin-top: 1rem; color: var(--color-danger, #f28b82); }

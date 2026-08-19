@@ -18,13 +18,14 @@
     flex-direction: column;
     gap: 0.5rem;
     min-width: 0; /* let tables/rows shrink instead of blowing out flex parents */
-    /* A drawn panel, not a floating list — the Bench composes as instrument
-       cards on the void, each with its own edge and paper shadow. */
-    background: var(--color-cacao);
+    /* v3 INSTRUMENT PANEL: the "instrument cards" this file always promised,
+       now machined — raised chassis face with a dual-light bezel edge. The
+       paper shadow idiom stays with the dossier sheet; the Bench is hardware. */
+    background: var(--color-chassis);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-chassis);
     padding: 12px 14px 14px;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--bezel-raised);
 }
 
 /* Header row: title left, freshness/refresh right. Wraps on narrow mobile
@@ -45,6 +46,7 @@
     text-transform: uppercase;
     letter-spacing: .18em;
     color: var(--color-bone);
+    text-shadow: var(--engrave); /* engraved plate */
 }
 .cockpit-header-right {
     display: flex;
@@ -137,14 +139,16 @@
     flex-wrap: wrap;
     gap: 0.35rem;
 }
+/* Readout strip: a recessed display well the value glows behind. */
 .cockpit-chip {
     display: inline-flex;
     align-items: baseline;
     gap: 0.3rem;
     padding: 3px 7px;
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
-    background: var(--color-cacao);
+    border-radius: var(--radius-control);
+    background: var(--color-well);
+    box-shadow: var(--bezel-well);
     font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.4;
@@ -158,7 +162,13 @@
     text-overflow: ellipsis;
 }
 .cockpit-chip-value {
+    /* Seven-segment readout. Digits + . : - render in DSEG7; % and letters
+       fall back to JetBrains Mono per-glyph, which is deliberate. Spacing
+       keeps the DSEG decimal point legible at this size. */
+    font-family: var(--font-seg);
+    letter-spacing: .1em;
     color: var(--color-amber);
+    text-shadow: 0 0 4px rgba(242,162,74,.45);
     white-space: nowrap;
 }
 .cockpit-chip-sub {
@@ -243,11 +253,16 @@
     border: 1px solid var(--color-bean);
     background: var(--color-espresso);
     color: var(--color-ink);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-key);
     cursor: pointer;
 }
 .cockpit-btn:hover:not(:disabled) {
     border-color: var(--color-crater);
+}
+.cockpit-btn:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
 }
 .cockpit-btn:focus-visible {
     outline: 1px solid var(--color-amber);
@@ -273,7 +288,7 @@
     padding: 0 10px;
     background: transparent;
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
     color: var(--color-secondary);
     font-family: var(--font-mono);
     font-size: 12px;
@@ -285,6 +300,9 @@
     border-color: var(--color-crater);
     color: var(--color-ink);
 }
+.cockpit-refresh-btn:active {
+    transform: translateY(1px);
+}
 
 /* --- Preformatted text block (MorningBriefCard) --- */
 .cockpit-pre {
@@ -294,9 +312,11 @@
     font-size: 12px;
     line-height: 1.55;
     color: var(--color-ink);
-    background: var(--color-cacao);
+    /* A recessed screen, not a card — the brief glows behind glass. */
+    background: var(--color-well);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
     padding: 0.65rem 0.75rem;
     max-height: 320px;
     overflow-y: auto;
@@ -411,9 +431,11 @@
 /* --- Severity chips: outline, currentColor, shared with TradingPanel's
  * node-badge treatment --- */
 .cockpit-severity {
-    display: inline-block;
-    padding: 2px 5px;
-    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 6px;
+    border-radius: var(--radius-control);
     font-family: var(--font-stencil);
     font-size: 12px;
     letter-spacing: .03em;
@@ -421,6 +443,16 @@
     border: 1px solid currentColor;
     background: transparent;
     flex-shrink: 0;
+}
+/* Indicator lamp: a lit LED beside the stencil word — hue already pairs
+   with the text, the lamp adds the hardware read. */
+.cockpit-severity::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 5px 1px currentColor;
 }
 .cockpit-severity--critical { color: var(--sev-crit); }
 .cockpit-severity--warning { color: var(--sev-improve); }
@@ -490,9 +522,10 @@
 .cockpit-scenario-result {
     margin-top: 0.5rem;
     padding: 0.5rem 0.6rem;
-    background: var(--color-cacao);
+    background: var(--color-well);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
 }
 .cockpit-scenario-result-label {
     font-family: var(--font-mono);

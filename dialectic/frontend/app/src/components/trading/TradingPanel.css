@@ -4,12 +4,13 @@
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    /* Same instrument-card surface as the cockpit modules around it. */
-    background: var(--color-cacao);
+    /* Same instrument-card surface as the cockpit modules around it —
+       v3: the machined chassis face, matching .cockpit-module. */
+    background: var(--color-chassis);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-chassis);
     padding: 14px 16px 16px;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--bezel-raised);
 }
 
 .trading-panel-empty {
@@ -56,7 +57,7 @@
     border-radius: 50%;
     flex-shrink: 0;
 }
-.trading-staleness--fresh .trading-staleness-dot { background: var(--sev-stable); }
+.trading-staleness--fresh .trading-staleness-dot { background: var(--sev-stable); box-shadow: var(--led-glow-green); }
 .trading-staleness--fresh { color: var(--color-faint); }
 .trading-staleness--stale .trading-staleness-dot { background: var(--color-warning); }
 .trading-staleness--stale { color: var(--color-warning); }

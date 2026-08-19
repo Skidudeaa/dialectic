@@ -25,7 +25,7 @@
     height: 5px;
     border-radius: 50%;
 }
-.participant-chip .presence-dot.online  { background: var(--sev-stable); }
+.participant-chip .presence-dot.online  { background: var(--sev-stable); box-shadow: var(--led-glow-green); }
 .participant-chip .presence-dot.away    { background: var(--color-warning); }
 .participant-chip .presence-dot.offline { background: var(--color-ghost); }
 .participant-chip .p-name {

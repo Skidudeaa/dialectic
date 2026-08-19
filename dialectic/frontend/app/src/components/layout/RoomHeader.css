@@ -1,11 +1,13 @@
-/* Room header — fully opaque obsidian, bean hairline below */
+/* Room header — v3: the chassis faceplate. The serif masthead stays (the
+   case title is product identity); the plate it sits on is now machined. */
 .room-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0.7rem 1.25rem;
     border-bottom: 1px solid var(--color-bean);
-    background: var(--color-obsidian);
+    background: var(--color-chassis);
+    box-shadow: var(--bezel-raised);
     flex-shrink: 0;
     gap: 1rem;
     z-index: 5;
@@ -75,7 +77,7 @@
     background: var(--color-ghost);   /* disconnected: dim — not red structural */
     transition: background 0.3s;
 }
-.conn-dot.connected { background: var(--sev-stable); }   /* olive green for connected */
+.conn-dot.connected { background: var(--sev-stable); box-shadow: var(--led-glow-green); }   /* lit LED when connected */
 
 /* Desktop toggles the contextual column; tablet/phone toggles fixed drawers. */
 .mobile-drawer-toggle { display: none; }

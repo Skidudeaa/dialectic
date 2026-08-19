@@ -30,11 +30,14 @@
     border-bottom: 2px solid transparent;
     transition: all 0.15s;
 }
+.sidebar-tab-btn { text-shadow: var(--engrave); }
 .sidebar-tab-btn:hover,
 .sidebar-tab-btn.active {
     color: var(--color-bone);
-    border-bottom-color: var(--color-amber);
+    border-bottom-color: var(--led-amber);
 }
+/* The active tab's underline glows like a lit filament. */
+.sidebar-tab-btn.active { box-shadow: inset 0 -6px 8px -8px var(--color-amber); }
 .sidebar-tab-slot {
     display: contents;
 }

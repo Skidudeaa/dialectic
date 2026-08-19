@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { ImplementedWorkspaceScene } from '../../types'
-import { SceneSwitcher } from './SceneSwitcher'
+import { SceneSwitcher, type SceneSignal } from './SceneSwitcher'
 import './WorkspaceSceneFrame.css'
 
 interface WorkspaceSceneFrameProps {
@@ -16,6 +16,10 @@ interface WorkspaceSceneFrameProps {
   onSelect: (scene: ImplementedWorkspaceScene) => void
   /** Scene bodies, built by the caller. A missing scene renders the default. */
   content: Partial<Record<ImplementedWorkspaceScene, ReactNode>>
+  /** Running-dot activity signals per scene tile — passed straight through. */
+  signals?: Partial<Record<ImplementedWorkspaceScene, SceneSignal>>
+  /** The Console's instrument cluster — passed straight through. */
+  instruments?: ReactNode
 }
 
 export function WorkspaceSceneFrame({
@@ -23,6 +27,8 @@ export function WorkspaceSceneFrame({
   scenes,
   onSelect,
   content,
+  signals,
+  instruments,
 }: WorkspaceSceneFrameProps) {
   // Defence in depth, not a second rule: the frame still refuses to render a
   // scene this destination does not offer, so a stale prop mid-navigation can
@@ -37,7 +43,13 @@ export function WorkspaceSceneFrame({
       className={`workspace-scene workspace-scene-${effectiveScene}`}
       data-workspace-scene={effectiveScene}
     >
-      <SceneSwitcher scene={effectiveScene} scenes={scenes} onSelect={onSelect} />
+      <SceneSwitcher
+        scene={effectiveScene}
+        scenes={scenes}
+        onSelect={onSelect}
+        signals={signals}
+        instruments={instruments}
+      />
       <div className="workspace-scene-content">{body}</div>
     </section>
   )

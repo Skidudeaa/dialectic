@@ -14,7 +14,9 @@
        ══════════════════════════════════════════════════════ */
 
     /* Surfaces — luminance ladder (deeper floor, brighter lifts) */
-    --color-void:     #0C0805;   /* page background, side rails */
+    --color-void:     #0A0603;   /* page background, side rails — v3 deepened
+                                    so the chassis surfaces below read as
+                                    machined metal against a darker room */
     --color-obsidian: #150D07;   /* stream / content background */
     --color-sheet:    #1B120B;   /* the dossier PAGE — the bounded sheet the
                                     transcript sits on. Sits between obsidian
@@ -157,13 +159,64 @@
     --shadow-lg:          3px 3px 0 rgba(0,0,0,.34);
     --shadow-glow-indigo: 0 0 12px rgba(242,162,74,.14);  /* repurposed: amber glow */
     --shadow-glow-amber:  0 0 12px rgba(242,162,74,.18);
-    --shadow-inset:       inset 0 1px 0 rgba(0,0,0,.24);
+    --shadow-inset:       inset 0 1px 3px rgba(0,0,0,.45);  /* v3: a real well */
 
     /* Transitions */
     --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
     --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 
-    /* Energy (ambient animation) */
+    /* Energy (ambient animation) — set at runtime by the Console's presence
+       lamp (Console.tsx); 0 = at rest. */
     --energy-level: 0;
     --energy-color: var(--color-amber);
+
+    /* ══════════════════════════════════════════════════════
+       INSTRUMENT PANEL v3 (2026-08-18) — the hardware chassis.
+       Aesthetic: a vintage trading desk — machined instrument
+       chassis with paper on it. These tokens style CHROME only
+       (Console, cockpit, buttons, faceplates); the dossier sheet
+       keeps the paper tokens above, whose values are unchanged.
+       ══════════════════════════════════════════════════════ */
+
+    /* Chassis surfaces */
+    --color-chassis: #100A06;   /* raised hardware band: Console, module faces */
+    --color-well:    #070402;   /* recessed display glass behind readouts */
+
+    /* Machined-edge bezels — dual light: top highlight, bottom shade */
+    --bezel-raised:   inset 0 1px 0 rgba(255,249,240,.07), inset 0 -1px 0 rgba(0,0,0,.5), 0 2px 5px rgba(0,0,0,.38);
+    --bezel-well:     inset 0 2px 6px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,249,240,.04);
+    --bezel-key:      inset 0 1px 0 rgba(255,249,240,.10), inset 0 -2px 0 rgba(0,0,0,.45), 0 1px 2px rgba(0,0,0,.4);
+    --bezel-key-down: inset 0 2px 4px rgba(0,0,0,.55);
+
+    /* LED lamps — hue is ALWAYS paired with shape or text at use sites
+       (design v2: no color-only signals) */
+    --led-green: var(--sev-stable);
+    --led-amber: var(--color-amber);
+    --led-red:   var(--color-scarlet);
+    --led-teal:  var(--color-teal);
+    --led-off:   #3A2A1C;
+    --led-glow-green: 0 0 6px 1px rgba(163,188,66,.55);
+    --led-glow-amber: 0 0 6px 1px rgba(242,162,74,.55);
+    --led-glow-red:   0 0 6px 1px rgba(222,81,81,.55);
+    --led-glow-teal:  0 0 6px 1px rgba(84,216,198,.55);
+
+    /* Engraved label (text-shadow) + segmented display type */
+    --engrave: 0 1px 0 rgba(255,249,240,.05), 0 -1px 0 rgba(0,0,0,.6);
+    --font-seg: 'DSEG7', var(--font-mono);
+
+    /* Radii — chassis vs controls; paper stays at the 2px radii above */
+    --radius-chassis: 5px;
+    --radius-control: 3px;
+}
+
+/* Seven-segment display face for live numeric readouts ONLY (quote prices,
+   probabilities, countdowns). DSEG7 has digits . : - only — keep units and
+   % outside the .seg span or accept the mono fallback. OFL license ships at
+   /fonts/DSEG-LICENSE.txt. */
+@font-face {
+    font-family: 'DSEG7';
+    src: url('/fonts/DSEG7Classic-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
 }

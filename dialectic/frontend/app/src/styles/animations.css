@@ -46,9 +46,19 @@
     0% { background: rgba(99,102,241,0.2); }
     100% { background: transparent; }
 }
+/* Scaled by --energy-level so the animation cannot override the "off" state:
+   keyframe opacity beats any static opacity rule, so at level 0 the fixed
+   0.3/0.8 values kept the scanline faintly lit forever. */
 @keyframes energyPulse {
-    0%, 100% { opacity: 0.3; }
-    50% { opacity: 0.8; }
+    0%, 100% { opacity: calc(var(--energy-level) * 0.3); }
+    50% { opacity: calc(var(--energy-level) * 0.8); }
+}
+
+/* LED lamp blink — the Console's THINKING/RESEARCH states. The state word
+   always accompanies the lamp, so reduced-motion can kill the blink. */
+@keyframes led-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
 }
 @keyframes cladogramLine {
     from { stroke-dashoffset: 100; }

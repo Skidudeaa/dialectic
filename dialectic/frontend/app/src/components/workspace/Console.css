@@ -1,0 +1,152 @@
+/* The Console — instrument cluster on the right of the switcher tray.
+   Chassis tiles with recessed display wells; every LED pairs its hue with a
+   glyph or a word (design v2: no color-only signals). */
+
+.console {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    margin-left: auto;
+    padding: 4px 0;
+}
+
+/* The machined groove between navigation tiles and instruments: a shade
+   line and a highlight line, like a routed seam in the faceplate. */
+.console::before {
+    content: '';
+    align-self: stretch;
+    width: 2px;
+    margin-right: 6px;
+    background: linear-gradient(90deg, rgba(0,0,0,.55) 0 1px, rgba(255,249,240,.06) 1px 2px);
+}
+
+.console-tile,
+.console-lamp {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-width: 74px;
+    padding: 3px 9px;
+    background: var(--color-chassis);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-chassis);
+    box-shadow: var(--bezel-raised);
+}
+
+.console-tile-label {
+    font: 600 9px/1 var(--font-mono);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--color-secondary);
+    text-shadow: var(--engrave);
+    white-space: nowrap;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* The display well: recessed glass the readout glows behind. */
+.console-readout {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    padding: 1px 6px;
+    background: var(--color-well);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
+    font-size: 13px;
+    color: var(--color-amber);
+    text-shadow: 0 0 4px rgba(242,162,74,.45);
+}
+
+.console-unit {
+    font: 500 10px/1 var(--font-mono);
+    color: var(--color-secondary);
+}
+
+.console-dir { font-size: 9px; }
+.console-dir-up   { color: var(--led-green); text-shadow: var(--led-glow-green); }
+.console-dir-down { color: var(--led-red);   text-shadow: var(--led-glow-red); }
+.console-dir-flat { color: var(--color-faint); text-shadow: none; }
+
+.console-tile.is-stale { opacity: .55; }
+
+.console-tile-skeleton {
+    min-width: 74px;
+    background: linear-gradient(100deg, var(--color-chassis) 40%, var(--color-espresso) 50%, var(--color-chassis) 60%);
+    background-size: 300% 100%;
+    animation: shimmer 1.4s infinite;
+}
+
+/* Ten-segment LED bar under the odds readout */
+.console-ledbar {
+    display: inline-flex;
+    gap: 1.5px;
+}
+.console-ledbar i {
+    width: 5px;
+    height: 3px;
+    border-radius: 1px;
+    background: var(--led-off);
+}
+.console-ledbar i.lit {
+    background: var(--led-amber);
+    box-shadow: var(--led-glow-amber);
+}
+
+/* The presence lamp — the participant's state, always mounted. */
+.console-lamp-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.console-led {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--led-off);
+    box-shadow: inset 0 1px 1px rgba(0,0,0,.5);
+}
+.console-lamp-green .console-led { background: var(--led-green); box-shadow: var(--led-glow-green); }
+.console-lamp-amber .console-led { background: var(--led-amber); box-shadow: var(--led-glow-amber); }
+.console-lamp-teal  .console-led { background: var(--led-teal);  box-shadow: var(--led-glow-teal); }
+.console-led.is-blinking { animation: led-blink 1.1s step-end infinite; }
+
+.console-lamp-word {
+    font: 600 10px/1 var(--font-mono);
+    letter-spacing: .12em;
+    color: var(--color-bone);
+}
+.console-lamp-green .console-lamp-word { color: var(--color-secondary); }
+
+@media (prefers-reduced-motion: reduce) {
+    .console-led.is-blinking { animation: none; }
+    .console-tile-skeleton { animation: none; }
+}
+
+/* Compact tray on phones: the lamp and the first quote earn their keep;
+   the wider instruments return at tablet width. */
+@media (max-width: 767.98px) {
+    .console-odds,
+    .console-upnext,
+    .console-quote ~ .console-quote { display: none; }
+    .console-tile-label { max-width: 90px; }
+    .console { gap: 6px; }
+    .console::before { margin-right: 3px; }
+}
+
+/* Narrow phones: the presence lamp is the Console's identity — it wins the
+   last slot; quote tiles return at 480px. */
+@media (max-width: 479.98px) {
+    .console-quote { display: none; }
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}

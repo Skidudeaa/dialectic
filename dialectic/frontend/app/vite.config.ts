@@ -53,7 +53,7 @@ export default defineConfig({
       // controllerchange reload) — the injectable one-liner can't do any of
       // that and is what let installed PWAs run stale bundles for hours.
       injectRegister: false,
-      includeAssets: ['icons/apple-touch-icon.png', 'icons/favicon.svg'],
+      includeAssets: ['icons/apple-touch-icon.png', 'icons/favicon.svg', 'fonts/*.woff2', 'fonts/DSEG-LICENSE.txt'],
       manifest: {
         name: 'Dialectic',
         short_name: 'Dialectic',

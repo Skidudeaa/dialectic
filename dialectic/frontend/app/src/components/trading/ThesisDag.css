@@ -211,10 +211,11 @@
 }
 
 /* State dot shapes — filled / ring / x / check / small dot. The shape IS
-   the signal; color reinforces it, never replaces it. */
-.thesis-dag-dot--filled { fill: var(--sev-crit); }
-.thesis-dag-dot--ring { stroke: var(--color-amber); stroke-width: 2px; }
-.thesis-dag-dot--check { stroke: var(--sev-resolve); stroke-width: 2px; stroke-linecap: round; stroke-linejoin: round; }
+   the signal; color reinforces it, never replaces it. v3: the lit states
+   glow like panel lamps; the dim/invalidated shapes stay unlit. */
+.thesis-dag-dot--filled { fill: var(--sev-crit); filter: drop-shadow(0 0 3px var(--sev-crit)); }
+.thesis-dag-dot--ring { stroke: var(--color-amber); stroke-width: 2px; filter: drop-shadow(0 0 3px var(--color-amber)); }
+.thesis-dag-dot--check { stroke: var(--sev-resolve); stroke-width: 2px; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 3px var(--sev-resolve)); }
 .thesis-dag-dot--x line { stroke: var(--color-faint); stroke-width: 2px; stroke-linecap: round; }
 .thesis-dag-dot--dim { fill: var(--color-secondary); }
 

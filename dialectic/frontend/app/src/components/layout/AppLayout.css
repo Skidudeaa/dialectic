@@ -74,6 +74,10 @@
     animation: energyPulse 3s ease-in-out infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+    .app-main::before { animation: none; }
+}
+
 /* Right cockpit panel — cacao */
 .app-right-panel {
     background: var(--color-cacao);

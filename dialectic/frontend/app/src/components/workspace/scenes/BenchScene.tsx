@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { WorkspaceObject } from '../../../types/workspace.ts'
 import type { WorkspaceObjectsState } from '../../../hooks/useWorkspaceObjects.ts'
-import { useTradingDesk } from '../../../hooks/useTradingDesk.ts'
+import type { TradingDeskState } from '../../../hooks/useTradingDesk.ts'
 import { useAppStore } from '../../../stores/appStore.ts'
 import { SceneLoading, SceneUnavailable } from '../SceneEmpty'
 import { WorkspaceObjectList } from '../WorkspaceObjectList'
@@ -60,14 +60,17 @@ export function BenchScene({
   onOpen,
   tradingPanel,
   roomId,
+  desk,
 }: {
   state: WorkspaceObjectsState
   onOpen?: (object: WorkspaceObject) => void
   /** The existing TradingPanel — the thesis lifecycle, moved not rewritten. */
   tradingPanel: ReactNode
   roomId: string | null
+  /** The ONE useTradingDesk instance, lifted to RoomView so the Console's
+   * instrument tiles and this cockpit read the same slices. */
+  desk: TradingDeskState
 }) {
-  const desk = useTradingDesk(roomId)
   const tradingConfig = useAppStore((s) => s.tradingConfig)
 
   if (state.status === 'loading') return <SceneLoading kicker="Bench" />
