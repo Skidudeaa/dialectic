@@ -1,4 +1,4 @@
-import type { Attachment, HomeActivityProjection, Memory, Thread, ThreadNode, UserRoom } from '../types/index.ts';
+import type { Attachment, HomeActivityProjection, Memory, RoundState, Thread, ThreadNode, UserRoom } from '../types/index.ts';
 import type { AtlasProjection } from '../types/atlas.ts';
 import type {
   FieldMark,
@@ -510,6 +510,37 @@ class DialecticAPI {
       method: 'POST',
       body: JSON.stringify({ verdict }),
     });
+  }
+
+  /**
+   * The Sunday Round. Note the READ takes a message id and the WRITES take a
+   * question's commitment id — the card is one message, each question is its
+   * own claim with its own close date.
+   *
+   * The response is projected PER VIEWER: until you have forecast a question
+   * yourself, the other person's number is absent from the body, not merely
+   * hidden by the UI. Do not try to render what you were not sent.
+   */
+  async readRound(roomId: string, messageId: string): Promise<RoundState> {
+    return this.fetch(`/rooms/${roomId}/rounds/${messageId}`) as Promise<RoundState>;
+  }
+
+  async recordForecast(
+    roomId: string,
+    commitmentId: string,
+    confidence: number,
+    reasoning?: string,
+  ): Promise<RoundState> {
+    return this.fetch(`/rooms/${roomId}/rounds/${commitmentId}/forecast`, {
+      method: 'POST',
+      body: JSON.stringify({ confidence, reasoning }),
+    }) as Promise<RoundState>;
+  }
+
+  async binRoundQuestion(roomId: string, commitmentId: string): Promise<RoundState> {
+    return this.fetch(`/rooms/${roomId}/rounds/${commitmentId}/bin`, {
+      method: 'POST',
+    }) as Promise<RoundState>;
   }
 
   async acceptReading(roomId: string, messageId: string): Promise<Record<string, unknown>> {

@@ -1,0 +1,140 @@
+/* The Sunday Round card. Its own file — the transcript's paper surfaces
+   (MessageList, MessageBubble, MessageInput, SignatureMark, fieldDisplay)
+   are deliberately untouched. This is an instrument sitting ON the paper,
+   so it takes the chassis vocabulary rather than the dossier's. */
+
+.round-card {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.round-q {
+    background: var(--color-well, rgba(0, 0, 0, .22));
+    border-radius: var(--radius-sm, 4px);
+    box-shadow: var(--bezel-well);
+    padding: 10px 12px;
+}
+
+.round-q.binned { opacity: .5; }
+
+.round-q-head {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+}
+
+.round-q-n {
+    font-family: var(--font-stencil);
+    font-size: 11px;
+    color: var(--color-amber);
+    min-width: 14px;
+}
+
+.round-q-claim { font-size: .92rem; line-height: 1.35; }
+
+.round-q-meta,
+.round-q-mine,
+.round-q-sealed,
+.round-q-binned {
+    font-size: .72rem;
+    color: var(--text-ghost);
+    margin-top: 4px;
+    font-family: var(--font-stencil);
+    letter-spacing: .04em;
+}
+
+/* Sealed is a STATE, not an error — it should read as the mechanism working. */
+.round-q-sealed { color: var(--color-teal, #54D8C6); }
+
+.round-q-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.round-q-label {
+    font-family: var(--font-stencil);
+    font-size: .72rem;
+    color: var(--text-ghost);
+    min-width: 28px;
+}
+
+.round-q-slider { flex: 1 1 120px; min-width: 100px; accent-color: var(--color-amber); }
+
+.round-q-value {
+    font-family: var(--font-seg, var(--font-stencil));
+    /* Without this the seven-seg decimal point vanishes at small sizes. */
+    letter-spacing: .1em;
+    font-size: .8rem;
+    min-width: 44px;
+    text-align: right;
+}
+
+.round-q-submit,
+.round-q-bin {
+    font-family: var(--font-stencil);
+    font-size: .7rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm, 4px);
+    border: 0;
+    cursor: pointer;
+    background: var(--color-chassis, #2A1E16);
+    color: var(--text-primary, #F5EFE6);
+    box-shadow: var(--bezel-key);
+}
+
+.round-q-submit:disabled,
+.round-q-bin:disabled { cursor: progress; opacity: .6; }
+
+.round-q-bin { background: transparent; box-shadow: none; color: var(--text-ghost); }
+.round-q-bin:hover:not(:disabled) { color: var(--color-scarlet, #DE5151); }
+
+.round-q-others { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+
+.round-q-other,
+.round-q-score {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: .78rem;
+}
+
+.round-q-delta,
+.round-q-gap {
+    font-family: var(--font-stencil);
+    font-size: .68rem;
+    color: var(--color-amber);
+}
+
+.round-q-scores {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid var(--engrave-line, rgba(255, 249, 240, .07));
+}
+
+.round-q-actions { margin-top: 8px; }
+
+/* A refusal is the server saying no on purpose (closed, binned). It must not
+   read like a transport error, because "try again" would be a lie. */
+.round-q-refused {
+    margin-top: 6px;
+    font-size: .72rem;
+    color: var(--color-amber);
+}
+
+.round-q-error {
+    margin-top: 6px;
+    font-size: .72rem;
+    color: var(--color-scarlet, #DE5151);
+}
+
+@media (max-width: 480px) {
+    .round-q-row { gap: 6px; }
+    .round-q-slider { flex-basis: 100%; order: 3; }
+}

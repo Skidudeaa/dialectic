@@ -10,6 +10,7 @@ import { useAppStore } from '../../stores/appStore'
 import { MessageAttachments } from './MessageAttachments'
 import { SignatureMark } from './SignatureMark'
 import { PassageMarker } from './PassageMarker'
+import { RoundCard } from './RoundCard'
 import { MessageMarks } from './MessageMarks'
 import './MessageBubble.css'
 
@@ -54,6 +55,8 @@ interface MessageBubbleProps {
    * mention chip for somebody the room does not have is worse than none.
    */
   mentionContext?: MentionContext
+  /** Display names by user id — a forecaster must not render as a UUID. */
+  userNames?: Record<string, string>
   /** Field marks whose subject is THIS message, with their review state. */
   marks?: FieldMark[]
   /** Re-read the Field projection after a mark or a review lands. */
@@ -142,6 +145,7 @@ export function MessageBubble({
   onEdit,
   onDelete,
   mentionContext,
+  userNames = {},
   marks = [],
   onFieldChanged,
   isContinuation,
@@ -474,6 +478,13 @@ export function MessageBubble({
         </div>
         {currentRoomId && (
           <MessageMarks roomId={currentRoomId} marks={marks} onReviewed={onFieldChanged} />
+        )}
+        {currentRoomId && message.metadata?.question_round && (
+          <RoundCard
+            roomId={currentRoomId}
+            messageId={message.id}
+            userNames={userNames}
+          />
         )}
 
         {foldable && (
