@@ -25,9 +25,12 @@
 #   - A hard close date. Ambiguity about WHEN is ambiguity about WHETHER.
 #   - Forecasts are REVISABLE until close. This is not a nicety: GJP scored
 #     the time-weighted average Brier across a question's life, so updating on
-#     news is the skill being measured. `prediction_confidence` is already an
-#     append-only per-actor history with recorded_at — the substrate was
-#     always there, nothing ever wrote a second row to it.
+#     news is the skill being measured. `commitment_confidence` is already an
+#     append-only per-USER history with recorded_at — the substrate was always
+#     there, nothing ever wrote a second row to it. (The desk's own
+#     `prediction_confidence` is the analogous table on the other side of the
+#     seam, but its scorer ignores `actor`, which is why the round is scored
+#     here and not there.)
 #
 # TRADEOFF: questions are drafted by the model against the room's live thesis
 # and the week's readings, then posted WITHOUT human review. A bad question is
@@ -336,12 +339,30 @@ async def question_round(ctx: SchedulerContext) -> dict:
     detail: dict[str, Any] = {}
     async with ctx.pool.acquire() as conn:
         rooms = await conn.fetch(
-            """SELECT DISTINCT r.id, r.name, r.trading_config
+            # WHY the two extra conditions, both learned the hard way:
+            #
+            # >= 2 MEMBERS is not a nicety, it is a consequence of the
+            # blindness rule. A question stays sealed until BOTH forecasters
+            # have committed, so in a one-member room `revealed` can never
+            # become true — the round would draft five questions a week,
+            # forever, into a room where they could never unseal. A real one
+            # ("Hi Dan!", one member, and that member a retired account) was
+            # found qualifying on 2026-08-20, the day this was armed.
+            #
+            # HUMAN traffic, not any traffic: the scheduled jobs post into
+            # rooms on their own, so `messages` alone will keep a room looking
+            # alive long after both people have left it. A room nobody has
+            # spoken in does not need questions.
+            """SELECT r.id, r.name, r.trading_config
                FROM rooms r
                JOIN threads t ON t.room_id = r.id
                JOIN messages m ON m.thread_id = t.id
                WHERE m.created_at > now() - interval '14 days'
-                 AND NOT r.is_home"""
+                 AND m.speaker_type = 'human'
+                 AND NOT r.is_home
+                 AND (SELECT count(*) FROM room_memberships rm
+                      WHERE rm.room_id = r.id) >= 2
+               GROUP BY r.id, r.name, r.trading_config"""
         )
         for room in rooms:
             key = str(room["id"])

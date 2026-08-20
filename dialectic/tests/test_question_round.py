@@ -13,6 +13,7 @@ import pytest
 
 from llm.question_round import (
     ENABLED_ENV,
+    question_round,
     QUESTIONS_PER_ROUND,
     ROUND_SYSTEM,
     is_round_day,
@@ -145,3 +146,48 @@ class TestRegistration:
 
     def test_round_size(self):
         assert QUESTIONS_PER_ROUND == 5
+
+
+class TestWhichRoomsGetARound:
+    """The selection query, asserted as SQL because it is the whole blast
+    radius: a room that should not receive a round receives one every Sunday
+    forever, and a room that should never stops.
+    """
+
+    @staticmethod
+    def _sql():
+        import inspect
+        from llm import question_round as mod
+        return inspect.getsource(mod.question_round)
+
+    def test_requires_two_members_because_blindness_needs_two(self):
+        """A one-member room can NEVER unseal — `revealed` requires both
+        forecasters — so a round there would draft questions that could never
+        be read. A real one ("Hi Dan!", one member, and that member a retired
+        account) qualified under the first version of this query."""
+        sql = self._sql()
+        assert "room_memberships" in sql
+        assert ">= 2" in sql
+
+    def test_requires_human_traffic_not_merely_traffic(self):
+        """Twelve scheduled jobs post into rooms on their own, so `messages`
+        alone keeps a room looking alive long after both people left it."""
+        assert "speaker_type = 'human'" in self._sql()
+
+    def test_excludes_home(self):
+        assert "NOT r.is_home" in self._sql()
+
+    def test_the_window_is_stated_once(self):
+        sql = self._sql()
+        assert sql.count("interval '14 days'") == 1
+
+
+class TestTheRoundIsIdempotentPerDay:
+    def test_the_guard_matches_on_the_round_source(self):
+        """A scheduler retry, or a restart inside the 09:00 slot, must not
+        post a second round into the same room the same day."""
+        import inspect
+        from llm import question_round as mod
+        sql = inspect.getsource(mod._already_ran_today)
+        assert "'question_round'" in sql
+        assert "source" in sql
