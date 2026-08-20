@@ -36,6 +36,7 @@
 # job exists to prevent. Resolution stays human-tapped, as everywhere else.
 
 import logging
+import os
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import uuid4
@@ -51,6 +52,20 @@ logger = logging.getLogger(__name__)
 # Sunday. `date.weekday()` is Monday=0, so Sunday is 6.
 ROUND_WEEKDAY = 6
 
+def questions_per_round() -> int:
+    """How many questions a room gets. Env-tunable because the right number is
+    a matter of appetite, not engineering: a question nobody forecasts scores
+    nobody, so covering less and answering all of it beats the reverse.
+    Clamped to 1..10 — a round of thirty is a chore, and a round of zero is a
+    silent job that looks broken."""
+    try:
+        raw = int(os.getenv("QUESTIONS_PER_ROUND", "5"))
+    except ValueError:
+        return 5
+    return max(1, min(raw, 10))
+
+
+# The default, and what the tests pin. Read questions_per_round() at call time.
 QUESTIONS_PER_ROUND = 5
 QUESTION_MODEL = "claude-sonnet-5"
 
@@ -98,7 +113,7 @@ No preamble, no numbering, no commentary outside the blocks."""
 
 def _horizon_dates(today: date) -> list[str]:
     out = []
-    for i in range(QUESTIONS_PER_ROUND):
+    for i in range(questions_per_round()):
         out.append((today + timedelta(days=HORIZONS_DAYS[i % len(HORIZONS_DAYS)])).isoformat())
     return out
 
@@ -108,7 +123,7 @@ def _build_prompt(room_name: str, thesis_context: str, readings: list[dict],
     lines = [
         f"Room: {room_name}. Today is {today.isoformat()} (a Sunday).",
         "",
-        f"Write {QUESTIONS_PER_ROUND} questions for this week's round.",
+        f"Write {questions_per_round()} questions for this week's round.",
         "Spread the close dates across roughly these horizons: "
         + ", ".join(_horizon_dates(today)) + ".",
         "",
