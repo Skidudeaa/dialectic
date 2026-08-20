@@ -21,8 +21,9 @@ for the feature is real GJP form, not a quiz.
 |---|---|
 | `269cd54` | The connection — push taps that land, cross-room presence, one presence predicate, the seam timeout law, the cairn fence |
 | `49e3129` | The Sunday Round — job, forecast door, scoring rule, card |
-| `9084c4e` | Round size dial + **ships dark** |
+| `9084c4e` | Round size dial + shipped dark |
 | `15f61ea` | `dialectic/CLAUDE.md` amendment |
+| `05e479e` | A round needs two people — the room filter, found while arming |
 
 Release `20260819233503-sunday-round`, symlink flipped, nginx reloaded, backend
 restarted (PID moved 3644589 → 1672664, `/health` 200 in 1s, 13 jobs
@@ -66,36 +67,68 @@ bite hardest:
    `user_presence`, use it. The bug it fixes is invisible: a stranded `'online'`
    row silently disables push/annotator/curator for one member of one room.
 
-## To arm the Round
+## The Round is ARMED (2026-08-20, owner: "un-darken it")
+
+`QUESTION_ROUND_ENABLED=1`, `QUESTIONS_PER_ROUND=5`, backend restarted
+(PID 1672664 → 359070, `/health` 200 in 4s, both vars confirmed in
+`/proc/<pid>/environ`, zero errors since).
+
+**First fire: Sunday 2026-08-23, 09:00 America/Chicago.** Proven silent in
+between — running the job live on a Thursday returns
+`{'skipped': 'not_sunday'}` against a pool that raises on any acquire, so the
+gate returns before it touches the database rather than merely existing.
+
+**Four rooms qualify, so 20 questions land that morning** — Iran/Hormuz, AI
+Capex Unwind, Japan Rate Shock, China Property Cascade. That is 40 forecasts a
+week between the two of them. The owner was asked to choose a volume and did
+not answer, so it ships at the built default; **the recommendation on the table
+was 3/room (12 a week)** on the grounds that a question nobody forecasts scores
+nobody. Changing it is one env var and a restart, no code:
 
 ```bash
-# in dialectic/.env
-QUESTION_ROUND_ENABLED=1
-QUESTIONS_PER_ROUND=5      # 1..10; fewer that get forecast beats more that don't
-systemctl restart dialectic          # NEVER with uncommitted edits in the tree
+# dialectic/.env
+QUESTIONS_PER_ROUND=3        # 1..10, clamped
+systemctl restart dialectic  # NEVER with uncommitted edits in the tree
 ```
-Read `ROUND_SYSTEM` in `llm/question_round.py` first — it is the question
-quality bar. Next fire after arming is the following Sunday 09:00 America/Chicago.
-Backup of the pre-change env: `/root/dialectic-env-backup-20260820.txt`.
+
+`ROUND_SYSTEM` in `llm/question_round.py` is the question quality bar and is
+the thing to edit if the questions come out weak. Env backups:
+`/root/dialectic-env-backup-20260820.txt` (pre-Round) and
+`-prearm.txt` (pre-arming).
+
+### The bug arming exposed
+
+Five rooms qualified, and one was **"Hi Dan!" — one member, and that member the
+retired `namosson+retired-test12` account.** Not merely a wasted draft: a
+question stays sealed until BOTH forecasters commit, so in a one-member room
+`revealed` can never become true. It would have drafted five questions a week,
+forever, into a room where none could ever be read. The selection now requires
+**≥2 members** and **human** traffic (thirteen jobs post into rooms on their
+own, so `messages` alone keeps a dead room looking alive). Mutation-verified.
 
 ## Open, in rough order of value
 
-1. **The owner never answered the deploy/volume question** (asked 23:25, no
-   reply). Round is dark and set to 5/room pending his call. Four bound rooms
-   would mean 20 questions/week; he may want 3, or one round in Home only.
-2. **The sharp-voice ruling is unbuilt.** The participant reading its own and
+1. **Volume is unruled.** Armed at 5/room = 20 questions every Sunday. The
+   recommendation was 3/room; the owner has not chosen. One env var.
+2. **The first real round is unobserved.** Nobody has seen a question this
+   thing writes. Read the 2026-08-23 output before assuming `ROUND_SYSTEM` is
+   good enough — the parser drops malformed blocks silently, so a bad prompt
+   shows up as a SHORT round, not an error. Check
+   `journalctl -u dialectic --since "2026-08-23 09:00"` for
+   `no_valid_questions`.
+3. **The sharp-voice ruling is unbuilt.** The participant reading its own and
    their track record aloud — the resolution callback ("Dan called this at 85%
    on Aug 17") — is designed, not written. It needs resolved questions first,
    so it is naturally downstream of arming the Round.
-3. **The commitment Accept card still asks for neither deadline nor
+4. **The commitment Accept card still asks for neither deadline nor
    confidence** (`MessageBubble.tsx:322`, `stakes/detector.py:96-99`). The Round
    routes around it; the ordinary path is still unscoreable. The approved plan's
    two-human vote card covers this and was superseded by the Round, not done.
-4. **`llm_decisions.tool_calls` is double-encoded** (`self_model.py:257-259`
+5. **`llm_decisions.tool_calls` is double-encoded** (`self_model.py:257-259`
    pre-dumps into a codec that already dumps), so tool analytics read empty.
    Observability only, but it is what makes "are the tools working" unanswerable
    by query.
-5. `save_reading` discards a written summary when the re-fetch 403s. Ten of
+6. `save_reading` discards a written summary when the re-fetch 403s. Ten of
    twenty tools have never been called in production. Polymarket is configured
    for none of the live rooms and Iran/Hormuz polls a market that resolved in
    April.

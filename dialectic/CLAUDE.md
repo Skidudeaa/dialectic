@@ -785,8 +785,17 @@ anything above that describes presence, push, or the tool timeouts.
   closed), and `get_dev_session` re-checks so a known id cannot walk around it.
 - **THE SUNDAY ROUND** (`llm/question_round.py`, `api/rounds.py`,
   `stakes/timeweighted.py`, `components/chat/RoundCard.tsx`). Thirteen scheduled
-  jobs now. **Ships dark: `QUESTION_ROUND_ENABLED=0`** in the live `.env`;
-  `QUESTIONS_PER_ROUND` (1..10, default 5) is the appetite dial.
+  jobs now. **ARMED 2026-08-20: `QUESTION_ROUND_ENABLED=1`**, first fire
+  Sunday 2026-08-23 09:00 CT. `QUESTIONS_PER_ROUND` (1..10, default 5) is the
+  appetite dial — four rooms qualify today, so 20 questions a Sunday.
+  - **Room selection requires >= 2 MEMBERS and HUMAN traffic.** The member
+    floor is a consequence of the blindness rule, not a nicety: a question
+    stays sealed until both forecasters commit, so in a one-member room
+    `revealed` can never become true and the round would draft questions that
+    could never be read. A real one qualified on arming day ("Hi Dan!", one
+    member, that member a retired account). The human-traffic condition exists
+    because thirteen scheduled jobs post into rooms on their own, so
+    `messages` alone keeps a dead room looking alive.
   - Forecasts are **rows in `commitment_confidence`**, never entries in message
     metadata — `schema.sql:249-259` states the rule (rows, because concurrent
     writes cannot clobber each other) and there is no array-append-into-JSONB
