@@ -139,7 +139,9 @@ def _push_text(room_name: str, events: list[dict]) -> tuple[str, str]:
 
 
 async def _push_critical(db, connection_manager, room_id: UUID,
-                         events: list[dict]) -> None:
+                         events: list[dict], *,
+                         thread_id: UUID | None = None,
+                         message_id: UUID | None = None) -> None:
     """Web-push a critical transition to every room member not looking at it.
 
     WHY every member rather than only the offline ones: an ordinary message
@@ -175,12 +177,21 @@ async def _push_critical(db, connection_manager, room_id: UUID,
     title, body = _push_text(room_name, events)
     from api.notifications.webpush import send_web_notifications
 
+    # Carry the alert's own coordinates when the curator produced one. A
+    # room-only payload lands the tap on the legacy `open-room` branch, which
+    # moves no navigation state — so the reader arrives at the list they were
+    # already looking at and the alert is not on it.
+    data = {"room_id": str(room_id), "type": "trading_alert"}
+    if thread_id is not None and message_id is not None:
+        data["thread_id"] = str(thread_id)
+        data["message_id"] = str(message_id)
+
     await send_web_notifications(
         db,
         recipients,
         title,
         body,
-        {"room_id": str(room_id), "type": "trading_alert"},
+        data,
         tag=f"trading_{room_id}",
     )
 
@@ -307,6 +318,8 @@ async def ingest_snapshot(
 async def _notify(db, connection_manager, room_id: UUID,
                   request: TradingSnapshotRequest, snapshot_data: dict) -> None:
     """Curator alert + critical web push. Neither may fail the receipt."""
+    alert_thread_id = None
+    alert_message_id = None
     plan = curator_plan(request)
     if plan is not None:
         try:
@@ -323,6 +336,8 @@ async def _notify(db, connection_manager, room_id: UUID,
                     daily_cap=plan["daily_cap"],
                 )
                 if alert:
+                    alert_thread_id = thread_row["id"]
+                    alert_message_id = alert.id
                     await connection_manager.broadcast(room_id, OutboundMessage(
                         type=MessageTypes.TRADING_UPDATE,
                         payload={"message": alert.model_dump(mode="json")},
@@ -333,7 +348,10 @@ async def _notify(db, connection_manager, room_id: UUID,
     criticals = critical_events(request.alertEvents)
     if criticals:
         try:
-            await _push_critical(db, connection_manager, room_id, criticals)
+            await _push_critical(
+                db, connection_manager, room_id, criticals,
+                thread_id=alert_thread_id, message_id=alert_message_id,
+            )
         except Exception as e:
             # A push failure must never turn a stored snapshot into a 500.
             logger.warning(f"Trading critical push failed (non-critical): {e}")

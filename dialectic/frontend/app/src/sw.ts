@@ -114,14 +114,25 @@ self.addEventListener('notificationclick', (event) => {
           channel.port1.close()
           resolve(received)
         }
-        const timeout = setTimeout(() => finish(false), 200)
+        // A thawing iOS PWA rarely runs its message listener inside 200ms,
+        // so the ack path almost never won on the device this was written for.
+        const timeout = setTimeout(() => finish(false), 1000)
         channel.port1.onmessage = () => {
           clearTimeout(timeout)
           finish(true)
         }
       })
       client.postMessage(payload, [channel.port2])
-      if (!await acknowledged) await client.navigate(destination)
+      // matchAll({includeUncontrolled:true}) can hand back a client this
+      // worker does not control, and navigate() REJECTS for those — the
+      // rejection escaped waitUntil and the tap did nothing at all.
+      if (!await acknowledged) {
+        try {
+          await client.navigate(destination)
+        } catch {
+          await self.clients.openWindow(destination)
+        }
+      }
       return
     }
     await self.clients.openWindow(destination)

@@ -333,6 +333,24 @@ export function useRoomNavigation(): RoomNavigation {
     })()
   }, [refreshRooms])
 
+  // The room list used to be fetched ONLY on navigation, so everything it
+  // carries — unread badges, previews, and now who is present in each room —
+  // froze the moment you settled into a room and stayed frozen until you left
+  // it. That is precisely the window in which you want to know the other
+  // person just walked into a different room. The socket cannot help: it only
+  // ever broadcasts into the room you are already connected to.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') void refreshRooms()
+    }
+    const interval = window.setInterval(tick, 45_000)
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', tick)
+    }
+  }, [refreshRooms])
+
   // Back/Forward re-entry is history-neutral: never a push, never a replace.
   useEffect(() => {
     const onPopState = () => {

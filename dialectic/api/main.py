@@ -39,6 +39,7 @@ from stakes.routes import router as stakes_router, set_stakes_db_pool
 from api.personas import router as personas_router, set_personas_db_pool
 from api.attachments import router as attachments_router, set_attachments_db_pool
 from api.prediction_relay import router as prediction_relay_router, set_prediction_relay_db_pool
+from api.rounds import router as rounds_router, set_rounds_db_pool
 from api.reading_relay import router as reading_relay_router, set_reading_relay_db_pool
 from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_pool
 from api.trading_relay import router as trading_relay_router, set_trading_relay_db_pool
@@ -162,6 +163,7 @@ async def lifespan(app: FastAPI):
 
         # Set db_pool for the prediction relay module
         set_prediction_relay_db_pool(db_pool)
+        set_rounds_db_pool(db_pool)
         set_reading_relay_db_pool(db_pool)
         set_thesis_relay_db_pool(db_pool)
         set_trading_relay_db_pool(db_pool)
@@ -213,6 +215,7 @@ async def lifespan(app: FastAPI):
         from trading_watch import register_bloodstream_jobs
         from llm.night_shift import register_brief_jobs
         from llm.news_night import register_news_jobs
+        from llm.question_round import register_question_round_jobs
         from llm.silence_sweep import register_sweep_jobs
         from llm.wire import register_wire_jobs
         from llm.rss_wire import register_rss_wire_jobs
@@ -231,6 +234,7 @@ async def lifespan(app: FastAPI):
         register_bloodstream_jobs(scheduler_instance)
         register_brief_jobs(scheduler_instance)
         register_news_jobs(scheduler_instance)
+        register_question_round_jobs(scheduler_instance)
         register_sweep_jobs(scheduler_instance)
         register_wire_jobs(scheduler_instance)
         register_rss_wire_jobs(scheduler_instance)
@@ -317,6 +321,7 @@ app.include_router(attachments_router)
 
 # Include prediction relay router (human Accept → tradingDesk write)
 app.include_router(prediction_relay_router)
+app.include_router(rounds_router)
 app.include_router(reading_relay_router)
 
 # Include thesis relay router (Create Thesis → book born bound to its room)
@@ -354,6 +359,7 @@ connection_manager: ConnectionManager = ConnectionManager()
 # ============================================================
 
 from api.token_utils import extract_room_token
+from presence import PRESENCE_STALE_AFTER, is_present, online_sql
 from api.thread_titles import ROOT_THREAD_TITLE
 
 
@@ -2504,6 +2510,12 @@ async def health():
 # USER ENDPOINTS
 # ============================================================
 
+class PresentMember(BaseModel):
+    """Another member who is in a room right now."""
+    user_id: UUID
+    display_name: str
+
+
 class UserRoomResponse(BaseModel):
     """Room with unread count for user's room list."""
     id: UUID
@@ -2522,6 +2534,13 @@ class UserRoomResponse(BaseModel):
     # The caller's OWN capability on this room — lets the client show Home
     # settings only to administrators. Never another member's flag.
     can_manage_home: bool = False
+    # WHO ELSE IS IN THIS ROOM RIGHT NOW. Presence has always been per-room in
+    # the table and single-room at every read, so the product could not answer
+    # "where are you talking right now?" — a question one founder asked the
+    # other in the room itself. This rides the room list because the sidebar
+    # already fetches it for every room: one LEFT JOIN, no new round trip.
+    # The caller is excluded; you are not news to yourself.
+    others_present: List[PresentMember] = []
 
 
 @app.get("/users/me/rooms", response_model=List[UserRoomResponse])
@@ -2580,12 +2599,27 @@ async def get_user_rooms(
                 WHERE mr.user_id = $1 AND mr.receipt_type = 'read'
                   AND t.room_id = r.id
             ) as last_read_at,
-            rm.joined_at as joined_at
+            rm.joined_at as joined_at,
+            (
+                SELECT COALESCE(
+                    json_agg(json_build_object(
+                        'user_id', u2.id, 'display_name', u2.display_name
+                    ) ORDER BY u2.display_name),
+                    '[]'::json
+                )
+                FROM user_presence up
+                JOIN users u2 ON u2.id = up.user_id
+                JOIN room_memberships rm2
+                  ON rm2.room_id = up.room_id AND rm2.user_id = up.user_id
+                WHERE up.room_id = r.id
+                  AND up.user_id != $1
+                  AND {presence_online}
+            ) as others_present
         FROM rooms r
         JOIN room_memberships rm ON r.id = rm.room_id
         WHERE rm.user_id = $1
         ORDER BY last_message_at DESC NULLS LAST
-        """,
+        """.format(presence_online=online_sql("up")),
         user_id
     )
 
@@ -2600,6 +2634,12 @@ async def get_user_rooms(
         joined_at=row['joined_at'],
         is_home=row['is_home'],
         can_manage_home=row['can_manage_home'],
+        # The pool registers a `json` codec with decoder=json.loads (see
+        # _init_connection), so json_agg arrives already decoded — do NOT
+        # json.loads it again.
+        others_present=[
+            PresentMember(**member) for member in (row['others_present'] or [])
+        ],
     ) for row in rows]
 
 
@@ -2611,9 +2651,6 @@ class PresenceUserResponse(BaseModel):
     last_heartbeat: Optional[datetime]
 
 
-PRESENCE_STALE_AFTER = timedelta(seconds=90)
-
-
 def _effective_presence_status(
     stored_status: Optional[str],
     last_heartbeat: Optional[datetime],
@@ -2621,17 +2658,24 @@ def _effective_presence_status(
     locally_connected: bool,
     now: Optional[datetime] = None,
 ) -> str:
-    """Convert abandoned online/away rows to offline after the heartbeat TTL."""
+    """Convert abandoned online/away rows to offline after the heartbeat TTL.
+
+    The TTL itself lives in presence.py because this used to be its only
+    application — three other readers (push fan-out, the annotator gate, the
+    trading curator) took `status` raw and so disagreed with this endpoint
+    about any row an ungraceful restart had stranded at 'online'.
+    """
     if locally_connected:
         return "online"
 
     status = stored_status or "offline"
-    current_time = now or datetime.now(timezone.utc)
-    if status in {"online", "away"} and (
-        last_heartbeat is None
-        or last_heartbeat < current_time - PRESENCE_STALE_AFTER
-    ):
-        return "offline"
+    if status == "away":
+        current_time = now or datetime.now(timezone.utc)
+        if last_heartbeat is None or last_heartbeat < current_time - PRESENCE_STALE_AFTER:
+            return "offline"
+        return "away"
+    if status == "online":
+        return "online" if is_present(status, last_heartbeat, now=now) else "offline"
     return status
 
 

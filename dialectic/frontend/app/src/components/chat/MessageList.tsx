@@ -232,13 +232,22 @@ export function MessageList({
     }
   }, [messages, isFollowing, isVisible, onSeen, streamingMessageId])
 
+  const [jumpMissed, setJumpMissed] = useState(false)
+
   // Scroll to a jumped-to message and flash it, so the eye lands on the right
   // line in a wall of text. Pure DOM work — the flash class is added and removed
   // directly rather than held in state.
   useEffect(() => {
     if (!jumpTarget) return
     const el = wrapperRef.current?.querySelector(`[data-message-id="${CSS.escape(jumpTarget.id)}"]`)
-    if (!el) return
+    // A tapped push whose message sits outside the loaded window used to
+    // return here silently — the tap appeared to do nothing, which is the
+    // exact report ("i click on them i don't see you post"). Say so instead.
+    if (!el) {
+      setJumpMissed(true)
+      return
+    }
+    setJumpMissed(false)
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     el.classList.add('msg-flash')
     const timer = window.setTimeout(() => el.classList.remove('msg-flash'), 1600)
@@ -294,6 +303,15 @@ export function MessageList({
     <div className="messages-viewport">
       <div className="messages-wrapper" ref={wrapperRef} onScroll={handleScroll}>
         <div className="messages-container">
+          {jumpMissed && (
+            <div className="unread-divider" role="status">
+              <span className="unread-divider-line" />
+              <span className="unread-divider-text">
+                That message is further back than this page reaches
+              </span>
+              <span className="unread-divider-line" />
+            </div>
+          )}
           {groupByDay(messages).map(group => (
             // WHY day-group wrapper: position:sticky is constrained to the
             // parent, so the divider must share a container with its day's
@@ -326,6 +344,7 @@ export function MessageList({
                     message={msg}
                     isSelf={msg.user_id === currentUserId}
                     authorName={getAuthorName(msg, userNames)}
+                    userNames={userNames}
                     mentionContext={mentionContext}
                     marks={marksByMessage[msg.id]}
                     onFieldChanged={onFieldChanged}

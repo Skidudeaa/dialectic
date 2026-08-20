@@ -101,6 +101,54 @@ class TestRegistryContract:
         assert set(registry.names()) == EXPECTED_TOOLS
         assert len(registry.tools) == 20
 
+    def test_every_tool_guard_outlives_its_http_client(self, registry):
+        """The seam's timeout law, enforced for the whole registry.
+
+        A tool's asyncio guard (timeout_s, applied by ToolLoop via
+        asyncio.wait_for) must be STRICTLY GREATER than the HTTP timeout of
+        the client it calls. Equal is not a budget, it is a race: whichever
+        fires first decides whether the room gets a descriptive error or a
+        bare timeout, and the descriptive one is the whole point of a tool
+        that can fail. Measured 2026-08-20: get_live_quotes ran 18.78s inside
+        a 20s inner timeout under a 20s outer guard.
+
+        The floor here is the default a tool inherits when it overrides
+        NEITHER side. tradingDesk and cairn both default to 10.0; the two
+        defuddle-backed tools set their own and are checked below, because
+        applying defuddle's larger default to tools that never call it would
+        fail correct code.
+        """
+        from llm import tradingdesk_client as td
+
+        floor = td.DEFAULT_TIMEOUT_S
+        offenders = [
+            (tool.name, tool.timeout_s) for tool in registry.tools
+            if tool.timeout_s <= floor
+        ]
+        assert not offenders, (
+            f"guard must exceed the {floor}s client default: {offenders}"
+        )
+
+    def test_named_tools_exceed_their_own_inner_timeouts(self, registry):
+        """Every tool that sets BOTH sides must keep a real margin."""
+        from llm import tools as tools_mod
+        from llm import tradingdesk_client as td
+        from llm import defuddle_client as dc
+
+        by_name = {tool.name: tool for tool in registry.tools}
+        pairs = [
+            ("get_live_quotes", tools_mod.QUOTES_TIMEOUT_S),
+            ("get_polymarket_odds", td.POLYMARKET_TIMEOUT_S),
+            ("get_thesis_news", td.NEWS_TIMEOUT_S),
+            ("read_article", dc.DEFAULT_TIMEOUT_S),
+            ("save_reading", dc.DEFAULT_TIMEOUT_S),
+        ]
+        for name, inner in pairs:
+            tool = by_name[name]
+            assert tool.timeout_s > inner, (
+                f"{name}: guard {tool.timeout_s}s must exceed inner {inner}s"
+            )
+
     def test_names_match_anthropic_pattern(self, registry):
         for tool in registry.tools:
             assert NAME_RE.match(tool.name), f"bad tool name: {tool.name!r}"
@@ -1853,10 +1901,14 @@ def install_cn_transport(handler):
     cn._client = httpx.AsyncClient(transport=httpx.MockTransport(handler), timeout=5.0)
 
 
+# NOTE the project: it must be inside CAIRN_ALLOWED_PROJECTS or the executors
+# fence it out before these shape assertions ever see it. That fence is the
+# point (somaNotes must not surface in a room shared with Dan), so the fixture
+# uses a project this monorepo actually owns rather than weakening the guard.
 CAIRN_SESSION = {
     "id": "session_abc123def456",
-    "name": "auto: cairn 2026-08-13 22:41",
-    "project": "cairn",
+    "name": "auto: dialectic 2026-08-13 22:41",
+    "project": "dialectic",
     "status": "completed",
     "started_at": "2026-08-13T22:41:12",
     "ended_at": "2026-08-13T22:42:45",
@@ -1930,13 +1982,14 @@ class TestCairnTools:
     async def test_recent_activity_lists_sessions(self, registry, cairn_env):
         def handler(request):
             assert request.url.path == "/api/sessions"
-            assert request.url.params.get("project") == "cairn"
+            assert request.url.params.get("project") == "dialectic"
             return json_response([CAIRN_SESSION])
 
         install_cn_transport(handler)
-        out = await registry.get("recent_dev_activity").execute({"project": "cairn"})
+        out = await registry.get("recent_dev_activity").execute(
+            {"project": "dialectic"})
         assert out["count"] == 1
-        assert out["project"] == "cairn"
+        assert out["project"] == "dialectic"
 
     @pytest.mark.asyncio
     async def test_get_session_joins_events(self, registry, cairn_env):

@@ -14,6 +14,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 from uuid import UUID, uuid4
 
+from presence import ONLINE_SQL
+
 from models import (
     Message, EventType, SpeakerType, MessageType,
 )
@@ -57,11 +59,11 @@ class TradingCuratorEngine:
         the snapshot comes from an external script, not a human sender.
         """
         offline_count = await self.db.fetchval(
-            """SELECT COUNT(*) FROM room_memberships rm
+            f"""SELECT COUNT(*) FROM room_memberships rm
                WHERE rm.room_id = $1
                AND rm.user_id NOT IN (
                    SELECT user_id FROM user_presence
-                   WHERE room_id = $1 AND status = 'online'
+                   WHERE room_id = $1 AND {ONLINE_SQL}
                )""",
             room_id,
         )

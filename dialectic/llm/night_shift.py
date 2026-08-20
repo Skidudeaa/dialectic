@@ -117,8 +117,13 @@ def _render_brief(briefing: BriefingResponse) -> str:
     return "\n".join(lines)
 
 
-async def _post_brief_message(conn, ctx, room, content: str) -> str:
-    """Annotator-lane brief, mirroring trading_watch._post_watchdog_message."""
+async def _post_brief_message(conn, ctx, room, content: str) -> tuple[str, str | None]:
+    """Annotator-lane brief, mirroring trading_watch._post_watchdog_message.
+
+    Returns (message_id, thread_id) so the push can point at the brief itself
+    rather than at the room — a room-only push tap moves no navigation state,
+    so it lands on whatever list the reader already had.
+    """
     msg_id = uuid4()
     now = datetime.now(timezone.utc)
     thread_row = await conn.fetchrow(
@@ -126,7 +131,7 @@ async def _post_brief_message(conn, ctx, room, content: str) -> str:
         room["id"],
     )
     if thread_row is None:
-        return "no_thread"
+        return "no_thread", None
     metadata = {"source": "night_shift"}
     await conn.execute(
         """INSERT INTO messages
@@ -162,10 +167,12 @@ async def _post_brief_message(conn, ctx, room, content: str) -> str:
                 "metadata": metadata,
             },
         ))
-    return str(msg_id)
+    return str(msg_id), str(thread_row["id"])
 
 
-async def _push_brief(conn, ctx, room, briefing: BriefingResponse) -> int:
+async def _push_brief(conn, ctx, room, briefing: BriefingResponse,
+                      thread_id: str | None = None,
+                      message_id: str | None = None) -> int:
     """Web-push the brief to members without an active WS to the room.
 
     Recipient filter mirrors trading_ingest._push_critical: a brief is not
@@ -199,7 +206,12 @@ async def _push_brief(conn, ctx, room, briefing: BriefingResponse) -> int:
         recipient_user_ids=recipients,
         title=f"{room['name']}: morning brief",
         body=briefing.summary,
-        data={"room_id": str(room["id"]), "type": "morning_brief"},
+        data=(
+            {"room_id": str(room["id"]), "type": "morning_brief",
+             "thread_id": thread_id, "message_id": message_id}
+            if thread_id and message_id
+            else {"room_id": str(room["id"]), "type": "morning_brief"}
+        ),
         tag=f"brief_{room['id']}",
     )
     return len(recipients)
@@ -228,11 +240,14 @@ async def morning_brief(ctx: SchedulerContext) -> dict:
                 continue
 
             content = _render_brief(briefing)
-            msg_id = await _post_brief_message(conn, ctx, room, content)
+            msg_id, brief_thread_id = await _post_brief_message(
+                conn, ctx, room, content)
             if msg_id == "no_thread":
                 detail[room_key] = "no_thread"
                 continue
-            pushed = await _push_brief(conn, ctx, room, briefing)
+            pushed = await _push_brief(
+                conn, ctx, room, briefing,
+                thread_id=brief_thread_id, message_id=msg_id)
             posted += 1
             detail[room_key] = {
                 "message_id": msg_id,

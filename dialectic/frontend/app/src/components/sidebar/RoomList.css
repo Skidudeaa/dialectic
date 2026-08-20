@@ -142,3 +142,48 @@
     position: static;
     margin-left: auto;
 }
+
+/* PRESENCE ON THE RAIL — who is in each room right now.
+   A lit lamp on the room card, engraved with the person's initial. This is
+   the surface that answers "where are you talking right now?"; the amber
+   unread badge keeps the top-right corner, so presence sits bottom-right and
+   the two never collide. Green because it means alive, not unread. */
+.room-item-present {
+    position: absolute;
+    bottom: 0.45rem;
+    right: 0.5rem;
+    display: flex;
+    gap: 3px;
+    align-items: center;
+}
+
+.room-item-present-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-family: var(--font-stencil);
+    font-size: 10px;
+    line-height: 1;
+    color: var(--color-void);
+    background: var(--led-green);
+    box-shadow: var(--led-glow-green);
+}
+
+/* A lamp is not information for a screen reader — the name is. */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .room-item-present-dot { box-shadow: none; }
+}

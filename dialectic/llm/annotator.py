@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
+from presence import ONLINE_SQL, online_sql
+
 from models import (
     Message, Event, EventType, SpeakerType, MessageType,
 )
@@ -112,8 +114,8 @@ class AnnotatorEngine:
         Knobs: ANNOTATOR_DAILY_CAP, ANNOTATOR_MIN_MEMORY_HITS, ANNOTATOR_MIN_CHARS.
         """
         online_count = await self.db.fetchval(
-            """SELECT COUNT(*) FROM user_presence
-               WHERE room_id = $1 AND status = 'online'
+            f"""SELECT COUNT(*) FROM user_presence
+               WHERE room_id = $1 AND {ONLINE_SQL}
                AND user_id != $2""",
             room_id, sender_user_id
         )
@@ -187,11 +189,11 @@ class AnnotatorEngine:
         """
         # Find the offline user's name for the annotation template
         offline_users = await self.db.fetch(
-            """SELECT u.display_name FROM users u
+            f"""SELECT u.display_name FROM users u
                JOIN room_memberships rm ON u.id = rm.user_id
                LEFT JOIN user_presence up ON u.id = up.user_id AND up.room_id = rm.room_id
                WHERE rm.room_id = $1
-               AND (up.status IS NULL OR up.status != 'online')
+               AND NOT (up.status IS NOT NULL AND {online_sql("up")})
                AND u.id != $2""",
             room_id, message.user_id
         )

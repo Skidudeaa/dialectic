@@ -1,4 +1,5 @@
 import type { ThreadNode, UserRoom } from '../../types'
+import { markGlyph } from '../../lib/productIdentity.ts'
 import { BranchTree } from './BranchTree'
 import './RoomList.css'
 
@@ -51,6 +52,29 @@ export function RoomList({
         )}
         {room.unread_count > 0 && (
           <span className="unread-badge">{room.unread_count}</span>
+        )}
+        {/* Who is in there RIGHT NOW. One founder asked the other "where are
+            you talking right now?" in the room itself, and answered it by
+            hand three times — the data was in user_presence the whole time
+            and no surface read it across rooms. */}
+        {(room.others_present?.length ?? 0) > 0 && (
+          <span
+            className="room-item-present"
+            title={`${room.others_present!.map(m => m.display_name).join(', ')} here now`}
+          >
+            {room.others_present!.map(member => (
+              <span
+                key={member.user_id}
+                className="room-item-present-dot"
+                aria-hidden="true"
+              >
+                {markGlyph('human', member.display_name)}
+              </span>
+            ))}
+            <span className="sr-only">
+              {room.others_present!.map(m => m.display_name).join(', ')} here now
+            </span>
+          </span>
         )}
       </div>
       {room.id === activeRoomId && (

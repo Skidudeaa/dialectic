@@ -47,6 +47,7 @@ def is_llm_speaker(speaker_type: SpeakerType) -> bool:
         SpeakerType.LLM_ANNOTATOR,
         SpeakerType.LLM_PERSONA,
     )
+from presence import is_present
 from stakes.detector import CommitmentDetector
 from .websocket import (
     ConnectionManager, Connection, InboundMessage, OutboundMessage, MessageTypes
@@ -1777,13 +1778,19 @@ class MessageHandler:
         if self.connections.is_user_connected(user_id, room_id):
             return False
 
-        # Check user's presence status - only push if offline or away
+        # Check user's presence status - only push if offline or away.
+        # The staleness TTL is applied HERE and not only at the presence
+        # endpoint: nothing resets presence at startup, so a row stranded at
+        # 'online' by an ungraceful restart used to suppress this member's
+        # push for this room forever, with no error anywhere.
         presence = await self.db.fetchrow(
-            "SELECT status FROM user_presence WHERE user_id = $1 AND room_id = $2",
+            "SELECT status, last_heartbeat FROM user_presence"
+            " WHERE user_id = $1 AND room_id = $2",
             user_id, room_id
         )
-        # Send push if no presence record or status is not 'online'
-        return presence is None or presence['status'] != 'online'
+        if presence is None:
+            return True
+        return not is_present(presence['status'], presence['last_heartbeat'])
 
     async def _trigger_push_notifications(
         self,

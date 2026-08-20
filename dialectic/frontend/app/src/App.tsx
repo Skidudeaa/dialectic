@@ -249,7 +249,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // needs the latest branch history. The cancellation fence prevents a slower
   // previous destination from overwriting the room/thread reached afterward.
   useEffect(() => {
-    if (!currentThread || !roomToken) return
+    if (!currentThread || !roomToken || !isVisible) return
     api.setRoomToken(roomToken)
     let cancelled = false
     const loadHistory = async () => {
@@ -301,8 +301,14 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
       if (!cancelled) console.error('Failed to load message history:', error)
     })
     return () => { cancelled = true }
+    // `isVisible` is a dependency because a push is only ever SENT to someone
+    // with no live socket to the room — so a pushed message was never
+    // delivered over the wire and exists only server-side. Nothing else
+    // backfills it: the socket replays no history on reconnect, and a tap
+    // back into the room the app is already in moves none of the other deps.
+    // Waking up is therefore the only reliable moment to re-read the branch.
   }, [
-    currentThread, roomToken, nav.messageId, setMessages,
+    currentThread, roomToken, nav.messageId, isVisible, setMessages,
     refreshReactions, refreshAttachments,
   ])
 

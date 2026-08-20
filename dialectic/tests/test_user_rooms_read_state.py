@@ -27,12 +27,14 @@ from api.auth.dependencies import AuthenticatedUser, get_current_user
 
 USER_ID = UUID("00000000-0000-0000-0000-0000000000aa")
 ROOM_ID = UUID("00000000-0000-0000-0000-000000000042")
+OTHER_USER_ID = UUID("00000000-0000-0000-0000-0000000000bb")
 
 JOINED_AT = datetime(2026, 7, 1, 9, 0, tzinfo=timezone.utc)
 LAST_READ_AT = datetime(2026, 7, 20, 17, 30, tzinfo=timezone.utc)
 
 
-def _row(*, last_read_at, unread_count=0, is_home=False, can_manage_home=False):
+def _row(*, last_read_at, unread_count=0, is_home=False, can_manage_home=False,
+         others_present=None):
     return {
         "id": ROOM_ID,
         "name": "Trading Room",
@@ -44,6 +46,9 @@ def _row(*, last_read_at, unread_count=0, is_home=False, can_manage_home=False):
         "joined_at": JOINED_AT,
         "is_home": is_home,
         "can_manage_home": can_manage_home,
+        # Who else is in this room right now. The rail reads it to answer
+        # "where are you talking?" without leaving the room you are in.
+        "others_present": others_present if others_present is not None else [],
     }
 
 
@@ -142,3 +147,25 @@ def test_derived_fields_exclude_deleted_messages():
     assert query.count("NOT m.is_deleted") >= 3
     assert "r.is_home" in query
     assert "rm.can_manage_home" in query
+
+
+def test_present_members_are_projected_onto_the_room():
+    """The cross-room presence answer, carried on the room list the rail
+    already fetches — no second round trip, and no presence endpoint per room."""
+    client, _ = _client([_row(
+        last_read_at=None,
+        others_present=[{"user_id": str(OTHER_USER_ID), "display_name": "Dan"}],
+    )])
+
+    body = client.get("/users/me/rooms").json()
+
+    assert body[0]["others_present"] == [
+        {"user_id": str(OTHER_USER_ID), "display_name": "Dan"}
+    ]
+
+
+def test_absent_members_project_as_an_empty_list_not_null():
+    """The rail maps over this; null would be a render crash on a quiet room."""
+    client, _ = _client([_row(last_read_at=None)])
+
+    assert client.get("/users/me/rooms").json()[0]["others_present"] == []

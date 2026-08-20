@@ -41,6 +41,14 @@ ARTICLE_CONTENT_CAP = 6000
 # out is worse than no tool, because the room waits 10s to learn nothing.
 QUOTES_TIMEOUT_S = 20.0
 
+# The seam's timeout law: an outer asyncio guard EQUAL to the inner HTTP
+# timeout is a race, not a budget. Measured live 2026-08-20 at 18.78s against
+# a 20s ceiling — 94% of budget, so the two were within a jitter of each other
+# and whichever fired first decided whether the room got a descriptive
+# TradingDeskError or a bare timeout. Same +4.0 margin the Polymarket tool
+# already uses below.
+QUOTES_TOOL_TIMEOUT_S = QUOTES_TIMEOUT_S + 4.0
+
 # The tool loop's asyncio timeout must outlive the HTTP client's complete
 # Polymarket budget and stay under half the 60s whole-turn budget.
 POLYMARKET_TOOL_TIMEOUT_S = td.POLYMARKET_TIMEOUT_S + 4.0
@@ -93,7 +101,11 @@ class Tool:
     input_schema: dict
     execute: Callable[[dict], Awaitable[dict]]
     label: str
-    timeout_s: float = 10.0
+    # 14.0, not 10.0: both tradingdesk_client and cairn_client default their
+    # HTTP timeout to 10.0, so a 10.0 guard here raced the inner client on
+    # every tool that set neither (nine of them). The guard must outlive what
+    # it guards. Still far under the 60s whole-turn budget.
+    timeout_s: float = 14.0
 
 
 @dataclass
@@ -672,7 +684,7 @@ def _build_trading_tools(room) -> list[Tool]:
             },
             execute=get_live_quotes,
             label="checking live prices",
-            timeout_s=QUOTES_TIMEOUT_S,
+            timeout_s=QUOTES_TOOL_TIMEOUT_S,
         ),
         Tool(
             name="get_polymarket_odds",
@@ -1595,10 +1607,38 @@ _EMPTY_DEV_MEMORY_NOTE = (
 )
 
 
+# The cairn tools read Amo's passively captured dev sessions for EVERY project
+# on this host — including somaNotes, a clinical product that is nobody else's
+# business and carries PHI-adjacent material. Every tool in this group is
+# registered into every room unconditionally, and those rooms have two other
+# humans in them. `project` was a model-supplied hint, so a call that omitted
+# it returned the lot.
+#
+# The fence is therefore on the PROJECT, not the room: this monorepo's own
+# work is exactly what Dan asked to see ("I'm not sure what we built here"),
+# and nothing else may leave the host. Enforced in the executors, never in the
+# prompt — a prompt rule is a request, and this is a boundary.
+CAIRN_ALLOWED_PROJECTS = frozenset({"dialectic", "DwoodAmo", "trading"})
+
+
+def _cairn_project_of(row: Any) -> str:
+    return str((row or {}).get("project") or "") if isinstance(row, dict) else ""
+
+
+def _cairn_allowed(rows: Any) -> list:
+    """Drop every row belonging to a project outside this monorepo."""
+    if not isinstance(rows, list):
+        return []
+    return [r for r in rows if _cairn_project_of(r) in CAIRN_ALLOWED_PROJECTS]
+
+
 def _build_cairn_tools() -> list[Tool]:
     """Read-only tools over cairn, the passive dev-session memory on this
     host. Failures surface at call time as CairnError → the loop's is_error
-    result; a down cairn never kills a turn."""
+    result; a down cairn never kills a turn.
+
+    Every result is filtered through _cairn_allowed — see CAIRN_ALLOWED_PROJECTS.
+    """
 
     async def search_dev_sessions(args: dict) -> dict:
         query = str(args.get("query") or "").strip()
@@ -1607,10 +1647,11 @@ def _build_cairn_tools() -> list[Tool]:
         limit = min(int(args.get("limit") or 5), 10)
         data = await cn.post("/api/search/sessions",
                              json={"query": query, "limit": limit})
+        sessions = _cairn_allowed(data.get("results", []))
         out = {
             "query": query,
-            "count": data.get("count", 0),
-            "sessions": data.get("results", []),
+            "count": len(sessions),
+            "sessions": sessions,
         }
         if not out["sessions"]:
             out["note"] = _EMPTY_DEV_MEMORY_NOTE
@@ -1620,11 +1661,17 @@ def _build_cairn_tools() -> list[Tool]:
         limit = min(int(args.get("limit") or 10), 20)
         params = {"limit": limit}
         project = str(args.get("project") or "").strip()
+        if project and project not in CAIRN_ALLOWED_PROJECTS:
+            raise ValueError(
+                f"{project!r} is not readable from here. Dev memory is scoped "
+                f"to {sorted(CAIRN_ALLOWED_PROJECTS)}."
+            )
         if project:
             params["project"] = project
         sessions = await cn.get("/api/sessions", params=params)
         if not isinstance(sessions, list):
             return {"sessions": [], "note": "cairn returned an unexpected shape."}
+        sessions = _cairn_allowed(sessions)
         out = {"count": len(sessions), "sessions": sessions}
         if project:
             out["project"] = project
@@ -1642,6 +1689,11 @@ def _build_cairn_tools() -> list[Tool]:
         session = await cn.get(f"/api/sessions/{session_id}")
         events = await cn.get(f"/api/sessions/{session_id}/events",
                               params={"limit": 50})
+        # An id fetched by hand must not walk around the project fence.
+        if _cairn_project_of(session) not in CAIRN_ALLOWED_PROJECTS:
+            raise ValueError(
+                "That session belongs to a project that is not readable here."
+            )
         out = {
             "session": session,
             "events": events if isinstance(events, list) else [],
@@ -1656,10 +1708,11 @@ def _build_cairn_tools() -> list[Tool]:
         limit = min(int(args.get("limit") or 5), 10)
         data = await cn.post("/api/search/insights",
                              json={"query": query, "limit": limit})
+        insights = _cairn_allowed(data.get("results", []))
         out = {
             "query": query,
-            "count": data.get("count", 0),
-            "insights": data.get("results", []),
+            "count": len(insights),
+            "insights": insights,
         }
         if not out["insights"]:
             out["note"] = _EMPTY_DEV_MEMORY_NOTE

@@ -75,6 +75,24 @@ export interface MessageMetadata {
   reading_proposal?: ReadingProposal;
   /** Detected implicit commitments ("I bet…") awaiting the Accept tap. */
   commitment_proposals?: CommitmentProposal[];
+  /**
+   * A Sunday Round card. Carries only the QUESTIONS — the forecasts live in
+   * commitment_confidence rows, per person per revision, because two people
+   * setting a number on one card is exactly the concurrent-write race that
+   * schema.sql:249-259 forbids putting in a JSONB blob.
+   */
+  question_round?: {
+    opened: string;
+    questions: {
+      question: string;
+      source: string;
+      closes: string;
+      base_rate?: string | null;
+      why?: string | null;
+      commitment_id: string | null;
+      binned: boolean;
+    }[];
+  };
   /** A claim-check verdict when a linked article isn't fairly represented. */
   claim_check?: ClaimCheck;
   /** A deadline-watch resolution proposal awaiting the human's verdict tap. */
@@ -443,6 +461,49 @@ export interface UserRoom {
   is_home: boolean;
   /** The caller's OWN Home administration capability. */
   can_manage_home: boolean;
+  /**
+   * Who else is in this room right now — the answer to "where are you talking
+   * right now?", which the product could not give because every presence read
+   * was fenced to the room you were already looking at. Excludes the caller.
+   */
+  others_present?: PresentMember[];
+}
+
+/** One question in a Sunday Round, as THIS viewer is allowed to see it. */
+export interface RoundQuestion {
+  commitment_id: string;
+  claim: string;
+  closes: string | null;
+  status: string;
+  resolution: string | null;
+  my_forecast: number | null;
+  my_revisions: number;
+  /** Both of you have committed, so the numbers are open. */
+  revealed: boolean;
+  /** You are in; they are not. */
+  waiting_on_other: boolean;
+  /** Present ONLY when revealed — absent, not null, before that. */
+  others?: { user_id: string; forecast: number; revisions: number }[];
+  /** How many others have committed, while still blind. Never their numbers. */
+  others_committed?: number;
+  scores?: {
+    user_id: string;
+    brier: number;
+    brier_final_answer: number;
+    lateness_gap: number;
+    days_scored: number;
+    bss: number | null;
+  }[];
+}
+
+export interface RoundState {
+  message_id: string;
+  questions: RoundQuestion[];
+}
+
+export interface PresentMember {
+  user_id: string;
+  display_name: string;
 }
 
 export interface TradingSnapshot {
