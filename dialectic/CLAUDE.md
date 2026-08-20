@@ -743,3 +743,76 @@ it**. Contract changes a future session must know:
   untouched — the dossier sheet stays paper.
 - `Console.test.tsx` carries the app's first real axe gate. Frontend
   suite 356 at this gate.
+
+## Amendment 2026-08-20 — the connection, and the Sunday Round (amend-beside)
+
+Three commits (`269cd54`, `49e3129`, `9084c4e`), deployed. Prefer this over
+anything above that describes presence, push, or the tool timeouts.
+
+- **`presence.py` is the ONE definition of "present right now"** — `is_present()`
+  for rows already fetched, `online_sql(alias)` for queries that filter in the
+  database. All four readers share it: `_should_send_push`
+  (`transport/handlers.py`), both `llm/annotator.py` queries, the trading
+  curator, and the presence endpoint. Before this the 90s TTL was the
+  endpoint's private opinion and the other three read `status` raw — and since
+  nothing resets presence at startup, one ungraceful restart could strand a row
+  at `'online'` and disable that member's push, annotator and curator **for that
+  room, permanently, with no error anywhere.** Mutation-proven in
+  `tests/test_presence_predicate.py`.
+- **`/users/me/rooms` now carries `others_present`** (one correlated subquery on
+  the query it already ran). This is the only cross-room presence in the
+  product; every other presence read is fenced to the current room by
+  construction. `RoomList.tsx` lights the other person's initial on the room
+  card, and `useRoomNavigation.ts` now polls the list (45s + `visibilitychange`)
+  — without that poll every badge on the rail is frozen while you sit in a room,
+  which it had been all along.
+- **The history fetch depends on `isVisible`** (`App.tsx`). A push is only SENT
+  to someone with no live socket to that room, so a pushed message was never
+  delivered over the wire; nothing backfilled it, and a tap back into the room
+  the app was already in moved none of the other deps. This one dependency also
+  covers resume generally. Trading alerts and the morning brief now carry
+  `thread_id`/`message_id` so they stop taking the legacy `open-room` branch.
+- **The seam's timeout law is now enforced registry-wide**, not per tool:
+  `tests/test_tools_registry.py` asserts every tool's asyncio guard EXCEEDS the
+  HTTP timeout of the client it calls. `Tool.timeout_s` default is **14.0**
+  (both tradingdesk_client and cairn_client default to 10.0);
+  `QUOTES_TOOL_TIMEOUT_S` is 24.0 over a 20.0 inner.
+- **The four cairn tools are fenced to `CAIRN_ALLOWED_PROJECTS`**
+  (`dialectic`, `DwoodAmo`, `trading`) **at the executor**. They read Amo's
+  dev-session memory for every project on this host — including somaNotes, a
+  clinical product — inside rooms shared with Dan and Scott, with no room fence
+  and no user fence, defaulting on. Rows with no `project` are dropped (fail
+  closed), and `get_dev_session` re-checks so a known id cannot walk around it.
+- **THE SUNDAY ROUND** (`llm/question_round.py`, `api/rounds.py`,
+  `stakes/timeweighted.py`, `components/chat/RoundCard.tsx`). Thirteen scheduled
+  jobs now. **Ships dark: `QUESTION_ROUND_ENABLED=0`** in the live `.env`;
+  `QUESTIONS_PER_ROUND` (1..10, default 5) is the appetite dial.
+  - Forecasts are **rows in `commitment_confidence`**, never entries in message
+    metadata — `schema.sql:249-259` states the rule (rows, because concurrent
+    writes cannot clobber each other) and there is no array-append-into-JSONB
+    idiom in this repo to make the alternative safe.
+  - Each question is a `commitments` row with `category='round'` and its close
+    date as the **deadline** — which is the ledger defect fixed by construction.
+    A vetoed question is `status='binned'`. No migration: both columns are free
+    text.
+  - **Blindness is enforced in the READ** (`api/rounds._round_state`): until you
+    have forecast a question, the other number is ABSENT from the response body.
+    A client-side hide is not blindness. Proven in `tests/test_rounds_pg.py`.
+  - **Scoring is time-weighted average Brier** (`stakes/timeweighted.py`), the
+    ACE rule, with the desk's leak-safe `min(close, resolved_at)` boundary. The
+    final-answer Brier rides alongside; the GAP is the interesting number.
+    Same-day activity has no gap by design — the last forecast of a day governs
+    that day, so a multi-day test must backdate.
+  - The forecast door **refuses a post-close write (409)** rather than storing
+    it and returning 200. The desk's own confidence endpoint has that bug: it
+    accepts, broadcasts "updated confidence to N%", and the scorer discards it.
+
+Checked and deliberately NOT changed: `get_thesis_news` returning
+`rate_limited` is GDELT limiting this host's IP with correct exponential
+backoff. Keying that cooldown per-book was proposed and refused —
+`trading/web/routes/bridge.py:535` says GDELT limits by caller IP, so per-book
+would draw five times the 429s.
+
+Suites at this gate: backend **1815 passed**, 1 pre-existing failure
+(`test_home_activity_pg::test_only_active_commitments_due_within_72h`, untouched
+by this diff); frontend **356/356**.
