@@ -137,6 +137,12 @@ def time_weighted_brier(
     return {
         "brier": total / days,
         "days_scored": days,
+        # How much of the question's life this forecaster was actually in.
+        # WHY it must be reported beside the Brier and not folded into it: a
+        # forecaster who opens the card late is scored only on the days they
+        # were present, and those days are nearer the outcome and therefore
+        # EASIER. Without coverage beside it, arriving late looks like skill.
+        "coverage": days / max(1, (window[1] - window[0]).days + 1),
         # The final-answer Brier, carried alongside rather than instead of.
         # The GAP between them is the interesting number: it says whether a
         # forecaster got there early or merely got there.
@@ -157,3 +163,113 @@ def brier_skill_score(brier: float, reference: float) -> Optional[float]:
 # The Brier of an uninformed 0.5 on a binary question. Used as the reference
 # when a question carries no base rate, matching the desk's IGNORANCE_REF_BRIER.
 IGNORANCE_REF_BRIER = 0.25
+
+
+# ── the duel: log score and the head-to-head ─────────────────────────────
+#
+# WHY a second rule beside Brier rather than instead of it: Brier answers
+# "how good were you", which at forty questions a season is a number neither
+# of them should believe. The log score answers "who took whose points on
+# THIS question", and with exactly two forecasters answering the same slate
+# on the same clock the question's difficulty cancels — a paired design most
+# platforms structurally cannot run, because they have a crowd instead of a
+# pair.
+#
+# THE CLIP IS THE RULE, not an implementation detail, and it must be stated
+# wherever the number is shown. The slider goes to 0.00 and 1.00, and a 0.00
+# that resolves yes is infinitely wrong; unclipped, one such answer would
+# annihilate a season and the ledger would be unreadable forever after.
+# 0.01 is the floor: it reads as "I was essentially certain" and caps a
+# single blown call at ln(0.01) ≈ -4.6 nats.
+LOG_CLIP = 0.01
+
+
+def _clip(p: float) -> float:
+    return max(LOG_CLIP, min(1.0 - LOG_CLIP, float(p)))
+
+
+def daily_log_scores(
+    history: Iterable[dict],
+    window: tuple[date, date],
+    outcome: float,
+) -> dict[date, float]:
+    """Per-day log score for ONE forecaster: ln(p) if it happened, ln(1-p) if
+    it did not. Days the forecaster had no standing number are absent, never
+    zero — zero is a perfect log score and would read as flawless."""
+    import math
+
+    standing = standing_forecast_by_day(history, window)
+    return {
+        day: math.log(_clip(p) if outcome >= 0.5 else 1.0 - _clip(p))
+        for day, p in standing.items()
+    }
+
+
+def time_weighted_log(
+    history: Iterable[dict],
+    *,
+    opened,
+    close,
+    resolved_at,
+    resolution: str,
+) -> Optional[dict]:
+    """The log-score twin of `time_weighted_brier`, same window, same days."""
+    outcome = OUTCOME_VALUES.get(resolution)
+    if outcome is None:
+        return None
+    window = scoring_window(opened, close, resolved_at)
+    if window is None:
+        return None
+    daily = daily_log_scores(history, window, outcome)
+    if not daily:
+        return None
+    return {
+        "log_score": sum(daily.values()) / len(daily),
+        "days_scored": len(daily),
+        "daily": daily,
+    }
+
+
+def window_days(window: tuple[date, date]) -> int:
+    """Inclusive day count of a scoring window."""
+    start, end = window
+    return (end - start).days + 1
+
+
+def peer_delta(daily_by_actor: dict) -> dict:
+    """The head-to-head, scored only on days everyone was actually in.
+
+    `daily_by_actor` maps an actor key to that actor's {day: log score}.
+    For each actor: 100 x mean over CONTESTED days of (their log score minus
+    the mean of everyone else's that day).
+
+    WHY contested days only: a day one of them had not yet forecast is not a
+    day they lost, it is a day they were absent — charging them for it would
+    make being slow to open the card indistinguishable from being wrong, and
+    `coverage` already reports absence honestly and separately.
+
+    At n=2 this is exactly antisymmetric: +18 for one is -18 for the other.
+    That is the whole appeal — the number says who took whose points, and it
+    sums to zero, so neither of them can quietly both be winning.
+    """
+    keys = [k for k, v in daily_by_actor.items() if v]
+    if len(keys) < 2:
+        return {}
+    contested = set(daily_by_actor[keys[0]])
+    for k in keys[1:]:
+        contested &= set(daily_by_actor[k])
+    if not contested:
+        return {k: {"peer": None, "contested_days": 0} for k in keys}
+
+    out = {}
+    for k in keys:
+        others = [o for o in keys if o != k]
+        total = 0.0
+        for day in contested:
+            rival = sum(daily_by_actor[o][day] for o in others) / len(others)
+            total += daily_by_actor[k][day] - rival
+        out[k] = {
+            "peer": 100.0 * total / len(contested),
+            "contested_days": len(contested),
+        }
+    return out

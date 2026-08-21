@@ -138,3 +138,78 @@
     .round-q-row { gap: 6px; }
     .round-q-slider { flex-basis: 100%; order: 3; }
 }
+
+/* ── the duel: the second slider, the house, the verdict ─────────────── */
+
+/* The read on your opponent is visually subordinate to your own number --
+   it is the optional half, and making the two rows identical would read as
+   two equally-required answers. */
+.round-q-row-peer { margin-top: 4px; opacity: .82; }
+.round-q-slider-peer { accent-color: var(--color-teal, #54D8C6); }
+
+.round-q-peer-open {
+    margin-top: 6px;
+    font-family: var(--font-stencil);
+    font-size: .68rem;
+    letter-spacing: .04em;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    color: var(--color-teal, #54D8C6);
+    opacity: .75;
+}
+
+.round-q-peer-open:hover:not(:disabled) { opacity: 1; }
+.round-q-peer-open:disabled { cursor: progress; opacity: .4; }
+
+.round-q-read {
+    font-size: .72rem;
+    color: var(--text-ghost);
+    font-family: var(--font-stencil);
+    letter-spacing: .03em;
+    margin-top: 2px;
+}
+
+/* The house wears the participant's own colour, not the forecasters'. It is
+   a third player, and it must never be mistakable for either of them. */
+.round-q-house {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--engrave-line, rgba(255, 249, 240, .07));
+}
+
+.round-q-house .round-q-other span:first-child { color: var(--claude-primary); }
+
+.round-q-because {
+    font-size: .72rem;
+    line-height: 1.35;
+    color: var(--text-ghost);
+    margin-top: 2px;
+}
+
+/* A closed question with no verdict is the only state where a score is one
+   tap away, so it is the only one allowed to draw the eye. */
+.round-q.awaiting { box-shadow: var(--bezel-well), inset 0 0 0 1px var(--amber-30, rgba(224, 160, 74, .3)); }
+.round-q.settled { opacity: .92; }
+
+.round-q-verdict {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.round-q-peer {
+    font-family: var(--font-seg, var(--font-stencil));
+    letter-spacing: .1em;
+    font-size: .78rem;
+    color: var(--color-amber);
+}
+
+.round-q-score.is-house span:first-child { color: var(--claude-primary); }
+
+@media (max-width: 480px) {
+    .round-q-verdict { gap: 6px; }
+}

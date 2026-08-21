@@ -477,7 +477,14 @@ export interface RoundQuestion {
   status: string;
   resolution: string | null;
   my_forecast: number | null;
+  /** Your guess at where THEY will land. Yours to see at any time -- hiding
+   *  your own number from you would only stop you revising it. */
+  my_peer_forecast: number | null;
   my_revisions: number;
+  /** The participant has put its own number down. True before reveal too:
+   *  that it HAS forecast is not an anchor; the number is, and that stays
+   *  sealed under the same rule the humans are. */
+  house_committed: boolean;
   /** Both of you have committed, so the numbers are open. */
   revealed: boolean;
   /** You are in; they are not. */
@@ -486,8 +493,21 @@ export interface RoundQuestion {
   others?: { user_id: string; forecast: number; revisions: number }[];
   /** How many others have committed, while still blind. Never their numbers. */
   others_committed?: number;
+  /** Signed: their number minus your guess at it. Positive means you
+   *  UNDERESTIMATED them. Present only once revealed. */
+  peer_read_error?: number;
+  /** The participant's own forecast, sealed until both humans are in. */
+  house?: { forecast: number; revisions: number; because: string | null };
   scores?: {
-    user_id: string;
+    user_id: string | null;
+    actor: 'human' | 'house';
+    /** Share of the question's life this forecaster was actually in. A 0.09
+     *  across 30% of the window is not a 0.09 across all of it. */
+    coverage: number;
+    log_score: number | null;
+    /** The head-to-head. Antisymmetric: +18 for one is -18 for the other. */
+    peer: number | null;
+    contested_days: number;
     brier: number;
     brier_final_answer: number;
     lateness_gap: number;
@@ -499,6 +519,9 @@ export interface RoundQuestion {
 export interface RoundState {
   message_id: string;
   questions: RoundQuestion[];
+  /** The room's other members, so the second slider can name the person it
+   *  is asking you to read. Membership only — never a forecast. */
+  peers: { user_id: string; display_name: string }[];
 }
 
 export interface PresentMember {

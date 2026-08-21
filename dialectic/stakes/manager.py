@@ -130,8 +130,16 @@ class CommitmentManager:
         user_id: Optional[UUID] = None,
         confidence: float = 0.5,
         reasoning: Optional[str] = None,
+        peer_forecast: Optional[float] = None,
     ) -> dict:
-        """Record or update a participant's confidence level."""
+        """Record or update a participant's confidence level.
+
+        `peer_forecast` (migration 019) is this forecaster's guess at what the
+        OTHER one will say. It rides the same row because the two are entered
+        and revised in one tap, and it is deliberately NOT relayed to the desk
+        below: the desk scores claims, and a bet on your friend is not a claim
+        about the world.
+        """
         now = datetime.now(timezone.utc)
 
         # Verify commitment exists and is active. SELECT * because the
@@ -148,9 +156,10 @@ class CommitmentManager:
 
         await self.db.execute(
             """INSERT INTO commitment_confidence
-               (commitment_id, user_id, confidence, recorded_at, reasoning)
-               VALUES ($1, $2, $3, $4, $5)""",
-            commitment_id, user_id, confidence, now, reasoning,
+               (commitment_id, user_id, confidence, recorded_at, reasoning,
+                peer_forecast)
+               VALUES ($1, $2, $3, $4, $5, $6)""",
+            commitment_id, user_id, confidence, now, reasoning, peer_forecast,
         )
 
         # Emit event

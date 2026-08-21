@@ -530,10 +530,31 @@ class DialecticAPI {
     commitmentId: string,
     confidence: number,
     reasoning?: string,
+    peerForecast?: number | null,
   ): Promise<RoundState> {
     return this.fetch(`/rooms/${roomId}/rounds/${commitmentId}/forecast`, {
       method: 'POST',
-      body: JSON.stringify({ confidence, reasoning }),
+      body: JSON.stringify({
+        confidence,
+        reasoning,
+        // Omitted rather than null when unset: the column is nullable and a
+        // forecaster who declines the second slider has not guessed 0.
+        ...(peerForecast === null || peerForecast === undefined
+          ? {}
+          : { peer_forecast: peerForecast }),
+      }),
+    }) as Promise<RoundState>;
+  }
+
+  async resolveRoundQuestion(
+    roomId: string,
+    commitmentId: string,
+    resolution: 'correct' | 'incorrect' | 'voided',
+    notes?: string,
+  ): Promise<RoundState> {
+    return this.fetch(`/rooms/${roomId}/rounds/${commitmentId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ resolution, notes }),
     }) as Promise<RoundState>;
   }
 

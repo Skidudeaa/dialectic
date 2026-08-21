@@ -580,10 +580,21 @@ CREATE TABLE IF NOT EXISTS commitment_confidence (
     user_id UUID REFERENCES users(id),  -- NULL for LLM
     confidence FLOAT NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
     recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    reasoning TEXT                      -- Why this confidence level
+    reasoning TEXT,                     -- Why this confidence level
+    -- Migration 019. `peer_forecast` rides this row rather than a table of
+    -- its own because it is entered and revised in the same tap as the
+    -- confidence beside it. `actor` is what keeps the two-human blindness
+    -- rule intact with a third forecaster in the same table: user_id NULL
+    -- already means "we do not know who", so it cannot also mean "the
+    -- machine" -- see stakes/house.py.
+    peer_forecast FLOAT CHECK (peer_forecast IS NULL
+                               OR (peer_forecast >= 0 AND peer_forecast <= 1)),
+    actor TEXT NOT NULL DEFAULT 'human' CHECK (actor IN ('human', 'house'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_commitment_confidence ON commitment_confidence(commitment_id);
+CREATE INDEX IF NOT EXISTS idx_commitment_confidence_house
+    ON commitment_confidence (commitment_id, recorded_at) WHERE actor = 'house';
 
 -- ============================================================
 -- MULTI-MODEL ROOMS
