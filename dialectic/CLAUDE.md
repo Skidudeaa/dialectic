@@ -937,6 +937,16 @@ must never open nothing.
 `HOUSE_FORECAST_ENABLED=1` and `ROUND_CLOSE_ENABLED=1` are in `dialectic/.env`
 and confirmed in `/proc/<pid>/environ`. Backup: `/root/dialectic-env-backup-20260820-preduel.txt`.
 
-Suites at this gate: backend **1917**, frontend **369**. One pre-existing lint
-error remains at `MessageList.tsx:247` (`react-hooks/set-state-in-effect`),
-introduced 2026-08-19 in `269cd54`, untouched by this work.
+Suites at this gate: backend **1917**, frontend **369**, both in isolation.
+
+Run CONCURRENTLY the frontend drops one:
+`RoomHeader.test.tsx > toggles the explicit desktop context column` times out
+at ~8.6s. Not an assertion failure and not this work -- no commit here touches
+`RoomHeader.*` (last changed in `5357670`), and it passes 3/3 alone. Same
+load-sensitive batch flake the 2026-08-18 amendment already records. The
+backend also stretches 32s -> 137s under the same contention, which is the
+tell: measure the two suites separately or the flake is the measurement.
+
+One pre-existing lint error remains at `MessageList.tsx:247`
+(`react-hooks/set-state-in-effect`), introduced 2026-08-19 in `269cd54`,
+untouched by this work.
