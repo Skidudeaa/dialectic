@@ -38,6 +38,7 @@
 # review gate is that the round stops arriving, which is the one failure this
 # job exists to prevent. Resolution stays human-tapped, as everywhere else.
 
+import json
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
@@ -115,14 +116,24 @@ No preamble, no numbering, no commentary outside the blocks."""
 
 
 def _horizon_dates(today: date) -> list[str]:
+    """One close date per question, spread across the horizons.
+
+    WHY the offset rather than a bare cycle: `HORIZONS_DAYS[i % 3]` repeats
+    exactly, so a five-question round asked for [+14, +30, +90, +14, +30] —
+    two duplicate close dates every week, which quietly halves the horizon
+    spread the round exists to create. Nudging each repeat by a week keeps
+    three distinct horizons while giving five distinct dates.
+    """
     out = []
     for i in range(questions_per_round()):
-        out.append((today + timedelta(days=HORIZONS_DAYS[i % len(HORIZONS_DAYS)])).isoformat())
+        base = HORIZONS_DAYS[i % len(HORIZONS_DAYS)]
+        lap = i // len(HORIZONS_DAYS)
+        out.append((today + timedelta(days=base + 7 * lap)).isoformat())
     return out
 
 
 def _build_prompt(room_name: str, thesis_context: str, readings: list[dict],
-                  today: date) -> str:
+                  today: date, signals: Optional[list[str]] = None) -> str:
     lines = [
         f"Room: {room_name}. Today is {today.isoformat()} (a Sunday).",
         "",
@@ -133,6 +144,8 @@ def _build_prompt(room_name: str, thesis_context: str, readings: list[dict],
     ]
     if thesis_context:
         lines += ["The room's live thesis state:", thesis_context, ""]
+    if signals:
+        lines += signals
     if readings:
         lines.append("What the room read this week:")
         for item in readings[:8]:
@@ -141,10 +154,21 @@ def _build_prompt(room_name: str, thesis_context: str, readings: list[dict],
             if title:
                 lines.append(f"- {title}: {summary[:180]}")
         lines.append("")
-    lines.append(
-        "Ground the questions in the above where you can. A question that "
-        "could have been written without reading any of it is a wasted slot."
-    )
+    # WHY the conditional: the instruction is a lie when nothing precedes it,
+    # and a lie in a prompt is an instruction to invent. China Property has
+    # zero reading_items and no signals on some weeks; before this, its prompt
+    # ended "Ground the questions in the above" with nothing above at all
+    # (seen live in the 2026-08-20 dry run).
+    if thesis_context or signals or readings:
+        lines.append(
+            "Ground the questions in the above where you can. A question that "
+            "could have been written without reading any of it is a wasted slot."
+        )
+    else:
+        lines.append(
+            "You have no room state this week. Write questions a well-read "
+            "generalist could not already answer, and say so in WHY."
+        )
     return "\n".join(lines)
 
 
@@ -221,6 +245,130 @@ async def _recent_readings(conn, room_id) -> list[dict]:
         room_id,
     )
     return [dict(r) for r in rows]
+
+
+# Node states the desk publishes. Only two of the five are worth a question:
+# `fired` is already true (criterion 4 — a question answered 98% teaches
+# nothing) and `stable`/`gated` are not live. `approaching` and `monitoring`
+# are precisely the edge the room is watching.
+_LIVE_NODE_STATES = ("approaching", "monitoring")
+_SETTLED_NODE_STATES = ("fired",)
+
+
+def _as_config(raw) -> dict:
+    """`rooms.trading_config` as a dict, whichever way the pool hands it over.
+
+    WHY this exists: the app pool registers a jsonb codec (api/main.py:126) so
+    in production this is already a dict — but a pool built without one hands
+    back a str, `isinstance(config, dict)` is False, and the whole thesis
+    context vanishes SILENTLY. That is exactly what happened to the
+    2026-08-20 dry-run harness, and it read as a live bug for a while.
+    """
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, (str, bytes)):
+        try:
+            parsed = json.loads(raw)
+        except (ValueError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+async def _room_signals(conn, room) -> list[str]:
+    """What this room already knows, in the drafter's hands.
+
+    ARCHITECTURE: pure assembly over rows that already exist — the room's v3
+    snapshot, its human transcript, and its own live questions. No new table,
+    no new call, no new dependency.
+
+    WHY: the round's stated bar is "a question that could have been written
+    without reading any of it is a wasted slot", and before this the drafter
+    saw only the room NAME, the thesis TITLE and eight reading summaries. A
+    2026-08-20 dry run against all four live rooms produced questions a
+    stranger reading the news could have written — correct GJP form, no room
+    in them. Everything below was sitting in `rooms.trading_config` and
+    `messages` the whole time.
+
+    TRADEOFF: this is context, not tools. The drafter still cannot check a
+    live price while writing; it can only see what the room already recorded.
+    Giving the drafter the tool loop is the next rung and costs a round-trip
+    budget per room per week.
+    """
+    lines: list[str] = []
+    config = _as_config(room["trading_config"])
+
+    states = config.get("nodeStates")
+    if isinstance(states, dict):
+        live = sorted(n for n, s in states.items() if s in _LIVE_NODE_STATES)
+        settled = sorted(n for n, s in states.items() if s in _SETTLED_NODE_STATES)
+        if live:
+            lines.append(
+                "Nodes the room's own causal model has on the edge right now "
+                "(approaching or monitoring): " + ", ".join(live) + "."
+            )
+        if settled:
+            lines.append(
+                "Already fired, so do NOT ask whether these will happen: "
+                + ", ".join(settled) + ". Asking what comes NEXT for one of "
+                "them is fair game."
+            )
+
+    scenarios = config.get("scenarioImpacts")
+    if isinstance(scenarios, dict) and scenarios:
+        priced = [
+            (name, body.get("probability"))
+            for name, body in scenarios.items()
+            if isinstance(body, dict) and isinstance(body.get("probability"), (int, float))
+        ]
+        if priced:
+            lines.append(
+                "The desk already carries these scenario probabilities: "
+                + ", ".join(f"{n} {p:.0%}" for n, p in sorted(priced, key=lambda x: -x[1]))
+                + ". A question that would move one of these is worth more "
+                "than one that would not."
+            )
+
+    if lines:
+        lines.append("")
+
+    argued = await conn.fetch(
+        # HUMAN only, and content only: thirteen scheduled jobs post into these
+        # rooms, so unfiltered `messages` is mostly the machine talking to
+        # itself and would crowd out the actual argument.
+        """SELECT m.content
+           FROM messages m JOIN threads t ON t.id = m.thread_id
+           WHERE t.room_id = $1 AND m.speaker_type = 'human'
+             AND m.created_at > now() - interval '14 days'
+           ORDER BY m.created_at DESC LIMIT 12""",
+        room["id"],
+    )
+    if argued:
+        lines.append("What the two of them actually said here in the last fortnight:")
+        for row in reversed(argued):
+            text = " ".join((row["content"] or "").split())
+            if text:
+                lines.append(f"- {text[:240]}")
+        lines.append(
+            "A question that settles something they disagreed about beats a "
+            "question about the news."
+        )
+        lines.append("")
+
+    live_questions = await conn.fetch(
+        """SELECT claim FROM commitments
+           WHERE room_id = $1 AND category = 'round' AND status = 'active'
+             AND deadline > now()
+           ORDER BY deadline LIMIT 20""",
+        room["id"],
+    )
+    if live_questions:
+        lines.append("Still open from earlier rounds — do not re-ask these:")
+        for row in live_questions:
+            lines.append(f"- {row['claim']}")
+        lines.append("")
+
+    return lines
 
 
 async def _open_questions(conn, room_id, thread_id, msg_id, questions: list[dict]):
@@ -371,19 +519,27 @@ async def question_round(ctx: SchedulerContext) -> dict:
                 continue
             try:
                 readings = await _recent_readings(conn, room["id"])
+                signals = await _room_signals(conn, room)
                 thesis = ""
-                config = room["trading_config"]
-                if isinstance(config, dict):
-                    thesis = str(config.get("title") or "")
-                    phase = config.get("cascadePhase")
-                    if phase:
-                        thesis += f" — phase {phase}"
+                config = _as_config(room["trading_config"])
+                thesis = str(config.get("title") or "")
+                phase = config.get("cascadePhase")
+                if isinstance(phase, dict):
+                    # It is a dict ({key, number, status}); f-stringing it whole
+                    # put `{'key': 'shock', 'number': 1, ...}` in the prompt.
+                    thesis += (
+                        f" — phase {phase.get('number')} "
+                        f"({phase.get('key')}, {phase.get('status')})"
+                    )
+                elif phase:
+                    thesis += f" — phase {phase}"
                 provider = get_provider(ProviderName.ANTHROPIC)
                 response = await provider.complete(LLMRequest(
                     messages=[{
                         "role": "user",
                         "content": _build_prompt(
-                            room["name"] or "this room", thesis, readings, today,
+                            room["name"] or "this room", thesis, readings,
+                            today, signals,
                         ),
                     }],
                     system=ROUND_SYSTEM,
