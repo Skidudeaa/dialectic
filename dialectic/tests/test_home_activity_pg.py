@@ -172,7 +172,15 @@ async def scenario(db):
                 $3, 'active'),
                ($1, $2, 'Far-future call', 'later', 'prediction', $4, 'active'),
                ($1, $2, 'Already settled', 'done', 'prediction', $3, 'resolved')""",
-        SHARED, T1, BASE + timedelta(hours=24), BASE + timedelta(days=10),
+        # WHY these two are relative to NOW and everything else in this fixture
+        # is relative to BASE: the 72h window is evaluated against the DATABASE
+        # clock (`deadline <= NOW() + INTERVAL '72 hours'`), not against BASE.
+        # Pinned absolutely, "Far-future call" at BASE+10d became due-within-72h
+        # for real on 2026-08-21 and the test went red on a correct query --
+        # a time bomb, not a flake and not a product bug.
+        SHARED, T1,
+        datetime.now(timezone.utc) + timedelta(hours=24),
+        datetime.now(timezone.utc) + timedelta(days=10),
     )
 
     yield SimpleNamespace(db=db, home_id=home_id)
