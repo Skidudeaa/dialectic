@@ -825,3 +825,118 @@ would draw five times the 429s.
 Suites at this gate: backend **1815 passed**, 1 pre-existing failure
 (`test_home_activity_pg::test_only_active_commitments_due_within_72h`, untouched
 by this diff); frontend **356/356**.
+
+## Amendment 2026-08-21 — the duel (amend-beside; prefer this over the Round section above)
+
+Three commits (`77163f1`, `72d745b`, plus the two fixes), migration `019`
+applied to prod and test, backend restarted (PID 359070 → 4126860, `/health`
+200 in 4s), release `20260820211217-the-duel` symlinked and nginx reloaded.
+**Fifteen scheduled jobs now.**
+
+### Migration 019 — two columns, no backfill
+
+`commitment_confidence` gained `peer_forecast double precision` and
+`actor text NOT NULL DEFAULT 'human'` (CHECK in `('human','house')`), plus a
+partial index on `actor='house'`. Every pre-existing row becomes a human
+forecast with no peer guess, which is what it is. `schema.sql` is in sync.
+
+### `stakes/house.py` is the single predicate, and here is the bug it prevents
+
+`is_house(row)` / `split_by_actor(history)` / `record_house_forecast(...)`.
+Same shape as `presence.py`, sharper reason: `api/rounds._round_state` split a
+question's history on `user_id != viewer_id`, and that column is **nullable**.
+A house row landing among the humans sets `revealed = True` and unseals one
+person's blind forecast to the other **the instant the machine posts its own** —
+no error, no log, on the one surface where a leak is the whole game.
+Mutation-proven in `tests/test_rounds_pg.py::TestTheHouseIsSealedToo`.
+
+**If you add a fourth actor, or a fifth reader of a forecast history, go
+through this module.** The house writes DIRECTLY rather than through
+`CommitmentManager.record_confidence`, deliberately: that path mirrors into
+tradingDesk's `prediction_confidence`, whose scorer ignores `actor`.
+
+### The scoring era changed BEFORE anything was ever scored
+
+`_score_question` opened its window at `min(recorded_at)` — the first
+FORECAST. A forecaster who opened the card late was therefore scored only
+across their own shorter window, and a shorter window sits nearer the outcome,
+so it is **easier**. Arriving late read as skill. The window now opens at the
+question's own `created_at`. Nothing had ever resolved, so this is a fix
+before first use; landing it after the first settlement would have left two
+scoring eras in one table with nothing to tell them apart.
+
+`coverage` (days_scored / window days) rides beside the Brier and must never
+be folded into it — a 0.09 across a third of a question's life is not a 0.09.
+
+### The head-to-head
+
+`peer_delta(daily_by_actor)` → `100 × mean over CONTESTED days of (your log
+score − the mean of the others')`. Antisymmetric at n=2 by construction, so it
+can only say who took whose points, never that both are winning. **Contested
+days only**: a day someone had not yet forecast is absence, not loss, and
+`coverage` reports that separately. `LOG_CLIP = 0.01` **is the rule, not an
+implementation detail** — the slider reaches 0.00, and unclipped one
+certain-and-wrong call annihilates a season. The card states the clip.
+
+### `scheduler._tick` RUNS JOBS SERIALLY — read this before adding a job
+
+A plain `for` loop, awaiting each job. A long job blocks **every other job**.
+This is why the house forecast is a bounded sweep and not an inline call
+inside `question_round` (where the first draft put it): twenty tool loops at
+150s each is ~50 minutes during which the silence sweep, the heartbeat and the
+reconcile do not run. `house_forecast_sweep` takes 2 questions per 15 min with
+a 330s run budget and is idempotent by query. What makes the delay acceptable
+rather than merely cheaper is the seal: the house's number is invisible until
+both humans commit, so it does not need to be there when the card lands.
+
+### The settlement (`llm/round_close_watch.py`)
+
+**THE LAW: it gathers evidence and SUGGESTS. It never resolves.**
+`POST /rooms/{id}/rounds/{cid}/resolve` is the only write and a human's tap is
+the only thing that reaches it.
+
+**The done-set MUST be excluded in SQL, before the LIMIT.** Because THE LAW
+forbids the job writing to `commitments`, a carded-but-untapped question stays
+`status='active'` with a past deadline **forever**. Filtering after
+`LIMIT BACKLOG_SCAN` let those rows keep their places until nothing live could
+get in, and the symptom is an empty detail identical to "nothing closed this
+hour". A pg test seeds a full backlog plus one live question.
+
+`credit_line` gates on **two HUMANS**, not two forecasters: `fact_packet`
+counts the house, so a "two forecasters" gate was satisfied by one person plus
+the machine — and the line would then post that person's number as an ordinary
+message while `_round_state` was still correctly sealing it. The API lane held;
+the message lane did not.
+
+`validate_line` pairs each number to the **name it sits beside**. Checking the
+number set and the name set independently passes a line with the attributions
+SWAPPED — every number the packet's own, every name the packet's own, and a
+lie. The outcome word must match the outcome too.
+
+### The Mirror (`api/mirror.py`, `MirrorPanel.tsx`)
+
+Three JWT-only GETs onto `user_model:<user_id>` memories and their
+`memory_versions` history. **The fence is the KEY, in the query**: `key =
+'user_model:' || <authenticated caller>`, never a post-fetch filter, so a room
+where only the OTHER person is modelled is indistinguishable from a room with
+no model — in the list, in the counts, and in the 404. Verified live against
+production with both users' tokens: zero cross-contaminated prose blocks.
+
+It also requires **current membership** and `status='active'`, matching the
+older single-room door at `api/main.py:1845`. Not about whose profile it is —
+a model written FROM a room's conversation quotes what happened there, and
+`deploy/remove_home_member.sql` exists.
+
+`mirror` is a new **Home-root scene** (`house/atlas/mirror/record`). It entered
+`WORKSPACE_SCENES` and `IMPLEMENTED_WORKSPACE_SCENES` in the same change on
+purpose: the rule those two lists exist to enforce is that an approved name
+must never open nothing.
+
+### Env
+
+`HOUSE_FORECAST_ENABLED=1` and `ROUND_CLOSE_ENABLED=1` are in `dialectic/.env`
+and confirmed in `/proc/<pid>/environ`. Backup: `/root/dialectic-env-backup-20260820-preduel.txt`.
+
+Suites at this gate: backend **1917**, frontend **369**. One pre-existing lint
+error remains at `MessageList.tsx:247` (`react-hooks/set-state-in-effect`),
+introduced 2026-08-19 in `269cd54`, untouched by this work.
