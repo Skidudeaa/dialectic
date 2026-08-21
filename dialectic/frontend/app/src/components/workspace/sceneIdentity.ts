@@ -15,6 +15,7 @@ export const SCENE_LABELS: Record<ImplementedWorkspaceScene, string> = {
   library: 'Library',
   ledger: 'Ledger',
   atlas: 'Atlas',
+  mirror: 'Mirror',
 }
 
 // One clause per place — rendered large in the SceneMasthead as the answer to
@@ -30,6 +31,7 @@ export const SCENE_HINTS: Record<ImplementedWorkspaceScene, string> = {
   library: 'What the room has actually read — filed evidence, one entry per source.',
   ledger: 'What the room holds itself to — commitments, dossier entries, memories.',
   atlas: 'The whole house mapped — rooms, artifacts, echoes, and their crossings.',
+  mirror: 'What the participant thinks of how you think — its own words, dated, and yours alone.',
 }
 
 // Each place's mark, shown on the masthead's glyph plate beside the name.
@@ -41,4 +43,5 @@ export const SCENE_GLYPHS: Record<ImplementedWorkspaceScene, string> = {
   library: '❧',
   ledger: '☰',
   atlas: '✦',
+  mirror: '☾',
 }

@@ -1,0 +1,160 @@
+/* MirrorPanel — the reading surface for the participant's model of you.
+ *
+ * The chassis, header, skeletons and freshness stamp all come from
+ * cockpit.css; nothing here re-declares them. What the Instrument Desk has
+ * no shape for is READING — a long serif measure meant to be gone through
+ * slowly — and a stepper that walks backwards through rewrites. Only those.
+ * Every color is an existing token (styles/tokens.css); no new palette.
+ */
+
+.mirror-panel {
+    gap: 0.7rem;
+}
+
+/* The one numeric readout: which rewrite you are looking at, out of how many.
+   Same recessed-glass idiom as Console.css's tiles, at panel scale. */
+.mirror-readout {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 1px 7px;
+    background: var(--color-well);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
+}
+.mirror-readout-value {
+    font-family: var(--font-seg);
+    font-size: 14px;
+    letter-spacing: .1em;
+    color: var(--color-amber);
+    text-shadow: 0 0 4px rgba(242, 162, 74, .45);
+}
+.mirror-readout-unit {
+    font: 500 10px/1 var(--font-mono);
+    letter-spacing: .12em;
+    color: var(--color-secondary);
+}
+
+/* Room tabs — the participant keeps a separate model per room, and they
+   diverge, so switching rooms is switching subject rather than filtering. */
+.mirror-rooms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+.mirror-room {
+    font: 500 11px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    padding: 4px 9px;
+    color: var(--color-secondary);
+    background: transparent;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    cursor: pointer;
+}
+.mirror-room:hover { color: var(--color-bone); border-color: var(--color-crater); }
+.mirror-room.is-current {
+    color: var(--color-ink);
+    border-color: var(--color-amber);
+    background: var(--color-espresso);
+}
+
+.mirror-preamble {
+    margin: 0;
+    font: italic 400 12px/1.5 var(--font-serif);
+    color: var(--color-faint);
+}
+
+/* The prose. A real reading measure, serif, generous leading — deliberately
+   NOT the 12px mono the rest of the desk uses, because this is the one panel
+   whose content is an argument rather than a value. */
+.mirror-prose {
+    font-family: var(--font-serif);
+    font-size: 15px;
+    line-height: 1.62;
+    color: var(--color-ink);
+    max-width: 62ch;
+}
+.mirror-prose > :first-child { margin-top: 0; }
+.mirror-prose > :last-child { margin-bottom: 0; }
+.mirror-prose p { margin: 0 0 0.85em; }
+.mirror-prose h1,
+.mirror-prose h2,
+.mirror-prose h3 {
+    font: 600 11px/1.4 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .18em;
+    color: var(--color-amber);
+    margin: 1.5em 0 0.5em;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--color-bean);
+}
+.mirror-prose ul,
+.mirror-prose ol { margin: 0 0 0.85em; padding-left: 1.2em; }
+.mirror-prose li { margin-bottom: 0.3em; }
+.mirror-prose strong { color: var(--color-bone); }
+.mirror-prose code {
+    font-family: var(--font-mono);
+    font-size: .85em;
+    color: var(--color-bone);
+}
+
+.mirror-quiet {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-ghost);
+}
+
+/* Stepper — walking backwards is the primary move, so "Earlier" leads. */
+.mirror-stepper {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--color-bean);
+}
+.mirror-step {
+    font: 500 11px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    padding: 5px 10px;
+    color: var(--color-secondary);
+    background: var(--color-chassis);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-key);
+    cursor: pointer;
+}
+.mirror-step:hover:not(:disabled) { color: var(--color-ink); border-color: var(--color-crater); }
+.mirror-step:active:not(:disabled) { box-shadow: var(--bezel-key-down); }
+.mirror-step:disabled { opacity: .38; cursor: default; }
+.mirror-step-diff { margin-left: auto; }
+
+.mirror-step-where {
+    font: 500 11px/1 var(--font-mono);
+    letter-spacing: .08em;
+    color: var(--color-ghost);
+}
+
+/* Diff — mono, because here the characters ARE the subject. */
+.mirror-diff {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 8px 10px;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.55;
+    background: var(--color-well);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--bezel-well);
+    white-space: pre;
+}
+.mirror-diff-line { display: block; }
+.mirror-diff-meta { color: var(--color-faint); }
+.mirror-diff-add { color: var(--color-sage); }
+.mirror-diff-cut { color: var(--color-error); }
+.mirror-diff-same { color: var(--color-secondary); }

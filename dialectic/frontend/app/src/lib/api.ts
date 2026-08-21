@@ -1,4 +1,4 @@
-import type { Attachment, HomeActivityProjection, Memory, RoundState, Thread, ThreadNode, UserRoom } from '../types/index.ts';
+import type { Attachment, HomeActivityProjection, Memory, MirrorDiff, MirrorRoom, MirrorVersion, RoundState, Thread, ThreadNode, UserRoom } from '../types/index.ts';
 import type { AtlasProjection } from '../types/atlas.ts';
 import type {
   FieldMark,
@@ -544,6 +544,32 @@ class DialecticAPI {
           : { peer_forecast: peerForecast }),
       }),
     }) as Promise<RoundState>;
+  }
+
+  /**
+   * The Mirror: the participant's own model of YOU. The server fences these
+   * to `user_model:<caller>` in the SQL -- there is no user id to pass and
+   * deliberately no way to ask for anyone else's.
+   */
+  async getMirror(): Promise<MirrorRoom[]> {
+    return this.fetch('/users/me/mirror') as Promise<MirrorRoom[]>;
+  }
+
+  async getMirrorVersions(roomId: string): Promise<MirrorVersion[]> {
+    return this.fetch(
+      `/users/me/mirror/${roomId}/versions`,
+    ) as Promise<MirrorVersion[]>;
+  }
+
+  async getMirrorDiff(
+    roomId: string,
+    fromVersion: number,
+    toVersion: number,
+  ): Promise<MirrorDiff> {
+    return this.fetch(
+      // The endpoint aliases these to `from`/`to` (api/mirror.py Query alias).
+      `/users/me/mirror/${roomId}/diff?from=${fromVersion}&to=${toVersion}`,
+    ) as Promise<MirrorDiff>;
   }
 
   async resolveRoundQuestion(

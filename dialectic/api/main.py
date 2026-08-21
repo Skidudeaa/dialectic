@@ -40,6 +40,7 @@ from api.personas import router as personas_router, set_personas_db_pool
 from api.attachments import router as attachments_router, set_attachments_db_pool
 from api.prediction_relay import router as prediction_relay_router, set_prediction_relay_db_pool
 from api.rounds import router as rounds_router, set_rounds_db_pool
+from api.mirror import router as mirror_router, set_mirror_db_pool
 from api.reading_relay import router as reading_relay_router, set_reading_relay_db_pool
 from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_pool
 from api.trading_relay import router as trading_relay_router, set_trading_relay_db_pool
@@ -164,6 +165,7 @@ async def lifespan(app: FastAPI):
         # Set db_pool for the prediction relay module
         set_prediction_relay_db_pool(db_pool)
         set_rounds_db_pool(db_pool)
+        set_mirror_db_pool(db_pool)
         set_reading_relay_db_pool(db_pool)
         set_thesis_relay_db_pool(db_pool)
         set_trading_relay_db_pool(db_pool)
@@ -216,6 +218,8 @@ async def lifespan(app: FastAPI):
         from llm.night_shift import register_brief_jobs
         from llm.news_night import register_news_jobs
         from llm.question_round import register_question_round_jobs
+        from llm.round_close_watch import register_round_close_jobs
+        from llm.house_forecast import register_house_forecast_jobs
         from llm.silence_sweep import register_sweep_jobs
         from llm.wire import register_wire_jobs
         from llm.rss_wire import register_rss_wire_jobs
@@ -235,6 +239,8 @@ async def lifespan(app: FastAPI):
         register_brief_jobs(scheduler_instance)
         register_news_jobs(scheduler_instance)
         register_question_round_jobs(scheduler_instance)
+        register_round_close_jobs(scheduler_instance)
+        register_house_forecast_jobs(scheduler_instance)
         register_sweep_jobs(scheduler_instance)
         register_wire_jobs(scheduler_instance)
         register_rss_wire_jobs(scheduler_instance)
@@ -342,6 +348,12 @@ app.include_router(workspace_router)
 # a room's field_marks. workspace.py stays write-free; this is the one place
 # a Field review lands (§2 item 15).
 app.include_router(field_router)
+
+# The Mirror -- the participant's own private model of the caller, which it
+# has been rewriting since February and which nobody has ever read. Fenced
+# in the SQL to `user_model:<caller>`: never another person's, in any
+# response, including its existence.
+app.include_router(mirror_router)
 
 # Atlas -- the caller's own cross-room map: rooms, branches, artifacts and
 # real-provenance edges, fenced per-viewer in the SQL, JWT-only (§5.4).

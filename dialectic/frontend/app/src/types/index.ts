@@ -573,3 +573,32 @@ export type OutboundMessageType =
   | 'commitment_created' | 'commitment_confidence_updated' | 'commitment_resolved' | 'commitment_surfaced'
   | 'trading_update'
   | 'pong' | 'error';
+
+/**
+ * The Mirror: the participant's own model of the CALLER, which it has been
+ * rewriting since February and which neither of them has ever read.
+ *
+ * There is no user id in any of these shapes and that is deliberate. The
+ * server fences on `user_model:<caller>` in the SQL, so there is nothing here
+ * that could address another person's model even by accident.
+ */
+export interface MirrorRoom {
+  room_id: string;
+  room_name: string | null;
+  version: number;
+  updated_at: string;
+  content: string;
+}
+
+export interface MirrorVersion {
+  version: number;
+  updated_at: string;
+  content: string;
+}
+
+export interface MirrorDiff {
+  room_id: string;
+  from_version: number;
+  to_version: number;
+  lines: string[];
+}

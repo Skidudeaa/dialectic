@@ -35,6 +35,7 @@ import { LibraryScene } from './components/workspace/scenes/LibraryScene'
 import { LedgerScene } from './components/workspace/scenes/LedgerScene'
 import { FieldScene } from './components/workspace/scenes/FieldScene'
 import { AtlasScene } from './components/workspace/scenes/AtlasScene'
+import { MirrorPanel } from './components/workspace/MirrorPanel'
 import { FocusSurface } from './components/workspace/focus/FocusSurface.tsx'
 import { bareMarkId } from './components/workspace/fieldDisplay.ts'
 import { TradingPanel } from './components/trading/TradingPanel'
@@ -864,6 +865,11 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
 
   const sceneContent = {
     house: houseSurface,
+    // Home root only. The Mirror is about the reader, not about a room --
+    // and it is fenced in the SQL to `user_model:<caller>`, so there is no
+    // room or user id to hand it and deliberately no way to ask for anyone
+    // else's.
+    mirror: <MirrorPanel />,
     atlas: (
       <AtlasScene
         state={atlas}

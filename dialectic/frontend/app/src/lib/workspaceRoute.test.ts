@@ -165,7 +165,8 @@ describe('workspace scenes', () => {
     expect(scenesForDestination(scheme, root)).toEqual([
       'record', 'bench', 'field', 'library', 'ledger',
     ])
-    expect(scenesForDestination(home, root)).toEqual(['house', 'atlas', 'record'])
+    expect(scenesForDestination(home, root))
+      .toEqual(['house', 'atlas', 'mirror', 'record'])
     expect(scenesForDestination(home, branch)).toEqual(['record'])
   })
 

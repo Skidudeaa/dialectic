@@ -16,6 +16,11 @@ export const WORKSPACE_SCENES = [
   'focus',
   'judgment',
   'atlas',
+  // Added 2026-08-20 with the Mirror. It enters BOTH lists in the same
+  // change on purpose -- the rule the two lists exist to enforce is that an
+  // approved name must never open nothing, and this one opens something the
+  // day it is named.
+  'mirror',
 ] as const
 
 export type WorkspaceScene = (typeof WORKSPACE_SCENES)[number]
@@ -45,6 +50,11 @@ export const IMPLEMENTED_WORKSPACE_SCENES = [
   'library',
   'ledger',
   'atlas',
+  // The Mirror (2026-08-20): the participant's own model of YOU, which it has
+  // been rewriting per room since February -- 134 versions of one of them,
+  // 129 of the other, never once read by the person it is about. Home root
+  // only: it is about the reader, not about a room.
+  'mirror',
 ] as const
 
 export type ImplementedWorkspaceScene =
