@@ -153,6 +153,136 @@ describe('TrackRecordPanel — states', () => {
   })
 })
 
+/**
+ * The panel explains itself. Today this is the ONLY state production has ever
+ * been in — nothing anywhere has been scored — so the empty state is what a
+ * reader learns the scoreboard from, and it has to teach rather than apologise.
+ *
+ * The jargon checks pin BUTTONS, not text. `Explain` fails soft: a term the
+ * glossary does not define renders its children as plain prose and no control,
+ * so a text assertion would pass on a dead marker and certify it.
+ */
+describe('TrackRecordPanel — what a reader can learn from it', () => {
+  it('the empty state says what it is waiting for, not that it is empty', async () => {
+    vi.mocked(api.getTradingCalibration).mockResolvedValue({
+      calibration: [], total_predictions: 0, brier_score: null,
+    })
+    vi.mocked(api.getTradingLeaderboard).mockResolvedValue({ rows: [] })
+    render(<TrackRecordPanel />)
+    await screen.findByTestId('track-record-empty')
+
+    // Waiting, and explicitly not broken — the reading a blank panel gets.
+    expect(screen.getByText(/not a panel that failed to load/)).toBeTruthy()
+    // The rule that makes the wait make sense.
+    expect(screen.getByText(/A forecast scores when its question/)).toBeTruthy()
+    expect(screen.getByText(/when you answer it/)).toBeTruthy()
+    // And where the questions come from, so the wait has an end.
+    expect(screen.getByRole('button', { name: 'the Round' })).toBeTruthy()
+    expect(screen.getByText(/each Sunday/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'nothing settles itself' }))
+      .toBeTruthy()
+  })
+
+  it('never claims to be room-scoped or per-forecaster', async () => {
+    // BOTH claims were in the shipped intro and both are false, traced to the
+    // code: `api/trading_relay.py` resolves the room's book and discards it —
+    // the desk answers from an unfiltered `SELECT * FROM predictions`, so every
+    // room renders identical numbers. And the grouping key is `source_label`,
+    // which `stakes/manager.py::_relay_source_label` derives from the
+    // commitment's CREATOR; a Round question is created with
+    // `created_by_user_id=None`, which that function maps to the literal "LLM".
+    // So both humans' Round forecasts land on one row labelled LLM, and "per
+    // forecaster" would not merely overstate — it would name the wrong person.
+    //
+    // Asserted against RENDERED TEXT, not the source file: a source-text
+    // `not.toContain` would go red the moment someone quoted the old wording in
+    // a comment explaining its removal, which is this repo's documented trap.
+    vi.mocked(api.getTradingCalibration).mockResolvedValue(CALIBRATION)
+    vi.mocked(api.getTradingLeaderboard).mockResolvedValue(LEADERBOARD)
+    render(<TrackRecordPanel />)
+    const panel = await screen.findByTestId('track-record-panel')
+    expect(panel.textContent).not.toMatch(/this room's forecasts/i)
+    expect(panel.textContent).not.toMatch(/per forecaster/i)
+  })
+
+  it('names itself in the empty state as well as the populated one', async () => {
+    vi.mocked(api.getTradingCalibration).mockResolvedValue({
+      calibration: [], total_predictions: 0, brier_score: null,
+    })
+    vi.mocked(api.getTradingLeaderboard).mockResolvedValue({ rows: [] })
+    const { unmount } = render(<TrackRecordPanel />)
+    await screen.findByTestId('track-record-empty')
+    expect(screen.getByText(/one row per source/)).toBeTruthy()
+    unmount()
+
+    vi.mocked(api.getTradingCalibration).mockResolvedValue(CALIBRATION)
+    vi.mocked(api.getTradingLeaderboard).mockResolvedValue(LEADERBOARD)
+    render(<TrackRecordPanel />)
+    await screen.findByTestId('track-record-panel')
+    expect(screen.getByText(/one row per source/)).toBeTruthy()
+  })
+
+  it('makes every headline term and column readable', async () => {
+    vi.mocked(api.getTradingCalibration).mockResolvedValue(CALIBRATION)
+    vi.mocked(api.getTradingLeaderboard).mockResolvedValue(LEADERBOARD)
+    render(<TrackRecordPanel />)
+    await screen.findByTestId('track-record-panel')
+
+    expect(screen.getByRole('button', { name: 'Brier 0.18' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'BSS +0.28' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Calibration' })).toBeTruthy()
+    // Acc and Bias have no glossary entry and are explained in place instead.
+    expect(screen.getByText(/positive means overconfident/)).toBeTruthy()
+    // The fixture's second row is UNVERIFIED, so the lone middot in its
+    // Source cell — previously meaningful only to a reader on a mouse —
+    // gets said in text.
+    expect(screen.getByText(/too few resolved questions/)).toBeTruthy()
+    // The bars said what they meant only in a `title` before this.
+    expect(screen.getByText(/One bar per confidence band/)).toBeTruthy()
+  })
+
+  it('drops the unverified footnote when every row is empirical', async () => {
+    vi.mocked(api.getTradingCalibration).mockResolvedValue(CALIBRATION)
+    vi.mocked(api.getTradingLeaderboard).mockResolvedValue({
+      rows: [LEADERBOARD.rows[0]],
+    })
+    render(<TrackRecordPanel />)
+    await screen.findByTestId('track-record-panel')
+    expect(screen.getByText(/positive means overconfident/)).toBeTruthy()
+    expect(screen.queryByText(/too few resolved questions/)).toBeNull()
+  })
+
+  it('names the two lines in the equity curve', async () => {
+    vi.mocked(api.getTradingCalibration).mockResolvedValue(CALIBRATION)
+    vi.mocked(api.getTradingLeaderboard).mockResolvedValue(LEADERBOARD)
+    vi.mocked(api.getTradingPortfolio).mockResolvedValue({
+      cash: 100, positions: [], equity: 3300, price_return_only: true,
+      marks: [
+        { mark_date: '2026-08-15', equity: 3000, spy_close: 555 },
+        { mark_date: '2026-08-16', equity: 3300, spy_close: 560 },
+      ],
+      spy_baseline: [
+        { mark_date: '2026-08-15', value: 3000 },
+        { mark_date: '2026-08-16', value: 3020 },
+      ],
+      spy_baseline_now: 3025,
+    })
+    render(<TrackRecordPanel />)
+    await screen.findByTestId('track-record-sparkline')
+    expect(screen.getByRole('button', { name: 'the paper book' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'the same cash in SPY' }))
+      .toBeTruthy()
+  })
+
+  it('draws no key when there is no curve to key', async () => {
+    vi.mocked(api.getTradingCalibration).mockResolvedValue(CALIBRATION)
+    vi.mocked(api.getTradingLeaderboard).mockResolvedValue(LEADERBOARD)
+    render(<TrackRecordPanel />)
+    await screen.findByTestId('track-record-panel')
+    expect(screen.queryByRole('button', { name: 'the paper book' })).toBeNull()
+  })
+})
+
 describe('LedgerScene mounts the panel', () => {
   const ready: WorkspaceObjectsState = {
     status: 'ready',

@@ -34,6 +34,43 @@ describe('scene copy reads as sentences', () => {
   })
 })
 
+/**
+ * The same trap, on the surfaces that are NOT empty.
+ *
+ * The 2026-08-21 orientation lines interpolate a `<Explain>` element into
+ * running prose, which is precisely the shape that loses its spaces: JSX drops
+ * the newline between an expression and the text on the next line, so
+ * `</Explain>\n— provisional` renders as "Field marks— provisional". Every
+ * structural assertion still passes. Only reading the words catches it, and the
+ * explicit `{' '}` joins are what these pin.
+ *
+ * SCENE_PRIMER needs no entry here — it is plain strings with no interpolation,
+ * and its totality and no-state-in-prose contracts live in SceneMasthead.test.tsx,
+ * beside the component that renders it.
+ */
+describe('orientation lines read as sentences', () => {
+  const populated = {
+    status: 'ready' as const,
+    generatedAt: 'x',
+    refresh: () => {},
+    marks: [{
+      id: 'field_mark:1', room_id: 'r1', thread_id: null,
+      relation: 'emerging_position' as const, origin: 'inferred' as const,
+      review: 'provisional' as const, deliberative_status: 'active' as const,
+      subjects: [], title: 'Rates fall', payload: {}, supersedes_id: null,
+      caused_by_id: null, actor_user_id: null, provenance: 'field_inference',
+      created_at: '2026-08-13T10:00:00Z', reviews: [],
+    }],
+  }
+
+  it('keeps the space on both sides of the Field lede’s glossary term', () => {
+    render(<FieldScene state={populated} objects={ready} onOpen={vi.fn()} />)
+    const lede = document.querySelector('.field-lede')?.textContent ?? ''
+    expect(lede).toMatch(/Field marks — provisional, and not conclusions\. Tap a row/)
+    expect(lede).toMatch(/earned the mark\. Nothing marked here outranks/)
+  })
+})
+
 describe('Field empty state teaches (SceneEmpty four-question contract)', () => {
   it('answers what/what-lands/how/what-you-can-do, with no fake action button', () => {
     render(<FieldScene state={readyMarks} objects={ready} />)

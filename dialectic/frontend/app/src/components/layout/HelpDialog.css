@@ -48,3 +48,55 @@
 }
 
 .help-section strong { color: var(--color-bone); }
+
+/* ── The two shelves ────────────────────────────────────────────────────
+   A tab row, not a segmented control: the underline carries the selection
+   and the label carries the meaning, so the state survives grayscale and a
+   forced-colors mode where a filled background would not. */
+.help-tabs {
+  display: flex;
+  gap: 2px;
+  margin-top: 0.9rem;
+  border-bottom: 1px solid var(--color-bean);
+}
+
+.help-tab {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 0.45rem 0.85rem;
+  color: var(--color-secondary);
+  font: 600 12px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.help-tab:hover { color: var(--color-bone); }
+
+.help-tab.is-active {
+  color: var(--color-bone);
+  border-bottom-color: var(--color-amber);
+}
+
+.help-tab:focus-visible {
+  outline: 2px solid var(--color-amber);
+  outline-offset: -2px;
+}
+
+/* The unread count. Never the only signal — the word "What changed" is
+   always there, and this only says how many. */
+.help-tab-count {
+  display: inline-block;
+  min-width: 1.15em;
+  margin-left: 0.45em;
+  padding: 0.1em 0.35em;
+  border-radius: 999px;
+  background: var(--color-amber);
+  color: var(--color-obsidian);
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: center;
+}

@@ -142,3 +142,27 @@
     .room-header .btn-label { display: none; }
     .room-header-left { gap: 0.5rem; }
 }
+
+/* ── The help door ──────────────────────────────────────────────────────
+   Keeps its meaning when `.btn-label` is hidden under 600px: the question
+   mark carries it alone, and the count keeps its own size rather than
+   collapsing with the label. */
+.help-action { position: relative; }
+
+.help-action .help-unread {
+  min-width: 1.15em;
+  margin-left: 0.4em;
+  padding: 0.1em 0.35em;
+  border-radius: 999px;
+  background: var(--color-amber);
+  color: var(--color-obsidian);
+  font: 600 10px/1.4 var(--font-mono);
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+    /* The label goes; the count must not go with it — it is the only thing
+       on the header telling a reader that anything shipped. */
+    .room-header .help-action .btn-label { display: none; }
+    .help-action .help-unread { margin-left: 0.3em; }
+}

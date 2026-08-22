@@ -114,3 +114,13 @@
 }
 
 .field-mark-orphan { padding-left: 0.75rem; }
+
+/* The orientation line above the bands. Quieter than a section label and set
+   in the reading serif, so it reads as the scene speaking rather than as a
+   first row of data. `.scene-body > *` already caps its measure at 1180px. */
+.field-lede {
+    margin: 0;
+    font: italic 12.5px/1.55 var(--font-serif);
+    color: var(--color-faint);
+    text-wrap: pretty;
+}

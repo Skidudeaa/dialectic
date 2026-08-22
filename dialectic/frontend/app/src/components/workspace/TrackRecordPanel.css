@@ -13,9 +13,67 @@
   font-size: 0.95rem;
 }
 
+/* The panel's own name for itself, above every number it draws. */
+.track-record-intro {
+  margin: 0 0 10px;
+  max-width: 62ch;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+
 .track-record-quiet {
   color: var(--text-tertiary);
   font-size: 0.85rem;
+}
+
+/* The empty state is a paragraph of real prose, not a "no data" stub -- in
+   production this is the state, and it is the only thing most readers will
+   ever have learned about the scoreboard. */
+.track-record-waiting p {
+  margin: 0 0 7px;
+  max-width: 62ch;
+  line-height: 1.45;
+}
+
+.track-record-waiting p:last-child { margin-bottom: 0; }
+
+/* Captions under the table, the bars and the curve: the meaning a column
+   header or a coloured line cannot carry on its own. */
+.track-record-note {
+  margin: 6px 0 0;
+  max-width: 62ch;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-ghost);
+}
+
+.track-record-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 5px 0 0;
+  font-size: 0.72rem;
+  color: var(--text-ghost);
+}
+
+/* Each swatch repeats the stroke it names, so the key is read off the drawing
+   rather than memorised: solid accent for the book, the same dashed ghost the
+   benchmark is drawn in. Keep these in step with EquitySparkline's strokes --
+   a key drawn in a colour the chart does not use is worse than no key. */
+.track-record-swatch {
+  width: 14px;
+  height: 0;
+  flex: none;
+}
+
+.track-record-swatch.is-equity { border-top: 2px solid var(--claude-primary); }
+
+/* The extra margin groups each swatch with its own label rather than with the
+   label before it -- flex `gap` alone spaces all four items evenly. */
+.track-record-swatch.is-spy {
+  margin-left: 6px;
+  border-top: 1px dashed var(--text-ghost);
 }
 
 .track-record-headline {

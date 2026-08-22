@@ -1,0 +1,187 @@
+/* Explain — the quiet marker, and the panel it opens.
+   Tokens only. This appears dozens of times on a page, so the marker has to
+   read as punctuation rather than as an icon: no fill, no border box, no
+   badge. A rash of question marks would make the surface look unfinished. */
+
+.explain {
+    /* The panel is fixed to the viewport, so this wrapper only has to keep the
+       trigger flowing inside the sentence it sits in. */
+    display: contents;
+}
+
+.explain-trigger {
+    /* A button is inline-BLOCK by default, and an inline-block cannot break
+       across lines. So a wrapped phrase of more than one word became an
+       unbreakable box: when it did not fit, the whole phrase jumped to the next
+       line and left a ragged hole behind it, and the taller line box opened a
+       gap under every paragraph carrying a marked term. Marked prose came out
+       visibly broken while every geometry assertion passed — no overflow,
+       nonzero size, correct stacking. Only the screenshot showed it.
+       `display: inline` does NOT fix it — Chrome blockifies it back to
+       inline-block on a button, which `getComputedStyle` confirms. What is
+       fixable is the damage that box does to the LINE: an inline-block aligns
+       on its own bottom margin edge by default and carries the UA's own
+       line-height, so every line holding a marked term grew taller than its
+       neighbours and the paragraph came apart. Pinning the baseline and
+       inheriting the line-height puts the box back in the text's own rhythm.
+       A multi-word phrase still moves to the next line as a unit, the way any
+       single long token does; that is ordinary wrapping, not the defect. */
+    display: inline;
+    vertical-align: baseline;
+    line-height: inherit;
+    /* THE ONE THAT ACTUALLY BROKE THE PROSE. global.css gives every button a
+       44x44 physical hit area — the work-surface touch contract, and correct
+       for a control. This is not a control; it is a word in a sentence. The
+       floor made every marked term a 44px-tall, 44px-wide atomic box sitting
+       inside a 20px line, so each marked line was forced open and short labels
+       carried a pad of empty space beside them. Measured at 228x44 with
+       min-height computing to 44px.
+       The contract is kept where it belongs, not abandoned: a wrapped label IS
+       its own hit target and is already finger-sized, and the bare marker below
+       reclaims a full-size target through a pseudo-element that costs the line
+       nothing. */
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    background: none;
+    border: none;
+    /* Inherit the label's own type — a wrapped term must look like the text it
+       replaced, not like a control dropped into the middle of a sentence. */
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+    border-bottom: 1px dotted var(--color-crater);
+    cursor: help;
+}
+
+.explain-trigger:hover,
+.explain-trigger[aria-expanded='true'] {
+    color: var(--color-amber);
+    border-bottom-color: var(--color-amber);
+}
+
+.explain-trigger:focus-visible {
+    outline: 1px solid var(--color-amber);
+    outline-offset: 2px;
+}
+
+/* The bare marker: a superscript question mark, dimmer than the text it
+   annotates, with no underline to compete with the prose. */
+.explain-trigger.is-bare {
+    position: relative;
+    margin-left: 2px;
+    border-bottom: none;
+    color: var(--color-ghost);
+    font-family: var(--font-mono);
+    font-size: 0.72em;
+    line-height: 1;
+    vertical-align: super;
+}
+
+/* The bare marker really is thumb-hostile — the glyph measures about 5x9 — so
+   it takes its hit area back through a pseudo-element. An absolutely-positioned
+   ::after contributes nothing to the line box, so the target grows and the
+   sentence is untouched.
+   FULL 44px vertically, deliberately NARROWER horizontally (~29px): these sit
+   inside running prose, sometimes a few words apart, and a 44px-wide invisible
+   box would overlap the words either side and open the wrong definition on a
+   near-miss. Overlapping hit areas are a worse failure than a slightly narrow
+   one, so the contract is met on the axis where it is free and traded on the
+   axis where it is not. Stated rather than rounded up. */
+.explain-trigger.is-bare::after {
+    content: '';
+    position: absolute;
+    inset: -18px -12px;
+}
+
+.explain-panel {
+    /* The positioning SCHEME is set inline by Explain.tsx, beside the viewport
+       coordinates it makes sense of — see the scar in PassageMarker.tsx, where
+       an absolutely-positioned menu was trapped in the message's stacking
+       context and a later byline painted over it.
+       z-index above 1200, which is the modal ladder: this opens inside dialogs. */
+    z-index: 1300;
+    width: min(320px, calc(100vw - 16px));
+    /* A long entry on a short viewport — a phone in landscape is ~390px tall —
+       otherwise runs past the fold with no way to reach the rest: the panel is
+       position:fixed, so the PAGE cannot scroll to it. Cap it and let the panel
+       scroll itself. Explain.tsx's scroll-dismissal is registered in the
+       capture phase and so would fire on this element's own scroll too, which
+       would close the panel the moment a reader tried to read it; the handler
+       ignores scrolls originating inside the panel for exactly this reason. */
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 10px 12px 11px;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--bezel-raised), 0 8px 24px rgba(0, 0, 0, 0.5);
+    text-align: left;
+    cursor: default;
+}
+
+.explain-term {
+    margin: 0 0 5px;
+    color: var(--color-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-shadow: var(--engrave);
+}
+
+.explain-short {
+    margin: 0;
+    color: var(--color-ink);
+    font-family: var(--font-serif);
+    font-size: 0.86rem;
+    line-height: 1.45;
+}
+
+.explain-long {
+    margin: 7px 0 0;
+    padding-top: 7px;
+    border-top: 1px solid var(--color-bean);
+    color: var(--color-faint);
+    font-family: var(--font-serif);
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.explain-see {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+    margin: 8px 0 0;
+}
+
+.explain-see-label {
+    color: var(--color-ghost);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.explain-see-btn {
+    padding: 0;
+    background: none;
+    border: none;
+    border-bottom: 1px dotted var(--color-crater);
+    color: var(--color-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.explain-see-btn:hover {
+    color: var(--color-amber);
+    border-bottom-color: var(--color-amber);
+}
+
+.explain-see-btn:focus-visible {
+    outline: 1px solid var(--color-amber);
+    outline-offset: 2px;
+}

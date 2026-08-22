@@ -60,6 +60,36 @@ describe('FieldScene', () => {
     expect(onOpen).toHaveBeenCalledWith(theMark)
   })
 
+  it('says what a mark IS on the populated scene, not only on the empty one', () => {
+    // The defect this closes: every word explaining a field mark lived in the
+    // empty state, which is the one screen a room with 85 marks never sees.
+    // Production had 85 marks and zero human reviews, ever.
+    const state: FieldMarksState = {
+      status: 'ready', generatedAt: 'x', refresh: () => {},
+      marks: [mark({ id: 'field_mark:1', relation: 'emerging_position', title: 'Rates fall' })],
+    }
+    render(<FieldScene state={state} objects={noObjects} onOpen={vi.fn()} />)
+    const lede = document.querySelector('.field-lede')
+    expect(lede?.textContent).toMatch(/provisional, and not conclusions/i)
+    expect(lede?.textContent).toMatch(/confirm or contest/i)
+    // And the definition is reachable, not assumed — the glossary marker is a
+    // real button, never a hover-only `title`.
+    expect(screen.getByRole('button', { name: 'Field marks' })).toBeInTheDocument()
+  })
+
+  it('does not promise a tap the scene cannot honour', () => {
+    // Without `onOpen` the rows are not tappable. "Tap a row to open it" would
+    // then be advertising a door that does not exist.
+    const state: FieldMarksState = {
+      status: 'ready', generatedAt: 'x', refresh: () => {},
+      marks: [mark({ id: 'field_mark:1', relation: 'emerging_position', title: 'Rates fall' })],
+    }
+    render(<FieldScene state={state} objects={noObjects} />)
+    const lede = document.querySelector('.field-lede')
+    expect(lede?.textContent).not.toMatch(/tap a row/i)
+    expect(lede?.textContent).toMatch(/under the message that earned the mark/i)
+  })
+
   it('resolves a subject to its title from the workspace-objects projection, not a raw id', () => {
     const objects: WorkspaceObjectsState = {
       status: 'ready',

@@ -15,7 +15,7 @@ import type { Message, SearchResult, ThesisSeed, Thread, ThreadNode, TradingSnap
 import { AppLayout } from './components/layout/AppLayout'
 import { RoomHeader } from './components/layout/RoomHeader'
 import { RoomSettingsDialog } from './components/layout/RoomSettingsDialog'
-import { HelpDialog } from './components/layout/HelpDialog'
+import { HelpDialog, type HelpTab } from './components/layout/HelpDialog'
 import { RoomList } from './components/sidebar/RoomList'
 import { RightPanel } from './components/sidebar/RightPanel'
 import { MemoryPanel } from './components/sidebar/MemoryPanel'
@@ -127,7 +127,10 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // intersection contracts immediately instead of on the next interval.
   const [homeRefreshVersion, setHomeRefreshVersion] = useState(0)
   const [showSettings, setShowSettings] = useState(false)
-  const [showHelp, setShowHelp] = useState(false)
+  // null = closed. A tab rather than a boolean because the header's unread
+  // badge opens straight onto "What changed": a badge that opens a dialog
+  // showing something else is a badge that lies about what it counts.
+  const [helpTab, setHelpTab] = useState<HelpTab | null>(null)
   // Lazy initializers, not an effect: both restore from continuity exactly
   // once, on ChatLayout's first render for this window — reading storage
   // synchronously during an effect body to call setState would cascade an
@@ -956,7 +959,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
               onProtocolClick={() => setShowProtocolPicker(true)}
               onSettingsClick={() => setShowSettings(true)}
               onSearchClick={() => setShowSearch(true)}
-              onHelpClick={() => setShowHelp(true)}
+              onHelpClick={(tab) => setHelpTab(tab)}
               connected={isConnected}
               isHome={isHome}
               onHomeClick={() => void navigate({ roomId: null }, 'push')}
@@ -1077,8 +1080,12 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
           onClose={() => setShowSettings(false)}
         />
       )}
-      {showHelp && (
-        <HelpDialog roomId={currentRoom.id} onClose={() => setShowHelp(false)} />
+      {helpTab && (
+        <HelpDialog
+          roomId={currentRoom.id}
+          initialTab={helpTab}
+          onClose={() => setHelpTab(null)}
+        />
       )}
       {showRoomAccess && (
         <RoomAccess

@@ -1,0 +1,14 @@
+/* The one line that says what a field mark is, at the point of action.
+   Its own file rather than an addition to PassageMarker.css: that stylesheet
+   is shared with PassageMarker.tsx, and the marks block is not the marker.
+
+   Deliberately quieter than the marks themselves — serif against their mono,
+   faint against their ink. It is an aside to a reader who needs it, never a
+   banner competing with the mark it explains. */
+
+.msg-marks-lede {
+    margin: 0 0 4px;
+    font: italic 11.5px/1.45 var(--font-serif);
+    color: var(--color-ghost);
+    text-wrap: pretty;
+}

@@ -1,0 +1,141 @@
+/* WhatsNewPanel — the changelog, with the running state beside it.
+   Tokens only, no raw hex. Deliberately built from the same type and spacing
+   vocabulary as CapabilityMap.css rather than importing its classes: this
+   panel can be mounted on its own, and a component that borrows another's
+   stylesheet renders unstyled the day it is mounted without it. */
+
+.whats-new {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.whats-new .wn-head h3 {
+    margin: 0;
+}
+
+.wn-sub {
+    margin: 0.2rem 0 0;
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--color-faint);
+    text-wrap: pretty;
+}
+
+.wn-unknown {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--color-warning);
+}
+
+.wn-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.wn-entry {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding-left: 0.75rem;
+    /* One rule down the left, so a long list reads as a spine of events rather
+       than as a stack of cards. */
+    border-left: 1px solid var(--color-bean);
+}
+
+.wn-entry-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0;
+}
+
+.wn-date {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--color-ghost);
+}
+
+.wn-title {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-bone);
+    text-shadow: var(--engrave);
+}
+
+/* The unread mark is a WORD, not a coloured dot — the same rule the capability
+   states follow. Amber carries it; the letters carry it without amber. */
+.wn-new {
+    padding: 1px 5px;
+    border: 1px solid var(--color-amber-mute);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-amber);
+}
+
+.wn-body {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--color-secondary);
+    text-wrap: pretty;
+}
+
+.wn-jobs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    margin: 0.15rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.wn-jobs li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.45rem;
+    font-size: 11px;
+}
+
+.wn-state {
+    flex: 0 0 3.2rem;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-amber);
+}
+
+.wn-job {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--color-secondary);
+}
+
+.wn-note {
+    font-family: var(--font-serif);
+    font-size: 11px;
+    color: var(--color-faint);
+}
+
+/* Dimming is secondary to the word: a switched-off row still SAYS "off". */
+.wn-jobs li.is-off .wn-state,
+.wn-jobs li.is-off .wn-job {
+    color: var(--color-faint);
+}

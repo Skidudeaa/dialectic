@@ -130,11 +130,35 @@ describe('the Mirror', () => {
     expect(screen.getByText(/Nothing yet/)).toBeTruthy()
   })
 
+  it('admits that empty and fenced look identical from here', async () => {
+    // The fence is the QUERY KEY (api/mirror.py), so a room where only the
+    // OTHER person is modelled is indistinguishable from a room with no model
+    // — in the list, in the counts, and in the 404. That ambiguity is
+    // deliberate and it is only honest if the empty state says it out loud;
+    // otherwise a reader concludes the participant has no theory of anyone.
+    mount([], [])
+    const quiet = await screen.findByTestId('mirror-quiet')
+    expect(quiet.textContent).toMatch(/only ever see your own/i)
+    expect(quiet.textContent).toMatch(/looks exactly like this/i)
+  })
+
   it('reads as unanswered, not as empty, when the door fails', async () => {
     // An error rendered as "you have no profile" is a lie about the data.
     vi.mocked(api.getMirror).mockRejectedValue(new Error('boom'))
     render(<MirrorPanel />)
     await screen.findByTestId('mirror-quiet')
     expect(screen.getByText(/not answering/)).toBeTruthy()
+    // ...and it must not borrow the empty state's sentence while doing it.
+    expect(screen.getByTestId('mirror-quiet').textContent).not.toMatch(/Nothing yet/)
+  })
+
+  it('orients the reader before the prose, and defines its own name', async () => {
+    mount()
+    await screen.findByTestId('mirror-panel')
+    // What the stepper does, said once at the top rather than as chrome on
+    // each control.
+    expect(screen.getByText(/Step back through the rewrites/)).toBeTruthy()
+    // The title is the glossary trigger — a real button, not a `title` tooltip.
+    expect(screen.getByRole('button', { name: 'The Mirror' })).toBeInTheDocument()
   })
 })

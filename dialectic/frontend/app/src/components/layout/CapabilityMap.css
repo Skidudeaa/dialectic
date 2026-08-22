@@ -50,3 +50,35 @@
     line-height: 1.55;
     color: var(--color-warning);
 }
+
+/* The glossary. Collapsed by default — see the note at its call site. */
+.capability-glossary > summary {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--color-secondary);
+    cursor: pointer;
+    padding: 0.2rem 0;
+}
+.capability-glossary > summary:hover { color: var(--color-bone); }
+.capability-defs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    margin-top: 0.8rem;
+}
+.capability-defs dt {
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--color-bone);
+}
+.capability-defs dd {
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--color-secondary);
+    text-wrap: pretty;
+    margin: 0.1rem 0 0;
+}

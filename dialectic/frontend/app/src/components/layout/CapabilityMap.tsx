@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api.ts'
 import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
+import { Explain } from '../common/Explain'
+import { GLOSSARY } from '../../lib/glossary'
 import './CapabilityMap.css'
 
 /**
@@ -23,10 +25,46 @@ import './CapabilityMap.css'
  * none of those are state, and inventing a state field for them would be worse.
  * The split is deliberate: facts about THIS deployment are read; rules about
  * the product are told.
+ *
+ * THE ROT FENCE: JOB_COPY must name every job the scheduler registers, and
+ * tests/test_capability_copy_contract.py fails the build when it does not. It
+ * finds the roster by IMPORTING api/main.py's register functions and running
+ * them against a real Scheduler, so the roster is the one the app boots with
+ * and not a list someone remembered to update. Six of fifteen jobs — the Round,
+ * the house forecast, settlement, the watchlist wire, disclosures and field
+ * marks — rendered to the reader as raw snake_case until 2026-08-21, which is
+ * the same failure as the hardcoded modal wearing different clothes.
  */
 
+interface JobCopy {
+  label: string
+  what: string
+  /** Glossary key, when the label is a term this product defines elsewhere. */
+  term?: string
+  /**
+   * The weekday of a job whose real rhythm lives in its BODY, where the Job
+   * dataclass cannot see it.
+   *
+   * There is exactly one today and it is not a nicety: `question_round` is
+   * registered `daily_at="09:00"` because the scheduler has interval buckets
+   * and wall-clock daily slots but no weekly cadence — `is_round_day()` returns
+   * immediately on the other six mornings. Rendering the scheduler's own field
+   * printed "daily 09:00" on the help screen, which is a lie the reader has no
+   * way to check, about the one feature they are being asked to show up for.
+   *
+   * WHY ONLY THE WEEKDAY, AND NEVER THE TIME: the first version of this fix
+   * wrote the whole string — `'Sundays 09:00'` — which re-introduces at small
+   * scale the exact drift it exists to correct. Change `daily_at` to 10:00 and
+   * the screen keeps promising 09:00, with a test pinning the lie in place.
+   * The weekday is genuinely unreadable and so is TOLD; the time is right there
+   * on the job and so is READ. Every part of a displayed fact comes from
+   * whichever side actually knows it.
+   */
+  weeklyOn?: string
+}
+
 /** Job name → what it does, in the reader's terms. */
-const JOB_COPY: Record<string, { label: string; what: string }> = {
+const JOB_COPY: Record<string, JobCopy> = {
   morning_brief: {
     label: 'Morning brief',
     what: 'a catch-up each morning in rooms that saw activity — missed threads, unanswered questions, anything due',
@@ -39,11 +77,44 @@ const JOB_COPY: Record<string, { label: string; what: string }> = {
     label: 'The wire',
     what: 'watches for news that bears on the thesis and interrupts when it matters',
   },
+  rss_wire: {
+    label: 'Watchlist feeds',
+    what: 'reads the feeds this room watches and files what bears on the thesis — spending the same daily interruption budget as the wire, not a second one',
+  },
+  congress_watch: {
+    label: 'Disclosures',
+    what: 'congressional stock filings, kept only where this room’s thesis already names the ticker — filed to the Library rather than interrupting, though the Library is read by the morning brief and by Echo',
+  },
+  question_round: {
+    label: 'The Round',
+    term: 'round',
+    what: 'drafts a slate of forecastable questions for a room with two forecasters in it — each binary, each with a named resolution source and a hard close date',
+    weeklyOn: 'Sundays',
+  },
+  house_forecast_sweep: {
+    label: 'The house forecast',
+    term: 'house',
+    what: 'the participant answers each open question itself, sealed like yours until you have both committed — a few at a time, so one long think cannot hold up the rest of this list',
+  },
+  round_close_watch: {
+    label: 'Settlement',
+    term: 'settlement',
+    what: 'when a question closes, reads the source it named and offers a verdict — it never resolves anything itself',
+  },
   prediction_deadline_watch: {
     label: 'Deadline review',
     what: 'when a prediction comes due, gathers evidence and offers a verdict for you to judge',
   },
+  field_inference: {
+    label: 'Field marks',
+    term: 'field-mark',
+    what: 'pencils in provisional marks about the room’s reasoning for you to confirm or contest — capped per run and per day, so a quiet room never wakes up covered in them',
+  },
   reading_echo: {
+    // No `term`: the marker wraps the LABEL, so it must define the label's own
+    // word. Hanging `reading` on "Echo" or "Watchlist feeds" opens a panel
+    // headed "Reading" over a word the reader did not tap. Only a label that
+    // IS the term earns one; the Library row below carries `reading`.
     label: 'Echo',
     what: 'notices when something filed here bears on another room, and says so there — a citation, never a copy',
   },
@@ -65,7 +136,13 @@ const JOB_COPY: Record<string, { label: string; what: string }> = {
   },
 }
 
-function cadence(job: { interval_s: number; daily_at: string | null }): string {
+function cadence(
+  job: { interval_s: number; daily_at: string | null },
+  weeklyOn?: string,
+): string {
+  // Told weekday, read time — see JobCopy.weeklyOn for why the two halves come
+  // from different places.
+  if (weeklyOn) return job.daily_at ? `${weeklyOn} ${job.daily_at}` : weeklyOn
   if (job.daily_at) return `daily ${job.daily_at}`
   if (job.interval_s >= 3600) return `every ${Math.round(job.interval_s / 3600)}h`
   return `every ${Math.round(job.interval_s / 60)} min`
@@ -96,8 +173,17 @@ export function CapabilityMap({ roomId }: { roomId: string }) {
           in directly. <strong>@Claude</strong> and <strong>@llm</strong> still work.
         </p>
         <p className="capability-prose">
-          It can prepare a change — a prediction, a thesis, a saved source — but
-          your Accept is the only thing that writes. It takes no action on its own.
+          It can <Explain term="proposal">prepare a change</Explain> — a
+          prediction, a thesis, a saved source — but your Accept is the only
+          thing that writes. It takes no action on its own.
+        </p>
+        <p className="capability-prose">
+          Once a week it also puts a number down of its own. The{' '}
+          <Explain term="round">Round</Explain> asks this room a slate of
+          forecastable questions;{' '}
+          <Explain term="house">the house</Explain> answers them too, under the
+          same <Explain term="seal">seal</Explain> and the same clock, and is
+          scored beside you.
         </p>
       </section>
 
@@ -149,9 +235,13 @@ export function CapabilityMap({ roomId }: { roomId: string }) {
                 <li key={job.name} className={job.enabled ? '' : 'is-off'}>
                   <span className="capability-state">{job.enabled ? 'on' : 'off'}</span>
                   <span>
-                    <strong>{copy?.label ?? job.name}</strong>
+                    <strong>
+                      {copy?.term
+                        ? <Explain term={copy.term}>{copy.label}</Explain>
+                        : (copy?.label ?? job.name)}
+                    </strong>
                     {copy ? ` — ${copy.what}` : ''}
-                    <span className="capability-cadence"> · {cadence(job)}</span>
+                    <span className="capability-cadence"> · {cadence(job, copy?.weeklyOn)}</span>
                   </span>
                 </li>
               )
@@ -164,16 +254,55 @@ export function CapabilityMap({ roomId }: { roomId: string }) {
         <h3>The parts of a room</h3>
         <ul className="capability-list capability-plain">
           <li><strong>Record</strong> — everything said, exactly, and searchable.</li>
-          <li><strong>Bench</strong> — the thesis this room is building, and what is staked on it.</li>
-          <li><strong>Library</strong> — the sources kept, and why each mattered.</li>
-          <li><strong>Ledger</strong> — what the room takes as settled.</li>
+          {/* The marker sits BESIDE each place-name rather than wrapping it.
+              Wrapping made the label the trigger, so tapping "Library" opened a
+              panel headed "Reading" — the very mismatch the reading_echo note
+              above forbids, committed by its own remedy. A place is not its
+              jargon: the Bench HOLDS a causal DAG, the Ledger is WHERE
+              calibration is read. A bare marker says "there is a word here to
+              look up" without claiming the word and the place are the same. */}
+          <li>
+            <strong>Bench</strong> <Explain term="causal-dag" /> — the
+            thesis this room is building, and what is staked on it.
+          </li>
+          <li>
+            <strong>Library</strong> <Explain term="reading" /> — the
+            sources kept, and why each mattered.
+          </li>
+          <li>
+            <strong>Field</strong> <Explain term="field-mark" /> — marks
+            pencilled in about the room&rsquo;s reasoning, waiting on you.
+          </li>
+          <li>
+            <strong>Ledger</strong> <Explain term="calibration" /> — what
+            the room takes as settled, and how well it has been calling things.
+          </li>
         </ul>
         <p className="capability-prose">
-          Fork any message to branch — a branch inherits everything above it, so
-          you can try a line of argument without losing the one you were on.
-          Restate a remembered fact and the new version supersedes the old,
+          Fork any message to <Explain term="branch">branch</Explain> — a branch
+          inherits everything above it, so you can try a line of argument without
+          losing the one you were on. Restate a remembered fact and the new
+          version <Explain term="supersession">supersedes</Explain> the old,
           keeping its history rather than overwriting it.
         </p>
+      </section>
+
+      {/* Collapsed, deliberately: the room's own state is the reason to open
+          this screen, and a wall of definitions ahead of it buries the thing
+          the reader came for. Open, it is the one place every hard word in the
+          product is defined — the same entries the ? markers above show. */}
+      <section className="help-section">
+        <details className="capability-glossary">
+          <summary>Every word this product uses</summary>
+          <dl className="capability-defs">
+            {Object.entries(GLOSSARY).map(([key, entry]) => (
+              <div key={key}>
+                <dt>{entry.term}</dt>
+                <dd>{entry.short}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
       </section>
 
       <section className="help-section">
@@ -181,7 +310,15 @@ export function CapabilityMap({ roomId }: { roomId: string }) {
         <ul className="capability-list capability-plain">
           <li>A remembered number can be stale. If it matters, ask for it to be fetched live.</li>
           <li>The fallback model cannot see images or use tools, and says so.</li>
-          <li>Nothing here places an order or moves money. Your tap is the only write.</li>
+          <li>
+            Nothing here places an order or moves money — the{' '}
+            <Explain term="paper-book">book is paper</Explain>. Your tap is the
+            only write.
+          </li>
+          <li>
+            <Explain term="settlement">Settlement</Explain> is suggested and
+            never taken: a closed question stays open until a human calls it.
+          </li>
         </ul>
       </section>
     </div>

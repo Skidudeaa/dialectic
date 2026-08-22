@@ -10,6 +10,15 @@
     gap: 10px;
 }
 
+/* The card names itself before the first number. Set as prose, not stencil --
+   it is the one line here meant to be READ rather than scanned. */
+.round-card-intro {
+    margin: 0;
+    font-size: .78rem;
+    line-height: 1.45;
+    color: var(--text-ghost);
+}
+
 .round-q {
     background: var(--color-well, rgba(0, 0, 0, .22));
     border-radius: var(--radius-sm, 4px);
@@ -162,6 +171,22 @@
 
 .round-q-peer-open:hover:not(:disabled) { opacity: 1; }
 .round-q-peer-open:disabled { cursor: progress; opacity: .4; }
+
+/* Both explanation lines: subordinate to the control they follow, and set in
+   prose rather than the stencil the meta rows use -- a sentence in a machined
+   face reads as a label and gets skipped, which defeats the point of it. */
+.round-q-peer-why,
+.round-q-seal-why {
+    margin: 3px 0 0;
+    font-size: .7rem;
+    line-height: 1.4;
+    color: var(--text-ghost);
+}
+
+/* Deliberately NOT the teal of the sealed line above it. That teal marks a
+   working state; this is supporting prose, and giving it the same weight
+   would make the pair read as two claims instead of a claim and its reason. */
+.round-q-seal-why { max-width: 46ch; }
 
 .round-q-read {
     font-size: .72rem;

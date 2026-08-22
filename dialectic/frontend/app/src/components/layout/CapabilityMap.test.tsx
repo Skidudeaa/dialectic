@@ -79,4 +79,85 @@ describe('CapabilityMap', () => {
     render(<CapabilityMap roomId="r1" />)
     await waitFor(() => expect(screen.getByText('brand_new_job')).toBeInTheDocument())
   })
+
+  // ── the six jobs that had no copy at all until 2026-08-21 ────────────────
+
+  it('names every job the scheduler runs, never its snake_case', async () => {
+    // tests/test_capability_copy_contract.py is the fence that keeps JOB_COPY
+    // complete against the real roster; this is what "complete" buys the
+    // reader. Six of fifteen rendered as raw identifiers before this — the
+    // newest six, including the Round two days before its first fire.
+    const newest = [
+      'question_round', 'house_forecast_sweep', 'round_close_watch',
+      'rss_wire', 'congress_watch', 'field_inference',
+    ]
+    vi.mocked(api.getRoomCapabilities).mockResolvedValue(caps({
+      jobs: newest.map((name) => ({
+        name, enabled: true, interval_s: 3600, daily_at: null,
+      })),
+    }))
+    render(<CapabilityMap roomId="r1" />)
+
+    await screen.findByRole('button', { name: 'The Round' })
+    for (const name of newest) {
+      expect(screen.queryByText(name)).not.toBeInTheDocument()
+    }
+    for (const label of ['The house forecast', 'Watchlist feeds',
+      'Disclosures', 'Field marks']) {
+      expect(screen.getByText(label)).toBeInTheDocument()
+    }
+  })
+
+  it('does not call the Round daily when it only fires on Sundays', async () => {
+    // THE DEFECT: question_round is registered daily_at="09:00" because the
+    // scheduler has no weekly cadence — is_round_day() returns immediately on
+    // the other six mornings. Rendering the Job's own field printed
+    // "daily 09:00", which the reader has no way to check.
+    vi.mocked(api.getRoomCapabilities).mockResolvedValue(caps({
+      jobs: [{ name: 'question_round', enabled: true, interval_s: 86400, daily_at: '09:00' }],
+    }))
+    render(<CapabilityMap roomId="r1" />)
+
+    const row = (await screen.findByRole('button', { name: 'The Round' })).closest('li')
+    expect(row?.textContent).toMatch(/Sundays 09:00/)
+    expect(row?.textContent).not.toMatch(/daily/i)
+  })
+
+  it('still reads the scheduler for every job with no override', async () => {
+    // The override is one job's exception, not a licence to author cadences.
+    vi.mocked(api.getRoomCapabilities).mockResolvedValue(caps({
+      jobs: [
+        { name: 'congress_watch', enabled: false, interval_s: 3600, daily_at: null },
+        { name: 'field_inference', enabled: true, interval_s: 1800, daily_at: null },
+      ],
+    }))
+    render(<CapabilityMap roomId="r1" />)
+    expect((await screen.findByText('Disclosures')).closest('li')?.textContent)
+      .toMatch(/every 1h/)
+    expect(screen.getByText('Field marks').closest('li')?.textContent)
+      .toMatch(/every 30 min/)
+  })
+
+  // ── the help screen defines its own vocabulary ───────────────────────────
+
+  it('defines a term on tap rather than leaving it as jargon', async () => {
+    vi.mocked(api.getRoomCapabilities).mockResolvedValue(caps({
+      jobs: [{ name: 'question_round', enabled: true, interval_s: 86400, daily_at: '09:00' }],
+    }))
+    render(<CapabilityMap roomId="r1" />)
+
+    const trigger = await screen.findByRole('button', { name: 'The Round' })
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+    trigger.click()
+    expect(await screen.findByRole('note')).toHaveTextContent(/named resolution source/)
+  })
+
+  it('carries the whole glossary, so no hard word is defined nowhere', async () => {
+    vi.mocked(api.getRoomCapabilities).mockResolvedValue(caps())
+    render(<CapabilityMap roomId="r1" />)
+    await screen.findByText(/Every word this product uses/)
+    // The definition that gets quoted at people and never explained.
+    expect(screen.getByText(/0 is perfect, 1 is perfectly wrong/)).toBeInTheDocument()
+    expect(screen.getByText('Brier score')).toBeInTheDocument()
+  })
 })

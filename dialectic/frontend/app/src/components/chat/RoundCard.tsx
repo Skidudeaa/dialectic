@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../lib/api.ts'
 import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import type { RoundQuestion, RoundState } from '../../types'
+import { Explain } from '../common/Explain'
 import './RoundCard.css'
 
 interface RoundCardProps {
@@ -50,6 +51,15 @@ function todayLocal(): string {
  * NOTHING SETTLES ITSELF. The settle controls send a human's verdict. The
  * close-watch job gathers evidence and suggests; it never resolves. One wrong
  * automatic settlement would cost this ledger its standing permanently.
+ *
+ * WHY THE CARD EXPLAINS ITSELF: every number on it is jargon — Brier, coverage,
+ * the peer delta, the clip — and a scoring surface a reader cannot decode is a
+ * scoring surface they do not trust. Hard words are marked with `Explain`,
+ * which reads `lib/glossary.ts`, so a definition shown here is the same one
+ * shown in the Ledger and the help map rather than a fourth paraphrase. The
+ * SEAL additionally gets a plain sentence of its own, not only a marker: a
+ * missing number reads as a bug to anyone who does not already know it was
+ * never sent, and that reader is exactly the one the seal is protecting.
  */
 export function RoundCard({ roomId, messageId, userNames = {} }: RoundCardProps) {
   const [state, setState] = useState<RoundState | null>(null)
@@ -132,6 +142,14 @@ export function RoundCard({ roomId, messageId, userNames = {} }: RoundCardProps)
 
   return (
     <div className="round-card">
+      {/* The card names itself, once, before any number. Masthead pattern:
+          a place says what it is before it says what it holds. */}
+      <p className="round-card-intro">
+        <Explain term="round">The Round</Explain> — forecast each question and
+        revise it until it closes. You are scored on{' '}
+        <Explain term="time-weighted-brier">every day you held a number</Explain>,
+        not on your last answer.
+      </p>
       {state.questions.map((question, index) => {
         const id = question.commitment_id
         const binned = question.status === 'binned'
@@ -212,25 +230,36 @@ export function RoundCard({ roomId, messageId, userNames = {} }: RoundCardProps)
                         friend. It scores the moment you both commit — it
                         never waits for the world to settle anything. */}
                     {showPeer ? (
-                      <div className="round-q-row round-q-row-peer">
-                        <label className="round-q-label" htmlFor={`p-${id}`}>
-                          {themName}
-                        </label>
-                        <input
-                          id={`p-${id}`}
-                          className="round-q-slider round-q-slider-peer"
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.01}
-                          value={peerValue}
-                          disabled={busy === id}
-                          onChange={(e) => setPeerDraft((d) => ({
-                            ...d, [id]: Number(e.target.value),
-                          }))}
-                        />
-                        <span className="round-q-value">{PCT(peerValue)}</span>
-                      </div>
+                      <>
+                        <div className="round-q-row round-q-row-peer">
+                          <label className="round-q-label" htmlFor={`p-${id}`}>
+                            {themName}
+                          </label>
+                          <input
+                            id={`p-${id}`}
+                            className="round-q-slider round-q-slider-peer"
+                            type="range"
+                            min={0}
+                            max={1}
+                            step={0.01}
+                            value={peerValue}
+                            disabled={busy === id}
+                            onChange={(e) => setPeerDraft((d) => ({
+                              ...d, [id]: Number(e.target.value),
+                            }))}
+                          />
+                          <span className="round-q-value">{PCT(peerValue)}</span>
+                        </div>
+                        {/* The label above is a bare name, which says nothing
+                            about what the slider is FOR. Kept out of the
+                            <label> itself: that element's text is the input's
+                            accessible name, and a sentence is a poor one. */}
+                        <p className="round-q-peer-why">
+                          <Explain term="peer-read">Your read on where they land</Explain>
+                          {' '}— this half scores the moment you both commit, not
+                          when the world does.
+                        </p>
+                      </>
                     ) : (
                       <button
                         className="round-q-peer-open"
@@ -310,20 +339,33 @@ export function RoundCard({ roomId, messageId, userNames = {} }: RoundCardProps)
                     )}
                   </div>
                 ) : question.waiting_on_other ? (
-                  <div className="round-q-sealed">
-                    in — sealed until they answer
-                    {question.house_committed && ' · the house is in too'}
-                  </div>
+                  <>
+                    <div className="round-q-sealed">
+                      in — <Explain term="seal">sealed until they answer</Explain>
+                      {question.house_committed && (
+                        <>
+                          {' · '}
+                          <Explain term="house">the house is in too</Explain>
+                        </>
+                      )}
+                    </div>
+                    <SealWhy />
+                  </>
                 ) : (question.others_committed ?? 0) > 0 ? (
-                  <div className="round-q-sealed">
-                    they are in — yours is what unseals it
-                  </div>
+                  <>
+                    <div className="round-q-sealed">
+                      <Explain term="seal">they are in — yours is what unseals it</Explain>
+                    </div>
+                    <SealWhy />
+                  </>
                 ) : null}
 
                 {/* The only tap that turns a closed question into a score. */}
                 {awaitingVerdict && (
                   <div className="round-q-verdict">
-                    <span className="round-q-label">what happened</span>
+                    <span className="round-q-label">
+                      <Explain term="settlement">what happened</Explain>
+                    </span>
                     <button
                       className="round-q-submit"
                       disabled={busy === id}
@@ -364,21 +406,35 @@ export function RoundCard({ roomId, messageId, userNames = {} }: RoundCardProps)
                             ? PARTICIPANT_NAME
                             : (userNames[score.user_id ?? ''] ?? 'them')}
                         </span>
-                        <span>Brier {score.brier.toFixed(3)}</span>
+                        {/* The headline number is the TIME-WEIGHTED Brier and
+                            the one beside it is the final-answer one — two
+                            different definitions of the same word, which is
+                            why each carries its own marker. */}
+                        <span>
+                          <Explain term="time-weighted-brier">
+                            Brier {score.brier.toFixed(3)}
+                          </Explain>
+                        </span>
                         <span className="round-q-gap">
-                          final {score.brier_final_answer.toFixed(3)}
+                          <Explain term="brier">
+                            final {score.brier_final_answer.toFixed(3)}
+                          </Explain>
                         </span>
                         {/* Coverage sits beside the Brier and never inside
                             it: a good score across a third of the question's
                             life is not a good score. */}
                         {score.coverage < 0.999 && (
                           <span className="round-q-gap">
-                            in for {Math.round(score.coverage * 100)}%
+                            <Explain term="coverage">
+                              in for {Math.round(score.coverage * 100)}%
+                            </Explain>
                           </span>
                         )}
                         {score.peer !== null && (
                           <span className="round-q-peer">
-                            {score.peer > 0 ? '+' : ''}{score.peer.toFixed(0)}
+                            <Explain term="peer-delta">
+                              {score.peer > 0 ? '+' : ''}{score.peer.toFixed(0)}
+                            </Explain>
                           </span>
                         )}
                       </div>
@@ -386,8 +442,10 @@ export function RoundCard({ roomId, messageId, userNames = {} }: RoundCardProps)
                     <div className="round-q-meta">
                       head-to-head over {question.scores[0].contested_days} day
                       {question.scores[0].contested_days === 1 ? '' : 's'} you
-                      were both in · probabilities clipped at 1% for the log
-                      score
+                      were both in ·{' '}
+                      <Explain term="log-clip">
+                        probabilities clipped at 1% for the log score
+                      </Explain>
                     </div>
                   </div>
                 )}
@@ -419,5 +477,28 @@ export function RoundCard({ roomId, messageId, userNames = {} }: RoundCardProps)
         )
       })}
     </div>
+  )
+}
+
+/**
+ * Why the other number is missing, said plainly, wherever a question is sealed.
+ *
+ * The seal is the one mechanism on this card that LOOKS like a defect. A
+ * forecasting surface showing one number where there should be two reads as a
+ * half-loaded panel to anyone who does not already know the rule — and the
+ * people who do not know it are the whole audience for the sentence. The
+ * marker beside it carries the reasoning; this carries the fact.
+ *
+ * It says "not sent", not "not shown", because that is what is true: the
+ * server omits the field from the response. Writing "hidden" here would
+ * describe a client-side hide, which is exactly the thing the seal is not,
+ * and would invite someone to go looking for it in this file.
+ */
+function SealWhy() {
+  return (
+    <p className="round-q-seal-why">
+      The other number is not on this page — it was never sent to it. The
+      server holds it back until you have both committed.
+    </p>
   )
 }

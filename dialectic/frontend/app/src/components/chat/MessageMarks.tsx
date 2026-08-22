@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { api } from '../../lib/api'
 import type { FieldMark } from '../../types/workspace.ts'
 import { ReviewChip } from '../workspace/ReviewChip'
+import { Explain } from '../common/Explain'
 import './PassageMarker.css'
+import './MessageMarks.css'
 
 /**
  * The marks on one message, with the two review actions inline.
@@ -49,6 +51,19 @@ export function MessageMarks({ roomId, marks, onReviewed }: MessageMarksProps) {
 
   return (
     <div className="msg-marks">
+      {/* THE REASON THIS LINE EXISTS: 85 marks in production and zero human
+          reviews, ever. The machinery was never the problem — nobody knew what
+          a mark was, or that the two buttons beside it were a real judgement
+          rather than a like. So the definition and the consequence are stated
+          at the point of action, not two destinations away in Focus. One line
+          per marked message, small: a reader who has learned it can skim past
+          it, and it costs nothing on the overwhelming majority of messages,
+          which carry no marks at all. */}
+      <p className="msg-marks-lede">
+        <Explain term="field-mark">Field marks</Explain>
+        {' '}— provisional, and not conclusions. Your confirm makes one solid;
+        your contest puts it on notice. Neither overwrites what is there.
+      </p>
       {marks.map((mark) => (
         <div key={mark.id} className={`msg-mark is-${mark.review}`}>
           <span className="msg-mark-relation">{relationLabel(mark.relation)}</span>

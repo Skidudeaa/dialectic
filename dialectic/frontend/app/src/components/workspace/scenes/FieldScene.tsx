@@ -14,6 +14,7 @@ import {
   type OrphanSupersededRow,
 } from '../fieldDisplay.ts'
 import { ReviewChip } from '../ReviewChip.tsx'
+import { Explain } from '../../common/Explain'
 import './FieldScene.css'
 
 /**
@@ -193,6 +194,21 @@ export function FieldScene({ state, objects, onOpen }: FieldSceneProps) {
 
   return (
     <div className="scene-body field-scene">
+      {/* The POPULATED Field had no orientation at all — every word explaining
+          a mark lived in the empty state, which is the one screen a reader
+          with 85 marks never sees. That is the shape of the defect this line
+          answers: the machinery was reachable and unexplained, so it was used
+          zero times. The tap sentence is conditional because without `onOpen`
+          the rows are not tappable, and promising an action a surface does not
+          offer is the same failure as advertising a door the server refuses. */}
+      <p className="field-lede">
+        <Explain term="field-mark">Field marks</Explain>
+        {' '}— provisional, and not conclusions.{' '}
+        {onOpen
+          ? 'Tap a row to open it, where you can confirm or contest it; the same two actions sit under the message that earned the mark.'
+          : 'Confirm and contest sit under the message that earned the mark.'}
+        {' '}Nothing marked here outranks what you said.
+      </p>
       {FIELD_SECTIONS.map((section) => {
         const rows = sectioned?.bySection.get(section.key) ?? []
         const orphans = sectioned?.orphans.get(section.key) ?? []

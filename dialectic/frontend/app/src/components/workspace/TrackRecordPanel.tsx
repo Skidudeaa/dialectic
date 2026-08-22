@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../../lib/api'
 import { useAppStore } from '../../stores/appStore'
 import type { Portfolio } from '../../types/trading'
+import { Explain } from '../common/Explain'
 import '../stakes/CommitmentDashboard.css'
 import './TrackRecordPanel.css'
 
@@ -19,6 +20,37 @@ import './TrackRecordPanel.css'
  * its .calibration-section styles — deliberately the same visual language,
  * without touching that component.
  */
+
+/**
+ * The panel's own name for itself, shown in every state that draws the board.
+ *
+ * WHY one constant and not the sentence written twice: the empty state is the
+ * one most readers meet first — production has scored nothing at all — so it
+ * must carry the same orientation as the populated one, and two copies of a
+ * sentence are two sentences that drift.
+ */
+/*
+ * TWO THINGS THIS SENTENCE MUST NOT SAY, both traced end to end before it was
+ * rewritten. Neither is a nicety; both were in the first draft and both were
+ * false in exactly the way the capabilities doctrine exists to prevent.
+ *
+ * NOT "this room's". The panel is DESK-WIDE and every room renders identical
+ * numbers. `api/trading_relay.py` resolves the room's book and then discards
+ * it — its own docstring says "desk-wide, like trades … the room gate is about
+ * who may look, not what they see" — and the desk answers from
+ * `repo.list_predictions()`, a bare `SELECT * FROM predictions` with no filter.
+ * The rows include claims belonging to no room at all.
+ *
+ * NOT "per forecaster". The grouping key is `source_label`, which
+ * `stakes/manager.py::_relay_source_label` derives from the commitment's
+ * CREATOR, not from whoever moved the slider — and a Round question is created
+ * with `created_by_user_id=None`, which that function maps to the literal
+ * "LLM". So both humans' Round forecasts land on one row labelled LLM. Saying
+ * "per forecaster" would not merely overstate; it would name the wrong person.
+ */
+const INTRO =
+  'What forecasts across the whole desk were worth once the world answered — one row per '
+  + 'source, scored only on the questions that actually resolved.'
 
 /** CommitmentDashboard.tsx's CalibrationPoint shape, reused verbatim. */
 interface CalibrationPoint {
@@ -121,11 +153,39 @@ export function TrackRecordPanel() {
     )
   }
   if (state.status === 'empty') {
+    // The state most readers meet: nothing in this product has ever been
+    // scored. A blank panel with "no data" on it is read as a broken feature,
+    // so this one says what it is WAITING FOR and roughly when that arrives.
+    // SceneEmpty's four questions — what this place is, what lands here, how
+    // it gets here, what you can do now — in the panel's own smaller frame;
+    // the component itself is a scene-level surface and the Ledger already
+    // wraps this panel in one.
     return (
       <div className="track-record-panel" data-testid="track-record-empty">
         <h3>Track Record</h3>
-        <div className="track-record-quiet">
-          No scored predictions yet. Resolve one and the scoreboard starts.
+        <p className="track-record-intro">{INTRO}</p>
+        <div className="track-record-quiet track-record-waiting">
+          <p>
+            Nothing has been scored yet. That is the board waiting on outcomes,
+            not a panel that failed to load.
+          </p>
+          <p>
+            A forecast scores when its question <strong>closes</strong>, not
+            when you answer it — and{' '}
+            <Explain term="settlement">nothing settles itself</Explain>: someone
+            has to say what happened before a row can appear here.
+          </p>
+          {/* "each Sunday" is the Round's cadence, which is a product rule and
+              is stated as one. NOT "drafted for this room each Sunday" — which
+              room gets a slate depends on who is in it and whether anyone has
+              spoken lately, and that is deployment state this panel has not
+              read. Never advertise a door the server may refuse. */}
+          <p>
+            Questions arrive with{' '}
+            <Explain term="round">the Round</Explain>, drafted each Sunday.
+            Answer them as they land and the first scores show up once the
+            first close date has passed.
+          </p>
         </div>
       </div>
     )
@@ -151,12 +211,19 @@ export function TrackRecordPanel() {
   return (
     <div className="track-record-panel" data-testid="track-record-panel">
       <h3>Track Record</h3>
+      <p className="track-record-intro">{INTRO}</p>
       <div className="track-record-headline">
         <span>{calibration.total_predictions ?? 0} resolved</span>
-        {typeof brier === 'number' && <span>Brier {brier.toFixed(2)}</span>}
+        {typeof brier === 'number' && (
+          <span>
+            <Explain term="brier">Brier {brier.toFixed(2)}</Explain>
+          </span>
+        )}
         {typeof bss === 'number' && (
           <span>
-            BSS {bss >= 0 ? '+' : ''}{bss.toFixed(2)}
+            <Explain term="bss">
+              BSS {bss >= 0 ? '+' : ''}{bss.toFixed(2)}
+            </Explain>
             {calibration.bss_vs && (
               <span className="track-record-vs"> vs {calibration.bss_vs}</span>
             )}
@@ -213,12 +280,35 @@ export function TrackRecordPanel() {
               ))}
             </tbody>
           </table>
+          {/* The two columns nothing else explains, plus the lone middot in
+              the Source cell — which is undecodable on its own and until now
+              carried its meaning only in a `title`, i.e. only for a reader on
+              a mouse. Both facts are read off the desk's own aggregate:
+              provenance is EMPIRICAL or UNVERIFIED_INSUFFICIENT_SAMPLES, and
+              bias is signed confidence minus outcome. The sample floor is
+              deliberately not quoted as a number here — it is the desk's
+              constant, and a copy of it in this file would drift. */}
+          <p className="track-record-note">
+            Acc is how often those calls came in. Bias is signed — positive
+            means overconfident, believing it harder than reality paid.
+            {leaderboard.some(
+              (row) => row.provenance && row.provenance !== 'EMPIRICAL',
+            ) && ' A · marks a row with too few resolved questions to read as a track record yet.'}
+          </p>
         </div>
       )}
 
       {points.length > 0 && (
         <div className="calibration-section">
-          <h4>Calibration</h4>
+          <h4><Explain term="calibration">Calibration</Explain></h4>
+          {/* The bars carried their meaning in a `title` only, which is hover
+              -only and so barred by the same accessibility rule sceneIdentity
+              states. The caption says it in text instead; the titles stay as
+              the per-bar detail. */}
+          <p className="track-record-note">
+            One bar per confidence band: of the calls made at that number, how
+            many came in. Well calibrated means the bars climb with the labels.
+          </p>
           <div className="track-record-buckets">
             {points.map((point) => (
               <div
@@ -245,7 +335,14 @@ export function TrackRecordPanel() {
   )
 }
 
-/** SVG equity-vs-SPY sparkline. Renders nothing without two real marks. */
+/**
+ * SVG equity-vs-SPY sparkline. Renders nothing without two real marks.
+ *
+ * The key lives INSIDE this component rather than beside it in the panel so
+ * the drawing and the words naming it share one guard — a legend that can
+ * outlive its chart is a legend that eventually points at nothing. Until this
+ * it drew two unlabelled lines and expected the reader to know which was which.
+ */
 export function EquitySparkline({
   points,
 }: {
@@ -263,15 +360,23 @@ export function EquitySparkline({
   const path = (pick: (p: { equity: number; benchmark: number }) => number) =>
     points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i)} ${y(pick(p))}`).join(' ')
   return (
-    <svg
-      className="track-record-sparkline"
-      width={w}
-      height={h}
-      viewBox={`0 0 ${w} ${h}`}
-      data-testid="track-record-sparkline"
-    >
-      <path d={path((p) => p.benchmark)} fill="none" stroke="var(--text-ghost)" strokeWidth={1} strokeDasharray="4 3" />
-      <path d={path((p) => p.equity)} fill="none" stroke="var(--claude-primary)" strokeWidth={1.5} />
-    </svg>
+    <>
+      <svg
+        className="track-record-sparkline"
+        width={w}
+        height={h}
+        viewBox={`0 0 ${w} ${h}`}
+        data-testid="track-record-sparkline"
+      >
+        <path d={path((p) => p.benchmark)} fill="none" stroke="var(--text-ghost)" strokeWidth={1} strokeDasharray="4 3" />
+        <path d={path((p) => p.equity)} fill="none" stroke="var(--claude-primary)" strokeWidth={1.5} />
+      </svg>
+      <p className="track-record-key">
+        <span className="track-record-swatch is-equity" aria-hidden="true" />
+        <Explain term="paper-book">the paper book</Explain>
+        <span className="track-record-swatch is-spy" aria-hidden="true" />
+        <Explain term="spy-benchmark">the same cash in SPY</Explain>
+      </p>
+    </>
   )
 }

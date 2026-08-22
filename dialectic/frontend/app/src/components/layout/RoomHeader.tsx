@@ -1,5 +1,7 @@
 import type { Thread } from '../../types'
 import { useAppStore } from '../../stores/appStore.ts'
+import { useUnreadReleases } from '../../lib/releases.ts'
+import type { HelpTab } from './HelpDialog'
 import './RoomHeader.css'
 
 interface RoomHeaderProps {
@@ -10,7 +12,8 @@ interface RoomHeaderProps {
   onProtocolClick: () => void
   onSettingsClick: () => void
   onSearchClick: () => void
-  onHelpClick: () => void
+  /** Opens the help dialog on a named shelf — 'new' when something shipped. */
+  onHelpClick: (tab: HelpTab) => void
   connected: boolean
   /** True when the current room IS Home — hides the Go Home action. */
   isHome: boolean
@@ -24,6 +27,9 @@ export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, 
   const mobileDrawer = useAppStore((s) => s.mobileDrawer)
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen)
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen)
+  // Subscribes through releases.ts's own store event, so opening the panel in
+  // the dialog clears this badge without the header knowing the dialog exists.
+  const unreadReleases = useUnreadReleases()
   // Home's root is the place, not a branch. The crumb returns once Home
   // actually has a fork — same control as every other room.
   const showBranchCrumb = !isHome || threads.length > 1
@@ -99,11 +105,33 @@ export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, 
             <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
           </svg>
         </button>
-        <button className="btn btn-secondary btn-sm" onClick={onHelpClick} title="Help — what can this room do?" aria-label="Help">
-          <span className="btn-label">Help</span>
+        {/* THE ONE DOOR to every explanation in the product, so it has to read
+            as one at every width. It used to pair the word "Help" with a
+            chevron-down; `.btn-label` is `display: none` under 600px, which
+            left a phone with a bare unlabelled ⌄ — an affordance that says
+            "expand something", not "explain this", on the single control that
+            opens the manual. The mark is now a question mark, which survives
+            losing its label, and the unread count rides it so a reader learns
+            something shipped without opening anything. */}
+        <button
+          className="btn btn-secondary btn-sm help-action"
+          onClick={() => onHelpClick(unreadReleases > 0 ? 'new' : 'room')}
+          title="Help — what this room can do, and what changed"
+          aria-label={
+            unreadReleases > 0
+              ? `Help — ${unreadReleases} new since you last looked`
+              : 'Help'
+          }
+        >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-            <path d="M6 9l6 6 6-6"/>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M9.2 9.3a2.9 2.9 0 015.6 1c0 1.9-2.8 2.5-2.8 4" />
+            <path d="M12 17.4h.01" />
           </svg>
+          <span className="btn-label">Help</span>
+          {unreadReleases > 0 && (
+            <span className="help-unread" aria-hidden="true">{unreadReleases}</span>
+          )}
         </button>
         <div className="conn-status">
           <span className={`conn-dot ${connected ? 'connected' : ''}`} />

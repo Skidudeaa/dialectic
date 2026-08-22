@@ -27,12 +27,12 @@ fallback, any fetch or shape failure logs and SKIPS, the job never raises.
 These are volunteer-run mirrors of the official eFD/Clerk filings; the URL
 or shape drifting is an expected failure mode, which is exactly why:
 
-SHIPS DARK: CONGRESS_WATCH_ENABLED defaults OFF — read in the job body
-with default "0", because scheduler.Job.enabled() treats an UNSET env as
-on ("1" default) and this job must not fetch a multi-megabyte dataset on a
-timer until someone has verified the URLs against production reality.
-Setting the var to "1" arms it; "0" (or unset) keeps it dark at both the
-tick gate and the body gate, consistently.
+SHIPS DARK: CONGRESS_WATCH_ENABLED defaults OFF — this job must not fetch
+a multi-megabyte dataset on a timer until someone has verified the URLs
+against production reality. `_enabled()` is that rule and the ONLY copy of
+it; both the tick gate and the body gate call it, so setting the var to
+"1" arms both and unset keeps both dark. See DarkByDefaultJob below for
+why the scheduler's generic gate could not be left to answer this one.
 
 WHY the instrument universe and not keywords: a book's instruments map
 (builder format, served by td's /api/bridge/structure/{thesis_id}) is the
@@ -309,11 +309,35 @@ async def congress_watch(ctx: SchedulerContext) -> dict:
     return detail
 
 
+class DarkByDefaultJob(Job):
+    """A Job that is OFF until its env var says otherwise.
+
+    WHY this exists: scheduler.Job.enabled() treats an UNSET env as ON, which
+    is right for the other fourteen jobs and wrong for this one. With the dark
+    default living only in the body's _enabled(), the scheduler's own answer —
+    and therefore GET /rooms/{id}/capabilities, and therefore the help screen —
+    reported congress_watch RUNNING while every single tick returned early on
+    "disabled". Verified against the live process on 2026-08-21:
+    CONGRESS_WATCH_ENABLED is unset in /proc/<pid>/environ, so the projection
+    was printing "on" for a job that does nothing. That is precisely the
+    "the screen cannot advertise a door the server refuses" guarantee
+    api/capabilities.py's own docstring makes.
+
+    ONE PREDICATE, TWO READERS: _enabled() is the rule; the tick gate and the
+    projection both ask it, and neither re-derives it. Fixing this in the
+    display would have put a third copy of the rule in the frontend — a guard
+    that re-derives what it reports on.
+
+    If a second dark job ever appears, this belongs in scheduler.Job as an
+    `enabled_default` field rather than as a second subclass here.
+    """
+
+    def enabled(self) -> bool:
+        return _enabled()
+
+
 def register_congress_watch_jobs(scheduler) -> None:
-    # enabled_env would default ON when unset (Job.enabled's contract), so
-    # the dark default lives in _enabled(); the env var still hard-stops the
-    # tick when explicitly "0". Both gates read the same variable.
-    scheduler.register(Job(
+    scheduler.register(DarkByDefaultJob(
         "congress_watch", 3600, congress_watch,
         enabled_env=ENABLED_ENV,
     ))

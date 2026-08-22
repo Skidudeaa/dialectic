@@ -3,6 +3,7 @@ import type { MirrorDiff, MirrorRoom, MirrorVersion } from '../../types'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { api } from '../../lib/api'
+import { Explain } from '../common/Explain'
 import '../trading/cockpit.css'
 import './MirrorPanel.css'
 
@@ -148,11 +149,19 @@ export function MirrorPanel() {
   if (status === 'error' || status === 'empty') {
     return (
       <section className="cockpit-module mirror-panel" data-testid="mirror-quiet">
-        <div className="cockpit-header"><span className="cockpit-title">The Mirror</span></div>
+        <div className="cockpit-header">
+          <span className="cockpit-title"><Explain term="mirror">The Mirror</Explain></span>
+        </div>
+        {/* An empty Mirror and an unreadable one are different claims and must
+            never share a sentence — SceneEmpty vs SceneUnavailable states the
+            same rule for the scenes. And "empty" here is honestly ambiguous by
+            construction: the fence is the query key, so a room where only the
+            other person is modelled is indistinguishable from one with no
+            model. Saying so is the only way the reader can tell. */}
         <div className="mirror-quiet">
           {status === 'error'
-            ? 'The mirror is not answering.'
-            : 'Nothing yet. The participant writes one of these after a real session.'}
+            ? 'The mirror is not answering. That is a failure to read it, not an empty one — what is here is unknown until it loads.'
+            : 'Nothing yet. The participant writes one of these after a real session in a room you share, then rewrites it as the room keeps talking. You only ever see your own, so a room where just the other person is modelled looks exactly like this one.'}
         </div>
       </section>
     )
@@ -161,7 +170,7 @@ export function MirrorPanel() {
   return (
     <section className="cockpit-module mirror-panel" data-testid="mirror-panel">
       <div className="cockpit-header">
-        <span className="cockpit-title">The Mirror</span>
+        <span className="cockpit-title"><Explain term="mirror">The Mirror</Explain></span>
         <div className="cockpit-header-right">
           <span className="mirror-readout" title="rewrites of this profile">
             <span className="mirror-readout-value" data-testid="mirror-version">{number}</span>
@@ -190,8 +199,14 @@ export function MirrorPanel() {
         </div>
       )}
 
+      {/* The orientation, stated once at the top rather than as chrome on each
+          control: what this prose IS, what the stepper does to it, and the
+          fence — which has to be said out loud, because absence and privacy
+          look identical from here. */}
       <p className="mirror-preamble">
         Written by the participant, for itself. You were never the audience.
+        Step back through the rewrites to watch a theory of you being revised,
+        or diff one against the one before it. You only ever read your own.
       </p>
 
       <Prose text={text} />

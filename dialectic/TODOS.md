@@ -4,6 +4,21 @@
 > only. Shipped Release 1–3 history lives in [`../PLAN.md`](../PLAN.md), the
 > release ledgers under `docs/superpowers/plans/`, `JOURNAL.md`, and git.
 
+## Decide before Sunday 2026-08-23 09:00 CT
+
+- [ ] **Round forecasts reach the desk ledger labelled `LLM`, not by person.**
+      Both humans collapse onto one row, and the participant reads that row back
+      as its own track record. The Round's OWN scoring is correct and unaffected;
+      only the tradingDesk mirror is wrong. The obvious one-line fix does not
+      work — the label is fixed at row creation and creates replay rather than
+      update. Full trace, the two real options, and a cheap stopgap:
+      [`docs/reviews/2026-08-21_round-forecast-attribution.md`](../docs/reviews/2026-08-21_round-forecast-attribution.md).
+      Rows relayed from the first fire carry the wrong label permanently.
+- [ ] **The volume ruling** (still open from 2026-08-20): `QUESTIONS_PER_ROUND`
+      is 5 and four rooms qualify, so 20 questions land Sunday and each draws a
+      house forecast the sweep drains at ~2.5 hours. Recommendation on the table
+      remains 3/room. One env var, no code.
+
 ## The quarter (see the plan for full detail + acceptance checks)
 
 - [ ] **P1 residue**: real-device push check on all four devices (Amo + Dan)

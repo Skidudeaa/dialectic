@@ -20,6 +20,59 @@
     margin-inline: auto;
 }
 
+/* ── The primer disclosure ──────────────────────────────────────────────
+   The masthead row IS the <summary>, so the closed state costs no extra
+   line — which is what keeps the compact contract on Record and House.
+   `display: flex` alone removes the default triangle in Chrome and
+   Firefox; Safari needs its own pseudo-element told to go. */
+summary.scene-masthead-inner {
+    cursor: pointer;
+    list-style: none;
+}
+summary.scene-masthead-inner::-webkit-details-marker { display: none; }
+summary.scene-masthead-inner:focus-visible {
+    outline: 1px solid var(--scene-accent, var(--color-amber));
+    outline-offset: 3px;
+    border-radius: var(--radius-control);
+}
+
+/* Pushed to the far end of the row it shares — the name and purpose keep
+   their place, and the affordance reads as an aside rather than a control
+   competing with the scene's own title. */
+.scene-masthead-more {
+    margin-left: auto;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    font: 500 10.5px/1 var(--font-mono);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--color-ghost);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    white-space: nowrap;
+}
+.scene-masthead-inner:hover .scene-masthead-more,
+.scene-masthead-primer[open] .scene-masthead-more {
+    color: var(--scene-accent, var(--color-amber));
+    border-color: var(--color-crater);
+}
+.scene-masthead-caret { transition: transform 120ms ease; }
+.scene-masthead-primer[open] .scene-masthead-caret { transform: rotate(180deg); }
+
+/* The orientation itself: a reading measure, not a tooltip. Aligned to the
+   same column the name sits in so it reads as that scene speaking. */
+.scene-masthead-primer-body {
+    max-width: 1180px;
+    margin: 10px auto 2px;
+    padding-left: 54px;
+    font: 13.5px/1.55 var(--font-serif);
+    color: var(--color-secondary);
+    text-wrap: pretty;
+}
+
 /* Glyph plate: a small chassis tile carrying the scene's mark. */
 .scene-masthead-glyph {
     display: inline-flex;
@@ -83,10 +136,22 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.scene-masthead-compact .scene-masthead-more {
+    padding: 2px 6px;
+    font-size: 9.5px;
+}
+.scene-masthead-compact .scene-masthead-primer-body {
+    max-width: 860px;
+    padding-left: 32px;
+    font-size: 13px;
+}
 
 @media (max-width: 767.98px) {
     .scene-masthead { padding: 12px 16px 10px; }
     .scene-masthead-name { font-size: 16px; }
     .scene-masthead-glyph { width: 34px; height: 34px; font-size: 16px; }
     .scene-masthead-compact .scene-masthead-purpose { display: none; }
+    /* The purpose line goes at this width; the way to the primer must not.
+       On the compact scenes it is now the ONLY explanation on screen. */
+    .scene-masthead-primer-body { padding-left: 0; }
 }

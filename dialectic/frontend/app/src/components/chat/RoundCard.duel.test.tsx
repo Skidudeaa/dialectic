@@ -98,6 +98,107 @@ describe('the seal', () => {
   })
 })
 
+/**
+ * The explanation layer. These assert the card is READABLE by someone who has
+ * never seen it — which is every reader before the first Sunday.
+ *
+ * Each jargon check is written as `getByRole('button', …)` rather than as a
+ * text match on purpose. `Explain` fails SOFT: a term the glossary does not
+ * define renders its children as plain text and no button at all. A text
+ * assertion would pass either way and quietly certify a dead marker, so the
+ * button is the thing worth pinning — it is the only observable difference
+ * between a word that explains itself and a word that does not.
+ */
+describe('the card explains itself', () => {
+  it('names what it is before the first number', async () => {
+    mount(question())
+    expect(await screen.findByRole('button', { name: 'The Round' })).toBeTruthy()
+    expect(screen.getByText(/not on your last answer/)).toBeTruthy()
+  })
+
+  it('says the missing number was never sent, not merely hidden', async () => {
+    mount(question({ my_forecast: 0.4, waiting_on_other: true }))
+    // The fact, in plain words, wherever the seal bites — a reader who does
+    // not know the rule sees one number where there should be two and reads
+    // a half-loaded panel.
+    expect(await screen.findByText(/never sent to it/)).toBeTruthy()
+    expect(screen.getByText(/until you have both committed/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'sealed until they answer' }))
+      .toBeTruthy()
+  })
+
+  it('lets you look up what the house even is, at the point it says it is in', async () => {
+    // The pre-existing seal test asserts this phrase as TEXT, which is exactly
+    // the assertion a dead marker survives. This one pins the control.
+    mount(question({
+      my_forecast: 0.4, waiting_on_other: true, house_committed: true,
+    }))
+    expect(await screen.findByRole('button', { name: 'the house is in too' }))
+      .toBeTruthy()
+  })
+
+  it('explains the seal from the other side too, when they are in and you are not', async () => {
+    mount(question({ others_committed: 1 }))
+    expect(await screen.findByRole('button', {
+      name: 'they are in — yours is what unseals it',
+    })).toBeTruthy()
+    expect(screen.getByText(/never sent to it/)).toBeTruthy()
+  })
+
+  it('says nothing about a seal on a question nobody has answered', async () => {
+    mount(question())
+    await screen.findByText(/closes 2099-12-19/)
+    expect(screen.queryByText(/never sent to it/)).toBeNull()
+  })
+
+  it('marks every scored number as something you can look up', async () => {
+    mount(question({
+      closes: '2020-01-01',
+      status: 'resolved',
+      resolution: 'incorrect',
+      my_forecast: 0.1,
+      revealed: true,
+      others: [{ user_id: DAN, forecast: 0.75, revisions: 1 }],
+      scores: [
+        {
+          user_id: DAN, actor: 'human', coverage: 0.3, log_score: -1.2,
+          peer: -18.4, contested_days: 6, brier: 0.09,
+          brier_final_answer: 0.09, lateness_gap: 0, days_scored: 6, bss: 0.64,
+        },
+      ],
+    }))
+    // The headline Brier is time-weighted and the one beside it is not: two
+    // definitions of one word, so each has to resolve to its own entry.
+    expect(await screen.findByRole('button', { name: 'Brier 0.090' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'final 0.090' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'in for 30%' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '-18' })).toBeTruthy()
+    expect(screen.getByRole('button', {
+      name: 'probabilities clipped at 1% for the log score',
+    })).toBeTruthy()
+  })
+
+  it('says what the second slider is for, once it is open', async () => {
+    mount(question({ my_forecast: 0.4 }))
+    fireEvent.click(await screen.findByText(/where will Dan land/))
+    // The slider's own label is the bare name "Dan", which is the input's
+    // accessible name and says nothing about what the control does.
+    expect(await screen.findByRole('button', {
+      name: 'Your read on where they land',
+    })).toBeTruthy()
+    expect(screen.getByText(/scores the moment you both commit/)).toBeTruthy()
+    // Still named for the accessible name the forecast row depends on.
+    expect(screen.getByLabelText('Dan')).toBeTruthy()
+  })
+
+  it('opens a real definition on a tap, not a hover-only tooltip', async () => {
+    mount(question())
+    fireEvent.click(await screen.findByRole('button', { name: 'The Round' }))
+    const note = await screen.findByRole('note')
+    expect(note.textContent).toMatch(/each Sunday/)
+  })
+})
+
 describe('the second slider', () => {
   it('is absent until asked for, and then sends the read', async () => {
     // The response replaces the card's state, so it must carry the forecast
