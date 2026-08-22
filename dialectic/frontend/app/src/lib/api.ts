@@ -26,6 +26,27 @@ interface MemoryPromotionListResponse {
 }
 
 /**
+ * Why the participant produced ONE message — never why its CONTENT says what
+ * it says (api/decisions.py). `mode` and `use_provoker` are two views of the
+ * same underlying flag; kept as two fields because the pairing is an
+ * observed property of today's server code, not a promised contract.
+ *
+ * Every field past `reason` is optional because it is genuinely ABSENT on
+ * some rows, not zero: a forced turn (wire, silence follow-up, protocol)
+ * never ran the heuristic rungs that would have computed a turn count, a
+ * novelty score, or an unsurfaced-memory count.
+ */
+export interface MessageDecisionExplain {
+  reason: string;
+  confidence?: number | null;
+  mode?: string | null;
+  use_provoker: boolean;
+  human_turn_count?: number | null;
+  semantic_novelty?: number | null;
+  unsurfaced_memory_count?: number | null;
+}
+
+/**
  * WHY a typed error: callers deciding between "this token is dead, leave the
  * room" and "the network blipped, stay put" need the HTTP status. A network
  * failure throws TypeError from fetch itself and never carries a status.
@@ -190,6 +211,23 @@ class DialecticAPI {
    */
   async getFieldMarks(roomId: string): Promise<FieldProjection> {
     return this.fetch(`/rooms/${roomId}/field`);
+  }
+
+  /**
+   * Why the participant produced every machine message in ONE thread, keyed
+   * by the message id it produced. Batched deliberately (api/decisions.py):
+   * a thread can hold dozens of machine messages, so this is fetched once
+   * per thread rather than once per message — hooks/useMessageDecisions.ts
+   * shares the one result across every MessageBubble in that thread.
+   */
+  async getThreadDecisions(
+    roomId: string,
+    threadId: string,
+  ): Promise<Record<string, MessageDecisionExplain>> {
+    const res = await this.fetch<{ decisions: Record<string, MessageDecisionExplain> }>(
+      `/rooms/${roomId}/threads/${threadId}/decisions`,
+    );
+    return res.decisions;
   }
 
   /**

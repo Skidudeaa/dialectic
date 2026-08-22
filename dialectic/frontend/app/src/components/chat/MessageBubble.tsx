@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { addressBlock, decorateMentions, type MentionContext } from '../../lib/mentions'
 import type { Attachment, CommitmentProposal, Message, Reaction, ThesisSeed } from '../../types'
 import type { FieldMark } from '../../types/workspace.ts'
-import { api } from '../../lib/api'
+import { api, type MessageDecisionExplain } from '../../lib/api'
 import { localProposals, type LocalProposal } from '../../lib/proposalEnvelope'
 import { useAppStore } from '../../stores/appStore'
+import { useMessageDecisions } from '../../hooks/useMessageDecisions'
 import { MessageAttachments } from './MessageAttachments'
 import { SignatureMark } from './SignatureMark'
 import { PassageMarker } from './PassageMarker'
@@ -129,6 +130,288 @@ function formatTime(iso: string): string {
   }
 }
 
+// ── provenance: why a machine message happened ──────────────────────────
+//
+// Owner's own words: "the user needs to be able to see EVERYWHERE what the
+// fuck is going on." Machine messages carried no indication of why they
+// exist — an answer to a question and an unprompted news alert looked
+// identical. This section translates api/decisions.py's raw `reason`
+// strings (llm/heuristics.py, llm/wire.py, llm/silence_sweep.py,
+// llm/orchestrator.py) and messages.metadata.source into the reader's own
+// terms. A raw reason string like "wire_interjection" must never reach the
+// user verbatim.
+
+/**
+ * Reason strings the interjection engine can record on a SPOKEN decision.
+ * Two are parameterized ("turn_threshold_exceeded (N >= M)",
+ * "semantic_novelty_spike (0.NN)") and matched by prefix; everything else
+ * is an exact reason string. `stagnation_detected` is HISTORICAL ONLY —
+ * that rung was removed 2026-08-15 (dialectic/CLAUDE.md's amendment of that
+ * date; llm/heuristics.py's `_detect_stagnation` is now a `return False`
+ * stub) and cannot fire today, but old messages still carry the old reason
+ * and must be described as history, not as a live feature.
+ */
+function reasonHeadline(reason: string): string {
+  if (reason.startsWith('turn_threshold_exceeded')) {
+    return 'A stretch of turns had passed with nothing from it.'
+  }
+  if (reason.startsWith('semantic_novelty_spike')) {
+    return 'The conversation had shifted into territory it hadn’t weighed in on yet.'
+  }
+  switch (reason) {
+    case 'explicit_mention':
+      return 'You addressed it directly, by name.'
+    case 'question_detected':
+      return 'Your last message read as a question.'
+    case 'information_gap':
+      return 'It knew something from memory that hadn’t come up in the conversation yet.'
+    case 'balance_redirect':
+      return 'One of you had been quiet a while, relative to the room.'
+    case 'wire_interjection':
+      return 'A news story crossed the relevance threshold it holds for the linked thesis.'
+    case 'silence_follow_up':
+      return 'It had asked something here and nobody had answered yet.'
+    case 'protocol_active':
+      return 'A structured protocol was running, and this was its turn.'
+    case 'stagnation_detected':
+      return 'A message-shape check used to fire on short, repetitive stretches — retired 2026-08-15. This message predates that.'
+    case 'forced':
+      return 'Something in the room asked it to respond directly.'
+    default:
+      return 'It decided to speak — the specific reason isn’t translated here yet.'
+  }
+}
+
+/**
+ * `messages.metadata.source` — a DIFFERENT, already-present provenance
+ * channel from a decision's `reason`. `source` says which scheduled job
+ * WROTE this message's content; a decision's `reason` says WHY the
+ * interjection engine gave a turn to a message at all. api/decisions.py's
+ * own module docstring verifies (by reading every writer in llm/) that the
+ * two channels are DISJOINT today: nothing that stamps `metadata.source`
+ * also logs a decision, and nothing logged as a decision stamps
+ * `metadata.source`. describeProvenance below is where the precedence for
+ * the day that stops being true actually lives: metadata.source wins,
+ * because it is the more specific claim ("this exact job wrote this exact
+ * content") — the decision reason is never hidden, only secondary.
+ */
+function sourceHeadline(source: string): string | null {
+  switch (source) {
+    case 'reading_echo':
+      return 'Another room read something that bears on this one — filed here overnight.'
+    case 'night_shift':
+      return 'Filed from the overnight pass against the live thesis.'
+    case 'trading_curator':
+      return 'The desk pushed a thesis update while you were away, and this flags what changed.'
+    case 'deep_dive':
+      return 'Posted as the brief from a Research run.'
+    default:
+      return null
+  }
+}
+
+/**
+ * The last resort: no decision record and no recognized metadata.source.
+ * True of most llm_annotator notes (the annotator never logs a decision —
+ * it runs a separate path entirely) and of any message old enough to
+ * predate this record. Always returns something: the point of this
+ * feature is that nothing machine-authored is unexplained, even when the
+ * honest explanation is only "what kind of turn this is."
+ */
+function roleFallback(speakerType: Message['speaker_type']): string {
+  switch (speakerType) {
+    case 'llm_annotator':
+      return 'A note left for whoever was offline — not a reply in the conversation.'
+    case 'llm_provoker':
+      return 'A provoker turn — no decision record survives for this one.'
+    case 'llm_primary':
+      return 'A primary turn — no decision record survives for this one.'
+    case 'llm_persona':
+      return 'Posted by a persona turn.'
+    case 'system':
+      return 'A system notice, not a participant turn.'
+    default:
+      return 'Machine-authored — no further record survives for this one.'
+  }
+}
+
+interface ProvenanceInfo {
+  headline: string
+  detail: string[]
+}
+
+/**
+ * Composes the three channels above into one disclosure. Decision data
+ * wins when present (it is the richest — a reason plus the inputs that
+ * made it fire); metadata.source is the fallback when there is content
+ * provenance but no decision (see sourceHeadline's docstring for why that
+ * precedence, not the reverse); the role fallback never fails.
+ */
+function describeProvenance(
+  speakerType: Message['speaker_type'],
+  source: string | undefined,
+  decision: MessageDecisionExplain | undefined,
+): ProvenanceInfo {
+  if (decision) {
+    const detail: string[] = []
+    if (decision.use_provoker) {
+      detail.push('Sent in provoker mode — arguing a position, not settling one.')
+    }
+    if (
+      typeof decision.human_turn_count === 'number'
+      && decision.reason.startsWith('turn_threshold_exceeded')
+    ) {
+      const n = decision.human_turn_count
+      detail.push(`${n} human turn${n === 1 ? '' : 's'} in a row before it spoke.`)
+    }
+    if (
+      typeof decision.semantic_novelty === 'number'
+      && decision.reason.startsWith('semantic_novelty_spike')
+    ) {
+      detail.push(`Novelty score ${decision.semantic_novelty.toFixed(2)} against its own threshold.`)
+    }
+    if (
+      typeof decision.unsurfaced_memory_count === 'number'
+      && decision.reason === 'information_gap'
+    ) {
+      const n = decision.unsurfaced_memory_count
+      detail.push(`${n} unsurfaced memor${n === 1 ? 'y' : 'ies'} it judged relevant.`)
+    }
+    if (typeof decision.confidence === 'number') {
+      detail.push(`Recorded confidence ${Math.round(decision.confidence * 100)}%.`)
+    }
+    return { headline: reasonHeadline(decision.reason), detail }
+  }
+  if (source) {
+    const headline = sourceHeadline(source)
+    if (headline) return { headline, detail: [] }
+  }
+  return { headline: roleFallback(speakerType), detail: [] }
+}
+
+/** Gap between the trigger and the panel, and the margin off the viewport
+ * edge — same values and same reasoning as common/Explain.tsx's OFFSET /
+ * VIEWPORT_MARGIN, so the two disclosures feel like one system. */
+const WHY_OFFSET = 6
+const WHY_MARGIN = 8
+
+/**
+ * The disclosure trigger + floating panel. Mirrors common/Explain.tsx's
+ * accessibility contract exactly — a real <button> with aria-expanded,
+ * Escape closes and returns focus, dismissed on outside-click and on
+ * scroll — rather than reinventing it, because that contract (not the
+ * component itself) is what dialectic/CLAUDE.md's accessibility gate
+ * requires. Explain.tsx cannot be reused directly: it resolves `term`
+ * through lib/glossary.ts's fixed vocabulary, and this content is dynamic
+ * per message (a decision's reason, confidence and inputs), not a
+ * glossary entry — and glossary.ts is out of this work's ownership to
+ * extend. The POSITIONING is copied for the same reason Explain.tsx's own
+ * comment names: this trigger sits inside `.msg`'s stacking context, and a
+ * `position: absolute` panel gets painted over by a LATER message's own
+ * byline (the exact bug PassageMarker.tsx shipped with once already).
+ * `position: fixed` with viewport coordinates read from
+ * getBoundingClientRect() is the one fix that actually holds here.
+ */
+function MessageProvenance({ info }: { info: ProvenanceInfo }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const panelId = useId()
+
+  useEffect(() => {
+    if (!open) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      setOpen(false)
+      triggerRef.current?.focus()
+    }
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as Node
+      if (panelRef.current?.contains(target)) return
+      if (triggerRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    function onScroll() {
+      setOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('mousedown', onPointerDown)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [open])
+
+  // Clamp inside the viewport after paint, once the panel's real size is
+  // known — same reasoning as Explain.tsx's own layout effect.
+  useLayoutEffect(() => {
+    const panel = panelRef.current
+    if (!open || !pos || !panel) return
+    const rect = panel.getBoundingClientRect()
+    let { top, left } = pos
+    if (left + rect.width > window.innerWidth - WHY_MARGIN) {
+      left = window.innerWidth - rect.width - WHY_MARGIN
+    }
+    if (left < WHY_MARGIN) left = WHY_MARGIN
+    if (top + rect.height > window.innerHeight - WHY_MARGIN) {
+      const trigger = triggerRef.current?.getBoundingClientRect()
+      const above = (trigger ? trigger.top : top) - rect.height - WHY_OFFSET
+      top = above >= WHY_MARGIN
+        ? above
+        : Math.max(WHY_MARGIN, window.innerHeight - rect.height - WHY_MARGIN)
+    }
+    panel.style.top = `${top}px`
+    panel.style.left = `${left}px`
+  }, [open, pos])
+
+  function toggle() {
+    if (open) {
+      setOpen(false)
+      return
+    }
+    const rect = triggerRef.current?.getBoundingClientRect()
+    setPos({ top: (rect?.bottom ?? 0) + WHY_OFFSET, left: rect?.left ?? 0 })
+    setOpen(true)
+  }
+
+  return (
+    <span className="msg-why">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="msg-why-trigger"
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        aria-label="Why this message appeared"
+        onClick={toggle}
+      >
+        · why
+      </button>
+      {open && pos && (
+        <div
+          ref={panelRef}
+          id={panelId}
+          className="msg-why-panel"
+          style={{ position: 'fixed', top: pos.top, left: pos.left }}
+          role="note"
+          aria-label="Why this message appeared"
+        >
+          <p className="msg-why-headline">{info.headline}</p>
+          {info.detail.length > 0 && (
+            <ul className="msg-why-detail">
+              {info.detail.map((line) => <li key={line}>{line}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+    </span>
+  )
+}
+
 export function MessageBubble({
   message,
   isSelf,
@@ -165,6 +448,21 @@ export function MessageBubble({
   const editRef = useRef<HTMLTextAreaElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const currentRoomId = useAppStore((s) => s.currentRoom?.id)
+
+  // Provenance — never on a human message. Fetched once per THREAD (see
+  // useMessageDecisions.ts's own docstring for why calling it here, once
+  // per rendered bubble, still costs the network exactly one request) and
+  // looked up by this message's own id; `enabled` skips the subscribe and
+  // the fetch entirely for a thread that turns out to hold no machine
+  // messages at all.
+  const isMachine = message.speaker_type !== 'human'
+  const decisionsState = useMessageDecisions(currentRoomId, message.thread_id, isMachine)
+  const decision = decisionsState.status === 'ready'
+    ? decisionsState.decisions[message.id]
+    : undefined
+  const provenance = isMachine
+    ? describeProvenance(message.speaker_type, message.metadata?.source, decision)
+    : null
 
   const html = useMemo(() => {
     const raw = marked.parse(message.content, { async: false }) as string
@@ -499,6 +797,14 @@ export function MessageBubble({
         {/* Outside the bubble, so a folded message still shows what it carried —
             the picture is usually the point of the message, not its tail. */}
         {attachments.length > 0 && <MessageAttachments attachments={attachments} />}
+
+        {/* Quiet, opt-in — never on a human message. provenance is non-null
+            exactly when isMachine is true. */}
+        {provenance && (
+          <div className="msg-why-wrap">
+            <MessageProvenance info={provenance} />
+          </div>
+        )}
 
         {toolCalls.length > 0 && (
           <div className="msg-tools">

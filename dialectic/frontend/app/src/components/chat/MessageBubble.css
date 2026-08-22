@@ -498,6 +498,65 @@
 .msg-tool-error { margin-left: 4px; color: var(--error); }
 .msg-tool-failed .msg-tool-name { color: var(--error); }
 
+/* ── Provenance disclosure ("· why") ─────────────────────────
+   Same visual register as .msg-tools-toggle just above (a quiet mono
+   footnote, not a badge) — this and "used N tools" are the same KIND of
+   control: provenance about the message, collapsed by default. The panel
+   reuses Explain.css's floating-note language (cacao surface, bean
+   border, bezel-raised shadow) at a distance, in this file's own classes
+   rather than importing that stylesheet, because Explain.* is owned by
+   other work in this build and its class names are not a contract this
+   file should couple to. */
+.msg-why-wrap { align-self: flex-start; margin-top: 3px; }
+.msg-why { display: contents; }
+.msg-why-trigger {
+    padding: 1px 6px 1px 0;
+    background: none;
+    border: none;
+    border-bottom: 1px solid transparent;
+    color: var(--color-faint);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .16em;
+    cursor: pointer;
+}
+.msg-why-trigger:hover,
+.msg-why-trigger[aria-expanded='true'] { color: var(--color-amber); border-bottom-color: var(--amber-30); }
+.msg-why-trigger:focus-visible { outline: 1px solid var(--color-amber); outline-offset: 2px; }
+
+.msg-why-panel {
+    /* Positioning SCHEME is set inline in MessageBubble.tsx, beside the
+       viewport coordinates it makes sense of — see MessageProvenance's own
+       comment and common/Explain.tsx's "POSITIONING SCAR" note.
+       z-index above the modal ladder (1200): this can open inside dialogs. */
+    z-index: 1300;
+    width: min(320px, calc(100vw - 16px));
+    padding: 10px 12px 11px;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--bezel-raised), 0 8px 24px rgba(0, 0, 0, 0.5);
+    text-align: left;
+}
+.msg-why-headline {
+    margin: 0;
+    color: var(--color-ink);
+    font-family: var(--font-serif);
+    font-size: 0.86rem;
+    line-height: 1.45;
+}
+.msg-why-detail {
+    margin: 7px 0 0;
+    padding: 7px 0 0 14px;
+    border-top: 1px solid var(--color-bean);
+    color: var(--color-faint);
+    font-family: var(--font-serif);
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+.msg-why-detail li { margin: 2px 0; }
+
 /* ── Prediction proposal card ────────────────────────────────
    A drafted prediction is a decision the humans owe, not provenance, so it
    renders louder than the tool trace: a small card under the bubble with the

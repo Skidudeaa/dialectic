@@ -48,6 +48,7 @@ from api.home import router as home_router, set_home_db_pool
 from api.workspace import router as workspace_router, set_workspace_db_pool
 from api.field import router as field_router, set_field_db_pool
 from api.atlas import router as atlas_router, set_atlas_db_pool
+from api.decisions import router as decisions_router, set_decisions_db_pool
 from api.rate_limit import check_rate_limit
 from proposal_intake import (
     MESSAGE_TAGS,
@@ -177,6 +178,8 @@ async def lifespan(app: FastAPI):
         set_field_db_pool(db_pool)
         # Set db_pool for Atlas -- the caller's own cross-room map (api/atlas.py)
         set_atlas_db_pool(db_pool)
+        # Set db_pool for the decision-provenance read (api/decisions.py)
+        set_decisions_db_pool(db_pool)
         set_capabilities_db_pool(db_pool)
 
         async with db_pool.acquire() as conn:
@@ -358,6 +361,10 @@ app.include_router(mirror_router)
 # Atlas -- the caller's own cross-room map: rooms, branches, artifacts and
 # real-provenance edges, fenced per-viewer in the SQL, JWT-only (§5.4).
 app.include_router(atlas_router)
+
+# Decision provenance -- why a machine message happened, batched per thread.
+# Fenced the same way as every other room route: room token + membership.
+app.include_router(decisions_router)
 
 # Which doors are open, answered WITHOUT a credential -- the signed-out screen
 # renders before one exists, and a closed door should be closed on sight.

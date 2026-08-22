@@ -150,7 +150,11 @@ def ctx(monkeypatch):
         finding={"verdict": "correct",
                  "rationale": "The EIA report puts the close at $91.40.",
                  "checked": [{"tool": "read_article", "ok": True}]},
-        line="Dan, 0.85, Aug 17 — while Amo stood at 0.40.",
+        # Dated off CLOSED for the same reason _good_line() is — a literal
+        # "Aug 17" here is a number validate_line will reject on every day
+        # but one. See the note on _good_line below.
+        line=(f"Dan, 0.85, {(CLOSED - timedelta(days=3)).strftime('%b %-d')}"
+              " — while Amo stood at 0.40."),
     )
 
     async def _load(conn, room_id):
@@ -425,7 +429,32 @@ def test_the_house_is_a_forecaster_and_is_named_as_one():
 # ── the credit line's honesty ────────────────────────────────────────
 
 
-GOOD_LINE = "Dan, 0.85, Aug 17 — three days before the print, while Amo stood at 0.40."
+def _good_line() -> str:
+    """The exemplar line, dated off the SAME clock the packet is built from.
+
+    THIS WAS A TIME BOMB, and it is the second of its exact species in this
+    repo in two days (see cc7909e, "the 72h test was a time bomb, not a
+    flake"). The date was written into the string as the literal "Aug 17"
+    while `CLOSED` is `datetime.now(timezone.utc) - 1 day`. `validate_line`
+    rejects any number the packet does not contain and `_packet_numbers`
+    says in its own docstring that "a date carries its day", so the 17 had
+    to BE the packet's day — which it was for exactly one UTC day.
+
+    It failed on the evening of 2026-08-21: at 23:22 CDT, UTC had already
+    rolled to Aug 22, so CLOSED became Aug 21 and the forecast day became
+    Aug 18 while the string still said 17. Local-clock daytime runs passed;
+    every run after 19:00 CDT failed. That is why it was measured green at
+    yesterday's gate and red tonight, and why "pre-existing failure" was the
+    wrong label — no production code is involved and none of it is broken.
+
+    Derive, never hardcode, anything a clock-relative fixture will be
+    compared against.
+    """
+    day = (CLOSED - timedelta(days=3)).strftime("%b %-d")
+    return f"Dan, 0.85, {day} — three days before the print, while Amo stood at 0.40."
+
+
+GOOD_LINE = _good_line()
 
 
 def test_a_line_built_from_the_packet_survives():

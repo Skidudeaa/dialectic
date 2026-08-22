@@ -11,7 +11,12 @@ vi.mock('../../lib/api', async () => {
   const actual = await vi.importActual<typeof import('../../lib/api')>('../../lib/api')
   return {
     ...actual,
-    api: { acceptTrade: vi.fn() },
+    // getThreadDecisions: every rendered bubble here is an llm_primary
+    // message, so useMessageDecisions fires regardless of which test is
+    // asking about a proposal card — an unresolved-forever promise keeps
+    // it quietly in 'loading' without ever painting a "· why" disclosure
+    // into these assertions.
+    api: { acceptTrade: vi.fn(), getThreadDecisions: vi.fn(() => new Promise(() => {})) },
   }
 })
 

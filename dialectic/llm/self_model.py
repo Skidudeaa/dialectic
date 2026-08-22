@@ -17,6 +17,7 @@ is invisible.
 """
 from __future__ import annotations
 
+import json
 import logging
 import time
 from dataclasses import dataclass, field
@@ -28,6 +29,54 @@ from . import tradingdesk_client as td
 from .heuristics import InterjectionDecision
 
 logger = logging.getLogger(__name__)
+
+
+# ── tolerant JSONB reads (llm_decisions.tool_calls / .speaker_balance) ────
+#
+# WHY THIS EXISTS: log_decision used to hand asyncpg a `json.dumps(...)`
+# STRING for both columns, on top of the pool's own JSONB codec (registered
+# in api/main.py — see dialectic/CLAUDE.md: "JSONB columns: pass dict
+# directly to asyncpg — pool codec handles serialization"). That double-
+# encodes: the codec serializes the Python str AGAIN, so what lands in
+# Postgres is a JSON STRING holding JSON text, not the array/object the
+# column means. Confirmed against the live DB: `jsonb_typeof(tool_calls)` /
+# `jsonb_typeof(speaker_balance)` read 'string' for every existing row
+# (~192), where a correct row reads 'array' / 'object'.
+#
+# The WRITE is fixed below (log_decision now passes the dict/list straight
+# through — see the INSERT). This is the READ side of the same fix, and it
+# is deliberately NOT a migration: the ~192 existing rows are production
+# data, nothing here UPDATEs them, and they keep their double-encoded shape
+# forever. So any code that reads either column back MUST go through this
+# one function rather than trusting the column's declared type — scattering
+# an `isinstance(value, str)` check at every call site is exactly how one of
+# them gets missed.
+#
+# No caller reads these two columns back today (checked: nothing in this
+# repo selects `tool_calls` or `speaker_balance` off `llm_decisions` outside
+# this module's own tests) — the columns exist for direct SQL/ops
+# inspection, which is how the double-encoding was originally found. This
+# helper is the contract the first real Python reader must use; proven by
+# the real-Postgres round-trip test rather than by a production call site
+# that does not exist yet.
+def parse_decision_jsonb(value: Any) -> Any:
+    """Decode a `tool_calls` / `speaker_balance` value read back from a
+    `llm_decisions` row, tolerant of either shape actually on disk.
+
+    A current-format row already comes back as a real list/dict — asyncpg's
+    codec decoded it once, correctly, and this returns it unchanged. A
+    legacy double-encoded row comes back as a `str` holding JSON text
+    (the codec's one decode just peeled off the outer layer); this decodes
+    it the second time. Anything that still is not valid JSON, or is None,
+    is returned unchanged — a provenance/debug field must degrade, never
+    raise, for its caller.
+    """
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except (TypeError, ValueError):
+            return value
+    return value
 
 
 # ── the track record (scored, not self-reported) ─────────────────────
@@ -253,9 +302,17 @@ class SelfModel:
         Returns the decision ID, or None on failure.
         """
         try:
-            import json
-            balance_json = json.dumps(speaker_balance) if speaker_balance else None
-            tool_calls_json = json.dumps(tool_calls) if tool_calls else None
+            # WHY no json.dumps here: speaker_balance/tool_calls are JSONB
+            # columns and the pool's own codec serializes a dict/list on its
+            # own (dialectic/CLAUDE.md). Pre-encoding to a string and handing
+            # THAT to the codec double-encodes — see parse_decision_jsonb's
+            # docstring above for the full defect and why existing rows are
+            # left alone. `or None` preserves the original behavior of
+            # storing NULL for an empty/falsy dict or list rather than `{}`
+            # / `[]`, which read as "measured, and empty" instead of "not
+            # measured".
+            balance_value = speaker_balance or None
+            tool_calls_value = tool_calls or None
             considered = decision.considered_reasons if hasattr(decision, 'considered_reasons') else []
 
             row = await self.db.fetchrow(
@@ -271,8 +328,8 @@ class SelfModel:
                 decision.should_interject, decision.reason, decision.confidence,
                 decision.use_provoker, considered, human_turn_count,
                 semantic_novelty, unsurfaced_memory_count,
-                balance_json, message_count,
-                response_message_id, mode, tool_calls_json,
+                balance_value, message_count,
+                response_message_id, mode, tool_calls_value,
             )
             decision_id = row["id"] if row else None
 
