@@ -88,6 +88,11 @@ class CommitmentManager:
                 },
                 source_label=await self._relay_source_label(created_by_user_id),
                 confidence=initial_confidence,
+                # On THIS path the creator is the forecaster — they stated the
+                # confidence as they made the claim. Both are passed anyway so
+                # the key shape is uniform across all three relays.
+                forecaster_id=created_by_user_id,
+                proposer_label=await self._relay_source_label(created_by_user_id),
             )
         except Exception:
             logger.debug(
@@ -188,12 +193,20 @@ class CommitmentManager:
             commitment.setdefault("id", commitment_id)
             stakes_relay.relay_confidence(
                 commitment,
-                source_label=await self._relay_source_label(
-                    commitment.get("created_by_user_id")
-                ),
+                # THE FORECASTER, not the creator. `user_id` is who moved the
+                # slider; `created_by_user_id` is who wrote the question, and
+                # for a Sunday Round question that is nobody at all. Labelling
+                # by creator put both humans' round forecasts on one desk row
+                # called "LLM" -- see this module's header and
+                # docs/reviews/2026-08-21_round-forecast-attribution.md.
+                source_label=await self._relay_source_label(user_id),
                 seq=seq,
                 confidence=confidence,
                 reasoning=reasoning,
+                forecaster_id=user_id,
+                proposer_label=await self._relay_source_label(
+                    commitment.get("created_by_user_id")
+                ),
             )
         except Exception:
             logger.debug(
@@ -264,23 +277,44 @@ class CommitmentManager:
         # commitment never reached the desk while active; a commitment with
         # no confidence at all stays un-relayed (nothing to score).
         try:
-            conf_row = await self.db.fetchrow(
-                """SELECT confidence FROM commitment_confidence
-                   WHERE commitment_id = $1
-                   ORDER BY recorded_at DESC LIMIT 1""",
+            # ONE RELAY PER HUMAN FORECASTER, each carrying that person's own
+            # last number. The ledger holds a row per (commitment, forecaster)
+            # since 2026-08-22, so a single relay would resolve whichever row
+            # it happened to build and leave every other forecaster's claim
+            # open forever — which scores as "never answered", not as right or
+            # wrong. DISTINCT ON gives the latest row per person in one pass.
+            #
+            # EXCLUDE BY ACTOR, NEVER BY A NULL user_id. The house writes
+            # straight to commitment_confidence (stakes/house.py) and is not
+            # mirrored to the desk, so it has to be dropped — but `user_id IS
+            # NOT NULL` is the wrong instrument for that, and it is precisely
+            # the confusion stakes/house.py was created to end. A NULL user_id
+            # ALSO means a legitimate un-attributed claim: create_commitment
+            # accepts `created_by_user_id=None` with an initial confidence and
+            # relays it as "LLM". Filtering on NULL would relay that claim's
+            # creation and then never resolve it, leaving it open forever.
+            conf_rows = await self.db.fetch(
+                """SELECT DISTINCT ON (user_id) user_id, confidence
+                   FROM commitment_confidence
+                   WHERE commitment_id = $1 AND actor <> 'house'
+                   ORDER BY user_id, recorded_at DESC""",
                 commitment_id,
             )
             commitment = dict(row)
             commitment.setdefault("id", commitment_id)
-            stakes_relay.relay_resolved(
-                commitment,
-                source_label=await self._relay_source_label(
-                    commitment.get("created_by_user_id")
-                ),
-                resolution=resolution,
-                resolution_notes=resolution_notes,
-                last_confidence=conf_row["confidence"] if conf_row else None,
+            proposer_label = await self._relay_source_label(
+                commitment.get("created_by_user_id")
             )
+            for conf in conf_rows:
+                stakes_relay.relay_resolved(
+                    commitment,
+                    source_label=await self._relay_source_label(conf["user_id"]),
+                    resolution=resolution,
+                    resolution_notes=resolution_notes,
+                    last_confidence=conf["confidence"],
+                    forecaster_id=conf["user_id"],
+                    proposer_label=proposer_label,
+                )
         except Exception:
             logger.debug(
                 "stakes relay scheduling failed for %s", commitment_id,

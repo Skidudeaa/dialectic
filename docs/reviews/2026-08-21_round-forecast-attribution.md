@@ -2,7 +2,46 @@
 
 **Date:** 2026-08-21 · **Found during:** the legibility build (explain-everywhere UI)
 **Severity:** high, and time-boxed — the Round's first fire is **Sunday 2026-08-23 09:00 CT**
-**Status:** NOT FIXED. Reported for a decision; the obvious fix does not work (see below).
+
+## Status: FIXED 2026-08-22, before first fire
+
+Owner's ruling: *"should be labeled both human and who proposes (can be 1 or
+more humans)."* Shipped as **one desk row per (commitment, forecaster)**:
+
+- `source_key` carries the forecaster — `stake:{id}:{user_id}:created` and the
+  same for `:confidence:{seq}` and `:resolved`. It had to go in the KEY, not
+  just the label, for the replay reason set out below.
+- `source_label` is the **forecaster's** display name, alone, because td's own
+  model calls it "the leaderboard grouping key" — folding the proposer in would
+  split one person across as many rows as there are proposers.
+- The proposer rides a **`proposed_by:<name>` tag**: recorded, queryable, and
+  grouping-neutral.
+- **Resolution fans out**, once per human who forecast, each with that person's
+  own last confidence. A single resolve would have left every other
+  forecaster's claim open forever, which scores as "never answered" rather than
+  as right or wrong.
+
+Two things the change surfaced that were not in the original finding:
+
+- The house had to be excluded from the resolve fan-out **by `actor`, never by
+  `user_id IS NOT NULL`** — that column is nullable for legitimate
+  un-attributed LLM claims too, which would then be created on the desk and
+  never resolved. This is exactly the confusion `stakes/house.py` exists to
+  end, and the first draft of the fix walked straight into it.
+- `trading/tools/outcomes/import_dialectic_stakes.py` still builds
+  per-commitment keys, so a run would now add duplicate rows attributed to the
+  wrong actor. It **refuses to run** until ported.
+
+Zero migration cost, confirmed before the change: `SELECT count(*) FROM
+predictions WHERE source_key LIKE 'stake:%'` was **0**, because no dialectic
+commitment has ever had both a deadline and a confidence. Sunday's Round will
+be the first rows this ledger has ever held.
+
+Backend suite 1943 passed. The key fence is mutation-proven: reverting
+`source_key` to the per-commitment shape turns
+`test_two_humans_on_one_question_get_two_distinct_rows` red.
+
+The original finding follows, unedited.
 
 ## What happens
 

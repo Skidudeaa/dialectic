@@ -4,20 +4,25 @@
 > only. Shipped Release 1–3 history lives in [`../PLAN.md`](../PLAN.md), the
 > release ledgers under `docs/superpowers/plans/`, `JOURNAL.md`, and git.
 
-## Decide before Sunday 2026-08-23 09:00 CT
+## Settled 2026-08-22, before the Round's first fire
 
-- [ ] **Round forecasts reach the desk ledger labelled `LLM`, not by person.**
-      Both humans collapse onto one row, and the participant reads that row back
-      as its own track record. The Round's OWN scoring is correct and unaffected;
-      only the tradingDesk mirror is wrong. The obvious one-line fix does not
-      work — the label is fixed at row creation and creates replay rather than
-      update. Full trace, the two real options, and a cheap stopgap:
+- [x] **Round forecast attribution.** Owner ruled: labelled by the human who
+      forecast, plus who proposed, and one or more humans per question. Shipped
+      as one desk row per (commitment, forecaster) — the forecaster is in the
+      idempotency KEY, `source_label` is that person alone, the proposer rides a
+      `proposed_by:` tag, and resolution fans out per forecaster. See
       [`docs/reviews/2026-08-21_round-forecast-attribution.md`](../docs/reviews/2026-08-21_round-forecast-attribution.md).
-      Rows relayed from the first fire carry the wrong label permanently.
-- [ ] **The volume ruling** (still open from 2026-08-20): `QUESTIONS_PER_ROUND`
-      is 5 and four rooms qualify, so 20 questions land Sunday and each draws a
-      house forecast the sweep drains at ~2.5 hours. Recommendation on the table
-      remains 3/room. One env var, no code.
+- [x] **The volume ruling.** `QUESTIONS_PER_ROUND=3` (was 5). Four rooms
+      qualify, so ~12 questions land Sunday rather than 20.
+- [ ] **Port the backfill CLI.** `trading/tools/outcomes/import_dialectic_stakes.py`
+      still builds per-commitment keys and now REFUSES to run rather than write
+      rows attributed to the wrong actor. `plan_commitment()` needs to fan out
+      per forecaster, then flip `_PORTED_TO_PER_FORECASTER_KEYS`. Nothing to
+      import today, so this is not urgent.
+- [ ] **Time-bomb sweep.** Two fixtures in `test_round_close_watch.py` compared
+      a hardcoded date against a `now(utc)`-relative value and went red at
+      19:00 CDT; both are fixed. A grep found ~10 other test files pairing
+      `datetime.now`/`utcnow` with literal dates. None are firing; none audited.
 
 ## The quarter (see the plan for full detail + acceptance checks)
 

@@ -214,7 +214,39 @@ def existing_source_refs(desk: Desk) -> set[str]:
     return refs
 
 
+# STALE AS OF 2026-08-22 — this tool writes the OLD key shape, and running it
+# now would put wrong data in the ledger rather than merely stale data.
+#
+# dialectic's live relay (dialectic/api/stakes_relay.py) moved to ONE ROW PER
+# (COMMITMENT, FORECASTER): keys are `stake:{id}:{user_id}:created` /
+# `:{user_id}:confidence:{seq}` / `:{user_id}:resolved`, source_label is the
+# FORECASTER's name rather than the commitment creator's, and the proposer
+# rides a `proposed_by:` tag. Every key below is still the per-commitment
+# shape, so a run today would create a SECOND, differently-keyed row for any
+# commitment the live relay has already written, attributed to the creator —
+# which for a Sunday Round question is the literal "LLM".
+#
+# Refusing rather than half-porting: the fan-out has to be per forecaster
+# (plan_commitment groups by commitment, and confidences[] mixes people), and
+# a wrong backfill is unpickable once it is in the ledger. There is nothing to
+# import today — zero dialectic commitments have both a deadline and a
+# confidence — so the refusal costs nothing.
+_PORTED_TO_PER_FORECASTER_KEYS = False
+
+
 def main() -> int:
+    if not _PORTED_TO_PER_FORECASTER_KEYS:
+        print(
+            "REFUSING: this backfill still builds per-COMMITMENT source keys.\n"
+            "dialectic's relay now writes one row per (commitment, forecaster)\n"
+            "-- see dialectic/api/stakes_relay.py's header and\n"
+            "docs/reviews/2026-08-21_round-forecast-attribution.md.\n"
+            "Running this would add duplicate rows attributed to the wrong\n"
+            "actor. Port plan_commitment() to fan out per forecaster, then\n"
+            "flip _PORTED_TO_PER_FORECASTER_KEYS.",
+            file=sys.stderr,
+        )
+        return 2
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--dialectic-dsn",

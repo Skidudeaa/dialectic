@@ -26,15 +26,32 @@
 # seeded history row can duplicate that confidence value — belief unchanged,
 # accepted.
 #
-# Idempotency keys crossing the seam (td dedups on source_key):
-#   stake:{commitment_id}:created
-#   stake:{commitment_id}:confidence:{seq}
-#   stake:{commitment_id}:resolved
+# Idempotency keys crossing the seam (td dedups on source_key). Amended
+# 2026-08-22 — every key now carries the FORECASTER, because the ledger holds
+# one row per (commitment, forecaster) rather than one per commitment:
+#   stake:{commitment_id}:{user_id}:created
+#   stake:{commitment_id}:{user_id}:confidence:{seq}
+#   stake:{commitment_id}:{user_id}:resolved
 #
-# Mapping (plan Phase 3): source_type='dialectic_commitment',
-# source_ref=str(commitment id), source_label=creator display name or "LLM"
-# for a NULL user (the existing stakes convention), claim + resolution
-# criteria → statement, deadline → deadline, category → tag.
+# Mapping: source_type='dialectic_commitment', source_ref=str(commitment id),
+# source_label=THE FORECASTER'S display name (td's own model calls this "the
+# leaderboard grouping key", so it must be one person), claim + resolution
+# criteria → statement, deadline → deadline, category → tag, and the question's
+# proposer → a `proposed_by:<name>` tag.
+#
+# WHY THE FORECASTER AND NOT THE CREATOR (owner ruling, 2026-08-22: a claim
+# should be "labeled both human and who proposes"): source_label used to come
+# from the commitment's creator. For an ordinary commitment the creator IS the
+# forecaster and it looked correct. A Sunday Round question is drafted by
+# nobody — `created_by_user_id=None`, which the label helper maps to the
+# literal "LLM" — so both humans' round forecasts would have collapsed onto one
+# desk row attributed to the machine, and `self_model.fetch_track_record` reads
+# that ledger back into the participant's own prompt. See
+# docs/reviews/2026-08-21_round-forecast-attribution.md.
+#
+# Resolution FANS OUT: the manager resolves once per human who forecast, each
+# with that person's own last confidence. Resolving a single row would leave
+# every other forecaster's claim open forever.
 #
 # Deliberately NOT relayed: a commitment with no deadline or no stated
 # confidence — tradingDesk's door requires both, and inventing either is the
@@ -89,34 +106,80 @@ def _deadline_str(commitment: dict) -> Optional[str]:
     return value or None
 
 
+def actor_token(user_id) -> str:
+    """The forecaster's half of an idempotency key.
+
+    `unattributed` rather than a bare empty segment, so a key never collapses
+    to `stake:<id>::created` and silently collides with a differently-shaped
+    one. Nothing relays a NULL forecaster today — the house writes directly,
+    bypassing this module entirely — but a key shape must not depend on that
+    staying true.
+    """
+    return str(user_id) if user_id else "unattributed"
+
+
 def create_body(
-    commitment: dict, *, source_label: str, confidence: Optional[float],
+    commitment: dict,
+    *,
+    source_label: str,
+    confidence: Optional[float],
+    forecaster_id=None,
+    proposer_label: Optional[str] = None,
 ) -> Optional[dict]:
     """The td PredictionCreate body for a commitment, or None when the
-    commitment is not ledger-mappable (no deadline / no stated confidence)."""
+    commitment is not ledger-mappable (no deadline / no stated confidence).
+
+    ONE ROW PER (COMMITMENT, FORECASTER), and the owner's ruling is the
+    reason: a claim should be "labeled both human and who proposes", and a
+    question may be answered by one or more humans.
+
+    The defect this replaces: `source_key` was `stake:<id>:created`, one row
+    per COMMITMENT, and `source_label` was derived from the commitment's
+    CREATOR. For an ordinary commitment the creator IS the forecaster, so it
+    looked right for a year. A Sunday Round question is drafted by nobody
+    (`question_round.py` creates it `created_by_user_id=None`), which
+    `_relay_source_label` maps to the literal "LLM" — so both humans' round
+    forecasts would have landed on ONE desk row labelled as the machine's,
+    and the participant reads that ledger back as its own track record.
+
+    Note it could not have been fixed at the confidence relay alone: the row
+    is created on first contact and td REPLAYS a claimed source_key rather
+    than updating it, so the label is settled by whoever gets there first.
+    The forecaster has to be in the KEY, not just the label.
+
+    `source_label` stays the forecaster alone because td's own model calls it
+    "the leaderboard grouping key" — folding the proposer in would split one
+    person across as many rows as there are proposers. The proposer rides a
+    tag, which is queryable and grouping-neutral.
+    """
     deadline = _deadline_str(commitment)
     if not deadline or confidence is None:
         return None
     commitment_id = str(commitment.get("id"))
+    tags = ["dialectic", str(commitment.get("category") or "prediction")]
+    if proposer_label:
+        tags.append(f"proposed_by:{proposer_label}")
     return {
         "statement": _statement(commitment),
         "confidence": float(confidence),
         "deadline": deadline,
-        "tags": ["dialectic", str(commitment.get("category") or "prediction")],
+        "tags": tags,
         "source_type": "dialectic_commitment",
         "source_label": source_label,
         "source_ref": commitment_id,
-        "source_key": f"stake:{commitment_id}:created",
+        "source_key": f"stake:{commitment_id}:{actor_token(forecaster_id)}:created",
     }
 
 
 async def _ensure_ledger_row(
     commitment: dict, *, source_label: str, confidence: Optional[float],
+    forecaster_id=None, proposer_label: Optional[str] = None,
 ) -> Optional[dict]:
     """POST the create; td replays the existing row when the source_key is
     already claimed. Returns the td prediction row, or None if unmappable."""
     body = create_body(
         commitment, source_label=source_label, confidence=confidence,
+        forecaster_id=forecaster_id, proposer_label=proposer_label,
     )
     if body is None:
         logger.debug(
@@ -134,10 +197,12 @@ async def _ensure_ledger_row(
 
 async def _run_created(
     commitment: dict, *, source_label: str, confidence: Optional[float],
+    forecaster_id=None, proposer_label: Optional[str] = None,
 ) -> None:
     try:
         await _ensure_ledger_row(
             commitment, source_label=source_label, confidence=confidence,
+            forecaster_id=forecaster_id, proposer_label=proposer_label,
         )
     except td.TradingDeskError as e:
         logger.debug("stakes relay (created) desk unavailable: %s", e)
@@ -152,10 +217,13 @@ async def _run_confidence(
     seq: int,
     confidence: float,
     reasoning: Optional[str],
+    forecaster_id=None,
+    proposer_label: Optional[str] = None,
 ) -> None:
     try:
         row = await _ensure_ledger_row(
             commitment, source_label=source_label, confidence=confidence,
+            forecaster_id=forecaster_id, proposer_label=proposer_label,
         )
         if not row or not row.get("id"):
             return
@@ -165,7 +233,10 @@ async def _run_confidence(
             json_body={
                 "confidence": float(confidence),
                 "reasoning": reasoning,
-                "source_key": f"stake:{commitment_id}:confidence:{seq}",
+                "source_key": (
+                    f"stake:{commitment_id}:{actor_token(forecaster_id)}"
+                    f":confidence:{seq}"
+                ),
             },
         )
     except td.TradingDeskError as e:
@@ -181,10 +252,21 @@ async def _run_resolved(
     resolution: str,
     resolution_notes: Optional[str],
     last_confidence: Optional[float],
+    forecaster_id=None,
+    proposer_label: Optional[str] = None,
 ) -> None:
+    """Resolve ONE forecaster's row.
+
+    Since a commitment now has a desk row per forecaster, the caller fans this
+    out — once per human who actually forecast, each with that person's OWN
+    last confidence. Resolving only the row this relay happened to find would
+    leave every other forecaster's claim open forever, which reads on the
+    leaderboard as "never answered" rather than as right or wrong.
+    """
     try:
         row = await _ensure_ledger_row(
             commitment, source_label=source_label, confidence=last_confidence,
+            forecaster_id=forecaster_id, proposer_label=proposer_label,
         )
         if not row or not row.get("id"):
             return
@@ -194,7 +276,10 @@ async def _run_resolved(
             json_body={
                 "resolution": resolution,
                 "resolution_notes": resolution_notes,
-                "source_key": f"stake:{commitment_id}:resolved",
+                "source_key": (
+                    f"stake:{commitment_id}:{actor_token(forecaster_id)}"
+                    ":resolved"
+                ),
             },
         )
     except td.TradingDeskError as e:
@@ -210,10 +295,12 @@ async def _run_resolved(
 
 def relay_created(
     commitment: dict, *, source_label: str, confidence: Optional[float],
+    forecaster_id=None, proposer_label: Optional[str] = None,
 ) -> Optional[asyncio.Task]:
     return _schedule(
         _run_created(
             commitment, source_label=source_label, confidence=confidence,
+            forecaster_id=forecaster_id, proposer_label=proposer_label,
         ),
         "created",
     )
@@ -226,6 +313,8 @@ def relay_confidence(
     seq: int,
     confidence: float,
     reasoning: Optional[str] = None,
+    forecaster_id=None,
+    proposer_label: Optional[str] = None,
 ) -> Optional[asyncio.Task]:
     return _schedule(
         _run_confidence(
@@ -234,6 +323,8 @@ def relay_confidence(
             seq=seq,
             confidence=confidence,
             reasoning=reasoning,
+            forecaster_id=forecaster_id,
+            proposer_label=proposer_label,
         ),
         "confidence",
     )
@@ -246,10 +337,14 @@ def relay_resolved(
     resolution: str,
     resolution_notes: Optional[str] = None,
     last_confidence: Optional[float] = None,
+    forecaster_id=None,
+    proposer_label: Optional[str] = None,
 ) -> Optional[asyncio.Task]:
     return _schedule(
         _run_resolved(
             commitment,
+            forecaster_id=forecaster_id,
+            proposer_label=proposer_label,
             source_label=source_label,
             resolution=resolution,
             resolution_notes=resolution_notes,
