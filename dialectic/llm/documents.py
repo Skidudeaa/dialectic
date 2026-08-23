@@ -74,9 +74,16 @@ def chrome_binary() -> Optional[str]:
     return None
 
 
+# A leading "# Heading" line. The page already prints `title` as the H1, and
+# the model nearly always opens the body by repeating it — measured on the
+# first live render (2026-08-22: "Probe memo" twice, stacked).
+_LEADING_H1 = re.compile(r"\A\s*#(?!#)[ \t]+[^\n]*\n?")
+
+
 def render_html(title: str, markdown: str) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    return _PAGE.format(title=html.escape(title), stamp=stamp, body=_md.render(markdown))
+    body = _LEADING_H1.sub("", markdown, count=1)
+    return _PAGE.format(title=html.escape(title), stamp=stamp, body=_md.render(body))
 
 
 async def render_pdf(title: str, markdown: str) -> bytes:

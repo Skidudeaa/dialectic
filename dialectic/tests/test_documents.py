@@ -49,6 +49,16 @@ def test_render_html_escapes_raw_html_and_renders_tables():
     assert "<script>" not in page
 
 
+def test_render_html_drops_the_models_repeated_title_heading():
+    # The page prints `title` as the H1; a body opening with "# Title" would
+    # stack it twice. Only a LEADING H1 goes — an H2 or a later H1 stays.
+    page = documents.render_html("Probe memo", "# Probe memo\n\n## Purpose\n\ntext\n\n# Appendix")
+    assert page.count("<h1>") == 2 and "<h1>Probe memo</h1>" in page and "<h1>Appendix</h1>" in page
+    assert "<h2>Purpose</h2>" in page
+    page2 = documents.render_html("T", "## Not a title\n\nbody")
+    assert page2.count("<h1>") == 1 and "<h2>Not a title</h2>" in page2
+
+
 @chrome
 @pytest.mark.asyncio
 async def test_render_pdf_is_a_real_pdf():
