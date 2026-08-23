@@ -51,6 +51,16 @@ export interface Release {
 /** Newest first. `releases.test.ts` pins that order at the data level. */
 export const RELEASES: Release[] = [
   {
+    id: 'documents',
+    date: '2026-08-22',
+    title: 'A file, not a blob',
+    body:
+      'Ask the participant for a document — a brief, a newsletter, a memo, a PDF — ' +
+      'and it writes the whole piece and attaches it to its reply as a download, ' +
+      'instead of pasting it into the chat or saying it has no way to make a file. ' +
+      'The file sits on the message like any upload, authored by the participant.',
+  },
+  {
     id: 'duel',
     date: '2026-08-21',
     title: 'The duel',

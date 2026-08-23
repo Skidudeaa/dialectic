@@ -345,6 +345,11 @@ export function useDialecticSocket(options?: {
             // list projects a fixed field set with no metadata in it.
             metadata: (payload.metadata as MessageMetadata | undefined) ?? null,
           } as Message);
+          // A document the turn wrote (write_document) rides llm_done the way
+          // a human upload rides message_created — bound server-side already.
+          if (Array.isArray(payload.attachments) && payload.attachments.length > 0) {
+            setMessageAttachments(payload.message_id, payload.attachments as Attachment[]);
+          }
         }
         void refreshThreads();
         break;

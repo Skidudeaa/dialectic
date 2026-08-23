@@ -125,6 +125,10 @@ def _llm_done_payload(thread_id: UUID, data: dict) -> dict:
     metadata = data.get("metadata")
     if metadata:
         payload["metadata"] = metadata
+    # Documents the turn wrote (write_document), bound server-side before
+    # this frame — same contract as message_created's attachments.
+    if data.get("attachments"):
+        payload["attachments"] = data["attachments"]
     return payload
 
 
@@ -710,6 +714,7 @@ class MessageHandler:
                     "message_type": result.response.message_type.value,
                     "content": result.response.content,
                     "model_used": result.response.model_used,
+                    "attachments": result.attachments,
                 },
             ))
             # Trigger push for LLM heuristic interjection

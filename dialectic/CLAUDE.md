@@ -950,3 +950,46 @@ tell: measure the two suites separately or the flake is the measurement.
 One pre-existing lint error remains at `MessageList.tsx:247`
 (`react-hooks/set-state-in-effect`), introduced 2026-08-19 in `269cd54`,
 untouched by this work.
+
+## Amendment 2026-08-22 — write_document: the participant can hand the room a file (amend-beside)
+
+Owner, 21:38 CT, in the AI Capex room: asked the participant for a
+newsletter "as a downloadable PDF"; it answered, truthfully, *"I don't have
+a file-output tool."* Tool calls themselves were healthy (the 22:37 UTC
+`read_article` ran `ok`); the gap was the tool that did not exist.
+
+- **Twenty-one tools.** `write_document(title, content)` in
+  `_build_dialectic_tools` — markdown → HTML (`markdown-it-py`, commonmark +
+  tables, raw HTML OFF) → PDF via the host's **headless Chrome**
+  (`google-chrome --headless=new --print-to-pdf`, own `--user-data-dir` per
+  render so concurrent turns never fight a profile lock; override binary
+  with `DIALECTIC_CHROME_BIN`). Nothing PDF-shaped was installed in Python;
+  Chrome was. `llm/documents.py` is the whole module.
+- **A document is an `attachments` row, not a new table** — `kind='file'`,
+  `mime='application/pdf'`, **`uploader_user_id NULL` = authored by the LLM**
+  (the same convention `messages.user_id` uses). **Migration `020`** drops
+  the NOT NULL; `schema.sql` and `AttachmentResponse` follow. Human uploads
+  still always carry their uploader.
+- **The bind is two-phase and the provenance is the thread between them.**
+  The tool writes the row with `message_id NULL` and returns
+  `provenance={"kind":"document","attachment_id"}`; the tool loop lifts that
+  onto the trace entry (the same lift `draft_prediction` uses); after
+  `_persist_response` on BOTH tool paths the orchestrator calls
+  `_bind_documents` → `documents.bind_documents`, whose UPDATE predicate is
+  `message_id IS NULL AND uploader_user_id IS NULL AND room_id = $3` — a
+  model cannot claim a human's upload or re-home a bound one. NEVER raises:
+  the message is already streamed; an unbound document is a reload away, not
+  a lost turn. The bound payloads ride `llm_done.attachments` (streaming) and
+  `message_created.attachments` (heuristic) — the frontend already consumed
+  the latter; `useDialecticSocket` now reads the former too. History is
+  covered by the existing `GET /rooms/{id}/attachments?message_ids=`.
+- **Timeout law**: `RENDER_TIMEOUT_S=20` inside `timeout_s=25.0` (the guard
+  outlives the render, and stays under half the 60s loop budget — the
+  registry test enforces both).
+- `TOOLS_SECTION` gained the one-paragraph policy ("Never say you cannot
+  produce a file") and the tool description tells the model the file
+  attaches automatically so the reply stays a sentence, not the content
+  again. `releases.ts` carries the What Changed entry (`documents`).
+- Tests: `tests/test_documents.py` — real-Chrome render, the INSERT shape,
+  the bind PREDICATE (asserted, not just the outcome), and one real-Postgres
+  store→bind→list round-trip against migration 020.

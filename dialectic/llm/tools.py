@@ -9,6 +9,7 @@ from uuid import UUID
 
 from . import cairn_client as cn
 from . import defuddle_client as dc
+from . import documents as documents_mod
 from . import tradingdesk_client as td
 
 logger = logging.getLogger(__name__)
@@ -1271,6 +1272,29 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
             )
         return _shrink(out, TOOL_RESULT_CHAR_CAP)
 
+    async def write_document(args: dict) -> dict:
+        """Render the model's markdown to a PDF and file it on the room.
+
+        The row is written NOW with message_id NULL; the orchestrator binds
+        it to this turn's message once that message exists (documents_mod
+        .bind_documents), and the client shows it as a download on the
+        bubble. provenance is how the orchestrator finds it in the trace.
+        """
+        title = str(args.get("title") or "").strip()
+        content = str(args.get("content") or "")
+        doc = await documents_mod.store_document(db, room.id, title, content)
+        return {
+            "document": {
+                "filename": doc["original_name"],
+                "bytes": doc["bytes"],
+                "status": (
+                    "Filed. It will appear as a download on your message — "
+                    "do not paste the content into the chat as well."
+                ),
+            },
+            "provenance": {"kind": "document", "attachment_id": doc["id"]},
+        }
+
     return [
         Tool(
             name="search_memories",
@@ -1585,6 +1609,43 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
             },
             execute=search_reading,
             label="searching what we've read",
+        ),
+        Tool(
+            name="write_document",
+            description=(
+                "Produce a downloadable PDF and attach it to your reply. Use "
+                "it when someone asks for a document, a write-up, a report, a "
+                "brief, a newsletter, a memo, a PDF — anything meant to be "
+                "kept or sent rather than read in the chat. Write the FULL "
+                "piece in `content` as markdown (headings, lists, tables, "
+                "bold all render); it is the deliverable, so make it complete "
+                "and well-structured. The file attaches to your message "
+                "automatically: your chat reply should then be one or two "
+                "sentences saying what the document covers, not the content "
+                "again. One call per document."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Document title — becomes the heading and the filename.",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": (
+                            "The whole document, in markdown. Up to 60,000 characters."
+                        ),
+                    },
+                },
+                "required": ["title", "content"],
+            },
+            execute=write_document,
+            label="writing the document",
+            # Headless Chrome render (RENDER_TIMEOUT_S=20) + disk + one INSERT;
+            # the guard must outlive the render's own timeout and stay under
+            # half the 60s loop budget, like read_article.
+            timeout_s=25.0,
         ),
     ]
 

@@ -271,7 +271,8 @@ export interface Attachment {
   room_id: string;
   /** Null until the uploader binds it to the message that carries it. */
   message_id: string | null;
-  uploader_user_id: string;
+  /** Null when the LLM participant authored it (write_document). */
+  uploader_user_id: string | null;
   kind: AttachmentKind;
   mime: string;
   bytes: number;

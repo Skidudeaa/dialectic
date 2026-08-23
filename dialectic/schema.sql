@@ -655,7 +655,7 @@ CREATE TABLE IF NOT EXISTS attachments (
     id UUID PRIMARY KEY,
     room_id UUID NOT NULL REFERENCES rooms(id),
     message_id UUID REFERENCES messages(id),   -- NULL until the send_message that references it lands
-    uploader_user_id UUID NOT NULL REFERENCES users(id),
+    uploader_user_id UUID REFERENCES users(id),   -- NULL = the LLM participant (write_document; migration 020)
     kind TEXT NOT NULL,                        -- image | video | file
     mime TEXT NOT NULL,
     bytes BIGINT NOT NULL,

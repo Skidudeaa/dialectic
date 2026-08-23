@@ -41,6 +41,7 @@ EXPECTED_TOOLS = {
     "recent_dev_activity",
     "get_dev_session",
     "search_dev_insights",
+    "write_document",
 }
 
 LIVE_FRESHNESS = {
@@ -97,9 +98,9 @@ def registry(room, db):
 
 
 class TestRegistryContract:
-    def test_registers_all_twenty_tools(self, registry):
+    def test_registers_all_twenty_one_tools(self, registry):
         assert set(registry.names()) == EXPECTED_TOOLS
-        assert len(registry.tools) == 20
+        assert len(registry.tools) == 21
 
     def test_every_tool_guard_outlives_its_http_client(self, registry):
         """The seam's timeout law, enforced for the whole registry.

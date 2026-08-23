@@ -337,7 +337,7 @@ class AttachmentResponse(BaseModel):
     id: UUID
     room_id: UUID
     message_id: Optional[UUID]
-    uploader_user_id: UUID
+    uploader_user_id: Optional[UUID]   # NULL = authored by the LLM (write_document)
     kind: str
     mime: str
     bytes: int
@@ -369,6 +369,12 @@ def _to_response(row, deduplicated: bool = False) -> AttachmentResponse:
         url=f"/attachments/{row['id']}",
         deduplicated=deduplicated,
     )
+
+
+def attachment_payload(row) -> dict:
+    """The wire shape of one attachment row — what message_created, llm_done
+    and GET /rooms/{id}/attachments all carry. One builder, no drift."""
+    return _to_response(row).model_dump(mode="json")
 
 
 # ============================================================

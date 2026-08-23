@@ -2,7 +2,7 @@
 
 import asyncio
 import asyncpg
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import AsyncIterator, Optional
 from uuid import UUID, uuid4
@@ -36,6 +36,7 @@ from .self_memory import LLMSelfMemory
 from .self_model import SelfModel
 from .identity import LLMIdentityManager
 from .tool_loop import ToolLoop
+from .documents import bind_documents
 from .tools import ToolRegistry, build_registry
 from .vision import count_images, load_message_images
 from memory.cross_session import CrossSessionMemoryManager
@@ -146,6 +147,9 @@ class OrchestrationResult:
     routing: Optional[RoutingResult]
     prompt_used: Optional[AssembledPrompt]
     phase_complete_signal: Optional[str] = None
+    # Documents the turn wrote (write_document), bound to `response` and
+    # AttachmentResponse-shaped, so the live broadcast can carry them.
+    attachments: list[dict] = field(default_factory=list)
 
 
 class LLMOrchestrator:
@@ -555,6 +559,7 @@ class LLMOrchestrator:
             protocol=protocol,
             metadata=tool_metadata,
         )
+        attachments = await self._bind_documents(thread.room_id, response_message.id, tool_metadata)
 
         # Fire-and-forget: extract LLM self-memories in background
         self._schedule_self_memory_extraction(response_message, thread.room_id, messages)
@@ -595,6 +600,7 @@ class LLMOrchestrator:
             routing=routing,
             prompt_used=prompt,
             phase_complete_signal=phase_complete_signal,
+            attachments=attachments,
         )
 
     async def _apply_fsm_turn(
@@ -992,6 +998,7 @@ class LLMOrchestrator:
                 token_count=0,  # Not available from streaming
                 metadata=tool_metadata,
             )
+            attachments = await self._bind_documents(thread.room_id, response_message.id, tool_metadata)
 
             # Fire-and-forget: extract LLM self-memories in background
             self._schedule_self_memory_extraction(response_message, thread.room_id, messages)
@@ -1068,6 +1075,8 @@ class LLMOrchestrator:
                 # None when no tool ran — the client renders the footer off its
                 # presence, so an empty dict would mean "used 0 tools".
                 "metadata": tool_metadata,
+                # Documents this turn wrote, already bound to the message.
+                "attachments": attachments,
             })
 
         except Exception as e:
@@ -1080,6 +1089,22 @@ class LLMOrchestrator:
                 "error": str(e),
                 "partial_content": accumulated_content,
             })
+
+    async def _bind_documents(
+        self, room_id: UUID, message_id: UUID, tool_metadata: Optional[dict],
+    ) -> list[dict]:
+        """Tie any write_document output in this turn's trace to the message
+        that just landed. NEVER raises: the message is already persisted and
+        streamed; an unbound document is a download the room has to reload
+        for, not a reason to lose the turn."""
+        if not tool_metadata:
+            return []
+        calls = (tool_metadata.get("tools") or {}).get("calls")
+        try:
+            return await bind_documents(self.db, room_id, message_id, calls)
+        except Exception:
+            logger.exception("Document bind failed for message %s", message_id)
+            return []
 
     def _tool_registry_for(
         self, room: Room, use_provoker: bool, protocol: Optional[ProtocolState] = None,
