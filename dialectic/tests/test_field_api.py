@@ -16,6 +16,7 @@ Strategy is split, deliberately:
 
 import os
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
@@ -35,8 +36,18 @@ CALLER_ID = UUID("00000000-0000-0000-0000-000000000601")
 ROOM_ID = UUID("00000000-0000-0000-0000-000000000602")
 MARK_ID = UUID("00000000-0000-0000-0000-000000000603")
 FIELD_PATH = f"/rooms/{ROOM_ID}/field"
+CREATE_PATH = f"/rooms/{ROOM_ID}/field/marks"
 REVIEW_PATH = f"/rooms/{ROOM_ID}/field/marks/{MARK_ID}/review"
 HEADERS = {"X-Room-Token": "room-token"}
+
+
+class _DirectPool:
+    def __init__(self, connection):
+        self.connection = connection
+
+    @asynccontextmanager
+    async def acquire(self):
+        yield self.connection
 
 
 @pytest.fixture(autouse=True)
@@ -70,7 +81,11 @@ def _client(*, authenticated: bool = True, room: bool = True,
     async def db_dependency() -> AsyncIterator[object]:
         yield db
 
+    async def pool_dependency() -> _DirectPool:
+        return _DirectPool(db)
+
     main_mod.app.dependency_overrides[field_mod.get_db] = db_dependency
+    main_mod.app.dependency_overrides[field_mod.get_pool] = pool_dependency
     if authenticated:
         main_mod.app.dependency_overrides[get_current_user] = lambda: _caller()
     return TestClient(main_mod.app)
@@ -128,6 +143,18 @@ def test_review_refuses_a_nonmember():
 def test_review_refuses_an_unknown_action():
     resp = _client().post(REVIEW_PATH, json={"action": "delete"}, headers=HEADERS)
     assert resp.status_code == 422
+
+
+def test_create_auth_precedes_relation_validation():
+    response = _client(room=False).post(
+        CREATE_PATH,
+        json={
+            "relation": "not-a-relation",
+            "subjects": [{"entity": "messages", "id": str(MARK_ID)}],
+        },
+        headers=HEADERS,
+    )
+    assert response.status_code == 401
 
 
 def test_the_routers_write_surface_is_exactly_these_two():
@@ -269,7 +296,7 @@ async def test_confirm_writes_one_review_row_attributed_to_the_caller(field_api_
     await _seed_mark(field_api_room, MARK_ID)
     resp = await field_mod.review_field_mark(
         ROOM, MARK_ID, _request("confirm", note="looks right"),
-        token=f"field-api-{ROOM}", current_user=_amo_caller(), db=field_api_room,
+        token=f"field-api-{ROOM}", current_user=_amo_caller(), pool=_DirectPool(field_api_room),
     )
     assert resp.mark.review == "confirmed"
     assert resp.review.action == "confirm"
@@ -290,12 +317,12 @@ async def test_contest_then_repeat_contest_is_409(field_api_room):
     await _seed_mark(field_api_room, MARK_ID)
     await field_mod.review_field_mark(
         ROOM, MARK_ID, _request("contest"), token=f"field-api-{ROOM}",
-        current_user=_amo_caller(), db=field_api_room,
+        current_user=_amo_caller(), pool=_DirectPool(field_api_room),
     )
     with pytest.raises(HTTPException) as exc:
         await field_mod.review_field_mark(
             ROOM, MARK_ID, _request("contest"), token=f"field-api-{ROOM}",
-            current_user=_amo_caller(), db=field_api_room,
+            current_user=_amo_caller(), pool=_DirectPool(field_api_room),
         )
     assert exc.value.status_code == 409
     assert "contested" in exc.value.detail
@@ -306,12 +333,12 @@ async def test_repeat_confirm_matching_current_state_is_409(field_api_room):
     await _seed_mark(field_api_room, MARK_ID)
     await field_mod.review_field_mark(
         ROOM, MARK_ID, _request("confirm"), token=f"field-api-{ROOM}",
-        current_user=_amo_caller(), db=field_api_room,
+        current_user=_amo_caller(), pool=_DirectPool(field_api_room),
     )
     with pytest.raises(HTTPException) as exc:
         await field_mod.review_field_mark(
             ROOM, MARK_ID, _request("confirm"), token=f"field-api-{ROOM}",
-            current_user=_amo_caller(), db=field_api_room,
+            current_user=_amo_caller(), pool=_DirectPool(field_api_room),
         )
     assert exc.value.status_code == 409
 
@@ -323,11 +350,11 @@ async def test_confirm_after_contest_is_allowed_and_flips_state(field_api_room):
     await _seed_mark(field_api_room, MARK_ID)
     await field_mod.review_field_mark(
         ROOM, MARK_ID, _request("contest"), token=f"field-api-{ROOM}",
-        current_user=_amo_caller(), db=field_api_room,
+        current_user=_amo_caller(), pool=_DirectPool(field_api_room),
     )
     resp = await field_mod.review_field_mark(
         ROOM, MARK_ID, _request("confirm"), token=f"field-api-{ROOM}",
-        current_user=_amo_caller(), db=field_api_room,
+        current_user=_amo_caller(), pool=_DirectPool(field_api_room),
     )
     assert resp.mark.review == "confirmed"
 
@@ -343,7 +370,7 @@ async def test_correct_writes_a_review_and_one_replacement(field_api_room):
     )
     resp = await field_mod.review_field_mark(
         ROOM, MARK_ID, _request("correct", replacement=replacement),
-        token=f"field-api-{ROOM}", current_user=_amo_caller(), db=field_api_room,
+        token=f"field-api-{ROOM}", current_user=_amo_caller(), pool=_DirectPool(field_api_room),
     )
     assert resp.mark.review == "superseded"
     assert len(resp.replacements) == 1
@@ -363,12 +390,12 @@ async def test_correct_on_an_already_superseded_target_is_409(field_api_room):
     )
     await field_mod.review_field_mark(
         ROOM, MARK_ID, _request("correct", replacement=replacement),
-        token=f"field-api-{ROOM}", current_user=_amo_caller(), db=field_api_room,
+        token=f"field-api-{ROOM}", current_user=_amo_caller(), pool=_DirectPool(field_api_room),
     )
     with pytest.raises(HTTPException) as exc:
         await field_mod.review_field_mark(
             ROOM, MARK_ID, _request("correct", replacement=replacement),
-            token=f"field-api-{ROOM}", current_user=_amo_caller(), db=field_api_room,
+            token=f"field-api-{ROOM}", current_user=_amo_caller(), pool=_DirectPool(field_api_room),
         )
     assert exc.value.status_code == 409
     assert "superseded" in exc.value.detail
@@ -379,7 +406,7 @@ async def test_a_foreign_target_is_404(field_api_room):
     with pytest.raises(HTTPException) as exc:
         await field_mod.review_field_mark(
             ROOM, uuid4(), _request("confirm"), token=f"field-api-{ROOM}",
-            current_user=_amo_caller(), db=field_api_room,
+            current_user=_amo_caller(), pool=_DirectPool(field_api_room),
         )
     assert exc.value.status_code == 404
 
@@ -395,7 +422,7 @@ async def test_a_replacement_subject_outside_the_room_is_422(field_api_room):
     with pytest.raises(HTTPException) as exc:
         await field_mod.review_field_mark(
             ROOM, MARK_ID, _request("correct", replacement=replacement),
-            token=f"field-api-{ROOM}", current_user=_amo_caller(), db=field_api_room,
+            token=f"field-api-{ROOM}", current_user=_amo_caller(), pool=_DirectPool(field_api_room),
         )
     assert exc.value.status_code == 422
 
@@ -420,7 +447,7 @@ async def test_split_writes_one_review_and_n_replacements(field_api_room):
     )
     resp = await field_mod.review_field_mark(
         ROOM, MARK_ID, _request("split", replacements=[r1, r2]),
-        token=f"field-api-{ROOM}", current_user=_amo_caller(), db=field_api_room,
+        token=f"field-api-{ROOM}", current_user=_amo_caller(), pool=_DirectPool(field_api_room),
     )
     assert resp.mark.review == "superseded"
     assert len(resp.replacements) == 2
@@ -460,7 +487,7 @@ async def test_a_mid_split_failure_leaves_zero_rows(field_api_room):
     with pytest.raises(HTTPException) as exc:
         await field_mod.review_field_mark(
             ROOM, MARK_ID, _request("split", replacements=[r1, r2]),
-            token=f"field-api-{ROOM}", current_user=_amo_caller(), db=field_api_room,
+            token=f"field-api-{ROOM}", current_user=_amo_caller(), pool=_DirectPool(field_api_room),
         )
     assert exc.value.status_code == 409
 
@@ -501,7 +528,7 @@ async def test_merge_writes_one_review_per_source_and_one_replacement(field_api_
     )
     resp = await field_mod.review_field_mark(
         ROOM, source_a, _request("merge", replacement=replacement, merge_ids=[source_b]),
-        token=f"field-api-{ROOM}", current_user=_amo_caller(), db=field_api_room,
+        token=f"field-api-{ROOM}", current_user=_amo_caller(), pool=_DirectPool(field_api_room),
     )
     assert resp.mark.review == "superseded"
     other = (await FieldMarkService(field_api_room).build(ROOM))
@@ -524,7 +551,7 @@ async def test_supersede_writes_only_a_review_row_no_replacement(field_api_room)
     await _seed_mark(field_api_room, MARK_ID, relation="unanswered_question")
     resp = await field_mod.review_field_mark(
         ROOM, MARK_ID, _request("supersede"), token=f"field-api-{ROOM}",
-        current_user=_amo_caller(), db=field_api_room,
+        current_user=_amo_caller(), pool=_DirectPool(field_api_room),
     )
     assert resp.mark.review == "superseded"
     assert resp.replacements == []
@@ -539,10 +566,10 @@ async def test_a_supersede_only_retirement_can_be_reopened_by_a_later_confirm(fi
     await _seed_mark(field_api_room, MARK_ID, relation="unanswered_question")
     await field_mod.review_field_mark(
         ROOM, MARK_ID, _request("supersede"), token=f"field-api-{ROOM}",
-        current_user=_amo_caller(), db=field_api_room,
+        current_user=_amo_caller(), pool=_DirectPool(field_api_room),
     )
     resp = await field_mod.review_field_mark(
         ROOM, MARK_ID, _request("confirm"), token=f"field-api-{ROOM}",
-        current_user=_amo_caller(), db=field_api_room,
+        current_user=_amo_caller(), pool=_DirectPool(field_api_room),
     )
     assert resp.mark.review == "confirmed"

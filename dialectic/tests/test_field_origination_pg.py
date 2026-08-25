@@ -23,6 +23,7 @@ Setup expected (skipped cleanly when absent):
 
 import json
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -57,6 +58,15 @@ BASE = datetime(2026, 8, 16, 6, 0, tzinfo=timezone.utc)
 BOOK_ID = "hormuz-cascade"
 NODE_ID = "shipping-chokepoint"
 NODE_2_ID = "freight-rates"
+
+
+class _DirectPool:
+    def __init__(self, connection):
+        self.connection = connection
+
+    @asynccontextmanager
+    async def acquire(self):
+        yield self.connection
 
 
 def row_id(mark) -> UUID:
@@ -172,6 +182,18 @@ async def causal_room(room, monkeypatch):
             expires_at=BASE - timedelta(seconds=1),
         ),
     }
+    superseded_id = await insert_scope(
+        room, **common, label="Retired evidence", authority="source_reported",
+    )
+    await insert_scope(
+        room,
+        **common,
+        label="Replacement evidence",
+        authority="source_reported",
+        supersedes_id=superseded_id,
+        revision_action="redraw",
+    )
+    seeded["superseded"] = superseded_id
 
     async def structure(path: str, **_kwargs):
         assert path == f"/api/bridge/structure/{BOOK_ID}"
@@ -209,7 +231,7 @@ async def _create(db, **overrides):
         request=_request(**overrides),
         token=overrides.pop("token", TOKEN),
         current_user=overrides.pop("current_user", caller()),
-        db=db,
+        pool=_DirectPool(db),
     )
 
 
@@ -484,6 +506,39 @@ async def test_causal_node_must_exist_in_authenticated_structure(causal_room):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("structure", [
+    {"id": "wrong-book", "nodes": []},
+    {"id": BOOK_ID, "nodes": {"id": NODE_ID, "label": "not a list"}},
+    {"id": BOOK_ID, "nodes": ["not a node"]},
+    {"id": BOOK_ID, "nodes": [{"id": NODE_ID, "label": ""}]},
+    {"id": BOOK_ID, "nodes": [
+        {"id": NODE_ID, "label": "Shipping chokepoint"},
+        {"id": NODE_ID, "label": "Duplicate"},
+    ]},
+], ids=[
+    "mismatched-book",
+    "nodes-not-list",
+    "malformed-node",
+    "malformed-matching-node",
+    "duplicate-node-ids",
+])
+async def test_malformed_structure_contract_fails_before_any_write(
+    causal_room, monkeypatch, structure,
+):
+    db, scopes = causal_room
+
+    async def malformed(*_args, **_kwargs):
+        return structure
+
+    monkeypatch.setattr(field_api.td, "service_get", malformed, raising=False)
+    before = await _causal_counts(db)
+    with pytest.raises(HTTPException) as exc:
+        await _causal_create(db, scopes["live"])
+    assert exc.value.status_code == 502
+    assert await _causal_counts(db) == before
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("state", ["proposed", "rejected", "expired"])
 async def test_only_accepted_canonically_live_scope_can_bind(causal_room, state):
     db, scopes = causal_room
@@ -512,6 +567,74 @@ async def test_unavailable_structure_bridge_fails_without_mark_or_event(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("scope_state", "book_id", "node_id", "status"),
+    [
+        ("live", "old-book", NODE_2_ID, 422),
+        ("live", BOOK_ID, "missing-node", 422),
+        ("expired", BOOK_ID, NODE_2_ID, 422),
+        ("superseded", BOOK_ID, NODE_2_ID, 422),
+    ],
+    ids=["wrong-book", "wrong-node", "dead-scope", "superseded-scope"],
+)
+async def test_causal_replacement_validation_failure_leaves_no_review_replacement_or_event(
+    causal_room, scope_state, book_id, node_id, status,
+):
+    db, scopes = causal_room
+    original = await _causal_create(db, scopes["live"])
+    before = await _causal_counts(db)
+    request = field_api.FieldReviewRequest(
+        action="correct",
+        replacement=field_api.FieldReplacementRequest(
+            relation="context",
+            subjects=_causal_subjects(
+                scopes[scope_state], book_id=book_id, node_id=node_id,
+            ),
+            title="invalid causal replacement",
+        ),
+    )
+    with pytest.raises(HTTPException) as exc:
+        await field_api.review_field_mark(
+            ROOM, row_id(original), request,
+            token=TOKEN, current_user=caller(), pool=_DirectPool(db),
+        )
+    assert exc.value.status_code == status
+    assert await _causal_counts(db) == before
+
+
+@pytest.mark.asyncio
+async def test_causal_replacement_bridge_failure_leaves_no_review_replacement_or_event(
+    causal_room, monkeypatch,
+):
+    db, scopes = causal_room
+    original = await _causal_create(db, scopes["live"])
+
+    async def unavailable(*_args, **_kwargs):
+        raise TradingDeskError("bridge unavailable")
+
+    monkeypatch.setattr(field_api.td, "service_get", unavailable, raising=False)
+    before = await _causal_counts(db)
+    with pytest.raises(HTTPException) as exc:
+        await field_api.review_field_mark(
+            ROOM,
+            row_id(original),
+            field_api.FieldReviewRequest(
+                action="correct",
+                replacement=field_api.FieldReplacementRequest(
+                    relation="context",
+                    subjects=_causal_subjects(scopes["live"], node_id=NODE_2_ID),
+                    title="bridge-dependent replacement",
+                ),
+            ),
+            token=TOKEN,
+            current_user=caller(),
+            pool=_DirectPool(db),
+        )
+    assert exc.value.status_code == 502
+    assert await _causal_counts(db) == before
+
+
+@pytest.mark.asyncio
 async def test_causal_confirm_contest_and_correct_preserve_roles_and_attribution(
     causal_room,
 ):
@@ -523,7 +646,7 @@ async def test_causal_confirm_contest_and_correct_preserve_roles_and_attribution
 
     confirmed = await field_api.review_field_mark(
         ROOM, row_id(original), field_api.FieldReviewRequest(action="confirm"),
-        token=TOKEN, current_user=caller(), db=db,
+        token=TOKEN, current_user=caller(), pool=_DirectPool(db),
     )
     assert [subject.model_dump() for subject in confirmed.mark.subjects] == original_subjects
     assert confirmed.mark.review == "confirmed"
@@ -531,7 +654,7 @@ async def test_causal_confirm_contest_and_correct_preserve_roles_and_attribution
 
     contested = await field_api.review_field_mark(
         ROOM, row_id(original), field_api.FieldReviewRequest(action="contest"),
-        token=TOKEN, current_user=caller(), db=db,
+        token=TOKEN, current_user=caller(), pool=_DirectPool(db),
     )
     assert [subject.model_dump() for subject in contested.mark.subjects] == original_subjects
     assert contested.mark.review == "contested"
@@ -554,7 +677,7 @@ async def test_causal_confirm_contest_and_correct_preserve_roles_and_attribution
         ),
         token=TOKEN,
         current_user=caller(),
-        db=db,
+        pool=_DirectPool(db),
     )
     assert corrected.mark.review == "superseded"
     assert corrected.review.actor_user_id == AMO

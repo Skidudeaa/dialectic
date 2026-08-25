@@ -212,9 +212,9 @@ describe('FocusSurface', () => {
     expect(screen.getByText('Supports')).toBeInTheDocument()
     expect(screen.getByText(/Shipping chokepoint/)).toBeInTheDocument()
     expect(screen.getAllByText('confirmed').length).toBeGreaterThan(0)
-    expect(screen.getByRole('link', { name: 'Open node in Builder' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open thesis in Builder' })).toHaveAttribute(
       'href',
-      'https://td.somacura.org/builder#dialectic_token=session-token&dialectic_room=r1',
+      'https://td.somacura.org/builder?edit=hormuz#dialectic_token=session-token&dialectic_room=r1',
     )
   })
 

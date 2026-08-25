@@ -140,11 +140,11 @@ function MarkRow({
       {causal && accessToken && (
         <a
           className="field-mark-builder"
-          href={tradingDeskBuilderUrl(accessToken, causal.roomId)}
+          href={tradingDeskBuilderUrl(accessToken, causal.roomId, causal.bookId)}
           target="_blank"
           rel="noreferrer"
         >
-          Open node in Builder
+          Open thesis in Builder
         </a>
       )}
     </li>

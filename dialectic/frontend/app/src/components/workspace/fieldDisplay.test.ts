@@ -6,6 +6,7 @@ import {
   humanizeRelation,
   resolveSubjectLabel,
   sectionMarks,
+  tradingDeskBuilderUrl,
 } from './fieldDisplay.ts'
 import type { FieldMark, WorkspaceObject } from '../../types/workspace.ts'
 
@@ -61,6 +62,13 @@ describe('causalFieldBinding', () => {
       scopeId: 'scope-1',
       scopeLabel: 'Strait of Hormuz',
     })
+  })
+})
+
+describe('tradingDeskBuilderUrl', () => {
+  it('routes the exact encoded book while credentials remain in the fragment', () => {
+    expect(tradingDeskBuilderUrl('secret token', 'room/one', 'Hormuz stress?'))
+      .toBe('https://td.somacura.org/builder?edit=Hormuz%20stress%3F#dialectic_token=secret+token&dialectic_room=room%2Fone')
   })
 })
 

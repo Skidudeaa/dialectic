@@ -141,9 +141,9 @@ describe('FieldScene', () => {
     expect(screen.getByText('Challenges')).toBeInTheDocument()
     expect(screen.getByText('Freight rates')).toBeInTheDocument()
     expect(screen.getByText('contested')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Open node in Builder' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open thesis in Builder' })).toHaveAttribute(
       'href',
-      'https://td.somacura.org/builder#dialectic_token=session-token&dialectic_room=r1',
+      'https://td.somacura.org/builder?edit=hormuz#dialectic_token=session-token&dialectic_room=r1',
     )
   })
 })

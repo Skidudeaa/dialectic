@@ -119,11 +119,15 @@ export function causalFieldBinding(mark: FieldMark): CausalFieldBinding | null {
 
 /** Match TradingPanel's fragment-only handoff. The bearer never enters the
  * query string, nginx logs, or Cloudflare request URL. */
-export function tradingDeskBuilderUrl(accessToken: string, roomId: string): string {
+export function tradingDeskBuilderUrl(
+  accessToken: string,
+  roomId: string,
+  bookId: string,
+): string {
   const params = new URLSearchParams()
   params.set('dialectic_token', accessToken)
   params.set('dialectic_room', roomId)
-  return `https://td.somacura.org/builder#${params.toString()}`
+  return `https://td.somacura.org/builder?edit=${encodeURIComponent(bookId)}#${params.toString()}`
 }
 
 /** The eight editorial bands, fixed order, each keyed to the relations it

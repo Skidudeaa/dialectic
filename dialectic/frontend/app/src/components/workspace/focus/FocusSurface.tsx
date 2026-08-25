@@ -236,11 +236,11 @@ export function FocusSurface({
       {causal && accessToken && (
         <a
           className="btn btn-ghost btn-sm focus-open-branch"
-          href={tradingDeskBuilderUrl(accessToken, causal.roomId)}
+          href={tradingDeskBuilderUrl(accessToken, causal.roomId, causal.bookId)}
           target="_blank"
           rel="noreferrer"
         >
-          Open node in Builder
+          Open thesis in Builder
         </a>
       )}
       <FocusSources sources={sources} />
