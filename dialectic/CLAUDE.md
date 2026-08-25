@@ -993,3 +993,29 @@ a file-output tool."* Tool calls themselves were healthy (the 22:37 UTC
 - Tests: `tests/test_documents.py` — real-Chrome render, the INSERT shape,
   the bind PREDICATE (asserted, not just the outcome), and one real-Postgres
   store→bind→list round-trip against migration 020.
+
+## Amendment 2026-08-24 — the desk dependency, stated plainly (amend-beside)
+
+Recorded during a droplet-wide service audit, so the coupling is never
+rediscovered the hard way.
+
+Dialectic is not a replacement for tradingDesk — it is a **runtime HTTP
+client of it**, and both must stay deployed:
+
+- `TRADINGDESK_URL` in `.env` points at `tradingdesk.service`
+  (uvicorn `web.main:app` on :8006, working tree `/root/DwoodAmo/trading`).
+  Service principal: `TRADINGDESK_USER=dialectic`.
+- Everything desk-shaped flows through `llm/tradingdesk_client.py` and the
+  four relays: `api/prediction_relay.py`, `api/stakes_relay.py`,
+  `api/trading_relay.py`, `api/thesis_relay.py`.
+- The dependency is bidirectional for auth: tradingDesk verifies Dialectic
+  access tokens (the no-second-login bridge to td.somacura.org), and gated
+  signup exists because of it (`api/auth/routes.py`).
+- There is deliberately **no systemd `Requires`/`After` on tradingdesk** —
+  if the desk is down, Dialectic keeps running and the relays surface 502s
+  ("tradingDesk unreachable") per call instead of crashing rooms. Do not
+  add a hard unit dependency; the soft-fail is the design.
+- Operational rule: retiring or moving `tradingdesk.service` or
+  `/root/DwoodAmo/trading` breaks predictions, stakes mirroring, live
+  quotes/what-ifs, and thesis books in every trading room. Treat the pair
+  as one deployment unit. (See also `/root/SERVICE_INVENTORY.md`.)
