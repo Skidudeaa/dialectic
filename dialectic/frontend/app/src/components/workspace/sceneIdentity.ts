@@ -30,7 +30,7 @@ export const SCENE_HINTS: Record<ImplementedWorkspaceScene, string> = {
   field: 'Provisional reasoning — support, tension, and synthesis candidates awaiting review.',
   library: 'What the room has actually read — filed evidence, one entry per source.',
   ledger: 'What the room holds itself to — commitments, dossier entries, memories.',
-  atlas: 'The whole house mapped — rooms, artifacts, echoes, and their crossings.',
+  atlas: 'The whole house mapped — rooms, artifacts, echoes, and their crossings; or the same map on the world.',
   mirror: 'What the participant thinks of how you think — its own words, dated, and yours alone.',
 }
 
@@ -89,7 +89,9 @@ export const SCENE_PRIMER: Record<ImplementedWorkspaceScene, string> = {
     'The map of everywhere you can go: every room you belong to, its branches, and what ' +
     'each one holds — a thesis, a reading, a brief, a question still open. Tap any node to ' +
     'land on it. It shows only rooms you are a member of, so it is your map and not the ' +
-    'house’s.',
+    'house’s. World is the same map drawn on a globe: only what a person confirmed or a ' +
+    'source reported is placed there, and a proposal the participant makes stays dashed ' +
+    'until someone confirms it.',
   mirror:
     'The participant keeps a private prose model of how you think, per room, rewritten as ' +
     'the room talks. This is the whole history of it — step back through the rewrites, and ' +

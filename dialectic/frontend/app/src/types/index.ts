@@ -28,6 +28,11 @@ export interface RoomDestination {
   scene?: WorkspaceScene | null;
   object?: string | null;
   messageId?: string | null;
+  /** Scene-local view state, opaque to the router (World Lens, 2026-08-25):
+   *  `world[:lat,lon,alt,heading,pitch][;room=<id>]` flips Atlas into World
+   *  mode and restores a camera. Absent = the scene's default view. Written
+   *  ONLY by useRoomNavigation.navigate, like every other axis. */
+  view?: string | null;
 }
 
 export interface User {

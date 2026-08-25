@@ -32,6 +32,9 @@ export function destinationFromSearch(search: string): RoomDestination {
     // unavailable state (§1.18), never dropped silently like an unknown scene.
     object: params.get('object'),
     messageId: params.get('message'),
+    // Like `object`, no closed vocabulary here: a view the scene cannot
+    // decode is the scene's own default, never a 404.
+    view: params.get('view'),
   }
 }
 
@@ -115,6 +118,7 @@ export function destinationUrl(
   scene: ImplementedWorkspaceScene = defaultWorkspaceScene(room, thread),
   object: string | null = null,
   message: string | null = null,
+  view: string | null = null,
 ): string {
   // Only Home's root canonicalizes to bare `/`; a Home branch carries both ids,
   // and an ordinary room root is `/?room=<id>`. The default scene is OMITTED so
@@ -130,6 +134,7 @@ export function destinationUrl(
   if (scene !== defaultScene) params.set('scene', scene)
   if (object) params.set('object', object)
   if (message) params.set('message', message)
+  if (view) params.set('view', view)
 
   const query = params.toString()
   return query ? `/?${query}` : '/'
@@ -152,5 +157,6 @@ export function entryDestination(parsed: RoomDestination): RoomDestination {
     scene: parsed.scene ?? null,
     object: parsed.object ?? null,
     messageId: parsed.messageId ?? null,
+    view: parsed.view ?? null,
   }
 }

@@ -1,38 +1,66 @@
+import { Suspense, lazy, useCallback, useMemo } from 'react'
 import type { AtlasState } from '../../../hooks/useAtlas.ts'
 import type { AtlasEdge, AtlasNode } from '../../../types/atlas.ts'
 import { isAtlasObjectNode } from '../../../types/atlas.ts'
+import type { GeoScope } from '../../../types/geo.ts'
 import { PARTICIPANT_NAME } from '../../../lib/productIdentity.ts'
 import { SceneEmpty, SceneLoading, SceneUnavailable } from '../SceneEmpty'
+import { SourceState } from '../world/SourceState'
+import {
+  decodeWorldView, encodeWorldView, isWorldView, type WorldCamera,
+} from '../world/worldCamera.ts'
+import {
+  AUTHORITY_LABEL, KIND_LABEL as SCOPE_KIND_LABEL, scopeDestination, scopeNode,
+} from '../world/worldScopes.ts'
 import './AtlasScene.css'
+import '../world/World.css'
 
 /**
  * Atlas — the caller's own cross-room map (PLAN.md §5.4, design v2 §22).
  *
  * LIST/TREE FIRST AND COMPLETE (§1.4): rooms group branches group artifacts,
  * exactly the shape the projection already carries via `room_id`/`branch_id`
- * — no client-side re-derivation of what belongs where. Any spatial view is
- * a LATER, second rendering of this SAME data (not built this release); this
- * component must stay the complete, authoritative representation on its own.
+ * — no client-side re-derivation of what belongs where. This component stays
+ * the complete, authoritative representation on its own.
+ *
+ * TWO MODES OF ONE PROJECTION (World Lens, 2026-08-25). `House` is the list
+ * above. `World` is the SECOND rendering of the SAME data the backend always
+ * reserved: the fenced `scopes` the projection now carries, drawn on a globe
+ * that loads only when asked for (React.lazy → the cesium chunk). World never
+ * replaces the list — the globe sits ABOVE it, the on-map rows beneath the
+ * globe are the same scopes as text, and the full House tree still follows.
+ * That is the accessibility, reduced-motion, small-screen and failed-WebGL
+ * path, all at once, and it costs no second component.
+ *
+ * WHICH MODE is the `view` axis of the URL (`world[:camera]`), decoded here
+ * by worldCamera.ts and written ONLY through `onView` → the one navigation
+ * writer. This scene owns no router: a toggle is a navigate, a camera settle
+ * is a navigate with 'replace'.
  *
  * WHY `onNavigate` is a caller-provided callback rather than an import: this
- * scene does not know about `useRoomNavigation` or the `object` axis it is
- * landing this release (TG-B/TG-E own that). A room/branch tap resolves to a
- * `{ roomId, threadId }` destination; an object-kind node tap (thesis,
- * reading, research_brief, commitment, field_mark) resolves to
- * `{ roomId, threadId, object: id }` — Object ids REUSE workspace-object id
- * conventions (types/atlas.ts), so the caller's navigate can hand this
- * straight to the object axis with no second id scheme to bridge.
+ * scene does not know about `useRoomNavigation` or the `object` axis. A
+ * room/branch tap resolves to a `{ roomId, threadId }` destination; an
+ * object-kind node tap (thesis, reading, research_brief, commitment,
+ * field_mark) resolves to `{ roomId, threadId, object: id }` — Object ids
+ * REUSE workspace-object id conventions (types/atlas.ts).
  */
 export interface AtlasNavigateDestination {
   roomId: string
   threadId?: string | null
   object?: string | null
+  messageId?: string | null
 }
 
 interface AtlasSceneProps {
   state: AtlasState
   onNavigate: (destination: AtlasNavigateDestination) => void
+  /** The URL's `view` axis, verbatim; null = House mode. */
+  view?: string | null
+  /** Write a new view through the one navigation writer. */
+  onView?: (view: string | null, mode: 'push' | 'replace') => void
 }
+
+const WorldView = lazy(() => import('../world/WorldView'))
 
 const KIND_LABEL: Record<AtlasNode['kind'], string> = {
   room: 'Room',
@@ -211,7 +239,65 @@ function SharedSourcesGroup({ nodes, onNavigate }: {
   )
 }
 
-export function AtlasScene({ state, onNavigate }: AtlasSceneProps) {
+/** The scopes as rows — the same data the globe draws, readable without it.
+ *  Every row says what it is, whose authority it carries, how fresh, and
+ *  which room; a proposed scope reads as such rather than blending in. */
+function OnTheMapGroup({ scopes, nodesById, onNavigate }: {
+  scopes: GeoScope[]
+  nodesById: Map<string, AtlasNode>
+  onNavigate: (d: AtlasNavigateDestination) => void
+}) {
+  if (scopes.length === 0) {
+    return (
+      <p className="world-note">
+        Nothing is placed on the world yet. A room's Strait, a reading's
+        region, a mark's location — each arrives as a scope a person confirmed
+        or a source reported, never as a guess drawn by {PARTICIPANT_NAME}.
+      </p>
+    )
+  }
+  return (
+    <section className="atlas-group" aria-label="On the map">
+      <h3 className="atlas-group-title">On the map</h3>
+      <ul className="atlas-list">
+        {scopes.map((scope) => {
+          const subject = scopeNode(scope, nodesById)
+          const room = nodesById.get(`room:${scope.room_id}`)
+          return (
+            <li key={scope.id} className="atlas-row world-scope-row" data-kind={scope.kind} data-authority={scope.authority}>
+              <button
+                type="button"
+                className="atlas-row-open"
+                onClick={() => onNavigate(scopeDestination(scope))}
+              >
+                <span className="atlas-row-kind">{SCOPE_KIND_LABEL[scope.kind]}</span>
+                <span className="atlas-row-title">
+                  {scope.label || subject?.title || 'Unlabelled'}
+                  {subject && subject.kind !== 'room' ? ` — ${subject.title}` : ''}
+                </span>
+                <span className="world-scope-meta">
+                  <span>{AUTHORITY_LABEL[scope.authority]}</span>
+                  <SourceState state={scope.source_state} observedAt={scope.observed_at ?? scope.retrieved_at} />
+                  {room ? <span>{room.title}</span> : null}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+export function AtlasScene({ state, onNavigate, view = null, onView }: AtlasSceneProps) {
+  const worldMode = isWorldView(view)
+  const decoded = useMemo(() => decodeWorldView(view), [view])
+
+  const onCameraSettle = useCallback((camera: WorldCamera) => {
+    if (!onView) return
+    onView(encodeWorldView({ camera, roomId: decoded?.roomId ?? null }), 'replace')
+  }, [onView, decoded?.roomId])
+
   if (state.status === 'loading') return <SceneLoading kicker="Atlas" />
   if (state.status === 'unavailable') {
     return (
@@ -224,7 +310,7 @@ export function AtlasScene({ state, onNavigate }: AtlasSceneProps) {
     )
   }
 
-  const { nodes, edges } = state.projection
+  const { nodes, edges, scopes } = state.projection
 
   if (nodes.length === 0) {
     return (
@@ -246,9 +332,46 @@ export function AtlasScene({ state, onNavigate }: AtlasSceneProps) {
 
   const { rooms, branchesByRoom, artifactsByBranch, artifactsByRoomOnly } = buildTree(nodes)
   const nodesById = new Map(nodes.map((n) => [n.id, n]))
+  const focusScopes = decoded?.roomId ? scopes.filter((s) => s.room_id === decoded.roomId) : null
+
+  const modes = onView ? (
+    <div className="atlas-modes" role="group" aria-label="Atlas mode">
+      <button
+        type="button"
+        className="atlas-mode"
+        aria-pressed={!worldMode}
+        onClick={() => onView(null, 'push')}
+      >
+        House
+      </button>
+      <button
+        type="button"
+        className="atlas-mode"
+        aria-pressed={worldMode}
+        onClick={() => onView(encodeWorldView({ camera: null, roomId: decoded?.roomId ?? null }), 'push')}
+      >
+        World
+      </button>
+    </div>
+  ) : null
 
   return (
-    <div className="scene-body atlas-scene">
+    <div className="scene-body atlas-scene" data-atlas-mode={worldMode ? 'world' : 'house'}>
+      {modes}
+      {worldMode ? (
+        <>
+          <Suspense fallback={<SceneLoading kicker="World" />}>
+            <WorldView
+              scopes={scopes}
+              initialCamera={decoded?.camera ?? null}
+              focusScopes={focusScopes}
+              onSelect={(scope) => onNavigate(scopeDestination(scope))}
+              onCameraSettle={onCameraSettle}
+            />
+          </Suspense>
+          <OnTheMapGroup scopes={scopes} nodesById={nodesById} onNavigate={onNavigate} />
+        </>
+      ) : null}
       <ul className="atlas-list atlas-room-list" aria-label="Rooms">
         {rooms.map((room) => (
           <RoomSection

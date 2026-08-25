@@ -61,6 +61,7 @@ export function BenchScene({
   tradingPanel,
   roomId,
   desk,
+  worldLink,
 }: {
   state: WorkspaceObjectsState
   onOpen?: (object: WorkspaceObject) => void
@@ -70,6 +71,9 @@ export function BenchScene({
   /** The ONE useTradingDesk instance, lifted to RoomView so the Console's
    * instrument tiles and this cockpit read the same slices. */
   desk: TradingDeskState
+  /** The door onto Atlas / World, present only when this room owns
+   *  geography (App decides; this scene only places it). */
+  worldLink?: ReactNode
 }) {
   const tradingConfig = useAppStore((s) => s.tradingConfig)
 
@@ -81,6 +85,7 @@ export function BenchScene({
         Everything the desk sees, read-only — live states color the authored
         graph; Evaluate runs a hypothetical, never a trade. Deep edits happen
         in the Builder.
+        {worldLink}
       </p>
       {desk.structure.status === 'ready' && desk.structure.data ? (
         <ThesisDag

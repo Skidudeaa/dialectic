@@ -36,6 +36,7 @@ describe('destinationFromSearch', () => {
       roomId: 'r',
       threadId: 't',
       messageId: 'm',
+      view: null,
     })
   })
 
@@ -46,6 +47,7 @@ describe('destinationFromSearch', () => {
       scene: null,
       object: null,
       messageId: null,
+      view: null,
     })
   })
 
@@ -56,6 +58,7 @@ describe('destinationFromSearch', () => {
       scene: null,
       object: null,
       messageId: null,
+      view: null,
     })
     expect(destinationFromSearch('?room=scheme-room&thread=branch-thread')).toEqual({
       roomId: 'scheme-room',
@@ -63,6 +66,7 @@ describe('destinationFromSearch', () => {
       scene: null,
       object: null,
       messageId: null,
+      view: null,
     })
   })
 
@@ -75,6 +79,7 @@ describe('destinationFromSearch', () => {
       scene: null,
       object: null,
       messageId: null,
+      view: null,
     })
   })
 })
@@ -87,6 +92,7 @@ describe('the object axis (§1.18)', () => {
       scene: null,
       object: 'field_mark:abc',
       messageId: null,
+      view: null,
     })
   })
 
@@ -102,6 +108,7 @@ describe('the object axis (§1.18)', () => {
       scene: 'field',
       object: 'field_mark:abc',
       messageId: null,
+      view: null,
     })
   })
 
@@ -149,6 +156,7 @@ describe('workspace scenes', () => {
       scene: 'record',
       object: null,
       messageId: null,
+      view: null,
     })
     expect(destinationFromSearch('?scene=made-up')).toEqual({
       roomId: null,
@@ -156,6 +164,7 @@ describe('workspace scenes', () => {
       scene: null,
       object: null,
       messageId: null,
+      view: null,
     })
   })
 
@@ -223,6 +232,7 @@ describe('entryDestination', () => {
       scene: 'record',
       object: null,
       messageId: null,
+      view: null,
     })
   })
 
@@ -233,6 +243,7 @@ describe('entryDestination', () => {
       scene: null,
       object: null,
       messageId: null,
+      view: null,
     })
   })
 
@@ -248,6 +259,32 @@ describe('entryDestination', () => {
       scene: null,
       object: 'house_movement:x',
       messageId: null,
+      view: null,
     })
+  })
+})
+
+describe('the view axis (World Lens)', () => {
+  it('reads an opaque view beside the scene and round-trips it', () => {
+    const parsed = destinationFromSearch('?scene=atlas&view=world%3A26.5%2C56.3%2C450000%2C0%2C-45')
+    expect(parsed.scene).toBe('atlas')
+    expect(parsed.view).toBe('world:26.5,56.3,450000,0,-45')
+    const home = { id: 'home', is_home: true }
+    const root = { id: 't', parent_thread_id: null }
+    const url = destinationUrl(home, root, 'atlas', null, null, parsed.view)
+    expect(url).toBe('/?scene=atlas&view=world%3A26.5%2C56.3%2C450000%2C0%2C-45')
+    expect(destinationFromSearch(url.slice(1)).view).toBe(parsed.view)
+  })
+
+  it('omits the view param when none is set, so every older URL serializes as before', () => {
+    const home = { id: 'home', is_home: true }
+    const root = { id: 't', parent_thread_id: null }
+    expect(destinationUrl(home, root, 'atlas')).toBe('/?scene=atlas')
+    expect(destinationFromSearch('?scene=atlas').view).toBeNull()
+  })
+
+  it('survives the Home-root entry fallback', () => {
+    const parsed = destinationFromSearch('?scene=atlas&view=world')
+    expect(entryDestination(parsed).view).toBe('world')
   })
 })

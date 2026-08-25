@@ -135,6 +135,7 @@ function navigation(messageId: string): RoomNavigation {
     navigate: vi.fn(async () => true),
     enterGrantedRoom: vi.fn(async () => true),
     objectId: null,
+    viewId: null,
     messageId,
   }
 }

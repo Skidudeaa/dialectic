@@ -44,6 +44,7 @@ import { scenesForDestination } from './lib/workspaceRoute.ts'
 import { useWorkspaceObjects } from './hooks/useWorkspaceObjects.ts'
 import { useFieldMarks } from './hooks/useFieldMarks.ts'
 import { useAtlas } from './hooks/useAtlas.ts'
+import { useGeoScopes } from './hooks/useGeoScopes.ts'
 import { useTradingDesk } from './hooks/useTradingDesk.ts'
 import { Console } from './components/workspace/Console'
 import type { SceneSignal } from './components/workspace/SceneSwitcher'
@@ -117,7 +118,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
 
   // Every destination change goes through nav.navigate — no setRoom,
   // setThread, or leaveRoom call expresses a destination in this file.
-  const { rooms, navigate, objectId } = nav
+  const { rooms, navigate, objectId, viewId } = nav
   const [showRoomAccess, setShowRoomAccess] = useState(false)
   const [showProtocolPicker, setShowProtocolPicker] = useState(false)
   // The fork tree behind both the rail's compact view and the Branches
@@ -566,6 +567,9 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // construction, and needs a JWT but no room token — so the enable is
   // "signed in and at Home", the inverse of the two room projections above.
   const atlas = useAtlas(Boolean(accessToken) && isHome)
+  // The room's own geography (World Lens) — read only to decide whether the
+  // Bench offers its World door; the globe itself lives at Home root.
+  const roomGeo = useGeoScopes(!isHome && accessToken ? currentRoom?.id ?? null : null)
 
   // The ONE trading-desk instance, lifted from BenchScene so the Console's
   // instrument tiles stay live in every scene. An unbound room short-circuits
@@ -878,11 +882,19 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     atlas: (
       <AtlasScene
         state={atlas}
+        view={viewId}
+        // World Lens: the scene's House/World mode and camera ride the URL's
+        // `view` axis and are written only here, through the one navigation
+        // writer. Home root stays the destination (roomId null).
+        onView={(view, mode) => {
+          void navigate({ roomId: null, scene: 'atlas', view }, mode)
+        }}
         onNavigate={(destination) => {
           void navigate({
             roomId: destination.roomId,
             threadId: destination.threadId ?? null,
             object: destination.object ?? null,
+            messageId: destination.messageId ?? null,
           }, 'push')
         }}
       />
@@ -895,6 +907,25 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
         tradingPanel={<TradingPanel />}
         roomId={currentRoom?.id ?? null}
         desk={desk}
+        // World Lens: a room that owns geography gets one door onto Atlas /
+        // World, prefocused on its own scopes. Absent otherwise — a globe on
+        // every room regardless of whether geography matters is the vision's
+        // own non-negotiable no.
+        worldLink={
+          roomGeo.status === 'ready' && roomGeo.projection.scopes.length > 0 && currentRoom ? (
+            <button
+              type="button"
+              className="cockpit-world-link"
+              onClick={() => {
+                void navigate({
+                  roomId: null, scene: 'atlas', view: `world;room=${currentRoom.id}`,
+                }, 'push')
+              }}
+            >
+              World ↗ <span className="cockpit-world-link-count">{roomGeo.projection.scopes.length} placed</span>
+            </button>
+          ) : null
+        }
       />
     ),
     field: <FieldScene state={fieldMarks} objects={workspaceObjects} onOpen={openWorkspaceObject} />,

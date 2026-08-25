@@ -297,6 +297,11 @@ class DialecticAPI {
   async getAtlas(): Promise<AtlasProjection> {
     return this.fetch('/users/me/atlas');
   }
+  /** The room's live geography (World Lens, migration 021). Room token +
+   *  JWT, like every other room read. */
+  async getGeo(roomId: string): Promise<import('../types/geo.ts').GeoProjection> {
+    return this.fetch(`/rooms/${roomId}/geo`);
+  }
   /**
    * The composer's "Make a move" affordance (§1.11, §5.3): a human-authored
    * proposal, written as an ordinary message whose metadata carries ONE

@@ -79,6 +79,10 @@ export interface RoomNavigation {
   /** Exact message target installed with this destination. It survives only
    *  when the requested thread was actually reached. */
   messageId: string | null
+  /** The `view` axis, verbatim (World Lens): scene-local view state such as
+   *  Atlas / World's camera. Same pass-through rule as `objectId` — the
+   *  scene decodes it; an undecodable value is the scene's default. */
+  viewId: string | null
 }
 
 export function useRoomNavigation(): RoomNavigation {
@@ -95,6 +99,7 @@ export function useRoomNavigation(): RoomNavigation {
   const [accessError, setAccessError] = useState<string | null>(null)
   const [objectId, setObjectId] = useState<string | null>(null)
   const [messageId, setMessageId] = useState<string | null>(null)
+  const [viewId, setViewId] = useState<string | null>(null)
 
   const roomsRef = useRef<UserRoom[]>([])
   const loadRef = useRef<Promise<UserRoom[]> | null>(null)
@@ -230,6 +235,7 @@ export function useRoomNavigation(): RoomNavigation {
     // Focus on an unrelated navigation without any extra code at the call
     // sites that don't care about it.
     const object = destination.object ?? null
+    const view = destination.view ?? null
     const message = requested && requested.id === thread.id
       ? destination.messageId ?? null
       : null
@@ -247,8 +253,9 @@ export function useRoomNavigation(): RoomNavigation {
 
     setObjectId(object)
     setMessageId(message)
+    setViewId(view)
 
-    const url = destinationUrl(room, thread, scene, object, message)
+    const url = destinationUrl(room, thread, scene, object, message, view)
     if (historyMode === 'push') window.history.pushState(null, '', url)
     else if (historyMode === 'replace') window.history.replaceState(null, '', url)
     // 'none' (popstate, initial entry) mutates no history.
@@ -410,5 +417,6 @@ export function useRoomNavigation(): RoomNavigation {
     enterGrantedRoom,
     objectId,
     messageId,
+    viewId,
   }
 }

@@ -1,0 +1,104 @@
+/* World — the globe inside the dossier. The canvas takes a warm cast from a
+   CSS filter rather than a shader: OSM's daylight tiles read as a bright
+   rectangle on the candlelit page otherwise, and one filter line is the
+   whole "sensor look" this needs. */
+
+.world-view {
+  position: relative;
+  border: 1px solid var(--color-bean);
+  background: var(--color-void);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.world-canvas {
+  width: 100%;
+  height: min(62vh, 640px);
+  min-height: 320px;
+  filter: sepia(0.55) saturate(0.7) brightness(0.72) contrast(1.12);
+}
+.world-canvas .cesium-widget,
+.world-canvas .cesium-widget canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* The credit line is ours and always visible — Cesium's default sits
+   inside the widget and can be hidden by widget CSS; this cannot. */
+.world-credits {
+  padding: 0.25rem 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-faint);
+  background: var(--color-obsidian);
+  border-top: 1px solid var(--color-bean);
+}
+.world-credits a { color: var(--color-steel); }
+.world-credits .cesium-credit-expand-link { color: var(--color-steel); cursor: pointer; }
+.world-credits .cesium-credit-lightbox { color: var(--color-ink); }
+
+.world-fallback {
+  padding: 0.6rem 0.8rem;
+  color: var(--color-secondary);
+  font-family: var(--font-serif);
+  font-size: 13px;
+  border-bottom: 1px solid var(--color-bean);
+}
+
+/* Mode toggle + the on-map list live in AtlasScene; styled here so the
+   world module owns its own look. */
+.atlas-modes {
+  display: inline-flex;
+  gap: 1px;
+  border: 1px solid var(--color-bean);
+  border-radius: 2px;
+  overflow: hidden;
+  align-self: flex-start;
+}
+.atlas-mode {
+  background: var(--color-cacao);
+  color: var(--color-secondary);
+  border: none;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.9rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+.atlas-mode[aria-pressed="true"] {
+  background: var(--color-espresso);
+  color: var(--color-amber);
+}
+.atlas-mode:focus-visible { outline: 2px solid var(--color-amber); outline-offset: -2px; }
+
+.world-scope-row .atlas-row-open { align-items: center; flex-wrap: wrap; }
+.world-scope-meta {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-faint);
+}
+.world-scope-row[data-authority="machine_proposed"] .atlas-row-title {
+  color: var(--color-ghost);
+  font-style: italic;
+}
+.world-note {
+  color: var(--color-secondary);
+  font-family: var(--font-serif);
+  font-size: 12.5px;
+  margin: 0;
+}
+
+@media (max-width: 700px) {
+  .world-canvas { height: 46vh; min-height: 240px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-canvas { transition: none; }
+}

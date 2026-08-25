@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { AtlasScene } from './AtlasScene'
 import type { AtlasState } from '../../../hooks/useAtlas.ts'
 import type { AtlasNode, AtlasEdge } from '../../../types/atlas.ts'
+import type { GeoScope } from '../../../types/geo.ts'
 
 function node(partial: Partial<AtlasNode> & Pick<AtlasNode, 'id' | 'kind' | 'room_id'>): AtlasNode {
   return {
@@ -143,5 +144,88 @@ describe('AtlasScene', () => {
     // read as an action that goes nowhere.
     const text = screen.getByText('unresolved target')
     expect(text.closest('button')).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// World Lens: the second mode of the same projection
+// ---------------------------------------------------------------------------
+
+vi.mock('../world/WorldView', () => ({
+  default: (props: { scopes: unknown[] }) => (
+    <div data-testid="world-view-mock">globe:{props.scopes.length}</div>
+  ),
+}))
+
+function readyWithScopes(nodes: AtlasNode[], scopes: GeoScope[]): AtlasState {
+  return {
+    status: 'ready',
+    projection: { generated_at: 'x', nodes, edges: [], scopes },
+    retry: vi.fn(),
+  }
+}
+
+const hormuzScope: GeoScope = {
+  id: 'geo_scope:s1', room_id: 'room-h',
+  subject: { entity: 'rooms', id: 'room-h' },
+  kind: 'polygon' as const,
+  geometry: { type: 'Polygon', coordinates: [[[55, 26], [57, 26], [57, 27], [55, 26]]] },
+  label: 'Strait of Hormuz (approx.)', authority: 'human_confirmed' as const,
+  provenance: { provider: 'human', acquisition: 'human', credit: 'sketch' },
+  source_state: 'ok' as const, centroid: [56, 26.5] as [number, number],
+  retrieved_at: '2026-08-25T00:00:00Z', created_at: '2026-08-25T00:00:00Z',
+}
+
+describe('AtlasScene / World', () => {
+  const rooms = [node({ id: 'room:room-h', kind: 'room', room_id: 'room-h', title: 'Hormuz' })]
+
+  it('is House by default and offers the World toggle only when a writer is given', () => {
+    const { rerender } = render(<AtlasScene state={readyWithScopes(rooms, [hormuzScope])} onNavigate={vi.fn()} />)
+    expect(screen.queryByRole('group', { name: 'Atlas mode' })).toBeNull()
+    expect(screen.queryByTestId('world-view-mock')).toBeNull()
+    rerender(<AtlasScene state={readyWithScopes(rooms, [hormuzScope])} onNavigate={vi.fn()} onView={vi.fn()} />)
+    expect(screen.getByRole('button', { name: 'House' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByTestId('world-view-mock')).toBeNull()
+  })
+
+  it('a World tap is a navigate through the one writer, never a local state', () => {
+    const onView = vi.fn()
+    render(<AtlasScene state={readyWithScopes(rooms, [hormuzScope])} onNavigate={vi.fn()} onView={onView} />)
+    fireEvent.click(screen.getByRole('button', { name: 'World' }))
+    expect(onView).toHaveBeenCalledWith('world', 'push')
+  })
+
+  it('World mode keeps the complete list under the globe and lists every scope as text', async () => {
+    const onNavigate = vi.fn()
+    render(
+      <AtlasScene
+        state={readyWithScopes(rooms, [hormuzScope])}
+        onNavigate={onNavigate}
+        view="world"
+        onView={vi.fn()}
+      />,
+    )
+    expect(await screen.findByTestId('world-view-mock')).toHaveTextContent('globe:1')
+    // The House tree is still there -- the globe never replaces it.
+    expect(screen.getByRole('list', { name: 'Rooms' })).toBeInTheDocument()
+    // And the scope is readable without WebGL, with its authority and state.
+    const row = screen.getByRole('button', { name: /Strait of Hormuz/ })
+    expect(row).toHaveTextContent('confirmed')
+    expect(row).toHaveTextContent('live')
+    fireEvent.click(row)
+    expect(onNavigate).toHaveBeenCalledWith({ roomId: 'room-h' })
+  })
+
+  it('a proposed scope is labelled as such in the list', async () => {
+    render(
+      <AtlasScene
+        state={readyWithScopes(rooms, [{ ...hormuzScope, authority: 'machine_proposed', label: 'Guess' }])}
+        onNavigate={vi.fn()}
+        view="world"
+        onView={vi.fn()}
+      />,
+    )
+    await screen.findByTestId('world-view-mock')
+    expect(screen.getByRole('button', { name: /Guess/ })).toHaveTextContent('proposed')
   })
 })

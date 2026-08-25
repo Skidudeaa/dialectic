@@ -103,6 +103,7 @@ describe('startup precedence', () => {
       // preserved scene (workspaceRoute.ts) — not a behavior change here.
       roomId: null, threadId: null, scene: null, object: null,
       messageId: null,
+      view: null,
     })
   })
 
@@ -113,6 +114,7 @@ describe('startup precedence', () => {
     expect(chosen).toEqual({
       roomId: null, threadId: null, scene: 'record', object: null,
       messageId: null,
+      view: null,
     })
   })
 })
