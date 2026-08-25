@@ -206,7 +206,8 @@ function readyWithWorld(
       signal_sources: {
         status: 'configured',
         sources: [{
-          provider: 'ais', source_state: 'partial', freshness: 'current',
+          provider: 'ais', configured_room_ids: ['room-h'],
+          source_state: 'partial', freshness: 'current',
           coverage: 'receiver footprint', observed_at: '2026-08-25T17:58:00Z',
           retrieved_at: '2026-08-25T17:59:00Z', expires_at: '2026-08-25T18:10:00Z',
           signal_count: signals.length,
@@ -354,7 +355,7 @@ describe('AtlasScene / World', () => {
       <AtlasScene
         state={state}
         onNavigate={vi.fn()}
-        placementRoomId={null}
+        signalRoomTokens={new Map()}
         onGeoChanged={refreshGeo}
       />,
     )
@@ -364,12 +365,12 @@ describe('AtlasScene / World', () => {
       <AtlasScene
         state={state}
         onNavigate={vi.fn()}
-        placementRoomId="room-h"
+        signalRoomTokens={new Map([['room-h', 'token-h']])}
         onGeoChanged={refreshGeo}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: /Place Vessel contact 1/i }))
-    await waitFor(() => expect(place).toHaveBeenCalledWith('room-h', vesselSignal.id))
+    await waitFor(() => expect(place).toHaveBeenCalledWith('room-h', vesselSignal.id, 'token-h'))
     expect(retry).toHaveBeenCalledOnce()
     expect(refreshGeo).toHaveBeenCalledOnce()
 
@@ -384,7 +385,7 @@ describe('AtlasScene / World', () => {
           revision_action: 'place_signal',
         }], [vesselSignal])}
         onNavigate={vi.fn()}
-        placementRoomId="room-h"
+        signalRoomTokens={new Map([['room-h', 'token-h']])}
         onGeoChanged={refreshGeo}
       />,
     )
@@ -413,7 +414,7 @@ describe('AtlasScene / World', () => {
       <AtlasScene
         state={readyWithWorld(twoRooms, [], [vesselSignal, otherRoomSignal])}
         onNavigate={vi.fn()}
-        placementRoomId="room-h"
+        signalRoomTokens={new Map([['room-h', 'token-h']])}
       />,
     )
 

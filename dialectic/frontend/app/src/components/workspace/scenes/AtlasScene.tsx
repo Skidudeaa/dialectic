@@ -59,9 +59,9 @@ interface AtlasSceneProps {
   view?: string | null
   /** Write a new view through the one navigation writer. */
   onView?: (view: string | null, mode: 'push' | 'replace') => void
-  /** The one room whose capability token is currently installed in api.
-   * Other eligible-room signals stay visible but cannot advertise a write. */
-  placementRoomId?: string | null
+  /** Bounded capabilities already authorized by the saved-room owner.
+   * A signal without its exact room token stays visible but read-only. */
+  signalRoomTokens?: ReadonlyMap<string, string>
   /** Refresh any room-local durable projection after placement. */
   onGeoChanged?: () => void
 }
@@ -295,10 +295,10 @@ function OnTheMapGroup({ scopes, nodesById, onNavigate }: {
   )
 }
 
-function SignalRow({ signal, roomTitle, canPlace, onPlaced }: {
+function SignalRow({ signal, roomTitle, roomToken, onPlaced }: {
   signal: WorldSignal
   roomTitle?: string
-  canPlace: boolean
+  roomToken?: string
   onPlaced: () => void
 }) {
   const [placing, setPlacing] = useState(false)
@@ -308,7 +308,8 @@ function SignalRow({ signal, roomTitle, canPlace, onPlaced }: {
     setPlacing(true)
     setError(null)
     try {
-      await api.placeWorldSignal(signal.room_id, signal.id)
+      if (!roomToken) return
+      await api.placeWorldSignal(signal.room_id, signal.id, roomToken)
       onPlaced()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not place this signal')
@@ -329,7 +330,7 @@ function SignalRow({ signal, roomTitle, canPlace, onPlaced }: {
           <span>{signal.coverage}</span>
           {roomTitle ? <span>{roomTitle}</span> : null}
         </span>
-        {canPlace ? (
+        {roomToken ? (
           <button
             type="button"
             className="world-signal-place"
@@ -348,11 +349,11 @@ function SignalRow({ signal, roomTitle, canPlace, onPlaced }: {
 
 /** Ephemeral observations are a separate read-only list, never disguised as
  * durable GeoScopes and never wired into Focus or review actions. */
-function LiveSignalsGroup({ signals, sources, nodesById, placementRoomId, onPlaced }: {
+function LiveSignalsGroup({ signals, sources, nodesById, signalRoomTokens, onPlaced }: {
   signals: WorldSignal[]
   sources: WorldSignalSources | undefined
   nodesById: Map<string, AtlasNode>
-  placementRoomId: string | null
+  signalRoomTokens: ReadonlyMap<string, string>
   onPlaced: () => void
 }) {
   // A default/older Atlas response did not opt in. Preserve that contract by
@@ -384,7 +385,7 @@ function LiveSignalsGroup({ signals, sources, nodesById, placementRoomId, onPlac
                   key={signal.id}
                   signal={signal}
                   roomTitle={nodesById.get(`room:${signal.room_id}`)?.title}
-                  canPlace={signal.room_id === placementRoomId}
+                  roomToken={signalRoomTokens.get(signal.room_id)}
                   onPlaced={onPlaced}
                 />
               ))}
@@ -397,7 +398,8 @@ function LiveSignalsGroup({ signals, sources, nodesById, placementRoomId, onPlac
 }
 
 export function AtlasScene({
-  state, onNavigate, view = null, onView, placementRoomId = null, onGeoChanged,
+  state, onNavigate, view = null, onView,
+  signalRoomTokens = new Map<string, string>(), onGeoChanged,
 }: AtlasSceneProps) {
   const worldMode = isWorldView(view)
   const decoded = useMemo(() => decodeWorldView(view), [view])
@@ -492,7 +494,7 @@ export function AtlasScene({
         signals={signals}
         sources={signalSources}
         nodesById={nodesById}
-        placementRoomId={placementRoomId}
+        signalRoomTokens={signalRoomTokens}
         onPlaced={onSignalPlaced}
       />
       <ul className="atlas-list atlas-room-list" aria-label="Rooms">

@@ -18,6 +18,7 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
 import asyncpg
@@ -83,14 +84,20 @@ def _world_signal(
     )
 
 
-def _signal_store(*signals: WorldSignal) -> WorldSignalStore:
-    store = WorldSignalStore()
+def _signal_snapshot(*signals: WorldSignal) -> WorldSignalSnapshot:
     now = datetime.now(timezone.utc)
-    store.replace(WorldSignalSnapshot(
-        provider="ais", source_state="partial", freshness="current",
+    return WorldSignalSnapshot(
+        provider="ais",
+        configured_room_ids=frozenset(signal.room_id for signal in signals),
+        source_state="partial", freshness="current",
         coverage="receiver footprint", retrieved_at=now,
         expires_at=now + timedelta(minutes=10), signals=signals,
-    ))
+    )
+
+
+def _signal_store(*signals: WorldSignal) -> WorldSignalStore:
+    store = WorldSignalStore()
+    store.replace(_signal_snapshot(*signals))
     return store
 
 
@@ -963,6 +970,146 @@ async def test_duplicate_signal_placement_replays_one_scope_and_one_event(world,
              AND payload->'subject'->>'field' = $2""",
         ROOM_AMO, signal.id,
     ) == 1
+
+
+@pytest.mark.asyncio
+async def test_two_independent_signal_placements_replay_exactly_one_scope_and_event(
+    monkeypatch,
+):
+    """The advisory lock serializes the real two-connection placement race."""
+    schema = f"geo_signal_race_{uuid4().hex}"
+    setup = await asyncpg.connect(TEST_DATABASE_URL)
+    contenders: list[asyncpg.Connection] = []
+
+    async def prepare(conn: asyncpg.Connection) -> None:
+        for typename in ("jsonb", "json"):
+            await conn.set_type_codec(
+                typename, encoder=json.dumps, decoder=json.loads,
+                schema="pg_catalog",
+            )
+        await conn.execute(f'SET search_path TO "{schema}", public')
+
+    try:
+        await setup.execute(f'CREATE SCHEMA "{schema}"')
+        for table in ("users", "rooms", "room_memberships", "events", "geo_scopes"):
+            await setup.execute(
+                f'CREATE TABLE "{schema}"."{table}" '
+                f'(LIKE public."{table}" INCLUDING ALL)',
+            )
+        await prepare(setup)
+        now = datetime.now(timezone.utc)
+        race_user, race_room = uuid4(), uuid4()
+        await setup.execute(
+            "INSERT INTO users (id, created_at, display_name) VALUES ($1, $2, 'Racer')",
+            race_user, now,
+        )
+        await setup.execute(
+            "INSERT INTO rooms (id, created_at, token, name) VALUES ($1, $2, $3, 'Race')",
+            race_room, now, "race-token",
+        )
+        await setup.execute(
+            "INSERT INTO room_memberships (room_id, user_id, joined_at) VALUES ($1, $2, $3)",
+            race_room, race_user, now,
+        )
+        signal = _world_signal("concurrent-place", room_id=race_room)
+        monkeypatch.setattr(geo_api, "world_signal_store", _signal_store(signal))
+
+        contenders = [
+            await asyncpg.connect(TEST_DATABASE_URL),
+            await asyncpg.connect(TEST_DATABASE_URL),
+        ]
+        for contender in contenders:
+            await prepare(contender)
+        assert len({conn.get_server_pid() for conn in contenders}) == 2
+        barrier = asyncio.Barrier(2)
+
+        async def place(conn: asyncpg.Connection) -> object:
+            await barrier.wait()
+            return await geo_api.place_world_signal(
+                race_room, signal.id, token="race-token",
+                current_user=_user(race_user), db=conn,
+            )
+
+        results = await asyncio.gather(*(place(conn) for conn in contenders))
+        assert results[0].id == results[1].id
+        assert await setup.fetchval(
+            """SELECT count(*) FROM geo_scopes
+               WHERE room_id = $1 AND subject->>'field' = $2""",
+            race_room, signal.id,
+        ) == 1
+        assert await setup.fetchval(
+            """SELECT count(*) FROM events
+               WHERE room_id = $1 AND event_type = 'geo_scope_created'
+                 AND payload->'subject'->>'field' = $2""",
+            race_room, signal.id,
+        ) == 1
+    finally:
+        for contender in contenders:
+            await contender.close()
+        await setup.execute("SET search_path TO public")
+        await setup.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        await setup.close()
+
+
+@pytest.mark.asyncio
+async def test_signal_placement_copies_the_snapshot_resolved_after_its_lock(
+    world, monkeypatch,
+):
+    old = _world_signal("moves-before-lock")
+    replacement_values = old.model_dump()
+    replacement_values.update(
+        geometry={"type": "Point", "coordinates": [57.1, 25.9]},
+        label="Post-lock contact",
+        observed_at=old.observed_at + timedelta(seconds=10),
+        retrieved_at=old.retrieved_at + timedelta(seconds=10),
+    )
+    replacement_values["provenance"].update(
+        url="https://provider.test/post-lock",
+        credit="Post-lock provider credit",
+    )
+    replacement = WorldSignal(**replacement_values)
+    store = _signal_store(old)
+    monkeypatch.setattr(geo_api, "world_signal_store", store)
+    lock_reached = asyncio.Event()
+    allow_lock = asyncio.Event()
+
+    class LockGate:
+        def __init__(self, conn: asyncpg.Connection) -> None:
+            self._conn = conn
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._conn, name)
+
+        async def fetchval(self, query: str, *args: object) -> Any:
+            if "pg_advisory_xact_lock" in query:
+                lock_reached.set()
+                await allow_lock.wait()
+            return await self._conn.fetchval(query, *args)
+
+    placement = asyncio.create_task(geo_api.place_world_signal(
+        ROOM_AMO, old.id, token=f"tok-{ROOM_AMO}",
+        current_user=_user(AMO), db=LockGate(world),
+    ))
+    await asyncio.wait_for(lock_reached.wait(), timeout=2)
+    store.replace(_signal_snapshot(replacement))
+    allow_lock.set()
+    scope = await asyncio.wait_for(placement, timeout=2)
+
+    assert scope.geometry == replacement.geometry
+    assert scope.label == replacement.label
+    assert scope.provenance == replacement.provenance
+    assert scope.observed_at == replacement.observed_at
+    assert scope.retrieved_at == replacement.retrieved_at
+    event = await world.fetchrow(
+        """SELECT payload FROM events
+           WHERE room_id = $1 AND event_type = 'geo_scope_created'
+             AND payload->'subject'->>'field' = $2""",
+        ROOM_AMO, replacement.id,
+    )
+    assert event is not None
+    assert event["payload"]["geometry"] == replacement.geometry
+    assert event["payload"]["label"] == replacement.label
+    assert event["payload"]["provenance"] == replacement.provenance.model_dump()
 
 
 @pytest.mark.asyncio

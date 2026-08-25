@@ -308,10 +308,12 @@ class DialecticAPI {
   }
   /** Place the server-held observation. The client supplies no geometry or
    * provenance; the signal identity in the path is the complete request. */
-  async placeWorldSignal(roomId: string, signalId: string): Promise<GeoScope> {
+  async placeWorldSignal(
+    roomId: string, signalId: string, targetRoomToken: string,
+  ): Promise<GeoScope> {
     return this.fetch(
       `/rooms/${roomId}/world-signals/${encodeURIComponent(signalId)}/place`,
-      { method: 'POST' },
+      { method: 'POST', headers: { 'X-Room-Token': targetRoomToken } },
     );
   }
   /** A person places geometry on a row this room owns (human_confirmed). */

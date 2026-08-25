@@ -52,6 +52,8 @@ import type { ImplementedWorkspaceScene } from './types/index.ts'
 import type { FieldMark, FieldReviewRequest } from './types/workspace.ts'
 import { rememberSceneAxes, restoreSceneAxes } from './lib/sceneContinuity.ts'
 
+const WORLD_SIGNAL_ROOM_CAPABILITY_LIMIT = 200
+
 function RoomBriefing({ roomId }: { roomId: string }) {
   const [dismissed, setDismissed] = useState(false)
   if (dismissed) return null
@@ -119,6 +121,17 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // Every destination change goes through nav.navigate — no setRoom,
   // setThread, or leaveRoom call expresses a destination in this file.
   const { rooms, navigate, objectId, viewId } = nav
+  // Same room cardinality as Atlas's server fence. Tokens never enter the
+  // Atlas response or a URL/body; the scene receives only this bounded map
+  // of capabilities already authorized by GET /users/me/rooms.
+  const signalRoomTokens = useMemo<ReadonlyMap<string, string>>(
+    () => new Map(
+      rooms.slice(0, WORLD_SIGNAL_ROOM_CAPABILITY_LIMIT)
+        .filter((room) => room.token)
+        .map((room) => [room.id, room.token]),
+    ),
+    [rooms],
+  )
   const [showRoomAccess, setShowRoomAccess] = useState(false)
   const [showProtocolPicker, setShowProtocolPicker] = useState(false)
   // The fork tree behind both the rail's compact view and the Branches
@@ -889,7 +902,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
       <AtlasScene
         state={atlas}
         view={viewId}
-        placementRoomId={accessToken && roomToken ? currentRoom.id : null}
+        signalRoomTokens={accessToken ? signalRoomTokens : undefined}
         // Atlas retry refreshes the combined live/durable projection. Queue a
         // room projection refresh too through the same loading-safe contract;
         // it remains dormant while Home has no room-local projection mounted.

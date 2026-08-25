@@ -370,6 +370,22 @@ async def test_a_caller_with_no_memberships_is_an_empty_projection(atlas_world):
     assert projection.nodes == []
     assert projection.edges == []
 
+    now = datetime.now(timezone.utc)
+    configured = WorldSignalStore()
+    configured.replace(WorldSignalSnapshot(
+        provider="ais", configured_room_ids=frozenset({ROOM_AMO}),
+        source_state="partial", freshness="current", coverage="PRIVATE-COVERAGE",
+        observed_at=now - timedelta(minutes=2), retrieved_at=now,
+        expires_at=now + timedelta(minutes=10), signals=(),
+    ))
+    signal_projection = await AtlasService(
+        atlas_world, signal_store=configured,
+    ).build(stranger, include_signals=True)
+    assert signal_projection.signals == []
+    assert signal_projection.signal_sources.status == "not_configured"
+    assert signal_projection.signal_sources.sources == []
+    assert "PRIVATE-COVERAGE" not in signal_projection.model_dump_json()
+
 
 @pytest.mark.asyncio
 async def test_signal_opt_in_uses_the_exact_atlas_eligible_room_fence(atlas_world):
@@ -392,7 +408,9 @@ async def test_signal_opt_in_uses_the_exact_atlas_eligible_room_fence(atlas_worl
         )
 
     store.replace(WorldSignalSnapshot(
-        provider="ais", source_state="partial", freshness="current",
+        provider="ais",
+        configured_room_ids=frozenset({ROOM_SHARED, ROOM_AMO, ROOM_DAN}),
+        source_state="partial", freshness="current",
         coverage="receiver footprint", retrieved_at=now,
         expires_at=now + timedelta(minutes=10),
         signals=(
@@ -409,6 +427,45 @@ async def test_signal_opt_in_uses_the_exact_atlas_eligible_room_fence(atlas_worl
     assert amo.signal_sources.sources[0].source_state == "partial"
     assert amo.signal_sources.sources[0].freshness == "current"
     assert amo.signal_sources.sources[0].coverage == "receiver footprint"
+    assert amo.signal_sources.sources[0].configured_room_ids == frozenset({ROOM_SHARED, ROOM_AMO})
+    assert dan.signal_sources.sources[0].configured_room_ids == frozenset({ROOM_SHARED, ROOM_DAN})
+
+
+@pytest.mark.asyncio
+async def test_disjoint_signal_source_envelope_does_not_leak_through_atlas(atlas_world):
+    now = datetime.now(timezone.utc)
+    store = WorldSignalStore()
+    store.replace(WorldSignalSnapshot(
+        provider="firms", configured_room_ids=frozenset({ROOM_DAN}),
+        source_state="rate_limited", freshness="stale", coverage="DAN-ONLY-COVERAGE",
+        observed_at=now - timedelta(hours=1), retrieved_at=now,
+        expires_at=now + timedelta(minutes=5), signals=(),
+    ))
+
+    amo = await AtlasService(atlas_world, signal_store=store).build(AMO, include_signals=True)
+    assert amo.signal_sources.status == "not_configured"
+    assert amo.signal_sources.sources == []
+    assert "DAN-ONLY-COVERAGE" not in amo.model_dump_json()
+
+
+@pytest.mark.asyncio
+async def test_configured_empty_source_remains_configured_for_an_eligible_room(atlas_world):
+    now = datetime.now(timezone.utc)
+    store = WorldSignalStore()
+    store.replace(WorldSignalSnapshot(
+        provider="ais", configured_room_ids=frozenset({ROOM_AMO}),
+        source_state="ok", freshness="current", coverage="Amo receiver",
+        observed_at=now, retrieved_at=now, expires_at=None, signals=(),
+    ))
+
+    amo = await AtlasService(atlas_world, signal_store=store).build(AMO, include_signals=True)
+    dan = await AtlasService(atlas_world, signal_store=store).build(DAN, include_signals=True)
+    assert amo.signals == []
+    assert amo.signal_sources.status == "configured"
+    assert amo.signal_sources.sources[0].signal_count == 0
+    assert amo.signal_sources.sources[0].configured_room_ids == frozenset({ROOM_AMO})
+    assert dan.signal_sources.status == "not_configured"
+    assert dan.signal_sources.sources == []
 
 
 @pytest.mark.asyncio

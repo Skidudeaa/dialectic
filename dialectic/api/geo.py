@@ -38,6 +38,7 @@ from geo_scopes import (
 )
 from models import EventType
 from world_signals import (
+    WorldSignal,
     WorldSignalExpired,
     WorldSignalMalformedId,
     WorldSignalNotFound,
@@ -96,6 +97,17 @@ WHERE room_id = $1
 ORDER BY created_at
 LIMIT 2
 """
+
+
+def _resolve_world_signal(room_id: UUID, signal_id: str) -> WorldSignal:
+    try:
+        return world_signal_store.resolve(room_id, signal_id)
+    except WorldSignalMalformedId as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (WorldSignalNotFound, WorldSignalWrongRoom) as exc:
+        raise HTTPException(status_code=404, detail="signal not found in this room") from exc
+    except WorldSignalExpired as exc:
+        raise HTTPException(status_code=409, detail="signal is expired") from exc
 
 
 class GeoProvenanceRequest(BaseModel):
@@ -251,22 +263,17 @@ async def place_world_signal(
     general ``geo_scopes`` table.
     """
     await _authorize(room_id, token, current_user.user_id, db)
-    try:
-        signal = world_signal_store.resolve(room_id, signal_id)
-    except WorldSignalMalformedId as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except (WorldSignalNotFound, WorldSignalWrongRoom) as exc:
-        raise HTTPException(status_code=404, detail="signal not found in this room") from exc
-    except WorldSignalExpired as exc:
-        raise HTTPException(status_code=409, detail="signal is expired") from exc
-
-    now = datetime.now(timezone.utc)
-    subject = {"entity": "rooms", "id": str(room_id), "field": signal.id}
+    signal = _resolve_world_signal(room_id, signal_id)
     async with db.transaction():
         await db.fetchval(
             "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
             f"world-signal-place:{room_id}:{signal.id}",
         )
+        # This is the placement linearization point. A provider replacement,
+        # removal, or expiry while this request waited for the lock wins.
+        signal = _resolve_world_signal(room_id, signal_id)
+        now = datetime.now(timezone.utc)
+        subject = {"entity": "rooms", "id": str(room_id), "field": signal.id}
         existing_rows = await db.fetch(_PLACED_SIGNAL_SQL, room_id, signal.id)
         if len(existing_rows) > 1:
             raise ValueError("world signal has more than one durable placement")

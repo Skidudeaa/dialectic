@@ -131,6 +131,9 @@ export interface WorldSignal {
 /** Provider snapshot state stays separate from each observation's state. */
 export interface WorldSignalSource {
   provider: string
+  /** Only the intersection of this source's configured rooms and the Atlas
+   * viewer's eligible-room fence. */
+  configured_room_ids: string[]
   source_state: GeoSourceState
   freshness: GeoFreshnessState
   coverage: string

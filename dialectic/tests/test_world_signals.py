@@ -1,5 +1,7 @@
 """Pure contracts for the ephemeral, process-local WorldSignal owner."""
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -52,9 +54,14 @@ def _signal(
     )
 
 
-def _snapshot(*signals: WorldSignal, source_state: str = "partial") -> WorldSignalSnapshot:
+def _snapshot(
+    *signals: WorldSignal, source_state: str = "partial",
+    configured_room_ids: frozenset[UUID] = frozenset({ROOM_A, ROOM_B}),
+    provider: str = "ais",
+) -> WorldSignalSnapshot:
     return WorldSignalSnapshot(
-        provider="ais",
+        provider=provider,
+        configured_room_ids=configured_room_ids,
         source_state=source_state,
         freshness="current",
         coverage="Strait of Hormuz receiver footprint",
@@ -63,6 +70,15 @@ def _snapshot(*signals: WorldSignal, source_state: str = "partial") -> WorldSign
         expires_at=NOW + timedelta(minutes=10),
         signals=signals,
     )
+
+
+def _provider_signal(provider: str, source_id: str, room_id: UUID = ROOM_A) -> WorldSignal:
+    values = _signal(source_id, room_id=room_id).model_dump()
+    values.update(id=f"world_signal:{provider}:{source_id}", provider=provider)
+    values["provenance"].update(
+        provider=provider, acquisition=f"adapter:{provider}", source_id=source_id,
+    )
+    return WorldSignal(**values)
 
 
 def test_world_signal_validates_identity_geometry_and_server_provenance() -> None:
@@ -134,6 +150,99 @@ def test_snapshot_rejects_duplicate_ids_and_provider_mismatch_without_partial_ch
         store.replace(_snapshot(WorldSignal(**other)))
 
     assert [s.source_id for s in store.project({ROOM_A}, now=NOW).signals] == ["kept"]
+
+
+def test_snapshot_configured_rooms_are_immutable_bounded_and_own_every_signal() -> None:
+    snapshot = _snapshot(_signal("mine", room_id=ROOM_A), configured_room_ids=frozenset({ROOM_A}))
+    assert snapshot.configured_room_ids == frozenset({ROOM_A})
+    assert isinstance(snapshot.configured_room_ids, frozenset)
+
+    with pytest.raises(ValidationError, match="at least 1"):
+        _snapshot(configured_room_ids=frozenset())
+    with pytest.raises(ValidationError, match="at most 200"):
+        _snapshot(configured_room_ids=frozenset(UUID(int=i + 1) for i in range(201)))
+    with pytest.raises(ValidationError, match="configured room"):
+        _snapshot(_signal("outside", room_id=ROOM_B), configured_room_ids=frozenset({ROOM_A}))
+
+
+def test_projection_hides_disjoint_source_envelope_and_filters_mixed_configured_rooms() -> None:
+    store = WorldSignalStore()
+    store.replace(_snapshot(
+        _signal("mine", room_id=ROOM_A), _signal("theirs", room_id=ROOM_B),
+        configured_room_ids=frozenset({ROOM_A, ROOM_B}),
+    ))
+
+    disjoint = store.project({UUID("00000000-0000-4000-c000-000000000099")}, now=NOW)
+    assert disjoint.signals == []
+    assert disjoint.signal_sources.status == "not_configured"
+    assert disjoint.signal_sources.sources == []
+
+    mine = store.project({ROOM_A}, now=NOW)
+    assert [signal.source_id for signal in mine.signals] == ["mine"]
+    assert mine.signal_sources.status == "configured"
+    assert mine.signal_sources.sources[0].configured_room_ids == frozenset({ROOM_A})
+
+
+def test_concurrent_replacements_publish_only_whole_snapshots() -> None:
+    store = WorldSignalStore(max_signals_per_source=3, max_total_signals=3)
+    store.replace(_snapshot(
+        *(_signal(f"seed-0-{index}") for index in range(3)),
+        configured_room_ids=frozenset({ROOM_A}),
+    ))
+    barrier = threading.Barrier(3)
+
+    def write(prefix: str) -> None:
+        barrier.wait()
+        for generation in range(50):
+            store.replace(_snapshot(
+                *(_signal(f"{prefix}-{generation}-{index}") for index in range(3)),
+                configured_room_ids=frozenset({ROOM_A}),
+            ))
+
+    def read() -> None:
+        barrier.wait()
+        for _ in range(300):
+            ids = [signal.source_id for signal in store.project({ROOM_A}, now=NOW).signals]
+            assert len(ids) == 3
+            assert len({source_id.rsplit("-", 1)[0] for source_id in ids}) == 1
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [executor.submit(write, "left"), executor.submit(write, "right"), executor.submit(read)]
+        for future in futures:
+            future.result()
+
+
+def test_concurrent_replacements_enforce_total_bound_against_one_atomic_candidate() -> None:
+    store = WorldSignalStore(max_sources=2, max_signals_per_source=2, max_total_signals=2)
+    store.replace(_snapshot(configured_room_ids=frozenset({ROOM_A})))
+    store.replace(_snapshot(
+        configured_room_ids=frozenset({ROOM_A}), provider="firms",
+    ))
+    barrier = threading.Barrier(2)
+
+    def fill(provider: str) -> str:
+        barrier.wait()
+        store.replace(_snapshot(
+            _provider_signal(provider, f"{provider}-1"),
+            _provider_signal(provider, f"{provider}-2"),
+            configured_room_ids=frozenset({ROOM_A}), provider=provider,
+        ))
+        return provider
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(fill, "ais"), executor.submit(fill, "firms")]
+        results: list[str | ValueError] = []
+        for future in futures:
+            try:
+                results.append(future.result())
+            except ValueError as exc:
+                results.append(exc)
+
+    assert len([result for result in results if isinstance(result, str)]) == 1
+    assert len([result for result in results if isinstance(result, ValueError)]) == 1
+    projection = store.project({ROOM_A}, now=NOW)
+    assert len(projection.signals) == 2
+    assert len({signal.provider for signal in projection.signals}) == 1
 
 
 def test_projection_fences_rooms_and_keeps_source_condition_freshness_coverage_separate() -> None:

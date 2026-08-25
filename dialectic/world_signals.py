@@ -32,6 +32,7 @@ _WORLD_SIGNAL_ID = re.compile(
 )
 _SOURCE_CONFIGURATION_STATES = ("configured", "not_configured")
 _MAX_DETAILS_BYTES = 16_384
+_MAX_CONFIGURED_ROOMS = 200
 
 
 class WorldSignalMalformedId(ValueError):
@@ -131,6 +132,9 @@ class WorldSignalSnapshot(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     provider: str
+    configured_room_ids: frozenset[UUID] = Field(
+        min_length=1, max_length=_MAX_CONFIGURED_ROOMS,
+    )
     source_state: str
     freshness: str
     coverage: str = Field(min_length=1, max_length=500)
@@ -154,6 +158,10 @@ class WorldSignalSnapshot(BaseModel):
         for signal in self.signals:
             if signal.provider != self.provider:
                 raise ValueError("every signal must match its snapshot provider")
+            if signal.room_id not in self.configured_room_ids:
+                raise ValueError(
+                    "every signal room must belong to the snapshot configured rooms",
+                )
             if signal.id in ids:
                 raise ValueError(f"duplicate signal id in snapshot: {signal.id}")
             ids.add(signal.id)
@@ -166,6 +174,9 @@ class WorldSignalSource(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     provider: str
+    configured_room_ids: frozenset[UUID] = Field(
+        min_length=1, max_length=_MAX_CONFIGURED_ROOMS,
+    )
     source_state: str
     freshness: str
     coverage: str
@@ -244,6 +255,9 @@ class WorldSignalStore:
         signals: list[WorldSignal] = []
         sources: list[WorldSignalSource] = []
         for snapshot in snapshots:
+            configured_room_ids = snapshot.configured_room_ids & eligible
+            if not configured_room_ids:
+                continue
             visible = [
                 signal.model_copy(deep=True)
                 for signal in snapshot.signals
@@ -256,6 +270,7 @@ class WorldSignalStore:
                 source_freshness = "expired"
             sources.append(WorldSignalSource(
                 provider=snapshot.provider,
+                configured_room_ids=frozenset(configured_room_ids),
                 source_state=snapshot.source_state,
                 freshness=source_freshness,
                 coverage=snapshot.coverage,
@@ -268,7 +283,7 @@ class WorldSignalStore:
         return WorldSignalProjection(
             signals=signals,
             signal_sources=WorldSignalSources(
-                status="configured" if snapshots else "not_configured",
+                status="configured" if sources else "not_configured",
                 sources=sources,
             ),
         )

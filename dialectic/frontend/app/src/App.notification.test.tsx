@@ -5,6 +5,8 @@ import { api } from './lib/api.ts'
 import { useAppStore } from './stores/appStore.ts'
 import type { Message, Room, Thread, UserRoom } from './types/index.ts'
 import type { RoomNavigation } from './hooks/useRoomNavigation.ts'
+import type { AtlasProjection } from './types/atlas.ts'
+import type { GeoScope, WorldSignal } from './types/geo.ts'
 import { ChatLayout } from './App.tsx'
 
 const socket = vi.hoisted(() => ({
@@ -18,6 +20,7 @@ const projections = vi.hoisted(() => ({
   refreshGeo: vi.fn(),
   refreshAtlas: vi.fn(),
 }))
+const atlasHook = vi.hoisted(() => vi.fn())
 
 vi.mock('./hooks/useDialecticSocket.ts', () => ({
   useDialecticSocket: () => ({
@@ -59,7 +62,7 @@ vi.mock('./hooks/useGeoScopes.ts', () => ({
   useGeoScopes: () => ({ status: 'loading', retry: projections.refreshGeo }),
 }))
 vi.mock('./hooks/useAtlas.ts', () => ({
-  useAtlas: () => ({ status: 'loading', retry: projections.refreshAtlas }),
+  useAtlas: atlasHook,
 }))
 vi.mock('./components/workspace/focus/FocusSurface.tsx', () => ({
   FocusSurface: ({ onGeoChanged }: { onGeoChanged: () => void }) => (
@@ -136,15 +139,18 @@ function message(id: string, threadId: string = thread.id): Message {
   } as Message
 }
 
-function navigation(messageId: string, objectId: string | null = null): RoomNavigation {
+function navigation(
+  messageId: string, objectId: string | null = null,
+  roomList: UserRoom[] = [roomDescriptor],
+): RoomNavigation {
   return {
-    rooms: [roomDescriptor],
+    rooms: roomList,
     loading: false,
     ready: true,
     error: null,
     accessError: null,
     clearAccessError: vi.fn(),
-    refreshRooms: vi.fn(async () => [roomDescriptor]),
+    refreshRooms: vi.fn(async () => roomList),
     navigate: vi.fn(async () => true),
     enterGrantedRoom: vi.fn(async () => true),
     objectId,
@@ -176,6 +182,8 @@ beforeEach(() => {
   socket.refreshAttachments.mockReset()
   projections.refreshGeo.mockReset()
   projections.refreshAtlas.mockReset()
+  atlasHook.mockReset()
+  atlasHook.mockReturnValue({ status: 'loading', retry: projections.refreshAtlas })
 })
 
 describe('world projection refresh', () => {
@@ -187,6 +195,75 @@ describe('world projection refresh', () => {
 
     expect(projections.refreshGeo).toHaveBeenCalledOnce()
     expect(projections.refreshAtlas).toHaveBeenCalledOnce()
+  })
+
+  it('places an ordinary-room Atlas signal from Home with that room capability', async () => {
+    const home = {
+      id: 'home-room', name: 'Home', token: 'home-token', is_home: true,
+    } as Room
+    const homeThread = { ...thread, id: 'home-thread', room_id: home.id }
+    const homeDescriptor = {
+      ...roomDescriptor, ...home, can_manage_home: true,
+    } as UserRoom
+    const signal: WorldSignal = {
+      id: 'world_signal:ais:contact-1', provider: 'ais', source_id: 'contact-1',
+      room_id: room.id, layer: 'vessels', kind: 'point',
+      geometry: { type: 'Point', coordinates: [56.3, 26.5] },
+      provenance: {
+        provider: 'ais', acquisition: 'adapter:ais', source_id: 'contact-1',
+        url: null, credit: 'AIS credit',
+      },
+      source_state: 'ok', freshness: 'current', coverage: 'receiver footprint',
+      observed_at: '2026-08-25T17:58:00Z', retrieved_at: '2026-08-25T17:59:00Z',
+      expires_at: '2026-08-25T18:10:00Z', label: 'Ordinary room vessel', details: {},
+    }
+    const readOnlySignal: WorldSignal = {
+      ...signal,
+      id: 'world_signal:ais:no-capability', source_id: 'no-capability',
+      room_id: 'unavailable-room', label: 'Unavailable room vessel',
+      provenance: { ...signal.provenance, source_id: 'no-capability' },
+    }
+    const projection: AtlasProjection = {
+      generated_at: '2026-08-25T18:00:00Z',
+      nodes: [{
+        id: `room:${room.id}`, kind: 'room', room_id: room.id, branch_id: null,
+        title: room.name ?? 'Room', summary: '', status: '', due: false,
+        created_at: '2026-08-25T00:00:00Z', updated_at: '2026-08-25T00:00:00Z',
+      }, {
+        id: 'room:unavailable-room', kind: 'room', room_id: 'unavailable-room',
+        branch_id: null, title: 'Unavailable room', summary: '', status: '', due: false,
+        created_at: '2026-08-25T00:00:00Z', updated_at: '2026-08-25T00:00:00Z',
+      }],
+      edges: [], scopes: [], signals: [signal, readOnlySignal],
+      signal_sources: {
+        status: 'configured',
+        sources: [{
+          provider: 'ais', configured_room_ids: [room.id, 'unavailable-room'], source_state: 'ok',
+          freshness: 'current', coverage: 'receiver footprint', observed_at: null,
+          retrieved_at: '2026-08-25T17:59:00Z', expires_at: null, signal_count: 2,
+        }],
+      },
+    }
+    atlasHook.mockReturnValue({
+      status: 'ready', projection, retry: projections.refreshAtlas,
+    })
+    useAppStore.setState({
+      currentRoom: home, roomToken: home.token, currentThread: homeThread,
+      threads: [homeThread], workspaceScene: 'atlas',
+    })
+    vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
+    const place = vi.spyOn(api, 'placeWorldSignal').mockResolvedValue({} as GeoScope)
+
+    render(<ChatLayout nav={navigation('', null, [homeDescriptor, roomDescriptor])} />)
+    expect(screen.getByText('Unavailable room vessel')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Place Unavailable room vessel' })).toBeNull()
+    fireEvent.click(screen.getByText('Unavailable room vessel'))
+    expect(place).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Place Ordinary room vessel' }))
+
+    await waitFor(() => expect(place).toHaveBeenCalledWith(
+      room.id, signal.id, room.token,
+    ))
   })
 })
 
