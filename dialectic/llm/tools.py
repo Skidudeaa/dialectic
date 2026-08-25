@@ -11,6 +11,7 @@ from . import cairn_client as cn
 from . import defuddle_client as dc
 from . import documents as documents_mod
 from . import tradingdesk_client as td
+from .world import WORLD_QUERY_INNER_TIMEOUT_S
 
 logger = logging.getLogger(__name__)
 
@@ -1661,17 +1662,28 @@ def _world_tools_enabled() -> bool:
 
 
 def _build_world_tools(room, db) -> list[Tool]:
-    """The World Lens (docs/WORLD_LENS_VISION.md): ONE proposal-shaped tool.
-    It resolves a NAME to geometry that already exists (Natural Earth, or a
-    scope a human confirmed) and writes a machine_proposed row — the same
-    shape as write_document's row: a thing the humans review, never an
-    authoritative placement. Coordinates are never taken from the model."""
+    """The World Lens: read current room authority, or propose for review.
+
+    ``world_query`` is read-only. ``propose_geo_scope`` remains the sole
+    participant geography writer and can only append a machine proposal.
+    """
     from llm import world as world_mod
 
     async def propose_geo_scope(args: dict) -> dict:
         return await world_mod.propose_geo_scope(db, room.id, args)
 
+    async def world_query(args: dict) -> dict:
+        return await world_mod.world_query(db, room.id, room.name, args)
+
     return [
+        Tool(
+            name="world_query",
+            description=world_mod.WORLD_QUERY_DESCRIPTION,
+            input_schema=world_mod.WORLD_QUERY_SCHEMA,
+            execute=world_query,
+            label="reading the world",
+            timeout_s=WORLD_QUERY_INNER_TIMEOUT_S + 4.0,
+        ),
         Tool(
             name="propose_geo_scope",
             description=world_mod.PROPOSE_GEO_SCOPE_DESCRIPTION,

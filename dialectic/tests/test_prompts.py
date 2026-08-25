@@ -771,3 +771,12 @@ class TestStandingDisciplines:
         assert "Touches no tracked node" not in flat
         assert "draft_prediction" not in flat
         assert "propose_trade" not in flat
+
+    def test_world_tools_keep_sight_read_only_and_proposals_human_reviewed(self, builder):
+        prompt = builder.build(make_room(), [], [], [], tools_enabled=True)
+        flat = " ".join(prompt.system.split())
+        assert "world_query" in flat
+        assert "read-only" in flat
+        assert "propose_geo_scope" in flat
+        assert "human review" in flat
+        assert "world_show" not in flat

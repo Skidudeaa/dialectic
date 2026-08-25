@@ -15,6 +15,7 @@
 # PROPOSAL_TTL it stops rendering. Confirming inserts a human_confirmed
 # replacement that does not expire (api/geo.py).
 
+import asyncio
 import difflib
 import json
 import os
@@ -25,16 +26,26 @@ from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from geo_scopes import (
+    GeoScope,
+    GeoScopeReview,
+    GeoScopeService,
     LIVE_PREDICATE,
     insert_scope,
     resolve_subject_in_room,
     validate_geometry,
 )
+from field_marks import FieldMarkService, causal_subject_roles
 from models import EventType
+from world_signals import WorldSignalSource, WorldSignalStore, world_signal_store
 
 MARINE_PATH = Path(__file__).resolve().parents[1] / "data" / "natural_earth" / "marine.json"
 PROPOSAL_TTL = timedelta(days=14)
 _MAX_CANDIDATES = 5
+WORLD_QUERY_INNER_TIMEOUT_S = 10.0
+_WORLD_QUERY_SCOPE_CAP = 100
+_WORLD_QUERY_LINEAGE_CAP = 12
+_WORLD_QUERY_BINDING_CAP = 50
+_WORLD_QUERY_SIGNAL_CAP = 100
 
 _SUBJECT_ENTITIES = {
     "room": "rooms",
@@ -276,4 +287,242 @@ PROPOSE_GEO_SCOPE_SCHEMA = {
         },
     },
     "required": ["region"],
+}
+
+
+def _scope_summary(scope: GeoScope) -> dict[str, Any]:
+    return {
+        "id": scope.id,
+        "label": scope.label,
+        "kind": scope.kind,
+        "authority": scope.authority,
+        "review_state": scope.review_state,
+        "source_state": scope.source_state,
+        "freshness": scope.freshness.model_dump(mode="json"),
+        "subject": scope.subject.model_dump(mode="json"),
+        "provenance": scope.provenance.model_dump(mode="json"),
+    }
+
+
+def _bounded_lineage(review: GeoScopeReview) -> dict[str, Any]:
+    lineage = review.lineage
+    if len(lineage) <= _WORLD_QUERY_LINEAGE_CAP:
+        selected = lineage
+    else:
+        selected = [lineage[0], *lineage[-(_WORLD_QUERY_LINEAGE_CAP - 1):]]
+    return {
+        "total": len(lineage),
+        "omitted": len(lineage) - len(selected),
+        "items": [
+            {
+                **_scope_summary(scope),
+                "revision_action": scope.revision_action,
+                "review_note": scope.review_note,
+                "created_by": str(scope.created_by) if scope.created_by else None,
+                "created_at": scope.created_at.isoformat(),
+            }
+            for scope in selected
+        ],
+    }
+
+
+def _signal_source_summary(source: WorldSignalSource) -> dict[str, Any]:
+    if source.source_state in {"unavailable", "rate_limited"}:
+        status = "unavailable"
+        current_count: int | None = None
+    elif source.freshness in {"unknown", "stale", "expired"}:
+        status = "unknown"
+        current_count = None
+    elif source.signal_count == 0:
+        status = "empty"
+        current_count = 0
+    else:
+        status = "configured"
+        current_count = source.signal_count
+    return {
+        "provider": source.provider,
+        "status": status,
+        "source_state": source.source_state,
+        "freshness": source.freshness,
+        "coverage": source.coverage,
+        "current_signal_count": current_count,
+        "observed_at": source.observed_at.isoformat() if source.observed_at else None,
+        "retrieved_at": source.retrieved_at.isoformat(),
+        "expires_at": source.expires_at.isoformat() if source.expires_at else None,
+    }
+
+
+def _signals_summary(
+    store: WorldSignalStore, room_id: UUID, *, now: datetime,
+) -> dict[str, Any]:
+    projection = store.project([room_id], now=now)
+    if projection.signal_sources.status == "not_configured":
+        return {
+            "status": "not_configured",
+            "current_signal_count": None,
+            "sources": [],
+            "items": [],
+            "omitted": 0,
+        }
+    sources = [_signal_source_summary(source) for source in projection.signal_sources.sources]
+    known_counts = [source["current_signal_count"] for source in sources]
+    current_count = (
+        sum(known_counts) if all(count is not None for count in known_counts) else None
+    )
+    signals = projection.signals[:_WORLD_QUERY_SIGNAL_CAP]
+    return {
+        "status": "configured",
+        "current_signal_count": current_count,
+        "sources": sources,
+        "items": [
+            {
+                "id": signal.id,
+                "provider": signal.provider,
+                "label": signal.label,
+                "layer": signal.layer,
+                "source_state": signal.source_state,
+                "freshness": signal.freshness,
+                "coverage": signal.coverage,
+                "observed_at": signal.observed_at.isoformat() if signal.observed_at else None,
+                "retrieved_at": signal.retrieved_at.isoformat(),
+                "expires_at": signal.expires_at.isoformat() if signal.expires_at else None,
+            }
+            for signal in signals
+        ],
+        "omitted": len(projection.signals) - len(signals),
+    }
+
+
+def _scope_uuid(value: str) -> UUID | None:
+    if not value.startswith("geo_scope:"):
+        return None
+    try:
+        return UUID(value.removeprefix("geo_scope:"))
+    except ValueError:
+        return None
+
+
+async def world_query(
+    db: Any,
+    room_id: UUID,
+    room_label: str,
+    args: dict,
+    *,
+    signal_store: WorldSignalStore | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Read the current room's durable World authority and ephemeral signals.
+
+    The two projections are public owner services. This executor contains no
+    SQL and no write call; the current room ID is closed over by the registry.
+    """
+    current_time = now or datetime.now(timezone.utc)
+    store = signal_store or world_signal_store
+    query = str(args.get("scope") or "").strip()
+
+    async with asyncio.timeout(WORLD_QUERY_INNER_TIMEOUT_S):
+        geo_service = GeoScopeService(db)
+        projection = await geo_service.build(room_id)
+        visible = projection.scopes
+        selected_id: UUID | None = None
+        if query:
+            if query.startswith("geo_scope:"):
+                selected_id = _scope_uuid(query)
+                if selected_id is None or await geo_service.get(room_id, selected_id) is None:
+                    return {"ok": False, "error": "scope_not_found", "scope": query}
+            else:
+                matches = [scope for scope in visible if scope.label == query]
+                if not matches:
+                    return {"ok": False, "error": "scope_not_found", "scope": query}
+                if len(matches) > 1:
+                    return {
+                        "ok": False,
+                        "error": "ambiguous_scope_label",
+                        "scope": query,
+                        "matches": sorted(scope.id for scope in matches),
+                    }
+                selected_id = UUID(matches[0].id.removeprefix("geo_scope:"))
+
+        result: dict[str, Any] = {
+            "ok": True,
+            "room": {"id": str(room_id), "label": room_label},
+            "show_on_world": {
+                "room_id": str(room_id),
+                "scene": "atlas",
+                "view": f"world;room={room_id}",
+            },
+            "scopes": {
+                "total": len(visible),
+                "omitted": max(0, len(visible) - _WORLD_QUERY_SCOPE_CAP),
+                "items": [_scope_summary(scope) for scope in visible[:_WORLD_QUERY_SCOPE_CAP]],
+            },
+            "signals": _signals_summary(store, room_id, now=current_time),
+        }
+        if selected_id is None:
+            return result
+
+        review = await geo_service.review(room_id, selected_id)
+        if review is None:
+            return {"ok": False, "error": "scope_not_found", "scope": query}
+        lineage_ids = {
+            scope.id.removeprefix("geo_scope:") for scope in review.lineage
+        }
+        field = await FieldMarkService(db).build(room_id)
+        bindings: list[dict[str, Any]] = []
+        for mark in field.marks:
+            subjects = [subject.model_dump() for subject in mark.subjects]
+            try:
+                roles = causal_subject_roles(mark.relation, subjects)
+            except ValueError:
+                continue
+            if roles is None or str(roles.evidence.get("id")) not in lineage_ids:
+                continue
+            bindings.append({
+                "id": mark.id,
+                "relation": mark.relation,
+                "review_state": mark.review,
+                "provisional": mark.review == "provisional",
+                "evidence_scope_id": str(roles.evidence["id"]),
+                "target": {
+                    "room_id": str(room_id),
+                    "book_id": roles.book_id,
+                    "node_id": roles.node_id,
+                    "node_label": str(mark.payload.get("node_label") or roles.node_id),
+                },
+            })
+        current = _scope_summary(review.current)
+        current.update({
+            "root_id": review.root_id,
+            "lineage": _bounded_lineage(review),
+            "causal_bindings": bindings[:_WORLD_QUERY_BINDING_CAP],
+            "causal_bindings_omitted": max(0, len(bindings) - _WORLD_QUERY_BINDING_CAP),
+            "causal_note": (
+                "Field bindings are interpretations under human review; "
+                "provisional does not mean confirmed."
+            ),
+        })
+        result["scope"] = current
+        return result
+
+
+WORLD_QUERY_DESCRIPTION = (
+    "Read-only inspection of geography for the current room. Use it to check "
+    "what durable scopes actually exist, who or what supplied them, their "
+    "separate review/source/freshness states, bounded lineage, causal Field "
+    "bindings, and any current ephemeral World signals. Pass `scope` as an "
+    "exact `geo_scope:<uuid>` or exact label for detail; omit it for a bounded "
+    "room overview. It never writes, guesses coordinates, widens the room "
+    "fence, or turns unknown source state into zero. The returned "
+    "`show_on_world` destination uses the existing encoded World view."
+)
+
+WORLD_QUERY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "scope": {
+            "type": "string",
+            "description": "Optional exact geo_scope:<uuid> or exact case-sensitive scope label.",
+        },
+    },
+    "required": [],
 }
