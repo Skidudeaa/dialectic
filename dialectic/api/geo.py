@@ -234,10 +234,10 @@ async def _review(
                     status_code=409,
                     detail="only a machine_proposed scope can be confirmed or rejected",
                 )
-            if action == "ratify" and target.authority != "source_reported":
+            if action == "ratify" and target.review_state != "accepted":
                 raise HTTPException(
                     status_code=409,
-                    detail="only a source_reported scope can be ratified",
+                    detail="only an accepted scope can be ratified",
                 )
             if action in ("redraw", "supersede") and target.review_state != "accepted":
                 raise HTTPException(

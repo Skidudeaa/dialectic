@@ -298,6 +298,44 @@ async def test_ratify_appends_an_identical_human_confirmed_successor(world):
 
 
 @pytest.mark.asyncio
+async def test_ratify_route_accepts_a_legacy_human_confirmed_seed_scope(world):
+    scope_id = uuid4()
+    now = datetime.now(timezone.utc)
+    subject = {"entity": "rooms", "id": str(ROOM_AMO)}
+    provenance = {
+        "provider": "natural_earth", "acquisition": "human",
+        "source_id": "Persian Gulf", "credit": "Made with Natural Earth",
+    }
+    await world.execute(
+        """INSERT INTO geo_scopes
+               (id, room_id, subject, kind, geometry, label, authority,
+                provenance, source_state, confirmed_by, confirmed_at,
+                created_by, created_at)
+           VALUES ($1, $2, $3, 'region', $4, 'Persian Gulf',
+                   'human_confirmed', $5, 'ok', $6, $7, $6, $7)""",
+        scope_id, ROOM_AMO, subject, POLY, provenance, AMO, now,
+    )
+    original = await GeoScopeService(world).get(ROOM_AMO, scope_id)
+    assert original is not None
+
+    successor = await geo_api.ratify_geo_scope(
+        ROOM_AMO, scope_id, request=None, token=f"tok-{ROOM_AMO}",
+        current_user=_user(AMO), db=world,
+    )
+
+    assert successor.revision_action == "ratify"
+    assert successor.authority == "human_confirmed"
+    assert successor.confirmed_by == AMO
+    assert successor.created_by == AMO
+    assert successor.subject == original.subject
+    assert successor.provenance == original.provenance
+    assert successor.geometry == original.geometry
+    assert successor.label == original.label
+    assert successor.source_state == original.source_state
+    assert successor.supersedes_id == scope_id
+
+
+@pytest.mark.asyncio
 async def test_one_scope_cannot_fork_to_two_direct_successors(world):
     scope_id = await _propose(world)
     await geo_api._review(ROOM_AMO, scope_id, "confirm", _user(AMO), world)
