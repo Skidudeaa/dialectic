@@ -133,8 +133,7 @@ export default function Login({ onLogin }: Props) {
         </button>
 
         <p className="mt-4 pt-3 border-t border-border text-[10px] text-text-dim font-mono leading-relaxed">
-          Two-analyst workspace. Dev users: <span className="text-text-muted">amo</span>,{" "}
-          <span className="text-text-muted">dan</span>.
+          Specialist console. Most sessions reach tradingDesk via Dialectic's Bench.
         </p>
       </form>
     </div>
