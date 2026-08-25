@@ -1,4 +1,4 @@
-import type { WorkspaceScene } from './workspace.ts'
+import type { ProposalEnvelope, WorkspaceScene } from './workspace.ts'
 export * from './workspace.ts'
 
 export interface Room {
@@ -366,6 +366,18 @@ export interface HomeActivityRoom {
 export interface HomeActivityProjection {
   generated_at: string;
   rooms: HomeActivityRoom[];
+}
+
+/** GET /users/me/home/proposals — the same ProposalEnvelope shape every room
+ *  already reads, widened across every room a Home member belongs to and
+ *  labelled with the room it came from. Mirrors home_proposals.HomeProposalItem. */
+export interface HomeProposalItem extends ProposalEnvelope {
+  room_name: string;
+}
+
+export interface HomeProposalsResponse {
+  generated_at: string;
+  proposals: HomeProposalItem[];
 }
 
 /** One node of GET /rooms/{id}/genealogy — the fork tree with lineage. */

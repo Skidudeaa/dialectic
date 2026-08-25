@@ -1,4 +1,4 @@
-import type { Attachment, HomeActivityProjection, Memory, MirrorDiff, MirrorRoom, MirrorVersion, RoundState, Thread, ThreadNode, UserRoom } from '../types/index.ts';
+import type { Attachment, HomeActivityProjection, HomeProposalsResponse, Memory, MirrorDiff, MirrorRoom, MirrorVersion, RoundState, Thread, ThreadNode, UserRoom } from '../types/index.ts';
 import type { AtlasProjection } from '../types/atlas.ts';
 import type {
   FieldMark,
@@ -128,6 +128,11 @@ class DialecticAPI {
   // the current Home room token through the normal header path.
   async getHomeActivity(): Promise<HomeActivityProjection> {
     return this.fetch('/users/me/home/activity');
+  }
+  /** Every pending/resolved proposal across every room a Home member belongs
+   *  to — the human-action inbox (§H03). Same auth shape as getHomeActivity. */
+  async getHomeProposals(): Promise<HomeProposalsResponse> {
+    return this.fetch('/users/me/home/proposals');
   }
   /**
    * Create the scheme's room from Home, carrying Home's membership into it.

@@ -29,6 +29,7 @@ asyncpg = pytest.importorskip("asyncpg")
 
 from api.home import _SPAWN_SCHEME_SQL  # noqa: E402
 from api.thread_titles import ROOT_THREAD_TITLE  # noqa: E402
+from models import EventType  # noqa: E402
 
 TEST_DSN = os.getenv("TEST_DATABASE_URL", "postgresql://root@localhost/dialectic_test")
 
@@ -186,7 +187,13 @@ async def test_spawned_room_gets_a_named_root_thread():
 
 async def test_spawn_writes_both_events():
     """Event sourcing is the source of truth — a room that appears without a
-    ROOM_CREATED event is a room the log cannot explain."""
+    room_created event is a room the log cannot explain.
+
+    The values must be lowercase, matching EventType's own members — the SQL
+    used to hardcode 'ROOM_CREATED'/'THREAD_CREATED' literals, which silently
+    diverged from every other writer of this column (models.py's EventType is
+    lowercase) and made replay/engine.py's `if event_type == "room_created"`
+    skip every Home-spawned room's creation event."""
     conn = await _connect()
     tx = conn.transaction()
     await tx.start()
@@ -198,7 +205,7 @@ async def test_spawn_writes_both_events():
                 "SELECT event_type FROM events WHERE room_id = $1", row["room_id"],
             )
         }
-        assert kinds == {"ROOM_CREATED", "THREAD_CREATED"}
+        assert kinds == {EventType.ROOM_CREATED.value, EventType.THREAD_CREATED.value}
     finally:
         await tx.rollback()
         await conn.close()

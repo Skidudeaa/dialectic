@@ -21,6 +21,7 @@ import pytest
 import pytest_asyncio
 
 from home_activity import MOVEMENT_KINDS, HomeActivityService
+from models import EventType
 
 TEST_DATABASE_URL = os.environ.get(
     "DIALECTIC_TEST_DATABASE_URL", "postgresql://root@localhost/dialectic_test"
@@ -127,11 +128,14 @@ async def moved(db):
            VALUES ($1,$2,'Close before CPI','flat','commitment',$3,'active')""",
         SHARED, TS, BASE + timedelta(hours=12))
 
-    # thesis_lifecycle
+    # thesis_lifecycle — event_type must match what thesis_relay.py actually
+    # writes (EventType.THESIS_CREATED.value, lowercase), not a literal that
+    # merely mirrors the query. A fixture matching only the query's own
+    # casing would mask a WHERE clause that matches zero real rows.
     await db.execute(
         """INSERT INTO events (id,timestamp,event_type,room_id,thread_id,payload)
-           VALUES ($1,$2,'THESIS_CREATED',$3,$4,'{}'::jsonb)""",
-        _uid(0xE41), _d(3), SHARED, TS)
+           VALUES ($1,$2,$3,$4,$5,'{}'::jsonb)""",
+        _uid(0xE41), _d(3), EventType.THESIS_CREATED.value, SHARED, TS)
 
     yield SimpleNamespace(db=db, home_id=home_id)
     await tx.rollback()
@@ -146,6 +150,21 @@ async def test_every_movement_kind_is_projected(moved):
     proj = await HomeActivityService(moved.db).build(DAN)
     kinds = {m.kind for m in _movement(proj)}
     assert kinds == set(MOVEMENT_KINDS), f"missing: {set(MOVEMENT_KINDS) - kinds}"
+
+
+@pytest.mark.asyncio
+async def test_thesis_lifecycle_state_strips_the_lowercase_prefix(moved):
+    """The movement SQL's WHERE clause used to require 'THESIS_CREATED' /
+    'THESIS_RETIRED' (uppercase), but thesis_relay.py writes
+    EventType.THESIS_CREATED.value, which is lowercase — so this arm matched
+    zero real rows in production, ever. Fixing only the WHERE clause without
+    also lowering the replace() prefix would leave state stuck at the full
+    'thesis_created' instead of 'created' — Postgres replace() is
+    case-sensitive."""
+    proj = await HomeActivityService(moved.db).build(DAN)
+    thesis_rows = [m for m in _movement(proj) if m.kind == "thesis_lifecycle"]
+    assert thesis_rows, "the fixture's thesis_created event must be projected"
+    assert thesis_rows[0].state == "created"
 
 
 @pytest.mark.asyncio

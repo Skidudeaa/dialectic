@@ -376,7 +376,7 @@ function oneLinePreview(raw: string | null | undefined): string {
     .slice(0, 110)
 }
 
-function agoLabel(iso: string | null | undefined): string | null {
+export function agoLabel(iso: string | null | undefined): string | null {
   if (!iso) return null
   const then = new Date(iso).getTime()
   if (Number.isNaN(then)) return null

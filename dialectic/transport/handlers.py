@@ -1287,7 +1287,7 @@ class MessageHandler:
         await self.db.execute(
             """INSERT INTO events (id, timestamp, event_type, room_id, thread_id, user_id, payload)
                VALUES ($1, $2, $3, $4, $5, $6, $7)""",
-            uuid4(), now, "MESSAGE_EDITED", conn.room_id, row['thread_id'], conn.user_id,
+            uuid4(), now, EventType.MESSAGE_EDITED.value, conn.room_id, row['thread_id'], conn.user_id,
             {"message_id": str(row['id']), "content": content},
         )
 
@@ -1321,7 +1321,7 @@ class MessageHandler:
         await self.db.execute(
             """INSERT INTO events (id, timestamp, event_type, room_id, thread_id, user_id, payload)
                VALUES ($1, $2, $3, $4, $5, $6, $7)""",
-            uuid4(), now, "MESSAGE_DELETED", conn.room_id, row['thread_id'], conn.user_id,
+            uuid4(), now, EventType.MESSAGE_DELETED.value, conn.room_id, row['thread_id'], conn.user_id,
             {"message_id": str(row['id'])},
         )
 

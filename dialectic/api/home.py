@@ -26,6 +26,7 @@ from home_activity import (
     HomeActivityService,
     HomeUnavailable,
 )
+from models import EventType
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ class SpawnSchemeResponse(BaseModel):
 #
 # can_manage_home is FALSE here without exception — the capability is Home's
 # and nondelegable, and an ordinary room has no use for it.
-_SPAWN_SCHEME_SQL = """
+_SPAWN_SCHEME_SQL = f"""
 WITH home AS (
     SELECT r.id
     FROM rooms r
@@ -116,10 +117,10 @@ WITH home AS (
     RETURNING user_id
 ), room_event AS (
     INSERT INTO events (id, timestamp, event_type, room_id, payload)
-    SELECT $7, NOW(), 'ROOM_CREATED', id, $8::jsonb FROM new_room
+    SELECT $7, NOW(), '{EventType.ROOM_CREATED.value}', id, $8::jsonb FROM new_room
 ), thread_event AS (
     INSERT INTO events (id, timestamp, event_type, room_id, thread_id, payload)
-    SELECT $9, NOW(), 'THREAD_CREATED', nr.id, nt.id, $10::jsonb
+    SELECT $9, NOW(), '{EventType.THREAD_CREATED.value}', nr.id, nt.id, $10::jsonb
     FROM new_room nr, new_thread nt
 )
 SELECT

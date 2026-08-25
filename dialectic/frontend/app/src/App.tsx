@@ -27,6 +27,7 @@ import { TypingIndicator } from './components/chat/TypingIndicator'
 import { ProtocolPicker } from './components/protocols/ProtocolPicker'
 import { ProtocolBanner } from './components/protocols/ProtocolBanner'
 import { HomeActivityPulse } from './components/home/HomeActivityPulse'
+import { ProposalInbox } from './components/home/ProposalInbox'
 import { BriefingPanel } from './components/analytics/BriefingPanel'
 import { CommitmentSurface } from './components/stakes/CommitmentSurface'
 import { WorkspaceSceneFrame } from './components/workspace/WorkspaceSceneFrame'
@@ -812,6 +813,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
         residents={participants}
         compact
       />
+      <ProposalInbox onNavigate={(destination) => navigate(destination, 'push')} />
       {recordSurface}
     </>
   )

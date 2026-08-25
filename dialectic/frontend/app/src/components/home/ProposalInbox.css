@@ -1,0 +1,219 @@
+/* A paper surface (like MessageList/MessageBubble) sitting between the
+   House's chassis lintel and the paper transcript — no chassis/bezel/led
+   tokens here, same "Dark Roast" ink/bean/amber palette as HouseMovement. */
+
+.proposal-inbox {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 18px;
+    background: var(--color-obsidian);
+    border-bottom: 1px solid var(--color-bean);
+}
+
+.proposal-inbox-head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.proposal-inbox h2 {
+    margin: 0;
+    color: var(--color-secondary);
+    font: 12px/1 var(--font-mono);
+    letter-spacing: .16em;
+    text-transform: uppercase;
+}
+
+.proposal-inbox-stale {
+    margin-left: auto;
+    color: var(--color-faint);
+    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.proposal-inbox-empty {
+    margin: 0;
+    color: var(--color-faint);
+    font-size: 0.8rem;
+}
+
+.proposal-inbox-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.proposal-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    border-left: 2px solid var(--color-bean);
+    padding: 6px 10px;
+    cursor: pointer;
+    color: inherit;
+}
+
+.proposal-item:hover { background: var(--amber-08); }
+
+.proposal-item.is-proposed { border-left-color: var(--color-amber); }
+.proposal-item.is-accepted { border-left-color: var(--color-teal); }
+.proposal-item.is-dismissed,
+.proposal-item.is-failed { border-left-color: var(--color-error); }
+.proposal-item.is-superseded,
+.proposal-item.is-expired { border-left-color: var(--color-ghost); }
+
+.proposal-item-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.proposal-item-kind {
+    flex: 0 0 auto;
+    color: var(--color-secondary);
+    font: 12px/1.4 var(--font-mono);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.proposal-item-time {
+    margin-left: auto;
+    flex: 0 0 auto;
+    color: var(--color-faint);
+    font: 11px/1.4 var(--font-mono);
+}
+
+/* The literal status word, never color alone — same rule as field-review-chip. */
+.proposal-status-chip {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-bean);
+    color: var(--color-faint);
+}
+
+.proposal-status-chip.is-proposed {
+    color: var(--color-amber);
+    border-color: var(--color-amber);
+    border-style: dashed;
+}
+.proposal-status-chip.is-accepted {
+    color: var(--color-teal);
+    border-color: var(--color-teal);
+}
+.proposal-status-chip.is-dismissed,
+.proposal-status-chip.is-failed {
+    color: var(--color-error);
+    border-color: var(--color-error);
+}
+.proposal-status-chip.is-superseded,
+.proposal-status-chip.is-expired {
+    color: var(--color-ghost);
+    border-color: var(--color-ghost);
+}
+
+.proposal-item-detail {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+}
+
+.proposal-item-room {
+    flex: 0 0 auto;
+    max-width: 40%;
+    font-family: var(--font-serif);
+    font-size: 0.85rem;
+    color: var(--color-bone);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.proposal-item-rationale {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.8rem;
+    color: var(--color-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Resolved trail: present, never erased, just out of the way — the same
+   disclosure pattern as "Elsewhere in the house" (HomeActivityPulse.css). */
+.proposal-inbox-fold {
+    flex: 0 0 auto;
+    margin-top: 4px;
+    border-top: 1px solid var(--color-bean);
+}
+
+.proposal-inbox-fold > summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 6px 4px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.7rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--color-secondary);
+    user-select: none;
+}
+
+.proposal-inbox-fold > summary::-webkit-details-marker { display: none; }
+
+.proposal-inbox-fold > summary::before {
+    content: '▸';
+    font-size: 0.9em;
+    color: var(--color-faint);
+    transition: transform 120ms ease;
+}
+
+.proposal-inbox-fold[open] > summary::before { transform: rotate(90deg); }
+
+.proposal-inbox-fold > summary:hover { color: var(--color-ink); }
+
+.proposal-inbox-fold-count {
+    color: var(--color-faint);
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.proposal-inbox-fold-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 30vh;
+    overflow-y: auto;
+}
+
+.proposal-inbox-fold-body .proposal-item { opacity: .68; }
+.proposal-inbox-fold-body .proposal-item:hover { opacity: 1; }
+
+@media (max-width: 700px) {
+    .proposal-item-detail {
+        flex-direction: column;
+        gap: 0;
+    }
+    .proposal-item-room { max-width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .proposal-inbox-fold > summary::before { transition: none; }
+}

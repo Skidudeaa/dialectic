@@ -45,6 +45,7 @@ from api.reading_relay import router as reading_relay_router, set_reading_relay_
 from api.thesis_relay import router as thesis_relay_router, set_thesis_relay_db_pool
 from api.trading_relay import router as trading_relay_router, set_trading_relay_db_pool
 from api.home import router as home_router, set_home_db_pool
+from api.home_proposals import router as home_proposals_router, set_home_proposals_db_pool
 from api.workspace import router as workspace_router, set_workspace_db_pool
 from api.field import router as field_router, set_field_db_pool
 from api.atlas import router as atlas_router, set_atlas_db_pool
@@ -171,6 +172,7 @@ async def lifespan(app: FastAPI):
         set_thesis_relay_db_pool(db_pool)
         set_trading_relay_db_pool(db_pool)
         set_home_db_pool(db_pool)
+        set_home_proposals_db_pool(db_pool)
 
         # Set db_pool for the read-only workspace-object projection
         set_workspace_db_pool(db_pool)
@@ -342,6 +344,7 @@ app.include_router(trading_relay_router)
 # Home membership administration — the only door into Home (the generic
 # join path below refuses it).
 app.include_router(home_router)
+app.include_router(home_proposals_router)
 
 # Workspace-object projection -- read-only adapters over entities that
 # already exist; every write still belongs to the entity's own endpoint.
@@ -663,6 +666,14 @@ async def create_room(
         """INSERT INTO threads (id, room_id, created_at, title)
            VALUES ($1, $2, $3, $4)""",
         thread_id, room_id, now, ROOT_THREAD_TITLE
+    )
+
+    # Without this, the room exists with zero members — nobody, including its
+    # own creator, can ever open it. See CLAUDE.md's 2026-08-15 (Home) amendment.
+    await db.execute(
+        """INSERT INTO room_memberships (room_id, user_id, joined_at)
+           VALUES ($1, $2, $3)""",
+        room_id, current_user.user_id, now
     )
 
     await db.execute(

@@ -26,6 +26,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from models import EventType
+
 
 class HomeUnavailable(Exception):
     """No Home exists, or the caller is not currently a Home member."""
@@ -406,10 +408,10 @@ WITH er AS (
 
     UNION ALL
     SELECT 'thesis_lifecycle', e.room_id, e.thread_id, e.id,
-           e.event_type, lower(replace(e.event_type, 'THESIS_', '')),
+           e.event_type, replace(e.event_type, 'thesis_', ''),
            e.timestamp
     FROM events e JOIN er ON er.room_id = e.room_id
-    WHERE e.event_type IN ('THESIS_CREATED', 'THESIS_RETIRED')
+    WHERE e.event_type IN ('{EventType.THESIS_CREATED.value}', '{EventType.THESIS_RETIRED.value}')
 ),
 ranked AS (
     -- Rank INSIDE each room before any global cut. A single global

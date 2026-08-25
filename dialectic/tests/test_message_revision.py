@@ -17,6 +17,7 @@ from uuid import uuid4
 import pytest
 
 from tests.test_collaboration_contracts import make_connection, make_handler
+from models import EventType
 from transport.websocket import MessageTypes
 
 
@@ -148,6 +149,28 @@ async def test_edit_of_own_message_updates_and_broadcasts():
 
 
 @pytest.mark.asyncio
+async def test_edit_logs_a_lowercase_message_edited_event():
+    """The events INSERT hardcoded the literal "MESSAGE_EDITED" (uppercase)
+    instead of EventType.MESSAGE_EDITED.value. Every other writer of this
+    column uses the enum, which is lowercase, and replay/engine.py only
+    recognizes "message_edited" — the uppercase literal made every edit
+    silently invisible to replay."""
+    row = owned_row()
+    db = make_db(message_row=row)
+    handler, _connections = make_handler(db=db)
+    conn = make_connection()
+
+    await handler._handle_edit_message(
+        conn, {"message_id": str(row["id"]), "content": "the corrected text"}
+    )
+
+    event_sql, *event_params = db.execute.await_args_list[1].args
+    assert "INSERT INTO events" in event_sql
+    assert event_params[2] == EventType.MESSAGE_EDITED.value
+    assert event_params[2] == "message_edited"
+
+
+@pytest.mark.asyncio
 async def test_delete_is_soft():
     """
     A hard DELETE would strip the parent out from under any reply pointing at
@@ -166,6 +189,23 @@ async def test_delete_is_soft():
     assert "DELETE FROM messages" not in update_sql
 
     assert connections.broadcasts[0][1].type == MessageTypes.MESSAGE_DELETED
+
+
+@pytest.mark.asyncio
+async def test_delete_logs_a_lowercase_message_deleted_event():
+    """Sibling of test_edit_logs_a_lowercase_message_edited_event — the
+    delete path hardcoded "MESSAGE_DELETED" the same way."""
+    row = owned_row()
+    db = make_db(message_row=row)
+    handler, _connections = make_handler(db=db)
+    conn = make_connection()
+
+    await handler._handle_delete_message(conn, {"message_id": str(row["id"])})
+
+    event_sql, *event_params = db.execute.await_args_list[1].args
+    assert "INSERT INTO events" in event_sql
+    assert event_params[2] == EventType.MESSAGE_DELETED.value
+    assert event_params[2] == "message_deleted"
 
 
 @pytest.mark.asyncio
