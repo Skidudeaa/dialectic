@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { api } from './lib/api.ts'
@@ -12,6 +12,11 @@ const socket = vi.hoisted(() => ({
   refreshPresence: vi.fn(),
   refreshReactions: vi.fn(),
   refreshAttachments: vi.fn(),
+}))
+
+const projections = vi.hoisted(() => ({
+  refreshGeo: vi.fn(),
+  refreshAtlas: vi.fn(),
 }))
 
 vi.mock('./hooks/useDialecticSocket.ts', () => ({
@@ -50,8 +55,16 @@ vi.mock('./hooks/useWorkspaceObjects.ts', () => ({
 vi.mock('./hooks/useFieldMarks.ts', () => ({
   useFieldMarks: () => ({ status: 'idle' }),
 }))
+vi.mock('./hooks/useGeoScopes.ts', () => ({
+  useGeoScopes: () => ({ status: 'loading', retry: projections.refreshGeo }),
+}))
 vi.mock('./hooks/useAtlas.ts', () => ({
-  useAtlas: () => ({ status: 'idle' }),
+  useAtlas: () => ({ status: 'loading', retry: projections.refreshAtlas }),
+}))
+vi.mock('./components/workspace/focus/FocusSurface.tsx', () => ({
+  FocusSurface: ({ onGeoChanged }: { onGeoChanged: () => void }) => (
+    <button type="button" onClick={onGeoChanged}>Complete scope write</button>
+  ),
 }))
 vi.mock('./components/layout/AppLayout', () => ({
   AppLayout: ({ main }: { main: ReactNode }) => main,
@@ -123,7 +136,7 @@ function message(id: string, threadId: string = thread.id): Message {
   } as Message
 }
 
-function navigation(messageId: string): RoomNavigation {
+function navigation(messageId: string, objectId: string | null = null): RoomNavigation {
   return {
     rooms: [roomDescriptor],
     loading: false,
@@ -134,7 +147,7 @@ function navigation(messageId: string): RoomNavigation {
     refreshRooms: vi.fn(async () => [roomDescriptor]),
     navigate: vi.fn(async () => true),
     enterGrantedRoom: vi.fn(async () => true),
-    objectId: null,
+    objectId,
     viewId: null,
     messageId,
   }
@@ -161,6 +174,20 @@ beforeEach(() => {
   socket.refreshPresence.mockReset()
   socket.refreshReactions.mockReset()
   socket.refreshAttachments.mockReset()
+  projections.refreshGeo.mockReset()
+  projections.refreshAtlas.mockReset()
+})
+
+describe('world projection refresh', () => {
+  it('refreshes geo and atlas when a write finishes while both projections are loading', () => {
+    vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
+    render(<ChatLayout nav={navigation('', 'reading:r1')} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Complete scope write' }))
+
+    expect(projections.refreshGeo).toHaveBeenCalledOnce()
+    expect(projections.refreshAtlas).toHaveBeenCalledOnce()
+  })
 })
 
 describe('notification message hydration', () => {

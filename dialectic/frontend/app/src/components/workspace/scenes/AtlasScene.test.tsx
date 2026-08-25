@@ -23,7 +23,7 @@ function ready(nodes: AtlasNode[], edges: AtlasEdge[] = []): AtlasState {
 
 describe('AtlasScene', () => {
   it('shows loading, never empty, while in flight', () => {
-    render(<AtlasScene state={{ status: 'loading' }} onNavigate={vi.fn()} />)
+    render(<AtlasScene state={{ status: 'loading', retry: vi.fn() }} onNavigate={vi.fn()} />)
     expect(screen.getByTestId('scene-loading')).toBeInTheDocument()
   })
 

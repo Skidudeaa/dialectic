@@ -1056,8 +1056,8 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
                   roomId={currentRoom.id}
                   geo={roomGeo}
                   onGeoChanged={() => {
-                    if (roomGeo.status !== 'loading') roomGeo.retry()
-                    if (atlas.status !== 'loading') atlas.retry()
+                    roomGeo.retry()
+                    atlas.retry()
                   }}
                   onMarked={() => { if (fieldMarks.status === 'ready') fieldMarks.refresh(); else if (fieldMarks.status === 'unavailable') fieldMarks.retry() }}
                 />

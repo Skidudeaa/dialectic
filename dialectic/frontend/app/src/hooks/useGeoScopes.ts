@@ -8,16 +8,23 @@ import type { GeoProjection } from '../types/geo.ts'
  * before the first setState). Read by the Bench's "World ↗" affordance,
  * which appears only when the room owns at least one scope.
  */
-export type GeoScopesState =
+type GeoScopesSnapshot =
   | { status: 'loading' }
-  | { status: 'unavailable'; error: string; retry: () => void }
-  | { status: 'ready'; projection: GeoProjection; retry: () => void }
+  | { status: 'unavailable'; error: string }
+  | { status: 'ready'; projection: GeoProjection }
+
+export type GeoScopesState = GeoScopesSnapshot & { retry: () => void }
 
 export function useGeoScopes(roomId: string | null): GeoScopesState {
-  const [state, setState] = useState<GeoScopesState>({ status: 'loading' })
   const [nonce, setNonce] = useState(0)
-  const retry = useCallback(() => setNonce((n) => n + 1), [])
   const requestRef = useRef(0)
+  const retry = useCallback(() => {
+    // Invalidate synchronously: a response already in flight must not land
+    // between this write-triggered refresh and the next effect pass.
+    requestRef.current += 1
+    setNonce((n) => n + 1)
+  }, [])
+  const [state, setState] = useState<GeoScopesSnapshot>({ status: 'loading' })
 
   useEffect(() => {
     if (!roomId) return
@@ -29,17 +36,16 @@ export function useGeoScopes(roomId: string | null): GeoScopesState {
       try {
         const projection = await api.getGeo(roomId)
         if (requestRef.current !== ticket) return
-        setState({ status: 'ready', projection, retry })
+        setState({ status: 'ready', projection })
       } catch (error: unknown) {
         if (requestRef.current !== ticket) return
         setState({
           status: 'unavailable',
           error: error instanceof Error ? error.message : 'Could not read the room geography',
-          retry,
         })
       }
     })()
   }, [roomId, nonce, retry])
 
-  return state
+  return { ...state, retry } as GeoScopesState
 }

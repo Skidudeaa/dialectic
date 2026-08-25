@@ -53,13 +53,17 @@ export function FocusWorld({
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [placeId, setPlaceId] = useState('')
+  const [moveScopeId, setMoveScopeId] = useState<string | null>(null)
 
   if (geo.status !== 'ready') return null
   const coords = coordinatesOf(object)
   const mine = geo.projection.scopes.filter((s) => isAbout(s, coords))
-  const options = placeable(geo.projection.scopes)
+  const roomOptions = placeable(geo.projection.scopes)
   const primary = coords[0]
-  const acceptedPlacement = mine.find((scope) => scope.review_state === 'accepted')
+  const acceptedPlacement = mine.find((scope) => scope.id === moveScopeId && scope.review_state === 'accepted')
+  const options = acceptedPlacement
+    ? roomOptions.filter((scope) => scope.geometry.type === acceptedPlacement.geometry.type)
+    : roomOptions
 
   const run = async (key: string, fn: () => Promise<unknown>, after: () => void) => {
     setBusy(key)
@@ -103,6 +107,21 @@ export function FocusWorld({
                 >
                   Review placement
                 </button>
+                {canAct && scope.review_state === 'accepted' && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    aria-pressed={moveScopeId === scope.id}
+                    disabled={busy !== null}
+                    onClick={() => {
+                      setMoveScopeId(scope.id)
+                      setPlaceId('')
+                      setError(null)
+                    }}
+                  >
+                    Move placement
+                  </button>
+                )}
                 {canAct && scope.review_state === 'accepted' && primary && (
                   <button
                     type="button"
@@ -146,7 +165,11 @@ export function FocusWorld({
                     credit: chosen.provenance.credit,
                   },
                 })
-            void run('place', write, () => { setPlaceId(''); onChanged() })
+            void run('place', write, () => {
+              setPlaceId('')
+              setMoveScopeId(null)
+              onChanged()
+            })
           }}
         >
           <label className="focus-world-place-label">
@@ -164,7 +187,7 @@ export function FocusWorld({
             </select>
           </label>
           <button type="submit" className="btn btn-sm" disabled={busy !== null || !placeId}>
-            Place
+            {acceptedPlacement ? 'Move' : 'Place'}
           </button>
         </form>
       )}

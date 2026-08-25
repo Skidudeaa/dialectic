@@ -11,19 +11,26 @@ import type { AtlasProjection } from '../types/atlas.ts'
  * WHY no room token: Atlas is cross-room by construction (§5.4) -- JWT alone,
  * same as `api.getHomeActivity()`.
  */
-export type AtlasState =
+type AtlasSnapshot =
   | { status: 'loading' }
-  | { status: 'unavailable'; error: string; retry: () => void }
-  | { status: 'ready'; projection: AtlasProjection; retry: () => void }
+  | { status: 'unavailable'; error: string }
+  | { status: 'ready'; projection: AtlasProjection }
+
+export type AtlasState = AtlasSnapshot & { retry: () => void }
 
 export function useAtlas(enabled: boolean): AtlasState {
-  const [state, setState] = useState<AtlasState>({ status: 'loading' })
   const [nonce, setNonce] = useState(0)
-  const retry = useCallback(() => setNonce((n) => n + 1), [])
 
   // Same purpose as useWorkspaceObjects' requestRef: a stale response from a
   // previous enable/disable toggle must not paint over a newer one.
   const requestRef = useRef(0)
+  const retry = useCallback(() => {
+    // Invalidate synchronously: a response already in flight must not land
+    // between this write-triggered refresh and the next effect pass.
+    requestRef.current += 1
+    setNonce((n) => n + 1)
+  }, [])
+  const [state, setState] = useState<AtlasSnapshot>({ status: 'loading' })
 
   useEffect(() => {
     if (!enabled) return
@@ -40,17 +47,16 @@ export function useAtlas(enabled: boolean): AtlasState {
       try {
         const projection = await api.getAtlas()
         if (requestRef.current !== ticket) return
-        setState({ status: 'ready', projection, retry })
+        setState({ status: 'ready', projection })
       } catch (error: unknown) {
         if (requestRef.current !== ticket) return
         setState({
           status: 'unavailable',
           error: error instanceof Error ? error.message : 'Could not read the atlas',
-          retry,
         })
       }
     })()
   }, [enabled, nonce, retry])
 
-  return state
+  return { ...state, retry } as AtlasState
 }

@@ -30,6 +30,12 @@ function jsonResponse(body: unknown, ok = true, status = 200) {
   } as Response
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
 describe('useAtlas', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
@@ -82,6 +88,29 @@ describe('useAtlas', () => {
     const { retry } = result.current
     await act(async () => { retry() })
     await waitFor(() => expect(result.current.status).toBe('ready'))
+  })
+
+  it('queues a refresh while loading and prevents the stale request from winning', async () => {
+    const stale = deferred<Response>()
+    const fresh = deferred<Response>()
+    vi.mocked(fetch)
+      .mockReturnValueOnce(stale.promise)
+      .mockReturnValueOnce(fresh.promise)
+
+    const { result } = renderHook(() => useAtlas(true))
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+    expect(result.current.status).toBe('loading')
+
+    act(() => { result.current.retry() })
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+
+    await act(async () => { stale.resolve(jsonResponse(projection(['reading:before']))); await stale.promise })
+    expect(result.current.status).toBe('loading')
+
+    await act(async () => { fresh.resolve(jsonResponse(projection(['reading:after']))); await fresh.promise })
+    await waitFor(() => expect(result.current.status).toBe('ready'))
+    if (result.current.status !== 'ready') throw new Error('unreachable')
+    expect(result.current.projection.nodes.map((node) => node.id)).toEqual(['reading:after'])
   })
 
   it('does not fetch until it is allowed to', () => {

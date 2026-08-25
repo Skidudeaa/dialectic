@@ -34,7 +34,15 @@ function ready(scopes: GeoScope[]): GeoScopesState {
 }
 
 const roomArea = scope({ id: 'geo_scope:area', label: 'Strait of Hormuz (approx.)' })
+const roomRoute = scope({
+  id: 'geo_scope:route', kind: 'route', label: 'Hormuz shipping lane',
+  geometry: { type: 'LineString', coordinates: [[55, 26], [57, 27]] },
+})
 const placedHere = scope({ id: 'geo_scope:p1', subject: { entity: 'reading_items', id: 'r1' }, kind: 'region', label: 'Persian Gulf' })
+const routedHere = scope({
+  id: 'geo_scope:r1', subject: { entity: 'reading_items', id: 'r1' }, kind: 'route', label: 'Tanker route',
+  geometry: { type: 'LineString', coordinates: [[54, 25], [56, 26]] },
+})
 const proposedHere = scope({
   id: 'geo_scope:p2', subject: { entity: 'reading_items', id: 'r1' }, kind: 'region', label: 'Gulf of Oman',
   authority: 'machine_proposed', revision_action: 'propose', review_state: 'proposed',
@@ -74,7 +82,7 @@ describe('FocusWorld', () => {
     const confirmed = rows.find((r) => r.getAttribute('data-authority') === 'human_confirmed')!
     expect(proposed).toHaveTextContent('proposed')
     expect(Array.from(proposed.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Review placement'])
-    expect(Array.from(confirmed.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Review placement', 'Mark as evidence here'])
+    expect(Array.from(confirmed.querySelectorAll('button')).map((b) => b.textContent)).toEqual(['Review placement', 'Move placement', 'Mark as evidence here'])
     expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Reject' })).toBeNull()
 
@@ -94,8 +102,9 @@ describe('FocusWorld', () => {
     const create = vi.spyOn(api, 'createGeoScope')
     const onChanged = vi.fn()
     render(<FocusWorld roomId="room-h" object={reading} geo={ready([roomArea, placedHere])} canAct onChanged={onChanged} onMarked={vi.fn()} onOpenScope={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Move placement' }))
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'geo_scope:area' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Place' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
     await waitFor(() => expect(onChanged).toHaveBeenCalled())
 
     expect(redraw).toHaveBeenCalledWith('room-h', 'p1', {
@@ -103,6 +112,40 @@ describe('FocusWorld', () => {
     })
     expect(create).not.toHaveBeenCalled()
     expect(redraw.mock.calls[0][2]).not.toHaveProperty('supersedes_id')
+  })
+
+  it('redraws the explicitly selected lineage when accepted sibling roots coexist', async () => {
+    const otherRoot = scope({
+      id: 'geo_scope:p-other', subject: { entity: 'reading_items', id: 'r1' },
+      kind: 'region', label: 'Arabian Sea',
+    })
+    const redraw = vi.spyOn(api, 'redrawGeoScope').mockResolvedValue({ ...placedHere, id: 'geo_scope:p-next' })
+    render(<FocusWorld roomId="room-h" object={reading} geo={ready([roomArea, otherRoot, placedHere])} canAct onChanged={vi.fn()} onMarked={vi.fn()} onOpenScope={vi.fn()} />)
+
+    const selectedRow = screen.getByText('Persian Gulf').closest('li')!
+    fireEvent.click(within(selectedRow).getByRole('button', { name: 'Move placement' }))
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'geo_scope:area' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+
+    await waitFor(() => expect(redraw).toHaveBeenCalled())
+    expect(redraw).toHaveBeenCalledWith('room-h', 'p1', expect.objectContaining({ geometry: roomArea.geometry }))
+    expect(redraw).not.toHaveBeenCalledWith('room-h', 'p-other', expect.anything())
+  })
+
+  it('only offers polygon room geometry when moving a region placement', () => {
+    render(<FocusWorld roomId="room-h" object={reading} geo={ready([roomRoute, roomArea, placedHere])} canAct onChanged={vi.fn()} onMarked={vi.fn()} onOpenScope={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Move placement' }))
+
+    expect(screen.getByRole('option', { name: 'Strait of Hormuz (approx.)' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Hormuz shipping lane' })).toBeNull()
+  })
+
+  it('only offers line room geometry when moving a route placement', () => {
+    render(<FocusWorld roomId="room-h" object={reading} geo={ready([roomArea, roomRoute, routedHere])} canAct onChanged={vi.fn()} onMarked={vi.fn()} onOpenScope={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Move placement' }))
+
+    expect(screen.getByRole('option', { name: 'Hormuz shipping lane' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Strait of Hormuz (approx.)' })).toBeNull()
   })
 
   it('offers no writes to a viewer who cannot act but still opens read-only review', () => {
