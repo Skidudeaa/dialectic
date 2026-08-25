@@ -141,6 +141,20 @@ _SUBJECT_ENTITY_TABLES = {
     "memories": ("memories", "room_id", "id"),
     "commitments": ("commitments", "room_id", "id"),
     "field_marks": ("field_marks", "room_id", "id"),
+    # World Lens (migration 021). The fourth element is an extra predicate:
+    # only geometry a human confirmed or a source reported may anchor a mark.
+    # A machine_proposed scope is the participant's guess and stays outside
+    # the Field until a person confirms it — the same fail-closed rule §14.4
+    # applies to relations, applied to coordinates. The live rule itself is
+    # geo_scopes.LIVE_PREDICATE, restated here on alias-free columns because
+    # this SELECT has no alias; keep the two in step.
+    "geo_scopes": (
+        "geo_scopes", "room_id", "id",
+        "AND authority <> 'machine_proposed'"
+        " AND (expires_at IS NULL OR expires_at > NOW())"
+        " AND source_state <> 'confirmed_empty'"
+        " AND NOT EXISTS (SELECT 1 FROM geo_scopes s WHERE s.supersedes_id = geo_scopes.id)",
+    ),
 }
 
 
@@ -259,13 +273,14 @@ async def resolve_subjects_in_room(db, room_id: UUID, subjects: list[dict]) -> b
         table = _SUBJECT_ENTITY_TABLES.get(entity)
         if table is None:
             return False
-        source, room_col, id_col = table
+        source, room_col, id_col = table[:3]
+        extra = table[3] if len(table) > 3 else ""
         try:
             subject_id = UUID(str(subject.get("id")))
         except (TypeError, ValueError):
             return False
         found = await db.fetchval(
-            f"SELECT 1 FROM {source} WHERE {id_col} = $1 AND {room_col} = $2",
+            f"SELECT 1 FROM {source} WHERE {id_col} = $1 AND {room_col} = $2 {extra}",
             subject_id, room_id,
         )
         if not found:

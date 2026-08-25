@@ -861,3 +861,33 @@ CREATE TABLE IF NOT EXISTS external_operations (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_external_operations_message_slot
     ON external_operations(source_message_id, proposal_slot)
     WHERE source_message_id IS NOT NULL AND proposal_slot IS NOT NULL;
+
+-- ============================================================
+-- GEO SCOPES (migration 021) — the World Lens substrate
+-- ============================================================
+CREATE TABLE IF NOT EXISTS geo_scopes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    room_id UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    subject JSONB NOT NULL,                 -- {entity,id,field}: rooms | reading_items | field_marks | messages | memories
+    kind TEXT NOT NULL CHECK (kind IN ('point','route','polygon','region')),
+    geometry JSONB NOT NULL,                -- GeoJSON geometry, [lon,lat] positions
+    label TEXT NOT NULL DEFAULT '',
+    authority TEXT NOT NULL CHECK (authority IN ('human_confirmed','source_reported','machine_proposed')),
+    provenance JSONB NOT NULL,              -- {provider, source_id?, url?, acquisition, credit}
+    observed_at TIMESTAMPTZ,
+    retrieved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ,
+    source_state TEXT NOT NULL DEFAULT 'ok'
+        CHECK (source_state IN ('ok','partial','confirmed_empty','stale','unavailable','rate_limited','not_configured')),
+    confirmed_by UUID REFERENCES users(id),
+    confirmed_at TIMESTAMPTZ,
+    supersedes_id UUID REFERENCES geo_scopes(id),
+    created_by UUID REFERENCES users(id),   -- NULL = Dialectic
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT confirmed_iff_human CHECK ((authority = 'human_confirmed') = (confirmed_by IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_geo_scopes_room       ON geo_scopes (room_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_geo_scopes_subject    ON geo_scopes USING GIN (subject jsonb_path_ops);
+CREATE INDEX IF NOT EXISTS idx_geo_scopes_supersedes ON geo_scopes (supersedes_id);
+COMMENT ON TABLE geo_scopes IS
+    'World Lens: append-only geography attached to existing rows, with authority and provenance. See geo_scopes.py.';

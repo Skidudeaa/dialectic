@@ -75,6 +75,9 @@ class EventType(str, Enum):
     FIELD_MARK_INFERRED = "field_mark_inferred"
     FIELD_MARK_REVIEWED = "field_mark_reviewed"
     FIELD_MARK_CREATED = "field_mark_created"
+    # World Lens (migration 021) — geography attached to existing rows.
+    GEO_SCOPE_CREATED = "geo_scope_created"
+    GEO_SCOPE_REVIEWED = "geo_scope_reviewed"
 
 
 class CommitmentStatus(str, Enum):

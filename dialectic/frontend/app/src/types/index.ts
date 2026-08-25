@@ -615,3 +615,4 @@ export interface MirrorDiff {
   to_version: number;
   lines: string[];
 }
+export * from './geo'

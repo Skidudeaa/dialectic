@@ -67,6 +67,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from field_marks import FieldMarkService
+from geo_scopes import LIVE_PREDICATE as _GEO_LIVE, GeoScope, scope_from_row
 from home_activity import COMMITMENT_DUE_WINDOW
 from workspace_objects import workspace_object_from_field_mark
 
@@ -156,6 +157,13 @@ class AtlasProjection(BaseModel):
     generated_at: datetime
     nodes: list[AtlasNode]
     edges: list[AtlasEdge]
+    # World Lens (migration 021): the live geometry in the viewer's eligible
+    # rooms, fenced by the SAME array as every node. A scope names its
+    # subject ({entity,id,field}); the World renderer joins that to a node
+    # (`reading:<id>`, `room:<id>`, `field_mark:<id>`) client-side. Nodes
+    # carry no geo field on purpose — "not geographically modeled" is the
+    # absence of a scope, never a null a renderer might misread as (0,0).
+    scopes: list[GeoScope] = []
 
 
 # --- statements --------------------------------------------------------
@@ -165,6 +173,23 @@ class AtlasProjection(BaseModel):
 # rediscover a room through a broader join — the fence is the entire privacy
 # invariant (§6.5), and it must hold in the SQL, never only in the Python
 # that consumes it.
+
+_GEO_SCOPES_SQL = f"""
+WITH ranked AS (
+    SELECT g.id, g.room_id, g.subject, g.kind, g.geometry, g.label,
+           g.authority, g.provenance, g.source_state, g.observed_at,
+           g.retrieved_at, g.expires_at, g.confirmed_by, g.confirmed_at,
+           g.supersedes_id, g.created_by, g.created_at,
+           row_number() OVER (
+               PARTITION BY g.room_id ORDER BY g.created_at DESC
+           ) AS rn
+    FROM geo_scopes g
+    WHERE g.room_id = ANY($1::uuid[]) AND {_GEO_LIVE}
+)
+SELECT * FROM ranked WHERE rn <= $2
+ORDER BY created_at DESC
+LIMIT $3
+"""
 
 _ELIGIBLE_ROOMS_SQL = """
 SELECT room_id FROM room_memberships WHERE user_id = $1
@@ -395,6 +420,9 @@ class AtlasService:
         contradiction_rows = await self.db.fetch(
             _CONTRADICTION_SQL, room_ids, _ATLAS_EDGE_CAP,
         )
+        scope_rows = await self.db.fetch(
+            _GEO_SCOPES_SQL, room_ids, _ATLAS_PER_ROOM_CAP, _ATLAS_TOTAL_CAP,
+        )
 
         nodes: list[AtlasNode] = []
         edges: list[AtlasEdge] = []
@@ -583,4 +611,5 @@ class AtlasService:
 
         return AtlasProjection(
             generated_at=generated_at, nodes=nodes, edges=edges,
+            scopes=[scope_from_row(r) for r in scope_rows],
         )

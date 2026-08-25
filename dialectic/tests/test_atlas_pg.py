@@ -65,7 +65,7 @@ def _d(days: float, base: datetime) -> datetime:
 # exact list, the same style test_workspace_objects_pg.py uses.
 _TOUCHED_TABLES = (
     "rooms", "threads", "messages", "reading_items", "memories",
-    "commitments", "field_marks", "memory_references",
+    "commitments", "field_marks", "memory_references", "geo_scopes",
 )
 
 # What entity → (table, id_column) an edge endpoint may resolve against, for

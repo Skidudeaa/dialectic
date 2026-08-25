@@ -1,3 +1,4 @@
+import type { GeoScope } from './geo'
 // Atlas — the caller's own cross-room map (design v2 §22, PLAN.md §5.4).
 //
 // Mirrors dialectic/atlas_objects.py field-for-field. This file is owned by
@@ -81,6 +82,9 @@ export interface AtlasProjection {
   generated_at: string
   nodes: AtlasNode[]
   edges: AtlasEdge[]
+  // World Lens: the live geometry in the viewer's eligible rooms, fenced by
+  // the same array as every node. Joined to nodes client-side by subject.
+  scopes: GeoScope[]
 }
 
 /** Object-kind nodes are exactly the kinds workspace_objects.py also

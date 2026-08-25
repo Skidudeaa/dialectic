@@ -20,6 +20,7 @@ const projection = (nodeIds: string[]): AtlasProjection => ({
     created_at: '2026-08-13T10:00:00Z', updated_at: '2026-08-13T10:00:00Z',
   })),
   edges: [],
+  scopes: [],
 })
 
 function jsonResponse(body: unknown, ok = true, status = 200) {

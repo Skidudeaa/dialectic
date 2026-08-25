@@ -15,7 +15,7 @@ const ready = { status: 'ready' as const, objects: [], generatedAt: 'x', retry: 
 const readyMarks = { status: 'ready' as const, marks: [], generatedAt: 'x', refresh: () => {} }
 const readyAtlas = {
   status: 'ready' as const,
-  projection: { generated_at: 'x', nodes: [], edges: [] },
+  projection: { generated_at: 'x', nodes: [], edges: [], scopes: [] },
   retry: () => {},
 }
 

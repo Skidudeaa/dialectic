@@ -49,6 +49,7 @@ from api.home_proposals import router as home_proposals_router, set_home_proposa
 from api.workspace import router as workspace_router, set_workspace_db_pool
 from api.field import router as field_router, set_field_db_pool
 from api.atlas import router as atlas_router, set_atlas_db_pool
+from api.geo import router as geo_router, set_geo_db_pool
 from api.decisions import router as decisions_router, set_decisions_db_pool
 from api.rate_limit import check_rate_limit
 from proposal_intake import (
@@ -180,6 +181,8 @@ async def lifespan(app: FastAPI):
         set_field_db_pool(db_pool)
         # Set db_pool for Atlas -- the caller's own cross-room map (api/atlas.py)
         set_atlas_db_pool(db_pool)
+        # Set db_pool for the World Lens write door (api/geo.py)
+        set_geo_db_pool(db_pool)
         # Set db_pool for the decision-provenance read (api/decisions.py)
         set_decisions_db_pool(db_pool)
         set_capabilities_db_pool(db_pool)
@@ -364,6 +367,8 @@ app.include_router(mirror_router)
 # Atlas -- the caller's own cross-room map: rooms, branches, artifacts and
 # real-provenance edges, fenced per-viewer in the SQL, JWT-only (§5.4).
 app.include_router(atlas_router)
+# World Lens (migration 021): a room's geometry -- human-only write door.
+app.include_router(geo_router)
 
 # Decision provenance -- why a machine message happened, batched per thread.
 # Fenced the same way as every other room route: room token + membership.

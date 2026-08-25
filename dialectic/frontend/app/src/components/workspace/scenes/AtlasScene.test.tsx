@@ -15,7 +15,7 @@ function node(partial: Partial<AtlasNode> & Pick<AtlasNode, 'id' | 'kind' | 'roo
 function ready(nodes: AtlasNode[], edges: AtlasEdge[] = []): AtlasState {
   return {
     status: 'ready',
-    projection: { generated_at: 'x', nodes, edges },
+    projection: { generated_at: 'x', nodes, edges, scopes: [] },
     retry: vi.fn(),
   }
 }
