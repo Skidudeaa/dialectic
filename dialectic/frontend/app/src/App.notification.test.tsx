@@ -197,7 +197,7 @@ describe('world projection refresh', () => {
     expect(projections.refreshAtlas).toHaveBeenCalledOnce()
   })
 
-  it('places an ordinary-room Atlas signal from Home with that room capability', async () => {
+  it('places an Atlas-visible signal whose saved room capability is beyond index 200', async () => {
     const home = {
       id: 'home-room', name: 'Home', token: 'home-token', is_home: true,
     } as Room
@@ -253,8 +253,15 @@ describe('world projection refresh', () => {
     })
     vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
     const place = vi.spyOn(api, 'placeWorldSignal').mockResolvedValue({} as GeoScope)
+    const fillerRooms = Array.from({ length: 200 }, (_, index): UserRoom => ({
+      ...roomDescriptor,
+      id: `filler-room-${index}`,
+      token: `filler-token-${index}`,
+    }))
+    const savedRooms = [homeDescriptor, ...fillerRooms, roomDescriptor]
+    expect(savedRooms.findIndex((savedRoom) => savedRoom.id === room.id)).toBeGreaterThan(200)
 
-    render(<ChatLayout nav={navigation('', null, [homeDescriptor, roomDescriptor])} />)
+    render(<ChatLayout nav={navigation('', null, savedRooms)} />)
     expect(screen.getByText('Unavailable room vessel')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Place Unavailable room vessel' })).toBeNull()
     fireEvent.click(screen.getByText('Unavailable room vessel'))

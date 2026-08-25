@@ -52,8 +52,6 @@ import type { ImplementedWorkspaceScene } from './types/index.ts'
 import type { FieldMark, FieldReviewRequest } from './types/workspace.ts'
 import { rememberSceneAxes, restoreSceneAxes } from './lib/sceneContinuity.ts'
 
-const WORLD_SIGNAL_ROOM_CAPABILITY_LIMIT = 200
-
 function RoomBriefing({ roomId }: { roomId: string }) {
   const [dismissed, setDismissed] = useState(false)
   if (dismissed) return null
@@ -121,17 +119,6 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // Every destination change goes through nav.navigate — no setRoom,
   // setThread, or leaveRoom call expresses a destination in this file.
   const { rooms, navigate, objectId, viewId } = nav
-  // Same room cardinality as Atlas's server fence. Tokens never enter the
-  // Atlas response or a URL/body; the scene receives only this bounded map
-  // of capabilities already authorized by GET /users/me/rooms.
-  const signalRoomTokens = useMemo<ReadonlyMap<string, string>>(
-    () => new Map(
-      rooms.slice(0, WORLD_SIGNAL_ROOM_CAPABILITY_LIMIT)
-        .filter((room) => room.token)
-        .map((room) => [room.id, room.token]),
-    ),
-    [rooms],
-  )
   const [showRoomAccess, setShowRoomAccess] = useState(false)
   const [showProtocolPicker, setShowProtocolPicker] = useState(false)
   // The fork tree behind both the rail's compact view and the Branches
@@ -580,6 +567,21 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // construction, and needs a JWT but no room token — so the enable is
   // "signed in and at Home", the inverse of the two room projections above.
   const atlas = useAtlas(Boolean(accessToken) && isHome)
+  // Capabilities follow the exact room IDs the already-fenced signal
+  // projection carries, then resolve against the complete saved-room list.
+  // This stays bounded by Atlas rather than by the rail's activity ordering;
+  // tokens never enter the Atlas wire response or a URL/body.
+  const signalRoomTokens = useMemo<ReadonlyMap<string, string> | undefined>(() => {
+    if (atlas.status !== 'ready') return undefined
+    const signalRoomIds = new Set(
+      (atlas.projection.signals ?? []).map((signal) => signal.room_id),
+    )
+    return new Map(
+      rooms
+        .filter((room) => room.token && signalRoomIds.has(room.id))
+        .map((room) => [room.id, room.token]),
+    )
+  }, [atlas, rooms])
   // The room's own geography (World Lens) — read only to decide whether the
   // Bench offers its World door; the globe itself lives at Home root.
   const roomGeo = useGeoScopes(!isHome && accessToken ? currentRoom?.id ?? null : null)
