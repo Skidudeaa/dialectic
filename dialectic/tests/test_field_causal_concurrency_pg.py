@@ -151,6 +151,18 @@ async def race_world() -> RaceWorld:
                 f'CREATE TABLE "{schema}"."{table}" '
                 f'(LIKE public."{table}" INCLUDING ALL)',
             )
+        # LIKE INCLUDING ALL copies indexes but not foreign keys. These two
+        # constraints are the production lock path under test: a successor
+        # insert takes KEY SHARE on both its room and superseded scope.
+        await setup.execute(
+            f'''ALTER TABLE "{schema}".geo_scopes
+                ADD CONSTRAINT geo_scopes_room_fk
+                    FOREIGN KEY (room_id) REFERENCES "{schema}".rooms(id)
+                    ON DELETE CASCADE,
+                ADD CONSTRAINT geo_scopes_supersedes_fk
+                    FOREIGN KEY (supersedes_id)
+                    REFERENCES "{schema}".geo_scopes(id)''',
+        )
         await _prepare(setup, schema)
         now = datetime.now(timezone.utc)
         room_id, user_id, thread_id = uuid4(), uuid4(), uuid4()
@@ -230,6 +242,62 @@ def _structure() -> dict:
             {"id": "node-c", "label": "Node C"},
         ],
     }
+
+
+async def _wait_until_lock_wait(
+    inspector: asyncpg.Connection, blocked_pid: int,
+) -> None:
+    async with asyncio.timeout(2):
+        while await inspector.fetchval(
+            "SELECT wait_event_type = 'Lock' FROM pg_stat_activity "
+            "WHERE pid = $1",
+            blocked_pid,
+        ) is not True:
+            await asyncio.sleep(0.01)
+
+
+@pytest.mark.asyncio
+async def test_causal_room_lock_serializes_a_concurrent_book_rebind(
+    race_world: RaceWorld,
+) -> None:
+    field_conn = await asyncpg.connect(TEST_DATABASE_URL)
+    rebind_conn = await asyncpg.connect(TEST_DATABASE_URL)
+    await _prepare(field_conn, race_world.schema)
+    await _prepare(rebind_conn, race_world.schema)
+    field_tx = field_conn.transaction()
+    await field_tx.start()
+    try:
+        facts = await field_api._causal_db_facts(
+            field_conn,
+            race_world.room_id,
+            "supports",
+            [
+                subject.model_dump()
+                for subject in _causal_subjects(race_world, "node-a")
+            ],
+            lock_authority=True,
+        )
+        assert facts is not None
+        assert facts[0].book_id == BOOK_ID
+
+        rebind = asyncio.create_task(rebind_conn.execute(
+            "UPDATE rooms SET linked_book_id = 'new-race-book' WHERE id = $1",
+            race_world.room_id,
+        ))
+        await _wait_until_lock_wait(race_world.setup, rebind_conn.get_server_pid())
+        assert not rebind.done()
+
+        await field_tx.commit()
+        await rebind
+        assert await race_world.setup.fetchval(
+            "SELECT linked_book_id FROM rooms WHERE id = $1",
+            race_world.room_id,
+        ) == "new-race-book"
+    finally:
+        if field_conn.is_in_transaction():
+            await field_tx.rollback()
+        await field_conn.close()
+        await rebind_conn.close()
 
 
 @pytest.mark.asyncio
@@ -341,11 +409,21 @@ async def test_causal_write_loses_cleanly_when_scope_successor_commits_first(
                 pool=_DirectPool(field_conn),
             ))
         await asyncio.wait_for(bridge_reached.wait(), timeout=2)
+        # Bridge completion precedes the write transaction. Wait until the
+        # Field writer owns the room lock and is blocked on Geo's scope lock;
+        # releasing Geo here reproduces the production lock cycle exactly.
+        await _wait_until_lock_wait(
+            race_world.setup, field_conn.get_server_pid(),
+        )
         release_geo.set()
-        await retire
-        result = await asyncio.gather(write, return_exceptions=True)
-        assert isinstance(result[0], HTTPException)
-        assert result[0].status_code == 422
+        retire_result, write_result = await asyncio.gather(
+            retire, write, return_exceptions=True,
+        )
+        assert not isinstance(retire_result, asyncpg.DeadlockDetectedError)
+        assert not isinstance(write_result, asyncpg.DeadlockDetectedError)
+        assert not isinstance(retire_result, BaseException)
+        assert isinstance(write_result, HTTPException)
+        assert write_result.status_code == 422
         assert await _field_counts(race_world) == before
     finally:
         release_geo.set()

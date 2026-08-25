@@ -206,7 +206,10 @@ async def _causal_db_facts(
     if roles is None:
         return None
 
-    lock = " FOR UPDATE" if lock_authority else ""
+    # linked_book_id is not part of the room key, so NO KEY UPDATE still
+    # serializes rebinding while remaining compatible with the KEY SHARE a
+    # GeoScope successor's room_id foreign key takes during insertion.
+    lock = " FOR NO KEY UPDATE" if lock_authority else ""
     bound_book = await db.fetchval(
         f"SELECT linked_book_id FROM rooms WHERE id = $1{lock}", room_id,
     )
