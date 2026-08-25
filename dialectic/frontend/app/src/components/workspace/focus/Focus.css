@@ -252,3 +252,20 @@
     color: var(--field-oxblood);
     font-size: 12px;
 }
+
+/* World Lens: where this object is, and who says so. */
+.focus-world-empty { color: var(--color-ghost); font-family: var(--font-serif); font-size: 12.5px; margin: 0; }
+.focus-world-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+.focus-world-row { border-top: 1px solid var(--color-bean); padding-top: 0.4rem; }
+.focus-world-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.focus-world-kind, .focus-world-authority { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-faint); }
+.focus-world-label { color: var(--color-ink); }
+.focus-world-row[data-authority="machine_proposed"] .focus-world-label { font-style: italic; color: var(--color-ghost); }
+.focus-world-provenance { font-family: var(--font-mono); font-size: 11px; color: var(--color-ghost); margin-top: 0.15rem; }
+.focus-world-actions { display: flex; gap: 0.4rem; margin-top: 0.35rem; flex-wrap: wrap; }
+.focus-world-actions .btn { min-height: 44px; }
+.focus-world-place { display: flex; align-items: flex-end; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; }
+.focus-world-place-label { display: flex; flex-direction: column; gap: 0.25rem; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-secondary); }
+.focus-world-select { min-height: 44px; background: var(--color-cacao); color: var(--color-ink); border: 1px solid var(--color-bean); border-radius: 2px; padding: 0.3rem 0.5rem; font: inherit; }
+.focus-world-place .btn { min-height: 44px; }
+.focus-world-error { color: var(--color-error); font-family: var(--font-serif); font-size: 12.5px; margin: 0.4rem 0 0; }

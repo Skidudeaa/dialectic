@@ -1047,6 +1047,10 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
                   canAct={Boolean(accessToken)}
                   onNavigate={focusNavigate}
                   onReview={handleFieldReview}
+                  roomId={currentRoom.id}
+                  geo={roomGeo}
+                  onGeoChanged={() => { if (roomGeo.status !== 'loading') roomGeo.retry() }}
+                  onMarked={() => { if (fieldMarks.status === 'ready') fieldMarks.refresh(); else if (fieldMarks.status === 'unavailable') fieldMarks.retry() }}
                 />
               )}
             </div>

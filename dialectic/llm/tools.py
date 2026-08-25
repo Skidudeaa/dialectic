@@ -1655,6 +1655,33 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
 _CAIRN_OFF_VALUES = frozenset({"0", "false", "no", "off"})
 
 
+def _world_tools_enabled() -> bool:
+    from llm.world import world_tools_enabled
+    return world_tools_enabled()
+
+
+def _build_world_tools(room, db) -> list[Tool]:
+    """The World Lens (docs/WORLD_LENS_VISION.md): ONE proposal-shaped tool.
+    It resolves a NAME to geometry that already exists (Natural Earth, or a
+    scope a human confirmed) and writes a machine_proposed row — the same
+    shape as write_document's row: a thing the humans review, never an
+    authoritative placement. Coordinates are never taken from the model."""
+    from llm import world as world_mod
+
+    async def propose_geo_scope(args: dict) -> dict:
+        return await world_mod.propose_geo_scope(db, room.id, args)
+
+    return [
+        Tool(
+            name="propose_geo_scope",
+            description=world_mod.PROPOSE_GEO_SCOPE_DESCRIPTION,
+            input_schema=world_mod.PROPOSE_GEO_SCOPE_SCHEMA,
+            execute=propose_geo_scope,
+            label="placing it on the world",
+        ),
+    ]
+
+
 def _cairn_tools_enabled() -> bool:
     """Group-level kill switch, default ON per house style — the deploy
     itself is the enablement act. DIALECTIC_TOOLS_ENABLED remains the
@@ -1893,6 +1920,8 @@ def build_registry(room, db) -> ToolRegistry:
     because a room's linked book can change between messages.
     """
     tools = _build_trading_tools(room) + _build_dialectic_tools(room, db)
+    if _world_tools_enabled():
+        tools += _build_world_tools(room, db)
     if _cairn_tools_enabled():
         tools += _build_cairn_tools()
     return ToolRegistry(tools=tools)

@@ -302,6 +302,23 @@ class DialecticAPI {
   async getGeo(roomId: string): Promise<import('../types/geo.ts').GeoProjection> {
     return this.fetch(`/rooms/${roomId}/geo`);
   }
+  /** A person places geometry on a row this room owns (human_confirmed). */
+  async createGeoScope(roomId: string, body: {
+    subject: { entity: string; id: string; field?: string | null }
+    kind: string
+    geometry: unknown
+    label?: string
+    provenance?: { provider?: string; source_id?: string | null; url?: string | null; credit?: string }
+    observed_at?: string | null
+  }): Promise<import('../types/geo.ts').GeoScope> {
+    return this.fetch(`/rooms/${roomId}/geo`, { method: 'POST', body: JSON.stringify(body) });
+  }
+  async confirmGeoScope(roomId: string, scopeId: string): Promise<import('../types/geo.ts').GeoScope> {
+    return this.fetch(`/rooms/${roomId}/geo/${scopeId}/confirm`, { method: 'POST' });
+  }
+  async rejectGeoScope(roomId: string, scopeId: string): Promise<import('../types/geo.ts').GeoScope> {
+    return this.fetch(`/rooms/${roomId}/geo/${scopeId}/reject`, { method: 'POST' });
+  }
   /**
    * The composer's "Make a move" affordance (§1.11, §5.3): a human-authored
    * proposal, written as an ordinary message whose metadata carries ONE

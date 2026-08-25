@@ -17,6 +17,8 @@ import { FocusSources, type FocusSourceItem } from './FocusSources.tsx'
 import { FocusStructure, type FocusRelationItem } from './FocusStructure.tsx'
 import { FocusHistory } from './FocusHistory.tsx'
 import { FocusActions } from './FocusActions.tsx'
+import { FocusWorld } from './FocusWorld.tsx'
+import type { GeoScopesState } from '../../../hooks/useGeoScopes.ts'
 import './Focus.css'
 
 interface FocusSurfaceProps {
@@ -42,6 +44,13 @@ interface FocusSurfaceProps {
    */
   onNavigate: (target: { threadId?: string; object: string | null }) => void
   onReview: (markId: string, request: FieldReviewRequest) => Promise<void>
+  /** World Lens: the room's geography, for the World section on a
+   *  non-mark object. Optional so surfaces without a room (tests, guests)
+   *  render exactly as before. */
+  roomId?: string | null
+  geo?: GeoScopesState
+  onGeoChanged?: () => void
+  onMarked?: () => void
 }
 
 const KIND_LABEL: Record<WorkspaceObject['kind'], string> = {
@@ -73,6 +82,7 @@ const KIND_LABEL: Record<WorkspaceObject['kind'], string> = {
  */
 export function FocusSurface({
   objectId, objects, fieldMarks, canAct, onNavigate, onReview,
+  roomId = null, geo, onGeoChanged, onMarked,
 }: FocusSurfaceProps) {
   const onClose = () => onNavigate({ object: null })
   const onSelectObject = (id: string) => onNavigate({ object: id })
@@ -192,6 +202,16 @@ export function FocusSurface({
       <FocusAxes axes={axes} />
       <FocusSources sources={sources} />
       <FocusStructure incoming={incoming} outgoing={outgoing} onOpen={(m) => onSelectObject(m.id)} />
+      {selectedObject && roomId && geo && (
+        <FocusWorld
+          roomId={roomId}
+          object={selectedObject}
+          geo={geo}
+          canAct={canAct}
+          onChanged={onGeoChanged ?? (() => undefined)}
+          onMarked={onMarked ?? (() => undefined)}
+        />
+      )}
       {selectedMark && (
         <>
           <FocusHistory reviews={selectedMark.reviews} lineage={markLineage(selectedMark, markList)} />
