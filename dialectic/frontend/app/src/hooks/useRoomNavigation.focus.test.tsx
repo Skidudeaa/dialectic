@@ -77,6 +77,18 @@ describe('the object axis', () => {
     expect(window.location.search).toContain('object=field_mark%3Aabc')
   })
 
+  it('carries a geo-scope root id through the same object axis unchanged', async () => {
+    const { result } = renderHook(() => useRoomNavigation())
+    await waitFor(() => expect(result.current.ready).toBe(true))
+
+    await act(async () => {
+      await result.current.navigate({ roomId: SCHEME.id, object: 'geo_scope:root-1' }, 'push')
+    })
+
+    expect(result.current.objectId).toBe('geo_scope:root-1')
+    expect(window.location.search).toContain('object=geo_scope%3Aroot-1')
+  })
+
   it('resets to null on a destination that does not carry it — same as scene', async () => {
     const { result } = renderHook(() => useRoomNavigation())
     await waitFor(() => expect(result.current.ready).toBe(true))

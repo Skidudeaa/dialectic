@@ -269,3 +269,89 @@
 .focus-world-select { min-height: 44px; background: var(--color-cacao); color: var(--color-ink); border: 1px solid var(--color-bean); border-radius: 2px; padding: 0.3rem 0.5rem; font: inherit; }
 .focus-world-place .btn { min-height: 44px; }
 .focus-world-error { color: var(--color-error); font-family: var(--font-serif); font-size: 12.5px; margin: 0.4rem 0 0; }
+
+/* Scope review: the list is the authority; the globe is only another view. */
+.focus-open-subject { align-self: flex-start; }
+.scope-review-subject,
+.scope-review-destination,
+.scope-review-current p {
+    margin: 0;
+    color: var(--color-secondary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+.scope-review-destination { color: var(--color-faint); }
+.scope-review-axes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem 0.8rem;
+}
+.scope-review-axes > div { min-width: 0; }
+.scope-review-axes dt,
+.scope-review-note-label,
+.scope-review-redraw label {
+    color: var(--color-faint);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+.scope-review-axes dd {
+    margin-top: 0.1rem;
+    color: var(--color-ink);
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+}
+.scope-review-history {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+.scope-review-history-row {
+    border-left: 2px solid var(--color-bean);
+    padding-left: 0.55rem;
+    color: var(--color-ink);
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+    overflow-wrap: anywhere;
+}
+.scope-review-history-row[data-review="proposed"] { border-left-style: dashed; }
+.scope-review-history-row[data-review="rejected"],
+.scope-review-history-row[data-review="superseded"] { opacity: 0.72; }
+.scope-review-history-head {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    gap: 0.45rem;
+    color: var(--color-secondary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+.scope-review-history-head span { text-align: right; overflow-wrap: anywhere; }
+.scope-review-provenance {
+    color: var(--color-ghost);
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+.scope-review-note { margin: 0.15rem 0 0; color: var(--color-faint); font-style: italic; }
+.scope-review-note-label,
+.scope-review-redraw label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.scope-review-note-label textarea,
+.scope-review-redraw textarea,
+.scope-review-redraw input {
+    min-height: 44px;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    background: var(--color-cacao);
+    color: var(--color-ink);
+    padding: 0.45rem 0.55rem;
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+}
+.scope-review-redraw { display: flex; flex-direction: column; gap: 0.55rem; }
+.scope-review-redraw textarea { min-height: 7rem; font-family: var(--font-mono); font-size: 12px; }

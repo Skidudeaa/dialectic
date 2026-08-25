@@ -18,6 +18,7 @@ import { FocusStructure, type FocusRelationItem } from './FocusStructure.tsx'
 import { FocusHistory } from './FocusHistory.tsx'
 import { FocusActions } from './FocusActions.tsx'
 import { FocusWorld } from './FocusWorld.tsx'
+import { ScopeReview } from './ScopeReview.tsx'
 import type { GeoScopesState } from '../../../hooks/useGeoScopes.ts'
 import './Focus.css'
 
@@ -42,7 +43,12 @@ interface FocusSurfaceProps {
    * intent — closing clears it, selecting sets it, opening a branch alone
    * preserves whatever was already selected.
    */
-  onNavigate: (target: { threadId?: string; object: string | null }) => void
+  onNavigate: (target: {
+    threadId?: string
+    messageId?: string
+    object: string | null
+    historyMode?: 'push' | 'replace'
+  }) => void
   onReview: (markId: string, request: FieldReviewRequest) => Promise<void>
   /** World Lens: the room's geography, for the World section on a
    *  non-mark object. Optional so surfaces without a room (tests, guests)
@@ -87,6 +93,7 @@ export function FocusSurface({
   const onClose = () => onNavigate({ object: null })
   const onSelectObject = (id: string) => onNavigate({ object: id })
   const isFieldMark = objectId.startsWith('field_mark:')
+  const isGeoScope = objectId.startsWith('geo_scope:')
 
   // Hooks run unconditionally, before either early return below (rules of
   // hooks) — objectList/markList fall back to [] while their projection is
@@ -100,6 +107,22 @@ export function FocusSurface({
   const markList = fieldMarks.status === 'ready' ? fieldMarks.marks : []
   const titles = useMemo(() => buildObjectTitleMap(objectList), [objectList])
   const byCoordinate = useMemo(() => buildObjectByCoordinate(objectList), [objectList])
+
+  if (isGeoScope && roomId) {
+    return (
+      <aside className="focus-surface" aria-label="Focus">
+        <ScopeReview
+          key={objectId}
+          roomId={roomId}
+          scopeId={objectId}
+          canAct={canAct}
+          onClose={onClose}
+          onNavigate={onNavigate}
+          onChanged={onGeoChanged ?? (() => undefined)}
+        />
+      </aside>
+    )
+  }
 
   const stillLoading = objects.status === 'loading' || (isFieldMark && fieldMarks.status === 'loading')
   if (stillLoading) {
@@ -210,6 +233,7 @@ export function FocusSurface({
           canAct={canAct}
           onChanged={onGeoChanged ?? (() => undefined)}
           onMarked={onMarked ?? (() => undefined)}
+          onOpenScope={onSelectObject}
         />
       )}
       {selectedMark && (

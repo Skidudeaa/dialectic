@@ -858,13 +858,19 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // why it is one function and not three) — resolved here, where roomId and
   // the current thread/scene are already in scope, so Focus itself never
   // has to reconstruct a destination from parts it was not given.
-  const focusNavigate = (target: { threadId?: string; object: string | null }) => {
+  const focusNavigate = (target: {
+    threadId?: string
+    messageId?: string
+    object: string | null
+    historyMode?: 'push' | 'replace'
+  }) => {
     void navigate({
       roomId: currentRoom.id,
       threadId: target.threadId ?? currentThread?.id ?? null,
       scene: workspaceScene,
       object: target.object,
-    }, 'push')
+      messageId: target.messageId ?? null,
+    }, target.historyMode ?? 'push')
   }
 
   const handleFieldReview = async (markId: string, request: FieldReviewRequest) => {
@@ -1049,7 +1055,10 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
                   onReview={handleFieldReview}
                   roomId={currentRoom.id}
                   geo={roomGeo}
-                  onGeoChanged={() => { if (roomGeo.status !== 'loading') roomGeo.retry() }}
+                  onGeoChanged={() => {
+                    if (roomGeo.status !== 'loading') roomGeo.retry()
+                    if (atlas.status !== 'loading') atlas.retry()
+                  }}
                   onMarked={() => { if (fieldMarks.status === 'ready') fieldMarks.refresh(); else if (fieldMarks.status === 'unavailable') fieldMarks.retry() }}
                 />
               )}

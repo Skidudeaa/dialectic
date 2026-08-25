@@ -12,12 +12,11 @@ import './Focus.css'
  *
  * The evidence loop the vision asks for, on the object the reader already
  * opened: the scopes whose subject IS this object, each with its authority
- * and source state; Confirm / Reject on a machine_proposed one (the
- * participant's guess becomes a person's act, or is put away); "Place" to
- * attach one of the room's own confirmed areas to this object; and "Mark"
- * to file an evidence_attachment Field mark whose subjects are the object
- * AND the scope — so the map and the Field share one row, never two
- * authorities.
+ * and source state. Scope decisions open the single ScopeReview inspector;
+ * this surface retains "Place" (or redraw when correcting an existing
+ * accepted placement) and "Mark" to file an evidence_attachment Field mark
+ * whose subjects are the object AND the scope — so the map and the Field
+ * share one row, never two authorities.
  *
  * Every write goes through the existing doors (api/geo.py, api/field.py)
  * and refreshes through the caller — this component owns no projection.
@@ -30,6 +29,7 @@ interface FocusWorldProps {
   canAct: boolean
   onChanged: () => void
   onMarked: () => void
+  onOpenScope: (scopeId: string) => void
 }
 
 function coordinatesOf(object: WorkspaceObject): { entity: string; id: string }[] {
@@ -47,7 +47,9 @@ function placeable(scopes: GeoScope[]): GeoScope[] {
   return scopes.filter((s) => s.authority === 'human_confirmed' && s.subject.entity === 'rooms' && s.kind !== 'point')
 }
 
-export function FocusWorld({ roomId, object, geo, canAct, onChanged, onMarked }: FocusWorldProps) {
+export function FocusWorld({
+  roomId, object, geo, canAct, onChanged, onMarked, onOpenScope,
+}: FocusWorldProps) {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [placeId, setPlaceId] = useState('')
@@ -57,6 +59,7 @@ export function FocusWorld({ roomId, object, geo, canAct, onChanged, onMarked }:
   const mine = geo.projection.scopes.filter((s) => isAbout(s, coords))
   const options = placeable(geo.projection.scopes)
   const primary = coords[0]
+  const acceptedPlacement = mine.find((scope) => scope.review_state === 'accepted')
 
   const run = async (key: string, fn: () => Promise<unknown>, after: () => void) => {
     setBusy(key)
@@ -92,28 +95,15 @@ export function FocusWorld({ roomId, object, geo, canAct, onChanged, onMarked }:
                 {scope.provenance.provider}
                 {scope.provenance.credit ? ` · ${scope.provenance.credit}` : ''}
               </div>
-              {canAct && scope.authority === 'machine_proposed' && (
-                <div className="focus-world-actions">
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    disabled={busy !== null}
-                    onClick={() => run(`confirm:${scope.id}`, () => api.confirmGeoScope(roomId, bare(scope)), onChanged)}
-                  >
-                    Confirm
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    disabled={busy !== null}
-                    onClick={() => run(`reject:${scope.id}`, () => api.rejectGeoScope(roomId, bare(scope)), onChanged)}
-                  >
-                    Reject
-                  </button>
-                </div>
-              )}
-              {canAct && scope.authority !== 'machine_proposed' && primary && (
-                <div className="focus-world-actions">
+              <div className="focus-world-actions">
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => onOpenScope(scope.id)}
+                >
+                  Review placement
+                </button>
+                {canAct && scope.review_state === 'accepted' && primary && (
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
@@ -127,30 +117,36 @@ export function FocusWorld({ roomId, object, geo, canAct, onChanged, onMarked }:
                   >
                     Mark as evidence here
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </li>
           ))}
         </ul>
       )}
-      {canAct && primary && options.length > 0 && (
+      {canAct && primary && options.length > 0 && (mine.length === 0 || Boolean(acceptedPlacement)) && (
         <form
           className="focus-world-place"
           onSubmit={(e) => {
             e.preventDefault()
             const chosen = options.find((s) => s.id === placeId)
             if (!chosen) return
-            void run('place', () => api.createGeoScope(roomId, {
-              subject: { entity: primary.entity, id: primary.id },
-              kind: chosen.kind === 'route' ? 'route' : 'region',
-              geometry: chosen.geometry,
-              label: chosen.label,
-              provenance: {
-                provider: 'room_scope',
-                source_id: bare(chosen),
-                credit: chosen.provenance.credit,
-              },
-            }), () => { setPlaceId(''); onChanged() })
+            const write = acceptedPlacement
+              ? () => api.redrawGeoScope(roomId, bare(acceptedPlacement), {
+                  label: chosen.label,
+                  geometry: chosen.geometry,
+                })
+              : () => api.createGeoScope(roomId, {
+                  subject: { entity: primary.entity, id: primary.id },
+                  kind: chosen.kind === 'route' ? 'route' : 'region',
+                  geometry: chosen.geometry,
+                  label: chosen.label,
+                  provenance: {
+                    provider: 'room_scope',
+                    source_id: bare(chosen),
+                    credit: chosen.provenance.credit,
+                  },
+                })
+            void run('place', write, () => { setPlaceId(''); onChanged() })
           }}
         >
           <label className="focus-world-place-label">

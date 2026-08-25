@@ -359,19 +359,17 @@ export function AtlasScene({ state, onNavigate, view = null, onView }: AtlasScen
     <div className="scene-body atlas-scene" data-atlas-mode={worldMode ? 'world' : 'house'}>
       {modes}
       {worldMode ? (
-        <>
-          <Suspense fallback={<SceneLoading kicker="World" />}>
-            <WorldView
-              scopes={scopes}
-              initialCamera={decoded?.camera ?? null}
-              focusScopes={focusScopes}
-              onSelect={(scope) => onNavigate(scopeDestination(scope))}
-              onCameraSettle={onCameraSettle}
-            />
-          </Suspense>
-          <OnTheMapGroup scopes={scopes} nodesById={nodesById} onNavigate={onNavigate} />
-        </>
+        <Suspense fallback={<SceneLoading kicker="World" />}>
+          <WorldView
+            scopes={scopes}
+            initialCamera={decoded?.camera ?? null}
+            focusScopes={focusScopes}
+            onSelect={(scope) => onNavigate(scopeDestination(scope))}
+            onCameraSettle={onCameraSettle}
+          />
+        </Suspense>
       ) : null}
+      <OnTheMapGroup scopes={scopes} nodesById={nodesById} onNavigate={onNavigate} />
       <ul className="atlas-list atlas-room-list" aria-label="Rooms">
         {rooms.map((room) => (
           <RoomSection

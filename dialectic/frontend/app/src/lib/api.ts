@@ -1,5 +1,6 @@
 import type { Attachment, HomeActivityProjection, HomeProposalsResponse, Memory, MirrorDiff, MirrorRoom, MirrorVersion, RoundState, Thread, ThreadNode, UserRoom } from '../types/index.ts';
 import type { AtlasProjection } from '../types/atlas.ts';
+import type { GeoScope, GeoScopeReview } from '../types/geo.ts';
 import type {
   FieldMark,
   FieldProjection,
@@ -302,6 +303,9 @@ class DialecticAPI {
   async getGeo(roomId: string): Promise<import('../types/geo.ts').GeoProjection> {
     return this.fetch(`/rooms/${roomId}/geo`);
   }
+  async getGeoScopeReview(roomId: string, scopeId: string): Promise<GeoScopeReview> {
+    return this.fetch(`/rooms/${roomId}/geo/${scopeId}/review`);
+  }
   /** A person places geometry on a row this room owns (human_confirmed). */
   async createGeoScope(roomId: string, body: {
     subject: { entity: string; id: string; field?: string | null }
@@ -310,14 +314,37 @@ class DialecticAPI {
     label?: string
     provenance?: { provider?: string; source_id?: string | null; url?: string | null; credit?: string }
     observed_at?: string | null
-  }): Promise<import('../types/geo.ts').GeoScope> {
+  }): Promise<GeoScope> {
     return this.fetch(`/rooms/${roomId}/geo`, { method: 'POST', body: JSON.stringify(body) });
   }
-  async confirmGeoScope(roomId: string, scopeId: string): Promise<import('../types/geo.ts').GeoScope> {
-    return this.fetch(`/rooms/${roomId}/geo/${scopeId}/confirm`, { method: 'POST' });
+  async confirmGeoScope(roomId: string, scopeId: string, note?: string): Promise<GeoScope> {
+    return this.fetch(`/rooms/${roomId}/geo/${scopeId}/confirm`, {
+      method: 'POST', body: JSON.stringify({ note: note || null }),
+    });
   }
-  async rejectGeoScope(roomId: string, scopeId: string): Promise<import('../types/geo.ts').GeoScope> {
-    return this.fetch(`/rooms/${roomId}/geo/${scopeId}/reject`, { method: 'POST' });
+  async rejectGeoScope(roomId: string, scopeId: string, note?: string): Promise<GeoScope> {
+    return this.fetch(`/rooms/${roomId}/geo/${scopeId}/reject`, {
+      method: 'POST', body: JSON.stringify({ note: note || null }),
+    });
+  }
+  async ratifyGeoScope(roomId: string, scopeId: string, note?: string): Promise<GeoScope> {
+    return this.fetch(`/rooms/${roomId}/geo/${scopeId}/ratify`, {
+      method: 'POST', body: JSON.stringify({ note: note || null }),
+    });
+  }
+  async redrawGeoScope(roomId: string, scopeId: string, body: {
+    label: string
+    geometry: unknown
+    note?: string
+  }): Promise<GeoScope> {
+    return this.fetch(`/rooms/${roomId}/geo/${scopeId}/redraw`, {
+      method: 'POST', body: JSON.stringify({ ...body, note: body.note || null }),
+    });
+  }
+  async supersedeGeoScope(roomId: string, scopeId: string, note?: string): Promise<GeoScope> {
+    return this.fetch(`/rooms/${roomId}/geo/${scopeId}/supersede`, {
+      method: 'POST', body: JSON.stringify({ note: note || null }),
+    });
   }
   /**
    * The composer's "Make a move" affordance (§1.11, §5.3): a human-authored

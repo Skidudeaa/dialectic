@@ -32,6 +32,35 @@ export const GEO_SOURCE_STATES = [
 ] as const
 export type GeoSourceState = (typeof GEO_SOURCE_STATES)[number]
 
+export const GEO_REVISION_ACTIONS = [
+  'place',
+  'propose',
+  'confirm',
+  'reject',
+  'redraw',
+  'supersede',
+  'ratify',
+  'place_signal',
+] as const
+export type GeoRevisionAction = (typeof GEO_REVISION_ACTIONS)[number]
+
+export const GEO_REVIEW_STATES = [
+  'accepted',
+  'proposed',
+  'rejected',
+  'superseded',
+] as const
+export type GeoReviewState = (typeof GEO_REVIEW_STATES)[number]
+
+export const GEO_FRESHNESS_STATES = [
+  'current',
+  'stale',
+  'expired',
+  'unknown',
+  'not_applicable',
+] as const
+export type GeoFreshnessState = (typeof GEO_FRESHNESS_STATES)[number]
+
 export interface GeoSubjectRef {
   entity: string
   id: string
@@ -46,6 +75,13 @@ export interface GeoProvenance {
   credit: string
 }
 
+export interface GeoFreshness {
+  state: GeoFreshnessState
+  observed_at?: string | null
+  retrieved_at: string
+  expires_at?: string | null
+}
+
 export interface GeoScope {
   id: string
   room_id: string
@@ -56,6 +92,10 @@ export interface GeoScope {
   authority: GeoAuthority
   provenance: GeoProvenance
   source_state: GeoSourceState
+  revision_action: GeoRevisionAction
+  review_note?: string | null
+  review_state: GeoReviewState
+  freshness: GeoFreshness
   centroid: [number, number]
   observed_at?: string | null
   retrieved_at: string
@@ -71,4 +111,18 @@ export interface GeoProjection {
   generated_at: string
   room_id: string
   scopes: GeoScope[]
+}
+
+export interface GeoSubjectDestination {
+  room_id: string
+  thread_id?: string | null
+  message_id?: string | null
+  object_id?: string | null
+}
+
+export interface GeoScopeReview {
+  root_id: string
+  current: GeoScope
+  lineage: GeoScope[]
+  subject_destination: GeoSubjectDestination
 }

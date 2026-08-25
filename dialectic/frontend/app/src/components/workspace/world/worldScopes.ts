@@ -6,22 +6,11 @@ import type { GeoScope } from '../../../types/geo.ts'
 import type { AtlasNode } from '../../../types/atlas.ts'
 import type { AtlasNavigateDestination } from '../scenes/AtlasScene'
 
-/** Where a tap on a scope lands. The subject decides: a room's own geometry
- *  opens the room; a reading opens that reading in Focus; a mark opens the
- *  mark; a message opens the transcript at it. The object ids REUSE the
- *  workspace-object conventions (types/atlas.ts) — no second id scheme. */
-export function scopeDestination(scope: GeoScope): AtlasNavigateDestination & { messageId?: string } {
-  const { entity, id } = scope.subject
-  switch (entity) {
-    case 'reading_items':
-      return { roomId: scope.room_id, object: `reading:${id}` }
-    case 'field_marks':
-      return { roomId: scope.room_id, object: `field_mark:${id}` }
-    case 'messages':
-      return { roomId: scope.room_id, messageId: id }
-    default:
-      return { roomId: scope.room_id }
-  }
+/** A scope tap always opens scope review. Its stored subject is a distinct
+ *  inspector action resolved by the server, so a message never loses its
+ *  owning thread and a room/reading scope does not bypass its own history. */
+export function scopeDestination(scope: GeoScope): AtlasNavigateDestination {
+  return { roomId: scope.room_id, object: scope.id }
 }
 
 /** The node a scope is about, when the projection carries it. */

@@ -10,23 +10,25 @@ function scope(partial: Partial<GeoScope>): GeoScope {
     geometry: { type: 'Polygon', coordinates: [[[55, 26], [57, 26], [57, 27], [55, 27], [55, 26]]] },
     label: 'Strait', authority: 'human_confirmed',
     provenance: { provider: 'human', acquisition: 'human', credit: '' },
-    source_state: 'ok', centroid: [56, 26.5],
+    source_state: 'ok', revision_action: 'place', review_note: null, review_state: 'accepted',
+    freshness: { state: 'current', observed_at: null, retrieved_at: '2026-08-25T00:00:00Z', expires_at: null },
+    centroid: [56, 26.5],
     retrieved_at: '2026-08-25T00:00:00Z', created_at: '2026-08-25T00:00:00Z',
     ...partial,
   }
 }
 
 describe('scopeDestination', () => {
-  it('lands on the subject, reusing workspace-object ids', () => {
-    expect(scopeDestination(scope({}))).toEqual({ roomId: 'room-1' })
+  it('opens the scope inspector for every subject kind', () => {
+    expect(scopeDestination(scope({}))).toEqual({ roomId: 'room-1', object: 'geo_scope:1' })
     expect(scopeDestination(scope({ subject: { entity: 'reading_items', id: 'r9' } })))
-      .toEqual({ roomId: 'room-1', object: 'reading:r9' })
+      .toEqual({ roomId: 'room-1', object: 'geo_scope:1' })
     expect(scopeDestination(scope({ subject: { entity: 'field_marks', id: 'm3' } })))
-      .toEqual({ roomId: 'room-1', object: 'field_mark:m3' })
+      .toEqual({ roomId: 'room-1', object: 'geo_scope:1' })
     expect(scopeDestination(scope({ subject: { entity: 'messages', id: 'msg' } })))
-      .toEqual({ roomId: 'room-1', messageId: 'msg' })
+      .toEqual({ roomId: 'room-1', object: 'geo_scope:1' })
     expect(scopeDestination(scope({ subject: { entity: 'memories', id: 'x' } })))
-      .toEqual({ roomId: 'room-1' })
+      .toEqual({ roomId: 'room-1', object: 'geo_scope:1' })
   })
 })
 

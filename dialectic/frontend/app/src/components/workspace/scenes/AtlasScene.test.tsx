@@ -152,8 +152,11 @@ describe('AtlasScene', () => {
 // ---------------------------------------------------------------------------
 
 vi.mock('../world/WorldView', () => ({
-  default: (props: { scopes: unknown[] }) => (
-    <div data-testid="world-view-mock">globe:{props.scopes.length}</div>
+  default: (props: { scopes: GeoScope[]; onSelect: (scope: GeoScope) => void }) => (
+    <div data-testid="world-view-mock">
+      globe:{props.scopes.length}
+      <button type="button" onClick={() => props.onSelect(props.scopes[0])}>Select globe scope</button>
+    </div>
   ),
 }))
 
@@ -172,7 +175,9 @@ const hormuzScope: GeoScope = {
   geometry: { type: 'Polygon', coordinates: [[[55, 26], [57, 26], [57, 27], [55, 26]]] },
   label: 'Strait of Hormuz (approx.)', authority: 'human_confirmed' as const,
   provenance: { provider: 'human', acquisition: 'human', credit: 'sketch' },
-  source_state: 'ok' as const, centroid: [56, 26.5] as [number, number],
+  source_state: 'ok' as const, revision_action: 'place', review_note: null, review_state: 'accepted',
+  freshness: { state: 'current', observed_at: null, retrieved_at: '2026-08-25T00:00:00Z', expires_at: null },
+  centroid: [56, 26.5] as [number, number],
   retrieved_at: '2026-08-25T00:00:00Z', created_at: '2026-08-25T00:00:00Z',
 }
 
@@ -213,7 +218,36 @@ describe('AtlasScene / World', () => {
     expect(row).toHaveTextContent('confirmed')
     expect(row).toHaveTextContent('live')
     fireEvent.click(row)
-    expect(onNavigate).toHaveBeenCalledWith({ roomId: 'room-h' })
+    expect(onNavigate).toHaveBeenCalledWith({ roomId: 'room-h', object: 'geo_scope:s1' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select globe scope' }))
+    expect(onNavigate).toHaveBeenLastCalledWith({ roomId: 'room-h', object: 'geo_scope:s1' })
+  })
+
+  it('keeps room, reading, and message scopes inspectable in House without loading the globe', () => {
+    const onNavigate = vi.fn()
+    const scopes = [
+      { ...hormuzScope, id: 'geo_scope:room', label: 'Room placement' },
+      { ...hormuzScope, id: 'geo_scope:reading', label: 'Reading placement', subject: { entity: 'reading_items', id: 'read-1' } },
+      { ...hormuzScope, id: 'geo_scope:message', label: 'Message placement', subject: { entity: 'messages', id: 'msg-1' } },
+    ]
+    render(
+      <AtlasScene
+        state={readyWithScopes(rooms, scopes)}
+        onNavigate={onNavigate}
+        onView={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByTestId('world-view-mock')).toBeNull()
+    for (const [label, id] of [
+      ['Room placement', 'geo_scope:room'],
+      ['Reading placement', 'geo_scope:reading'],
+      ['Message placement', 'geo_scope:message'],
+    ]) {
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
+      expect(onNavigate).toHaveBeenLastCalledWith({ roomId: 'room-h', object: id })
+    }
   })
 
   it('a proposed scope is labelled as such in the list', async () => {
