@@ -7,9 +7,11 @@ import {
   bareMarkId,
   buildObjectByCoordinate,
   buildObjectTitleMap,
+  causalFieldBinding,
   humanizeRelation,
   markLineage,
   resolveSubjectLabel,
+  tradingDeskBuilderUrl,
 } from '../fieldDisplay.ts'
 import { FocusHeader } from './FocusHeader.tsx'
 import { FocusAxes, type FocusAxis } from './FocusAxes.tsx'
@@ -20,6 +22,7 @@ import { FocusActions } from './FocusActions.tsx'
 import { FocusWorld } from './FocusWorld.tsx'
 import { ScopeReview } from './ScopeReview.tsx'
 import type { GeoScopesState } from '../../../hooks/useGeoScopes.ts'
+import { useAppStore } from '../../../stores/appStore.ts'
 import './Focus.css'
 
 interface FocusSurfaceProps {
@@ -90,6 +93,7 @@ export function FocusSurface({
   objectId, objects, fieldMarks, canAct, onNavigate, onReview,
   roomId = null, geo, onGeoChanged, onMarked,
 }: FocusSurfaceProps) {
+  const accessToken = useAppStore((state) => state.accessToken)
   const onClose = () => onNavigate({ object: null })
   const onSelectObject = (id: string) => onNavigate({ object: id })
   const isFieldMark = objectId.startsWith('field_mark:')
@@ -119,6 +123,7 @@ export function FocusSurface({
           onClose={onClose}
           onNavigate={onNavigate}
           onChanged={onGeoChanged ?? (() => undefined)}
+          onMarked={onMarked ?? (() => undefined)}
         />
       </aside>
     )
@@ -160,6 +165,7 @@ export function FocusSurface({
     ? `Field mark · ${humanizeRelation(selectedMark.relation)}`
     : KIND_LABEL[selectedObject?.kind ?? 'record_event']
   const branchId = selectedMark?.thread_id ?? selectedObject?.branch_id ?? null
+  const causal = selectedMark ? causalFieldBinding(selectedMark) : null
 
   const axes: FocusAxis[] = selectedMark
     ? [
@@ -176,15 +182,17 @@ export function FocusSurface({
       : []
 
   const sources: FocusSourceItem[] = selectedMark
-    ? selectedMark.subjects.map((subject) => {
-        const resolved = byCoordinate.get(`${subject.entity}:${subject.id}`)
-        return {
-          label: resolveSubjectLabel(subject, titles),
-          onNavigate: resolved?.branch_id
-            ? () => onNavigate({ threadId: resolved.branch_id as string, object: resolved.id })
-            : undefined,
-        }
-      })
+    ? causal
+      ? [{ label: causal.scopeLabel }]
+      : selectedMark.subjects.map((subject) => {
+          const resolved = byCoordinate.get(`${subject.entity}:${subject.id}`)
+          return {
+            label: resolveSubjectLabel(subject, titles),
+            onNavigate: resolved?.branch_id
+              ? () => onNavigate({ threadId: resolved.branch_id as string, object: resolved.id })
+              : undefined,
+          }
+        })
     : (selectedObject?.relationships ?? []).map((r) => ({
         label: `${humanizeRelation(r.relation)}${r.entity !== 'url' ? ` · ${r.entity}` : ''}`,
       }))
@@ -203,7 +211,9 @@ export function FocusSurface({
     return matches ? [{ mark: m, otherLabel: title }] : []
   })
   const outgoing: FocusRelationItem[] = selectedMark
-    ? selectedMark.subjects.map((s) => ({ mark: selectedMark, otherLabel: resolveSubjectLabel(s, titles) }))
+    ? causal
+      ? [{ mark: selectedMark, otherLabel: causal.nodeLabel }]
+      : selectedMark.subjects.map((s) => ({ mark: selectedMark, otherLabel: resolveSubjectLabel(s, titles) }))
     : []
 
   const mergeCandidates = selectedMark
@@ -223,6 +233,16 @@ export function FocusSurface({
         </button>
       )}
       <FocusAxes axes={axes} />
+      {causal && accessToken && (
+        <a
+          className="btn btn-ghost btn-sm focus-open-branch"
+          href={tradingDeskBuilderUrl(accessToken, causal.roomId)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Open node in Builder
+        </a>
+      )}
       <FocusSources sources={sources} />
       <FocusStructure incoming={incoming} outgoing={outgoing} onOpen={(m) => onSelectObject(m.id)} />
       {selectedObject && roomId && geo && (

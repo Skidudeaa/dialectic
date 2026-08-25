@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FocusSurface } from './FocusSurface'
 import type { FieldMark, WorkspaceObject } from '../../../types/workspace.ts'
 import type { FieldMarksState } from '../../../hooks/useFieldMarks.ts'
 import type { WorkspaceObjectsState } from '../../../hooks/useWorkspaceObjects.ts'
+import { useAppStore } from '../../../stores/appStore.ts'
 
 const mark = (overrides: Partial<FieldMark> & { id: string; relation: FieldMark['relation'] }): FieldMark => ({
   room_id: 'r1', thread_id: null, origin: 'inferred', review: 'provisional',
@@ -67,6 +68,7 @@ function jsonResponse(body: unknown): Response {
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  useAppStore.setState({ accessToken: null })
 })
 
 describe('FocusSurface', () => {
@@ -185,6 +187,35 @@ describe('FocusSurface', () => {
       />,
     )
     expect(screen.getByText('Supports')).toBeInTheDocument()
+  })
+
+  it('shows adjudicated causal roles and navigates to the matching Builder room', () => {
+    act(() => useAppStore.setState({ accessToken: 'session-token' }))
+    const causal = mark({
+      id: 'field_mark:causal', relation: 'supports', title: 'Hormuz supports shipping',
+      review: 'confirmed',
+      subjects: [
+        { entity: 'rooms', id: 'r1', field: 'thesis_node:hormuz:shipping' },
+        { entity: 'geo_scopes', id: 'scope-1', field: null },
+      ],
+      payload: { node_label: 'Shipping chokepoint', scope_label: 'Strait of Hormuz' },
+    })
+    render(
+      <FocusSurface
+        {...baseProps}
+        objectId="field_mark:causal"
+        objects={noObjects}
+        fieldMarks={{ status: 'ready', marks: [causal], generatedAt: 'x', refresh: () => {} }}
+      />,
+    )
+    expect(screen.getByText('Strait of Hormuz')).toBeInTheDocument()
+    expect(screen.getByText('Supports')).toBeInTheDocument()
+    expect(screen.getByText(/Shipping chokepoint/)).toBeInTheDocument()
+    expect(screen.getAllByText('confirmed').length).toBeGreaterThan(0)
+    expect(screen.getByRole('link', { name: 'Open node in Builder' })).toHaveAttribute(
+      'href',
+      'https://td.somacura.org/builder#dialectic_token=session-token&dialectic_room=r1',
+    )
   })
 
   it('loads a geo scope independently of object projections and shows every lineage fact and evidence axis', async () => {
@@ -443,5 +474,71 @@ describe('FocusSurface', () => {
     expect(screen.queryByRole('button', { name: 'Ratify' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Redraw' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Supersede' })).toBeNull()
+  })
+
+  it('selects a thesis node and files supports/challenges/context into normal Field review', async () => {
+    const structure = {
+      id: 'hormuz', meta: { title: 'Hormuz' },
+      nodes: [
+        { id: 'shipping', label: 'Shipping chokepoint', type: 'event', phase: 1, state: 'watching', x: 0, y: 0 },
+        { id: 'freight', label: 'Freight rates', type: 'market', phase: 2, state: 'watching', x: 1, y: 1 },
+      ],
+      edges: [], scenarios: [],
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(geoReview()))
+      .mockResolvedValueOnce(jsonResponse(structure))
+      .mockResolvedValueOnce(jsonResponse({ id: 'field_mark:new' }))
+    vi.stubGlobal('fetch', fetchMock)
+    const onMarked = vi.fn()
+    render(
+      <FocusSurface
+        {...baseProps}
+        objectId="geo_scope:root-1"
+        roomId="r1"
+        objects={noObjects}
+        fieldMarks={noMarks}
+        onMarked={onMarked}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Bind to thesis node' }))
+    await screen.findByLabelText('Thesis node')
+    fireEvent.change(screen.getByLabelText('Causal relation'), { target: { value: 'context' } })
+    fireEvent.change(screen.getByLabelText('Thesis node'), { target: { value: 'freight' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add to Field' }))
+
+    await waitFor(() => expect(onMarked).toHaveBeenCalledTimes(1))
+    expect(fetchMock.mock.calls[1][0]).toBe('/rooms/r1/trading/structure')
+    expect(fetchMock.mock.calls[2][0]).toBe('/rooms/r1/field/marks')
+    expect(JSON.parse((fetchMock.mock.calls[2][1] as RequestInit).body as string)).toEqual({
+      relation: 'context',
+      subjects: [
+        { entity: 'geo_scopes', id: 'root-1' },
+        { entity: 'rooms', id: 'r1', field: 'thesis_node:hormuz:freight' },
+      ],
+      title: 'Strait of Hormuz context Freight rates',
+      payload: { node_label: 'Freight rates' },
+    })
+  })
+
+  it('keeps causal binding unavailable when the authenticated structure cannot load', async () => {
+    const failed = { ok: false, status: 503, json: vi.fn().mockResolvedValue({ detail: 'desk unavailable' }) } as unknown as Response
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(geoReview()))
+      .mockResolvedValueOnce(failed)
+    vi.stubGlobal('fetch', fetchMock)
+    render(
+      <FocusSurface
+        {...baseProps}
+        objectId="geo_scope:root-1"
+        roomId="r1"
+        objects={noObjects}
+        fieldMarks={noMarks}
+      />,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Bind to thesis node' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/desk unavailable/i)
+    expect(screen.queryByRole('button', { name: 'Add to Field' })).toBeNull()
   })
 })

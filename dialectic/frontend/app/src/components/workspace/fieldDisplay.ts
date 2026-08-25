@@ -80,6 +80,52 @@ export function bareMarkId(markId: string): string {
   return idx === -1 ? markId : markId.slice(idx + 1)
 }
 
+export interface CausalFieldBinding {
+  bookId: string
+  nodeId: string
+  nodeLabel: string
+  roomId: string
+  scopeId: string
+  scopeLabel: string
+}
+
+/** The server validates these same semantic roles before insert. Re-resolve
+ * them here by entity name so reversing JSON subject order can never reverse
+ * evidence and target on a surface. Payload labels are historical display
+ * only; book/node identity remains the exact room-field grammar. */
+export function causalFieldBinding(mark: FieldMark): CausalFieldBinding | null {
+  if (!['supports', 'challenges', 'context'].includes(mark.relation)) return null
+  if (mark.subjects.length !== 2) return null
+  const scopes = mark.subjects.filter((subject) => subject.entity === 'geo_scopes')
+  const rooms = mark.subjects.filter((subject) => subject.entity === 'rooms')
+  if (scopes.length !== 1 || rooms.length !== 1) return null
+  const match = /^thesis_node:([^:]+):([^:]+)$/.exec(rooms[0].field ?? '')
+  if (!match) return null
+  const nodeLabel = typeof mark.payload.node_label === 'string'
+    ? mark.payload.node_label
+    : match[2]
+  const scopeLabel = typeof mark.payload.scope_label === 'string'
+    ? mark.payload.scope_label
+    : `GeoScope ${scopes[0].id}`
+  return {
+    bookId: match[1],
+    nodeId: match[2],
+    nodeLabel,
+    roomId: rooms[0].id,
+    scopeId: scopes[0].id,
+    scopeLabel,
+  }
+}
+
+/** Match TradingPanel's fragment-only handoff. The bearer never enters the
+ * query string, nginx logs, or Cloudflare request URL. */
+export function tradingDeskBuilderUrl(accessToken: string, roomId: string): string {
+  const params = new URLSearchParams()
+  params.set('dialectic_token', accessToken)
+  params.set('dialectic_room', roomId)
+  return `https://td.somacura.org/builder#${params.toString()}`
+}
+
 /** The eight editorial bands, fixed order, each keyed to the relations it
  *  gathers (§5.2). `supports`/`challenges` are deliberately absent from
  *  every list here -- they never anchor a section of their own. They render
@@ -93,7 +139,7 @@ export const FIELD_SECTIONS: { key: string; label: string; relations: FieldRelat
   { key: 'tensions', label: 'Tensions', relations: ['possible_contradiction', 'challenges'] },
   { key: 'questions', label: 'Questions', relations: ['unanswered_question'] },
   { key: 'definitions', label: 'Definitions', relations: ['repeated_definition'] },
-  { key: 'evidence', label: 'Evidence', relations: ['evidence_attachment'] },
+  { key: 'evidence', label: 'Evidence', relations: ['evidence_attachment', 'context'] },
   { key: 'syntheses', label: 'Syntheses', relations: ['candidate_synthesis'] },
   { key: 'branches', label: 'Branches', relations: ['branch_candidate'] },
 ]
@@ -178,6 +224,7 @@ export function sectionMarks(marks: FieldMark[]): {
   const orphanNested: FieldMark[] = []
   for (const mark of marks) {
     if (mark.relation !== 'supports' && mark.relation !== 'challenges') continue
+    if (causalFieldBinding(mark)) continue
     const resolved = mark.subjects
       .filter((s) => s.entity === 'field_marks')
       .map((s) => byBareId.get(s.id))
@@ -206,8 +253,9 @@ export function sectionMarks(marks: FieldMark[]): {
   }
 
   for (const mark of marks) {
-    if (mark.relation === 'supports' || mark.relation === 'challenges') continue
-    const sectionKey = relationToSection.get(mark.relation)
+    const causal = causalFieldBinding(mark)
+    if (!causal && (mark.relation === 'supports' || mark.relation === 'challenges')) continue
+    const sectionKey = causal ? 'evidence' : relationToSection.get(mark.relation)
     if (!sectionKey) continue // an approved-but-unmapped relation: nothing to lose silently here today
     if (mark.review === 'superseded') {
       if (!namedAncestors.has(bareMarkId(mark.id))) {

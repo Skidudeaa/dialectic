@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../../lib/api.ts'
 import type { GeoScope, GeoScopeReview, GeoSubjectDestination } from '../../../types/geo.ts'
+import type { ThesisStructure } from '../../../types/trading.ts'
+import type { FieldRelation } from '../../../types/workspace.ts'
 import { AUTHORITY_LABEL, KIND_LABEL } from '../world/worldScopes.ts'
 import { FocusHeader } from './FocusHeader.tsx'
 import { SceneLoading } from '../SceneEmpty.tsx'
@@ -18,6 +20,7 @@ interface ScopeReviewProps {
     historyMode?: 'push' | 'replace'
   }) => void
   onChanged: () => void
+  onMarked: () => void
 }
 
 function bareScopeId(id: string): string {
@@ -67,7 +70,7 @@ function navigateToSubject(
 }
 
 export function ScopeReview({
-  roomId, scopeId, canAct, onClose, onNavigate, onChanged,
+  roomId, scopeId, canAct, onClose, onNavigate, onChanged, onMarked,
 }: ScopeReviewProps) {
   const [review, setReview] = useState<GeoScopeReview | null>(null)
   const [loading, setLoading] = useState(true)
@@ -77,6 +80,11 @@ export function ScopeReview({
   const [redrawing, setRedrawing] = useState(false)
   const [redrawLabel, setRedrawLabel] = useState('')
   const [redrawGeometry, setRedrawGeometry] = useState('')
+  const [binding, setBinding] = useState(false)
+  const [bindingBusy, setBindingBusy] = useState(false)
+  const [structure, setStructure] = useState<ThesisStructure | null>(null)
+  const [causalRelation, setCausalRelation] = useState<FieldRelation>('supports')
+  const [nodeId, setNodeId] = useState('')
   const requestRef = useRef(0)
   const canonicalizedRef = useRef<string | null>(null)
 
@@ -124,6 +132,54 @@ export function ScopeReview({
       setError(err instanceof Error ? err.message : 'That review did not go through')
     } finally {
       setBusy(false)
+    }
+  }
+
+  const openBinding = async () => {
+    setBindingBusy(true)
+    setError(null)
+    try {
+      const next = await api.getThesisStructure(roomId)
+      if (!Array.isArray(next.nodes) || next.nodes.length === 0) {
+        throw new Error('This thesis has no nodes to bind.')
+      }
+      setStructure(next)
+      setNodeId(next.nodes[0].id)
+      setBinding(true)
+    } catch (err) {
+      setStructure(null)
+      setBinding(false)
+      setError(err instanceof Error ? err.message : 'Thesis structure is unavailable')
+    } finally {
+      setBindingBusy(false)
+    }
+  }
+
+  const createBinding = async () => {
+    if (!structure || !review) return
+    const node = structure.nodes.find((candidate) => candidate.id === nodeId)
+    if (!node) return
+    setBindingBusy(true)
+    setError(null)
+    try {
+      await api.createFieldMark(roomId, {
+        relation: causalRelation,
+        subjects: [
+          { entity: 'geo_scopes', id: bareScopeId(review.current.id) },
+          {
+            entity: 'rooms', id: roomId,
+            field: `thesis_node:${structure.id}:${node.id}`,
+          },
+        ],
+        title: `${review.current.label || 'GeoScope'} ${causalRelation} ${node.label}`,
+        payload: { node_label: node.label },
+      })
+      setBinding(false)
+      onMarked()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add this binding to Field')
+    } finally {
+      setBindingBusy(false)
     }
   }
 
@@ -216,6 +272,14 @@ export function ScopeReview({
               <>
                 <button
                   type="button"
+                  className="btn btn-sm"
+                  disabled={busy || bindingBusy}
+                  onClick={() => void openBinding()}
+                >
+                  Bind to thesis node
+                </button>
+                <button
+                  type="button"
                   className="btn btn-ghost btn-sm"
                   disabled={busy}
                   onClick={() => {
@@ -230,6 +294,43 @@ export function ScopeReview({
               </>
             ) : null}
           </div>
+          {binding && structure ? (
+            <form
+              className="focus-actions-editor scope-review-causal"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void createBinding()
+              }}
+            >
+              <label>
+                Causal relation
+                <select
+                  value={causalRelation}
+                  disabled={bindingBusy}
+                  onChange={(event) => setCausalRelation(event.target.value as FieldRelation)}
+                >
+                  <option value="supports">Supports</option>
+                  <option value="challenges">Challenges</option>
+                  <option value="context">Context</option>
+                </select>
+              </label>
+              <label>
+                Thesis node
+                <select
+                  value={nodeId}
+                  disabled={bindingBusy}
+                  onChange={(event) => setNodeId(event.target.value)}
+                >
+                  {structure.nodes.map((node) => (
+                    <option key={node.id} value={node.id}>{node.label}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="submit" className="btn btn-sm" disabled={bindingBusy || !nodeId}>
+                Add to Field
+              </button>
+            </form>
+          ) : null}
           {redrawing ? (
             <form
               className="scope-review-redraw"

@@ -21,6 +21,7 @@ import pytest
 import pytest_asyncio
 
 from field_marks import compute_dedup_key
+from geo_scopes import insert_scope
 from llm import field_inference
 from scheduler import Scheduler, SchedulerContext
 
@@ -254,6 +255,50 @@ async def test_a_foreign_room_subject_is_dropped(inference_room, monkeypatch):
 
     rows = await _inserted_rows(inference_room, ROOM)
     assert rows == [], "a subject naming another room's message must never mint provenance"
+
+
+@pytest.mark.asyncio
+async def test_inference_cannot_bypass_the_causal_structure_bridge(
+    inference_room, monkeypatch,
+):
+    """Only api.field owns the authenticated room/book/node proof.
+
+    Even a model candidate whose GeoScope is genuinely accepted and live must
+    not use the lower-level subject resolver to insert a causal room target.
+    """
+    scope_id = await insert_scope(
+        inference_room,
+        room_id=ROOM,
+        subject={"entity": "messages", "id": str(MSG_A)},
+        kind="point",
+        geometry={"type": "Point", "coordinates": [56.25, 26.55]},
+        label="Hormuz evidence",
+        authority="source_reported",
+        provenance={"provider": "test", "acquisition": "adapter:test"},
+    )
+    candidate = _candidate(
+        relation="supports",
+        subjects=[
+            {"entity": "geo_scopes", "id": str(scope_id)},
+            {
+                "entity": "rooms",
+                "id": str(ROOM),
+                "field": "thesis_node:unverified-book:unverified-node",
+            },
+        ],
+    )
+
+    async def _fake(*args, **kwargs):
+        return [candidate]
+
+    monkeypatch.setattr(field_inference, "_generate_candidates", _fake)
+    await field_inference.run(SchedulerContext(pool=_FakePool(inference_room)))
+
+    assert await _inserted_rows(inference_room, ROOM) == []
+    assert await inference_room.fetchval(
+        "SELECT count(*) FROM events WHERE room_id = $1 "
+        "AND event_type = 'field_mark_inferred'", ROOM,
+    ) == 0
 
 
 @pytest.mark.asyncio

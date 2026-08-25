@@ -23,7 +23,8 @@ Setup expected (skipped cleanly when absent):
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import asyncpg
@@ -32,8 +33,11 @@ import pytest_asyncio
 from fastapi import HTTPException
 
 from api.auth.dependencies import AuthenticatedUser
+import api.field as field_api
 from api.field import FieldMarkCreateRequest, create_field_mark
-from field_marks import FieldSubjectRef, compute_dedup_key
+from field_marks import FIELD_RELATIONS, FieldSubjectRef, compute_dedup_key
+from geo_scopes import insert_scope
+from llm.tradingdesk_client import TradingDeskError
 
 TEST_DATABASE_URL = os.environ.get(
     "DIALECTIC_TEST_DATABASE_URL", "postgresql://root@localhost/dialectic_test"
@@ -50,6 +54,9 @@ AMO, STRANGER = _uid(0xA05), _uid(0xA06)
 MSG_A, MSG_B, MSG_OTHER = _uid(0xA07), _uid(0xA08), _uid(0xA09)
 TOKEN = "field-origination-token"
 BASE = datetime(2026, 8, 16, 6, 0, tzinfo=timezone.utc)
+BOOK_ID = "hormuz-cascade"
+NODE_ID = "shipping-chokepoint"
+NODE_2_ID = "freight-rates"
 
 
 def row_id(mark) -> UUID:
@@ -122,6 +129,66 @@ async def room(db):
         )
     yield db
     await tx.rollback()
+
+
+@pytest_asyncio.fixture
+async def causal_room(room, monkeypatch):
+    """A bound room plus every scope-liveness state the causal door fences."""
+    if not await room.fetchval("SELECT to_regclass('geo_scopes')"):
+        pytest.skip("geo_scopes missing — run migrations/021_geo_scopes.sql")
+    await room.execute(
+        "UPDATE rooms SET linked_book_id = $1 WHERE id = $2", BOOK_ID, ROOM,
+    )
+    point = {"type": "Point", "coordinates": [56.25, 26.55]}
+    common = {
+        "room_id": ROOM,
+        "subject": {"entity": "messages", "id": str(MSG_A)},
+        "kind": "point",
+        "geometry": point,
+        "provenance": {"provider": "test", "acquisition": "adapter:test"},
+        "now": BASE,
+    }
+    seeded = {
+        "live": await insert_scope(
+            room, **common, label="Hormuz evidence", authority="source_reported",
+        ),
+        "proposed": await insert_scope(
+            room, **{
+                **common,
+                "provenance": {"provider": "test", "acquisition": "llm"},
+            },
+            label="Machine guess", authority="machine_proposed",
+        ),
+        "rejected": await insert_scope(
+            room, **{
+                **common,
+                "provenance": {"provider": "human", "acquisition": "human"},
+            },
+            label="Rejected placement", authority="human_confirmed",
+            confirmed_by=AMO, revision_action="reject",
+        ),
+        "expired": await insert_scope(
+            room, **common, label="Expired evidence", authority="source_reported",
+            expires_at=BASE - timedelta(seconds=1),
+        ),
+    }
+
+    async def structure(path: str, **_kwargs):
+        assert path == f"/api/bridge/structure/{BOOK_ID}"
+        return {
+            "id": BOOK_ID,
+            "meta": {"title": "Hormuz Cascade"},
+            "nodes": [
+                {"id": NODE_ID, "label": "Shipping chokepoint"},
+                {"id": NODE_2_ID, "label": "Freight rates"},
+            ],
+            "edges": [],
+        }
+
+    monkeypatch.setattr(
+        field_api, "td", SimpleNamespace(service_get=structure), raising=False,
+    )
+    return room, seeded
 
 
 def _request(**overrides):
@@ -262,3 +329,239 @@ async def test_the_creation_is_evented(room):
     assert row is not None
     assert row["payload"]["mark_id"] == str(row_id(mark))
     assert row["payload"]["origin"] == "explicit"
+
+
+def _causal_subjects(scope_id: UUID, *, room_id: UUID = ROOM,
+                     book_id: str = BOOK_ID, node_id: str = NODE_ID,
+                     reverse: bool = False, field: str | None = None):
+    subjects = [
+        FieldSubjectRef(entity="geo_scopes", id=str(scope_id)),
+        FieldSubjectRef(
+            entity="rooms", id=str(room_id),
+            field=field or f"thesis_node:{book_id}:{node_id}",
+        ),
+    ]
+    return list(reversed(subjects)) if reverse else subjects
+
+
+async def _causal_create(db, scope_id: UUID, **overrides):
+    return await _create(
+        db,
+        relation=overrides.pop("relation", "supports"),
+        subjects=overrides.pop("subjects", _causal_subjects(scope_id)),
+        title=overrides.pop("title", "Hormuz evidence supports shipping chokepoint"),
+        payload=overrides.pop("payload", {"node_label": "client forgery"}),
+        **overrides,
+    )
+
+
+async def _causal_counts(db) -> tuple[int, int]:
+    return (
+        await db.fetchval(
+            "SELECT count(*) FROM field_marks WHERE room_id = $1", ROOM,
+        ),
+        await db.fetchval(
+            "SELECT count(*) FROM events WHERE room_id = $1 AND "
+            "event_type IN ('field_mark_created', 'field_mark_reviewed')", ROOM,
+        ),
+    )
+
+
+def test_context_is_part_of_the_field_vocabulary():
+    assert "context" in FIELD_RELATIONS
+
+
+@pytest.mark.asyncio
+async def test_causal_roles_are_resolved_by_entity_not_subject_order(causal_room):
+    db, scopes = causal_room
+    mark = await _causal_create(
+        db, scopes["live"], subjects=_causal_subjects(scopes["live"], reverse=True),
+    )
+    stored = await db.fetchrow(
+        "SELECT subjects, payload FROM field_marks WHERE id = $1", row_id(mark),
+    )
+    assert [subject["entity"] for subject in stored["subjects"]] == ["rooms", "geo_scopes"]
+    assert stored["payload"]["node_label"] == "Shipping chokepoint"
+    assert stored["payload"]["scope_label"] == "Hormuz evidence"
+    assert mark.actor_user_id == AMO
+    assert mark.review == "provisional"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", [
+    "thesis_node:hormuz-cascade",
+    "thesis_node:hormuz-cascade:shipping-chokepoint:extra",
+    "thesis_node::shipping-chokepoint",
+    "thesis_node:hormuz-cascade:",
+    "node:hormuz-cascade:shipping-chokepoint",
+])
+async def test_causal_room_subject_requires_exact_field_grammar(causal_room, field):
+    db, scopes = causal_room
+    before = await _causal_counts(db)
+    with pytest.raises(HTTPException) as exc:
+        await _causal_create(
+            db, scopes["live"],
+            subjects=_causal_subjects(scopes["live"], field=field),
+        )
+    assert exc.value.status_code == 422
+    assert await _causal_counts(db) == before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("subjects", [
+    lambda scope: [
+        *_causal_subjects(scope),
+        FieldSubjectRef(entity="messages", id=str(MSG_A)),
+    ],
+    lambda _scope: [
+        FieldSubjectRef(entity="messages", id=str(MSG_A)),
+        FieldSubjectRef(
+            entity="rooms", id=str(ROOM),
+            field=f"thesis_node:{BOOK_ID}:{NODE_ID}",
+        ),
+    ],
+    lambda scope: [
+        FieldSubjectRef(entity="geo_scopes", id=str(scope)),
+        FieldSubjectRef(entity="rooms", id=str(ROOM)),
+    ],
+])
+async def test_causal_mark_requires_exactly_scope_and_room_roles(causal_room, subjects):
+    db, scopes = causal_room
+    before = await _causal_counts(db)
+    with pytest.raises(HTTPException) as exc:
+        await _causal_create(db, scopes["live"], subjects=subjects(scopes["live"]))
+    assert exc.value.status_code == 422
+    assert await _causal_counts(db) == before
+
+
+@pytest.mark.asyncio
+async def test_room_field_subject_is_only_legal_for_causal_relations(causal_room):
+    db, scopes = causal_room
+    before = await _causal_counts(db)
+    with pytest.raises(HTTPException) as exc:
+        await _causal_create(db, scopes["live"], relation="evidence_attachment")
+    assert exc.value.status_code == 422
+    assert await _causal_counts(db) == before
+
+
+@pytest.mark.asyncio
+async def test_causal_room_subject_must_name_the_current_room(causal_room):
+    db, scopes = causal_room
+    before = await _causal_counts(db)
+    with pytest.raises(HTTPException) as exc:
+        await _causal_create(
+            db, scopes["live"],
+            subjects=_causal_subjects(scopes["live"], room_id=OTHER_ROOM),
+        )
+    assert exc.value.status_code == 422
+    assert await _causal_counts(db) == before
+
+
+@pytest.mark.asyncio
+async def test_causal_book_must_be_the_rooms_current_binding(causal_room):
+    db, scopes = causal_room
+    before = await _causal_counts(db)
+    with pytest.raises(HTTPException) as exc:
+        await _causal_create(
+            db, scopes["live"],
+            subjects=_causal_subjects(scopes["live"], book_id="old-book"),
+        )
+    assert exc.value.status_code == 422
+    assert await _causal_counts(db) == before
+
+
+@pytest.mark.asyncio
+async def test_causal_node_must_exist_in_authenticated_structure(causal_room):
+    db, scopes = causal_room
+    before = await _causal_counts(db)
+    with pytest.raises(HTTPException) as exc:
+        await _causal_create(
+            db, scopes["live"],
+            subjects=_causal_subjects(scopes["live"], node_id="missing-node"),
+        )
+    assert exc.value.status_code == 422
+    assert await _causal_counts(db) == before
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", ["proposed", "rejected", "expired"])
+async def test_only_accepted_canonically_live_scope_can_bind(causal_room, state):
+    db, scopes = causal_room
+    before = await _causal_counts(db)
+    with pytest.raises(HTTPException) as exc:
+        await _causal_create(db, scopes[state])
+    assert exc.value.status_code == 422
+    assert await _causal_counts(db) == before
+
+
+@pytest.mark.asyncio
+async def test_unavailable_structure_bridge_fails_without_mark_or_event(
+    causal_room, monkeypatch,
+):
+    db, scopes = causal_room
+
+    async def unavailable(*_args, **_kwargs):
+        raise TradingDeskError("bridge unavailable")
+
+    monkeypatch.setattr(field_api.td, "service_get", unavailable, raising=False)
+    before = await _causal_counts(db)
+    with pytest.raises(HTTPException) as exc:
+        await _causal_create(db, scopes["live"])
+    assert exc.value.status_code == 502
+    assert await _causal_counts(db) == before
+
+
+@pytest.mark.asyncio
+async def test_causal_confirm_contest_and_correct_preserve_roles_and_attribution(
+    causal_room,
+):
+    db, scopes = causal_room
+    original = await _causal_create(
+        db, scopes["live"], subjects=_causal_subjects(scopes["live"], reverse=True),
+    )
+    original_subjects = [subject.model_dump() for subject in original.subjects]
+
+    confirmed = await field_api.review_field_mark(
+        ROOM, row_id(original), field_api.FieldReviewRequest(action="confirm"),
+        token=TOKEN, current_user=caller(), db=db,
+    )
+    assert [subject.model_dump() for subject in confirmed.mark.subjects] == original_subjects
+    assert confirmed.mark.review == "confirmed"
+    assert confirmed.review.actor_user_id == AMO
+
+    contested = await field_api.review_field_mark(
+        ROOM, row_id(original), field_api.FieldReviewRequest(action="contest"),
+        token=TOKEN, current_user=caller(), db=db,
+    )
+    assert [subject.model_dump() for subject in contested.mark.subjects] == original_subjects
+    assert contested.mark.review == "contested"
+    assert contested.review.actor_user_id == AMO
+
+    replacement_subjects = _causal_subjects(
+        scopes["live"], node_id=NODE_2_ID, reverse=False,
+    )
+    corrected = await field_api.review_field_mark(
+        ROOM,
+        row_id(original),
+        field_api.FieldReviewRequest(
+            action="correct",
+            replacement=field_api.FieldReplacementRequest(
+                relation="context",
+                subjects=replacement_subjects,
+                title="Hormuz evidence is context for freight rates",
+                payload={"node_label": "client forgery"},
+            ),
+        ),
+        token=TOKEN,
+        current_user=caller(),
+        db=db,
+    )
+    assert corrected.mark.review == "superseded"
+    assert corrected.review.actor_user_id == AMO
+    assert len(corrected.replacements) == 1
+    replacement = corrected.replacements[0]
+    assert {subject.entity for subject in replacement.subjects} == {"geo_scopes", "rooms"}
+    assert replacement.payload["node_label"] == "Freight rates"
+    assert replacement.payload["scope_label"] == "Hormuz evidence"
+    assert replacement.actor_user_id == AMO
+    assert replacement.caused_by_id == corrected.review.id

@@ -7,14 +7,17 @@ import { SceneEmpty, SceneLoading, SceneUnavailable } from '../SceneEmpty'
 import {
   FIELD_SECTIONS,
   buildObjectTitleMap,
+  causalFieldBinding,
   humanizeRelation,
   resolveSubjectLabel,
   sectionMarks,
+  tradingDeskBuilderUrl,
   type FieldRow,
   type OrphanSupersededRow,
 } from '../fieldDisplay.ts'
 import { ReviewChip } from '../ReviewChip.tsx'
 import { Explain } from '../../common/Explain'
+import { useAppStore } from '../../../stores/appStore.ts'
 import './FieldScene.css'
 
 /**
@@ -45,6 +48,18 @@ interface FieldSceneProps {
 }
 
 function SubjectList({ mark, titles }: { mark: FieldMark; titles: Map<string, string> }) {
+  const causal = causalFieldBinding(mark)
+  if (causal) {
+    return (
+      <p className="field-mark-subjects field-mark-causal">
+        <span>{causal.scopeLabel}</span>
+        <span aria-hidden="true"> · </span>
+        <span>{humanizeRelation(mark.relation)}</span>
+        <span aria-hidden="true"> · </span>
+        <span>{causal.nodeLabel}</span>
+      </p>
+    )
+  }
   if (mark.subjects.length === 0) return null
   return (
     <p className="field-mark-subjects">
@@ -89,13 +104,15 @@ function HistoryDisclosure({ history, titles }: { history: FieldMark[]; titles: 
 }
 
 function MarkRow({
-  row, titles, onOpen,
+  row, titles, onOpen, accessToken,
 }: {
   row: FieldRow
   titles: Map<string, string>
   onOpen?: (mark: FieldMark) => void
+  accessToken: string | null
 }) {
   const { mark } = row
+  const causal = causalFieldBinding(mark)
   const title = mark.title || humanizeRelation(mark.relation)
   const body = (
     <>
@@ -120,6 +137,16 @@ function MarkRow({
           {body}
         </button>
       ) : body}
+      {causal && accessToken && (
+        <a
+          className="field-mark-builder"
+          href={tradingDeskBuilderUrl(accessToken, causal.roomId)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Open node in Builder
+        </a>
+      )}
     </li>
   )
 }
@@ -144,6 +171,7 @@ function OrphanRow({ orphan, titles }: { orphan: OrphanSupersededRow; titles: Ma
 }
 
 export function FieldScene({ state, objects, onOpen }: FieldSceneProps) {
+  const accessToken = useAppStore((store) => store.accessToken)
   const titles = useMemo(
     () => buildObjectTitleMap(objects.status === 'ready' ? objects.objects : []),
     [objects],
@@ -218,7 +246,13 @@ export function FieldScene({ state, objects, onOpen }: FieldSceneProps) {
             <h3 className="field-section-label">{section.label}</h3>
             <ul className="field-section-list">
               {rows.map((row) => (
-                <MarkRow key={row.mark.id} row={row} titles={titles} onOpen={onOpen} />
+                <MarkRow
+                  key={row.mark.id}
+                  row={row}
+                  titles={titles}
+                  onOpen={onOpen}
+                  accessToken={accessToken}
+                />
               ))}
               {orphans.map((orphan) => (
                 <OrphanRow key={orphan.mark.id} orphan={orphan} titles={titles} />

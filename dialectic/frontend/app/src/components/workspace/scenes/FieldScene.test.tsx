@@ -1,9 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FieldScene } from './FieldScene'
 import type { FieldMark, WorkspaceObject } from '../../../types/workspace.ts'
 import type { FieldMarksState } from '../../../hooks/useFieldMarks.ts'
 import type { WorkspaceObjectsState } from '../../../hooks/useWorkspaceObjects.ts'
+import { useAppStore } from '../../../stores/appStore.ts'
 
 const mark = (overrides: Partial<FieldMark> & { id: string; relation: FieldMark['relation'] }): FieldMark => ({
   room_id: 'r1', thread_id: null, origin: 'inferred', review: 'provisional',
@@ -14,6 +15,10 @@ const mark = (overrides: Partial<FieldMark> & { id: string; relation: FieldMark[
 })
 
 const noObjects: WorkspaceObjectsState = { status: 'ready', objects: [], generatedAt: 'x', retry: () => {} }
+
+afterEach(() => {
+  useAppStore.setState({ accessToken: null })
+})
 
 describe('FieldScene', () => {
   it('shows loading, never empty, while the fetch is in flight', () => {
@@ -114,5 +119,31 @@ describe('FieldScene', () => {
     }
     render(<FieldScene state={state} objects={objects} />)
     expect(screen.getByText('The tariff piece')).toBeInTheDocument()
+  })
+
+  it('shows an adjudicated causal binding and its authenticated Builder route', () => {
+    useAppStore.setState({ accessToken: 'session-token' })
+    const causal = mark({
+      id: 'field_mark:causal', relation: 'challenges', title: 'Hormuz challenges freight',
+      review: 'contested',
+      subjects: [
+        { entity: 'rooms', id: 'r1', field: 'thesis_node:hormuz:freight-rates' },
+        { entity: 'geo_scopes', id: 'scope-1', field: null },
+      ],
+      payload: { node_label: 'Freight rates', scope_label: 'Strait of Hormuz' },
+    })
+    render(<FieldScene
+      state={{ status: 'ready', generatedAt: 'x', refresh: () => {}, marks: [causal] }}
+      objects={noObjects}
+    />)
+
+    expect(screen.getByText('Strait of Hormuz')).toBeInTheDocument()
+    expect(screen.getByText('Challenges')).toBeInTheDocument()
+    expect(screen.getByText('Freight rates')).toBeInTheDocument()
+    expect(screen.getByText('contested')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open node in Builder' })).toHaveAttribute(
+      'href',
+      'https://td.somacura.org/builder#dialectic_token=session-token&dialectic_room=r1',
+    )
   })
 })

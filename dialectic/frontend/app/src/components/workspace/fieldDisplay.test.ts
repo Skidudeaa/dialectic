@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   bareMarkId,
   buildObjectTitleMap,
+  causalFieldBinding,
   humanizeRelation,
   resolveSubjectLabel,
   sectionMarks,
@@ -39,6 +40,27 @@ describe('bareMarkId', () => {
   })
   it('is a no-op on an id with no prefix', () => {
     expect(bareMarkId('abc-123')).toBe('abc-123')
+  })
+})
+
+describe('causalFieldBinding', () => {
+  it('assigns evidence and target by semantic entity, never subject order', () => {
+    const causal = baseMark({
+      id: 'field_mark:causal', relation: 'context', review: 'confirmed',
+      subjects: [
+        { entity: 'rooms', id: 'r1', field: 'thesis_node:hormuz:freight-rates' },
+        { entity: 'geo_scopes', id: 'scope-1', field: null },
+      ],
+      payload: { node_label: 'Freight rates', scope_label: 'Strait of Hormuz' },
+    })
+    expect(causalFieldBinding(causal)).toEqual({
+      bookId: 'hormuz',
+      nodeId: 'freight-rates',
+      nodeLabel: 'Freight rates',
+      roomId: 'r1',
+      scopeId: 'scope-1',
+      scopeLabel: 'Strait of Hormuz',
+    })
   })
 })
 
@@ -144,5 +166,18 @@ describe('sectionMarks', () => {
     })
     const { bySection } = sectionMarks([orphanChallenge])
     expect(bySection.get('tensions')?.map((r) => r.mark.id)).toEqual(['field_mark:chal'])
+  })
+
+  it('renders a causal support as evidence instead of subject-order nesting', () => {
+    const causal = baseMark({
+      id: 'field_mark:causal', relation: 'supports',
+      subjects: [
+        { entity: 'rooms', id: 'r1', field: 'thesis_node:hormuz:node-1' },
+        { entity: 'geo_scopes', id: 'scope-1', field: null },
+      ],
+      payload: { node_label: 'Shipping chokepoint', scope_label: 'Strait of Hormuz' },
+    })
+    const { bySection } = sectionMarks([causal])
+    expect(bySection.get('evidence')?.map((row) => row.mark.id)).toEqual(['field_mark:causal'])
   })
 })

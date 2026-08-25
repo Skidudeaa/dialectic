@@ -38,7 +38,9 @@ GUARDRAILS:
   - hard validation, not prompt trust: relation must be in FIELD_RELATIONS;
     every subject must resolve to a real row IN THIS ROOM
     (field_marks.resolve_subjects_in_room) — the model cannot mint
-    provenance no matter what it emits.
+    provenance no matter what it emits. Room-field subjects are refused even
+    when their grammar is valid: only api.field performs the authenticated
+    trading structure proof required for a causal binding.
   - Home is never a candidate room: the Field does not render there (TG-B),
     so there is nothing to spend the budget on.
   - no WS push this release — the scene refetches on entry and after a
@@ -274,6 +276,8 @@ def _candidate_valid(candidate: dict) -> bool:
     for subject in subjects:
         if not isinstance(subject, dict) or not subject.get("entity") or not subject.get("id"):
             return False
+        if subject.get("entity") == "rooms":
+            return False
     return True
 
 
@@ -378,7 +382,7 @@ async def run(ctx: SchedulerContext) -> dict:
                     if not _candidate_valid(candidate):
                         continue
                     if not await resolve_subjects_in_room(
-                        conn, room["id"], candidate["subjects"],
+                        conn, room["id"], candidate["subjects"], candidate["relation"],
                     ):
                         continue
                     mark_id = await _insert_candidate(

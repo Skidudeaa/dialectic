@@ -269,7 +269,7 @@ async def field_room(db):
 # ---------------------------------------------------------------------------
 
 def test_vocabularies_are_the_right_size():
-    assert len(FIELD_RELATIONS) == 11
+    assert len(FIELD_RELATIONS) == 12
     assert len(FIELD_ACTIONS) == 6
     assert len(FIELD_ORIGINS) == 2
     assert len(FIELD_REVIEW_STATES) == 4

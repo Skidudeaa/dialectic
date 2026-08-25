@@ -40,8 +40,9 @@
 # validation and is dropped before it reaches SQL.
 
 import json
+import re
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -52,7 +53,8 @@ from geo_scopes import live_predicate as geo_scope_live_predicate
 # too, not just membership: these render as switch arms and lists) ----------
 
 # §14.3's ten, with support/challenge split into two directed relations —
-# eleven total. Comment-documented rather than a DB CHECK: the list may grow,
+# twelve total after adding causal `context`. Comment-documented rather than
+# a DB CHECK: the list may grow,
 # and a migration-per-relation would be the wrong cost for adding a kind of
 # mark.
 FIELD_RELATIONS = (
@@ -60,6 +62,7 @@ FIELD_RELATIONS = (
     "claim_group",
     "supports",
     "challenges",
+    "context",
     "repeated_definition",
     "possible_contradiction",
     "emerging_position",
@@ -73,6 +76,13 @@ FIELD_RELATIONS = (
 FIELD_ACTIONS = ("confirm", "contest", "correct", "supersede", "split", "merge")
 
 FIELD_ORIGINS = ("explicit", "inferred")
+
+# These are the only relations whose semantic roles may cross the Field/World/
+# thesis boundary. Existing supports/challenges marks between ordinary Field
+# subjects remain valid; the causal grammar is activated by a `rooms` subject.
+FIELD_CAUSAL_RELATIONS = ("supports", "challenges", "context")
+
+_THESIS_NODE_FIELD = re.compile(r"^thesis_node:([^:]+):([^:]+)$")
 
 # The independent REVIEW axis (§1.3, §14.2) — never conflated with
 # deliberative_status, and never implying the marked proposition is true.
@@ -167,6 +177,14 @@ class FieldSubjectRef(BaseModel):
     field: Optional[str] = None
 
 
+class CausalFieldRoles(NamedTuple):
+    """Semantic roles for one World-to-thesis mark, independent of JSON order."""
+    evidence: dict
+    target: dict
+    book_id: str
+    node_id: str
+
+
 class FieldReview(BaseModel):
     """One human action on a mark. Never itself reviewed — reviews are the
     leaves of the append-only tree, not a target of a target."""
@@ -259,7 +277,39 @@ def compute_dedup_key(relation: str, subjects: list[dict]) -> str:
     return f"{relation}|{','.join(tokens)}"
 
 
-async def resolve_subjects_in_room(db, room_id: UUID, subjects: list[dict]) -> bool:
+def causal_subject_roles(
+    relation: Optional[str], subjects: list[dict],
+) -> Optional[CausalFieldRoles]:
+    """Resolve causal roles by entity, never by subject-array position.
+
+    A room subject opts the mark into this strict grammar. Without one, the
+    pre-existing Field subject rules apply unchanged (including ordinary
+    supports/challenges relations between messages or marks).
+    """
+    room_subjects = [s for s in subjects if s.get("entity") == "rooms"]
+    if not room_subjects:
+        return None
+    if relation not in FIELD_CAUSAL_RELATIONS:
+        raise ValueError("room thesis subjects require a causal relation")
+    scope_subjects = [s for s in subjects if s.get("entity") == "geo_scopes"]
+    if len(subjects) != 2 or len(room_subjects) != 1 or len(scope_subjects) != 1:
+        raise ValueError("causal marks require exactly one scope and one room target")
+    field = room_subjects[0].get("field")
+    match = _THESIS_NODE_FIELD.fullmatch(field) if isinstance(field, str) else None
+    if match is None:
+        raise ValueError("room target field must be thesis_node:<book-id>:<node-id>")
+    return CausalFieldRoles(
+        evidence=scope_subjects[0],
+        target=room_subjects[0],
+        book_id=match.group(1),
+        node_id=match.group(2),
+    )
+
+
+async def resolve_subjects_in_room(
+    db, room_id: UUID, subjects: list[dict], relation: Optional[str] = None,
+    *, allow_causal: bool = False,
+) -> bool:
     """Every subject ref resolves to a real row IN THIS ROOM, checked in SQL.
 
     Client payloads and model output are documents, not trust boundaries
@@ -268,8 +318,27 @@ async def resolve_subjects_in_room(db, room_id: UUID, subjects: list[dict]) -> b
     """
     if not subjects:
         return False
+    try:
+        causal_roles = causal_subject_roles(relation, subjects)
+    except ValueError:
+        return False
+    # Only the human Field API performs the authenticated room/book/node
+    # structure proof. Every other caller, especially model inference, stays
+    # fail-closed even when the raw subject rows and grammar are valid.
+    if causal_roles is not None and not allow_causal:
+        return False
     for subject in subjects:
         entity = subject.get("entity")
+        if entity == "rooms":
+            try:
+                subject_id = UUID(str(subject.get("id")))
+            except (TypeError, ValueError):
+                return False
+            if subject_id != room_id:
+                return False
+            if not await db.fetchval("SELECT 1 FROM rooms WHERE id = $1", room_id):
+                return False
+            continue
         table = _SUBJECT_ENTITY_TABLES.get(entity)
         if table is None:
             return False

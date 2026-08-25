@@ -68,6 +68,15 @@
     margin-top: 0.25rem;
     overflow-wrap: anywhere;
 }
+.field-mark-causal { color: var(--color-secondary); }
+.field-mark-builder {
+    display: inline-block;
+    margin-top: 0.35rem;
+    color: var(--color-amber);
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+.field-mark-builder:hover { text-decoration: underline; }
 
 /* Support/challenge edges: indented lines under their subject's row
    (§5.2), not a section of their own. */

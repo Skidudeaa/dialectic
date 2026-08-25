@@ -31,16 +31,21 @@ from api.token_utils import extract_room_token
 from field_marks import (
     FIELD_ACTIONS,
     FIELD_RELATIONS,
+    CausalFieldRoles,
     FieldMark,
     FieldMarkService,
     FieldProjection,
     FieldReview,
     FieldSubjectRef,
     build_single_mark,
+    causal_subject_roles,
     compute_dedup_key,
     current_review_state,
     resolve_subjects_in_room,
 )
+from geo_scopes import live_predicate as geo_scope_live_predicate
+from llm import tradingdesk_client as td
+from llm.tradingdesk_client import TradingDeskError
 from models import EventType
 
 logger = logging.getLogger(__name__)
@@ -169,6 +174,97 @@ class FieldMarkCreateRequest(BaseModel):
     thread_id: Optional[UUID] = None
 
 
+async def _causal_db_facts(
+    db, room_id: UUID, relation: str, subjects: list[dict], *, lock_room: bool,
+) -> Optional[tuple[CausalFieldRoles, str]]:
+    """Return the causal roles and accepted scope label, or reject the mark.
+
+    The room binding and canonical GeoScope liveness are database authority.
+    When called inside the insert transaction, the room row is locked so a
+    concurrent rebind cannot slip between validation and insertion.
+    """
+    try:
+        roles = causal_subject_roles(relation, subjects)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if roles is None:
+        return None
+
+    lock = " FOR UPDATE" if lock_room else ""
+    bound_book = await db.fetchval(
+        f"SELECT linked_book_id FROM rooms WHERE id = $1{lock}", room_id,
+    )
+    if bound_book != roles.book_id:
+        raise HTTPException(
+            status_code=422,
+            detail="thesis node book is not the room's current binding",
+        )
+    try:
+        scope_id = UUID(str(roles.evidence.get("id")))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="invalid GeoScope subject") from exc
+    scope_label = await db.fetchval(
+        "SELECT label FROM geo_scopes WHERE id = $1 AND room_id = $2 "
+        "AND authority <> 'machine_proposed' AND "
+        f"{geo_scope_live_predicate('geo_scopes')}",
+        scope_id, room_id,
+    )
+    if scope_label is None:
+        raise HTTPException(
+            status_code=422,
+            detail="causal evidence must be an accepted canonically-live GeoScope",
+        )
+    return roles, scope_label
+
+
+async def _validated_causal_payload(
+    db, room_id: UUID, relation: str, subjects: list[dict], payload: dict,
+) -> dict:
+    """Prove the external node and replace client labels with bridge truth."""
+    facts = await _causal_db_facts(
+        db, room_id, relation, subjects, lock_room=False,
+    )
+    if facts is None:
+        return dict(payload)
+    roles, scope_label = facts
+    try:
+        structure = await td.service_get(
+            f"/api/bridge/structure/{roles.book_id}",
+        )
+    except TradingDeskError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"trading structure unavailable: {exc}",
+        ) from exc
+    if (
+        not isinstance(structure, dict)
+        or structure.get("id") != roles.book_id
+        or not isinstance(structure.get("nodes"), list)
+    ):
+        raise HTTPException(
+            status_code=502, detail="trading structure returned an invalid book",
+        )
+    node = next(
+        (
+            candidate for candidate in structure["nodes"]
+            if isinstance(candidate, dict) and candidate.get("id") == roles.node_id
+        ),
+        None,
+    )
+    if node is None:
+        raise HTTPException(
+            status_code=422, detail="thesis node does not exist in the current structure",
+        )
+    label = node.get("label")
+    node_label = label if isinstance(label, str) and label.strip() else roles.node_id
+    normalized = dict(payload)
+    # Historical display only. Authority remains the room-field grammar plus
+    # the authenticated structure proof above; later renames do not rewrite
+    # append-only Field history.
+    normalized["node_label"] = node_label
+    normalized["scope_label"] = scope_label or f"GeoScope {roles.evidence['id']}"
+    return normalized
+
+
 @router.post("/rooms/{room_id}/field/marks", response_model=FieldMark, status_code=201)
 async def create_field_mark(
     room_id: UUID,
@@ -205,7 +301,9 @@ async def create_field_mark(
     subjects = [s.model_dump() for s in request.subjects]
     # Client payloads are documents, not trust boundaries (§5.1): a subject
     # naming a row this room does not own fails closed.
-    if not await resolve_subjects_in_room(db, room_id, subjects):
+    if not await resolve_subjects_in_room(
+        db, room_id, subjects, request.relation, allow_causal=True,
+    ):
         raise HTTPException(
             status_code=422,
             detail="subjects do not resolve to rows in this room",
@@ -219,16 +317,29 @@ async def create_field_mark(
             raise HTTPException(
                 status_code=422, detail="thread does not belong to this room",
             )
+    payload = await _validated_causal_payload(
+        db, room_id, request.relation, subjects, request.payload,
+    )
 
     now = datetime.now(timezone.utc)
     mark_id = uuid4()
     dedup_key = compute_dedup_key(request.relation, subjects)
 
     async with db.transaction():
+        if not await resolve_subjects_in_room(
+            db, room_id, subjects, request.relation, allow_causal=True,
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail="subjects no longer resolve to rows in this room",
+            )
+        await _causal_db_facts(
+            db, room_id, request.relation, subjects, lock_room=True,
+        )
         await db.execute(
             _INSERT_RELATION_SQL + _ON_CONFLICT_DEDUP,
             mark_id, room_id, request.thread_id, request.relation, subjects,
-            request.title, request.payload, None, None,
+            request.title, payload, None, None,
             current_user.user_id, now, dedup_key,
         )
         # DO NOTHING means an identical mark already exists; the caller asked
@@ -251,7 +362,9 @@ async def create_field_mark(
     return mark
 
 
-async def _validate_replacement(db, room_id: UUID, replacement: FieldReplacementRequest) -> None:
+async def _validate_replacement(
+    db, room_id: UUID, replacement: FieldReplacementRequest,
+) -> dict:
     if replacement.relation not in FIELD_RELATIONS:
         raise HTTPException(
             status_code=422, detail=f"Unknown relation: {replacement.relation}",
@@ -259,11 +372,16 @@ async def _validate_replacement(db, room_id: UUID, replacement: FieldReplacement
     subjects = [s.model_dump() for s in replacement.subjects]
     # Client payloads are documents, not trust boundaries (§5.1) — every
     # subject must resolve to a real row in THIS room before anything writes.
-    if not await resolve_subjects_in_room(db, room_id, subjects):
+    if not await resolve_subjects_in_room(
+        db, room_id, subjects, replacement.relation, allow_causal=True,
+    ):
         raise HTTPException(
             status_code=422,
             detail="replacement subjects do not resolve to rows in this room",
         )
+    return await _validated_causal_payload(
+        db, room_id, replacement.relation, subjects, replacement.payload,
+    )
 
 
 @router.post(
@@ -341,8 +459,10 @@ async def review_field_mark(
             raise HTTPException(status_code=422, detail="merge needs a replacement")
         replacement_requests = [request.replacement]
 
-    for replacement in replacement_requests:
+    replacement_payloads = [
         await _validate_replacement(db, room_id, replacement)
+        for replacement in replacement_requests
+    ]
 
     now = datetime.now(timezone.utc)
     review_payload: dict = {}
@@ -353,6 +473,19 @@ async def review_field_mark(
 
     try:
         async with db.transaction():
+            for replacement in replacement_requests:
+                subjects = [s.model_dump() for s in replacement.subjects]
+                if not await resolve_subjects_in_room(
+                    db, room_id, subjects, replacement.relation,
+                    allow_causal=True,
+                ):
+                    raise HTTPException(
+                        status_code=422,
+                        detail="replacement subjects no longer resolve to rows in this room",
+                    )
+                await _causal_db_facts(
+                    db, room_id, replacement.relation, subjects, lock_room=True,
+                )
             if request.action == "merge":
                 merge_group = str(uuid4())
                 for other in merge_targets:
@@ -367,7 +500,7 @@ async def review_field_mark(
                 replacement = replacement_requests[0]
                 replacement_id = uuid4()
                 subjects = [s.model_dump() for s in replacement.subjects]
-                payload = dict(replacement.payload)
+                payload = dict(replacement_payloads[0])
                 payload["merged_ids"] = [str(t["id"]) for t in merge_targets]
                 await db.execute(
                     _INSERT_RELATION_SQL, replacement_id, room_id, target["thread_id"],
@@ -381,13 +514,15 @@ async def review_field_mark(
                     _INSERT_REVIEW_SQL, review_id, room_id, request.action, mark_id,
                     current_user.user_id, now, review_payload,
                 )
-                for replacement in replacement_requests:
+                for replacement, payload in zip(
+                    replacement_requests, replacement_payloads,
+                ):
                     replacement_id = uuid4()
                     subjects = [s.model_dump() for s in replacement.subjects]
                     await db.execute(
                         _INSERT_RELATION_SQL, replacement_id, room_id, target["thread_id"],
                         replacement.relation, subjects, replacement.title,
-                        dict(replacement.payload), mark_id, review_id,
+                        payload, mark_id, review_id,
                         current_user.user_id, now,
                         compute_dedup_key(replacement.relation, subjects),
                     )

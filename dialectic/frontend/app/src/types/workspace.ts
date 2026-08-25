@@ -291,7 +291,8 @@ export interface ProposalEnvelopeProjection {
 // ---------------------------------------------------------------------------
 
 // §14.3's ten low-risk automatic kinds, with support/challenge split into two
-// directed relations -- eleven total. §14.4's human-ratified judgments are
+// directed relations plus causal context -- twelve total. §14.4's
+// human-ratified judgments are
 // deliberately NOT here: none of them is a member, which is what makes them
 // structurally unwritable by inference (field_marks.py's own guard comment).
 export const FIELD_RELATIONS = [
@@ -299,6 +300,7 @@ export const FIELD_RELATIONS = [
   'claim_group',
   'supports',
   'challenges',
+  'context',
   'repeated_definition',
   'possible_contradiction',
   'emerging_position',
