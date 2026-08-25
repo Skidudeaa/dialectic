@@ -328,3 +328,51 @@ narrowly than written, recorded rather than edited above:
 Provider terms now live in `WORLD_PROVIDERS.md`. Phase 3 waits on the gate
 this document sets ("feels electric in daily use") and on an AIS terms
 decision.
+
+---
+
+## Amendment 2026-08-25 — truth before spectacle, Tasks 1–5
+
+Implemented on isolated branch `codex/world-lens-truth-before-spectacle`; **not
+deployed or activated**. This supersedes the speculative
+`GeoSignalProjection` flow above:
+
+```text
+provider adapter (none configured)
+  -> bounded in-process WorldSignal snapshot (ephemeral, read-only)
+    -> viewer/current-room-fenced Atlas / World
+      -> explicit human place
+        -> append-only source_reported GeoScope + full event
+          -> causal Field mark (supports | challenges | context)
+            -> human confirm / contest / correct
+              -> optional explicit Builder edit (the only thesis writer)
+```
+
+- **Migration 022 makes geographic authority immutable.** `geo_scopes`
+  rejects UPDATE/DELETE, permits one direct successor, and records typed
+  revision actions. Scope + event are atomic. Review, source condition,
+  freshness, and authority remain independent axes.
+- **Review is universal and list-first.** House and World open one root-stable
+  inspector. Full lineage and exact server-derived room/reading/message
+  destinations remain available without Cesium; messages retain their thread.
+- **Causal meaning stays in Field.** Semantic roles are resolved by entity:
+  one accepted live GeoScope is evidence; one room subject names
+  `thesis_node:<book-id>:<node-id>`. The server proves the current binding and
+  node through the authenticated structure bridge. Inference cannot open this
+  door. Builder remains the sole thesis editor.
+- **WorldSignal is not geographic memory.** The bounded snapshot owner starts
+  empty; there is no public writer, adapter, poller, or sample feed. Source
+  envelopes share Atlas's room fence. Human placement copies current
+  same-room server bytes into a durable scope.
+- **The participant has read-only sight.** `world_query` reports exact bound
+  room identity, exact-ID/exact-label scope state, bounded lineage, semantic
+  causal bindings, and explicit signal status/coverage/clocks through the
+  public owner services. Unknown/unavailable/not-configured never become zero.
+  `propose_geo_scope` remains the sole participant geography writer and always
+  requires human review. “Show me” uses the existing `world;room=<uuid>` view
+  token through `useRoomNavigation`; no second camera serializer exists.
+
+Provider activation and geographic memory remain closed until physical-device
+acceptance, one week of ordinary Hormuz use with a written value/error ledger,
+source-specific terms/coverage/outage/replay/budget approval, and an explicit
+owner activation choice. Interesting dots are not qualification.
