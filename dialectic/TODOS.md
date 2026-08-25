@@ -24,6 +24,24 @@
       19:00 CDT; both are fixed. A grep found ~10 other test files pairing
       `datetime.now`/`utcnow` with literal dates. None are firing; none audited.
 
+## World Lens (2026-08-25) — Phases 0–2 live; Phase 3 gated
+
+- [x] **geo_scopes substrate, Atlas / World, the evidence loop.** See
+      CLAUDE.md's 2026-08-25 amendment and `docs/WORLD_LENS_VISION.md`.
+- [ ] **Use the wedge for a week.** The vision's gate for Phase 3 is "feels
+      electric in daily use", not a test count. Place readings, confirm or
+      reject what the participant proposes, mark from the map.
+- [ ] **AIS terms.** AISStream is beta with no formal terms; owner decision
+      before any vessel layer (`docs/WORLD_PROVIDERS.md`).
+- [ ] **Phase 3 when opened:** `llm/world_feeds.py` adapters in terms-clarity
+      order (USGS → adsb.lol → FIRMS → AIS), `world_query` with the counting
+      law (every count names its scope; `unknown` never 0), migration 022
+      `world_samples` + the 900s sampler + `world_trend`, a Bench strip.
+- [ ] **Mark glyphs on the globe** once a room's geo-marks read as a layer;
+      `analystEngine` port only with the first live feed.
+- [ ] **Redraw the Hormuz sketch** if a founder wants a charted lane: an
+      ordinary POST to `/rooms/{id}/geo`; the "(approx.)" rows stay as history.
+
 ## The quarter (see the plan for full detail + acceptance checks)
 
 - [ ] **P1 residue**: real-device push check on all four devices (Amo + Dan)

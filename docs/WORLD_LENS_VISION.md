@@ -303,3 +303,28 @@ feels electric in daily use, then expand aggressively into live maritime
 signals, temporal replay, thesis watches, and counterfactual world scenes.
 
 That is the vision worth protecting.
+
+---
+
+## Amendment 2026-08-25 — what shipped against this (amend-beside)
+
+Phases 0–2 of the plan drawn from this document are live (commits 0be95ae,
+58d702f, 011d666, eab5178). Three places the build read the vision more
+narrowly than written, recorded rather than edited above:
+
+- **Cesium loads on demand, but not "only when World opens" from a cold
+  cache the first time** — the chunk is fetched the first time a person
+  opens World and thereafter comes from the browser's HTTP cache, never the
+  PWA precache. Same intent; the mechanism is the SW's `globIgnores`.
+- **"A second Atlas mode" is a URL axis (`view`), not a scene** — so Back,
+  share links and the sole navigation writer all keep working without a
+  second router, and House stays under the globe rather than beside it.
+- **The first wedge added no live provider, as asked; it did add a
+  proposal tool.** `propose_geo_scope` resolves names to geometry that
+  already exists and writes only `machine_proposed` rows the Field refuses
+  until confirmed — the "no LLM-invented coordinates" boundary enforced in
+  SQL, not in a prompt.
+
+Provider terms now live in `WORLD_PROVIDERS.md`. Phase 3 waits on the gate
+this document sets ("feels electric in daily use") and on an AIS terms
+decision.

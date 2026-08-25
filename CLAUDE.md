@@ -211,3 +211,51 @@ describes the Bench as a badge panel or td as a parallel product:
 - Suites at this gate: dialectic backend 1335 (one pre-existing
   load-sensitive p95 gate flake in `test_home_activity_pg`), frontend 250;
   td backend 1377, frontend 62.
+
+## Amendment 2026-08-25 — the World Lens: Atlas / World, and the participant's eyes (amend-beside)
+
+`docs/WORLD_LENS_VISION.md` (60eb618) governs; Phases 0–2 of its plan
+shipped tonight (0be95ae, 58d702f, 011d666, eab5178), live. Prefer this
+over anything above that says Atlas is list-only or counts 21 tools.
+
+- **Migrations run to `021`** (`021_geo_scopes.sql`, applied prod + test,
+  in `schema.sql`). `geo_scopes` attaches GeoJSON geometry to rows that
+  already exist via the same `{entity,id,field}` ref the Field uses.
+  **Authority is a column**: `human_confirmed | source_reported |
+  machine_proposed`. Append-only with supersession; the live set is DERIVED
+  (`geo_scopes.LIVE_PREDICATE`: not expired, not superseded, not
+  `confirmed_empty`). Owner module `geo_scopes.py`; human-only door
+  `api/geo.py` (place / confirm / reject — reject INSERTS a
+  `confirmed_empty` replacement). `field_marks._SUBJECT_ENTITY_TABLES`
+  gained `geo_scopes` with the authority guard IN the SQL: a proposal cannot
+  anchor a mark until a person confirms it.
+- **Atlas has two modes over one fenced projection.** `AtlasProjection.scopes`
+  rides beside nodes (nodes carry NO geo field on purpose). The `view` URL
+  axis (`world[:lat,lon,alt,heading,pitch][;room=<id>]`, grammar in
+  `world/worldCamera.ts`) is written only by `useRoomNavigation.navigate`.
+  `WorldView.tsx` = CesiumJS behind `React.lazy`, own 4.2 MB chunk served
+  with its static tree from `/cesium/`, both excluded from the PWA precache;
+  keyless OSM + Re:Earth terrain, never Google tiles; `requestRenderMode`;
+  the credit line is ours and always visible. The House list never leaves
+  the page in World mode. A room that owns geography gets a "World ↗" door
+  on its Bench (`useGeoScopes`).
+- **Twenty-two tools**: `propose_geo_scope` (`llm/world.py`,
+  `DIALECTIC_WORLD_ENABLED`) resolves a NAME — a Natural Earth marine region
+  (`data/natural_earth/marine.json`, PD) or the exact label of a scope the
+  room holds — to geometry that already exists and writes a
+  `machine_proposed` row expiring in 14 days. An unknown name returns
+  candidates, never a guess. Coordinates are never taken from the model.
+- **Focus grew a World section** (`FocusWorld.tsx`): the scopes about the
+  object with authority + source state + age; Confirm/Reject a proposal;
+  "Place on" one of the room's confirmed areas; "Mark as evidence here"
+  files an `evidence_attachment` mark whose subjects are the scope AND the
+  object. Provider terms: `docs/WORLD_PROVIDERS.md`.
+- Hormuz (`56ba2f1e`) holds the Strait polygon + TSS inbound lane
+  (hand-authored, "(approx.)") and the Persian Gulf / Gulf of Oman rings,
+  confirmed_by Amo via `deploy/seed_hormuz_geo.py`.
+- Suites at this gate: backend **1995**, frontend **517/518**
+  (`WhatsNewPanel > explains a hard word` pre-existing: the newest release
+  entry carries no `[[gloss]]`). Browser-proven as Amo on production.
+- Phase 3 (live feeds as FastAPI adapters, `world_query`, the
+  `world_samples` sampler) waits on the vision's own gate: "only after the
+  wedge feels electric" — and on the AIS terms decision.
