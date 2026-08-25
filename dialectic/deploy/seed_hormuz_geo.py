@@ -34,7 +34,7 @@ from uuid import UUID, uuid4
 import asyncpg
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from geo_scopes import insert_scope, live_predicate  # noqa: E402
+from geo_scopes import insert_scope, live_predicate, validate_geometry  # noqa: E402
 from models import EventType  # noqa: E402
 
 ROOM = UUID("56ba2f1e-5c70-4290-a77d-52404f0095da")  # Iran/Hormuz Trading Room
@@ -122,9 +122,10 @@ async def main(
                 if dry_run:
                     print(f"would insert: {kind} {label} ({len(json.dumps(geometry))} bytes)")
                     continue
+                clean_geometry = validate_geometry(kind, geometry)
                 scope_id = await insert_scope(
                     conn, room_id=ROOM, subject=subject, kind=kind,
-                    geometry=geometry, label=label, authority="human_confirmed",
+                    geometry=clean_geometry, label=label, authority="human_confirmed",
                     provenance=provenance, confirmed_by=confirmed_by,
                     created_by=confirmed_by, revision_action="place", now=now,
                 )
@@ -135,6 +136,7 @@ async def main(
                     {
                         "scope_id": str(scope_id), "kind": kind,
                         "subject": subject, "label": label,
+                        "geometry": clean_geometry,
                         "authority": "human_confirmed",
                         "provenance": provenance, "source_state": "ok",
                         "observed_at": None, "retrieved_at": now.isoformat(),

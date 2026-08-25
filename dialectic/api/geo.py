@@ -123,6 +123,7 @@ def _scope_payload(scope: GeoScope) -> dict[str, Any]:
     return {
         "subject": scope.subject.model_dump(),
         "kind": scope.kind,
+        "geometry": scope.geometry,
         "label": scope.label,
         "authority": scope.authority,
         "provenance": scope.provenance.model_dump(),

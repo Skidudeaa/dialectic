@@ -12,12 +12,13 @@ Setup expected (skipped cleanly when absent):
     psql dialectic_test -f migrations/021_geo_scopes.sql
 """
 
+import asyncio
 import json
 import os
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import asyncpg
 import pytest
@@ -434,6 +435,146 @@ async def test_full_lineage_resolves_room_reading_and_exact_message_destination(
 
 
 @pytest.mark.asyncio
+async def test_lineage_returns_more_than_five_hundred_revisions_without_truncation(world):
+    predecessor = await insert_scope(
+        world, room_id=ROOM_AMO,
+        subject={"entity": "rooms", "id": str(ROOM_AMO)},
+        kind="point", geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+        authority="human_confirmed",
+        provenance={"provider": "human", "acquisition": "human"},
+        confirmed_by=AMO, revision_action="place",
+    )
+    root_id = predecessor
+    chain_ids = [root_id]
+    for revision in range(1, 505):
+        predecessor = await insert_scope(
+            world, room_id=ROOM_AMO,
+            subject={"entity": "rooms", "id": str(ROOM_AMO)},
+            kind="point",
+            geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+            label=f"revision {revision}", authority="human_confirmed",
+            provenance={"provider": "human", "acquisition": "human"},
+            confirmed_by=AMO, supersedes_id=predecessor,
+            revision_action="redraw",
+        )
+        chain_ids.append(predecessor)
+
+    review = await GeoScopeService(world).review(ROOM_AMO, root_id)
+    assert review is not None
+    assert len(review.lineage) == 505
+    assert review.current.id == f"geo_scope:{chain_ids[-1]}"
+
+
+@pytest.mark.asyncio
+async def test_lineage_fails_loudly_when_legacy_rows_contain_a_cycle(world):
+    scope_id = await insert_scope(
+        world, room_id=ROOM_AMO,
+        subject={"entity": "rooms", "id": str(ROOM_AMO)},
+        kind="point", geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+        authority="human_confirmed",
+        provenance={"provider": "human", "acquisition": "human"},
+        confirmed_by=AMO,
+    )
+    await world.execute(
+        "ALTER TABLE geo_scopes DISABLE TRIGGER geo_scopes_reject_update",
+    )
+    try:
+        await world.execute(
+            "UPDATE geo_scopes SET supersedes_id = id WHERE id = $1", scope_id,
+        )
+    finally:
+        await world.execute(
+            "ALTER TABLE geo_scopes ENABLE TRIGGER geo_scopes_reject_update",
+        )
+
+    with pytest.raises(ValueError, match="cycle"):
+        await GeoScopeService(world).review(ROOM_AMO, scope_id)
+
+
+@pytest.mark.asyncio
+async def test_two_independent_review_connections_create_exactly_one_successor_and_event():
+    """The row lock and unique successor fence arbitrate a real writer race."""
+    schema = f"geo_review_race_{uuid4().hex}"
+    setup = await asyncpg.connect(TEST_DATABASE_URL)
+    contenders: list[asyncpg.Connection] = []
+
+    async def prepare(conn: asyncpg.Connection) -> None:
+        for typename in ("jsonb", "json"):
+            await conn.set_type_codec(
+                typename, encoder=json.dumps, decoder=json.loads,
+                schema="pg_catalog",
+            )
+        await conn.execute(f'SET search_path TO "{schema}", public')
+
+    try:
+        await setup.execute(f'CREATE SCHEMA "{schema}"')
+        for table in ("users", "rooms", "room_memberships", "events", "geo_scopes"):
+            await setup.execute(
+                f'CREATE TABLE "{schema}"."{table}" '
+                f'(LIKE public."{table}" INCLUDING ALL)',
+            )
+        await prepare(setup)
+        now = datetime.now(timezone.utc)
+        race_user, race_room = uuid4(), uuid4()
+        await setup.execute(
+            "INSERT INTO users (id, created_at, display_name) VALUES ($1, $2, 'Racer')",
+            race_user, now,
+        )
+        await setup.execute(
+            "INSERT INTO rooms (id, created_at, token, name) VALUES ($1, $2, $3, 'Race')",
+            race_room, now, "race-token",
+        )
+        await setup.execute(
+            "INSERT INTO room_memberships (room_id, user_id, joined_at) VALUES ($1, $2, $3)",
+            race_room, race_user, now,
+        )
+        proposal_id = await insert_scope(
+            setup, room_id=race_room,
+            subject={"entity": "rooms", "id": str(race_room)},
+            kind="point", geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+            authority="machine_proposed",
+            provenance={"provider": "llm", "acquisition": "llm"},
+            revision_action="propose",
+        )
+
+        contenders = [
+            await asyncpg.connect(TEST_DATABASE_URL),
+            await asyncpg.connect(TEST_DATABASE_URL),
+        ]
+        for contender in contenders:
+            await prepare(contender)
+        assert len({conn.get_server_pid() for conn in contenders}) == 2
+        barrier = asyncio.Barrier(2)
+
+        async def confirm(conn: asyncpg.Connection) -> object:
+            await barrier.wait()
+            return await geo_api.confirm_geo_scope(
+                race_room, proposal_id, token="race-token",
+                current_user=_user(race_user), request=None, db=conn,
+            )
+
+        results = await asyncio.gather(
+            *(confirm(conn) for conn in contenders), return_exceptions=True,
+        )
+        winners = [result for result in results if not isinstance(result, BaseException)]
+        losers = [result for result in results if isinstance(result, HTTPException)]
+        assert len(winners) == 1
+        assert [loser.status_code for loser in losers] == [409]
+        assert await setup.fetchval(
+            "SELECT count(*) FROM geo_scopes WHERE supersedes_id = $1", proposal_id,
+        ) == 1
+        assert await setup.fetchval(
+            "SELECT count(*) FROM events WHERE event_type = 'geo_scope_reviewed'",
+        ) == 1
+    finally:
+        for contender in contenders:
+            await contender.close()
+        await setup.execute("SET search_path TO public")
+        await setup.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        await setup.close()
+
+
+@pytest.mark.asyncio
 async def test_revision_event_is_full_fidelity(world):
     scope_id = await _propose(world)
     successor = await geo_api._review(
@@ -454,6 +595,7 @@ async def test_revision_event_is_full_fidelity(world):
         "root_scope_id": str(scope_id),
         "subject": {"entity": "reading_items", "id": str(READING), "field": None},
         "kind": "region",
+        "geometry": successor.geometry,
         "label": "Persian Gulf?",
         "authority": "human_confirmed",
         "provenance": {
@@ -510,6 +652,28 @@ async def test_create_event_failure_rolls_back_the_scope(world, monkeypatch):
     assert await world.fetchval(
         "SELECT count(*) FROM geo_scopes WHERE label = 'atomic'",
     ) == 0
+
+
+@pytest.mark.asyncio
+async def test_create_event_contains_the_canonical_persisted_geometry(world):
+    request = geo_api.GeoScopeCreateRequest(
+        subject={"entity": "rooms", "id": str(ROOM_AMO)},
+        kind="point",
+        geometry={"type": "Point", "coordinates": [56, 26]},
+        label="event geometry",
+    )
+    scope = await geo_api.create_geo_scope(
+        ROOM_AMO, request, token=f"tok-{ROOM_AMO}",
+        current_user=_user(AMO), db=world,
+    )
+    event = await world.fetchrow(
+        """SELECT payload FROM events
+           WHERE room_id = $1 AND event_type = 'geo_scope_created'
+           ORDER BY timestamp DESC LIMIT 1""",
+        ROOM_AMO,
+    )
+    assert event is not None
+    assert event["payload"]["geometry"] == scope.geometry
 
 
 @pytest.mark.asyncio

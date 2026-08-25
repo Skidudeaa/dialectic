@@ -427,30 +427,39 @@ WHERE g.id = $1 AND g.room_id = $2
 FOR UPDATE OF g
 """
 
-_LINEAGE_SQL = f"""
-WITH RECURSIVE ancestors(id, supersedes_id, depth) AS (
-    SELECT g.id, g.supersedes_id, 0
+_ANCESTORS_SQL = """
+WITH RECURSIVE ancestors(id, supersedes_id, path, cycle) AS (
+    SELECT g.id, g.supersedes_id, ARRAY[g.id], FALSE
     FROM geo_scopes g
     WHERE g.id = $1 AND g.room_id = $2
   UNION ALL
-    SELECT parent.id, parent.supersedes_id, ancestors.depth + 1
+    SELECT parent.id, parent.supersedes_id,
+           ancestors.path || parent.id,
+           parent.id = ANY(ancestors.path)
     FROM geo_scopes parent
     JOIN ancestors ON ancestors.supersedes_id = parent.id
-    WHERE parent.room_id = $2 AND ancestors.depth < 499
-), root AS (
-    SELECT id FROM ancestors ORDER BY depth DESC LIMIT 1
-), lineage(id, depth) AS (
-    SELECT id, 0 FROM root
+    WHERE parent.room_id = $2 AND NOT ancestors.cycle
+)
+SELECT id, supersedes_id, path, cycle
+FROM ancestors
+"""
+
+_LINEAGE_SQL = f"""
+WITH RECURSIVE lineage(id, path, cycle) AS (
+    SELECT g.id, ARRAY[g.id], FALSE
+    FROM geo_scopes g
+    WHERE g.id = $1 AND g.room_id = $2
   UNION ALL
-    SELECT successor.id, lineage.depth + 1
+    SELECT successor.id, lineage.path || successor.id,
+           successor.id = ANY(lineage.path)
     FROM geo_scopes successor
     JOIN lineage ON successor.supersedes_id = lineage.id
-    WHERE successor.room_id = $2 AND lineage.depth < 499
+    WHERE successor.room_id = $2 AND NOT lineage.cycle
 )
-SELECT {_COLUMNS}
+SELECT {_COLUMNS}, lineage.cycle AS lineage_cycle
 FROM lineage
 JOIN geo_scopes g ON g.id = lineage.id
-ORDER BY lineage.depth
+ORDER BY cardinality(lineage.path)
 """
 
 _ROOM_CAP = 500
@@ -498,9 +507,17 @@ class GeoScopeService:
     async def review(
         self, room_id: UUID, scope_id: UUID,
     ) -> Optional[GeoScopeReview]:
-        rows = await self.db.fetch(_LINEAGE_SQL, scope_id, room_id)
-        if not rows:
+        ancestors = await self.db.fetch(_ANCESTORS_SQL, scope_id, room_id)
+        if not ancestors:
             return None
+        if any(row["cycle"] for row in ancestors):
+            raise ValueError("geo scope lineage cycle detected while finding root")
+        roots = [row["id"] for row in ancestors if row["supersedes_id"] is None]
+        if len(roots) != 1:
+            raise ValueError("geo scope lineage has no unique root")
+        rows = await self.db.fetch(_LINEAGE_SQL, roots[0], room_id)
+        if any(row["lineage_cycle"] for row in rows):
+            raise ValueError("geo scope lineage cycle detected while finding current scope")
         lineage = [scope_from_row(row) for row in rows]
         destination = await self._subject_destination(room_id, lineage[-1].subject)
         return GeoScopeReview(

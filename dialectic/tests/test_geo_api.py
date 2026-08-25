@@ -184,6 +184,49 @@ def test_hormuz_seed_requires_named_human_and_inspection_acknowledgement():
     assert args.geometry_inspected_by_named_human is True
 
 
+@pytest.mark.asyncio
+async def test_hormuz_seed_events_include_each_persisted_geometry(monkeypatch):
+    class SeedConnection:
+        def __init__(self) -> None:
+            self.event_payloads: list[dict] = []
+
+        async def set_type_codec(self, *args: object, **kwargs: object) -> None:
+            return None
+
+        async def fetchval(self, sql: str, *args: object) -> int | None:
+            if "room_memberships" in sql:
+                return 1
+            return None
+
+        async def execute(self, sql: str, *args: object) -> str:
+            if "INSERT INTO events" in sql:
+                self.event_payloads.append(args[-1])
+            return "INSERT 0 1"
+
+        def transaction(self) -> _Transaction:
+            return _Transaction()
+
+        async def close(self) -> None:
+            return None
+
+    connection = SeedConnection()
+
+    async def connect(*args: object, **kwargs: object) -> SeedConnection:
+        return connection
+
+    monkeypatch.setattr(seed_hormuz_geo.asyncpg, "connect", connect)
+    await seed_hormuz_geo.main(
+        CALLER_ID, False, geometry_inspected=True,
+    )
+
+    expected_by_label = {
+        label: geometry for _kind, label, geometry, _provenance in seed_hormuz_geo.SEEDS
+    }
+    assert len(connection.event_payloads) == len(expected_by_label)
+    for payload in connection.event_payloads:
+        assert payload["geometry"] == expected_by_label[payload["label"]]
+
+
 def test_review_routes_require_auth():
     for action in ("confirm", "reject", "ratify", "redraw", "supersede"):
         path = f"{GEO_PATH}/{SCOPE_ID}/{action}"

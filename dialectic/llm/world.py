@@ -28,6 +28,7 @@ from geo_scopes import (
     LIVE_PREDICATE,
     insert_scope,
     resolve_subject_in_room,
+    validate_geometry,
 )
 from models import EventType
 
@@ -195,9 +196,10 @@ async def propose_geo_scope(db, room_id: UUID, args: dict) -> dict:
 
     now = datetime.now(timezone.utc)
     expires_at = now + PROPOSAL_TTL
+    clean_geometry = validate_geometry(kind, geometry)
     async with db.transaction():
         scope_id = await insert_scope(
-            db, room_id=room_id, subject=subject, kind=kind, geometry=geometry,
+            db, room_id=room_id, subject=subject, kind=kind, geometry=clean_geometry,
             label=label, authority="machine_proposed", provenance=provenance,
             expires_at=expires_at, revision_action="propose", now=now,
         )
@@ -208,6 +210,7 @@ async def propose_geo_scope(db, room_id: UUID, args: dict) -> dict:
                 "kind": kind,
                 "subject": subject,
                 "label": label,
+                "geometry": clean_geometry,
                 "authority": "machine_proposed",
                 "provenance": provenance,
                 "source_state": "ok",

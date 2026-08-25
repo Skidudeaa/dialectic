@@ -117,8 +117,8 @@ async def test_a_proposal_is_provisional_and_the_field_refuses_it(db):
     assert out["ok"] is True and out["authority"] == "machine_proposed"
     sid = UUID(out["scope_id"])
     row = await db.fetchrow(
-        """SELECT authority, provenance, retrieved_at, expires_at, created_by,
-                  subject, revision_action
+        """SELECT authority, geometry, provenance, retrieved_at, expires_at,
+                  created_by, subject, revision_action
            FROM geo_scopes WHERE id = $1""",
         sid,
     )
@@ -138,6 +138,7 @@ async def test_a_proposal_is_provisional_and_the_field_refuses_it(db):
         "kind": "region",
         "subject": {"entity": "reading_items", "id": str(READING)},
         "label": "Persian Gulf",
+        "geometry": row["geometry"],
         "authority": "machine_proposed",
         "provenance": row["provenance"],
         "source_state": "ok",
