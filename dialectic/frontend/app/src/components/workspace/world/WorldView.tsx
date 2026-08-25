@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as Cesium from 'cesium'
+import 'cesium/Build/Cesium/Widgets/widgets.css'
 import type { GeoScope } from '../../../types/geo.ts'
 import type { WorldCamera } from './worldCamera.ts'
 import { isProvisional, scopesBounds } from './worldScopes.ts'
@@ -197,6 +198,11 @@ export default function WorldView({ scopes, initialCamera, focusScopes, onSelect
         requestRenderMode: true,
         maximumRenderTimeChange: Infinity,
         msaaSamples: 2,
+        // A preserved buffer is what lets a screenshot (browser acceptance,
+        // a human's share) capture the frame instead of a cleared canvas;
+        // GEV sets it for the same reason. requestRenderMode keeps the cost
+        // to the frames actually drawn.
+        contextOptions: { webgl: { preserveDrawingBuffer: true } },
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'WebGL is unavailable'
@@ -206,12 +212,20 @@ export default function WorldView({ scopes, initialCamera, focusScopes, onSelect
       return
     }
     viewerRef.current = viewer
+    // A probe handle for browser acceptance (the harness reads tile and
+    // render state through it); nothing in the app reads it.
+    ;(window as unknown as { __dialecticWorld?: Cesium.Viewer }).__dialecticWorld = viewer
     viewer.scene.globe.enableLighting = false
     viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#150D07')
     viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#0A0603')
     if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = true
     if (viewer.scene.skyBox) viewer.scene.skyBox.show = false
-    viewer.creditDisplay.addStaticCredit(new Cesium.Credit(NATURAL_EARTH_CREDIT, false))
+    // Credits ON SCREEN, in our own line: OSM's tile policy asks for visible
+    // attribution, Natural Earth's ring provenance rides with it, and the
+    // engine credit is the engine's name — not the ion service we do not use.
+    Cesium.CreditDisplay.cesiumCredit = new Cesium.Credit('CesiumJS', true)
+    viewer.creditDisplay.addStaticCredit(new Cesium.Credit('© OpenStreetMap contributors', true))
+    viewer.creditDisplay.addStaticCredit(new Cesium.Credit(NATURAL_EARTH_CREDIT, true))
 
     // Keyless terrain with a plain-ellipsoid fallback; never throws, and a
     // late failure leaves the globe drawn on the ellipsoid it started on.
@@ -244,6 +258,7 @@ export default function WorldView({ scopes, initialCamera, focusScopes, onSelect
       viewer.camera.moveEnd.removeEventListener(onMoveEnd)
       handler.destroy()
       viewerRef.current = null
+      delete (window as unknown as { __dialecticWorld?: Cesium.Viewer }).__dialecticWorld
       viewer.destroy()
     }
   }, [])
