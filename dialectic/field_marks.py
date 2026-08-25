@@ -46,6 +46,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from geo_scopes import live_predicate as geo_scope_live_predicate
+
 # --- vocabularies, order-pinned (tests/test_workspace_contract.py pins order
 # too, not just membership: these render as switch arms and lists) ----------
 
@@ -146,14 +148,12 @@ _SUBJECT_ENTITY_TABLES = {
     # A machine_proposed scope is the participant's guess and stays outside
     # the Field until a person confirms it — the same fail-closed rule §14.4
     # applies to relations, applied to coordinates. The live rule itself is
-    # geo_scopes.LIVE_PREDICATE, restated here on alias-free columns because
-    # this SELECT has no alias; keep the two in step.
+    # The owner module supplies the canonical alias-aware live predicate; the
+    # Field adds only its authority requirement.
     "geo_scopes": (
         "geo_scopes", "room_id", "id",
         "AND authority <> 'machine_proposed'"
-        " AND (expires_at IS NULL OR expires_at > NOW())"
-        " AND source_state <> 'confirmed_empty'"
-        " AND NOT EXISTS (SELECT 1 FROM geo_scopes s WHERE s.supersedes_id = geo_scopes.id)",
+        f" AND {geo_scope_live_predicate('geo_scopes')}",
     ),
 }
 

@@ -882,6 +882,10 @@ CREATE TABLE IF NOT EXISTS geo_scopes (
     confirmed_by UUID REFERENCES users(id),
     confirmed_at TIMESTAMPTZ,
     supersedes_id UUID REFERENCES geo_scopes(id),
+    revision_action TEXT CHECK (revision_action IS NULL OR revision_action IN (
+        'place','propose','confirm','reject','redraw','supersede','ratify','place_signal'
+    )),
+    review_note TEXT,
     created_by UUID REFERENCES users(id),   -- NULL = Dialectic
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT confirmed_iff_human CHECK ((authority = 'human_confirmed') = (confirmed_by IS NOT NULL))
@@ -889,5 +893,17 @@ CREATE TABLE IF NOT EXISTS geo_scopes (
 CREATE INDEX IF NOT EXISTS idx_geo_scopes_room       ON geo_scopes (room_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_geo_scopes_subject    ON geo_scopes USING GIN (subject jsonb_path_ops);
 CREATE INDEX IF NOT EXISTS idx_geo_scopes_supersedes ON geo_scopes (supersedes_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_geo_scopes_one_successor
+    ON geo_scopes (supersedes_id) WHERE supersedes_id IS NOT NULL;
+CREATE OR REPLACE FUNCTION reject_geo_scope_mutation()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'geo_scopes is append-only: % prohibited', TG_OP;
+END;
+$$;
+CREATE TRIGGER geo_scopes_reject_update BEFORE UPDATE ON geo_scopes
+    FOR EACH ROW EXECUTE FUNCTION reject_geo_scope_mutation();
+CREATE TRIGGER geo_scopes_reject_delete BEFORE DELETE ON geo_scopes
+    FOR EACH ROW EXECUTE FUNCTION reject_geo_scope_mutation();
 COMMENT ON TABLE geo_scopes IS
     'World Lens: append-only geography attached to existing rows, with authority and provenance. See geo_scopes.py.';

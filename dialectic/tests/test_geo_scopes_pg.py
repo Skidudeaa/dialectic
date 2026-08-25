@@ -35,6 +35,7 @@ from geo_scopes import (
     GeoScopeService,
     centroid,
     insert_scope,
+    live_predicate,
     validate_geometry,
 )
 
@@ -51,6 +52,7 @@ def _uid(n: int) -> UUID:
 AMO, DAN = _uid(0x1), _uid(0x2)
 ROOM_AMO, ROOM_DAN = _uid(0x11), _uid(0x12)
 READING = _uid(0x41)
+THREAD, MESSAGE = _uid(0x51), _uid(0x61)
 
 RING = [[55.6, 26.0], [56.2, 25.6], [57.2, 25.9], [57.0, 26.9], [55.6, 26.0]]
 POLY = {"type": "Polygon", "coordinates": [RING]}
@@ -101,6 +103,14 @@ def test_centroid_skips_the_closing_vertex():
     square = {"type": "Polygon", "coordinates": [[[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]]}
     assert centroid(square) == [1.0, 1.0]
     assert centroid({"type": "Point", "coordinates": [5, 6]}) == [5.0, 6.0]
+
+
+def test_live_predicate_is_alias_aware_and_refuses_unsafe_aliases():
+    predicate = live_predicate("placed_scope")
+    assert "placed_scope.expires_at" in predicate
+    assert "geo_scope_successor.supersedes_id = placed_scope.id" in predicate
+    with pytest.raises(ValueError, match="invalid SQL alias"):
+        live_predicate("scope; DELETE")
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +183,17 @@ async def world(db):
            VALUES ($1,$2,'https://example.test/hormuz','Tankers slow','example.test','body','s','wire',$3)""",
         READING, ROOM_AMO, now,
     )
+    await db.execute(
+        "INSERT INTO threads (id, room_id, created_at, title) VALUES ($1,$2,$3,'Main')",
+        THREAD, ROOM_AMO, now,
+    )
+    await db.execute(
+        """INSERT INTO messages
+               (id, thread_id, sequence, created_at, speaker_type, user_id,
+                message_type, content)
+           VALUES ($1,$2,1,$3,'human',$4,'text','Hormuz claim')""",
+        MESSAGE, THREAD, now, AMO,
+    )
     yield db
     await tx.rollback()
 
@@ -193,6 +214,302 @@ async def test_insert_and_project_a_human_scope(world):
     assert scope.confirmed_by == AMO and scope.confirmed_at is not None
     assert scope.centroid == centroid(POLY)
     assert scope.provenance.credit == "sketch"
+
+
+@pytest.mark.asyncio
+async def test_geo_scope_rows_are_database_enforced_append_only(world):
+    """An accidental UPDATE or DELETE must fail even outside the owner module."""
+    scope_id = await insert_scope(
+        world, room_id=ROOM_AMO,
+        subject={"entity": "rooms", "id": str(ROOM_AMO)},
+        kind="polygon", geometry=POLY, label="Immutable Strait",
+        authority="human_confirmed",
+        provenance={"provider": "human", "acquisition": "human"},
+        confirmed_by=AMO, created_by=AMO,
+    )
+
+    with pytest.raises(asyncpg.RaiseError, match="append-only"):
+        async with world.transaction():
+            await world.execute(
+                "UPDATE geo_scopes SET label = 'mutated' WHERE id = $1", scope_id,
+            )
+    with pytest.raises(asyncpg.RaiseError, match="append-only"):
+        async with world.transaction():
+            await world.execute("DELETE FROM geo_scopes WHERE id = $1", scope_id)
+
+
+@pytest.mark.asyncio
+async def test_scope_keeps_source_review_and_freshness_as_separate_axes(world):
+    observed_at = datetime.now(timezone.utc) - timedelta(minutes=3)
+    scope_id = await insert_scope(
+        world, room_id=ROOM_AMO,
+        subject={"entity": "rooms", "id": str(ROOM_AMO)},
+        kind="point", geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+        authority="source_reported", source_state="partial",
+        provenance={"provider": "ais", "acquisition": "adapter:ais"},
+        observed_at=observed_at,
+    )
+
+    scope = await GeoScopeService(world).get(ROOM_AMO, scope_id)
+    assert scope is not None
+    assert scope.source_state == "partial"
+    assert scope.review_state == "accepted"
+    assert scope.revision_action == "place_signal"
+    assert scope.freshness.state == "current"
+    assert scope.freshness.observed_at == observed_at
+
+
+@pytest.mark.asyncio
+async def test_ratify_appends_an_identical_human_confirmed_successor(world):
+    observed_at = datetime.now(timezone.utc) - timedelta(minutes=5)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    scope_id = await insert_scope(
+        world, room_id=ROOM_AMO,
+        subject={"entity": "reading_items", "id": str(READING)},
+        kind="route", geometry=LINE, label="AIS lane",
+        authority="source_reported", source_state="partial",
+        provenance={
+            "provider": "ais", "acquisition": "adapter:ais",
+            "source_id": "lane-7", "credit": "AIS source",
+        },
+        observed_at=observed_at, expires_at=expires_at,
+    )
+    original = await GeoScopeService(world).get(ROOM_AMO, scope_id)
+    assert original is not None
+
+    successor = await geo_api._review(
+        ROOM_AMO, scope_id, "ratify", _user(AMO), world,
+    )
+
+    assert successor.revision_action == "ratify"
+    assert successor.authority == "human_confirmed"
+    assert successor.subject == original.subject
+    assert successor.provenance == original.provenance
+    assert successor.geometry == original.geometry
+    assert successor.label == original.label
+    assert successor.source_state == original.source_state
+    assert successor.observed_at == original.observed_at
+    assert successor.retrieved_at == original.retrieved_at
+    assert successor.expires_at == original.expires_at
+    assert successor.supersedes_id == scope_id
+    retired = await GeoScopeService(world).get(ROOM_AMO, scope_id)
+    assert retired is not None and retired.review_state == "superseded"
+
+
+@pytest.mark.asyncio
+async def test_one_scope_cannot_fork_to_two_direct_successors(world):
+    scope_id = await _propose(world)
+    await geo_api._review(ROOM_AMO, scope_id, "confirm", _user(AMO), world)
+
+    with pytest.raises(asyncpg.UniqueViolationError):
+        async with world.transaction():
+            await insert_scope(
+                world, room_id=ROOM_AMO,
+                subject={"entity": "reading_items", "id": str(READING)},
+                kind="region", geometry=POLY, label="Fork",
+                authority="human_confirmed",
+                provenance={"provider": "human", "acquisition": "human"},
+                confirmed_by=AMO, supersedes_id=scope_id,
+                revision_action="confirm",
+            )
+
+
+@pytest.mark.asyncio
+async def test_legacy_confirmed_empty_derives_rejected_without_rewrite(world):
+    legacy_id = _uid(0x710)
+    now = datetime.now(timezone.utc)
+    await world.execute(
+        """INSERT INTO geo_scopes
+               (id, room_id, subject, kind, geometry, label, authority,
+                provenance, retrieved_at, source_state, confirmed_by,
+                confirmed_at, revision_action, created_by, created_at)
+           VALUES ($1,$2,$3,'point',$4,'legacy rejection','human_confirmed',
+                   $5,$6,'confirmed_empty',$7,$6,NULL,$7,$6)""",
+        legacy_id, ROOM_AMO, {"entity": "rooms", "id": str(ROOM_AMO)},
+        {"type": "Point", "coordinates": [56.3, 26.5]},
+        {"provider": "human", "acquisition": "human"}, now, AMO,
+    )
+
+    legacy = await GeoScopeService(world).get(ROOM_AMO, legacy_id)
+    assert legacy is not None
+    assert legacy.revision_action == "reject"
+    assert legacy.review_state == "rejected"
+    assert legacy.source_state == "confirmed_empty"
+    assert await GeoScopeService(world).is_live(legacy_id) is False
+
+
+@pytest.mark.asyncio
+async def test_redraw_copies_server_owned_subject_and_provenance(world):
+    scope_id = await insert_scope(
+        world, room_id=ROOM_AMO,
+        subject={"entity": "reading_items", "id": str(READING)},
+        kind="region", geometry=POLY, label="Old Gulf",
+        authority="human_confirmed",
+        provenance={
+            "provider": "natural_earth", "acquisition": "human",
+            "source_id": "Persian Gulf", "credit": "Made with Natural Earth",
+        },
+        confirmed_by=AMO, created_by=AMO,
+    )
+    old = await GeoScopeService(world).get(ROOM_AMO, scope_id)
+    assert old is not None
+    replacement_geometry = {
+        "type": "Polygon",
+        "coordinates": [[[55.0, 25.0], [56.0, 25.0], [56.0, 26.0], [55.0, 25.0]]],
+    }
+
+    successor = await geo_api._review(
+        ROOM_AMO, scope_id, "redraw", _user(AMO), world,
+        review_note="shoreline corrected", replacement_label="Corrected Gulf",
+        replacement_geometry=replacement_geometry,
+    )
+
+    assert successor.revision_action == "redraw"
+    assert successor.review_note == "shoreline corrected"
+    assert successor.label == "Corrected Gulf"
+    assert successor.geometry == replacement_geometry
+    assert successor.subject == old.subject
+    assert successor.provenance == old.provenance
+
+
+@pytest.mark.asyncio
+async def test_supersede_retires_the_chain_without_corrupting_source_state(world):
+    scope_id = await insert_scope(
+        world, room_id=ROOM_AMO,
+        subject={"entity": "rooms", "id": str(ROOM_AMO)},
+        kind="point", geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+        authority="source_reported", source_state="partial",
+        provenance={"provider": "sensor", "acquisition": "adapter:sensor"},
+        observed_at=datetime.now(timezone.utc),
+    )
+    ratified = await geo_api._review(
+        ROOM_AMO, scope_id, "ratify", _user(AMO), world,
+    )
+    ratified_id = UUID(ratified.id.split(":", 1)[1])
+    retired = await geo_api._review(
+        ROOM_AMO, ratified_id, "supersede", _user(AMO), world,
+        review_note="no longer relevant",
+    )
+
+    assert retired.revision_action == "supersede"
+    assert retired.review_state == "rejected"
+    assert retired.source_state == "partial"
+    assert (await GeoScopeService(world).build(ROOM_AMO)).scopes == []
+
+
+@pytest.mark.asyncio
+async def test_full_lineage_resolves_room_reading_and_exact_message_destination(world):
+    service = GeoScopeService(world)
+    for entity, subject_id, expected in (
+        ("rooms", ROOM_AMO, {"room_id": ROOM_AMO}),
+        ("reading_items", READING, {
+            "room_id": ROOM_AMO, "object_id": f"reading:{READING}",
+        }),
+        ("messages", MESSAGE, {
+            "room_id": ROOM_AMO, "thread_id": THREAD, "message_id": MESSAGE,
+        }),
+    ):
+        root = await insert_scope(
+            world, room_id=ROOM_AMO,
+            subject={"entity": entity, "id": str(subject_id)},
+            kind="point", geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+            authority="human_confirmed",
+            provenance={"provider": "human", "acquisition": "human"},
+            confirmed_by=AMO, created_by=AMO,
+        )
+        successor = await geo_api._review(
+            ROOM_AMO, root, "redraw", _user(AMO), world,
+            replacement_label="v2",
+            replacement_geometry={"type": "Point", "coordinates": [56.4, 26.6]},
+        )
+        review = await service.review(
+            ROOM_AMO, UUID(successor.id.split(":", 1)[1]),
+        )
+        assert review is not None
+        assert review.root_id == f"geo_scope:{root}"
+        assert review.current.id == successor.id
+        assert [row.revision_action for row in review.lineage] == ["place", "redraw"]
+        destination = review.subject_destination.model_dump(exclude_none=True)
+        assert destination == expected
+
+
+@pytest.mark.asyncio
+async def test_revision_event_is_full_fidelity(world):
+    scope_id = await _propose(world)
+    successor = await geo_api._review(
+        ROOM_AMO, scope_id, "reject", _user(AMO), world,
+        review_note="wrong basin",
+    )
+    event = await world.fetchrow(
+        """SELECT payload FROM events
+           WHERE room_id = $1 AND event_type = 'geo_scope_reviewed'
+           ORDER BY timestamp DESC LIMIT 1""",
+        ROOM_AMO,
+    )
+    assert event is not None
+    assert event["payload"] == {
+        "scope_id": str(scope_id),
+        "action": "reject",
+        "replacement_id": successor.id.split(":", 1)[1],
+        "root_scope_id": str(scope_id),
+        "subject": {"entity": "reading_items", "id": str(READING), "field": None},
+        "kind": "region",
+        "label": "Persian Gulf?",
+        "authority": "human_confirmed",
+        "provenance": {
+            "provider": "natural_earth", "acquisition": "llm",
+            "source_id": "Persian Gulf", "url": None,
+            "credit": "Made with Natural Earth",
+        },
+        "source_state": "ok",
+        "observed_at": None,
+        "retrieved_at": successor.retrieved_at.isoformat(),
+        "expires_at": None,
+        "revision_action": "reject",
+        "review_note": "wrong basin",
+    }
+
+
+@pytest.mark.asyncio
+async def test_event_failure_rolls_back_the_successor(world, monkeypatch):
+    scope_id = await _propose(world)
+
+    async def fail_event(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("event ledger unavailable")
+
+    monkeypatch.setattr(geo_api, "_record_event", fail_event)
+    with pytest.raises(RuntimeError, match="event ledger unavailable"):
+        await geo_api._review(
+            ROOM_AMO, scope_id, "confirm", _user(AMO), world,
+        )
+
+    assert await world.fetchval(
+        "SELECT count(*) FROM geo_scopes WHERE supersedes_id = $1", scope_id,
+    ) == 0
+    assert await GeoScopeService(world).is_live(scope_id) is True
+
+
+@pytest.mark.asyncio
+async def test_create_event_failure_rolls_back_the_scope(world, monkeypatch):
+    async def fail_event(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("event ledger unavailable")
+
+    monkeypatch.setattr(geo_api, "_record_event", fail_event)
+    request = geo_api.GeoScopeCreateRequest(
+        subject={"entity": "rooms", "id": str(ROOM_AMO)},
+        kind="point",
+        geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+        label="atomic",
+    )
+    with pytest.raises(RuntimeError, match="event ledger unavailable"):
+        await geo_api.create_geo_scope(
+            ROOM_AMO, request, token=f"tok-{ROOM_AMO}",
+            current_user=_user(AMO), db=world,
+        )
+
+    assert await world.fetchval(
+        "SELECT count(*) FROM geo_scopes WHERE label = 'atomic'",
+    ) == 0
 
 
 @pytest.mark.asyncio
@@ -247,10 +564,12 @@ async def test_a_proposal_is_live_but_cannot_anchor_a_field_mark(world):
 
 
 @pytest.mark.asyncio
-async def test_reject_is_a_confirmed_empty_row_and_hides_both(world):
+async def test_reject_preserves_source_condition_and_hides_both(world):
     sid = await _propose(world)
     replacement = await geo_api._review(ROOM_AMO, sid, "reject", _user(AMO), world)
-    assert replacement.source_state == "confirmed_empty"
+    assert replacement.source_state == "ok"
+    assert replacement.revision_action == "reject"
+    assert replacement.review_state == "rejected"
     assert replacement.supersedes_id == sid
     assert (await GeoScopeService(world).build(ROOM_AMO)).scopes == []
     assert await world.fetchval("SELECT count(*) FROM geo_scopes WHERE room_id = $1", ROOM_AMO) == 2

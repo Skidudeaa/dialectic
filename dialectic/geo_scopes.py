@@ -17,10 +17,10 @@
 # human placed or marked. No LLM-invented coordinate ever becomes
 # authoritative by any path but a human's confirm.
 #
-# APPEND-ONLY with supersession. Nothing here UPDATEs or DELETEs. The live
-# set is DERIVED at read time by _LIVE_PREDICATE: not expired, not named as
-# another row's supersedes_id, and not a `confirmed_empty` row (a person
-# looked; it is not there — the vision's word for an answered "none").
+# APPEND-ONLY with supersession. Migration 022 rejects UPDATE/DELETE in the
+# database. The live set is DERIVED at read time: not expired, not named as a
+# predecessor, and not rejected/superseded. Legacy `confirmed_empty` rows stay
+# immutable and derive rejected review state; new rejection is revision_action.
 #
 # WHY this module imports nothing from workspace_objects / field_marks /
 # atlas_objects: those will import the GeoScope shape FROM here (Atlas
@@ -30,6 +30,7 @@
 # same reason.
 
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -44,7 +45,7 @@ GEO_KINDS = ("point", "route", "polygon", "region")
 GEO_AUTHORITIES = ("human_confirmed", "source_reported", "machine_proposed")
 
 # The existing evidence statuses (llm/tools.py's news/polymarket contracts)
-# plus `confirmed_empty`: we asked, a person answered, the answer is none.
+# plus legacy `confirmed_empty`, retained for read compatibility only.
 GEO_SOURCE_STATES = (
     "ok", "partial", "confirmed_empty", "stale", "unavailable",
     "rate_limited", "not_configured",
@@ -54,6 +55,17 @@ GEO_SOURCE_STATES = (
 # the provider. `human` drew or chose it; `adapter:<name>` is a feed fix;
 # `llm` is the participant's proposal (always paired with machine_proposed).
 GEO_ACQUISITIONS = ("human", "adapter", "llm")
+
+GEO_REVISION_ACTIONS = (
+    "place", "propose", "confirm", "reject", "redraw", "supersede",
+    "ratify", "place_signal",
+)
+
+GEO_REVIEW_STATES = ("accepted", "proposed", "rejected", "superseded")
+
+GEO_FRESHNESS_STATES = (
+    "current", "stale", "expired", "unknown", "not_applicable",
+)
 
 _GEOMETRY_TYPES = {
     "point": "Point",
@@ -98,6 +110,15 @@ class GeoProvenance(BaseModel):
     credit: str = ""
 
 
+class GeoFreshness(BaseModel):
+    """Observation time is evidence time; retrieval time is ingestion time.
+    Review and provider condition remain separate axes on ``GeoScope``."""
+    state: str
+    observed_at: Optional[datetime] = None
+    retrieved_at: datetime
+    expires_at: Optional[datetime] = None
+
+
 class GeoScope(BaseModel):
     """One geometry row exactly as a surface renders it.
 
@@ -115,6 +136,10 @@ class GeoScope(BaseModel):
     authority: str
     provenance: GeoProvenance
     source_state: str
+    revision_action: str
+    review_note: Optional[str] = None
+    review_state: str
+    freshness: GeoFreshness
     centroid: list[float]
     observed_at: Optional[datetime] = None
     retrieved_at: datetime
@@ -130,6 +155,21 @@ class GeoProjection(BaseModel):
     generated_at: datetime
     room_id: UUID
     scopes: list[GeoScope]
+
+
+class GeoSubjectDestination(BaseModel):
+    """The navigation coordinates derived from the stored subject row."""
+    room_id: UUID
+    thread_id: Optional[UUID] = None
+    message_id: Optional[UUID] = None
+    object_id: Optional[str] = None
+
+
+class GeoScopeReview(BaseModel):
+    root_id: str
+    current: GeoScope
+    lineage: list[GeoScope]
+    subject_destination: GeoSubjectDestination
 
 
 # --- geometry -------------------------------------------------------------
@@ -247,8 +287,64 @@ def _jsonb(value: Any) -> dict:
     return {}
 
 
-def scope_from_row(row) -> GeoScope:
+def _row_value(row: Any, key: str, default: Any = None) -> Any:
+    try:
+        return row[key]
+    except (KeyError, TypeError):
+        return default
+
+
+def _derived_revision_action(row: Any) -> str:
+    stored = _row_value(row, "revision_action")
+    if stored:
+        return str(stored)
+    if row["source_state"] == "confirmed_empty":
+        return "reject"
+    if row["supersedes_id"] is not None:
+        return "confirm"
+    if row["authority"] == "machine_proposed":
+        return "propose"
+    if row["authority"] == "source_reported":
+        return "place_signal"
+    return "place"
+
+
+def _derived_review_state(row: Any, action: str) -> str:
+    if bool(_row_value(row, "has_successor", False)):
+        return "superseded"
+    if action in ("reject", "supersede") or row["source_state"] == "confirmed_empty":
+        return "rejected"
+    if row["authority"] == "machine_proposed":
+        return "proposed"
+    return "accepted"
+
+
+def _derived_freshness(row: Any, now: datetime) -> GeoFreshness:
+    observed_at = row["observed_at"]
+    retrieved_at = row["retrieved_at"]
+    expires_at = row["expires_at"]
+    if expires_at is not None and expires_at <= now:
+        state = "expired"
+    elif row["source_state"] == "stale":
+        state = "stale"
+    elif row["source_state"] in ("unavailable", "rate_limited", "not_configured"):
+        state = "unknown"
+    elif observed_at is not None:
+        state = "current"
+    elif row["authority"] == "source_reported":
+        state = "unknown"
+    else:
+        state = "not_applicable"
+    return GeoFreshness(
+        state=state, observed_at=observed_at, retrieved_at=retrieved_at,
+        expires_at=expires_at,
+    )
+
+
+def scope_from_row(row: Any, *, now: Optional[datetime] = None) -> GeoScope:
     geometry = _jsonb(row["geometry"])
+    action = _derived_revision_action(row)
+    projection_now = now or datetime.now(timezone.utc)
     return GeoScope(
         id=f"geo_scope:{row['id']}",
         room_id=row["room_id"],
@@ -259,6 +355,10 @@ def scope_from_row(row) -> GeoScope:
         authority=row["authority"],
         provenance=GeoProvenance(**_jsonb(row["provenance"])),
         source_state=row["source_state"],
+        revision_action=action,
+        review_note=_row_value(row, "review_note"),
+        review_state=_derived_review_state(row, action),
+        freshness=_derived_freshness(row, projection_now),
         centroid=centroid(geometry),
         observed_at=row["observed_at"],
         retrieved_at=row["retrieved_at"],
@@ -274,18 +374,37 @@ def scope_from_row(row) -> GeoScope:
 _COLUMNS = """
 g.id, g.room_id, g.subject, g.kind, g.geometry, g.label, g.authority,
 g.provenance, g.source_state, g.observed_at, g.retrieved_at, g.expires_at,
-g.confirmed_by, g.confirmed_at, g.supersedes_id, g.created_by, g.created_at
+g.confirmed_by, g.confirmed_at, g.supersedes_id, g.revision_action,
+g.review_note, g.created_by, g.created_at,
+EXISTS (SELECT 1 FROM geo_scopes successor WHERE successor.supersedes_id = g.id)
+    AS has_successor
 """
 
 # The derived "still stands" rule, stated ONCE and reused by the room
 # projection, the Atlas fence query (atlas_objects.py) and the Field's
 # subject allowlist (field_marks.py) so three readers cannot disagree about
 # which rows are live.
-LIVE_PREDICATE = """
-(g.expires_at IS NULL OR g.expires_at > NOW())
-AND g.source_state <> 'confirmed_empty'
-AND NOT EXISTS (SELECT 1 FROM geo_scopes s WHERE s.supersedes_id = g.id)
+def live_predicate(alias: str) -> str:
+    """Canonical SQL for a scope that still stands, qualified by ``alias``.
+
+    The alias is owned by source code, never request data. Validation keeps a
+    future dynamic caller from turning this shared SQL fragment into an
+    injection surface.
+    """
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", alias) is None:
+        raise ValueError(f"invalid SQL alias: {alias}")
+    return f"""
+({alias}.expires_at IS NULL OR {alias}.expires_at > NOW())
+AND {alias}.source_state <> 'confirmed_empty'
+AND ({alias}.revision_action IS NULL OR {alias}.revision_action NOT IN ('reject', 'supersede'))
+AND NOT EXISTS (
+    SELECT 1 FROM geo_scopes geo_scope_successor
+    WHERE geo_scope_successor.supersedes_id = {alias}.id
+)
 """
+
+
+LIVE_PREDICATE = live_predicate("g")
 
 _ROOM_SQL = f"""
 SELECT {_COLUMNS}
@@ -301,14 +420,48 @@ FROM geo_scopes g
 WHERE g.id = $1 AND g.room_id = $2
 """
 
+_ONE_FOR_UPDATE_SQL = f"""
+SELECT {_COLUMNS}
+FROM geo_scopes g
+WHERE g.id = $1 AND g.room_id = $2
+FOR UPDATE OF g
+"""
+
+_LINEAGE_SQL = f"""
+WITH RECURSIVE ancestors(id, supersedes_id, depth) AS (
+    SELECT g.id, g.supersedes_id, 0
+    FROM geo_scopes g
+    WHERE g.id = $1 AND g.room_id = $2
+  UNION ALL
+    SELECT parent.id, parent.supersedes_id, ancestors.depth + 1
+    FROM geo_scopes parent
+    JOIN ancestors ON ancestors.supersedes_id = parent.id
+    WHERE parent.room_id = $2 AND ancestors.depth < 499
+), root AS (
+    SELECT id FROM ancestors ORDER BY depth DESC LIMIT 1
+), lineage(id, depth) AS (
+    SELECT id, 0 FROM root
+  UNION ALL
+    SELECT successor.id, lineage.depth + 1
+    FROM geo_scopes successor
+    JOIN lineage ON successor.supersedes_id = lineage.id
+    WHERE successor.room_id = $2 AND lineage.depth < 499
+)
+SELECT {_COLUMNS}
+FROM lineage
+JOIN geo_scopes g ON g.id = lineage.id
+ORDER BY lineage.depth
+"""
+
 _ROOM_CAP = 500
 
 _INSERT_SQL = """
 INSERT INTO geo_scopes
     (id, room_id, subject, kind, geometry, label, authority, provenance,
      observed_at, retrieved_at, expires_at, source_state,
-     confirmed_by, confirmed_at, supersedes_id, created_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+     confirmed_by, confirmed_at, supersedes_id, revision_action, review_note,
+     created_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 """
 
 
@@ -330,11 +483,65 @@ class GeoScopeService:
         row = await self.db.fetchrow(_ONE_SQL, scope_id, room_id)
         return scope_from_row(row) if row else None
 
+    async def get_for_update(
+        self, room_id: UUID, scope_id: UUID,
+    ) -> Optional[GeoScope]:
+        row = await self.db.fetchrow(_ONE_FOR_UPDATE_SQL, scope_id, room_id)
+        return scope_from_row(row) if row else None
+
     async def is_live(self, scope_id: UUID) -> bool:
         return bool(await self.db.fetchval(
             f"SELECT 1 FROM geo_scopes g WHERE g.id = $1 AND {LIVE_PREDICATE}",
             scope_id,
         ))
+
+    async def review(
+        self, room_id: UUID, scope_id: UUID,
+    ) -> Optional[GeoScopeReview]:
+        rows = await self.db.fetch(_LINEAGE_SQL, scope_id, room_id)
+        if not rows:
+            return None
+        lineage = [scope_from_row(row) for row in rows]
+        destination = await self._subject_destination(room_id, lineage[-1].subject)
+        return GeoScopeReview(
+            root_id=lineage[0].id,
+            current=lineage[-1],
+            lineage=lineage,
+            subject_destination=destination,
+        )
+
+    async def _subject_destination(
+        self, room_id: UUID, subject: GeoSubjectRef,
+    ) -> GeoSubjectDestination:
+        try:
+            subject_id = UUID(subject.id)
+        except ValueError as exc:
+            raise ValueError(f"stored geo subject has invalid id: {subject.id}") from exc
+        if subject.entity == "rooms":
+            return GeoSubjectDestination(room_id=room_id)
+        if subject.entity == "messages":
+            thread_id = await self.db.fetchval(
+                """SELECT m.thread_id FROM messages m
+                   JOIN threads t ON t.id = m.thread_id
+                   WHERE m.id = $1 AND t.room_id = $2""",
+                subject_id, room_id,
+            )
+            if thread_id is None:
+                raise ValueError("stored geo message subject no longer resolves")
+            return GeoSubjectDestination(
+                room_id=room_id, thread_id=thread_id, message_id=subject_id,
+            )
+        prefixes = {
+            "reading_items": "reading",
+            "field_marks": "field_mark",
+            "memories": "memory",
+        }
+        prefix = prefixes.get(subject.entity)
+        if prefix is None:
+            raise ValueError(f"stored geo subject entity is unsupported: {subject.entity}")
+        return GeoSubjectDestination(
+            room_id=room_id, object_id=f"{prefix}:{subject_id}",
+        )
 
 
 async def insert_scope(
@@ -343,6 +550,8 @@ async def insert_scope(
     observed_at: Optional[datetime] = None, expires_at: Optional[datetime] = None,
     source_state: str = "ok", confirmed_by: Optional[UUID] = None,
     supersedes_id: Optional[UUID] = None, created_by: Optional[UUID] = None,
+    revision_action: Optional[str] = None, review_note: Optional[str] = None,
+    retrieved_at: Optional[datetime] = None,
     now: Optional[datetime] = None,
 ) -> UUID:
     """The one insert path. Validates the closed vocabularies and the
@@ -357,6 +566,8 @@ async def insert_scope(
         raise ValueError(f"unknown authority: {authority}")
     if source_state not in GEO_SOURCE_STATES:
         raise ValueError(f"unknown source_state: {source_state}")
+    if revision_action is not None and revision_action not in GEO_REVISION_ACTIONS:
+        raise ValueError(f"unknown revision_action: {revision_action}")
     if (authority == "human_confirmed") != (confirmed_by is not None):
         raise ValueError("human_confirmed requires confirmed_by, and only it may carry one")
     if subject.get("entity") not in _SUBJECT_ENTITY_TABLES:
@@ -368,12 +579,23 @@ async def insert_scope(
     GeoProvenance(**provenance)  # shape check; raises pydantic ValidationError
     clean = validate_geometry(kind, geometry)
     now = now or datetime.now(timezone.utc)
+    if revision_action is None:
+        if source_state == "confirmed_empty":
+            revision_action = "reject"
+        elif supersedes_id is not None:
+            revision_action = "confirm"
+        elif authority == "machine_proposed":
+            revision_action = "propose"
+        elif authority == "source_reported":
+            revision_action = "place_signal"
+        else:
+            revision_action = "place"
     scope_id = uuid4()
     await db.execute(
         _INSERT_SQL,
         scope_id, room_id, subject, kind, clean, label, authority, provenance,
-        observed_at, now, expires_at, source_state,
+        observed_at, retrieved_at or now, expires_at, source_state,
         confirmed_by, now if confirmed_by is not None else None,
-        supersedes_id, created_by, now,
+        supersedes_id, revision_action, review_note, created_by, now,
     )
     return scope_id

@@ -67,7 +67,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from field_marks import FieldMarkService
-from geo_scopes import LIVE_PREDICATE as _GEO_LIVE, GeoScope, scope_from_row
+from geo_scopes import GeoScope, live_predicate as _geo_live_predicate, scope_from_row
 from home_activity import COMMITMENT_DUE_WINDOW
 from workspace_objects import workspace_object_from_field_mark
 
@@ -179,12 +179,13 @@ WITH ranked AS (
     SELECT g.id, g.room_id, g.subject, g.kind, g.geometry, g.label,
            g.authority, g.provenance, g.source_state, g.observed_at,
            g.retrieved_at, g.expires_at, g.confirmed_by, g.confirmed_at,
-           g.supersedes_id, g.created_by, g.created_at,
+           g.supersedes_id, g.revision_action, g.review_note,
+           g.created_by, g.created_at,
            row_number() OVER (
                PARTITION BY g.room_id ORDER BY g.created_at DESC
            ) AS rn
     FROM geo_scopes g
-    WHERE g.room_id = ANY($1::uuid[]) AND {_GEO_LIVE}
+    WHERE g.room_id = ANY($1::uuid[]) AND {_geo_live_predicate("g")}
 )
 SELECT * FROM ranked WHERE rn <= $2
 ORDER BY created_at DESC

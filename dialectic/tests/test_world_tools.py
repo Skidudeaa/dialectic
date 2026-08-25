@@ -116,18 +116,52 @@ async def test_a_proposal_is_provisional_and_the_field_refuses_it(db):
     })
     assert out["ok"] is True and out["authority"] == "machine_proposed"
     sid = UUID(out["scope_id"])
-    row = await db.fetchrow("SELECT authority, provenance, expires_at, created_by, subject FROM geo_scopes WHERE id = $1", sid)
+    row = await db.fetchrow(
+        """SELECT authority, provenance, retrieved_at, expires_at, created_by,
+                  subject, revision_action
+           FROM geo_scopes WHERE id = $1""",
+        sid,
+    )
     assert row["authority"] == "machine_proposed"
     assert row["provenance"]["acquisition"] == "llm"
     assert row["created_by"] is None
     assert row["expires_at"] is not None
+    assert row["revision_action"] == "propose"
     assert row["subject"] == {"entity": "reading_items", "id": str(READING)}
     # Live (it renders, dashed) — but the Field's allowlist says no.
     assert await GeoScopeService(db).is_live(sid)
     assert await resolve_subjects_in_room(db, ROOM, [{"entity": "geo_scopes", "id": str(sid)}]) is False
     events = await db.fetch("SELECT event_type, payload FROM events WHERE room_id = $1", ROOM)
     assert events[-1]["event_type"] == "geo_scope_created"
-    assert events[-1]["payload"]["why"].startswith("tanker")
+    assert events[-1]["payload"] == {
+        "scope_id": str(sid),
+        "kind": "region",
+        "subject": {"entity": "reading_items", "id": str(READING)},
+        "label": "Persian Gulf",
+        "authority": "machine_proposed",
+        "provenance": row["provenance"],
+        "source_state": "ok",
+        "observed_at": None,
+        "retrieved_at": row["retrieved_at"].isoformat(),
+        "expires_at": row["expires_at"].isoformat(),
+        "revision_action": "propose",
+        "review_note": None,
+        "why": "tanker counts are about the Gulf",
+    }
+
+
+@pytest.mark.asyncio
+async def test_proposal_event_failure_rolls_back_the_scope(db, monkeypatch):
+    async def fail_event(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("event ledger unavailable")
+
+    monkeypatch.setattr(world, "_record_event", fail_event, raising=False)
+    with pytest.raises(RuntimeError, match="event ledger unavailable"):
+        await world.propose_geo_scope(db, ROOM, {"region": "Persian Gulf"})
+
+    assert await db.fetchval(
+        "SELECT count(*) FROM geo_scopes WHERE room_id = $1", ROOM,
+    ) == 0
 
 
 @pytest.mark.asyncio

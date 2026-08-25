@@ -21,7 +21,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from geo_scopes import (
@@ -116,6 +116,15 @@ VALUES ($1, $2, $3, $4, NULL, NULL, $5)
 """
 
 
+async def _record_event(
+    db: Any, *, event_id: UUID, now: datetime, room_id: UUID, payload: dict,
+) -> None:
+    await db.execute(
+        _INSERT_EVENT_SQL, event_id, now, EventType.GEO_SCOPE_CREATED.value,
+        room_id, payload,
+    )
+
+
 def _jsonb(value) -> dict:
     if isinstance(value, dict):
         return value
@@ -185,23 +194,38 @@ async def propose_geo_scope(db, room_id: UUID, args: dict) -> dict:
         kind = "region"
 
     now = datetime.now(timezone.utc)
-    scope_id = await insert_scope(
-        db, room_id=room_id, subject=subject, kind=kind, geometry=geometry,
-        label=label, authority="machine_proposed", provenance=provenance,
-        expires_at=now + PROPOSAL_TTL, now=now,
-    )
-    await db.execute(
-        _INSERT_EVENT_SQL, uuid4(), now, EventType.GEO_SCOPE_CREATED.value, room_id,
-        {"scope_id": str(scope_id), "kind": kind, "subject": subject,
-         "authority": "machine_proposed", "why": why},
-    )
+    expires_at = now + PROPOSAL_TTL
+    async with db.transaction():
+        scope_id = await insert_scope(
+            db, room_id=room_id, subject=subject, kind=kind, geometry=geometry,
+            label=label, authority="machine_proposed", provenance=provenance,
+            expires_at=expires_at, revision_action="propose", now=now,
+        )
+        await _record_event(
+            db, event_id=uuid4(), now=now, room_id=room_id,
+            payload={
+                "scope_id": str(scope_id),
+                "kind": kind,
+                "subject": subject,
+                "label": label,
+                "authority": "machine_proposed",
+                "provenance": provenance,
+                "source_state": "ok",
+                "observed_at": None,
+                "retrieved_at": now.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "revision_action": "propose",
+                "review_note": None,
+                "why": why,
+            },
+        )
     return {
         "ok": True,
         "scope_id": str(scope_id),
         "label": label,
         "subject": subject,
         "authority": "machine_proposed",
-        "expires_at": (now + PROPOSAL_TTL).isoformat(),
+        "expires_at": expires_at.isoformat(),
         "note": (
             "Placed as a PROPOSAL. It renders dashed on the World until a "
             "person confirms it in Focus; until then say so if you cite it."
