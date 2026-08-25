@@ -121,12 +121,12 @@ describe('useAtlas', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 
-  it('fetches /users/me/atlas with no room-token header', async () => {
+  it('opts into signals with no room-token header', async () => {
     vi.mocked(fetch).mockResolvedValue(jsonResponse(projection([])))
     renderHook(() => useAtlas(true))
     await waitFor(() => expect(fetch).toHaveBeenCalled())
     const [url, options] = vi.mocked(fetch).mock.calls[0]
-    expect(url).toBe('/users/me/atlas')
+    expect(url).toBe('/users/me/atlas?signals=1')
     expect((options?.headers as Record<string, string>)['X-Room-Token']).toBeUndefined()
   })
 

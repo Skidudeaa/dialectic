@@ -107,6 +107,44 @@ export interface GeoScope {
   created_at: string
 }
 
+/** A current provider observation. Unlike GeoScope, this object is ephemeral,
+ * server-owned, and never opens Focus or accepts geometry from the client. */
+export interface WorldSignal {
+  id: string
+  provider: string
+  source_id: string
+  room_id: string
+  layer: string
+  kind: GeoKind
+  geometry: { type: string; coordinates: unknown }
+  provenance: GeoProvenance
+  source_state: GeoSourceState
+  freshness: GeoFreshnessState
+  coverage: string
+  observed_at?: string | null
+  retrieved_at: string
+  expires_at?: string | null
+  label: string
+  details: Record<string, unknown>
+}
+
+/** Provider snapshot state stays separate from each observation's state. */
+export interface WorldSignalSource {
+  provider: string
+  source_state: GeoSourceState
+  freshness: GeoFreshnessState
+  coverage: string
+  observed_at?: string | null
+  retrieved_at: string
+  expires_at?: string | null
+  signal_count: number
+}
+
+export interface WorldSignalSources {
+  status: 'configured' | 'not_configured'
+  sources: WorldSignalSource[]
+}
+
 export interface GeoProjection {
   generated_at: string
   room_id: string

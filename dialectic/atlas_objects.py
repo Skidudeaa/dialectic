@@ -70,6 +70,12 @@ from field_marks import FieldMarkService
 from geo_scopes import GeoScope, live_predicate as _geo_live_predicate, scope_from_row
 from home_activity import COMMITMENT_DUE_WINDOW
 from workspace_objects import workspace_object_from_field_mark
+from world_signals import (
+    WorldSignal,
+    WorldSignalSources,
+    WorldSignalStore,
+    world_signal_store,
+)
 
 # The closed node vocabulary (§5.4's node list). A surface switches on these;
 # an unlisted value is a bug, not an extension.
@@ -164,6 +170,12 @@ class AtlasProjection(BaseModel):
     # carry no geo field on purpose — "not geographically modeled" is the
     # absence of a scope, never a null a renderer might misread as (0,0).
     scopes: list[GeoScope] = []
+
+
+class AtlasSignalProjection(AtlasProjection):
+    """The opt-in ephemeral layer; absent entirely from the default contract."""
+    signals: list[WorldSignal]
+    signal_sources: WorldSignalSources
 
 
 # --- statements --------------------------------------------------------
@@ -373,10 +385,15 @@ class AtlasService:
     array is the caller's OWN room_memberships, never an intersection.
     """
 
-    def __init__(self, db):
+    def __init__(
+        self, db, *, signal_store: WorldSignalStore | None = None,
+    ) -> None:
         self.db = db
+        self.signal_store = signal_store or world_signal_store
 
-    async def build(self, viewer_user_id: UUID) -> AtlasProjection:
+    async def build(
+        self, viewer_user_id: UUID, *, include_signals: bool = False,
+    ) -> AtlasProjection | AtlasSignalProjection:
         # Same conditional as HomeActivityService.build(): production hands
         # this service a standalone acquired connection (an explicit
         # snapshot transaction is needed), while test fixtures already wrap
@@ -384,11 +401,13 @@ class AtlasService:
         # options on a nested transaction, where the outer transaction
         # already IS the snapshot.
         if self.db.is_in_transaction():
-            return await self._build(viewer_user_id)
+            return await self._build(viewer_user_id, include_signals=include_signals)
         async with self.db.transaction(isolation="repeatable_read", readonly=True):
-            return await self._build(viewer_user_id)
+            return await self._build(viewer_user_id, include_signals=include_signals)
 
-    async def _build(self, viewer_user_id: UUID) -> AtlasProjection:
+    async def _build(
+        self, viewer_user_id: UUID, *, include_signals: bool,
+    ) -> AtlasProjection | AtlasSignalProjection:
         generated_at = datetime.now(timezone.utc)
 
         eligible = await self.db.fetch(
@@ -396,7 +415,8 @@ class AtlasService:
         )
         room_ids = [r["room_id"] for r in eligible]
         if not room_ids:
-            return AtlasProjection(generated_at=generated_at, nodes=[], edges=[])
+            projection = AtlasProjection(generated_at=generated_at, nodes=[], edges=[])
+            return self._with_signals(projection, room_ids) if include_signals else projection
 
         room_rows = await self.db.fetch(_ROOMS_SQL, room_ids, _ATLAS_ROOM_CAP)
         branch_rows = await self.db.fetch(
@@ -610,7 +630,18 @@ class AtlasService:
                 label=row["verdict"] or "",
             ))
 
-        return AtlasProjection(
+        projection = AtlasProjection(
             generated_at=generated_at, nodes=nodes, edges=edges,
             scopes=[scope_from_row(r) for r in scope_rows],
+        )
+        return self._with_signals(projection, room_ids) if include_signals else projection
+
+    def _with_signals(
+        self, projection: AtlasProjection, room_ids: list[UUID],
+    ) -> AtlasSignalProjection:
+        signal_projection = self.signal_store.project(room_ids)
+        return AtlasSignalProjection(
+            **projection.model_dump(),
+            signals=signal_projection.signals,
+            signal_sources=signal_projection.signal_sources,
         )

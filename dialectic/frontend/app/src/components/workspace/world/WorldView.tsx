@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import * as Cesium from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
-import type { GeoScope } from '../../../types/geo.ts'
+import type { GeoScope, WorldSignal } from '../../../types/geo.ts'
 import type { WorldCamera } from './worldCamera.ts'
 import { isProvisional, scopesBounds } from './worldScopes.ts'
+import { addSignal } from './worldSignals.ts'
 import './World.css'
 
 /**
@@ -28,11 +29,11 @@ import './World.css'
  * here animates, so the hold set is deliberately absent (add it with the
  * first moving contact, not before).
  *
- * WHAT IT DRAWS: GeoScope rows only — the fenced geometry the projection
- * already carries. Polygons as translucent fills, routes as lines, points
- * as pins; a machine_proposed scope is dashed and dim, because authority is
- * a column and the style merely agrees with it. Selecting an entity reports
- * the scope to the parent, which navigates through the ONE writer.
+ * WHAT IT DRAWS: durable GeoScopes and a visually distinct ephemeral signal
+ * layer, both already room-fenced by the projection. Scope selection reports
+ * the durable row to the parent. Signals deliberately have no selection
+ * handler: they are not Focus objects and can only be copied through the
+ * explicit server-owned placement action in the complete text list.
  *
  * CAMERA STATE goes out through `onCameraSettle`, debounced, and the parent
  * serializes it into the `view` axis with `navigate(..., 'replace')` — this
@@ -44,10 +45,12 @@ import './World.css'
 
 interface WorldViewProps {
   scopes: GeoScope[]
+  signals: WorldSignal[]
   /** Restore this camera on mount; otherwise frame every scope. */
   initialCamera: WorldCamera | null
   /** Frame these scopes (a room's) instead of all when no camera is given. */
   focusScopes?: GeoScope[] | null
+  focusSignals?: WorldSignal[] | null
   onSelect: (scope: GeoScope) => void
   onCameraSettle: (camera: WorldCamera) => void
 }
@@ -149,8 +152,12 @@ function addScope(viewer: Cesium.Viewer, scope: GeoScope): void {
   }
 }
 
-function frame(viewer: Cesium.Viewer, scopes: GeoScope[], animate: boolean): void {
-  const bounds = scopesBounds(scopes)
+function frame(
+  viewer: Cesium.Viewer,
+  geometry: Array<{ geometry: { coordinates: unknown } }>,
+  animate: boolean,
+): void {
+  const bounds = scopesBounds(geometry)
   if (!bounds) {
     viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(30, 20, 18_000_000) })
     return
@@ -162,7 +169,9 @@ function frame(viewer: Cesium.Viewer, scopes: GeoScope[], animate: boolean): voi
   else viewer.camera.setView({ destination: rect })
 }
 
-export default function WorldView({ scopes, initialCamera, focusScopes, onSelect, onCameraSettle }: WorldViewProps) {
+export default function WorldView({
+  scopes, signals, initialCamera, focusScopes, focusSignals, onSelect, onCameraSettle,
+}: WorldViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const creditRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Cesium.Viewer | null>(null)
@@ -263,22 +272,24 @@ export default function WorldView({ scopes, initialCamera, focusScopes, onSelect
     }
   }, [])
 
-  // Redraw the scopes whenever the projection changes.
+  // Redraw both layers whenever the projection changes. Only scopes are
+  // copied onto __scopes, preserving the click fence below.
   useEffect(() => {
     const viewer = viewerRef.current
     if (!viewer || viewer.isDestroyed()) return
     viewer.entities.removeAll()
     for (const scope of scopes) addScope(viewer, scope)
+    for (const signal of signals) addSignal(viewer, signal)
     ;(viewer as unknown as { __scopes?: GeoScope[] }).__scopes = scopes
     viewer.scene.requestRender()
-  }, [scopes])
+  }, [scopes, signals])
 
   // Initial camera: restore, or frame the focus set, or frame everything.
   const framedRef = useRef(false)
   useEffect(() => {
     const viewer = viewerRef.current
     if (!viewer || viewer.isDestroyed() || framedRef.current) return
-    if (scopes.length === 0 && !initialCamera) return
+    if (scopes.length === 0 && signals.length === 0 && !initialCamera) return
     framedRef.current = true
     if (initialCamera) {
       viewer.camera.setView({
@@ -290,10 +301,14 @@ export default function WorldView({ scopes, initialCamera, focusScopes, onSelect
         },
       })
     } else {
-      frame(viewer, focusScopes && focusScopes.length > 0 ? focusScopes : scopes, !reducedMotion())
+      const focused = [
+        ...(focusScopes ?? []),
+        ...(focusSignals ?? []),
+      ]
+      frame(viewer, focused.length > 0 ? focused : [...scopes, ...signals], !reducedMotion())
     }
     viewer.scene.requestRender()
-  }, [scopes, initialCamera, focusScopes])
+  }, [scopes, signals, initialCamera, focusScopes, focusSignals])
 
   return (
     <div className="world-view" data-testid="world-view">

@@ -19,10 +19,10 @@
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from api.auth.dependencies import AuthenticatedUser, get_current_user
-from atlas_objects import AtlasProjection, AtlasService
+from atlas_objects import AtlasProjection, AtlasService, AtlasSignalProjection
 
 logger = logging.getLogger(__name__)
 
@@ -41,15 +41,21 @@ async def get_db():
         yield conn
 
 
-@router.get("/users/me/atlas", response_model=AtlasProjection)
+@router.get(
+    "/users/me/atlas",
+    response_model=AtlasSignalProjection | AtlasProjection,
+)
 async def get_atlas(
+    include_signals: bool = Query(False, alias="signals"),
     current_user: AuthenticatedUser = Depends(get_current_user),
     db=Depends(get_db),
-) -> AtlasProjection:
+) -> AtlasProjection | AtlasSignalProjection:
     """The caller's own cross-room map: rooms, branches, theses, readings,
     briefs, commitments and unresolved work, plus the real-provenance edges
     between them. Fenced by the caller's OWN memberships (§5.4) — not the
     all-members intersection home_activity.py uses for the shared House.
     Projects; never writes.
     """
-    return await AtlasService(db).build(current_user.user_id)
+    return await AtlasService(db).build(
+        current_user.user_id, include_signals=include_signals,
+    )

@@ -87,6 +87,22 @@ def test_a_caller_with_no_rooms_gets_an_empty_projection() -> None:
     assert body["generated_at"]
 
 
+def test_default_atlas_response_remains_source_compatible_without_signal_fields() -> None:
+    body = _client().get(PATH).json()
+    assert set(body) == {"generated_at", "nodes", "edges", "scopes"}
+
+
+def test_signals_are_opt_in_and_absence_is_explicitly_not_configured() -> None:
+    response = _client().get(f"{PATH}?signals=1")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["signals"] == []
+    assert body["signal_sources"] == {
+        "status": "not_configured",
+        "sources": [],
+    }
+
+
 def test_the_router_exposes_no_write_route() -> None:
     """Read-only is a property of the router, not a promise in a docstring —
     same assertion test_workspace_api.py makes for the workspace router."""

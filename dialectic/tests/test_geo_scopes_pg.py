@@ -39,6 +39,7 @@ from geo_scopes import (
     live_predicate,
     validate_geometry,
 )
+from world_signals import WorldSignal, WorldSignalSnapshot, WorldSignalStore
 
 TEST_DATABASE_URL = os.environ.get(
     "DIALECTIC_TEST_DATABASE_URL", "postgresql://root@localhost/dialectic_test"
@@ -58,6 +59,39 @@ THREAD, MESSAGE = _uid(0x51), _uid(0x61)
 RING = [[55.6, 26.0], [56.2, 25.6], [57.2, 25.9], [57.0, 26.9], [55.6, 26.0]]
 POLY = {"type": "Polygon", "coordinates": [RING]}
 LINE = {"type": "LineString", "coordinates": [[55.3, 26.4], [56.0, 26.6], [57.4, 25.7]]}
+
+
+def _world_signal(
+    source_id: str, *, room_id: UUID = ROOM_AMO,
+    expires_at: datetime | None = None,
+) -> WorldSignal:
+    now = datetime.now(timezone.utc)
+    return WorldSignal(
+        id=f"world_signal:ais:{source_id}", provider="ais", source_id=source_id,
+        room_id=room_id, layer="vessels", kind="point",
+        geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+        provenance={
+            "provider": "ais", "acquisition": "adapter:ais",
+            "source_id": source_id, "url": f"https://provider.test/{source_id}",
+            "credit": "AIS provider credit",
+        },
+        source_state="partial", freshness="current", coverage="receiver footprint",
+        observed_at=now - timedelta(minutes=2),
+        retrieved_at=now - timedelta(minutes=1),
+        expires_at=expires_at or now + timedelta(minutes=10),
+        label=f"Contact {source_id}", details={"speed_knots": 12.4},
+    )
+
+
+def _signal_store(*signals: WorldSignal) -> WorldSignalStore:
+    store = WorldSignalStore()
+    now = datetime.now(timezone.utc)
+    store.replace(WorldSignalSnapshot(
+        provider="ais", source_state="partial", freshness="current",
+        coverage="receiver footprint", retrieved_at=now,
+        expires_at=now + timedelta(minutes=10), signals=signals,
+    ))
+    return store
 
 
 def _user(uid: UUID) -> AuthenticatedUser:
@@ -847,3 +881,131 @@ async def test_the_atlas_fence_holds_for_scopes(world):
     assert all("DAN-ONLY" != s.label for s in amo_view.scopes)
     # The scope's subject resolves to a node the same projection carries.
     assert f"room:{ROOM_AMO}" in {n.id for n in amo_view.nodes}
+
+
+# ---------------------------------------------------------------------------
+# WorldSignal -> one durable source_reported GeoScope
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_signal_placement_preserves_server_geometry_provenance_and_event_fidelity(
+    world, monkeypatch,
+):
+    signal = _world_signal("place-1")
+    monkeypatch.setattr(geo_api, "world_signal_store", _signal_store(signal))
+
+    scope = await geo_api.place_world_signal(
+        ROOM_AMO, signal.id, token=f"tok-{ROOM_AMO}",
+        current_user=_user(AMO), db=world,
+    )
+
+    assert scope.authority == "source_reported"
+    assert scope.revision_action == "place_signal"
+    assert scope.created_by == AMO
+    assert scope.confirmed_by is None
+    assert scope.subject.model_dump() == {
+        "entity": "rooms", "id": str(ROOM_AMO), "field": signal.id,
+    }
+    assert scope.kind == signal.kind
+    assert scope.geometry == signal.geometry
+    assert scope.label == signal.label
+    assert scope.provenance == signal.provenance
+    assert scope.source_state == signal.source_state
+    assert scope.observed_at == signal.observed_at
+    assert scope.retrieved_at == signal.retrieved_at
+    assert scope.expires_at == signal.expires_at
+
+    event = await world.fetchrow(
+        """SELECT user_id, payload FROM events
+           WHERE room_id = $1 AND event_type = $2
+             AND payload->>'scope_id' = $3""",
+        ROOM_AMO, "geo_scope_created", scope.id.split(":", 1)[1],
+    )
+    assert event is not None and event["user_id"] == AMO
+    assert event["payload"] == {
+        "scope_id": scope.id.split(":", 1)[1],
+        "subject": scope.subject.model_dump(),
+        "kind": signal.kind,
+        "geometry": signal.geometry,
+        "label": signal.label,
+        "authority": "source_reported",
+        "provenance": signal.provenance.model_dump(),
+        "source_state": "partial",
+        "observed_at": signal.observed_at.isoformat(),
+        "retrieved_at": signal.retrieved_at.isoformat(),
+        "expires_at": signal.expires_at.isoformat(),
+        "revision_action": "place_signal",
+        "review_note": None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_duplicate_signal_placement_replays_one_scope_and_one_event(world, monkeypatch):
+    signal = _world_signal("duplicate")
+    monkeypatch.setattr(geo_api, "world_signal_store", _signal_store(signal))
+
+    first = await geo_api.place_world_signal(
+        ROOM_AMO, signal.id, token=f"tok-{ROOM_AMO}", current_user=_user(AMO), db=world,
+    )
+    second = await geo_api.place_world_signal(
+        ROOM_AMO, signal.id, token=f"tok-{ROOM_AMO}", current_user=_user(AMO), db=world,
+    )
+
+    assert second.id == first.id
+    assert await world.fetchval(
+        """SELECT count(*) FROM geo_scopes
+           WHERE room_id = $1 AND subject->>'field' = $2""",
+        ROOM_AMO, signal.id,
+    ) == 1
+    assert await world.fetchval(
+        """SELECT count(*) FROM events
+           WHERE room_id = $1 AND event_type = 'geo_scope_created'
+             AND payload->'subject'->>'field' = $2""",
+        ROOM_AMO, signal.id,
+    ) == 1
+
+
+@pytest.mark.asyncio
+async def test_signal_placement_failures_leave_no_scope_or_event(world, monkeypatch):
+    expired = _world_signal(
+        "expired-place", expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+    )
+    cross_room = _world_signal("cross-room", room_id=ROOM_DAN)
+    monkeypatch.setattr(geo_api, "world_signal_store", _signal_store(expired, cross_room))
+    before_scopes = await world.fetchval("SELECT count(*) FROM geo_scopes")
+    before_events = await world.fetchval("SELECT count(*) FROM events")
+
+    cases = (
+        ("not-a-signal", 422),
+        ("world_signal:ais:missing", 404),
+        (cross_room.id, 404),
+        (expired.id, 409),
+    )
+    for signal_id, status in cases:
+        with pytest.raises(HTTPException) as exc:
+            await geo_api.place_world_signal(
+                ROOM_AMO, signal_id, token=f"tok-{ROOM_AMO}",
+                current_user=_user(AMO), db=world,
+            )
+        assert exc.value.status_code == status
+
+    assert await world.fetchval("SELECT count(*) FROM geo_scopes") == before_scopes
+    assert await world.fetchval("SELECT count(*) FROM events") == before_events
+
+
+@pytest.mark.asyncio
+async def test_signal_placement_event_failure_rolls_back_the_scope(world, monkeypatch):
+    signal = _world_signal("event-failure")
+    monkeypatch.setattr(geo_api, "world_signal_store", _signal_store(signal))
+
+    async def fail_event(*args, **kwargs):
+        raise RuntimeError("event write failed")
+
+    monkeypatch.setattr(geo_api, "_record_event", fail_event)
+    before = await world.fetchval("SELECT count(*) FROM geo_scopes")
+    with pytest.raises(RuntimeError, match="event write failed"):
+        await geo_api.place_world_signal(
+            ROOM_AMO, signal.id, token=f"tok-{ROOM_AMO}",
+            current_user=_user(AMO), db=world,
+        )
+    assert await world.fetchval("SELECT count(*) FROM geo_scopes") == before

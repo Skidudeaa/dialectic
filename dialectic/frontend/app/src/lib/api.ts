@@ -295,8 +295,8 @@ class DialecticAPI {
    * between them (atlas_objects.py). JWT only, no room token: cross-room by
    * construction, same auth shape as getHomeActivity().
    */
-  async getAtlas(): Promise<AtlasProjection> {
-    return this.fetch('/users/me/atlas');
+  async getAtlas(options: { signals?: boolean } = {}): Promise<AtlasProjection> {
+    return this.fetch(options.signals ? '/users/me/atlas?signals=1' : '/users/me/atlas');
   }
   /** The room's live geography (World Lens, migration 021). Room token +
    *  JWT, like every other room read. */
@@ -305,6 +305,14 @@ class DialecticAPI {
   }
   async getGeoScopeReview(roomId: string, scopeId: string): Promise<GeoScopeReview> {
     return this.fetch(`/rooms/${roomId}/geo/${scopeId}/review`);
+  }
+  /** Place the server-held observation. The client supplies no geometry or
+   * provenance; the signal identity in the path is the complete request. */
+  async placeWorldSignal(roomId: string, signalId: string): Promise<GeoScope> {
+    return this.fetch(
+      `/rooms/${roomId}/world-signals/${encodeURIComponent(signalId)}/place`,
+      { method: 'POST' },
+    );
   }
   /** A person places geometry on a row this room owns (human_confirmed). */
   async createGeoScope(roomId: string, body: {

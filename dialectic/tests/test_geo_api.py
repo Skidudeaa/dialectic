@@ -23,7 +23,9 @@ from deploy import seed_hormuz_geo
 CALLER_ID = UUID("00000000-0000-0000-0000-000000000701")
 ROOM_ID = UUID("00000000-0000-0000-0000-000000000702")
 SCOPE_ID = UUID("00000000-0000-0000-0000-000000000703")
+SIGNAL_ID = "world_signal:ais:contact-1"
 GEO_PATH = f"/rooms/{ROOM_ID}/geo"
+SIGNAL_PATH = f"/rooms/{ROOM_ID}/world-signals/{SIGNAL_ID}/place"
 HEADERS = {"X-Room-Token": "room-token"}
 BODY = {
     "subject": {"entity": "rooms", "id": str(ROOM_ID)},
@@ -170,6 +172,28 @@ def test_create_refuses_bad_geometry_before_sql():
     assert resp.status_code == 422
 
 
+def test_signal_placement_requires_bearer_auth_room_token_and_membership():
+    assert _client(authenticated=False).post(SIGNAL_PATH, headers=HEADERS).status_code == 401
+    assert _client(room=False).post(SIGNAL_PATH, headers=HEADERS).status_code == 401
+    assert _client(member=False).post(SIGNAL_PATH, headers=HEADERS).status_code == 403
+
+
+def test_signal_placement_distinguishes_malformed_and_missing_server_signals():
+    malformed = _client().post(
+        f"/rooms/{ROOM_ID}/world-signals/not-a-signal/place", headers=HEADERS,
+    )
+    assert malformed.status_code == 422
+    assert "world_signal" in malformed.json()["detail"]
+
+    missing = _client().post(SIGNAL_PATH, headers=HEADERS)
+    assert missing.status_code == 404
+
+
+def test_signal_placement_has_no_client_body_contract():
+    route = next(route for route in geo_mod.router.routes if route.path.endswith("/world-signals/{signal_id}/place"))
+    assert route.body_field is None
+
+
 def test_hormuz_seed_requires_named_human_and_inspection_acknowledgement():
     parser = seed_hormuz_geo.build_parser()
     with pytest.raises(SystemExit):
@@ -278,4 +302,5 @@ def test_the_routers_write_surface_is_exactly_the_human_authority_actions():
         ("/rooms/{room_id}/geo/{scope_id}/redraw", ("POST",)),
         ("/rooms/{room_id}/geo/{scope_id}/reject", ("POST",)),
         ("/rooms/{room_id}/geo/{scope_id}/supersede", ("POST",)),
+        ("/rooms/{room_id}/world-signals/{signal_id}/place", ("POST",)),
     ]

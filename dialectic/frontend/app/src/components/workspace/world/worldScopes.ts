@@ -28,9 +28,11 @@ export function isProvisional(scope: GeoScope): boolean {
   return scope.authority === 'machine_proposed'
 }
 
-/** Bounding box over every scope's geometry, [west, south, east, north],
- *  or null when there is nothing to frame. */
-export function scopesBounds(scopes: GeoScope[]): [number, number, number, number] | null {
+/** Bounding box over durable scopes or ephemeral signals, [west, south,
+ *  east, north], or null when there is nothing to frame. */
+export function scopesBounds(
+  scopes: Array<{ geometry: { coordinates: unknown } }>,
+): [number, number, number, number] | null {
   let west = 180, south = 90, east = -180, north = -90
   let any = false
   const visit = (pos: unknown) => {

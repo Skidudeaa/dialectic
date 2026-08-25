@@ -37,6 +37,13 @@ from geo_scopes import (
     validate_geometry,
 )
 from models import EventType
+from world_signals import (
+    WorldSignalExpired,
+    WorldSignalMalformedId,
+    WorldSignalNotFound,
+    WorldSignalWrongRoom,
+    world_signal_store,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +83,18 @@ async def _authorize(room_id: UUID, token: str, user_id: UUID, db) -> None:
 _INSERT_EVENT_SQL = """
 INSERT INTO events (id, timestamp, event_type, room_id, thread_id, user_id, payload)
 VALUES ($1, $2, $3, $4, NULL, $5, $6)
+"""
+
+_PLACED_SIGNAL_SQL = """
+SELECT id
+FROM geo_scopes
+WHERE room_id = $1
+  AND subject->>'entity' = 'rooms'
+  AND subject->>'id' = $1::text
+  AND subject->>'field' = $2
+  AND revision_action = 'place_signal'
+ORDER BY created_at
+LIMIT 2
 """
 
 
@@ -208,6 +227,82 @@ async def create_geo_scope(
         raise HTTPException(status_code=422, detail=str(e))
     scope = await GeoScopeService(db).get(room_id, scope_id)
     assert scope is not None
+    return scope
+
+
+@router.post(
+    "/rooms/{room_id}/world-signals/{signal_id}/place",
+    response_model=GeoScope,
+    status_code=201,
+)
+async def place_world_signal(
+    room_id: UUID,
+    signal_id: str,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db=Depends(get_db),
+) -> GeoScope:
+    """Copy one current server-held observation into durable GeoScope history.
+
+    The request has no body: geometry, provenance, source condition, coverage,
+    and observation clocks come only from the in-process owner. A transaction-
+    scoped advisory lock gives a repeated/concurrent human tap one durable row
+    and one event without adding a provider-specific uniqueness rule to the
+    general ``geo_scopes`` table.
+    """
+    await _authorize(room_id, token, current_user.user_id, db)
+    try:
+        signal = world_signal_store.resolve(room_id, signal_id)
+    except WorldSignalMalformedId as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (WorldSignalNotFound, WorldSignalWrongRoom) as exc:
+        raise HTTPException(status_code=404, detail="signal not found in this room") from exc
+    except WorldSignalExpired as exc:
+        raise HTTPException(status_code=409, detail="signal is expired") from exc
+
+    now = datetime.now(timezone.utc)
+    subject = {"entity": "rooms", "id": str(room_id), "field": signal.id}
+    async with db.transaction():
+        await db.fetchval(
+            "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+            f"world-signal-place:{room_id}:{signal.id}",
+        )
+        existing_rows = await db.fetch(_PLACED_SIGNAL_SQL, room_id, signal.id)
+        if len(existing_rows) > 1:
+            raise ValueError("world signal has more than one durable placement")
+        if existing_rows:
+            existing = await GeoScopeService(db).get(room_id, existing_rows[0]["id"])
+            if existing is None:
+                raise ValueError("world signal placement no longer resolves")
+            return existing
+
+        scope_id = await insert_scope(
+            db,
+            room_id=room_id,
+            subject=subject,
+            kind=signal.kind,
+            geometry=signal.geometry,
+            authority="source_reported",
+            provenance=signal.provenance.model_dump(),
+            label=signal.label,
+            observed_at=signal.observed_at,
+            retrieved_at=signal.retrieved_at,
+            expires_at=signal.expires_at,
+            source_state=signal.source_state,
+            created_by=current_user.user_id,
+            revision_action="place_signal",
+            now=now,
+        )
+        scope = await GeoScopeService(db).get(room_id, scope_id)
+        assert scope is not None
+        await _record_event(
+            db,
+            now=now,
+            event_type=EventType.GEO_SCOPE_CREATED.value,
+            room_id=room_id,
+            user_id=current_user.user_id,
+            payload={"scope_id": str(scope_id), **_scope_payload(scope)},
+        )
     return scope
 
 

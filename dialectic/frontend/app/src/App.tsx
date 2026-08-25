@@ -889,6 +889,11 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
       <AtlasScene
         state={atlas}
         view={viewId}
+        placementRoomId={accessToken && roomToken ? currentRoom.id : null}
+        // Atlas retry refreshes the combined live/durable projection. Queue a
+        // room projection refresh too through the same loading-safe contract;
+        // it remains dormant while Home has no room-local projection mounted.
+        onGeoChanged={roomGeo.retry}
         // World Lens: the scene's House/World mode and camera ride the URL's
         // `view` axis and are written only here, through the one navigation
         // writer. Home root stays the destination (roomId null).

@@ -1,9 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AtlasScene } from './AtlasScene'
+import { api } from '../../../lib/api.ts'
 import type { AtlasState } from '../../../hooks/useAtlas.ts'
 import type { AtlasNode, AtlasEdge } from '../../../types/atlas.ts'
-import type { GeoScope } from '../../../types/geo.ts'
+import type { GeoScope, WorldSignal } from '../../../types/geo.ts'
 
 function node(partial: Partial<AtlasNode> & Pick<AtlasNode, 'id' | 'kind' | 'room_id'>): AtlasNode {
   return {
@@ -152,9 +153,9 @@ describe('AtlasScene', () => {
 // ---------------------------------------------------------------------------
 
 vi.mock('../world/WorldView', () => ({
-  default: (props: { scopes: GeoScope[]; onSelect: (scope: GeoScope) => void }) => (
+  default: (props: { scopes: GeoScope[]; signals: WorldSignal[]; onSelect: (scope: GeoScope) => void }) => (
     <div data-testid="world-view-mock">
-      globe:{props.scopes.length}
+      scopes:{props.scopes.length};signals:{props.signals.length}
       <button type="button" onClick={() => props.onSelect(props.scopes[0])}>Select globe scope</button>
     </div>
   ),
@@ -180,6 +181,44 @@ const hormuzScope: GeoScope = {
   centroid: [56, 26.5] as [number, number],
   retrieved_at: '2026-08-25T00:00:00Z', created_at: '2026-08-25T00:00:00Z',
 }
+
+const vesselSignal: WorldSignal = {
+  id: 'world_signal:ais:contact-1', provider: 'ais', source_id: 'contact-1',
+  room_id: 'room-h', layer: 'vessels', kind: 'point',
+  geometry: { type: 'Point', coordinates: [56.3, 26.5] },
+  provenance: {
+    provider: 'ais', acquisition: 'adapter:ais', source_id: 'contact-1',
+    url: 'https://provider.test/contact-1', credit: 'AIS provider credit',
+  },
+  source_state: 'partial', freshness: 'current', coverage: 'receiver footprint',
+  observed_at: '2026-08-25T17:58:00Z', retrieved_at: '2026-08-25T17:59:00Z',
+  expires_at: '2026-08-25T18:10:00Z', label: 'Vessel contact 1',
+  details: { speed_knots: 12.4 },
+}
+
+function readyWithWorld(
+  nodes: AtlasNode[], scopes: GeoScope[], signals: WorldSignal[], retry = vi.fn(),
+): AtlasState {
+  return {
+    status: 'ready', retry,
+    projection: {
+      generated_at: 'x', nodes, edges: [], scopes, signals,
+      signal_sources: {
+        status: 'configured',
+        sources: [{
+          provider: 'ais', source_state: 'partial', freshness: 'current',
+          coverage: 'receiver footprint', observed_at: '2026-08-25T17:58:00Z',
+          retrieved_at: '2026-08-25T17:59:00Z', expires_at: '2026-08-25T18:10:00Z',
+          signal_count: signals.length,
+        }],
+      },
+    },
+  }
+}
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('AtlasScene / World', () => {
   const rooms = [node({ id: 'room:room-h', kind: 'room', room_id: 'room-h', title: 'Hormuz' })]
@@ -210,7 +249,7 @@ describe('AtlasScene / World', () => {
         onView={vi.fn()}
       />,
     )
-    expect(await screen.findByTestId('world-view-mock')).toHaveTextContent('globe:1')
+    expect(await screen.findByTestId('world-view-mock')).toHaveTextContent('scopes:1')
     // The House tree is still there -- the globe never replaces it.
     expect(screen.getByRole('list', { name: 'Rooms' })).toBeInTheDocument()
     // And the scope is readable without WebGL, with its authority and state.
@@ -261,5 +300,143 @@ describe('AtlasScene / World', () => {
     )
     await screen.findByTestId('world-view-mock')
     expect(screen.getByRole('button', { name: /Guess/ })).toHaveTextContent('proposed')
+  })
+
+  it('renders signals separately on the globe and in the complete no-WebGL list', async () => {
+    render(
+      <AtlasScene
+        state={readyWithWorld(rooms, [hormuzScope], [vesselSignal])}
+        onNavigate={vi.fn()}
+        view="world"
+        onView={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByTestId('world-view-mock')).toHaveTextContent('scopes:1;signals:1')
+    expect(screen.getByRole('region', { name: 'On the map' })).toHaveTextContent('Strait of Hormuz')
+    const signals = screen.getByRole('region', { name: 'Live signals' })
+    expect(signals).toHaveTextContent('Vessel contact 1')
+    expect(signals).toHaveTextContent('receiver footprint')
+  })
+
+  it('keeps signals visible with the lazy globe absent and gives them no Focus/review action', () => {
+    const onNavigate = vi.fn()
+    render(
+      <AtlasScene
+        state={readyWithWorld(rooms, [hormuzScope], [vesselSignal])}
+        onNavigate={onNavigate}
+        onView={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByTestId('world-view-mock')).toBeNull()
+    const signalRow = screen.getByText('Vessel contact 1').closest('li')
+    expect(signalRow).not.toBeNull()
+    expect(signalRow).not.toHaveTextContent(/confirm|reject|review|focus/i)
+    expect(signalRow?.querySelector('.atlas-row-open')).toBeNull()
+    fireEvent.click(screen.getByText('Vessel contact 1'))
+    expect(onNavigate).not.toHaveBeenCalled()
+  })
+
+  it('shows placement only to an authorized human and refreshes signals plus durable scopes', async () => {
+    const retry = vi.fn()
+    const refreshGeo = vi.fn()
+    const place = vi.spyOn(api, 'placeWorldSignal').mockResolvedValue({
+      ...hormuzScope,
+      id: 'geo_scope:placed-contact',
+      subject: { entity: 'rooms', id: 'room-h', field: vesselSignal.id },
+      label: vesselSignal.label,
+      authority: 'source_reported',
+      revision_action: 'place_signal',
+    })
+    const state = readyWithWorld(rooms, [hormuzScope], [vesselSignal], retry)
+    const { rerender } = render(
+      <AtlasScene
+        state={state}
+        onNavigate={vi.fn()}
+        placementRoomId={null}
+        onGeoChanged={refreshGeo}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: /Place Vessel contact 1/i })).toBeNull()
+
+    rerender(
+      <AtlasScene
+        state={state}
+        onNavigate={vi.fn()}
+        placementRoomId="room-h"
+        onGeoChanged={refreshGeo}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Place Vessel contact 1/i }))
+    await waitFor(() => expect(place).toHaveBeenCalledWith('room-h', vesselSignal.id))
+    expect(retry).toHaveBeenCalledOnce()
+    expect(refreshGeo).toHaveBeenCalledOnce()
+
+    rerender(
+      <AtlasScene
+        state={readyWithWorld(rooms, [{
+          ...hormuzScope,
+          id: 'geo_scope:placed-contact',
+          subject: { entity: 'rooms', id: 'room-h', field: vesselSignal.id },
+          label: vesselSignal.label,
+          authority: 'source_reported',
+          revision_action: 'place_signal',
+        }], [vesselSignal])}
+        onNavigate={vi.fn()}
+        placementRoomId="room-h"
+        onGeoChanged={refreshGeo}
+      />,
+    )
+    expect(screen.getByRole('region', { name: 'On the map' })).toHaveTextContent('Vessel contact 1')
+    // Placement copies the observation; it does not consume or mutate the
+    // process-local provider snapshot. The refreshed projections may carry
+    // both the still-current signal and its new durable scope.
+    expect(screen.getByRole('region', { name: 'Live signals' })).toHaveTextContent('Vessel contact 1')
+  })
+
+  it('keeps another-room signal visible but read-only under the current room token', () => {
+    const place = vi.spyOn(api, 'placeWorldSignal')
+    const otherRoomSignal: WorldSignal = {
+      ...vesselSignal,
+      id: 'world_signal:ais:contact-other',
+      source_id: 'contact-other',
+      room_id: 'room-other',
+      label: 'Other room vessel',
+      provenance: { ...vesselSignal.provenance, source_id: 'contact-other' },
+    }
+    const twoRooms = [
+      ...rooms,
+      node({ id: 'room:room-other', kind: 'room', room_id: 'room-other', title: 'Other room' }),
+    ]
+    render(
+      <AtlasScene
+        state={readyWithWorld(twoRooms, [], [vesselSignal, otherRoomSignal])}
+        onNavigate={vi.fn()}
+        placementRoomId="room-h"
+      />,
+    )
+
+    expect(screen.getByText('Other room vessel')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Place Other room vessel/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /Place Vessel contact 1/i })).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Other room vessel'))
+    expect(place).not.toHaveBeenCalled()
+  })
+
+  it('renders explicit not-configured source state instead of treating empty as zero observations', () => {
+    render(
+      <AtlasScene
+        state={{
+          status: 'ready', retry: vi.fn(),
+          projection: {
+            generated_at: 'x', nodes: rooms, edges: [], scopes: [], signals: [],
+            signal_sources: { status: 'not_configured', sources: [] },
+          },
+        }}
+        onNavigate={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('region', { name: 'Live signals' })).toHaveTextContent('not configured')
   })
 })

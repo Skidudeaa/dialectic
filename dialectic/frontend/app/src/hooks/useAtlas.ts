@@ -45,7 +45,7 @@ export function useAtlas(enabled: boolean): AtlasState {
       setState({ status: 'loading' })
 
       try {
-        const projection = await api.getAtlas()
+        const projection = await api.getAtlas({ signals: true })
         if (requestRef.current !== ticket) return
         setState({ status: 'ready', projection })
       } catch (error: unknown) {

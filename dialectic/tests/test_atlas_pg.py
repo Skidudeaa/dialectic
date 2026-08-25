@@ -28,6 +28,7 @@ from atlas_objects import (
     AtlasService,
 )
 from field_marks import compute_dedup_key
+from world_signals import WorldSignal, WorldSignalSnapshot, WorldSignalStore
 
 TEST_DATABASE_URL = os.environ.get(
     "DIALECTIC_TEST_DATABASE_URL", "postgresql://root@localhost/dialectic_test"
@@ -368,6 +369,52 @@ async def test_a_caller_with_no_memberships_is_an_empty_projection(atlas_world):
     projection = await AtlasService(atlas_world).build(stranger)
     assert projection.nodes == []
     assert projection.edges == []
+
+
+@pytest.mark.asyncio
+async def test_signal_opt_in_uses_the_exact_atlas_eligible_room_fence(atlas_world):
+    now = datetime.now(timezone.utc)
+    store = WorldSignalStore()
+
+    def signal(source_id: str, room_id: UUID) -> WorldSignal:
+        return WorldSignal(
+            id=f"world_signal:ais:{source_id}", provider="ais", source_id=source_id,
+            room_id=room_id, layer="vessels", kind="point",
+            geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+            provenance={
+                "provider": "ais", "acquisition": "adapter:ais",
+                "source_id": source_id, "credit": "AIS provider credit",
+            },
+            source_state="partial", freshness="current",
+            coverage="receiver footprint", observed_at=now - timedelta(minutes=2),
+            retrieved_at=now - timedelta(minutes=1),
+            expires_at=now + timedelta(minutes=10), label=source_id,
+        )
+
+    store.replace(WorldSignalSnapshot(
+        provider="ais", source_state="partial", freshness="current",
+        coverage="receiver footprint", retrieved_at=now,
+        expires_at=now + timedelta(minutes=10),
+        signals=(
+            signal("shared", ROOM_SHARED), signal("amo-only", ROOM_AMO),
+            signal("dan-only", ROOM_DAN),
+        ),
+    ))
+
+    amo = await AtlasService(atlas_world, signal_store=store).build(AMO, include_signals=True)
+    dan = await AtlasService(atlas_world, signal_store=store).build(DAN, include_signals=True)
+
+    assert {signal.source_id for signal in amo.signals} == {"shared", "amo-only"}
+    assert {signal.source_id for signal in dan.signals} == {"shared", "dan-only"}
+    assert amo.signal_sources.sources[0].source_state == "partial"
+    assert amo.signal_sources.sources[0].freshness == "current"
+    assert amo.signal_sources.sources[0].coverage == "receiver footprint"
+
+
+@pytest.mark.asyncio
+async def test_signal_fields_do_not_exist_without_opt_in(atlas_world):
+    projection = await AtlasService(atlas_world).build(AMO)
+    assert set(projection.model_dump()) == {"generated_at", "nodes", "edges", "scopes"}
 
 
 # ---------------------------------------------------------------------------

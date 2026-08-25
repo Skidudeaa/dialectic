@@ -1,8 +1,9 @@
-import { Suspense, lazy, useCallback, useMemo } from 'react'
+import { Suspense, lazy, useCallback, useMemo, useState } from 'react'
 import type { AtlasState } from '../../../hooks/useAtlas.ts'
 import type { AtlasEdge, AtlasNode } from '../../../types/atlas.ts'
 import { isAtlasObjectNode } from '../../../types/atlas.ts'
-import type { GeoScope } from '../../../types/geo.ts'
+import type { GeoScope, WorldSignal, WorldSignalSources } from '../../../types/geo.ts'
+import { api } from '../../../lib/api.ts'
 import { PARTICIPANT_NAME } from '../../../lib/productIdentity.ts'
 import { SceneEmpty, SceneLoading, SceneUnavailable } from '../SceneEmpty'
 import { SourceState } from '../world/SourceState'
@@ -58,6 +59,11 @@ interface AtlasSceneProps {
   view?: string | null
   /** Write a new view through the one navigation writer. */
   onView?: (view: string | null, mode: 'push' | 'replace') => void
+  /** The one room whose capability token is currently installed in api.
+   * Other eligible-room signals stay visible but cannot advertise a write. */
+  placementRoomId?: string | null
+  /** Refresh any room-local durable projection after placement. */
+  onGeoChanged?: () => void
 }
 
 const WorldView = lazy(() => import('../world/WorldView'))
@@ -289,7 +295,110 @@ function OnTheMapGroup({ scopes, nodesById, onNavigate }: {
   )
 }
 
-export function AtlasScene({ state, onNavigate, view = null, onView }: AtlasSceneProps) {
+function SignalRow({ signal, roomTitle, canPlace, onPlaced }: {
+  signal: WorldSignal
+  roomTitle?: string
+  canPlace: boolean
+  onPlaced: () => void
+}) {
+  const [placing, setPlacing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const place = async () => {
+    setPlacing(true)
+    setError(null)
+    try {
+      await api.placeWorldSignal(signal.room_id, signal.id)
+      onPlaced()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not place this signal')
+    } finally {
+      setPlacing(false)
+    }
+  }
+
+  return (
+    <li className="atlas-row world-signal-row" data-kind={signal.kind}>
+      <div className="world-signal-body">
+        <span className="atlas-row-kind">{signal.layer}</span>
+        <span className="atlas-row-title">{signal.label || signal.source_id}</span>
+        <span className="world-signal-meta">
+          <span>{signal.provider}</span>
+          <span>{signal.source_state}</span>
+          <span>{signal.freshness}</span>
+          <span>{signal.coverage}</span>
+          {roomTitle ? <span>{roomTitle}</span> : null}
+        </span>
+        {canPlace ? (
+          <button
+            type="button"
+            className="world-signal-place"
+            disabled={placing}
+            aria-label={`Place ${signal.label || signal.source_id}`}
+            onClick={() => { void place() }}
+          >
+            {placing ? 'Placing…' : 'Place'}
+          </button>
+        ) : null}
+      </div>
+      {error ? <p className="world-signal-error" role="alert">{error}</p> : null}
+    </li>
+  )
+}
+
+/** Ephemeral observations are a separate read-only list, never disguised as
+ * durable GeoScopes and never wired into Focus or review actions. */
+function LiveSignalsGroup({ signals, sources, nodesById, placementRoomId, onPlaced }: {
+  signals: WorldSignal[]
+  sources: WorldSignalSources | undefined
+  nodesById: Map<string, AtlasNode>
+  placementRoomId: string | null
+  onPlaced: () => void
+}) {
+  // A default/older Atlas response did not opt in. Preserve that contract by
+  // rendering no invented source state.
+  if (!sources) return null
+  return (
+    <section className="atlas-group world-signals" aria-label="Live signals">
+      <h3 className="atlas-group-title">Live signals</h3>
+      {sources.status === 'not_configured' ? (
+        <p className="world-note">Live signal providers are not configured.</p>
+      ) : (
+        <>
+          <ul className="world-source-list" aria-label="Signal sources">
+            {sources.sources.map((source) => (
+              <li key={source.provider}>
+                <span>{source.provider}</span>
+                <span>{source.source_state}</span>
+                <span>{source.freshness}</span>
+                <span>{source.coverage}</span>
+              </li>
+            ))}
+          </ul>
+          {signals.length === 0 ? (
+            <p className="world-note">No current signals in your rooms.</p>
+          ) : (
+            <ul className="atlas-list">
+              {signals.map((signal) => (
+                <SignalRow
+                  key={signal.id}
+                  signal={signal}
+                  roomTitle={nodesById.get(`room:${signal.room_id}`)?.title}
+                  canPlace={signal.room_id === placementRoomId}
+                  onPlaced={onPlaced}
+                />
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
+
+export function AtlasScene({
+  state, onNavigate, view = null, onView, placementRoomId = null, onGeoChanged,
+}: AtlasSceneProps) {
   const worldMode = isWorldView(view)
   const decoded = useMemo(() => decodeWorldView(view), [view])
 
@@ -310,7 +419,7 @@ export function AtlasScene({ state, onNavigate, view = null, onView }: AtlasScen
     )
   }
 
-  const { nodes, edges, scopes } = state.projection
+  const { nodes, edges, scopes, signals = [], signal_sources: signalSources } = state.projection
 
   if (nodes.length === 0) {
     return (
@@ -333,6 +442,13 @@ export function AtlasScene({ state, onNavigate, view = null, onView }: AtlasScen
   const { rooms, branchesByRoom, artifactsByBranch, artifactsByRoomOnly } = buildTree(nodes)
   const nodesById = new Map(nodes.map((n) => [n.id, n]))
   const focusScopes = decoded?.roomId ? scopes.filter((s) => s.room_id === decoded.roomId) : null
+  const focusSignals = decoded?.roomId ? signals.filter((s) => s.room_id === decoded.roomId) : null
+  const onSignalPlaced = () => {
+    // useAtlas.retry is loading-safe: it invalidates an in-flight response
+    // before requesting one projection containing both live and durable rows.
+    state.retry()
+    onGeoChanged?.()
+  }
 
   const modes = onView ? (
     <div className="atlas-modes" role="group" aria-label="Atlas mode">
@@ -362,14 +478,23 @@ export function AtlasScene({ state, onNavigate, view = null, onView }: AtlasScen
         <Suspense fallback={<SceneLoading kicker="World" />}>
           <WorldView
             scopes={scopes}
+            signals={signals}
             initialCamera={decoded?.camera ?? null}
             focusScopes={focusScopes}
+            focusSignals={focusSignals}
             onSelect={(scope) => onNavigate(scopeDestination(scope))}
             onCameraSettle={onCameraSettle}
           />
         </Suspense>
       ) : null}
       <OnTheMapGroup scopes={scopes} nodesById={nodesById} onNavigate={onNavigate} />
+      <LiveSignalsGroup
+        signals={signals}
+        sources={signalSources}
+        nodesById={nodesById}
+        placementRoomId={placementRoomId}
+        onPlaced={onSignalPlaced}
+      />
       <ul className="atlas-list atlas-room-list" aria-label="Rooms">
         {rooms.map((room) => (
           <RoomSection
