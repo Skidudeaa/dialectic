@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic authenticated Task 5 acceptance on disposable local state.
+"""Deterministic authenticated World Lens acceptance on disposable local state.
 
 The harness creates a uniquely suffixed disposable database from ``dialectic_test``,
 applies migration 022, seeds one human/room/thread/message, and starts its own
@@ -7,7 +7,7 @@ backend and built-preview processes on spare loopback ports.  The backend is
 the fixture-only app next to this script, which injects a WorldSignal snapshot
 directly into the process.  There is no HTTP snapshot writer.
 
-Evidence is intentionally small: two screenshots and a JSON result ledger are
+Evidence is intentionally small: focused screenshots and a JSON result ledger are
 written beneath a uniquely suffixed ``/tmp/dialectic-world-lens-acceptance-*``.  The disposable DB is
 dropped after both child processes stop, including on failure.
 """
@@ -379,7 +379,8 @@ def open_home_world(page: Page) -> None:
 
 
 def exercise_named_ui_writes(
-    page: Page, access_token: str, fixture_ids: dict[str, str | int],
+    browser: Any, page: Page, access_token: str,
+    fixture_ids: dict[str, str | int],
 ) -> dict[str, str]:
     writes: list[dict[str, str | None]] = []
 
@@ -422,8 +423,8 @@ def exercise_named_ui_writes(
     page.wait_for_timeout(400)
     room_query = urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query)
     check(
-        "room subject destination retains the exact room without invented axes",
-        room_query == {"room": [ROOM_ID]}, page.url,
+        "room subject destination retains the exact room and Atlas scene",
+        room_query == {"room": [ROOM_ID], "scene": ["atlas"]}, page.url,
     )
 
     open_home_world(page)
@@ -482,6 +483,199 @@ def exercise_named_ui_writes(
         "() => document.querySelector('button[disabled]')?.textContent?.trim() === 'Confirm'",
     )
     check("visible Confirm refreshes the Field mark", page.get_by_role("button", name="Confirm").is_disabled())
+
+    # Phase 3 Synapse: the Field mark stays the selected object while its
+    # server-owned live scope becomes the World underlay. Every action below
+    # is read/navigation only; the named write ledger remains unchanged.
+    page.locator(".field-mark-world").click()
+    page.wait_for_function(
+        """({roomId, markId}) => {
+          const query = new URL(location.href).searchParams
+          return query.get('room') === roomId
+            && query.get('scene') === 'atlas'
+            && query.get('view') === `world;room=${roomId}`
+            && query.get('object') === markId
+        }""",
+        arg={"roomId": ROOM_ID, "markId": mark_id},
+    )
+    synapse_query = urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query)
+    check(
+        "Field opens World in the same ordinary room",
+        synapse_query.get("room") == [ROOM_ID]
+        and synapse_query.get("scene") == ["atlas"],
+        page.url,
+    )
+    check(
+        "World preserves the same selected Field object",
+        synapse_query.get("object") == [mark_id], page.url,
+    )
+
+    current_row = page.locator(".world-scope-row", has_text="Ratified and redrawn scope")
+    current_row.wait_for()
+    current_scope_button = current_row.locator(".atlas-row-open")
+    check(
+        "current lineage scope is selected from an older evidence binding",
+        current_scope_button.get_attribute("aria-current") == "true",
+        {"root": placed_id, "evidence": redrawn_id},
+    )
+    overlay = page.get_by_role("region", name="Selected causal evidence")
+    overlay.wait_for()
+    overlay_text = overlay.inner_text()
+    check(
+        "causal overlay names exact Field semantics",
+        all(text in overlay_text for text in (
+            "Ratified and redrawn scope", "Supports",
+            "Shipping chokepoint", "Confirmed",
+        )),
+        overlay_text,
+    )
+    page.wait_for_function(
+        """scopeId => {
+          const entity = window.__dialecticWorld?.entities?.getById(scopeId)
+          const selected = entity?.properties?.selected
+          return selected?.getValue ? selected.getValue() === true : selected === true
+        }""",
+        arg=redrawn_id,
+    )
+    selected_entity = page.evaluate(
+        """scopeId => {
+          const selected = window.__dialecticWorld.entities
+            .getById(scopeId).properties.selected
+          return selected?.getValue ? selected.getValue() : selected
+        }""",
+        redrawn_id,
+    )
+    check("Cesium current-scope entity carries selected=true", selected_entity is True)
+    page.screenshot(path=str(EVIDENCE / "synapse-desktop.png"), full_page=False)
+
+    modes = page.get_by_role("group", name="Atlas mode")
+    modes.get_by_role("button", name="House").click()
+    page.wait_for_function(
+        """({roomId, markId}) => {
+          const query = new URL(location.href).searchParams
+          return document.querySelector('[data-atlas-mode="house"]') !== null
+            && query.get('room') === roomId
+            && query.get('scene') === 'atlas'
+            && query.get('object') === markId
+            && !query.has('view')
+        }""",
+        arg={"roomId": ROOM_ID, "markId": mark_id},
+    )
+    check(
+        "House preserves room, Atlas, and Field Focus identity",
+        page.get_by_role("heading", name=mark_title).count() == 1
+        and current_scope_button.get_attribute("aria-current") == "true",
+    )
+    modes.get_by_role("button", name="World").click()
+    page.wait_for_function(
+        """({roomId, markId}) => {
+          const query = new URL(location.href).searchParams
+          return document.querySelector('[data-atlas-mode="world"]') !== null
+            && query.get('room') === roomId
+            && query.get('scene') === 'atlas'
+            && query.get('object') === markId
+            && query.get('view')?.startsWith('world')
+        }""",
+        arg={"roomId": ROOM_ID, "markId": mark_id},
+    )
+    page.wait_for_function(
+        """scopeId => {
+          const selected = window.__dialecticWorld?.entities
+            ?.getById(scopeId)?.properties?.selected
+          return selected?.getValue ? selected.getValue() === true : selected === true
+        }""",
+        arg=redrawn_id,
+    )
+    check(
+        "World restores the same current-scope highlight and Focus",
+        page.get_by_role("heading", name=mark_title).count() == 1,
+    )
+
+    page.get_by_role("region", name="Selected causal evidence").get_by_role(
+        "button", name="Supports",
+    ).click()
+    page.wait_for_function(
+        "expected => new URL(location.href).searchParams.get('object') === expected",
+        arg=mark_id,
+    )
+    check(
+        "causal relation opens the exact Field mark while World stays rendered",
+        page.locator('[data-atlas-mode="world"]').count() == 1
+        and page.get_by_role("heading", name=mark_title).count() == 1,
+    )
+
+    page.go_back()
+    page.wait_for_function(
+        "expected => new URL(location.href).searchParams.get('object') === expected",
+        arg=mark_id,
+    )
+    check(
+        "Back restores exact World object and current-scope highlight",
+        page.locator('[data-atlas-mode="world"]').count() == 1
+        and current_scope_button.get_attribute("aria-current") == "true",
+    )
+    page.go_back()
+    page.wait_for_selector('[data-atlas-mode="house"]')
+    check(
+        "Back restores exact House room and object axes",
+        urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query).get("object") == [mark_id]
+        and urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query).get("room") == [ROOM_ID],
+        page.url,
+    )
+    page.go_forward()
+    page.wait_for_selector('[data-atlas-mode="world"]')
+    page.wait_for_function(
+        """scopeId => {
+          const selected = window.__dialecticWorld?.entities
+            ?.getById(scopeId)?.properties?.selected
+          return selected?.getValue ? selected.getValue() === true : selected === true
+        }""",
+        arg=redrawn_id,
+    )
+    check(
+        "Forward restores exact World room, object, and highlight",
+        urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query).get("object") == [mark_id]
+        and urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query).get("room") == [ROOM_ID],
+        page.url,
+    )
+
+    synapse_url = page.url
+    failed_synapse = browser_context(browser, width=1280, webgl=False)
+    failed_synapse_page = failed_synapse.new_page()
+    watch_page(failed_synapse_page)
+    login(failed_synapse_page)
+    failed_synapse_page.goto(synapse_url, wait_until="networkidle")
+    fallback_row = failed_synapse_page.locator(
+        ".world-scope-row", has_text="Ratified and redrawn scope",
+    )
+    fallback_row.wait_for()
+    fallback_binding = failed_synapse_page.get_by_role(
+        "region", name="Selected causal evidence",
+    )
+    fallback_binding.wait_for()
+    fallback_text = fallback_binding.inner_text()
+    check(
+        "failed WebGL preserves Synapse Focus, selection, and exact semantics",
+        failed_synapse_page.get_by_role("heading", name=mark_title).count() == 1
+        and fallback_row.locator(".atlas-row-open").get_attribute("aria-current") == "true"
+        and all(text in fallback_text for text in (
+            "Supports", "Shipping chokepoint", "Confirmed",
+        )),
+        fallback_text,
+    )
+    fallback_scope_button = fallback_row.locator(".atlas-row-open")
+    fallback_visited = tab_to(failed_synapse_page, fallback_scope_button)
+    check(
+        "failed WebGL keeps the full selected-scope list keyboard reachable",
+        fallback_scope_button.evaluate(
+            "element => element === document.activeElement",
+        ),
+        {"tab_stops": len(fallback_visited), "last": fallback_visited[-1]},
+    )
+    failed_synapse_page.screenshot(
+        path=str(EVIDENCE / "synapse-webgl-failure.png"), full_page=False,
+    )
+    failed_synapse.close()
 
     page.goto(
         f"{BASE}/?room={ROOM_ID}&scene=field&object={urllib.parse.quote(redrawn_id)}",
@@ -557,7 +751,7 @@ def exercise_browser(browser: Any) -> None:
     fixture_ids = seed_subject_scopes(page, auth["accessToken"])
     page.reload(wait_until="networkidle")
     check("API fixture seed refreshes only the two unrelated subject scopes", page.locator(".world-signal-row").count() == 1 and page.locator(".world-scope-row").count() == 2)
-    ids = exercise_named_ui_writes(page, auth["accessToken"], fixture_ids)
+    ids = exercise_named_ui_writes(browser, page, auth["accessToken"], fixture_ids)
 
     open_home_world(page)
 

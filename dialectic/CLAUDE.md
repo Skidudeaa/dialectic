@@ -86,6 +86,27 @@ silence follow-ups), `DIALECTIC_TOOLS_ENABLED`, `DIALECTIC_VISION_ENABLED`,
 | `transport/websocket.py` | WebSocket connection lifecycle |
 | `models.py` | Pydantic data models for all entities |
 
+### World Synapse
+
+World Lens is an embodiment of Dialectic evidence, not a separate globe app.
+Atlas House and World are available inside an ordinary room and share the one
+URL-authoritative `room` / `scene` / `view` / `object` navigation transaction
+with Field and Focus. Switching House/World preserves the selected object;
+changing rooms deliberately clears the prior object and camera.
+
+`GeoScope` remains append-only geographic authority. Enhanced Atlas projects
+each live scope with its immutable `lineage_root_id`, so a root, historical
+revision, current redraw, or causal Field mark resolves to the same current
+geometry without client-side lineage inference. `field_marks.py` owns the
+shared bounded `CausalGeoBinding` DTO; enhanced Atlas, Field, Focus, scope
+review, and participant `world_query` consume that same identity and semantic
+relation. Default Atlas remains the four-key source-compatible projection.
+
+Causal meaning is rendered as explicit DOM text (`scope -> relation -> thesis
+node -> review state`) and never as a geographic ray. A map connector is
+allowed only when both endpoints are accepted geographic coordinates; a
+scope-to-thesis relationship is semantic evidence, not measured geography.
+
 ### Trading Integration
 
 tradingDesk pushes thesis graph state to `POST /rooms/{room_id}/trading/snapshot`. On each push:

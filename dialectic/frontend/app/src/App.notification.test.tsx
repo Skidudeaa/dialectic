@@ -67,14 +67,21 @@ vi.mock('./hooks/useAtlas.ts', () => ({
 }))
 vi.mock('./components/workspace/focus/FocusSurface.tsx', () => ({
   FocusSurface: ({
-    onGeoChanged, onOpenWorld, worldBindings = [],
+    onGeoChanged, onOpenWorld, onReview, worldBindings = [],
   }: {
     onGeoChanged: () => void
     onOpenWorld?: (scopeObjectId: string, selectedObject?: string) => void
+    onReview: (markId: string, request: { action: 'confirm' }) => Promise<void>
     worldBindings?: CausalGeoBinding[]
   }) => (
     <>
       <button type="button" onClick={onGeoChanged}>Complete scope write</button>
+      <button
+        type="button"
+        onClick={() => void onReview('field_mark:causal', { action: 'confirm' })}
+      >
+        Complete Field review
+      </button>
       {worldBindings[0] && onOpenWorld ? (
         <button
           type="button"
@@ -409,6 +416,16 @@ describe('world projection refresh', () => {
 
     expect(projections.refreshGeo).toHaveBeenCalledOnce()
     expect(projections.refreshAtlas).toHaveBeenCalledOnce()
+  })
+
+  it('refreshes causal Atlas semantics when a Field review finishes', async () => {
+    vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
+    vi.spyOn(api, 'postFieldReview').mockResolvedValue({} as never)
+    render(<ChatLayout nav={navigation('', 'field_mark:causal')} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Complete Field review' }))
+
+    await waitFor(() => expect(projections.refreshAtlas).toHaveBeenCalledOnce())
   })
 
   it('places an Atlas-visible signal whose saved room capability is beyond index 200', async () => {

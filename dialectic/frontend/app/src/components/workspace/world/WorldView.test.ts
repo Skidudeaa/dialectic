@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type * as Cesium from 'cesium'
 import type { GeoScope, WorldSignal } from '../../../types/geo.ts'
-import { addScope } from './WorldView.tsx'
 import { addSignal } from './worldSignals.ts'
+import { addScope } from './worldScopeEntities.ts'
 
 const contact: WorldSignal = {
   id: 'world_signal:ais:contact-1',

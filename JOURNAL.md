@@ -151,3 +151,6 @@
 [2026-08-25] moved Atlas through the room instead of out of it — ordinary rooms now admit the same Atlas scene, House and World preserve Focus identity, and a room change deliberately clears the prior object and camera
 [2026-08-25] rendered Synapse as one selected causal object across House and World — current scope, immutable lineage root, and Field mark all highlight the same real geometry and disclose the shared bounded evidence DTO with honest omission state
 [2026-08-25] joined Field and Focus to the same live World evidence door — both preserve the selected Field mark while the server-owned current scope highlights underneath, and room-local scope review rejects cross-room Atlas bindings
+[2026-08-25] refreshed enhanced Atlas after Field review — World causal text now changes from provisional to confirmed or contested in the same completed review transaction instead of retaining a stale projection
+[2026-08-25] kept durable-scope Cesium construction inside the lazy World chunk — a dedicated non-component module preserves Fast Refresh and selection unit tests without loading Cesium into House
+[2026-08-25] fused World and Dialectic through one causal Synapse projection — room, view, object, Focus, Field, and participant sight now preserve canonical scope lineage and exact Field meaning without inventing geography or a second authority

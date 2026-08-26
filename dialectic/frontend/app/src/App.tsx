@@ -920,6 +920,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const handleFieldReview = async (markId: string, request: FieldReviewRequest) => {
     await api.postFieldReview(currentRoom.id, bareMarkId(markId), request)
     if (fieldMarks.status === 'ready') fieldMarks.refresh()
+    atlas.retry()
   }
 
   const sceneContent = {
