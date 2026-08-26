@@ -1047,3 +1047,18 @@ client of it**, and both must stay deployed:
   `/root/DwoodAmo/trading` breaks predictions, stakes mirroring, live
   quotes/what-ifs, and thesis books in every trading room. Treat the pair
   as one deployment unit. (See also `/root/SERVICE_INVENTORY.md`.)
+
+## Amendment 2026-08-25 — production World Synapse (amend-beside)
+
+The `World Synapse` source contract above is active in production from
+application commit `85fed38`. Migration 022 is applied; `dialectic.service`
+runs the repository checkout directly; the selected PWA release is
+`20260826T032052Z-world-synapse-85fed38`. Public authenticated acceptance
+passed 10/10, including zero Cesium bytes in House, one lazy World bundle,
+canonical Focus, complete provenance, and the collapsed full-list no-WebGL
+path. Root `PLAN.md` is the zero-context runtime/rollback handoff.
+
+The tool registry is 23 (`world_query` plus the earlier 22). No live signal
+provider is configured. Do not interpret the empty `WorldSignalStore` as a
+failed feed or as confirmed-empty evidence; provider activation is a separate
+Phase 4 decision.

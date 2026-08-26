@@ -1,198 +1,299 @@
-# World Lens truth-before-spectacle — zero-context handoff
+# God's Eye x Dialectic — live production handoff
 
-Current **2026-08-25**. Keep source, checkout, publication, runtime, served
-bytes, activation, and human qualification separate. Do not call them all
-“deployed.”
+Current **2026-08-25 America/Chicago**. This is a zero-context handoff for the
+production repository at `/root/DwoodAmo`. God's Eye means the World Lens / World
+Synapse program, not an Epic EHR integration.
 
-## Truth ledger
+## CURRENT PRODUCTION TRUTH
 
-| Surface | Current truth |
+| Surface | Verified state |
 |---|---|
-| Production checkout | `/root/DwoodAmo` is out of scope and intentionally untouched. |
-| Isolated worktree | `/root/DwoodAmo/.worktrees/world-lens-truth-before-spectacle` |
-| Branch | `codex/world-lens-truth-before-spectacle` |
-| Safe baseline | `origin/codex/world-lens-pre-phase2.5-20260825` = `3eabd4a` preserves prior Phase 0–2 source off-host. |
-| Task commits | Plan `a690fe6`; lineage `91014b8..808e17e`; review `fef716a..32e8333`; causal Field `0d2ae3c..472cc5a`; WorldSignal `48e9288..3dd9089`; participant sight/docs `e751968` + `7906e21`; independent-review closure `0eadc74..5172b0e`; frontend gate `9824e92`; exact-navigation qualification `806a7a6`; room-fence hardening `cd74b15`. |
-| Push/publication | **Not pushed** unless later evidence says otherwise. The safety ref is not publication of this branch. |
-| Production migration 022 | **Not applied.** Exercised only on isolated/test PostgreSQL. |
-| Backend runtime | **Not restarted or loaded from this worktree.** |
-| Frontend served bytes | **No release flip/nginx reload.** A local build is not served/public truth. |
-| Public browser | **Unverified for this branch.** Droplet-local Playwright is isolated proof, not public delivery or physical UAT. |
-| Providers | **None activated.** `world_signal_store` starts empty; no adapter, poller, public writer, or fixture data. |
-| Geographic memory | **Closed.** No sample/replay table or recorder. |
-| Human qualification | Physical-device and one-week ordinary-use gates remain pending. |
+| Source | `master`; live application code `85fed388444abfaea2cabe50d1af41a902fa05c0`. Resolve the later documentation-only handoff commit with `git log -1 --format=%H -- PLAN.md`. |
+| Publication | `master` is intended to be pushed to `origin/master` after this handoff is committed; verify equality before relying on it. |
+| Database | Migration `022_geo_scope_lineage.sql` applied to production. Six existing scopes survived. Columns, check, unique-successor index, and reject-UPDATE/DELETE triggers verified. |
+| Database backup | `/var/backups/dialectic/20260826T031404Z-5f50c122-world-synapse-before.dump`, SHA-256 `1dc4ffdb7988efb8f3397162abfedb96620cba81cbdacfb4d7c92e9fd210f5af`, PostgreSQL custom dump, mode 600. |
+| Backend | `dialectic.service`, checkout `/root/DwoodAmo/dialectic`, PID `1941516`, active since `2026-08-25 22:20:53 CDT`; DB, Redis, scheduler, and public/local health green. |
+| Activation | `DIALECTIC_WORLD_ENABLED` is unset and its code default is ON; the live registry contains `world_query` and `propose_geo_scope`; runtime inspection returned `world_tools_enabled=True`. |
+| Frontend | `/var/www/dialectic-current` -> `/var/www/dialectic-releases/20260826T032052Z-world-synapse-85fed38`; nginx reloaded and active. |
+| Served hashes | `index.html` `6f3babc16c004037dd5fca07f5be3debca4fb58aa48f9d17808556f4b59e9dcc`; `sw.js` `791bb5375305dce6b89d321f88ad212cae06be375d9b52b4fe9054325b068058`. Public bytes matched the selected release. |
+| Public browser | Authenticated Chromium against `https://dialectic.somacura.org`: 10/10 checks passed; House loaded no World/Cesium bytes, World fetched one lazy JS bundle, five real Hormuz scopes and all provenance rendered, canonical Focus opened, failed WebGL retained the complete list/provenance and collapsed the canvas, no page errors/HTTP 500s. |
+| Public evidence | `/var/backups/dialectic/20260826T032052Z-world-synapse-85fed38-public/`; qualified images are `public-world-globe-settled.png` and `public-world-webgl-failure.png`; `results.json` is the machine ledger. |
+| Production content | Five live Hormuz scopes project publicly. One real geographic `evidence_attachment` Field mark links a reading to the Persian Gulf. There are currently **zero** geography-to-thesis-node causal bindings; no fake binding was created for qualification. |
+| Providers | CesiumJS, OSM raster, optional Re:Earth terrain, and Natural Earth reference geometry are active under the provider ledger. No live `WorldSignal` provider adapter, poller, or sample/replay store is configured. |
+| Human qualification | Production delivery is proven. Physical phone/tablet/desktop UAT and one week of ordinary Hormuz use remain unqualified. |
 
-## What exists on this branch
+The production deployment manifest is
+`/var/backups/dialectic/20260826T032052Z-world-synapse-85fed38.manifest`.
 
-1. Migration `dialectic/migrations/022_geo_scope_lineage.sql` and fresh schema
-   enforce append-only `GeoScope`, one successor, typed actions, and atomic
-   scope/event writes.
-2. House/World/Focus share a root-stable scope inspector with exact
-   room/reading/message destinations and message-thread retention.
-3. Human-only causal Field binding connects accepted live geography to a
-   current authenticated thesis node. Field adjudication stays append-only;
-   Builder remains the sole thesis writer.
-4. `dialectic/world_signals.py` owns bounded immutable snapshots. Atlas opt-in
-   projection and bodyless human placement keep observations ephemeral until a
-   person copies current same-room server bytes into a durable scope.
-5. `world_query` composes `GeoScopeService`, scope-specific bounded
-   `FieldMarkService` semantic roles with exact total/omitted/completeness,
-   and `WorldSignalStore`; the causal owner query accepts an uncapped valid
-   lineage and obtains candidates plus the exact total in one SQL statement.
-   Output remains exact-room, read-only, bounded, and preserves
-   not-configured/unavailable/unknown/empty/zero. `propose_geo_scope` remains
-   the sole participant geography writer and creates a reviewed proposal only.
-6. Provider envelope expiry overrides every child signal; both snapshots and
-   signals require `observed_at <= retrieved_at < expires_at` when those
-   optional clocks exist. ScopeReview renders provider, acquisition, source
-   ID, exact URL, and credit for current and every historical revision.
+## DECISIONS WITH RATIONALE
 
-## Exact local verification
+1. **God's Eye is Dialectic's sensory body, not a second application.**
+   Rejected: iframe, fork, microfrontend, or separate globe workbench. It lost
+   because it would split object identity, navigation, authority, annotations,
+   participant state, and mobile fallback.
+2. **House and World are two views of one Atlas projection.** Rejected: make
+   World the universal home screen. It lost because geography is not meaningful
+   for every room and House is the complete accessible authority.
+3. **One canonical object identity crosses House, World, Focus, Field, URLs,
+   and participant results.** Rejected: renderer-owned marker IDs. It lost
+   because they cannot preserve lineage, review, deep links, or room fences.
+4. **Geographic authority is append-only lineage.** Rejected: UPDATE/DELETE
+   convenience. It lost because historical evidence and the decision record
+   must remain reproducible; migration 022 now enforces this in PostgreSQL.
+5. **Causal meaning is a Field-owned semantic relation.** Rejected: infer map
+   rays from proximity, text similarity, or model confidence. It lost because a
+   thesis node has no geographic coordinate and visual proximity is not causal
+   evidence.
+6. **The authority ladder is observation/proposal -> human placement -> durable
+   GeoScope -> explicit Field binding -> human review -> optional Builder edit.**
+   Rejected: provider or model auto-write into geography/thesis. It lost because
+   it collapses observation, interpretation, and authority.
+7. **Cesium is genuinely lazy and excluded from the PWA precache.** Rejected:
+   Rollup manual Cesium chunk ownership. It lost because it introduced eager
+   shell preload, a circular lazy graph, and a 495 KB service-worker burden.
+   `scripts/verify-lazy-cesium.mjs` now fails the production build on regression.
+8. **Provider signals remain ephemeral until explicitly placed.** Rejected:
+   store every tick as geographic memory. It lost because provider terms,
+   retention, coverage, replay, privacy, and ordinary-use value are unresolved.
+9. **No live signal provider was activated in this wave.** Rejected: add AIS or
+   an easy decorative feed to make the globe feel alive. It lost because AIS
+   lacks adequate terms/SLA/replay and an unselected feed is spectacle without
+   a named causal decision.
+10. **Production proof and human qualification remain separate.** Rejected:
+    call a green deployment ordinary-use success. It lost because public bytes
+    prove delivery, not whether the instrument changes Amo and Dan's reasoning.
+
+## DO-NOT-RELITIGATE LIST
+
+- Do not rebuild or embed the upstream God's Eye View app. The approved
+  architecture ports bounded rendering/lifecycle patterns into Dialectic's
+  existing owners.
+- Do not add a second router, object store, annotation table, agent persona, or
+  source-state vocabulary. `useRoomNavigation`, `GeoScope`, Field, the existing
+  participant, and the evidence vocabulary are settled owners.
+- Do not weaken migration 022's UPDATE/DELETE rejection or one-successor law.
+  Room deletion has no product contract; design tombstones/retention before
+  adding one instead of erasing authority by cascade.
+- Do not infer coordinates from prose or allow an LLM/provider to create
+  authoritative geometry. `propose_geo_scope` resolves only existing named
+  geometry and remains human-reviewed.
+- Do not convert unavailable, partial, stale, rate-limited, expired, or
+  unconfigured source state into empty or zero.
+- Do not auto-edit the thesis from a map interaction, signal, watch, or score.
+  Builder remains the sole thesis writer.
+- Do not make Cesium part of the shell or service-worker precache. Users who
+  never open World pay no globe JS/GPU cost.
+- Do not treat a dead globe as loss of evidence. The complete DOM list,
+  provenance, selection, Focus, and actions remain usable without WebGL.
+- Do not target `dialectic/deploy/dialectic.service` or `/opt/dialectic/current`
+  on this host. The installed unit is `/etc/systemd/system/dialectic.service`
+  and runs the production git checkout directly.
+- Do not fabricate production Field bindings or reviews for a demo. A real
+  causal mark must express a real human judgment through the visible product.
+- Do not treat loopback browser proof as physical-device UAT or one-week use.
+
+## OPEN QUESTIONS — ASK BEFORE DECIDING
+
+1. **First Sense provider:** which exact Hormuz thesis question and source can
+   change a decision? AISStream remains closed pending terms/license,
+   redistribution, outage, replay, and slow-consumer decisions. OpenSky needs a
+   written agreement. FIRMS needs a MAP_KEY plus exact dataset and causal wedge.
+   USGS is technically viable but thesis-unselected.
+2. **World Memory:** whether any provider observation may be retained, for how
+   long, under which privacy/license class, and with what deletion/export
+   policy. Do not add a sample table before this ruling.
+3. **First real causal binding:** which accepted Hormuz scope genuinely
+   supports, challenges, or contextualizes which current thesis node. The owner
+   must make this judgment in the product; do not infer or seed it.
+4. **Physical qualification:** who will execute iPhone/iPad/desktop installed-
+   PWA/browser UAT and where its evidence ledger belongs.
+5. **Phase 4 activation:** explicit owner approval after the selected layer
+   passes source terms, coverage/absence, cost, bounded-failure, list fallback,
+   and one-week protocol design.
+6. **Room retirement:** tombstone and geographic evidence retention/export
+   semantics before any room-deletion route or direct operation is introduced.
+
+## REPO / ENVIRONMENT ORIENTATION
+
+### Canonical product and design
+
+- `docs/superpowers/specs/2026-08-25-gods-eye-dialectic-fusion-program-design.md`
+  — Siamese-twin contract and Phases 3–9.
+- `docs/WORLD_LENS_VISION.md` — product direction and non-negotiable authority,
+  provenance, performance, and accessibility boundaries.
+- `docs/WORLD_PROVIDERS.md` — source-specific terms and activation ledger.
+- `docs/superpowers/qualification/2026-08-25-phase-3-world-synapse.md` — source,
+  disposable-browser, production, and public evidence ledger.
+
+### Backend owners
+
+- `dialectic/migrations/021_geo_scopes.sql` and
+  `dialectic/migrations/022_geo_scope_lineage.sql` — geographic storage and
+  immutable revision law; `dialectic/schema.sql` is the fresh-DB baseline.
+- `dialectic/geo_scopes.py`, `dialectic/api/geo.py` — scope projection and the
+  human revision door.
+- `dialectic/field_marks.py`, `dialectic/api/field.py` — causal binding DTO,
+  room/thesis validation, append-only review.
+- `dialectic/atlas_objects.py`, `dialectic/api/atlas.py` — viewer-fenced House /
+  enhanced World projection.
+- `dialectic/world_signals.py`, `dialectic/api/world_signals.py` — bounded
+  ephemeral signal owner and human placement. It intentionally starts empty.
+- `dialectic/llm/world.py`, `dialectic/llm/tools.py` — `world_query` read sight
+  and `propose_geo_scope` reviewed proposal path.
+
+### Frontend owners
+
+- `dialectic/frontend/app/src/hooks/useRoomNavigation.ts` — sole destination
+  writer for room/scene/view/object/camera.
+- `dialectic/frontend/app/src/components/workspace/scenes/AtlasScene.tsx` —
+  House list, World shell, selection, causal DOM overlay, no-WebGL fallback.
+- `dialectic/frontend/app/src/components/world/WorldView.tsx` — lazy Cesium
+  renderer; presentation only.
+- `dialectic/frontend/app/src/components/focus/FocusWorld.tsx` — lineage,
+  provenance, review, placement, and Field doors.
+- `dialectic/frontend/app/scripts/verify-lazy-cesium.mjs` and `vite.config.ts` —
+  emitted-build enforcement for shell/SW isolation.
+
+### Runtime
+
+- Backend unit: `/etc/systemd/system/dialectic.service`; loopback `127.0.0.1:8002`.
+- Public origin: `https://dialectic.somacura.org`.
+- Frontend releases: `/var/www/dialectic-releases`; selected by
+  `/var/www/dialectic-current`.
+- Environment: `dialectic/.env`, never commit or print it.
+- Legacy/dead trap: checked-in `dialectic/deploy/dialectic.service` targets
+  nonexistent `/opt/dialectic/current`; do not use it.
+- Frozen/dead frontend paths: root mobile packages and legacy static frontend
+  are not the production reach surface; the React PWA is.
+
+### Invariants
+
+- Every query repeats authenticated viewer/room fences server-side.
+- Root/historical/current scope IDs resolve to one current live lineage object.
+- Scope, successor, review, and event writes remain atomic and append-only.
+- Provider credentials and inaccessible geometry never enter browser bytes,
+  URLs, screenshots, or participant context.
+- Default Atlas retains its compatibility shape; causal/signal payloads remain
+  enhanced opt-in projection fields.
+- Renderer failure may remove only spatial presentation, never evidence truth.
+
+## CONTINUED PROGRAM — EPIC IN THE ACTUAL SENSE
+
+Execute only after the preceding phase's hard gate; do not collapse these into
+one provider-first spectacle push.
+
+1. **Phase 4 — First Sense:** one bounded provider for one Hormuz decision,
+   truthful state/freshness/coverage, explicit human placement, seven-day
+   value/error ledger.
+2. **Phase 5 — Causal Airspace:** deterministic belief weather, drillable
+   evidence constellations, participant-directed cited tours, and a Living
+   World Brief that reports only causally material change.
+3. **Phase 6 — Time and World Memory:** separately approved immutable capture,
+   synchronized world-time/belief-time replay, and exact decision retrospectives.
+4. **Phase 7 — Competing Futures:** precommitted geographic signatures,
+   falsification watches, deterministic reality comparisons, human-adjudicated
+   scorecards, never automatic thesis mutation.
+5. **Phase 8 — World Echoes:** viewer-fenced cross-room causal implications and
+   multi-room briefs with zero inaccessible-room leakage.
+6. **Phase 9 — Command and Embodiment:** shared object/camera command, voice
+   through the same typed destinations, wall-scale Dark Roast command deck, then
+   evaluate spatial computing as a renderer—not a new authority surface.
+
+The endpoint is not “more dots.” It is an inspectable living causal world where
+every observation answers where it came from, how old it is, what claim it bears
+on, who accepted that meaning, what would falsify it, and what was believed at
+the moment of decision.
+
+## VERIFICATION
+
+### Source and publication
 
 ```bash
-cd /root/DwoodAmo/.worktrees/world-lens-truth-before-spectacle/dialectic
-DIALECTIC_TEST_DATABASE_URL=postgresql://root@localhost/dialectic_test \
-  python -m pytest -q tests/
-python -m pytest -q \
-  tests/test_world_tools.py tests/test_tools_registry.py tests/test_prompts.py
-psql postgresql://root@localhost/dialectic_test -v ON_ERROR_STOP=1 \
-  -f migrations/022_geo_scope_lineage.sql
+cd /root/DwoodAmo
+git status --short
+git rev-parse HEAD
+git fetch origin master
+git rev-list --left-right --count origin/master...HEAD
+git diff --check
+```
 
+Pass: only known unrelated untracked paths remain; after the authorized push,
+the divergence is `0 0` and `origin/master` equals `HEAD`.
+
+### Database authority
+
+```bash
+cd /root/DwoodAmo
+sha256sum dialectic/migrations/022_geo_scope_lineage.sql \
+  /var/backups/dialectic/20260826T031404Z-5f50c122-world-synapse-before.dump
+sudo -u postgres pg_restore --list \
+  /var/backups/dialectic/20260826T031404Z-5f50c122-world-synapse-before.dump \
+  >/dev/null
+```
+
+Expected migration hash:
+`8f6987ef923ac18eea4455abf72e5b6bdd7c3005432593487b554fff4fcb32a3`.
+Inspect production `geo_scopes` with the application `DATABASE_URL` and verify
+the 022 columns, check, one-successor index, reject UPDATE trigger, and reject
+DELETE trigger. Never test those triggers by mutating production rows.
+
+### Runtime and public bytes
+
+```bash
+systemctl is-active dialectic nginx
+systemctl show dialectic --property=MainPID,ActiveEnterTimestamp,SubState
+curl -fsS http://127.0.0.1:8002/health
+curl -fsS https://dialectic.somacura.org/health
+readlink -f /var/www/dialectic-current
+sha256sum /var/www/dialectic-current/index.html /var/www/dialectic-current/sw.js
+curl -fsS https://dialectic.somacura.org/ | sha256sum
+curl -fsS https://dialectic.somacura.org/sw.js | sha256sum
+journalctl -u dialectic --since '2026-08-25 22:20:53' --no-pager
+```
+
+Pass: both services active; health reports DB/Redis connected and scheduler
+fresh; PID is nonzero; selected release and public/local hashes match; no new
+ERROR, traceback, exception, or HTTP 500 appears.
+
+### Code gates
+
+```bash
+cd /root/DwoodAmo/dialectic
+DIALECTIC_TEST_DATABASE_URL=postgresql://root@localhost/dialectic_test \
+  python3 -m pytest tests/ -q
 cd frontend/app
 npm test -- --run
 npm run lint
 npm run build
-
-cd ../../../
-python docs/superpowers/acceptance/2026-08-25-world-lens-truth-acceptance.py
-git diff --check
 ```
 
-These PostgreSQL guards must execute, not skip:
+Last full results: backend `2125 passed`; frontend `580 passed`; lint passed;
+production build passed; emitted lazy-Cesium gate passed. Re-run before changing
+application behavior, not merely for a documentation-only commit.
 
-```bash
-cd dialectic
-DIALECTIC_TEST_DATABASE_URL=postgresql://root@localhost/dialectic_test \
-  python -m pytest -q \
-    tests/test_geo_scopes_pg.py tests/test_field_marks_pg.py \
-    tests/test_field_causal_concurrency_pg.py \
-    tests/test_field_origination_pg.py tests/test_world_signals.py \
-    tests/test_atlas_pg.py
-```
+### Public browser and human use
 
-The historical pre-integration frontend gate was one failing changelog test
-and two lint errors in `MessageList.tsx` and `HomeActivityPulse.tsx`.
-`9824e92` closed all three without weakening their product contracts: the
-changelog test selects a release that actually carries a glossary marker,
-jump-miss truth derives from the loaded page, and relative-time formatting is
-a shared non-component helper.
+Machine proof lives in
+`/var/backups/dialectic/20260826T032052Z-world-synapse-85fed38-public/results.json`.
+Re-run public authenticated acceptance after any served-code change. Physical
+qualification must record device/OS/browser or installed PWA, viewport,
+network, selected release hash, UTC time, visible sequence, screenshots, page
+errors, and failures. One-week qualification must name the causal decision each
+layer changed—or `none`—every day.
 
-Fresh exact-code-head qualification on `cd74b15`:
+### Definition of done
 
-- backend `2120 passed`;
-- explicit PostgreSQL guard slice `147 passed`, with no skips;
-- frontend `562 passed` across 62 files;
-- full frontend lint passed;
-- production frontend build and service-worker build passed;
-- authenticated disposable-database browser/migration harness `50/50 passed`,
-  evidence `/tmp/dialectic-world-lens-acceptance-1819868_563643193`;
-- independent room-fence review of `806a7a6..cd74b15`: 0 Critical,
-  0 Important, 0 Minor.
+The Phase 3 production wave is done when source is pushed, migration 022 and its
+backup are verified, the restarted backend is healthy with tools enabled, the
+selected public PWA hashes match, authenticated public acceptance passes House,
+World, Focus, provenance, laziness, and failed-WebGL contracts, and every
+remaining provider/physical/human-use gate is stated as open rather than implied.
 
-The final browser run exercised visible Place/Ratify/Redraw/Add to Field/
-Confirm/Supersede writes in order with the exact room token. It measured 44 px
-Place and 12 px Place/error/metadata text at 390 px, collapsed failed WebGL to
-a zero-height canvas, reached the full text list after 17 real Tab stops, and
-observed no page errors, HTTP 500s, reset markers, or unexplained ASGI
-exceptions. The only ASGI exception was the harness-classified browser-context
-WebSocketDisconnect 1001 during teardown. Retained desktop/failure and
-390 px/reduced-motion screenshots were visually inspected.
+The whole fusion program is not done until Phases 4–9 each pass their own
+provider, retention, causality, privacy, accessibility, and ordinary-use gate.
 
-## Remaining operational caveat — explicit, not lost
+## CONFLICT RULE
 
-The Task 1–4 deferred correctness gaps are closed across `160a92e` and
-`8252760`: `160a92e` closes route-token and serialized-lineage coverage,
-complete per-revision provenance, expired binding/load semantics, strict
-provider chronology, the 44 px Place target, and 12 px signal/source metadata;
-`8252760` closes the 12 px Place and visible placement-error text floor.
-`cd74b15` additionally prevents manually malformed cross-room successor or
-review rows from adjudicating an in-room causal binding.
+If implementation reality contradicts this plan, the builder flags the contradiction and stops — no silent improvisation, no quiet re-planning.
 
-The acceptance harness gives each run a unique database and evidence path.
-Its loopback ports are selected by binding to port zero, then releasing that
-socket before the child process binds; this leaves a small time-of-check/time-
-of-use collision window and is **not collision-proof**. Serialize or retry a
-local acceptance run if another process takes a selected port. A true socket
-handoff is deferred rather than overstated as current evidence.
-
-Migration 021/schema declare `geo_scopes.room_id ... ON DELETE CASCADE`, while
-migration 022 deliberately rejects every GeoScope DELETE. A room delete that
-owns geographic evidence would therefore fail rather than erase authority.
-There is no room-deletion product route in this repository, so this wave does
-not weaken the append-only trigger or fabricate deletion semantics. Before any
-future room-deletion feature, design room tombstones and an explicit evidence
-retention/export policy; treat direct room deletion as an operations caveat.
-
-## Physical-device protocol — pending
-
-Use the reachable public origin after a separately authorized release, never
-localhost/mosh/droplet Playwright. Record device/OS, installed-PWA/browser,
-viewport, network, release asset hash, and UTC time. On iPhone, iPad, and one
-desktop:
-
-1. cold-open House and enumerate all scopes/signals without World/WebGL;
-2. House -> World -> House, Back/Forward, and a shared `world;room=<uuid>` URL;
-3. open room/reading/message scope history; verify exact branch/message;
-4. ratify, redraw, supersede; reload and verify one successor/event per act;
-5. create supports/challenges/context marks; confirm, contest, correct; verify
-   Builder opens the bound book but no automatic thesis edit occurs;
-6. inspect a read-only signal, place it, verify ephemeral and durable rows stay
-   distinct, then refresh Atlas/room projections;
-7. repeat at 390px, keyboard-only, reduced motion, offline/reconnect, and
-   failed/no-WebGL; the complete text list must remain usable;
-8. retain screenshots, URLs, API responses, geometry, row/event counts, and
-   every failure. Simulation/emulation is not physical proof.
-
-## One-week ordinary-use protocol — pending
-
-After provider terms and a bounded adapter are separately approved, keep a
-daily ledger for seven ordinary Hormuz-use days:
-
-- source condition/freshness/coverage, outages, reconnects, dropped/replay
-  gaps, bytes/requests/cost;
-- observations ignored, inspected, placed, bound, confirmed, contested,
-  corrected, or superseded;
-- exact discussion/Field/thesis decision changed by the layer, or “none”;
-- false positives, stale/unknown cases, and any absence-as-zero confusion;
-- physical-device performance, battery, thermal, and accessibility.
-
-Pass requires at least one documented causal decision improved, no authority/
-fence/unknown-as-zero breach, acceptable operations, and explicit owner
-approval. “Interesting dots” is failure.
-
-## Closed provider/memory gates
-
-- OSM tiles: modest interactive rendering only; no SLA; bulk/offline/prefetch
-  prohibited. Move provider/self-host before scale.
-- AISStream: no SLA, no replay, slow-consumer loss, insufficient product/data
-  terms. **Closed.**
-- OpenSky: operational integration requires prior written agreement.
-  **Excluded without it.**
-- FIRMS: MAP_KEY + exact dataset + bounded area/day/budget + thesis selection.
-  **Closed.**
-- USGS: technically valid real-time GeoJSON, but thesis-unselected.
-- Geographic memory/replay: closed until ordinary use proves value and a
-  retention/privacy design is approved.
-
-## Integration and rollback choices
-
-Owner may later: (A) keep isolated; (B) push for review without activation;
-(C) merge source while leaving migration/runtime/release/provider gates closed;
-or (D) authorize a separate production migration/backend/frontend release.
-No option is implied.
-
-Before activation, rollback is branch deletion/revert. After migration 022,
-do **not** restore UPDATE/DELETE semantics: roll code forward or restore a
-validated backup under separate authorization. Frontend rollback is an exact
-known-good release symlink flip. Provider rollback disables the adapter and
-removes ephemeral snapshots; durable human placements remain append-only.
+## AMENDMENTS

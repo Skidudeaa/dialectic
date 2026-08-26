@@ -34,3 +34,13 @@ feasibility is not provider approval. No live signal provider is configured on
 - No provider may write `GeoScope` on poll. Provider bytes remain ephemeral
   `WorldSignal` snapshots until a human places one through the canonical
   append-only door.
+
+## Amendment 2026-08-25 22:20 CDT — production Synapse status
+
+Phase 3 Synapse is live from application commit `85fed38`, but it activates no
+new external signal provider. CesiumJS, modest OSM rendering, optional Re:Earth
+terrain, Natural Earth reference geometry, and human-authored approximate
+scopes retain the active decisions above. `WorldSignalStore` remains empty and
+unconfigured by design. AISStream, OpenSky, FIRMS, and USGS retain their exact
+closed/excluded/thesis-unselected gates; production deployment does not alter
+terms approval.

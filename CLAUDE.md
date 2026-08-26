@@ -259,3 +259,28 @@ over anything above that says Atlas is list-only or counts 21 tools.
 - Phase 3 (live feeds as FastAPI adapters, `world_query`, the
   `world_samples` sampler) waits on the vision's own gate: "only after the
   wedge feels electric" — and on the AIS terms decision.
+
+## Amendment 2026-08-25 (late) — World Synapse is live (amend-beside)
+
+The prior paragraph's speculative Phase 3 shape is superseded. Phase 3 means
+**Synapse**, not provider feeds: House, World, Focus, Field, and the participant
+share canonical scope-lineage identity and one server-owned causal binding
+projection. Live provider activation moved to Phase 4 and remains gated.
+
+- Migration `022_geo_scope_lineage.sql` is applied in production. GeoScope
+  UPDATE/DELETE and successor forks are rejected in PostgreSQL; human review
+  appends typed successors and events atomically.
+- The participant registry is now **23 tools**. `world_query` is read-only and
+  room-fenced; `propose_geo_scope` remains the sole participant geography
+  writer and creates only a human-reviewed proposal from existing geometry.
+- Ordinary rooms admit Atlas; House/World/Focus/Field preserve one root-stable
+  object across the sole navigation writer. Causal meaning is explicit DOM
+  text, never an invented geographic ray to a non-geographic thesis node.
+- Cesium's complete dependency graph is lazy and outside the PWA precache. The
+  production build now fails if emitted shell/SW assets regress that contract.
+- Live application code `85fed38`; production backend PID `1941516`; selected
+  PWA release `20260826T032052Z-world-synapse-85fed38`; authenticated public
+  browser gate 10/10. Exact operational evidence and rollback coordinates are
+  in root `PLAN.md` and the Phase 3 qualification ledger.
+- No live WorldSignal adapter or geographic replay store is configured. That is
+  a deliberate Phase 4/6 gate, not an inactive Phase 3 feature.
