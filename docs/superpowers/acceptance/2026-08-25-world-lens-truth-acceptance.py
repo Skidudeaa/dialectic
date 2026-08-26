@@ -367,7 +367,15 @@ def open_home_world(page: Page) -> None:
     page.get_by_role("button", name="Atlas", exact=True).click()
     modes = page.get_by_role("group", name="Atlas mode")
     modes.get_by_role("button", name="World").click()
-    page.wait_for_selector('[data-atlas-mode="world"]')
+    page.wait_for_function(
+        """() => {
+          const query = new URL(location.href).searchParams
+          return document.querySelector('[data-atlas-mode="world"]') !== null
+            && query.get('scene') === 'atlas'
+            && query.get('view')?.startsWith('world')
+            && !query.has('object')
+        }""",
+    )
 
 
 def exercise_named_ui_writes(
@@ -553,7 +561,13 @@ def exercise_browser(browser: Any) -> None:
 
     open_home_world(page)
 
-    page.get_by_text("Message placement", exact=True).click()
+    message_row = page.locator(".world-scope-row", has_text="Message placement")
+    message_row.wait_for()
+    message_row.get_by_role("button").click()
+    page.wait_for_function(
+        "expected => new URL(location.href).searchParams.get('object') === expected",
+        arg=ids["message_scope"],
+    )
     page.get_by_role("heading", name="Message placement").wait_for()
     check("message scope inspector exposes its history", page.get_by_role("list", name="Scope history").get_by_role("listitem").count() == 1)
     page.get_by_role("button", name="Open subject").click()
