@@ -215,6 +215,10 @@ export default function WorldView({
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'WebGL is unavailable'
+      // Cesium may append its own modal error panel before Viewer throws.
+      // The complete text list is our usable fallback; remove the abandoned
+      // partial widget so it cannot cover or trap interaction with that list.
+      container.replaceChildren()
       // Deferred one tick: the set-state-in-effect rule (rightly) refuses a
       // synchronous write inside the effect body — same idiom as useAtlas.
       void Promise.resolve().then(() => setFailure(message))

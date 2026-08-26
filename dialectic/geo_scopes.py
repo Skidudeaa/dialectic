@@ -414,6 +414,20 @@ ORDER BY g.created_at DESC
 LIMIT $2
 """
 
+_LIVE_COUNT_SQL = f"""
+SELECT count(*)
+FROM geo_scopes g
+WHERE g.room_id = $1 AND {LIVE_PREDICATE}
+"""
+
+_EXACT_LIVE_LABEL_SQL = f"""
+SELECT {_COLUMNS}
+FROM geo_scopes g
+WHERE g.room_id = $1 AND g.label = $2 AND {LIVE_PREDICATE}
+ORDER BY g.created_at DESC, g.id DESC
+LIMIT 2
+"""
+
 _ONE_SQL = f"""
 SELECT {_COLUMNS}
 FROM geo_scopes g
@@ -487,6 +501,17 @@ class GeoScopeService:
             room_id=room_id,
             scopes=[scope_from_row(r) for r in rows],
         )
+
+    async def live_count(self, room_id: UUID) -> int:
+        """Exact number of scopes in the canonical live room projection."""
+        return int(await self.db.fetchval(_LIVE_COUNT_SQL, room_id))
+
+    async def find_live_by_exact_label(
+        self, room_id: UUID, label: str,
+    ) -> list[GeoScope]:
+        """At most two exact-label live matches, enough to prove uniqueness."""
+        rows = await self.db.fetch(_EXACT_LIVE_LABEL_SQL, room_id, label)
+        return [scope_from_row(row) for row in rows]
 
     async def get(self, room_id: UUID, scope_id: UUID) -> Optional[GeoScope]:
         row = await self.db.fetchrow(_ONE_SQL, scope_id, room_id)

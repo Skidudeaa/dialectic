@@ -259,6 +259,44 @@ async def test_insert_and_project_a_human_scope(world):
 
 
 @pytest.mark.asyncio
+async def test_public_live_count_and_exact_label_lookup_use_the_canonical_live_set(world):
+    first = await insert_scope(
+        world, room_id=ROOM_AMO,
+        subject={"entity": "rooms", "id": str(ROOM_AMO)},
+        kind="point", geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+        label="Exact duplicate", authority="human_confirmed",
+        provenance={"provider": "human", "acquisition": "human"},
+        confirmed_by=AMO, created_by=AMO,
+    )
+    second = await insert_scope(
+        world, room_id=ROOM_AMO,
+        subject={"entity": "rooms", "id": str(ROOM_AMO)},
+        kind="point", geometry={"type": "Point", "coordinates": [56.4, 26.6]},
+        label="Exact duplicate", authority="human_confirmed",
+        provenance={"provider": "human", "acquisition": "human"},
+        confirmed_by=AMO, created_by=AMO,
+    )
+    expired = await insert_scope(
+        world, room_id=ROOM_AMO,
+        subject={"entity": "rooms", "id": str(ROOM_AMO)},
+        kind="point", geometry={"type": "Point", "coordinates": [56.5, 26.7]},
+        label="Exact duplicate", authority="human_confirmed",
+        provenance={"provider": "human", "acquisition": "human"},
+        expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+        confirmed_by=AMO, created_by=AMO,
+    )
+
+    service = GeoScopeService(world)
+    matches = await service.find_live_by_exact_label(ROOM_AMO, "Exact duplicate")
+
+    assert [scope.id for scope in matches] == [
+        f"geo_scope:{second}", f"geo_scope:{first}",
+    ]
+    assert all(scope.id != f"geo_scope:{expired}" for scope in matches)
+    assert await service.live_count(ROOM_AMO) == 2
+
+
+@pytest.mark.asyncio
 async def test_geo_scope_rows_are_database_enforced_append_only(world):
     """An accidental UPDATE or DELETE must fail even outside the owner module."""
     scope_id = await insert_scope(

@@ -272,6 +272,31 @@ async def test_world_query_exact_lookup_is_deterministic_for_ambiguous_and_missi
 
 
 @pytest.mark.asyncio
+async def test_world_query_ambiguity_and_overview_are_honest_beyond_projection_cap(db):
+    outside_projection = await _accepted_scope(db, label="Boundary duplicate")
+    for index in range(500):
+        await _accepted_scope(db, label=f"Filler {index:03d}")
+    inside_projection = await _accepted_scope(db, label="Boundary duplicate")
+
+    ambiguous = await world.world_query(
+        db, ROOM, "Hormuz room", {"scope": "Boundary duplicate"},
+    )
+    overview = await world.world_query(db, ROOM, "Hormuz room", {})
+
+    assert ambiguous == {
+        "ok": False,
+        "error": "ambiguous_scope_label",
+        "scope": "Boundary duplicate",
+        "matches": sorted([
+            f"geo_scope:{outside_projection}", f"geo_scope:{inside_projection}",
+        ]),
+    }
+    assert overview["scopes"]["total"] == 502
+    assert overview["scopes"]["omitted"] == 402
+    assert len(overview["scopes"]["items"]) == 100
+
+
+@pytest.mark.asyncio
 async def test_world_query_reports_causal_roles_provisional_language_and_bounded_lineage(db):
     scope_id = await _accepted_scope(db, label="Hormuz evidence")
     subjects = [
@@ -333,6 +358,26 @@ def _signal(now: datetime, *, source_id: str = "one") -> WorldSignal:
 
 
 @pytest.mark.asyncio
+async def test_world_query_all_not_configured_sources_keep_the_overall_status_not_configured(db):
+    now = datetime.now(timezone.utc)
+    store = WorldSignalStore()
+    store.replace(WorldSignalSnapshot(
+        provider="disabled_provider", configured_room_ids=frozenset({ROOM}),
+        source_state="not_configured", freshness="current",
+        coverage="provider is deliberately disabled",
+        observed_at=None, retrieved_at=now, signals=(),
+    ))
+
+    out = await world.world_query(
+        db, ROOM, "Hormuz room", {}, signal_store=store, now=now,
+    )
+
+    assert out["signals"]["status"] == "not_configured"
+    assert out["signals"]["current_signal_count"] is None
+    assert out["signals"]["sources"][0]["status"] == "not_configured"
+
+
+@pytest.mark.asyncio
 async def test_world_query_signal_states_keep_unknown_and_unavailable_distinct_from_zero(db):
     now = datetime.now(timezone.utc)
     not_configured = await world.world_query(
@@ -359,6 +404,12 @@ async def test_world_query_signal_states_keep_unknown_and_unavailable_distinct_f
         source_state="unavailable", freshness="unknown", coverage="poll failed",
         observed_at=None, retrieved_at=now, signals=(),
     ))
+    store.replace(WorldSignalSnapshot(
+        provider="disabled_provider", configured_room_ids=frozenset({ROOM}),
+        source_state="not_configured", freshness="current",
+        coverage="provider is deliberately disabled",
+        observed_at=None, retrieved_at=now, signals=(),
+    ))
     out = await world.world_query(db, ROOM, "Hormuz room", {}, signal_store=store, now=now)
     by_provider = {source["provider"]: source for source in out["signals"]["sources"]}
     assert by_provider["empty_provider"]["status"] == "empty"
@@ -367,6 +418,8 @@ async def test_world_query_signal_states_keep_unknown_and_unavailable_distinct_f
     assert by_provider["unknown_provider"]["current_signal_count"] is None
     assert by_provider["down_provider"]["status"] == "unavailable"
     assert by_provider["down_provider"]["current_signal_count"] is None
+    assert by_provider["disabled_provider"]["status"] == "not_configured"
+    assert by_provider["disabled_provider"]["current_signal_count"] is None
     assert out["signals"]["current_signal_count"] is None
 
 

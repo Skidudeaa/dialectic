@@ -327,9 +327,12 @@ def _bounded_lineage(review: GeoScopeReview) -> dict[str, Any]:
 
 
 def _signal_source_summary(source: WorldSignalSource) -> dict[str, Any]:
-    if source.source_state in {"unavailable", "rate_limited"}:
-        status = "unavailable"
+    if source.source_state == "not_configured":
+        status = "not_configured"
         current_count: int | None = None
+    elif source.source_state in {"unavailable", "rate_limited"}:
+        status = "unavailable"
+        current_count = None
     elif source.freshness in {"unknown", "stale", "expired"}:
         status = "unknown"
         current_count = None
@@ -371,7 +374,11 @@ def _signals_summary(
     )
     signals = projection.signals[:_WORLD_QUERY_SIGNAL_CAP]
     return {
-        "status": "configured",
+        "status": (
+            "not_configured"
+            if all(source["status"] == "not_configured" for source in sources)
+            else "configured"
+        ),
         "current_signal_count": current_count,
         "sources": sources,
         "items": [
@@ -424,6 +431,7 @@ async def world_query(
         geo_service = GeoScopeService(db)
         projection = await geo_service.build(room_id)
         visible = projection.scopes
+        total_visible = await geo_service.live_count(room_id)
         selected_id: UUID | None = None
         if query:
             if query.startswith("geo_scope:"):
@@ -431,7 +439,7 @@ async def world_query(
                 if selected_id is None or await geo_service.get(room_id, selected_id) is None:
                     return {"ok": False, "error": "scope_not_found", "scope": query}
             else:
-                matches = [scope for scope in visible if scope.label == query]
+                matches = await geo_service.find_live_by_exact_label(room_id, query)
                 if not matches:
                     return {"ok": False, "error": "scope_not_found", "scope": query}
                 if len(matches) > 1:
@@ -452,8 +460,8 @@ async def world_query(
                 "view": f"world;room={room_id}",
             },
             "scopes": {
-                "total": len(visible),
-                "omitted": max(0, len(visible) - _WORLD_QUERY_SCOPE_CAP),
+                "total": total_visible,
+                "omitted": max(0, total_visible - _WORLD_QUERY_SCOPE_CAP),
                 "items": [_scope_summary(scope) for scope in visible[:_WORLD_QUERY_SCOPE_CAP]],
             },
             "signals": _signals_summary(store, room_id, now=current_time),
