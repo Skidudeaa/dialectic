@@ -249,6 +249,7 @@ async def test_world_query_resolves_exact_canonical_id_and_exact_label(db):
     assert by_id["scope"]["freshness"]["state"] == "not_applicable"
     assert by_id["show_on_world"] == {
         "room_id": str(ROOM), "scene": "atlas", "view": f"world;room={ROOM}",
+        "object": f"geo_scope:{scope_id}",
     }
 
 
@@ -320,10 +321,11 @@ async def test_world_query_reports_causal_roles_provisional_language_and_bounded
     assert out["scope"]["lineage"]["omitted"] == 0
     assert out["scope"]["causal_bindings"] == [{
         "id": f"field_mark:{mark_id}",
+        "current_scope_id": f"geo_scope:{scope_id}",
+        "evidence_scope_id": f"geo_scope:{scope_id}",
         "relation": "supports",
         "review_state": "provisional",
         "provisional": True,
-        "evidence_scope_id": str(scope_id),
         "target": {
             "room_id": str(ROOM),
             "book_id": "hormuz-book",
@@ -425,7 +427,10 @@ async def test_world_query_finds_an_early_binding_across_more_than_fifty_revisio
     assert out["scope"]["lineage"]["omitted"] == 40
     assert out["scope"]["causal_bindings_total"] == 1
     assert out["scope"]["causal_bindings_complete"] is True
-    assert out["scope"]["causal_bindings"][0]["id"] == f"field_mark:{mark_id}"
+    binding = out["scope"]["causal_bindings"][0]
+    assert binding["id"] == f"field_mark:{mark_id}"
+    assert binding["current_scope_id"] == f"geo_scope:{previous_id}"
+    assert binding["evidence_scope_id"] == f"geo_scope:{root_id}"
 
 
 def _signal(now: datetime, *, source_id: str = "one") -> WorldSignal:

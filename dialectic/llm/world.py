@@ -34,7 +34,7 @@ from geo_scopes import (
     resolve_subject_in_room,
     validate_geometry,
 )
-from field_marks import FieldMarkService, causal_subject_roles
+from field_marks import FieldMarkService, causal_geo_binding_from_mark
 from models import EventType
 from world_signals import WorldSignalSource, WorldSignalStore, world_signal_store
 
@@ -481,26 +481,15 @@ async def world_query(
         )
         bindings: list[dict[str, Any]] = []
         for mark in field.marks:
-            subjects = [subject.model_dump() for subject in mark.subjects]
-            try:
-                roles = causal_subject_roles(mark.relation, subjects)
-            except ValueError:
-                continue
-            if roles is None or str(roles.evidence.get("id")) not in lineage_ids:
-                continue
-            bindings.append({
-                "id": mark.id,
-                "relation": mark.relation,
-                "review_state": mark.review,
-                "provisional": mark.review == "provisional",
-                "evidence_scope_id": str(roles.evidence["id"]),
-                "target": {
-                    "room_id": str(room_id),
-                    "book_id": roles.book_id,
-                    "node_id": roles.node_id,
-                    "node_label": str(mark.payload.get("node_label") or roles.node_id),
-                },
-            })
+            binding = causal_geo_binding_from_mark(
+                mark, current_scope_id=review.current.id,
+            )
+            if binding is None:
+                raise ValueError(
+                    "scope binding projection returned a non-causal Field mark",
+                )
+            bindings.append(binding.model_dump(mode="json"))
+        result["show_on_world"]["object"] = review.root_id
         current = _scope_summary(review.current)
         current.update({
             "root_id": review.root_id,
