@@ -24,14 +24,19 @@ import pytest
 import pytest_asyncio
 
 from field_marks import (
+    CausalGeoBinding,
     FIELD_ACTIONS,
     FIELD_DELIBERATIVE_STATUSES,
     FIELD_ORIGINS,
     FIELD_RELATIONS,
     FIELD_REVIEW_STATES,
+    FieldMark,
     FieldMarkService,
+    FieldSubjectRef,
+    causal_geo_binding_from_mark,
     compute_dedup_key,
 )
+from geo_scopes import insert_scope
 
 TEST_DATABASE_URL = os.environ.get(
     "DIALECTIC_TEST_DATABASE_URL", "postgresql://root@localhost/dialectic_test"
@@ -278,6 +283,51 @@ def test_vocabularies_are_the_right_size():
     assert len(FIELD_RELATIONS) == len(set(FIELD_RELATIONS))
 
 
+def test_causal_binding_adapter_emits_canonical_object_ids():
+    root_scope_id = _uid(0xFA1)
+    current_scope_id = _uid(0xFA2)
+    mark = FieldMark(
+        id=f"field_mark:{MARK_CONFIRM}",
+        room_id=ROOM,
+        thread_id=TH,
+        relation="supports",
+        origin="explicit",
+        review="confirmed",
+        deliberative_status="active",
+        subjects=[
+            FieldSubjectRef(
+                entity="rooms",
+                id=str(ROOM),
+                field="thesis_node:hormuz-book:shipping",
+            ),
+            FieldSubjectRef(entity="geo_scopes", id=str(root_scope_id)),
+        ],
+        title="Hormuz supports shipping",
+        payload={"node_label": "Shipping"},
+        provenance="human",
+        created_at=BASE,
+    )
+
+    binding = causal_geo_binding_from_mark(
+        mark, current_scope_id=f"geo_scope:{current_scope_id}",
+    )
+
+    assert binding == CausalGeoBinding(
+        id=f"field_mark:{MARK_CONFIRM}",
+        current_scope_id=f"geo_scope:{current_scope_id}",
+        evidence_scope_id=f"geo_scope:{root_scope_id}",
+        relation="supports",
+        review_state="confirmed",
+        provisional=False,
+        target={
+            "room_id": ROOM,
+            "book_id": "hormuz-book",
+            "node_id": "shipping",
+            "node_label": "Shipping",
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # derived review — all six actions
 # ---------------------------------------------------------------------------
@@ -499,6 +549,184 @@ async def test_causal_geo_bindings_are_one_atomic_bounded_newest_first_read(fiel
     assert projection.marks[1].reviews == []
     assert "OTHER-ROOM-CAUSAL-SENTINEL" not in projection.model_dump_json()
     assert "OTHER-ROOM-MALFORMED-SUCCESSOR" not in projection.model_dump_json()
+    assert audited.candidate_calls == 1
+    assert audited.read_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_atlas_causal_geo_bindings_follow_lineage_with_one_fenced_bounded_read(
+    field_room,
+):
+    if not await field_room.fetchval("SELECT to_regclass('geo_scopes')"):
+        pytest.skip("geo_scopes missing — run migrations 021 and 022")
+
+    provenance = {
+        "provider": "human",
+        "acquisition": "human",
+        "source_id": "field-atlas-test",
+        "credit": "Synthetic test fixture",
+    }
+    root_scope_id = await insert_scope(
+        field_room,
+        room_id=ROOM,
+        subject={"entity": "rooms", "id": str(ROOM)},
+        kind="point",
+        geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+        label="Root evidence",
+        authority="human_confirmed",
+        provenance=provenance,
+        confirmed_by=AMO,
+        revision_action="place",
+        created_by=AMO,
+        now=BASE,
+    )
+    current_scope_id = await insert_scope(
+        field_room,
+        room_id=ROOM,
+        subject={"entity": "rooms", "id": str(ROOM)},
+        kind="point",
+        geometry={"type": "Point", "coordinates": [56.4, 26.6]},
+        label="Current evidence",
+        authority="human_confirmed",
+        provenance=provenance,
+        confirmed_by=AMO,
+        supersedes_id=root_scope_id,
+        revision_action="redraw",
+        created_by=AMO,
+        now=BASE + timedelta(minutes=1),
+    )
+    other_scope_id = await insert_scope(
+        field_room,
+        room_id=OTHER,
+        subject={"entity": "rooms", "id": str(OTHER)},
+        kind="point",
+        geometry={"type": "Point", "coordinates": [1.0, 1.0]},
+        label="OTHER-ROOM-SCOPE-SENTINEL",
+        authority="human_confirmed",
+        provenance=provenance,
+        confirmed_by=AMO,
+        revision_action="place",
+        created_by=AMO,
+        now=BASE,
+    )
+
+    mark_ids = [uuid4() for _ in range(26)]
+    for index, mark_id in enumerate(mark_ids):
+        await _relation(
+            field_room,
+            mark_id,
+            ROOM,
+            thread=TH,
+            relation="supports",
+            origin="explicit",
+            provenance="human",
+            actor=AMO,
+            subjects=[
+                {"entity": "geo_scopes", "id": str(root_scope_id)},
+                {
+                    "entity": "rooms",
+                    "id": str(ROOM),
+                    "field": f"thesis_node:hormuz-book:node-{index}",
+                },
+            ],
+            title=f"Causal lineage {index}",
+            payload={"node_label": f"Node {index}"},
+            at=BASE + timedelta(seconds=index),
+        )
+
+    other_mark_id = uuid4()
+    await _relation(
+        field_room,
+        other_mark_id,
+        OTHER,
+        thread=TH_OTHER,
+        relation="supports",
+        origin="explicit",
+        provenance="human",
+        actor=AMO,
+        subjects=[
+            {"entity": "geo_scopes", "id": str(other_scope_id)},
+            {
+                "entity": "rooms",
+                "id": str(OTHER),
+                "field": "thesis_node:other-book:other-node",
+            },
+        ],
+        title="OTHER-ROOM-CAUSAL-SENTINEL",
+        at=BASE + timedelta(hours=1),
+    )
+    await _review(
+        field_room,
+        uuid4(),
+        OTHER,
+        mark_ids[-1],
+        "contest",
+        AMO,
+        BASE + timedelta(hours=2),
+    )
+    await _relation(
+        field_room,
+        uuid4(),
+        OTHER,
+        thread=TH_OTHER,
+        relation="supports",
+        origin="explicit",
+        provenance="human",
+        actor=AMO,
+        subjects=[
+            {"entity": "geo_scopes", "id": str(other_scope_id)},
+            {
+                "entity": "rooms",
+                "id": str(OTHER),
+                "field": "thesis_node:other-book:malformed-successor",
+            },
+        ],
+        title="OTHER-ROOM-MALFORMED-SUCCESSOR",
+        at=BASE + timedelta(hours=3),
+        supersedes=mark_ids[-2],
+    )
+
+    class ReadAudit:
+        def __init__(self, connection: asyncpg.Connection) -> None:
+            self.connection = connection
+            self.read_calls = 0
+            self.candidate_calls = 0
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self.connection, name)
+
+        async def fetch(self, query: str, *args: object) -> list[asyncpg.Record]:
+            self.read_calls += 1
+            if "scope_lineage" in query:
+                self.candidate_calls += 1
+            return await self.connection.fetch(query, *args)
+
+    audited = ReadAudit(field_room)
+    projection = await FieldMarkService(audited).atlas_causal_geo_bindings(
+        [ROOM], {current_scope_id}, per_room_limit=25, limit=200,
+    )
+
+    assert projection.total == 26
+    assert len(projection.bindings) == 25
+    assert projection.omitted == 1
+    assert projection.complete is False
+    assert all(
+        binding.current_scope_id == f"geo_scope:{current_scope_id}"
+        for binding in projection.bindings
+    )
+    assert all(
+        binding.evidence_scope_id == f"geo_scope:{root_scope_id}"
+        for binding in projection.bindings
+    )
+    assert "OTHER-ROOM-CAUSAL-SENTINEL" not in projection.model_dump_json()
+    assert "OTHER-ROOM-MALFORMED-SUCCESSOR" not in projection.model_dump_json()
+    assert all(binding.target.room_id == ROOM for binding in projection.bindings)
+    newest = next(
+        binding
+        for binding in projection.bindings
+        if binding.id == f"field_mark:{mark_ids[-1]}"
+    )
+    assert newest.review_state == "provisional"
     assert audited.candidate_calls == 1
     assert audited.read_calls == 1
 

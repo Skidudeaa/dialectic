@@ -205,6 +205,98 @@ LEFT JOIN candidate_reviews
 ORDER BY candidates.created_at DESC, candidates.id DESC
 """
 
+_ATLAS_CAUSAL_GEO_BINDINGS_SQL = """
+WITH RECURSIVE scope_lineage AS (
+    SELECT g.id AS revision_id, g.id AS current_scope_id,
+           g.room_id, g.supersedes_id
+    FROM geo_scopes g
+    WHERE g.id = ANY($2::uuid[])
+      AND g.room_id = ANY($1::uuid[])
+    UNION ALL
+    SELECT predecessor.id, lineage.current_scope_id,
+           predecessor.room_id, predecessor.supersedes_id
+    FROM scope_lineage lineage
+    JOIN geo_scopes predecessor
+      ON predecessor.id = lineage.supersedes_id
+     AND predecessor.room_id = lineage.room_id
+    WHERE predecessor.room_id = ANY($1::uuid[])
+), matching AS (
+    SELECT fm.id, fm.room_id, fm.thread_id, fm.mark_kind, fm.relation,
+           fm.action, fm.origin, fm.deliberative_status, fm.subjects,
+           fm.target_mark_id, fm.title, fm.payload, fm.supersedes_id,
+           fm.caused_by_id, fm.actor_user_id, fm.provenance, fm.created_at,
+           lineage.current_scope_id,
+           count(*) OVER () AS matching_total,
+           row_number() OVER (
+               PARTITION BY fm.room_id
+               ORDER BY fm.created_at DESC, fm.id DESC
+           ) AS room_rank
+    FROM field_marks fm
+    JOIN scope_lineage lineage
+      ON lineage.room_id = fm.room_id
+     AND EXISTS (
+         SELECT 1
+         FROM jsonb_array_elements(fm.subjects) AS subject
+         WHERE subject->>'entity' = 'geo_scopes'
+           AND subject->>'id' = lineage.revision_id::text
+     )
+    WHERE fm.room_id = ANY($1::uuid[])
+      AND fm.mark_kind = 'relation'
+      AND fm.relation = ANY($3::text[])
+      AND jsonb_array_length(fm.subjects) = 2
+      AND EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(fm.subjects) AS subject
+          WHERE subject->>'entity' = 'rooms'
+            AND subject->>'id' = fm.room_id::text
+            AND subject->>'field' ~ '^thesis_node:[^:]+:[^:]+$'
+      )
+), candidates AS (
+    SELECT * FROM matching
+    WHERE room_rank <= $4
+    ORDER BY created_at DESC, id DESC
+    LIMIT $5
+), candidate_successors AS (
+    SELECT successor.supersedes_id AS target_id,
+           successor.room_id
+    FROM field_marks successor
+    JOIN candidates
+      ON candidates.id = successor.supersedes_id
+     AND candidates.room_id = successor.room_id
+    WHERE successor.room_id = ANY($1::uuid[])
+    GROUP BY successor.supersedes_id, successor.room_id
+), candidate_reviews AS (
+    SELECT review.target_mark_id, review.room_id,
+           jsonb_agg(
+               jsonb_build_object(
+                   'id', review.id,
+                   'action', review.action,
+                   'actor_user_id', review.actor_user_id,
+                   'payload', review.payload,
+                   'created_at', review.created_at
+               ) ORDER BY review.created_at, review.id
+           ) AS reviews
+    FROM field_marks review
+    JOIN candidates
+      ON candidates.id = review.target_mark_id
+     AND candidates.room_id = review.room_id
+    WHERE review.room_id = ANY($1::uuid[])
+      AND review.mark_kind = 'review'
+    GROUP BY review.target_mark_id, review.room_id
+)
+SELECT candidates.*,
+       candidate_successors.target_id IS NOT NULL AS has_successor,
+       COALESCE(candidate_reviews.reviews, '[]'::jsonb) AS reviews
+FROM candidates
+LEFT JOIN candidate_successors
+  ON candidate_successors.target_id = candidates.id
+ AND candidate_successors.room_id = candidates.room_id
+LEFT JOIN candidate_reviews
+  ON candidate_reviews.target_mark_id = candidates.id
+ AND candidate_reviews.room_id = candidates.room_id
+ORDER BY candidates.created_at DESC, candidates.id DESC
+"""
+
 # Every entity a subject ref may name, and how to check it belongs to the
 # room. Table names come from this fixed dict, never from a caller, so the
 # f-string below is not a SQL-injection surface. Shared by the API's
@@ -248,6 +340,37 @@ class CausalFieldRoles(NamedTuple):
     node_id: str
 
 
+class CausalGeoTarget(BaseModel):
+    """The exact thesis node named by a causal Field mark."""
+
+    room_id: UUID
+    book_id: str
+    node_id: str
+    node_label: str
+
+
+class CausalGeoBinding(BaseModel):
+    """One existing Field interpretation joined to its current scope lineage."""
+
+    id: str
+    current_scope_id: str
+    evidence_scope_id: str
+    relation: str
+    review_state: str
+    provisional: bool
+    target: CausalGeoTarget
+
+
+class CausalGeoBindingsProjection(BaseModel):
+    """A bounded, exact-count causal view across selected live scopes."""
+
+    generated_at: datetime
+    bindings: list[CausalGeoBinding]
+    total: int
+    omitted: int
+    complete: bool
+
+
 class FieldReview(BaseModel):
     """One human action on a mark. Never itself reviewed — reviews are the
     leaves of the append-only tree, not a target of a target."""
@@ -284,6 +407,32 @@ class FieldMark(BaseModel):
     provenance: str
     created_at: datetime
     reviews: list[FieldReview] = []
+
+
+def causal_geo_binding_from_mark(
+    mark: FieldMark, *, current_scope_id: str,
+) -> Optional[CausalGeoBinding]:
+    """Project one causal Field mark without deriving a second semantics."""
+
+    roles = causal_subject_roles(
+        mark.relation, [subject.model_dump() for subject in mark.subjects],
+    )
+    if roles is None:
+        return None
+    return CausalGeoBinding(
+        id=mark.id,
+        current_scope_id=current_scope_id,
+        evidence_scope_id=f"geo_scope:{roles.evidence['id']}",
+        relation=mark.relation,
+        review_state=mark.review,
+        provisional=mark.review == "provisional",
+        target=CausalGeoTarget(
+            room_id=mark.room_id,
+            book_id=roles.book_id,
+            node_id=roles.node_id,
+            node_label=str(mark.payload.get("node_label") or roles.node_id),
+        ),
+    )
 
 
 class FieldProjection(BaseModel):
@@ -551,6 +700,61 @@ class FieldMarkService:
 
     def __init__(self, db):
         self.db = db
+
+    async def atlas_causal_geo_bindings(
+        self,
+        room_ids: list[UUID],
+        current_scope_ids: set[UUID],
+        *,
+        per_room_limit: int = 25,
+        limit: int = 200,
+    ) -> CausalGeoBindingsProjection:
+        """Read causal bindings across selected live scopes in one statement."""
+
+        if not room_ids or not current_scope_ids:
+            return CausalGeoBindingsProjection(
+                generated_at=datetime.now(timezone.utc),
+                bindings=[],
+                total=0,
+                omitted=0,
+                complete=True,
+            )
+        if per_room_limit < 1 or per_room_limit > 100:
+            raise ValueError("causal per-room limit must be between 1 and 100")
+        if limit < 1 or limit > 400:
+            raise ValueError("causal total limit must be between 1 and 400")
+        rows = await self.db.fetch(
+            _ATLAS_CAUSAL_GEO_BINDINGS_SQL,
+            room_ids,
+            sorted(current_scope_ids),
+            list(FIELD_CAUSAL_RELATIONS),
+            per_room_limit,
+            limit,
+        )
+        total = int(rows[0]["matching_total"]) if rows else 0
+        bindings: list[CausalGeoBinding] = []
+        for row in rows:
+            reviews = _jsonb_list(row["reviews"])
+            mark = _to_field_mark(
+                dict(row),
+                _derive_review_state(bool(row["has_successor"]), reviews),
+                reviews,
+            )
+            binding = causal_geo_binding_from_mark(
+                mark,
+                current_scope_id=f"geo_scope:{row['current_scope_id']}",
+            )
+            if binding is None:
+                raise ValueError("causal query returned a non-causal Field mark")
+            bindings.append(binding)
+        omitted = max(0, total - len(bindings))
+        return CausalGeoBindingsProjection(
+            generated_at=datetime.now(timezone.utc),
+            bindings=bindings,
+            total=total,
+            omitted=omitted,
+            complete=omitted == 0,
+        )
 
     async def causal_geo_bindings(
         self, room_id: UUID, scope_ids: set[UUID], *, limit: int = 50,
