@@ -102,3 +102,8 @@
   color: var(--color-faint);
   margin: 0 0 0.4rem;
 }
+
+.world-scope-row .atlas-row-open[aria-current="true"] {
+  box-shadow: inset 3px 0 0 var(--color-amber);
+  background: color-mix(in srgb, var(--color-amber) 10%, transparent);
+}

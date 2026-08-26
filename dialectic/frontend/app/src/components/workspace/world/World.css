@@ -164,6 +164,63 @@
   margin: 0;
 }
 
+.world-selected-chip,
+.world-causal-review {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.world-selected-chip {
+  color: var(--color-amber);
+}
+
+.world-causal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.world-causal-binding {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--color-cream);
+  font-family: var(--font-serif);
+  font-size: 13px;
+}
+
+.world-causal-binding button {
+  min-height: 44px;
+  border: 0;
+  border-bottom: 1px solid var(--color-teal);
+  background: transparent;
+  color: var(--color-teal);
+  font: inherit;
+  cursor: pointer;
+}
+
+.world-causal-binding button:focus-visible {
+  outline: 2px solid var(--color-amber);
+}
+
+.world-causal-review {
+  margin-left: auto;
+  color: var(--color-secondary);
+}
+
+.world-causal-review.is-confirmed { color: var(--color-teal); }
+.world-causal-review.is-contested { color: var(--color-warning); }
+.world-causal-review.is-superseded { color: var(--color-faint); }
+
+.world-causal-overlay {
+  border-left: 2px solid var(--color-teal);
+  background: var(--color-obsidian);
+}
+
 @media (max-width: 700px) {
   .world-canvas { height: 46vh; min-height: 240px; }
 }

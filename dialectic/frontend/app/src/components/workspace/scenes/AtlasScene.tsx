@@ -1,8 +1,13 @@
 import { Suspense, lazy, useCallback, useMemo, useState } from 'react'
 import type { AtlasState } from '../../../hooks/useAtlas.ts'
-import type { AtlasEdge, AtlasNode } from '../../../types/atlas.ts'
+import type {
+  AtlasEdge,
+  AtlasGeoScope,
+  AtlasNode,
+  CausalGeoBinding,
+} from '../../../types/atlas.ts'
 import { isAtlasObjectNode } from '../../../types/atlas.ts'
-import type { GeoScope, WorldSignal, WorldSignalSources } from '../../../types/geo.ts'
+import type { WorldSignal, WorldSignalSources } from '../../../types/geo.ts'
 import { api } from '../../../lib/api.ts'
 import { PARTICIPANT_NAME } from '../../../lib/productIdentity.ts'
 import { SceneEmpty, SceneLoading, SceneUnavailable } from '../SceneEmpty'
@@ -13,6 +18,7 @@ import {
 import {
   AUTHORITY_LABEL, KIND_LABEL as SCOPE_KIND_LABEL, scopeDestination, scopeNode,
 } from '../world/worldScopes.ts'
+import { CausalBindingList } from '../world/CausalBindingList.tsx'
 import './AtlasScene.css'
 import '../world/World.css'
 
@@ -64,6 +70,8 @@ interface AtlasSceneProps {
   signalRoomTokens?: ReadonlyMap<string, string>
   /** Refresh any room-local durable projection after placement. */
   onGeoChanged?: () => void
+  /** The exact shared object axis; a Field mark may select its current scope. */
+  selectedObjectId?: string | null
 }
 
 const WorldView = lazy(() => import('../world/WorldView'))
@@ -248,9 +256,13 @@ function SharedSourcesGroup({ nodes, onNavigate }: {
 /** The scopes as rows — the same data the globe draws, readable without it.
  *  Every row says what it is, whose authority it carries, how fresh, and
  *  which room; a proposed scope reads as such rather than blending in. */
-function OnTheMapGroup({ scopes, nodesById, onNavigate }: {
-  scopes: GeoScope[]
+function OnTheMapGroup({
+  scopes, nodesById, bindingsByScope, selectedScopeId, onNavigate,
+}: {
+  scopes: AtlasGeoScope[]
   nodesById: Map<string, AtlasNode>
+  bindingsByScope: Map<string, CausalGeoBinding[]>
+  selectedScopeId: string | null
   onNavigate: (d: AtlasNavigateDestination) => void
 }) {
   if (scopes.length === 0) {
@@ -269,11 +281,14 @@ function OnTheMapGroup({ scopes, nodesById, onNavigate }: {
         {scopes.map((scope) => {
           const subject = scopeNode(scope, nodesById)
           const room = nodesById.get(`room:${scope.room_id}`)
+          const selected = scope.id === selectedScopeId
+          const causalBindings = bindingsByScope.get(scope.id) ?? []
           return (
             <li key={scope.id} className="atlas-row world-scope-row" data-kind={scope.kind} data-authority={scope.authority}>
               <button
                 type="button"
                 className="atlas-row-open"
+                aria-current={selected ? 'true' : undefined}
                 onClick={() => onNavigate(scopeDestination(scope))}
               >
                 <span className="atlas-row-kind">{SCOPE_KIND_LABEL[scope.kind]}</span>
@@ -286,7 +301,16 @@ function OnTheMapGroup({ scopes, nodesById, onNavigate }: {
                   <SourceState state={scope.source_state} observedAt={scope.observed_at ?? scope.retrieved_at} />
                   {room ? <span>{room.title}</span> : null}
                 </span>
+                {selected ? <span className="world-selected-chip">Selected</span> : null}
               </button>
+              <CausalBindingList
+                scopeLabel={scope.label || subject?.title || 'Unlabelled'}
+                bindings={causalBindings}
+                onOpenMark={(binding) => onNavigate({
+                  roomId: binding.target.room_id,
+                  object: binding.id,
+                })}
+              />
             </li>
           )
         })}
@@ -400,6 +424,7 @@ function LiveSignalsGroup({ signals, sources, nodesById, signalRoomTokens, onPla
 export function AtlasScene({
   state, onNavigate, view = null, onView,
   signalRoomTokens = new Map<string, string>(), onGeoChanged,
+  selectedObjectId = null,
 }: AtlasSceneProps) {
   const worldMode = isWorldView(view)
   const decoded = useMemo(() => decodeWorldView(view), [view])
@@ -422,6 +447,7 @@ export function AtlasScene({
   }
 
   const { nodes, edges, scopes, signals = [], signal_sources: signalSources } = state.projection
+  const causalBindings = state.projection.causal_bindings ?? []
 
   if (nodes.length === 0) {
     return (
@@ -443,6 +469,18 @@ export function AtlasScene({
 
   const { rooms, branchesByRoom, artifactsByBranch, artifactsByRoomOnly } = buildTree(nodes)
   const nodesById = new Map(nodes.map((n) => [n.id, n]))
+  const selectedBinding = causalBindings.find((binding) => binding.id === selectedObjectId)
+  const selectedScope = scopes.find((scope) => (
+    scope.id === selectedObjectId
+    || scope.lineage_root_id === selectedObjectId
+    || scope.id === selectedBinding?.current_scope_id
+  ))
+  const bindingsByScope = new Map<string, CausalGeoBinding[]>()
+  for (const binding of causalBindings) {
+    const list = bindingsByScope.get(binding.current_scope_id) ?? []
+    list.push(binding)
+    bindingsByScope.set(binding.current_scope_id, list)
+  }
   const focusScopes = decoded?.roomId ? scopes.filter((s) => s.room_id === decoded.roomId) : null
   const focusSignals = decoded?.roomId ? signals.filter((s) => s.room_id === decoded.roomId) : null
   const onSignalPlaced = () => {
@@ -484,12 +522,36 @@ export function AtlasScene({
             initialCamera={decoded?.camera ?? null}
             focusScopes={focusScopes}
             focusSignals={focusSignals}
+            selectedScopeId={selectedScope?.id ?? null}
             onSelect={(scope) => onNavigate(scopeDestination(scope))}
             onCameraSettle={onCameraSettle}
           />
+          {selectedScope ? (
+            <section className="world-causal-overlay" aria-label="Selected causal evidence">
+              <CausalBindingList
+                scopeLabel={selectedScope.label || 'Unlabelled'}
+                bindings={bindingsByScope.get(selectedScope.id) ?? []}
+                onOpenMark={(binding) => onNavigate({
+                  roomId: binding.target.room_id,
+                  object: binding.id,
+                })}
+              />
+            </section>
+          ) : null}
         </Suspense>
       ) : null}
-      <OnTheMapGroup scopes={scopes} nodesById={nodesById} onNavigate={onNavigate} />
+      <OnTheMapGroup
+        scopes={scopes}
+        nodesById={nodesById}
+        bindingsByScope={bindingsByScope}
+        selectedScopeId={selectedScope?.id ?? null}
+        onNavigate={onNavigate}
+      />
+      {state.projection.causal_bindings_complete === false ? (
+        <p className="world-note">
+          {(state.projection.causal_bindings_omitted ?? 0).toLocaleString()} more causal bindings omitted.
+        </p>
+      ) : null}
       <LiveSignalsGroup
         signals={signals}
         sources={signalSources}

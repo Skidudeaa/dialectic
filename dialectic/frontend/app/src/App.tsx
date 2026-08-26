@@ -571,8 +571,9 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // House/World embodiments stay inside an ordinary room. Fetch it only when
   // one of those causal surfaces actually consumes it: Home, Atlas, Field, or
   // a causal Focus object. Ordinary Record sessions still pay no Atlas read.
-  const causalObjectSelected = objectId?.startsWith('geo_scope:')
-    || objectId?.startsWith('field_mark:')
+  const causalObjectSelected = Boolean(
+    objectId?.startsWith('geo_scope:') || objectId?.startsWith('field_mark:'),
+  )
   const atlas = useAtlas(Boolean(accessToken) && (
     isHome
     || workspaceScene === 'atlas'
@@ -916,6 +917,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
       <AtlasScene
         state={atlas}
         view={viewId}
+        selectedObjectId={objectId}
         signalRoomTokens={accessToken ? signalRoomTokens : undefined}
         // Atlas retry refreshes the combined live/durable projection. Queue a
         // room projection refresh too through the same loading-safe contract;

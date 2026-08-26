@@ -5,7 +5,7 @@ import { api } from './lib/api.ts'
 import { useAppStore } from './stores/appStore.ts'
 import type { Message, Room, Thread, UserRoom } from './types/index.ts'
 import type { RoomNavigation } from './hooks/useRoomNavigation.ts'
-import type { AtlasProjection } from './types/atlas.ts'
+import type { AtlasGeoScope, AtlasProjection } from './types/atlas.ts'
 import type { GeoScope, WorldSignal } from './types/geo.ts'
 import { ChatLayout } from './App.tsx'
 
@@ -190,8 +190,9 @@ beforeEach(() => {
   geoHook.mockReturnValue({ status: 'loading', retry: projections.refreshGeo })
 })
 
-const placedScope: GeoScope = {
+const placedScope: AtlasGeoScope = {
   id: 'geo_scope:scope-1',
+  lineage_root_id: 'geo_scope:scope-1',
   room_id: room.id,
   subject: { entity: 'rooms', id: room.id },
   kind: 'point',
@@ -211,7 +212,7 @@ const placedScope: GeoScope = {
 }
 
 function atlasProjection(
-  nodes: AtlasProjection['nodes'], scopes: GeoScope[] = [],
+  nodes: AtlasProjection['nodes'], scopes: AtlasGeoScope[] = [],
 ): AtlasProjection {
   return {
     generated_at: '2026-08-25T18:00:00Z',

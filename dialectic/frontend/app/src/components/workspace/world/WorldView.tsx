@@ -51,6 +51,8 @@ interface WorldViewProps {
   /** Frame these scopes (a room's) instead of all when no camera is given. */
   focusScopes?: GeoScope[] | null
   focusSignals?: WorldSignal[] | null
+  /** The one durable object selected through the shared navigation axis. */
+  selectedScopeId?: string | null
   onSelect: (scope: GeoScope) => void
   onCameraSettle: (camera: WorldCamera) => void
 }
@@ -84,21 +86,28 @@ function cameraOf(viewer: Cesium.Viewer): WorldCamera | null {
   }
 }
 
-function addScope(viewer: Cesium.Viewer, scope: GeoScope): void {
+export function addScope(
+  viewer: Cesium.Viewer, scope: GeoScope, selected = false,
+): void {
   const provisional = isProvisional(scope)
   const line = provisional ? PROVISIONAL : LINE
   const g = scope.geometry
-  const base = { id: scope.id, name: scope.label || scope.kind, description: undefined }
+  const base = {
+    id: scope.id,
+    name: scope.label || scope.kind,
+    description: undefined,
+    properties: { worldScope: true, selected },
+  }
   if (g.type === 'Point') {
     const [lon, lat] = g.coordinates as number[]
     viewer.entities.add({
       ...base,
       position: Cesium.Cartesian3.fromDegrees(lon, lat),
       point: {
-        pixelSize: 9,
+        pixelSize: selected ? 14 : 9,
         color: provisional ? PROVISIONAL : PIN,
         outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
-        outlineWidth: 1,
+        outlineWidth: selected ? 3 : 1,
         heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
       },
       label: {
@@ -118,7 +127,7 @@ function addScope(viewer: Cesium.Viewer, scope: GeoScope): void {
       ...base,
       polyline: {
         positions: Cesium.Cartesian3.fromDegreesArray(flat),
-        width: provisional ? 2 : 3,
+        width: selected ? 5 : provisional ? 2 : 3,
         material: provisional
           ? new Cesium.PolylineDashMaterialProperty({ color: line, dashLength: 12 })
           : line,
@@ -137,12 +146,12 @@ function addScope(viewer: Cesium.Viewer, scope: GeoScope): void {
         material: provisional ? PROVISIONAL.withAlpha(0.08) : FILL,
         outline: true,
         outlineColor: line,
-        outlineWidth: 2,
+        outlineWidth: selected ? 4 : 2,
         heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
       },
       polyline: {
         positions: Cesium.Cartesian3.fromDegreesArray(flat),
-        width: provisional ? 1.5 : 2,
+        width: selected ? 4 : provisional ? 1.5 : 2,
         material: provisional
           ? new Cesium.PolylineDashMaterialProperty({ color: line, dashLength: 10 })
           : line,
@@ -170,7 +179,8 @@ function frame(
 }
 
 export default function WorldView({
-  scopes, signals, initialCamera, focusScopes, focusSignals, onSelect, onCameraSettle,
+  scopes, signals, initialCamera, focusScopes, focusSignals,
+  selectedScopeId = null, onSelect, onCameraSettle,
 }: WorldViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const creditRef = useRef<HTMLDivElement>(null)
@@ -282,11 +292,11 @@ export default function WorldView({
     const viewer = viewerRef.current
     if (!viewer || viewer.isDestroyed()) return
     viewer.entities.removeAll()
-    for (const scope of scopes) addScope(viewer, scope)
+    for (const scope of scopes) addScope(viewer, scope, scope.id === selectedScopeId)
     for (const signal of signals) addSignal(viewer, signal)
     ;(viewer as unknown as { __scopes?: GeoScope[] }).__scopes = scopes
     viewer.scene.requestRender()
-  }, [scopes, signals])
+  }, [scopes, signals, selectedScopeId])
 
   // Initial camera: restore, or frame the focus set, or frame everything.
   const framedRef = useRef(false)

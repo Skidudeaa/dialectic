@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AtlasScene } from './AtlasScene'
 import { api } from '../../../lib/api.ts'
 import type { AtlasState } from '../../../hooks/useAtlas.ts'
-import type { AtlasNode, AtlasEdge } from '../../../types/atlas.ts'
+import type {
+  AtlasEdge,
+  AtlasGeoScope,
+  AtlasNode,
+  CausalGeoBinding,
+} from '../../../types/atlas.ts'
 import type { GeoScope, WorldSignal } from '../../../types/geo.ts'
 
 function node(partial: Partial<AtlasNode> & Pick<AtlasNode, 'id' | 'kind' | 'room_id'>): AtlasNode {
@@ -153,15 +158,20 @@ describe('AtlasScene', () => {
 // ---------------------------------------------------------------------------
 
 vi.mock('../world/WorldView', () => ({
-  default: (props: { scopes: GeoScope[]; signals: WorldSignal[]; onSelect: (scope: GeoScope) => void }) => (
+  default: (props: {
+    scopes: GeoScope[]
+    signals: WorldSignal[]
+    selectedScopeId?: string | null
+    onSelect: (scope: GeoScope) => void
+  }) => (
     <div data-testid="world-view-mock">
-      scopes:{props.scopes.length};signals:{props.signals.length}
+      scopes:{props.scopes.length};signals:{props.signals.length};selected:{props.selectedScopeId ?? 'none'}
       <button type="button" onClick={() => props.onSelect(props.scopes[0])}>Select globe scope</button>
     </div>
   ),
 }))
 
-function readyWithScopes(nodes: AtlasNode[], scopes: GeoScope[]): AtlasState {
+function readyWithScopes(nodes: AtlasNode[], scopes: AtlasGeoScope[]): AtlasState {
   return {
     status: 'ready',
     projection: { generated_at: 'x', nodes, edges: [], scopes },
@@ -169,8 +179,9 @@ function readyWithScopes(nodes: AtlasNode[], scopes: GeoScope[]): AtlasState {
   }
 }
 
-const hormuzScope: GeoScope = {
+const hormuzScope: AtlasGeoScope = {
   id: 'geo_scope:s1', room_id: 'room-h',
+  lineage_root_id: 'geo_scope:s1',
   subject: { entity: 'rooms', id: 'room-h' },
   kind: 'polygon' as const,
   geometry: { type: 'Polygon', coordinates: [[[55, 26], [57, 26], [57, 27], [55, 26]]] },
@@ -197,7 +208,7 @@ const vesselSignal: WorldSignal = {
 }
 
 function readyWithWorld(
-  nodes: AtlasNode[], scopes: GeoScope[], signals: WorldSignal[], retry = vi.fn(),
+  nodes: AtlasNode[], scopes: AtlasGeoScope[], signals: WorldSignal[], retry = vi.fn(),
 ): AtlasState {
   return {
     status: 'ready', retry,
@@ -453,5 +464,85 @@ describe('AtlasScene / World', () => {
       />,
     )
     expect(screen.getByRole('region', { name: 'Live signals' })).toHaveTextContent('not configured')
+  })
+
+  const causalBinding: CausalGeoBinding = {
+    id: 'field_mark:causal',
+    current_scope_id: hormuzScope.id,
+    evidence_scope_id: 'geo_scope:root-s1',
+    relation: 'supports',
+    review_state: 'confirmed',
+    provisional: false,
+    target: {
+      room_id: 'room-h', book_id: 'hormuz-book', node_id: 'shipping',
+      node_label: 'Shipping chokepoint',
+    },
+  }
+
+  function synapseState(): AtlasState {
+    return {
+      status: 'ready',
+      retry: vi.fn(),
+      projection: {
+        generated_at: 'x', nodes: rooms, edges: [],
+        scopes: [{ ...hormuzScope, lineage_root_id: 'geo_scope:root-s1' }],
+        causal_bindings: [causalBinding],
+        causal_bindings_total: 1,
+        causal_bindings_omitted: 0,
+        causal_bindings_complete: true,
+      },
+    }
+  }
+
+  it('selects the current live scope when Focus carries its lineage root', () => {
+    render(
+      <AtlasScene
+        state={synapseState()}
+        selectedObjectId="geo_scope:root-s1"
+        onNavigate={vi.fn()}
+      />,
+    )
+
+    const row = screen.getByRole('button', { name: /Strait of Hormuz/ })
+    expect(row).toHaveAttribute('aria-current', 'true')
+    expect(row).toHaveTextContent('Selected')
+  })
+
+  it('keeps Field mark selection while highlighting and explaining its World evidence', async () => {
+    const onNavigate = vi.fn()
+    render(
+      <AtlasScene
+        state={synapseState()}
+        selectedObjectId={causalBinding.id}
+        onNavigate={onNavigate}
+        view="world;room=room-h"
+        onView={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByTestId('world-view-mock')).toHaveTextContent(
+      `selected:${hormuzScope.id}`,
+    )
+    const overlays = screen.getAllByRole('list', { name: /Causal bindings for Strait of Hormuz/ })
+    expect(overlays.length).toBeGreaterThanOrEqual(2)
+    expect(overlays[0]).toHaveTextContent('Supports')
+    expect(overlays[0]).toHaveTextContent('Shipping chokepoint')
+    expect(overlays[0]).toHaveTextContent('Confirmed')
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Supports' })[0])
+    expect(onNavigate).toHaveBeenCalledWith({
+      roomId: 'room-h', object: causalBinding.id,
+    })
+  })
+
+  it('states when the bounded projection omits causal bindings', () => {
+    const state = synapseState()
+    if (state.status !== 'ready') throw new Error('fixture must be ready')
+    state.projection.causal_bindings_omitted = 3
+    state.projection.causal_bindings_complete = false
+
+    render(<AtlasScene state={state} onNavigate={vi.fn()} />)
+
+    expect(screen.getByText('3 more causal bindings omitted.')).toBeInTheDocument()
   })
 })

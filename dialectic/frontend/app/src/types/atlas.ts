@@ -78,13 +78,40 @@ export interface AtlasEdge {
   label: string
 }
 
+export interface AtlasGeoScope extends GeoScope {
+  /** Canonical object identity shared by every append-only revision. */
+  lineage_root_id: string
+}
+
+export interface CausalGeoTarget {
+  room_id: string
+  book_id: string
+  node_id: string
+  node_label: string
+}
+
+export interface CausalGeoBinding {
+  id: string
+  current_scope_id: string
+  evidence_scope_id: string
+  relation: 'supports' | 'challenges' | 'context'
+  review_state: 'provisional' | 'confirmed' | 'contested' | 'superseded'
+  provisional: boolean
+  target: CausalGeoTarget
+}
+
 export interface AtlasProjection {
   generated_at: string
   nodes: AtlasNode[]
   edges: AtlasEdge[]
   // World Lens: the live geometry in the viewer's eligible rooms, fenced by
   // the same array as every node. Joined to nodes client-side by subject.
-  scopes: GeoScope[]
+  scopes: AtlasGeoScope[]
+  /** Enhanced Atlas only; absent from the source-compatible default GET. */
+  causal_bindings?: CausalGeoBinding[]
+  causal_bindings_total?: number
+  causal_bindings_omitted?: number
+  causal_bindings_complete?: boolean
   /** Present only on `GET /users/me/atlas?signals=1`; optional so the default
    * Atlas wire contract remains source-compatible. */
   signals?: WorldSignal[]

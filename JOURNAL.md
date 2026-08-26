@@ -149,3 +149,4 @@
 [2026-08-25] taught enhanced Atlas one canonical identity per live scope lineage — current geometry names its immutable root and carries the same bounded Field binding DTO while the default four-key Atlas response remains unchanged
 [2026-08-25] made participant World sight speak the same causal object language as Atlas — selected scope destinations now carry the canonical root object and binding scope IDs use the geo_scope namespace instead of bare UUIDs
 [2026-08-25] moved Atlas through the room instead of out of it — ordinary rooms now admit the same Atlas scene, House and World preserve Focus identity, and a room change deliberately clears the prior object and camera
+[2026-08-25] rendered Synapse as one selected causal object across House and World — current scope, immutable lineage root, and Field mark all highlight the same real geometry and disclose the shared bounded evidence DTO with honest omission state
