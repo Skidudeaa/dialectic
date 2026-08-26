@@ -66,7 +66,11 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from field_marks import FieldMarkService
+from field_marks import (
+    CausalGeoBinding,
+    CausalGeoBindingsProjection,
+    FieldMarkService,
+)
 from geo_scopes import GeoScope, live_predicate as _geo_live_predicate, scope_from_row
 from home_activity import COMMITMENT_DUE_WINDOW
 from workspace_objects import workspace_object_from_field_mark
@@ -113,6 +117,8 @@ _ATLAS_TOTAL_CAP = 400
 _ATLAS_UNRESOLVED_PER_ROOM_CAP = 10
 _ATLAS_UNRESOLVED_TOTAL_CAP = 100
 _ATLAS_EDGE_CAP = 300
+_ATLAS_CAUSAL_PER_ROOM_CAP = 25
+_ATLAS_CAUSAL_TOTAL_CAP = 200
 
 
 class AtlasRef(BaseModel):
@@ -159,6 +165,12 @@ class AtlasEdge(BaseModel):
     label: str = ""
 
 
+class AtlasGeoScope(GeoScope):
+    """A live GeoScope plus the canonical object identity of its lineage."""
+
+    lineage_root_id: str
+
+
 class AtlasProjection(BaseModel):
     generated_at: datetime
     nodes: list[AtlasNode]
@@ -169,13 +181,17 @@ class AtlasProjection(BaseModel):
     # (`reading:<id>`, `room:<id>`, `field_mark:<id>`) client-side. Nodes
     # carry no geo field on purpose — "not geographically modeled" is the
     # absence of a scope, never a null a renderer might misread as (0,0).
-    scopes: list[GeoScope] = []
+    scopes: list[AtlasGeoScope] = []
 
 
 class AtlasSignalProjection(AtlasProjection):
     """The opt-in ephemeral layer; absent entirely from the default contract."""
     signals: list[WorldSignal]
     signal_sources: WorldSignalSources
+    causal_bindings: list[CausalGeoBinding]
+    causal_bindings_total: int
+    causal_bindings_omitted: int
+    causal_bindings_complete: bool
 
 
 # --- statements --------------------------------------------------------
@@ -187,7 +203,7 @@ class AtlasSignalProjection(AtlasProjection):
 # that consumes it.
 
 _GEO_SCOPES_SQL = f"""
-WITH ranked AS (
+WITH RECURSIVE ranked AS (
     SELECT g.id, g.room_id, g.subject, g.kind, g.geometry, g.label,
            g.authority, g.provenance, g.source_state, g.observed_at,
            g.retrieved_at, g.expires_at, g.confirmed_by, g.confirmed_at,
@@ -198,10 +214,36 @@ WITH ranked AS (
            ) AS rn
     FROM geo_scopes g
     WHERE g.room_id = ANY($1::uuid[]) AND {_geo_live_predicate("g")}
+), selected AS (
+    SELECT * FROM ranked
+    WHERE rn <= $2
+    ORDER BY created_at DESC
+    LIMIT $3
+), lineage AS (
+    SELECT selected.id AS current_scope_id,
+           selected.id AS revision_id,
+           selected.room_id,
+           selected.supersedes_id
+    FROM selected
+    UNION ALL
+    SELECT lineage.current_scope_id,
+           predecessor.id,
+           predecessor.room_id,
+           predecessor.supersedes_id
+    FROM lineage
+    JOIN geo_scopes predecessor
+      ON predecessor.id = lineage.supersedes_id
+     AND predecessor.room_id = lineage.room_id
+    WHERE predecessor.room_id = ANY($1::uuid[])
+), roots AS (
+    SELECT current_scope_id, revision_id AS root_scope_id
+    FROM lineage
+    WHERE supersedes_id IS NULL
 )
-SELECT * FROM ranked WHERE rn <= $2
-ORDER BY created_at DESC
-LIMIT $3
+SELECT selected.*, roots.root_scope_id
+FROM selected
+JOIN roots ON roots.current_scope_id = selected.id
+ORDER BY selected.created_at DESC
 """
 
 _ELIGIBLE_ROOMS_SQL = """
@@ -377,6 +419,16 @@ def _clip(text: Optional[str], limit: int = 120) -> str:
     return ""
 
 
+def _atlas_scope_from_row(row: Any) -> AtlasGeoScope:
+    """Attach canonical lineage identity to the existing GeoScope projection."""
+
+    scope = scope_from_row(row)
+    return AtlasGeoScope(
+        **scope.model_dump(),
+        lineage_root_id=f"geo_scope:{row['root_scope_id']}",
+    )
+
+
 class AtlasService:
     """Builds one viewer's cross-room Atlas projection inside one snapshot.
 
@@ -416,7 +468,16 @@ class AtlasService:
         room_ids = [r["room_id"] for r in eligible]
         if not room_ids:
             projection = AtlasProjection(generated_at=generated_at, nodes=[], edges=[])
-            return self._with_signals(projection, room_ids) if include_signals else projection
+            if not include_signals:
+                return projection
+            causal = CausalGeoBindingsProjection(
+                generated_at=generated_at,
+                bindings=[],
+                total=0,
+                omitted=0,
+                complete=True,
+            )
+            return self._with_signals(projection, room_ids, causal)
 
         room_rows = await self.db.fetch(_ROOMS_SQL, room_ids, _ATLAS_ROOM_CAP)
         branch_rows = await self.db.fetch(
@@ -444,6 +505,20 @@ class AtlasService:
         scope_rows = await self.db.fetch(
             _GEO_SCOPES_SQL, room_ids, _ATLAS_PER_ROOM_CAP, _ATLAS_TOTAL_CAP,
         )
+        causal = CausalGeoBindingsProjection(
+            generated_at=generated_at,
+            bindings=[],
+            total=0,
+            omitted=0,
+            complete=True,
+        )
+        if include_signals:
+            causal = await FieldMarkService(self.db).atlas_causal_geo_bindings(
+                room_ids,
+                {row["id"] for row in scope_rows},
+                per_room_limit=_ATLAS_CAUSAL_PER_ROOM_CAP,
+                limit=_ATLAS_CAUSAL_TOTAL_CAP,
+            )
 
         nodes: list[AtlasNode] = []
         edges: list[AtlasEdge] = []
@@ -632,16 +707,26 @@ class AtlasService:
 
         projection = AtlasProjection(
             generated_at=generated_at, nodes=nodes, edges=edges,
-            scopes=[scope_from_row(r) for r in scope_rows],
+            scopes=[_atlas_scope_from_row(row) for row in scope_rows],
         )
-        return self._with_signals(projection, room_ids) if include_signals else projection
+        return (
+            self._with_signals(projection, room_ids, causal)
+            if include_signals else projection
+        )
 
     def _with_signals(
-        self, projection: AtlasProjection, room_ids: list[UUID],
+        self,
+        projection: AtlasProjection,
+        room_ids: list[UUID],
+        causal: CausalGeoBindingsProjection,
     ) -> AtlasSignalProjection:
         signal_projection = self.signal_store.project(room_ids)
         return AtlasSignalProjection(
             **projection.model_dump(),
             signals=signal_projection.signals,
             signal_sources=signal_projection.signal_sources,
+            causal_bindings=causal.bindings,
+            causal_bindings_total=causal.total,
+            causal_bindings_omitted=causal.omitted,
+            causal_bindings_complete=causal.complete,
         )

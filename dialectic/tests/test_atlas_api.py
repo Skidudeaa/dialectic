@@ -103,6 +103,14 @@ def test_signals_are_opt_in_and_absence_is_explicitly_not_configured() -> None:
     }
 
 
+def test_enhanced_atlas_response_names_empty_causal_state_exactly() -> None:
+    body = _client().get(f"{PATH}?signals=1").json()
+    assert body["causal_bindings"] == []
+    assert body["causal_bindings_total"] == 0
+    assert body["causal_bindings_omitted"] == 0
+    assert body["causal_bindings_complete"] is True
+
+
 def test_the_router_exposes_no_write_route() -> None:
     """Read-only is a property of the router, not a promise in a docstring —
     same assertion test_workspace_api.py makes for the workspace router."""

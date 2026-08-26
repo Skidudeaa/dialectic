@@ -16,7 +16,7 @@ Setup expected (skipped cleanly when absent):
 import json
 import os
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import asyncpg
 import pytest
@@ -28,6 +28,7 @@ from atlas_objects import (
     AtlasService,
 )
 from field_marks import compute_dedup_key
+from geo_scopes import insert_scope
 from world_signals import WorldSignal, WorldSignalSnapshot, WorldSignalStore
 
 TEST_DATABASE_URL = os.environ.get(
@@ -472,6 +473,160 @@ async def test_configured_empty_source_remains_configured_for_an_eligible_room(a
 async def test_signal_fields_do_not_exist_without_opt_in(atlas_world):
     projection = await AtlasService(atlas_world).build(AMO)
     assert set(projection.model_dump()) == {"generated_at", "nodes", "edges", "scopes"}
+
+
+@pytest.mark.asyncio
+async def test_enhanced_atlas_projects_scope_root_and_shared_causal_binding(atlas_world):
+    now = datetime.now(timezone.utc)
+    provenance = {
+        "provider": "human",
+        "acquisition": "human",
+        "source_id": "atlas-synapse-test",
+        "credit": "Synthetic test fixture",
+    }
+    root_scope_id = await insert_scope(
+        atlas_world,
+        room_id=ROOM_SHARED,
+        subject={"entity": "rooms", "id": str(ROOM_SHARED)},
+        kind="point",
+        geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+        label="Original Hormuz evidence",
+        authority="human_confirmed",
+        provenance=provenance,
+        confirmed_by=AMO,
+        revision_action="place",
+        created_by=AMO,
+        now=now,
+    )
+    current_scope_id = await insert_scope(
+        atlas_world,
+        room_id=ROOM_SHARED,
+        subject={"entity": "rooms", "id": str(ROOM_SHARED)},
+        kind="point",
+        geometry={"type": "Point", "coordinates": [56.4, 26.6]},
+        label="Current Hormuz evidence",
+        authority="human_confirmed",
+        provenance=provenance,
+        confirmed_by=AMO,
+        supersedes_id=root_scope_id,
+        revision_action="redraw",
+        created_by=AMO,
+        now=now + timedelta(seconds=1),
+    )
+    mark_id = uuid4()
+    subjects = [
+        {"entity": "geo_scopes", "id": str(root_scope_id)},
+        {
+            "entity": "rooms",
+            "id": str(ROOM_SHARED),
+            "field": "thesis_node:atlas-thesis-graph:shipping",
+        },
+    ]
+    await atlas_world.execute(
+        """INSERT INTO field_marks
+               (id, room_id, thread_id, mark_kind, relation, origin,
+                provenance, subjects, title, payload, actor_user_id,
+                created_at, dedup_key)
+           VALUES ($1,$2,$3,'relation','supports','explicit','human',$4,$5,$6,
+                   $7,$8,$9)""",
+        mark_id,
+        ROOM_SHARED,
+        TH_SHARED,
+        subjects,
+        "Hormuz supports shipping",
+        {"node_label": "Shipping chokepoint"},
+        AMO,
+        now + timedelta(seconds=2),
+        compute_dedup_key("supports", subjects),
+    )
+    await atlas_world.execute(
+        """INSERT INTO field_marks
+               (id, room_id, mark_kind, action, target_mark_id, actor_user_id,
+                provenance, created_at, payload)
+           VALUES ($1,$2,'review','confirm',$3,$4,'human',$5,'{}'::jsonb)""",
+        uuid4(), ROOM_SHARED, mark_id, AMO, now + timedelta(seconds=3),
+    )
+
+    projection = await AtlasService(atlas_world).build(AMO, include_signals=True)
+
+    scope = next(
+        item for item in projection.scopes
+        if item.id == f"geo_scope:{current_scope_id}"
+    )
+    assert scope.lineage_root_id == f"geo_scope:{root_scope_id}"
+    assert projection.causal_bindings_total == 1
+    assert projection.causal_bindings_omitted == 0
+    assert projection.causal_bindings_complete is True
+    assert projection.causal_bindings[0].model_dump(mode="json") == {
+        "id": f"field_mark:{mark_id}",
+        "current_scope_id": f"geo_scope:{current_scope_id}",
+        "evidence_scope_id": f"geo_scope:{root_scope_id}",
+        "relation": "supports",
+        "review_state": "confirmed",
+        "provisional": False,
+        "target": {
+            "room_id": str(ROOM_SHARED),
+            "book_id": "atlas-thesis-graph",
+            "node_id": "shipping",
+            "node_label": "Shipping chokepoint",
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_enhanced_atlas_causal_binding_never_crosses_viewer_fence(atlas_world):
+    now = datetime.now(timezone.utc)
+    scope_id = await insert_scope(
+        atlas_world,
+        room_id=ROOM_AMO,
+        subject={"entity": "rooms", "id": str(ROOM_AMO)},
+        kind="point",
+        geometry={"type": "Point", "coordinates": [10.0, 10.0]},
+        label="AMO-ONLY-SCOPE-SENTINEL",
+        authority="human_confirmed",
+        provenance={
+            "provider": "human", "acquisition": "human",
+            "source_id": "amo-only", "credit": "Synthetic test fixture",
+        },
+        confirmed_by=AMO,
+        revision_action="place",
+        created_by=AMO,
+        now=now,
+    )
+    mark_id = uuid4()
+    subjects = [
+        {"entity": "geo_scopes", "id": str(scope_id)},
+        {
+            "entity": "rooms", "id": str(ROOM_AMO),
+            "field": "thesis_node:amo-only-book:sentinel",
+        },
+    ]
+    await atlas_world.execute(
+        """INSERT INTO field_marks
+               (id, room_id, thread_id, mark_kind, relation, origin,
+                provenance, subjects, title, payload, actor_user_id,
+                created_at, dedup_key)
+           VALUES ($1,$2,$3,'relation','challenges','explicit','human',$4,$5,$6,
+                   $7,$8,$9)""",
+        mark_id,
+        ROOM_AMO,
+        TH_AMO,
+        subjects,
+        "AMO-ONLY-CAUSAL-SENTINEL",
+        {"node_label": "AMO-ONLY-NODE-SENTINEL"},
+        AMO,
+        now,
+        compute_dedup_key("challenges", subjects),
+    )
+
+    amo = await AtlasService(atlas_world).build(AMO, include_signals=True)
+    dan = await AtlasService(atlas_world).build(DAN, include_signals=True)
+
+    assert "AMO-ONLY-CAUSAL-SENTINEL" not in amo.model_dump_json()
+    assert f"field_mark:{mark_id}" in amo.model_dump_json()
+    assert "AMO-ONLY-NODE-SENTINEL" in amo.model_dump_json()
+    assert f"field_mark:{mark_id}" not in dan.model_dump_json()
+    assert "AMO-ONLY-NODE-SENTINEL" not in dan.model_dump_json()
 
 
 # ---------------------------------------------------------------------------
