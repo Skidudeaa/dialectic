@@ -12,7 +12,7 @@ bytes, activation, and human qualification separate. Do not call them all
 | Isolated worktree | `/root/DwoodAmo/.worktrees/world-lens-truth-before-spectacle` |
 | Branch | `codex/world-lens-truth-before-spectacle` |
 | Safe baseline | `origin/codex/world-lens-pre-phase2.5-20260825` = `3eabd4a` preserves prior Phase 0–2 source off-host. |
-| Task commits | Plan `a690fe6`; lineage `91014b8..808e17e`; review `fef716a..32e8333`; causal Field `0d2ae3c..472cc5a`; WorldSignal `48e9288..3dd9089`; participant sight/docs `e751968` + `7906e21`; independent-review fixes `0eadc74`. |
+| Task commits | Plan `a690fe6`; lineage `91014b8..808e17e`; review `fef716a..32e8333`; causal Field `0d2ae3c..472cc5a`; WorldSignal `48e9288..3dd9089`; participant sight/docs `e751968` + `7906e21`; independent-review fixes `0eadc74` + `987472d`; final evidence fixes `160a92e`. |
 | Push/publication | **Not pushed** unless later evidence says otherwise. The safety ref is not publication of this branch. |
 | Production migration 022 | **Not applied.** Exercised only on isolated/test PostgreSQL. |
 | Backend runtime | **Not restarted or loaded from this worktree.** |
@@ -35,10 +35,15 @@ bytes, activation, and human qualification separate. Do not call them all
 4. `dialectic/world_signals.py` owns bounded immutable snapshots. Atlas opt-in
    projection and bodyless human placement keep observations ephemeral until a
    person copies current same-room server bytes into a durable scope.
-5. `world_query` composes `GeoScopeService`, `FieldMarkService` semantic roles,
+5. `world_query` composes `GeoScopeService`, scope-specific bounded
+   `FieldMarkService` semantic roles with exact total/omitted/completeness,
    and `WorldSignalStore`; it is exact-room, read-only, bounded, and preserves
    not-configured/unavailable/unknown/empty/zero. `propose_geo_scope` remains
    the sole participant geography writer and creates a reviewed proposal only.
+6. Provider envelope expiry overrides every child signal; both snapshots and
+   signals require `observed_at <= retrieved_at < expires_at` when those
+   optional clocks exist. ScopeReview renders provider, acquisition, source
+   ID, exact URL, and credit for current and every historical revision.
 
 ## Exact local verification
 
@@ -76,29 +81,37 @@ Inherited frontend baseline before Task 5: one test failure
 glossary marker); two lint findings at `MessageList.tsx:247` and
 `HomeActivityPulse.tsx:379`. Re-run and report exact current results.
 
-Latest isolated evidence on `0eadc74`: backend `2102 passed`; exact PostgreSQL
+Latest full-suite baseline on `0eadc74` (unchanged by docs-only `987472d`):
+backend `2102 passed`; exact PostgreSQL
 slice `120 passed, 0 skipped`; focused Task 5 backend `232 passed`; focused
 World frontend `23 passed`; full frontend `551 passed, 1 inherited failure`;
 full lint `2 inherited errors`, changed World files clean; production build
-passed; authenticated browser/migration harness `43/43 passed`. The harness
-observed no page errors, HTTP 500s, or reset markers and classified its sole
-ASGI exception exactly as browser-context `WebSocketDisconnect (1001, '')`.
+passed; authenticated browser/migration harness `43/43 passed`.
 
-## Known deferred gaps — explicit, not lost
+Fresh final-wave evidence on `160a92e`: relevant backend/PostgreSQL `118
+passed`; focused World/Focus frontend `32 passed`; changed Python Ruff and
+changed TypeScript ESLint passed; production frontend build passed inside the
+isolated harness; authenticated browser/migration harness `47/47 passed`.
+The harness used a unique disposable DB/evidence directory and kernel-assigned
+ports, measured 44 px Place and 12 px signal/source metadata at 390 px,
+collapsed failed WebGL to a zero-height canvas, reached its row after 17 real
+Tab stops, and observed no page errors, HTTP 500s, reset markers, or ASGI
+exceptions. Per final-wave instruction, full repo suites were not rerun; the
+main integration agent owns that fresh final verification.
 
-- Task 1: route coverage still lacks wrong/missing room-token cases and one
-  successful serialized lineage response.
-- Task 2: each ScopeReview history revision does not yet render the complete
-  source ID, URL, and credit provenance set consistently.
-- Task 3: an expired accepted scope can still show the causal-binding
-  affordance, and thesis-structure loading has no explicit visible/ARIA state.
-- Task 4: snapshot validation proves timezone awareness but not full clock
-  chronology; signal typography/control size remains below the established
-  12px/44px floor.
+## Remaining operational caveat — explicit, not lost
 
-These are review-visible integration backlog, not evidence that production or
-provider activation occurred. Resolve or explicitly accept them before a
-public physical-device gate.
+The Task 1–4 deferred correctness gaps are closed in `160a92e`: route token
+and serialized-lineage coverage, complete per-revision provenance, expired
+binding/load semantics, strict provider chronology, and the 12 px/44 px floor.
+
+Migration 021/schema declare `geo_scopes.room_id ... ON DELETE CASCADE`, while
+migration 022 deliberately rejects every GeoScope DELETE. A room delete that
+owns geographic evidence would therefore fail rather than erase authority.
+There is no room-deletion product route in this repository, so this wave does
+not weaken the append-only trigger or fabricate deletion semantics. Before any
+future room-deletion feature, design room tombstones and an explicit evidence
+retention/export policy; treat direct room deletion as an operations caveat.
 
 ## Physical-device protocol — pending
 
