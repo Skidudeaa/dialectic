@@ -175,6 +175,7 @@ WITH candidates AS (
     SELECT successor.supersedes_id AS target_id
     FROM field_marks successor
     JOIN candidates ON candidates.id = successor.supersedes_id
+    WHERE successor.room_id = $1
     GROUP BY successor.supersedes_id
 ), candidate_reviews AS (
     SELECT review.target_mark_id,
@@ -189,7 +190,8 @@ WITH candidates AS (
            ) AS reviews
     FROM field_marks review
     JOIN candidates ON candidates.id = review.target_mark_id
-    WHERE review.mark_kind = 'review'
+    WHERE review.room_id = $1
+      AND review.mark_kind = 'review'
     GROUP BY review.target_mark_id
 )
 SELECT candidates.*,

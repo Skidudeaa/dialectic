@@ -435,6 +435,25 @@ async def test_causal_geo_bindings_are_one_atomic_bounded_newest_first_read(fiel
         ],
         title="OTHER-ROOM-CAUSAL-SENTINEL", at=BASE + timedelta(days=1),
     )
+    # Malformed/manual rows must not be able to adjudicate another room's
+    # otherwise provisional candidate merely by naming its globally unique id.
+    await _review(
+        field_room, uuid4(), OTHER, mark_ids[1], "contest", AMO,
+        BASE + timedelta(minutes=2),
+    )
+    await _relation(
+        field_room, uuid4(), OTHER, thread=TH_OTHER, relation="supports",
+        origin="explicit", provenance="human", actor=AMO,
+        subjects=[
+            {"entity": "geo_scopes", "id": str(scope_id)},
+            {
+                "entity": "rooms", "id": str(OTHER),
+                "field": "thesis_node:other:malformed-successor",
+            },
+        ],
+        title="OTHER-ROOM-MALFORMED-SUCCESSOR",
+        at=BASE + timedelta(minutes=3), supersedes=mark_ids[1],
+    )
 
     class ReadAudit:
         def __init__(self, connection: asyncpg.Connection) -> None:
@@ -476,7 +495,10 @@ async def test_causal_geo_bindings_are_one_atomic_bounded_newest_first_read(fiel
     ]
     assert projection.marks[0].review == "confirmed"
     assert len(projection.marks[0].reviews) == 1
+    assert projection.marks[1].review == "provisional"
+    assert projection.marks[1].reviews == []
     assert "OTHER-ROOM-CAUSAL-SENTINEL" not in projection.model_dump_json()
+    assert "OTHER-ROOM-MALFORMED-SUCCESSOR" not in projection.model_dump_json()
     assert audited.candidate_calls == 1
     assert audited.read_calls == 1
 
