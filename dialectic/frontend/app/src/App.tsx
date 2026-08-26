@@ -1151,7 +1151,11 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
                     roomGeo.retry()
                     atlas.retry()
                   }}
-                  onMarked={() => { if (fieldMarks.status === 'ready') fieldMarks.refresh(); else if (fieldMarks.status === 'unavailable') fieldMarks.retry() }}
+                  onMarked={() => {
+                    if (fieldMarks.status === 'ready') fieldMarks.refresh()
+                    else if (fieldMarks.status === 'unavailable') fieldMarks.retry()
+                    atlas.retry()
+                  }}
                   worldBindings={causalBindings}
                   onOpenWorld={openWorldEvidence}
                 />

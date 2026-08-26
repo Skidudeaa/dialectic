@@ -663,6 +663,22 @@ def exercise_named_ui_writes(
         )),
         fallback_text,
     )
+    fallback_provenance = failed_synapse_page.get_by_role(
+        "group", name="Source provenance for Ratified and redrawn scope",
+    )
+    fallback_provenance.wait_for()
+    fallback_provenance_text = fallback_provenance.inner_text()
+    check(
+        "failed WebGL preserves exact scope provenance",
+        all(text in fallback_provenance_text for text in (
+            "fixture",
+            "adapter:fixture",
+            "hormuz-001",
+            "https://example.invalid/acceptance/hormuz-001",
+            "Acceptance fixture — not provider data",
+        )),
+        fallback_provenance_text,
+    )
     fallback_scope_button = fallback_row.locator(".atlas-row-open")
     fallback_visited = tab_to(failed_synapse_page, fallback_scope_button)
     check(

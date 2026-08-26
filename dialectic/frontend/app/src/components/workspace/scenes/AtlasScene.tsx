@@ -253,6 +253,23 @@ function SharedSourcesGroup({ nodes, onNavigate }: {
   )
 }
 
+function ScopeSourceProvenance({ scope }: { scope: AtlasGeoScope }) {
+  const provenance = scope.provenance
+  return (
+    <dl
+      className="world-scope-provenance"
+      role="group"
+      aria-label={`Source provenance for ${scope.label || 'Unlabelled'}`}
+    >
+      <div><dt>Provider</dt><dd>{provenance.provider}</dd></div>
+      <div><dt>Acquisition</dt><dd>{provenance.acquisition}</dd></div>
+      <div><dt>Source ID</dt><dd>{provenance.source_id || 'Not supplied'}</dd></div>
+      <div><dt>Exact URL</dt><dd>{provenance.url || 'Not supplied'}</dd></div>
+      <div><dt>Credit</dt><dd>{provenance.credit || 'Not supplied'}</dd></div>
+    </dl>
+  )
+}
+
 /** The scopes as rows — the same data the globe draws, readable without it.
  *  Every row says what it is, whose authority it carries, how fresh, and
  *  which room; a proposed scope reads as such rather than blending in. */
@@ -303,6 +320,7 @@ function OnTheMapGroup({
                 </span>
                 {selected ? <span className="world-selected-chip">Selected</span> : null}
               </button>
+              <ScopeSourceProvenance scope={scope} />
               <CausalBindingList
                 scopeLabel={scope.label || subject?.title || 'Unlabelled'}
                 bindings={causalBindings}

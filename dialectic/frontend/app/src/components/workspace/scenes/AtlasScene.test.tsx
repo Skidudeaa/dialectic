@@ -186,7 +186,10 @@ const hormuzScope: AtlasGeoScope = {
   kind: 'polygon' as const,
   geometry: { type: 'Polygon', coordinates: [[[55, 26], [57, 26], [57, 27], [55, 26]]] },
   label: 'Strait of Hormuz (approx.)', authority: 'human_confirmed' as const,
-  provenance: { provider: 'human', acquisition: 'human', credit: 'sketch' },
+  provenance: {
+    provider: 'human', acquisition: 'human', source_id: 'scope-source-1',
+    url: 'https://source.test/scope-1', credit: 'sketch',
+  },
   source_state: 'ok' as const, revision_action: 'place', review_note: null, review_state: 'accepted',
   freshness: { state: 'current', observed_at: null, retrieved_at: '2026-08-25T00:00:00Z', expires_at: null },
   centroid: [56, 26.5] as [number, number],
@@ -506,6 +509,19 @@ describe('AtlasScene / World', () => {
     const row = screen.getByRole('button', { name: /Strait of Hormuz/ })
     expect(row).toHaveAttribute('aria-current', 'true')
     expect(row).toHaveTextContent('Selected')
+  })
+
+  it('keeps complete scope provenance visible in the list without WebGL', () => {
+    render(<AtlasScene state={synapseState()} onNavigate={vi.fn()} />)
+
+    const provenance = screen.getByRole('group', {
+      name: 'Source provenance for Strait of Hormuz (approx.)',
+    })
+    expect(provenance).toHaveTextContent('Providerhuman')
+    expect(provenance).toHaveTextContent('Acquisitionhuman')
+    expect(provenance).toHaveTextContent('Source IDscope-source-1')
+    expect(provenance).toHaveTextContent('Exact URLhttps://source.test/scope-1')
+    expect(provenance).toHaveTextContent('Creditsketch')
   })
 
   it('keeps Field mark selection while highlighting and explaining its World evidence', async () => {

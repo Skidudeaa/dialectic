@@ -106,6 +106,9 @@ Causal meaning is rendered as explicit DOM text (`scope -> relation -> thesis
 node -> review state`) and never as a geographic ray. A map connector is
 allowed only when both endpoints are accepted geographic coordinates; a
 scope-to-thesis relationship is semantic evidence, not measured geography.
+The text-first scope list is authoritative even when Cesium cannot start: it
+keeps provider, acquisition, source ID, exact URL, and credit visible beside
+each scope rather than relying on globe-owned attribution or interaction.
 
 ### Trading Integration
 

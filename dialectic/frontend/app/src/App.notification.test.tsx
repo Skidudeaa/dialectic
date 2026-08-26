@@ -67,15 +67,19 @@ vi.mock('./hooks/useAtlas.ts', () => ({
 }))
 vi.mock('./components/workspace/focus/FocusSurface.tsx', () => ({
   FocusSurface: ({
-    onGeoChanged, onOpenWorld, onReview, worldBindings = [],
+    onGeoChanged, onMarked, onOpenWorld, onReview, worldBindings = [],
   }: {
     onGeoChanged: () => void
+    onMarked?: () => void
     onOpenWorld?: (scopeObjectId: string, selectedObject?: string) => void
     onReview: (markId: string, request: { action: 'confirm' }) => Promise<void>
     worldBindings?: CausalGeoBinding[]
   }) => (
     <>
       <button type="button" onClick={onGeoChanged}>Complete scope write</button>
+      {onMarked ? (
+        <button type="button" onClick={onMarked}>Complete causal bind</button>
+      ) : null}
       <button
         type="button"
         onClick={() => void onReview('field_mark:causal', { action: 'confirm' })}
@@ -424,6 +428,15 @@ describe('world projection refresh', () => {
     render(<ChatLayout nav={navigation('', 'field_mark:causal')} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Complete Field review' }))
+
+    await waitFor(() => expect(projections.refreshAtlas).toHaveBeenCalledOnce())
+  })
+
+  it('refreshes enhanced Atlas when a provisional causal binding is created', async () => {
+    vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
+    render(<ChatLayout nav={navigation('', 'geo_scope:root')} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Complete causal bind' }))
 
     await waitFor(() => expect(projections.refreshAtlas).toHaveBeenCalledOnce())
   })

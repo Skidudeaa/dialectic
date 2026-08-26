@@ -12,17 +12,18 @@ scope.
 
 - Worktree: `/root/DwoodAmo/.worktrees/world-lens-truth-before-spectacle`
 - Branch: `codex/world-lens-truth-before-spectacle`
-- Qualification base `HEAD`: `7cc5958ff4a93de8b3c820c93e9008236d35077b`
+- Qualification base `HEAD`: `4bc03f166fffb791bda0737874b697dc5c3c3245`
 - Phase 3 implementation commits through that base:
-  `d7b7ff7`, `e67931e`, `fa4db17`, `3be3e28`, `43c887d`, `7cc5958`
-- The final qualification ran with a deliberate non-clean working tree: the
-  acceptance harness, Atlas-after-Field-review refresh, route expectations,
-  visible semantic casing, and lazy Cesium helper were not yet committed.
-- Canonical SHA-256 of that eight-file qualification patch, including the
-  untracked `worldScopeEntities.ts`:
-  `a5aa20ec22e8482e345d9e28d089bfe5c549d0eebbef677a5f24272875e99229`
-- Documentation and this ledger were added only after the successful run and
-  do not alter qualified runtime behavior.
+  `d7b7ff7`, `e67931e`, `fa4db17`, `3be3e28`, `43c887d`, `7cc5958`,
+  `4bc03f1`
+- The final qualification ran with a deliberate six-file independent-review
+  remediation patch: causal mark creation refreshes enhanced Atlas, every
+  live-scope row renders complete source provenance, and the browser harness
+  requires that provenance in a forced no-WebGL Synapse.
+- Canonical SHA-256 of that six-file source/harness patch:
+  `8073e33af0ed62529e83e3d14a4bdf692095f8e36aa54419c8cd6b22c88ad2e5`
+- `JOURNAL.md`, `dialectic/CLAUDE.md`, and this ledger were updated only after
+  the successful run and do not alter qualified runtime behavior.
 
 No schema or migration file changed in Phase 3.
 
@@ -31,16 +32,16 @@ No schema or migration file changed in Phase 3.
 | Gate | Exact result |
 |---|---|
 | Targeted backend + real PostgreSQL | `57 passed in 5.48s`; no skips in `test_field_marks_pg.py`, `test_atlas_pg.py`, `test_atlas_api.py`, or `test_world_tools.py` |
-| Targeted fused frontend | `9` files, `104 passed` |
+| Targeted fused frontend | `9` files, `106 passed` |
 | Full backend | `2125 passed in 45.68s` with `DIALECTIC_TEST_DATABASE_URL=postgresql://root@localhost/dialectic_test` |
-| Full frontend | `64` files, `578 passed` |
+| Full frontend | `64` files, `580 passed` |
 | ESLint | `npm run lint` passed with zero errors/warnings |
 | Production build | `tsc -b && vite build` passed; PWA service worker generated; existing large-chunk advisory only |
 | Diff whitespace | `git diff --check` passed on the final source and documentation diff |
 | Scope-word hygiene | Phase 3 diff contains no prohibited integration vocabulary or stealth stub; broad source scan returns only longstanding legitimate HTML `placeholder` attributes/comments |
 
 The frontend suite emits jsdom's known informational canvas message because
-the optional `canvas` package is not installed; all 578 tests pass.
+the optional `canvas` package is not installed; all 580 tests pass.
 
 ## Disposable browser qualification
 
@@ -50,14 +51,13 @@ Command:
 python3 docs/superpowers/acceptance/2026-08-25-world-lens-truth-acceptance.py
 ```
 
-Final result: **63/63 passed**.
+Final result: **64/64 passed**.
 
 Evidence directory (preserved):
-`/tmp/dialectic-world-lens-acceptance-1888703_406245025`
+`/tmp/dialectic-world-lens-acceptance-1910419_543346580`
 
-- `results.json` — 63 checks, 0 failed
-- `backend.log` — no HTTP 500; no runtime reset markers; the one ASGI
-  exception is exactly the classified browser-context WebSocket close 1001
+- `results.json` — 64 checks, 0 failed
+- `backend.log` — no HTTP 500, runtime reset marker, or ASGI exception
 - `preview.log` — ephemeral loopback Vite preview, stopped after the run
 - `synapse-desktop.png` — 1280 x 900
 - `synapse-webgl-failure.png` — 1280 x 900
@@ -79,7 +79,8 @@ Qualified visible sequence:
 4. Preserve room/object/Focus across House and World, causal-relation
    navigation, Back, and Forward.
 5. Copy the same URL into a forced no-WebGL context and retain Focus, literal
-   causal semantics, selected row, complete list, and keyboard traversal.
+   causal semantics, selected row, complete list, keyboard traversal, and the
+   exact provider/acquisition/source-ID/URL/credit chain.
 6. Supersede through UI and prove the retired scope leaves the live projection.
 
 ## Screenshot inspection
@@ -92,7 +93,8 @@ All four screenshots were opened at original resolution.
 - Synapse no-WebGL 1280 x 900: literal scope -> Supports -> thesis node ->
   Confirmed text is clean and readable; no connector can be mistaken for
   measured geography. The selected row also says `Selected` and carries an
-  amber border, so state is not color-only.
+  amber border, so state is not color-only. Provider, acquisition, source ID,
+  exact URL, and credit remain legible directly below that selected row.
 - 390 x 844 reduced-motion: no horizontal overflow; the Place target measures
   44px and action, metadata, source, and error text measure at least 12px.
 - Post-retirement no-WebGL 1280 x 900: only the two unrelated live scopes
@@ -105,7 +107,7 @@ All four screenshots were opened at original resolution.
 | Source checkout | QUALIFIED | Commits + patch hash above |
 | Local PostgreSQL | QUALIFIED | 57 targeted + 2125 full tests |
 | Local production build | QUALIFIED | Build passed in source gate and browser harness |
-| Disposable loopback browser | QUALIFIED | 63/63 and evidence directory above |
+| Disposable loopback browser | QUALIFIED | 64/64 and evidence directory above |
 | Local migration exercise | QUALIFIED | Migration 022 idempotent in disposable clone; clone dropped |
 | Production migration state | **NOT PERFORMED** | No production database access or mutation authorized |
 | Production runtime / PID | **NOT PERFORMED** | No service inspection, restart, or deployment authorized |

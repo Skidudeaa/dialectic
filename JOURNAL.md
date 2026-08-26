@@ -154,3 +154,5 @@
 [2026-08-25] refreshed enhanced Atlas after Field review — World causal text now changes from provisional to confirmed or contested in the same completed review transaction instead of retaining a stale projection
 [2026-08-25] kept durable-scope Cesium construction inside the lazy World chunk — a dedicated non-component module preserves Fast Refresh and selection unit tests without loading Cesium into House
 [2026-08-25] fused World and Dialectic through one causal Synapse projection — room, view, object, Focus, Field, and participant sight now preserve canonical scope lineage and exact Field meaning without inventing geography or a second authority
+[2026-08-25] invalidated enhanced Atlas at causal mark creation — a provisional Field binding now appears in World immediately instead of waiting for review or an unrelated refresh
+[2026-08-25] made exact scope provenance survive a dead globe — the authoritative text list keeps provider, acquisition, source ID, URL, and credit visible and browser-qualified when WebGL initialization fails

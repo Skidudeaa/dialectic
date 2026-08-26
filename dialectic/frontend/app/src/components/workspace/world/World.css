@@ -97,6 +97,26 @@
   color: var(--color-ghost);
   font-style: italic;
 }
+.world-scope-provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.8rem;
+  margin: 0.35rem 0.75rem 0.5rem;
+  color: var(--color-faint);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.world-scope-provenance div {
+  display: inline-flex;
+  min-width: 0;
+  gap: 0.25rem;
+}
+.world-scope-provenance dt { color: var(--color-secondary); }
+.world-scope-provenance dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .world-signals {
   border-top-color: rgba(86, 183, 242, 0.38);
 }
