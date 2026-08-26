@@ -262,10 +262,63 @@ describe('FocusSurface', () => {
     expect(history).toHaveTextContent('Place')
     expect(history).toHaveTextContent('Redraw')
     expect(history).toHaveTextContent('shoreline corrected')
-    expect(history).toHaveTextContent('natural_earth · adapter')
+    expect(history).toHaveTextContent('Providernatural_earth')
+    expect(history).toHaveTextContent('Acquisitionadapter')
     expect(history).toHaveTextContent('Polygon · 5 vertices')
     expect(history).toHaveTextContent('wrong basin')
     expect(fetchMock).toHaveBeenCalledWith('/rooms/r1/geo/root-1/review', expect.any(Object))
+  })
+
+  it('shows all five distinct provenance fields for the current scope and every history revision', async () => {
+    const historical = geoScope({
+      id: 'geo_scope:historical', label: 'Historical placement',
+      provenance: {
+        provider: 'history-provider', acquisition: 'adapter:history',
+        source_id: 'history-1', url: 'https://history.test/1', credit: 'History credit',
+      },
+    })
+    const current = geoScope({
+      id: 'geo_scope:current', label: 'Current placement label', supersedes_id: 'historical',
+      provenance: {
+        provider: 'current-provider', acquisition: 'adapter:current',
+        source_id: 'current-2', url: 'https://current.test/2', credit: 'Current credit',
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(geoReview({
+      current, lineage: [historical, current],
+    }))))
+
+    render(
+      <FocusSurface
+        {...baseProps}
+        objectId="geo_scope:root-1"
+        roomId="r1"
+        objects={noObjects}
+        fieldMarks={noMarks}
+      />,
+    )
+
+    const currentProvenance = await screen.findByRole('group', { name: 'Current placement provenance' })
+    expect(currentProvenance).toHaveTextContent('Providercurrent-provider')
+    expect(currentProvenance).toHaveTextContent('Acquisitionadapter:current')
+    expect(currentProvenance).toHaveTextContent('Source IDcurrent-2')
+    expect(currentProvenance).toHaveTextContent('CreditCurrent credit')
+    expect(within(currentProvenance).getByRole('link', { name: 'https://current.test/2' })).toHaveAttribute(
+      'href', 'https://current.test/2',
+    )
+    const history = screen.getByRole('list', { name: 'Scope history' })
+    const historicalRow = within(history).getByText(/Historical placement/).closest('li')
+    expect(historicalRow).not.toBeNull()
+    const historicalProvenance = within(historicalRow as HTMLElement).getByRole(
+      'group', { name: 'Historical placement provenance' },
+    )
+    expect(historicalProvenance).toHaveTextContent('Providerhistory-provider')
+    expect(historicalProvenance).toHaveTextContent('Acquisitionadapter:history')
+    expect(historicalProvenance).toHaveTextContent('Source IDhistory-1')
+    expect(historicalProvenance).toHaveTextContent('CreditHistory credit')
+    expect(within(historicalProvenance).getByRole('link', { name: 'https://history.test/1' })).toHaveAttribute(
+      'href', 'https://history.test/1',
+    )
   })
 
   it('opens the stored message subject with the exact server-derived thread and message destination', async () => {
@@ -540,5 +593,61 @@ describe('FocusSurface', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Bind to thesis node' }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/desk unavailable/i)
     expect(screen.queryByRole('button', { name: 'Add to Field' })).toBeNull()
+  })
+
+  it('does not offer an expired accepted scope as causal evidence', async () => {
+    const expired = geoScope({
+      freshness: {
+        state: 'expired', observed_at: '2026-08-24T12:00:00Z',
+        retrieved_at: '2026-08-25T00:00:00Z', expires_at: '2026-08-25T01:00:00Z',
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(geoReview({ current: expired }))))
+    render(
+      <FocusSurface
+        {...baseProps}
+        objectId="geo_scope:root-1"
+        roomId="r1"
+        objects={noObjects}
+        fieldMarks={noMarks}
+      />,
+    )
+
+    await screen.findByRole('heading', { name: 'Strait of Hormuz' })
+    expect(screen.queryByRole('button', { name: 'Bind to thesis node' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Redraw' })).toBeInTheDocument()
+  })
+
+  it('announces thesis loading with a changed label, busy state, and status', async () => {
+    let finishStructure: ((value: Response) => void) | undefined
+    const structureResponse = new Promise<Response>((resolve) => {
+      finishStructure = resolve
+    })
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(geoReview()))
+      .mockImplementationOnce(() => structureResponse)
+    vi.stubGlobal('fetch', fetchMock)
+    render(
+      <FocusSurface
+        {...baseProps}
+        objectId="geo_scope:root-1"
+        roomId="r1"
+        objects={noObjects}
+        fieldMarks={noMarks}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Bind to thesis node' }))
+    const loadingButton = await screen.findByRole('button', { name: 'Loading thesis structure…' })
+    expect(loadingButton).toBeDisabled()
+    expect(loadingButton).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByRole('status')).toHaveTextContent('Loading thesis structure…')
+
+    finishStructure?.(jsonResponse({
+      id: 'book', meta: { title: 'Book' },
+      nodes: [{ id: 'node', label: 'Node', type: 'event', phase: 1, state: 'watching', x: 0, y: 0 }],
+      edges: [], scenarios: [],
+    }))
+    expect(await screen.findByRole('button', { name: 'Add to Field' })).toBeInTheDocument()
   })
 })

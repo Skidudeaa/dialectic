@@ -377,6 +377,41 @@ async def test_ratify_appends_an_identical_human_confirmed_successor(world):
 
 
 @pytest.mark.asyncio
+async def test_ratifying_a_ratified_current_scope_is_rejected_without_a_write(world):
+    root_id = await insert_scope(
+        world, room_id=ROOM_AMO,
+        subject={"entity": "rooms", "id": str(ROOM_AMO)},
+        kind="route", geometry=LINE, label="AIS lane",
+        authority="source_reported", source_state="partial",
+        provenance={"provider": "ais", "acquisition": "adapter:ais"},
+    )
+    ratified = await geo_api._review(
+        ROOM_AMO, root_id, "ratify", _user(AMO), world,
+    )
+    current_id = UUID(ratified.id.removeprefix("geo_scope:"))
+    before_scopes = await world.fetchval(
+        "SELECT count(*) FROM geo_scopes WHERE room_id = $1", ROOM_AMO,
+    )
+    before_events = await world.fetchval(
+        "SELECT count(*) FROM events WHERE room_id = $1", ROOM_AMO,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await geo_api._review(
+            ROOM_AMO, current_id, "ratify", _user(AMO), world,
+        )
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail == "scope is already ratified"
+    assert await world.fetchval(
+        "SELECT count(*) FROM geo_scopes WHERE room_id = $1", ROOM_AMO,
+    ) == before_scopes
+    assert await world.fetchval(
+        "SELECT count(*) FROM events WHERE room_id = $1", ROOM_AMO,
+    ) == before_events
+
+
+@pytest.mark.asyncio
 async def test_ratify_route_accepts_a_legacy_human_confirmed_seed_scope(world):
     scope_id = uuid4()
     now = datetime.now(timezone.utc)
@@ -1174,6 +1209,34 @@ async def test_signal_placement_failures_leave_no_scope_or_event(world, monkeypa
             )
         assert exc.value.status_code == status
 
+    assert await world.fetchval("SELECT count(*) FROM geo_scopes") == before_scopes
+    assert await world.fetchval("SELECT count(*) FROM events") == before_events
+
+
+@pytest.mark.asyncio
+async def test_expired_signal_envelope_cannot_place_future_child(world, monkeypatch):
+    now = datetime.now(timezone.utc)
+    child = _world_signal("expired-envelope", expires_at=now + timedelta(minutes=10))
+    snapshot = WorldSignalSnapshot(
+        provider="ais", configured_room_ids=frozenset({ROOM_AMO}),
+        source_state="partial", freshness="current", coverage="receiver footprint",
+        retrieved_at=now - timedelta(minutes=2),
+        expires_at=now - timedelta(minutes=1), signals=(child,),
+    )
+    store = WorldSignalStore()
+    store.replace(snapshot)
+    monkeypatch.setattr(geo_api, "world_signal_store", store)
+    before_scopes = await world.fetchval("SELECT count(*) FROM geo_scopes")
+    before_events = await world.fetchval("SELECT count(*) FROM events")
+
+    with pytest.raises(HTTPException) as exc:
+        await geo_api.place_world_signal(
+            ROOM_AMO, child.id, token=f"tok-{ROOM_AMO}",
+            current_user=_user(AMO), db=world,
+        )
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail == "signal is expired"
     assert await world.fetchval("SELECT count(*) FROM geo_scopes") == before_scopes
     assert await world.fetchval("SELECT count(*) FROM events") == before_events
 

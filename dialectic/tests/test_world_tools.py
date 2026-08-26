@@ -331,7 +331,58 @@ async def test_world_query_reports_causal_roles_provisional_language_and_bounded
             "node_label": "Shipping chokepoint",
         },
     }]
+    assert out["scope"]["causal_bindings_total"] == 1
+    assert out["scope"]["causal_bindings_omitted"] == 0
+    assert out["scope"]["causal_bindings_complete"] is True
     assert "human review" in out["scope"]["causal_note"].lower()
+
+
+@pytest.mark.asyncio
+async def test_world_query_scope_bindings_are_not_hidden_by_room_field_projection_cap(db):
+    scope_id = await _accepted_scope(db, label="Old but causally relevant")
+    subjects = [
+        {"entity": "geo_scopes", "id": str(scope_id)},
+        {"entity": "rooms", "id": str(ROOM), "field": "thesis_node:book:node"},
+    ]
+    target_id = uuid4()
+    await db.execute(
+        """INSERT INTO field_marks
+               (id, room_id, mark_kind, relation, origin, provenance, subjects,
+                title, payload, actor_user_id, dedup_key, created_at)
+           VALUES ($1,$2,'relation','context','explicit','human',$3,$4,$5,$6,$7,$8)""",
+        target_id, ROOM, subjects, "Relevant old binding", {"node_label": "Node"},
+        AMO, f"target-{target_id}", datetime.now(timezone.utc) - timedelta(days=2),
+    )
+    now = datetime.now(timezone.utc)
+    await db.executemany(
+        """INSERT INTO field_marks
+               (id, room_id, mark_kind, relation, origin, provenance, subjects,
+                title, payload, actor_user_id, dedup_key, created_at)
+           VALUES ($1,$2,'relation','supports','explicit','human',$3,$4,'{}',$5,$6,$7)""",
+        [
+            (
+                uuid4(), ROOM,
+                [
+                    {"entity": "reading_items", "id": str(READING)},
+                    {"entity": "reading_items", "id": str(READING)},
+                ],
+                f"Unrelated {index}", AMO, f"unrelated-{index}",
+                now + timedelta(microseconds=index),
+            )
+            for index in range(500)
+        ],
+    )
+
+    out = await world.world_query(
+        db, ROOM, "Hormuz room", {"scope": "Old but causally relevant"},
+    )
+
+    assert out["scope"]["causal_bindings_total"] == 1
+    assert out["scope"]["causal_bindings_omitted"] == 0
+    assert out["scope"]["causal_bindings_complete"] is True
+    assert [binding["id"] for binding in out["scope"]["causal_bindings"]] == [
+        f"field_mark:{target_id}",
+    ]
 
 
 def _signal(now: datetime, *, source_id: str = "one") -> WorldSignal:

@@ -12,8 +12,8 @@ Four human_confirmed scopes, all with the room itself as subject:
 
 The hand-authored shapes are labelled "(approx.)" in their own label and
 say so in provenance.credit — they are a founder's sketch of where the
-argument happens, not a chart. Redrawing later is an ordinary POST to
-/rooms/{id}/geo; this script never UPDATEs anything.
+argument happens, not a chart. Redrawing later is an append-only POST to
+/rooms/{id}/geo/{scope_id}/redraw; this script never UPDATEs anything.
 
 Reviewed operator script — run manually, never automatically, as the
 founder who is confirming the geometry (their user id is stamped as

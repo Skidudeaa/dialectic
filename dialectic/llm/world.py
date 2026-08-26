@@ -475,7 +475,10 @@ async def world_query(
         lineage_ids = {
             scope.id.removeprefix("geo_scope:") for scope in review.lineage
         }
-        field = await FieldMarkService(db).build(room_id)
+        field = await FieldMarkService(db).causal_geo_bindings(
+            room_id, {UUID(scope_id) for scope_id in lineage_ids},
+            limit=_WORLD_QUERY_BINDING_CAP,
+        )
         bindings: list[dict[str, Any]] = []
         for mark in field.marks:
             subjects = [subject.model_dump() for subject in mark.subjects]
@@ -503,7 +506,9 @@ async def world_query(
             "root_id": review.root_id,
             "lineage": _bounded_lineage(review),
             "causal_bindings": bindings[:_WORLD_QUERY_BINDING_CAP],
-            "causal_bindings_omitted": max(0, len(bindings) - _WORLD_QUERY_BINDING_CAP),
+            "causal_bindings_total": field.total,
+            "causal_bindings_omitted": field.omitted,
+            "causal_bindings_complete": field.complete,
             "causal_note": (
                 "Field bindings are interpretations under human review; "
                 "provisional does not mean confirmed."

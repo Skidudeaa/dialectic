@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Deterministic authenticated Task 5 acceptance on disposable local state.
 
-The harness creates ``dialectic_world_acceptance`` from ``dialectic_test``,
+The harness creates a uniquely suffixed disposable database from ``dialectic_test``,
 applies migration 022, seeds one human/room/thread/message, and starts its own
 backend and built-preview processes on spare loopback ports.  The backend is
 the fixture-only app next to this script, which injects a WorldSignal snapshot
 directly into the process.  There is no HTTP snapshot writer.
 
 Evidence is intentionally small: two screenshots and a JSON result ledger are
-written beneath ``/tmp/dialectic-world-lens-acceptance``.  The disposable DB is
+written beneath a uniquely suffixed ``/tmp/dialectic-world-lens-acceptance-*``.  The disposable DB is
 dropped after both child processes stop, including on failure.
 """
 
@@ -18,6 +18,7 @@ import json
 import os
 import re
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -36,14 +37,26 @@ ROOT = Path(__file__).resolve().parents[3]
 DIALECTIC = ROOT / "dialectic"
 FRONTEND = DIALECTIC / "frontend" / "app"
 sys.path.insert(0, str(DIALECTIC))
-DB_NAME = "dialectic_world_acceptance"
+RUN_SUFFIX = f"{os.getpid()}_{time.time_ns() % 1_000_000_000}"
+DB_NAME = f"dialectic_world_acceptance_{RUN_SUFFIX}"
 DB_URL = f"postgresql://root@localhost/{DB_NAME}"
 SOURCE_DB = "dialectic_test"
-BACKEND_PORT = 8025
-PREVIEW_PORT = 4185
+
+
+def free_loopback_port() -> int:
+    """Ask the kernel for one currently unused loopback port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
+        reservation.bind(("127.0.0.1", 0))
+        return int(reservation.getsockname()[1])
+
+
+BACKEND_PORT = free_loopback_port()
+PREVIEW_PORT = free_loopback_port()
+while PREVIEW_PORT == BACKEND_PORT:
+    PREVIEW_PORT = free_loopback_port()
 API = f"http://127.0.0.1:{BACKEND_PORT}"
 BASE = f"http://127.0.0.1:{PREVIEW_PORT}"
-EVIDENCE = Path("/tmp/dialectic-world-lens-acceptance")
+EVIDENCE = Path(f"/tmp/dialectic-world-lens-acceptance-{RUN_SUFFIX}")
 BACKEND_LOG = EVIDENCE / "backend.log"
 PREVIEW_LOG = EVIDENCE / "preview.log"
 LEDGER = EVIDENCE / "results.json"
@@ -261,6 +274,23 @@ def watch_page(page: Page) -> None:
             f"HTTP 500: {response.request.method} {response.url}",
         ) if response.status == 500 else None,
     )
+
+
+def tab_to(page: Page, locator: Any, *, max_stops: int = 120) -> list[str]:
+    """Reach one visible control using only real keyboard Tab traversal."""
+    visited: list[str] = []
+    for _ in range(max_stops):
+        page.keyboard.press("Tab")
+        active = page.evaluate(
+            """() => {
+              const active = document.activeElement
+              return active ? `${active.tagName}:${active.textContent?.trim().slice(0, 80)}` : 'none'
+            }""",
+        )
+        visited.append(str(active))
+        if locator.evaluate("element => element === document.activeElement"):
+            return visited
+    raise RuntimeError(f"Tab did not reach control after {max_stops} stops: {visited[-10:]}")
 
 
 def login(page: Page) -> dict[str, Any]:
@@ -509,7 +539,7 @@ def exercise_browser(browser: Any) -> None:
     page.goto(f"{BASE}/?scene=atlas", wait_until="networkidle")
     modes = page.get_by_role("group", name="Atlas mode")
     check("House is the initial Atlas mode", modes.get_by_role("button", name="House").get_attribute("aria-pressed") == "true")
-    modes.get_by_role("button", name="World").focus()
+    tab_to(page, modes.get_by_role("button", name="World"))
     page.keyboard.press("Enter")
     page.wait_for_selector('[data-atlas-mode="world"]')
     check("keyboard opens World and preserves encoded World URL", "view=world" in page.url)
@@ -565,10 +595,16 @@ def exercise_browser(browser: Any) -> None:
           client: document.documentElement.clientWidth,
           reduced: matchMedia('(prefers-reduced-motion: reduce)').matches,
           world: document.querySelector('[data-atlas-mode="world"]') !== null,
+          placeHeight: document.querySelector('.world-signal-place')?.getBoundingClientRect().height ?? 0,
+          signalMetaFont: parseFloat(getComputedStyle(document.querySelector('.world-signal-meta')).fontSize),
+          sourceMetaFont: parseFloat(getComputedStyle(document.querySelector('.world-source-list')).fontSize),
         })""",
     )
     check("390px World has no horizontal overflow", facts["scroll"] <= facts["client"], facts)
     check("reduced motion is honored by the browser context", facts["reduced"] is True)
+    check("390px signal Place target is at least 44px", facts["placeHeight"] >= 44, facts)
+    check("390px signal metadata is at least 12px", facts["signalMetaFont"] >= 12, facts)
+    check("390px source metadata is at least 12px", facts["sourceMetaFont"] >= 12, facts)
     phone_page.screenshot(path=str(EVIDENCE / "world-390-reduced.png"), full_page=False)
     phone.close()
 
@@ -607,12 +643,20 @@ def exercise_browser(browser: Any) -> None:
         failed_page.locator(".cesium-widget-errorPanel").count() == 0
         and failed_page.get_by_text("Error constructing CesiumWidget.", exact=True).count() == 0,
     )
+    canvas_facts = failed_page.locator(".world-canvas").evaluate(
+        "element => ({ hidden: element.hidden, height: element.getBoundingClientRect().height })",
+    )
+    check(
+        "forced WebGL fallback collapses the unusable canvas region",
+        canvas_facts == {"hidden": True, "height": 0}, canvas_facts,
+    )
     failed_page.screenshot(path=str(EVIDENCE / "world-webgl-failure.png"), full_page=False)
     fallback_control = failed_page.locator(".world-scope-row", has_text="Message placement").get_by_role("button")
-    fallback_control.focus()
+    visited = tab_to(failed_page, fallback_control)
     check(
-        "forced WebGL text-list scope receives keyboard focus",
+        "actual Tab traversal reaches the forced-WebGL text-list scope",
         fallback_control.evaluate("element => element === document.activeElement"),
+        {"tab_stops": len(visited), "last": visited[-1]},
     )
     failed_page.keyboard.press("Enter")
     failed_page.get_by_role("heading", name="Message placement").wait_for()

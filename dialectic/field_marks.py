@@ -142,6 +142,35 @@ FROM field_marks
 WHERE mark_kind = 'review' AND target_mark_id = $1
 """
 
+_CAUSAL_GEO_WHERE_SQL = """
+room_id = $1
+AND mark_kind = 'relation'
+AND relation = ANY($2::text[])
+AND jsonb_array_length(subjects) = 2
+AND EXISTS (
+    SELECT 1 FROM jsonb_array_elements(subjects) AS subject
+    WHERE subject->>'entity' = 'geo_scopes'
+      AND subject->>'id' = ANY($3::text[])
+)
+AND EXISTS (
+    SELECT 1 FROM jsonb_array_elements(subjects) AS subject
+    WHERE subject->>'entity' = 'rooms'
+      AND subject->>'id' = $1::text
+      AND subject->>'field' ~ '^thesis_node:[^:]+:[^:]+$'
+)
+"""
+
+_CAUSAL_GEO_COUNT_SQL = f"""
+SELECT count(*) FROM field_marks WHERE {_CAUSAL_GEO_WHERE_SQL}
+"""
+
+_CAUSAL_GEO_IDS_SQL = f"""
+SELECT id FROM field_marks
+WHERE {_CAUSAL_GEO_WHERE_SQL}
+ORDER BY created_at DESC, id DESC
+LIMIT $4
+"""
+
 # Every entity a subject ref may name, and how to check it belongs to the
 # room. Table names come from this fixed dict, never from a caller, so the
 # f-string below is not a SQL-injection surface. Shared by the API's
@@ -227,6 +256,17 @@ class FieldProjection(BaseModel):
     generated_at: datetime
     room_id: UUID
     marks: list[FieldMark]
+
+
+class CausalGeoBindingProjection(BaseModel):
+    """A bounded, exact-count view of causal marks for named scope revisions."""
+
+    generated_at: datetime
+    room_id: UUID
+    marks: list[FieldMark]
+    total: int
+    omitted: int
+    complete: bool
 
 
 def _jsonb(value: Any) -> dict:
@@ -477,6 +517,43 @@ class FieldMarkService:
 
     def __init__(self, db):
         self.db = db
+
+    async def causal_geo_bindings(
+        self, room_id: UUID, scope_ids: set[UUID], *, limit: int = 50,
+    ) -> CausalGeoBindingProjection:
+        """Read causal Field marks for specific room-owned scope revisions.
+
+        This does not inherit the room-wide 500-row projection cap. The exact
+        matching count and bounded result are reported separately so a caller
+        can never confuse omitted history with no binding.
+        """
+        if not scope_ids:
+            return CausalGeoBindingProjection(
+                generated_at=datetime.now(timezone.utc), room_id=room_id,
+                marks=[], total=0, omitted=0, complete=True,
+            )
+        if len(scope_ids) > 50:
+            raise ValueError("causal scope lookup accepts at most 50 revisions")
+        if limit < 1 or limit > 100:
+            raise ValueError("causal scope lookup limit must be between 1 and 100")
+        relations = list(FIELD_CAUSAL_RELATIONS)
+        identifiers = [str(scope_id) for scope_id in sorted(scope_ids)]
+        total = int(await self.db.fetchval(
+            _CAUSAL_GEO_COUNT_SQL, room_id, relations, identifiers,
+        ))
+        rows = await self.db.fetch(
+            _CAUSAL_GEO_IDS_SQL, room_id, relations, identifiers, limit,
+        )
+        marks: list[FieldMark] = []
+        for row in rows:
+            mark = await build_single_mark(self.db, room_id, row["id"])
+            if mark is not None:
+                marks.append(mark)
+        omitted = max(0, total - len(marks))
+        return CausalGeoBindingProjection(
+            generated_at=datetime.now(timezone.utc), room_id=room_id,
+            marks=marks, total=total, omitted=omitted, complete=omitted == 0,
+        )
 
     async def build(self, room_id: UUID) -> FieldProjection:
         rows = [dict(r) for r in await self.db.fetch(

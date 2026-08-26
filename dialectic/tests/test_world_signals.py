@@ -108,6 +108,26 @@ def test_world_signal_validates_identity_geometry_and_server_provenance() -> Non
         })
 
 
+@pytest.mark.parametrize("model", ["signal", "snapshot"])
+@pytest.mark.parametrize(
+    ("updates", "message"),
+    [
+        ({"observed_at": NOW, "retrieved_at": NOW - timedelta(seconds=1)}, "observed_at"),
+        ({"retrieved_at": NOW, "expires_at": NOW}, "expires_at"),
+        ({"retrieved_at": NOW, "expires_at": NOW - timedelta(seconds=1)}, "expires_at"),
+    ],
+)
+def test_signal_and_snapshot_enforce_observation_retrieval_expiry_chronology(
+    model: str, updates: dict[str, datetime], message: str,
+) -> None:
+    values = (_signal().model_dump() if model == "signal" else _snapshot().model_dump())
+    values.update(updates)
+    cls = WorldSignal if model == "signal" else WorldSignalSnapshot
+
+    with pytest.raises(ValidationError, match=message):
+        cls(**values)
+
+
 def test_world_signal_is_frozen_and_store_reads_cannot_mutate_the_snapshot() -> None:
     store = WorldSignalStore()
     store.replace(_snapshot(_signal()))
@@ -288,6 +308,23 @@ def test_expired_signals_are_not_projected_and_source_expiry_is_reported_separat
     assert projection.signals == []
     assert projection.signal_sources.sources[0].source_state == "partial"
     assert projection.signal_sources.sources[0].freshness == "expired"
+
+
+def test_expired_provider_envelope_hides_and_cannot_resolve_future_child() -> None:
+    child = _signal("future-child", expires_at=NOW + timedelta(minutes=10))
+    snapshot = WorldSignalSnapshot(**{
+        **_snapshot(child).model_dump(),
+        "expires_at": NOW - timedelta(seconds=1),
+    })
+    store = WorldSignalStore()
+    store.replace(snapshot)
+
+    projection = store.project({ROOM_A}, now=NOW)
+    assert projection.signals == []
+    assert projection.signal_sources.sources[0].freshness == "expired"
+    assert projection.signal_sources.sources[0].signal_count == 0
+    with pytest.raises(WorldSignalExpired):
+        store.resolve(ROOM_A, child.id, now=NOW)
 
 
 def test_resolve_distinguishes_malformed_missing_cross_room_and_expired() -> None:

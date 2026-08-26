@@ -322,7 +322,12 @@ export default function WorldView({
           same map, in full.
         </p>
       ) : null}
-      <div ref={containerRef} className="world-canvas" aria-label="World globe" />
+      <div
+        ref={containerRef}
+        className="world-canvas"
+        aria-label="World globe"
+        hidden={Boolean(failure)}
+      />
       <div ref={creditRef} className="world-credits" />
     </div>
   )

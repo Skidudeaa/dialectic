@@ -330,10 +330,21 @@
 }
 .scope-review-history-head span { text-align: right; overflow-wrap: anywhere; }
 .scope-review-provenance {
+    display: grid;
+    gap: 0.2rem;
+    margin: 0.35rem 0 0;
     color: var(--color-ghost);
     font-family: var(--font-mono);
     font-size: 12px;
 }
+.scope-review-provenance div {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr);
+    gap: 0.45rem;
+}
+.scope-review-provenance dt { color: var(--color-faint); }
+.scope-review-provenance dd { margin: 0; overflow-wrap: anywhere; }
+.scope-review-provenance a { color: var(--color-steel); }
 .scope-review-note { margin: 0.15rem 0 0; color: var(--color-faint); font-style: italic; }
 .scope-review-note-label,
 .scope-review-redraw label {

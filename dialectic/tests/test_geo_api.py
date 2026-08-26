@@ -265,6 +265,51 @@ def test_review_history_requires_auth_and_membership():
     assert _client(member=False).get(path, headers=HEADERS).status_code == 403
 
 
+def test_review_history_requires_the_exact_room_token():
+    path = f"{GEO_PATH}/{SCOPE_ID}/review"
+    missing = _client().get(path)
+    wrong = _client(room=False).get(path, headers={"X-Room-Token": "wrong"})
+
+    assert missing.status_code == 401
+    assert missing.json()["detail"] == "Room token required"
+    assert wrong.status_code == 401
+    assert wrong.json()["detail"] == "Invalid room token"
+
+
+def test_review_history_route_serializes_one_complete_lineage(monkeypatch):
+    now = datetime.now(timezone.utc)
+    current = geo_mod.GeoScope(
+        id=f"geo_scope:{SCOPE_ID}", room_id=ROOM_ID,
+        subject={"entity": "rooms", "id": str(ROOM_ID)},
+        kind="point", geometry=BODY["geometry"], label="Serialized scope",
+        authority="human_confirmed",
+        provenance={
+            "provider": "human", "acquisition": "human", "source_id": "source-7",
+            "url": "https://source.test/7", "credit": "Source credit",
+        },
+        source_state="ok", revision_action="place", review_state="accepted",
+        freshness={"state": "not_applicable", "retrieved_at": now},
+        centroid=[56.3, 26.5], retrieved_at=now, confirmed_by=CALLER_ID,
+        confirmed_at=now, created_by=CALLER_ID, created_at=now,
+    )
+
+    async def review(*args: object, **kwargs: object) -> geo_mod.GeoScopeReview:
+        return geo_mod.GeoScopeReview(
+            root_id=f"geo_scope:{SCOPE_ID}", current=current, lineage=[current],
+            subject_destination={"room_id": ROOM_ID},
+        )
+
+    monkeypatch.setattr(geo_mod.GeoScopeService, "review", review)
+    response = _client().get(f"{GEO_PATH}/{SCOPE_ID}/review", headers=HEADERS)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["root_id"] == f"geo_scope:{SCOPE_ID}"
+    assert body["current"]["id"] == f"geo_scope:{SCOPE_ID}"
+    assert body["lineage"] == [body["current"]]
+    assert body["current"]["provenance"]["url"] == "https://source.test/7"
+
+
 def test_redraw_rejects_malformed_geometry():
     response = _client(scope=True).post(
         f"{GEO_PATH}/{SCOPE_ID}/redraw",

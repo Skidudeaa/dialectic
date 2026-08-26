@@ -58,6 +58,26 @@ function destinationLabel(destination: GeoSubjectDestination): string {
   return parts.join(' · ')
 }
 
+function ScopeProvenance({ scope, label }: { scope: GeoScope; label: string }) {
+  const provenance = scope.provenance
+  return (
+    <dl className="scope-review-provenance" role="group" aria-label={`${label} provenance`}>
+      <div><dt>Provider</dt><dd>{provenance.provider}</dd></div>
+      <div><dt>Acquisition</dt><dd>{provenance.acquisition}</dd></div>
+      <div><dt>Source ID</dt><dd>{provenance.source_id || 'Not supplied'}</dd></div>
+      <div>
+        <dt>Exact URL</dt>
+        <dd>
+          {provenance.url
+            ? <a href={provenance.url}>{provenance.url}</a>
+            : 'Not supplied'}
+        </dd>
+      </div>
+      <div><dt>Credit</dt><dd>{provenance.credit || 'Not supplied'}</dd></div>
+    </dl>
+  )
+}
+
 function navigateToSubject(
   destination: GeoSubjectDestination,
   onNavigate: ScopeReviewProps['onNavigate'],
@@ -197,6 +217,8 @@ export function ScopeReview({
   const current = review.current
   const proposed = current.review_state === 'proposed'
   const accepted = current.review_state === 'accepted'
+  const bindable = accepted && current.freshness.state !== 'expired'
+  const bindingLoading = bindingBusy && !binding
   const canRatify = accepted && (
     current.revision_action === 'place' || current.revision_action === 'place_signal'
   )
@@ -226,10 +248,7 @@ export function ScopeReview({
       <section className="focus-section scope-review-current" aria-label="Current placement">
         <h3 className="focus-section-label">Current placement</h3>
         <p>{geometrySummary(current)} · centroid {current.centroid.join(', ')}</p>
-        <p className="scope-review-provenance">
-          {current.provenance.provider} · {current.provenance.acquisition}
-          {current.provenance.credit ? ` · ${current.provenance.credit}` : ''}
-        </p>
+        <ScopeProvenance scope={current} label="Current placement" />
       </section>
       <section className="focus-section" aria-label="Scope lineage">
         <h3 className="focus-section-label">History</h3>
@@ -242,10 +261,7 @@ export function ScopeReview({
                 <span>{scope.created_by ?? scope.confirmed_by ?? 'system'}</span>
               </div>
               <div>{scope.label || 'Unlabelled'} · {geometrySummary(scope)}</div>
-              <div className="scope-review-provenance">
-                {scope.provenance.provider} · {scope.provenance.acquisition}
-                {scope.provenance.source_id ? ` · ${scope.provenance.source_id}` : ''}
-              </div>
+              <ScopeProvenance scope={scope} label={scope.label || 'Unlabelled placement'} />
               {scope.review_note ? <p className="scope-review-note">{scope.review_note}</p> : null}
             </li>
           ))}
@@ -270,14 +286,17 @@ export function ScopeReview({
             ) : null}
             {accepted ? (
               <>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  disabled={busy || bindingBusy}
-                  onClick={() => void openBinding()}
-                >
-                  Bind to thesis node
-                </button>
+                {bindable ? (
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={busy || bindingBusy}
+                    aria-busy={bindingLoading}
+                    onClick={() => void openBinding()}
+                  >
+                    {bindingLoading ? 'Loading thesis structure…' : 'Bind to thesis node'}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm"
@@ -294,6 +313,7 @@ export function ScopeReview({
               </>
             ) : null}
           </div>
+          {bindingLoading ? <p role="status">Loading thesis structure…</p> : null}
           {binding && structure ? (
             <form
               className="focus-actions-editor scope-review-causal"

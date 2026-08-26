@@ -56,6 +56,18 @@ def _aware(value: datetime | None, field: str) -> None:
         raise ValueError(f"{field} must include a timezone")
 
 
+def _validate_chronology(
+    observed_at: datetime | None,
+    retrieved_at: datetime,
+    expires_at: datetime | None,
+) -> None:
+    """Require provider clocks to describe one possible observation envelope."""
+    if observed_at is not None and observed_at > retrieved_at:
+        raise ValueError("observed_at must be at or before retrieved_at")
+    if expires_at is not None and retrieved_at >= expires_at:
+        raise ValueError("expires_at must be after retrieved_at")
+
+
 def parse_world_signal_id(value: str) -> tuple[str, str]:
     match = _WORLD_SIGNAL_ID.fullmatch(value)
     if match is None:
@@ -114,6 +126,7 @@ class WorldSignal(BaseModel):
         _aware(self.observed_at, "observed_at")
         _aware(self.retrieved_at, "retrieved_at")
         _aware(self.expires_at, "expires_at")
+        _validate_chronology(self.observed_at, self.retrieved_at, self.expires_at)
         try:
             encoded_details = json.dumps(
                 self.details, separators=(",", ":"), sort_keys=True,
@@ -154,6 +167,7 @@ class WorldSignalSnapshot(BaseModel):
         _aware(self.observed_at, "observed_at")
         _aware(self.retrieved_at, "retrieved_at")
         _aware(self.expires_at, "expires_at")
+        _validate_chronology(self.observed_at, self.retrieved_at, self.expires_at)
         ids: set[str] = set()
         for signal in self.signals:
             if signal.provider != self.provider:
@@ -258,15 +272,20 @@ class WorldSignalStore:
             configured_room_ids = snapshot.configured_room_ids & eligible
             if not configured_room_ids:
                 continue
+            snapshot_expired = (
+                snapshot.freshness == "expired"
+                or (snapshot.expires_at is not None and snapshot.expires_at <= current_time)
+            )
             visible = [
                 signal.model_copy(deep=True)
                 for signal in snapshot.signals
-                if signal.room_id in eligible
+                if not snapshot_expired
+                and signal.room_id in eligible
                 and signal.freshness != "expired"
                 and (signal.expires_at is None or signal.expires_at > current_time)
             ]
             source_freshness = snapshot.freshness
-            if snapshot.expires_at is not None and snapshot.expires_at <= current_time:
+            if snapshot_expired:
                 source_freshness = "expired"
             sources.append(WorldSignalSource(
                 provider=snapshot.provider,
@@ -301,9 +320,13 @@ class WorldSignalStore:
             if signal is None:
                 raise WorldSignalNotFound(signal_id)
             stable = signal.model_copy(deep=True)
+            snapshot_expired = (
+                snapshot.freshness == "expired"
+                or (snapshot.expires_at is not None and snapshot.expires_at <= current_time)
+            )
         if stable.room_id != room_id:
             raise WorldSignalWrongRoom(signal_id)
-        if (stable.freshness == "expired"
+        if (snapshot_expired or stable.freshness == "expired"
                 or (stable.expires_at is not None and stable.expires_at <= current_time)):
             raise WorldSignalExpired(signal_id)
         return stable

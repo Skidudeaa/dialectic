@@ -39,5 +39,6 @@ describe('WorldView WebGL fallback', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('The list below is the same map, in full.')
     expect(container.querySelector('.cesium-widget-errorPanel')).toBeNull()
     expect(container.querySelector('.world-canvas')).toBeEmptyDOMElement()
+    expect(container.querySelector('.world-canvas')).toHaveAttribute('hidden')
   })
 })
