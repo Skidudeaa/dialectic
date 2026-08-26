@@ -172,7 +172,7 @@ describe('workspace scenes', () => {
     // THE one scenesForDestination definition (§5.2) — Field joins Bench
     // between Bench and Library; Home holds no Field at all.
     expect(scenesForDestination(scheme, root)).toEqual([
-      'record', 'bench', 'field', 'library', 'ledger',
+      'record', 'bench', 'field', 'atlas', 'library', 'ledger',
     ])
     expect(scenesForDestination(home, root))
       .toEqual(['house', 'atlas', 'mirror', 'record'])

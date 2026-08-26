@@ -51,6 +51,11 @@ import type { SceneSignal } from './components/workspace/SceneSwitcher'
 import type { ImplementedWorkspaceScene } from './types/index.ts'
 import type { FieldMark, FieldReviewRequest } from './types/workspace.ts'
 import { rememberSceneAxes, restoreSceneAxes } from './lib/sceneContinuity.ts'
+import {
+  decodeWorldView,
+  encodeWorldView,
+  isWorldView,
+} from './components/workspace/world/worldCamera.ts'
 
 function RoomBriefing({ roomId }: { roomId: string }) {
   const [dismissed, setDismissed] = useState(false)
@@ -562,11 +567,18 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     currentRoom?.id ?? null,
     Boolean(accessToken) && !isHome,
   )
-  // Atlas is the opposite fence: it renders ONLY at Home root (§5.4 — the
-  // Home-root scene list is ['house','atlas','record']), is cross-room by
-  // construction, and needs a JWT but no room token — so the enable is
-  // "signed in and at Home", the inverse of the two room projections above.
-  const atlas = useAtlas(Boolean(accessToken) && isHome)
+  // Atlas remains a JWT-only cross-room projection, but Synapse lets its
+  // House/World embodiments stay inside an ordinary room. Fetch it only when
+  // one of those causal surfaces actually consumes it: Home, Atlas, Field, or
+  // a causal Focus object. Ordinary Record sessions still pay no Atlas read.
+  const causalObjectSelected = objectId?.startsWith('geo_scope:')
+    || objectId?.startsWith('field_mark:')
+  const atlas = useAtlas(Boolean(accessToken) && (
+    isHome
+    || workspaceScene === 'atlas'
+    || workspaceScene === 'field'
+    || causalObjectSelected
+  ))
   // Capabilities follow the exact room IDs the already-fenced signal
   // projection carries, then resolve against the complete saved-room list.
   // This stays bounded by Atlas rather than by the rail's activity ordering;
@@ -909,18 +921,47 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
         // room projection refresh too through the same loading-safe contract;
         // it remains dormant while Home has no room-local projection mounted.
         onGeoChanged={roomGeo.retry}
-        // World Lens: the scene's House/World mode and camera ride the URL's
-        // `view` axis and are written only here, through the one navigation
-        // writer. Home root stays the destination (roomId null).
+        // House/World mode and camera ride the URL's `view` axis and are
+        // written only here. An ordinary room's first World tap acquires that
+        // room as its focus; later camera replacements preserve it.
         onView={(view, mode) => {
-          void navigate({ roomId: null, scene: 'atlas', view }, mode)
+          const decodedView = decodeWorldView(view)
+          const nextView = !isHome && decodedView
+            ? encodeWorldView({
+                camera: decodedView.camera,
+                roomId: currentRoom.id,
+              })
+            : view
+          void navigate({
+            roomId: currentRoom.id,
+            threadId: null,
+            scene: 'atlas',
+            object: objectId,
+            view: nextView,
+          }, mode)
         }}
         onNavigate={(destination) => {
+          // A branch is still a conversation destination. Every object and
+          // room destination stays in Atlas so World does not disappear when
+          // Focus opens. Room changes reset the prior camera and object.
+          if (destination.threadId && !destination.object) {
+            void navigate({
+              roomId: destination.roomId,
+              threadId: destination.threadId,
+              object: null,
+            }, 'push')
+            return
+          }
+          const nextWorldView = isWorldView(viewId)
+            ? `world;room=${destination.roomId}`
+            : null
           void navigate({
             roomId: destination.roomId,
-            threadId: destination.threadId ?? null,
+            threadId: null,
+            scene: 'atlas',
             object: destination.object ?? null,
             messageId: destination.messageId ?? null,
+            view: nextWorldView,
           }, 'push')
         }}
       />
@@ -944,7 +985,11 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
               className="cockpit-world-link"
               onClick={() => {
                 void navigate({
-                  roomId: null, scene: 'atlas', view: `world;room=${currentRoom.id}`,
+                  roomId: currentRoom.id,
+                  threadId: null,
+                  scene: 'atlas',
+                  object: objectId,
+                  view: `world;room=${currentRoom.id}`,
                 }, 'push')
               }}
             >

@@ -21,6 +21,7 @@ const projections = vi.hoisted(() => ({
   refreshAtlas: vi.fn(),
 }))
 const atlasHook = vi.hoisted(() => vi.fn())
+const geoHook = vi.hoisted(() => vi.fn())
 
 vi.mock('./hooks/useDialecticSocket.ts', () => ({
   useDialecticSocket: () => ({
@@ -59,7 +60,7 @@ vi.mock('./hooks/useFieldMarks.ts', () => ({
   useFieldMarks: () => ({ status: 'idle' }),
 }))
 vi.mock('./hooks/useGeoScopes.ts', () => ({
-  useGeoScopes: () => ({ status: 'loading', retry: projections.refreshGeo }),
+  useGeoScopes: geoHook,
 }))
 vi.mock('./hooks/useAtlas.ts', () => ({
   useAtlas: atlasHook,
@@ -142,6 +143,7 @@ function message(id: string, threadId: string = thread.id): Message {
 function navigation(
   messageId: string, objectId: string | null = null,
   roomList: UserRoom[] = [roomDescriptor],
+  viewId: string | null = null,
 ): RoomNavigation {
   return {
     rooms: roomList,
@@ -154,7 +156,7 @@ function navigation(
     navigate: vi.fn(async () => true),
     enterGrantedRoom: vi.fn(async () => true),
     objectId,
-    viewId: null,
+    viewId,
     messageId,
   }
 }
@@ -184,6 +186,163 @@ beforeEach(() => {
   projections.refreshAtlas.mockReset()
   atlasHook.mockReset()
   atlasHook.mockReturnValue({ status: 'loading', retry: projections.refreshAtlas })
+  geoHook.mockReset()
+  geoHook.mockReturnValue({ status: 'loading', retry: projections.refreshGeo })
+})
+
+const placedScope: GeoScope = {
+  id: 'geo_scope:scope-1',
+  room_id: room.id,
+  subject: { entity: 'rooms', id: room.id },
+  kind: 'point',
+  geometry: { type: 'Point', coordinates: [56.3, 26.5] },
+  label: 'Hormuz placement',
+  authority: 'human_confirmed',
+  provenance: { provider: 'human', acquisition: 'human', credit: 'fixture' },
+  source_state: 'ok',
+  revision_action: 'place',
+  review_state: 'accepted',
+  freshness: {
+    state: 'not_applicable', retrieved_at: '2026-08-25T18:00:00Z',
+  },
+  centroid: [56.3, 26.5],
+  retrieved_at: '2026-08-25T18:00:00Z',
+  created_at: '2026-08-25T18:00:00Z',
+}
+
+function atlasProjection(
+  nodes: AtlasProjection['nodes'], scopes: GeoScope[] = [],
+): AtlasProjection {
+  return {
+    generated_at: '2026-08-25T18:00:00Z',
+    nodes,
+    edges: [],
+    scopes,
+    signals: [],
+    signal_sources: { status: 'not_configured', sources: [] },
+  }
+}
+
+describe('World Synapse navigation', () => {
+  it('enables Atlas in an ordinary room when Atlas is the active scene', () => {
+    useAppStore.setState({ workspaceScene: 'atlas' })
+    vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
+
+    render(<ChatLayout nav={navigation('')} />)
+
+    expect(atlasHook).toHaveBeenCalledWith(true)
+  })
+
+  it('opens Bench World inside the same room without dropping the selected object', () => {
+    useAppStore.setState({ workspaceScene: 'bench' })
+    geoHook.mockReturnValue({
+      status: 'ready',
+      projection: {
+        generated_at: '2026-08-25T18:00:00Z', room_id: room.id,
+        scopes: [placedScope],
+      },
+      retry: projections.refreshGeo,
+    })
+    vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
+    const nav = navigation('', 'reading:r1')
+
+    render(<ChatLayout nav={nav} />)
+    fireEvent.click(screen.getByRole('button', { name: /World/ }))
+
+    expect(nav.navigate).toHaveBeenCalledWith({
+      roomId: room.id,
+      threadId: null,
+      scene: 'atlas',
+      object: 'reading:r1',
+      view: `world;room=${room.id}`,
+    }, 'push')
+  })
+
+  it('opens World mode inside the same room with the same Focus object', () => {
+    useAppStore.setState({ workspaceScene: 'atlas' })
+    atlasHook.mockReturnValue({
+      status: 'ready',
+      projection: atlasProjection([{
+        id: `room:${room.id}`, kind: 'room', room_id: room.id,
+        branch_id: null, title: room.name ?? 'Room', summary: '', status: '',
+        due: false, created_at: '2026-08-25T00:00:00Z',
+        updated_at: '2026-08-25T00:00:00Z',
+      }]),
+      retry: projections.refreshAtlas,
+    })
+    vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
+    const nav = navigation('', 'field_mark:causal')
+
+    render(<ChatLayout nav={nav} />)
+    fireEvent.click(screen.getByRole('button', { name: 'World' }))
+
+    expect(nav.navigate).toHaveBeenCalledWith({
+      roomId: room.id,
+      threadId: null,
+      scene: 'atlas',
+      object: 'field_mark:causal',
+      view: `world;room=${room.id}`,
+    }, 'push')
+  })
+
+  it('keeps a selected scope in Atlas instead of falling back to Record', () => {
+    useAppStore.setState({ workspaceScene: 'atlas' })
+    atlasHook.mockReturnValue({
+      status: 'ready',
+      projection: atlasProjection([{
+        id: `room:${room.id}`, kind: 'room', room_id: room.id,
+        branch_id: null, title: room.name ?? 'Room', summary: '', status: '',
+        due: false, created_at: '2026-08-25T00:00:00Z',
+        updated_at: '2026-08-25T00:00:00Z',
+      }], [placedScope]),
+      retry: projections.refreshAtlas,
+    })
+    vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
+    const nav = navigation('')
+
+    render(<ChatLayout nav={nav} />)
+    fireEvent.click(screen.getByRole('button', { name: /Hormuz placement/ }))
+
+    expect(nav.navigate).toHaveBeenCalledWith({
+      roomId: room.id,
+      threadId: null,
+      scene: 'atlas',
+      object: placedScope.id,
+      messageId: null,
+      view: null,
+    }, 'push')
+  })
+
+  it('changes rooms without carrying the prior object or World camera', () => {
+    const otherRoomId = 'room-2'
+    useAppStore.setState({ workspaceScene: 'atlas' })
+    atlasHook.mockReturnValue({
+      status: 'ready',
+      projection: atlasProjection([{
+        id: `room:${otherRoomId}`, kind: 'room', room_id: otherRoomId,
+        branch_id: null, title: 'Other room', summary: '', status: '', due: false,
+        created_at: '2026-08-25T00:00:00Z', updated_at: '2026-08-25T00:00:00Z',
+      }]),
+      retry: projections.refreshAtlas,
+    })
+    vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
+    const nav = navigation(
+      '', 'field_mark:old', [roomDescriptor],
+      `world:26.5,56.3,450000,0,-45;room=${room.id}`,
+    )
+
+    render(<ChatLayout nav={nav} />)
+    fireEvent.click(screen.getByText('Other room'))
+
+    expect(nav.navigate).toHaveBeenCalledWith({
+      roomId: otherRoomId,
+      threadId: null,
+      scene: 'atlas',
+      object: null,
+      messageId: null,
+      view: `world;room=${otherRoomId}`,
+    }, 'push')
+  })
 })
 
 describe('world projection refresh', () => {

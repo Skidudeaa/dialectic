@@ -70,13 +70,14 @@ export function defaultWorkspaceScene(
  * 409 -- so a Bench there would be a door onto a refusal. A branch off Home is
  * an ordinary conversation and carries no household at all.
  *
- * WHY an ordinary room offers all five even when empty: a Bench with no thesis
+ * WHY an ordinary room offers all six even when empty: a Bench with no thesis
  * is where a thesis is CREATED, and a Library with no readings is where the
  * first one is explained. Hiding a scene until it has content is how the
  * trading panel once made its own create flow unreachable. The Field is the
  * same shape: an empty Field teaches what lands there (SceneEmpty's contract)
  * rather than staying unreachable until the inference job has something to
- * show. Home root does not get it — Home holds no Field (§5.2).
+ * show. Atlas is the same room's House/World embodiment, not a trip back to
+ * Home. Home root does not get Field — Home holds no Field (§5.2).
  */
 export function scenesForDestination(
   room: Pick<UserRoom, 'is_home'>,
@@ -87,7 +88,7 @@ export function scenesForDestination(
       ? (['house', 'atlas', 'mirror', 'record'] as const)
       : (['record'] as const)
   }
-  return ['record', 'bench', 'field', 'library', 'ledger'] as const
+  return ['record', 'bench', 'field', 'atlas', 'library', 'ledger'] as const
 }
 
 /**
