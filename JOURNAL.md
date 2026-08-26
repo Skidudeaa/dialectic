@@ -142,3 +142,4 @@
 [2026-08-25] restored a zero-defect frontend gate before World Lens integration — the changelog test follows an actual marker-bearing release, jump-miss truth derives from the loaded page, and one shared relative-time helper keeps component modules Fast Refresh-safe
 [2026-08-25] made World acceptance wait for navigation authority rather than DOM coincidence — Home/Atlas/World must settle with no object, then the exact scope-row button must install its expected object ID before Focus can qualify it
 [2026-08-25] repeated the room fence inside causal successor and review hydration — even manually malformed cross-room child rows can no longer adjudicate an in-room geographic binding by globally unique id
+[2026-08-25] replaced the historical inherited-gate baseline with exact final qualification evidence — the source branch is zero-defect locally while publication, production, provider, public-browser, and human-use gates remain explicitly closed

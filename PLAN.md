@@ -12,7 +12,7 @@ bytes, activation, and human qualification separate. Do not call them all
 | Isolated worktree | `/root/DwoodAmo/.worktrees/world-lens-truth-before-spectacle` |
 | Branch | `codex/world-lens-truth-before-spectacle` |
 | Safe baseline | `origin/codex/world-lens-pre-phase2.5-20260825` = `3eabd4a` preserves prior Phase 0–2 source off-host. |
-| Task commits | Plan `a690fe6`; lineage `91014b8..808e17e`; review `fef716a..32e8333`; causal Field `0d2ae3c..472cc5a`; WorldSignal `48e9288..3dd9089`; participant sight/docs `e751968` + `7906e21`; independent-review fixes `0eadc74` + `987472d`; final evidence fixes `160a92e`; narrow final-review fixes `8252760`. |
+| Task commits | Plan `a690fe6`; lineage `91014b8..808e17e`; review `fef716a..32e8333`; causal Field `0d2ae3c..472cc5a`; WorldSignal `48e9288..3dd9089`; participant sight/docs `e751968` + `7906e21`; independent-review closure `0eadc74..5172b0e`; frontend gate `9824e92`; exact-navigation qualification `806a7a6`; room-fence hardening `cd74b15`. |
 | Push/publication | **Not pushed** unless later evidence says otherwise. The safety ref is not publication of this branch. |
 | Production migration 022 | **Not applied.** Exercised only on isolated/test PostgreSQL. |
 | Backend runtime | **Not restarted or loaded from this worktree.** |
@@ -72,52 +72,51 @@ These PostgreSQL guards must execute, not skip:
 
 ```bash
 cd dialectic
-python -m pytest -q \
-  tests/test_geo_scopes_pg.py tests/test_field_causal_concurrency_pg.py \
-  tests/test_field_origination_pg.py tests/test_world_signals.py \
-  tests/test_atlas_pg.py
+DIALECTIC_TEST_DATABASE_URL=postgresql://root@localhost/dialectic_test \
+  python -m pytest -q \
+    tests/test_geo_scopes_pg.py tests/test_field_marks_pg.py \
+    tests/test_field_causal_concurrency_pg.py \
+    tests/test_field_origination_pg.py tests/test_world_signals.py \
+    tests/test_atlas_pg.py
 ```
 
-Inherited frontend baseline before Task 5: one test failure
-`WhatsNewPanel > explains a hard word in place` (newest release body has no
-glossary marker); two lint findings at `MessageList.tsx:247` and
-`HomeActivityPulse.tsx:379`. Re-run and report exact current results.
+The historical pre-integration frontend gate was one failing changelog test
+and two lint errors in `MessageList.tsx` and `HomeActivityPulse.tsx`.
+`9824e92` closed all three without weakening their product contracts: the
+changelog test selects a release that actually carries a glossary marker,
+jump-miss truth derives from the loaded page, and relative-time formatting is
+a shared non-component helper.
 
-Latest full-suite baseline on `0eadc74` (unchanged by docs-only `987472d`):
-backend `2102 passed`; exact PostgreSQL
-slice `120 passed, 0 skipped`; focused Task 5 backend `232 passed`; focused
-World frontend `23 passed`; full frontend `551 passed, 1 inherited failure`;
-full lint `2 inherited errors`, changed World files clean; production build
-passed; authenticated browser/migration harness `43/43 passed`.
+Fresh exact-code-head qualification on `cd74b15`:
 
-Fresh final-wave evidence on `160a92e`: relevant backend/PostgreSQL `118
-passed`; focused World/Focus frontend `32 passed`; changed Python Ruff and
-changed TypeScript ESLint passed; production frontend build passed inside the
-isolated harness; authenticated browser/migration harness `47/47 passed`.
-The harness used a unique disposable DB/evidence directory and dynamically
-selected loopback ports, measured 44 px Place and 12 px signal/source metadata
-at 390 px,
-collapsed failed WebGL to a zero-height canvas, reached its row after 17 real
-Tab stops, and observed no page errors, HTTP 500s, reset markers, or ASGI
-exceptions. Per final-wave instruction, full repo suites were not rerun; the
-main integration agent owns that fresh final verification.
+- backend `2120 passed`;
+- explicit PostgreSQL guard slice `147 passed`, with no skips;
+- frontend `562 passed` across 62 files;
+- full frontend lint passed;
+- production frontend build and service-worker build passed;
+- authenticated disposable-database browser/migration harness `50/50 passed`,
+  evidence `/tmp/dialectic-world-lens-acceptance-1819868_563643193`;
+- independent room-fence review of `806a7a6..cd74b15`: 0 Critical,
+  0 Important, 0 Minor.
 
-Fresh narrow-review evidence on `8252760`: relevant backend/PostgreSQL `124
-passed`; focused World/Focus frontend `57 passed`; changed Python Ruff and
-changed TypeScript ESLint passed; production frontend build passed inside the
-isolated harness; authenticated browser/migration harness `50/50 passed`. The
-owner query used one PostgreSQL statement while finding a root binding through
-a 52-revision lineage and returned bounded rows with truthful
-total/omitted/completeness. The browser measured Place and its real visible
-offline error at 12 px, with no page errors, HTTP 500s, reset markers, or ASGI
-exceptions. Per instruction, full repo suites were not rerun; the main
-integration agent owns fresh final verification.
+The final browser run exercised visible Place/Ratify/Redraw/Add to Field/
+Confirm/Supersede writes in order with the exact room token. It measured 44 px
+Place and 12 px Place/error/metadata text at 390 px, collapsed failed WebGL to
+a zero-height canvas, reached the full text list after 17 real Tab stops, and
+observed no page errors, HTTP 500s, reset markers, or unexplained ASGI
+exceptions. The only ASGI exception was the harness-classified browser-context
+WebSocketDisconnect 1001 during teardown. Retained desktop/failure and
+390 px/reduced-motion screenshots were visually inspected.
 
 ## Remaining operational caveat — explicit, not lost
 
-The Task 1–4 deferred correctness gaps are closed in `160a92e`: route token
-and serialized-lineage coverage, complete per-revision provenance, expired
-binding/load semantics, strict provider chronology, and the 12 px/44 px floor.
+The Task 1–4 deferred correctness gaps are closed across `160a92e` and
+`8252760`: `160a92e` closes route-token and serialized-lineage coverage,
+complete per-revision provenance, expired binding/load semantics, strict
+provider chronology, the 44 px Place target, and 12 px signal/source metadata;
+`8252760` closes the 12 px Place and visible placement-error text floor.
+`cd74b15` additionally prevents manually malformed cross-room successor or
+review rows from adjudicating an in-room causal binding.
 
 The acceptance harness gives each run a unique database and evidence path.
 Its loopback ports are selected by binding to port zero, then releasing that
