@@ -74,4 +74,35 @@ describe('MessageList — who is speaking', () => {
       behavior: 'smooth', block: 'center',
     })
   })
+
+  it('says when a jump target is outside the loaded page and clears when it arrives', () => {
+    if (!globalThis.CSS) vi.stubGlobal('CSS', {})
+    Object.defineProperty(globalThis.CSS, 'escape', {
+      configurable: true,
+      value: (value: string) => value,
+    })
+    const jumpTarget = { id: 'target', nonce: 1 }
+    const { container, rerender } = render(
+      <MessageList
+        messages={[message('human', 'before')]}
+        currentUserId="u1"
+        jumpTarget={jumpTarget}
+      />,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'That message is further back than this page reaches',
+    )
+
+    rerender(
+      <MessageList
+        messages={[message('human', 'before'), message('human', 'target')]}
+        currentUserId="u1"
+        jumpTarget={jumpTarget}
+      />,
+    )
+
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(container.querySelector('[data-message-id="target"]')).toHaveClass('msg-flash')
+  })
 })

@@ -139,3 +139,4 @@
 [2026-08-25] aligned ratification with the visible one-shot contract — only an original current place/place_signal scope can be ratified; confirmed, redrawn, or ratified successors fail 409 without rows or events
 [2026-08-25] raised World signal action/error text to the 12 px floor — isolated 390 px browser proof now triggers a visible placement failure and measures Place, error, signal, and source text directly
 [2026-08-25] ledgered acceptance port selection as best-effort isolation, not collision-proof reservation — bind-zero sockets close before child startup and retain a narrow TOCTOU window
+[2026-08-25] restored a zero-defect frontend gate before World Lens integration — the changelog test follows an actual marker-bearing release, jump-miss truth derives from the loaded page, and one shared relative-time helper keeps component modules Fast Refresh-safe

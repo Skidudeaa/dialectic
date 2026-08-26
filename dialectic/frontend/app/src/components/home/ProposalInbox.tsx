@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { agoLabel } from './HomeActivityPulse.tsx'
+import { agoLabel } from '../../lib/relativeTime.ts'
 import { api } from '../../lib/api.ts'
 import type { HomeProposalItem, RoomDestination } from '../../types/index.ts'
 import type { ProposalKind } from '../../types/workspace.ts'
