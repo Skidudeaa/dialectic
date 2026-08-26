@@ -226,7 +226,7 @@ the divergence is `0 0` and `origin/master` equals `HEAD`.
 cd /root/DwoodAmo
 sha256sum dialectic/migrations/022_geo_scope_lineage.sql \
   /var/backups/dialectic/20260826T031404Z-5f50c122-world-synapse-before.dump
-sudo -u postgres pg_restore --list \
+pg_restore --list \
   /var/backups/dialectic/20260826T031404Z-5f50c122-world-synapse-before.dump \
   >/dev/null
 ```
