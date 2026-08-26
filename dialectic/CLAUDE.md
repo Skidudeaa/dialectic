@@ -109,6 +109,10 @@ scope-to-thesis relationship is semantic evidence, not measured geography.
 The text-first scope list is authoritative even when Cesium cannot start: it
 keeps provider, acquisition, source ID, exact URL, and credit visible beside
 each scope rather than relying on globe-owned attribution or interaction.
+React's dynamic `WorldView` import owns the complete Cesium dependency graph;
+the production build fails if the app shell eagerly imports/module-preloads it
+or if the service worker precaches WorldView JS/CSS. Do not reintroduce a
+manual Cesium chunk without proving those emitted-artifact contracts.
 
 ### Trading Integration
 

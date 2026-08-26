@@ -70,16 +70,6 @@ function proxyMap(): Record<string, ProxyOptions> {
 // https://vite.dev/config/
 export default defineConfig({
   define: { CESIUM_BASE_URL: JSON.stringify('/cesium/') },
-  build: {
-    rollupOptions: {
-      output: {
-        // Cesium in its own chunk, loaded only by the World's React.lazy —
-        // the house list never pays for it, and the chunk's name is stable
-        // so the precache exclusion below can name it.
-        manualChunks: { cesium: ['cesium'] },
-      },
-    },
-  },
   plugins: [
     react(),
     cesiumAssets(),
@@ -95,9 +85,10 @@ export default defineConfig({
       // that and is what let installed PWAs run stale bundles for hours.
       injectRegister: false,
       injectManifest: {
-        // The Cesium chunk and its static tree are fetched on demand, never
-        // precached (they would triple the install and the SW's update cost).
-        globIgnores: ['**/cesium-*.js', 'cesium/**', '**/node_modules/**'],
+        // React.lazy owns the complete WorldView/Cesium dependency graph.
+        // Neither that JS/CSS nor Cesium's static tree belongs in the base
+        // install; all are fetched only when a person opens World.
+        globIgnores: ['**/WorldView-*.js', '**/WorldView-*.css', 'cesium/**', '**/node_modules/**'],
       },
       includeAssets: ['icons/apple-touch-icon.png', 'icons/favicon.svg', 'fonts/*.woff2', 'fonts/DSEG-LICENSE.txt'],
       manifest: {
