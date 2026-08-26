@@ -12,7 +12,7 @@ bytes, activation, and human qualification separate. Do not call them all
 | Isolated worktree | `/root/DwoodAmo/.worktrees/world-lens-truth-before-spectacle` |
 | Branch | `codex/world-lens-truth-before-spectacle` |
 | Safe baseline | `origin/codex/world-lens-pre-phase2.5-20260825` = `3eabd4a` preserves prior Phase 0–2 source off-host. |
-| Task commits | Plan `a690fe6`; lineage `91014b8..808e17e`; review `fef716a..32e8333`; causal Field `0d2ae3c..472cc5a`; WorldSignal `48e9288..3dd9089`; participant sight `e751968`. Use `git log -12 --oneline` for any later Task 5 docs commit. |
+| Task commits | Plan `a690fe6`; lineage `91014b8..808e17e`; review `fef716a..32e8333`; causal Field `0d2ae3c..472cc5a`; WorldSignal `48e9288..3dd9089`; participant sight/docs `e751968` + `7906e21`; independent-review fixes `0eadc74`. |
 | Push/publication | **Not pushed** unless later evidence says otherwise. The safety ref is not publication of this branch. |
 | Production migration 022 | **Not applied.** Exercised only on isolated/test PostgreSQL. |
 | Backend runtime | **Not restarted or loaded from this worktree.** |
@@ -75,6 +75,30 @@ Inherited frontend baseline before Task 5: one test failure
 `WhatsNewPanel > explains a hard word in place` (newest release body has no
 glossary marker); two lint findings at `MessageList.tsx:247` and
 `HomeActivityPulse.tsx:379`. Re-run and report exact current results.
+
+Latest isolated evidence on `0eadc74`: backend `2102 passed`; exact PostgreSQL
+slice `120 passed, 0 skipped`; focused Task 5 backend `232 passed`; focused
+World frontend `23 passed`; full frontend `551 passed, 1 inherited failure`;
+full lint `2 inherited errors`, changed World files clean; production build
+passed; authenticated browser/migration harness `43/43 passed`. The harness
+observed no page errors, HTTP 500s, or reset markers and classified its sole
+ASGI exception exactly as browser-context `WebSocketDisconnect (1001, '')`.
+
+## Known deferred gaps — explicit, not lost
+
+- Task 1: route coverage still lacks wrong/missing room-token cases and one
+  successful serialized lineage response.
+- Task 2: each ScopeReview history revision does not yet render the complete
+  source ID, URL, and credit provenance set consistently.
+- Task 3: an expired accepted scope can still show the causal-binding
+  affordance, and thesis-structure loading has no explicit visible/ARIA state.
+- Task 4: snapshot validation proves timezone awareness but not full clock
+  chronology; signal typography/control size remains below the established
+  12px/44px floor.
+
+These are review-visible integration backlog, not evidence that production or
+provider activation occurred. Resolve or explicitly accept them before a
+public physical-device gate.
 
 ## Physical-device protocol — pending
 
