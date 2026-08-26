@@ -1062,3 +1062,85 @@ The tool registry is 23 (`world_query` plus the earlier 22). No live signal
 provider is configured. Do not interpret the empty `WorldSignalStore` as a
 failed feed or as confirmed-empty evidence; provider activation is a separate
 Phase 4 decision.
+
+## Amendment 2026-08-26 — God's Eye parity: live signals and the sensor cockpit (amend-beside)
+
+The owner asked for the World Lens to *"actually resemble and function like the
+god's eye github project."* Two halves shipped; prefer this over the
+2026-08-25 line saying no live provider is configured.
+
+### Function — `world_adapters.py`, the adapters the substrate reserved
+
+`world_signals.py` was complete and empty by design. It now has a producer.
+
+- **Sixteen scheduled jobs**: `world_signals` joined (120 s,
+  `WORLD_SIGNALS_ENABLED`). It polls five keyless public feeds, converts each
+  into one complete `WorldSignalSnapshot`, and replaces exactly that provider
+  in the process-local store. **No database write, no HTTP writer, no
+  geography.** Placement through `api/geo.py` is still the only way a person
+  makes a scope, so the authority ladder is untouched.
+- **Providers**: `usgs` (earthquakes), `adsb` (adsb.lol live aircraft — chosen
+  *because* OpenSky's written-agreement clause still excludes it), `iss`
+  (wheretheiss.at), `launch` (Launch Library 2), `firms` (NASA FIRMS, **dark
+  without `FIRMS_MAP_KEY`**). Each has its own `*_ENABLED` flag and its own
+  `min_interval_s` floor — the job's 120 s cadence is right for aircraft and
+  rude to Launch Library's ~15 requests/hour anonymous tier. Terms for all
+  five are in `docs/WORLD_PROVIDERS.md`'s 2026-08-26 amendment.
+- **The room fence is the coverage boundary.** A signal reaches a room only if
+  it falls inside that room's own accepted geography (live scope bbox + 1.5°,
+  24 rooms max). A room that has placed nothing gets nothing. The ISS is the
+  one deliberate global exception and its `coverage` string says so.
+- **Every failure is an evidence state, never an exception**: timeout →
+  `unavailable`, 429/503 → `rate_limited`, no key → `not_configured` (and the
+  adapter does not touch the network — a test fails if it does), one room's
+  fetch failing → `partial`, a successful empty poll → `ok` with zero signals.
+  Absence is never silently converted into zero.
+- **Verified against the real feeds, not fixtures**: the live probe returned
+  51 live aircraft and the ISS projected into the actual Iran/Hormuz room
+  (fence `46.22,20.96 → 62.91,32.01`), USGS `ok` with zero *inside that box*,
+  FIRMS `not_configured`. The probe also caught a real defect: Launch Library's
+  `mode=list` omits `pad` entirely, so every launch was silently dropped for
+  having no geography and the layer merely looked empty. Pinned by a test that
+  asserts the URL does not ask for that mode.
+
+### Resemble — the sensor cockpit
+
+- **Six sensor shaders copied VERBATIM** from God's Eye View (MIT, © 2026
+  Bilawal Sidhu) into `world/shaders/` — CRT, night vision, FLIR/thermal,
+  noir, snow, illustrated. The GLSL is left unedited so upstream fixes re-apply
+  by diff; each file carries the notice. **No dataset and no 3D model** was
+  taken from that repository (its MIT grant covers code only).
+- **`worldStyleStages.ts`** is upstream's `_initStages` recast as an
+  instance-scoped service, because a globaled stage set outlives the viewer a
+  React route unmounts. Two invariants it exists to hold: a zero-intensity
+  stage is **disabled**, not merely transparent; and the animation clock runs
+  only while a visible animated shader needs it — `requestRenderMode` is on, so
+  an always-running rAF would quietly convert the idle globe into a
+  continuously drawn one. Reduced motion never starts it.
+- **`WorldHud.tsx` is ordinary DOM, deliberately.** Upstream renders its
+  readouts inside the fragment shader as seven-segment glyphs — beautiful, and
+  unreadable to a screen reader, unselectable, and absent exactly when WebGL
+  is. Layers, source lamps, camera readout and tracked telemetry are real text
+  over the canvas, and every one of them also exists in the complete list below
+  the globe.
+- **Click-to-track.** A scope click still opens Focus. A **signal** click only
+  starts tracking: the camera follows, a trail of the *received fixes* draws
+  behind it (never interpolated — the trail is evidence, not a drawing of one),
+  telemetry opens in the HUD, `Esc` releases. Tracking writes nothing. Keys:
+  `0`–`6` optics, `H` HUD, `Esc` release.
+- **Layer-aware glyphs** in `worldSignals.ts`: an aircraft is an arrow rotated
+  onto its reported track with a leader line to the ground it is over; a quake
+  is a ring sized by magnitude; altitude is honoured so an airliner at FL370
+  does not sit on the terrain. A contact with **no** reported track stays a
+  plain point — an arrow pointing north by default would be the map inventing
+  telemetry.
+- The page's warm sepia filter is dropped whenever a sensor style is active:
+  the shader IS the look, and tinting FLIR makes white-hot beige.
+
+Suites at this gate: backend **2144**, frontend **597**, lint clean, `tsc -b`
+clean, production build passes the lazy-Cesium/precache contract (shell
+unchanged at ~768 KiB precache; Cesium stays in its own on-demand chunk).
+
+**Not deployed by this commit.** Both units run their git working trees, so
+the deploy is the usual ritual: no migration is needed (nothing here touches
+the schema), then `systemctl restart dialectic` and a frontend release flip.

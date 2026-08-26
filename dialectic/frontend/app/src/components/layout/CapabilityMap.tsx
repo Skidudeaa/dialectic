@@ -105,6 +105,11 @@ const JOB_COPY: Record<string, JobCopy> = {
     label: 'Deadline review',
     what: 'when a prediction comes due, gathers evidence and offers a verdict for you to judge',
   },
+  world_signals: {
+    label: 'Live world signals',
+    term: 'world-signal',
+    what: 'polls public feeds — aircraft, earthquakes, fires, satellites, launches — for the areas your rooms have actually placed on the map, and shows what is there right now; each observation expires on its own, and placing one is yours alone',
+  },
   field_inference: {
     label: 'Field marks',
     term: 'field-mark',

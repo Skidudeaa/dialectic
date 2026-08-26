@@ -235,6 +235,7 @@ async def lifespan(app: FastAPI):
         from llm.prediction_watch import register_prediction_watch_jobs
         from llm.reading_echo import register_reading_echo_jobs
         from llm.field_inference import register_field_inference_jobs
+        from world_adapters import register_world_signal_jobs
 
         async def _scheduler_broadcast(room_id, message):
             await connection_manager.broadcast(room_id, message)
@@ -256,6 +257,7 @@ async def lifespan(app: FastAPI):
         register_prediction_watch_jobs(scheduler_instance)
         register_reading_echo_jobs(scheduler_instance)
         register_field_inference_jobs(scheduler_instance)
+        register_world_signal_jobs(scheduler_instance)
         scheduler_instance.start()
 
     # The capability map reads these exact Job objects, so what it reports and

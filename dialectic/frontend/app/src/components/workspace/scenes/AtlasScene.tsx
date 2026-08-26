@@ -537,6 +537,7 @@ export function AtlasScene({
           <WorldView
             scopes={scopes}
             signals={signals}
+            sources={signalSources?.sources ?? []}
             initialCamera={decoded?.camera ?? null}
             focusScopes={focusScopes}
             focusSignals={focusSignals}

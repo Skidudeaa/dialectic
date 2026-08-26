@@ -39,6 +39,10 @@ describe('WorldView WebGL fallback', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('The list below is the same map, in full.')
     expect(container.querySelector('.cesium-widget-errorPanel')).toBeNull()
     expect(container.querySelector('.world-canvas')).toBeEmptyDOMElement()
-    expect(container.querySelector('.world-canvas')).toHaveAttribute('hidden')
+    // The whole stage is hidden -- the canvas AND the HUD that lays itself
+    // out over it. Hiding only the canvas would leave the cockpit chrome
+    // floating over the text fallback that replaced the globe.
+    expect(container.querySelector('.world-stage')).toHaveAttribute('hidden')
+    expect(container.querySelector('.world-hud')).toBeNull()
   })
 })

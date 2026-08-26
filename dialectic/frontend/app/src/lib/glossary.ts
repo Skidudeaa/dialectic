@@ -179,6 +179,21 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   },
 
   // ── the room ────────────────────────────────────────────────────────────
+  'world-signal': {
+    term: 'World signal',
+    short:
+      'A live observation from a public feed — an aircraft, a quake, a fire, the ISS — shown ' +
+      'on the World globe for as long as it is current, and no longer.',
+    long:
+      'A signal is not geography. It is one provider\u2019s report, held only in memory, stamped ' +
+      'with when it was observed, when we fetched it, and when it stops counting as now. It ' +
+      'expires on its own and nothing keeps a copy. To make a place out of one \u2014 to argue ' +
+      'from it, mark evidence on it, or have it survive a restart \u2014 a person has to place ' +
+      'it, which is what turns a report into a scope the room owns. Every layer also reports ' +
+      'its own condition: live, partial, stale, throttled, unavailable, or not configured \u2014 ' +
+      'so an empty globe never has to be guessed at.',
+    seeAlso: ['field-mark'],
+  },
   'field-mark': {
     term: 'Field mark',
     short:

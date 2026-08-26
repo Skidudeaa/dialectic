@@ -14,12 +14,20 @@
   overflow: hidden;
 }
 
+/* The stage is the positioning context the HUD lays itself out over. */
+.world-stage {
+  position: relative;
+}
+
 .world-canvas {
   width: 100%;
   height: min(62vh, 640px);
   min-height: 320px;
   filter: sepia(0.55) saturate(0.7) brightness(0.72) contrast(1.12);
 }
+/* A sensor style IS the look. Leaving the page's warm cast on top of FLIR or
+   night vision would tint the shader's own palette and make white-hot beige. */
+.world-view:not([data-style='none']) .world-canvas { filter: none; }
 .world-canvas .cesium-viewer,
 .world-canvas .cesium-widget,
 .world-canvas .cesium-widget canvas {

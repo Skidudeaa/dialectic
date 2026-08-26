@@ -1,0 +1,202 @@
+/* The cockpit chrome. Panels float over the canvas; every one of them is
+   ordinary DOM so it survives a failed globe, a screen reader, and zoom. */
+
+.world-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) 1fr minmax(0, 17rem);
+  grid-template-rows: auto 1fr auto;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.72rem;
+  color: #CFEAF7;
+}
+
+.world-hud > * { pointer-events: auto; }
+
+.hud-panel {
+  background: rgba(6, 14, 20, 0.82);
+  border: 1px solid rgba(86, 183, 242, 0.32);
+  border-radius: 4px;
+  padding: 0.5rem 0.6rem;
+  backdrop-filter: blur(3px);
+  max-height: 100%;
+  overflow: auto;
+}
+
+.hud-panel h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #7FC8EE;
+}
+
+.hud-panel ul { list-style: none; margin: 0; padding: 0; }
+
+.hud-quiet { margin: 0.35rem 0 0; color: #7794A3; }
+
+/* Column 1, row 1 — what is on the globe */
+.hud-layers { grid-column: 1; grid-row: 1; }
+.hud-layers label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.12rem 0;
+  cursor: pointer;
+}
+.hud-layer-name { flex: 1; text-transform: capitalize; }
+.hud-layer-name[data-layer='aircraft'] { color: #56B7F2; }
+.hud-layer-name[data-layer='earthquakes'] { color: #F2A93B; }
+.hud-layer-name[data-layer='fires'] { color: #FF5A36; }
+.hud-layer-name[data-layer='satellites'] { color: #B98CF5; }
+.hud-layer-name[data-layer='launches'] { color: #57E2A5; }
+.hud-count { color: #7794A3; font-variant-numeric: tabular-nums; }
+
+.hud-sources {
+  margin-top: 0.5rem;
+  border-top: 1px solid rgba(86, 183, 242, 0.2);
+  padding-top: 0.4rem;
+}
+.hud-sources li { display: flex; justify-content: space-between; gap: 0.5rem; }
+.hud-source-state::before {
+  content: '';
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  margin-right: 0.3rem;
+  background: currentColor;
+}
+.hud-sources li[data-tone='live'] .hud-source-state { color: #57E2A5; }
+.hud-sources li[data-tone='partial'] .hud-source-state,
+.hud-sources li[data-tone='stale'] .hud-source-state { color: #F2A93B; }
+.hud-sources li[data-tone='down'] .hud-source-state { color: #FF5A36; }
+.hud-sources li[data-tone='empty'] .hud-source-state,
+.hud-sources li[data-tone='off'] .hud-source-state { color: #7794A3; }
+
+/* Column 3, row 1 — the optics rack */
+.hud-styles { grid-column: 3; grid-row: 1; justify-self: end; }
+.hud-styles button {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0.16rem 0.2rem;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.hud-styles button:hover { background: rgba(86, 183, 242, 0.14); }
+.hud-styles button[aria-pressed='true'] {
+  background: rgba(86, 183, 242, 0.24);
+  color: #EAF7FF;
+}
+.hud-key {
+  display: inline-block;
+  min-width: 1.1rem;
+  padding: 0 0.2rem;
+  text-align: center;
+  border: 1px solid rgba(86, 183, 242, 0.4);
+  border-radius: 2px;
+  color: #7FC8EE;
+  font-size: 0.62rem;
+}
+
+/* Column 1, row 3 — where the camera is */
+.hud-readout {
+  grid-column: 1;
+  grid-row: 3;
+  align-self: end;
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.05rem 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+.hud-readout > div { display: contents; }
+.hud-readout dt { color: #7FC8EE; letter-spacing: 0.1em; }
+.hud-readout dd { margin: 0; }
+
+/* Column 3, rows 2-3 — the tracked contact */
+.hud-contact {
+  grid-column: 3;
+  grid-row: 2 / span 2;
+  align-self: end;
+  justify-self: end;
+}
+.hud-contact header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.hud-contact h4 { flex: 1; margin: 0; font-size: 0.82rem; letter-spacing: 0.04em; color: #EAF7FF; }
+.hud-contact-layer {
+  text-transform: uppercase;
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+}
+.hud-contact header button {
+  background: none;
+  border: 1px solid rgba(86, 183, 242, 0.4);
+  border-radius: 3px;
+  color: inherit;
+  font: inherit;
+  padding: 0.1rem 0.35rem;
+  cursor: pointer;
+}
+.hud-telemetry {
+  margin: 0.5rem 0 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.06rem 0.6rem;
+  font-variant-numeric: tabular-nums;
+}
+.hud-telemetry > div { display: contents; }
+.hud-telemetry dt { color: #7FC8EE; text-transform: capitalize; }
+.hud-telemetry dd { margin: 0; overflow-wrap: anywhere; }
+.hud-provenance { margin: 0.5rem 0 0; color: #7794A3; }
+.hud-provenance a { color: #7FC8EE; }
+
+/* The reticle. Two hairlines and a ring — no crosshair over a map that a
+   person might read as a weapon sight, and none at all when the HUD is off. */
+.hud-reticle {
+  grid-column: 2;
+  grid-row: 2;
+  place-self: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border: 1px solid rgba(86, 183, 242, 0.5);
+  border-radius: 50%;
+  position: relative;
+}
+.hud-reticle::before,
+.hud-reticle::after {
+  content: '';
+  position: absolute;
+  background: rgba(86, 183, 242, 0.5);
+}
+.hud-reticle::before { left: 50%; top: -0.6rem; bottom: -0.6rem; width: 1px; }
+.hud-reticle::after { top: 50%; left: -0.6rem; right: -0.6rem; height: 1px; }
+
+.world-hud[data-visible='false'] .hud-readout { display: none; }
+
+@media (max-width: 60rem) {
+  /* On a small screen the panels would cover the globe entirely. The complete
+     list below is the real surface there, so the HUD keeps only the optics. */
+  .world-hud { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
+  .hud-layers, .hud-readout, .hud-contact { display: none; }
+  .hud-styles { grid-column: 1; grid-row: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-panel { backdrop-filter: none; }
+}
