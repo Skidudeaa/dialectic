@@ -138,3 +138,4 @@
 [2026-08-25] made scope freshness close every review door consistently — expired accepted/proposed evidence keeps history and provenance but exposes no write control, while ticketed thesis loads cannot republish after review refresh and only HTTP(S) provenance becomes active
 [2026-08-25] aligned ratification with the visible one-shot contract — only an original current place/place_signal scope can be ratified; confirmed, redrawn, or ratified successors fail 409 without rows or events
 [2026-08-25] raised World signal action/error text to the 12 px floor — isolated 390 px browser proof now triggers a visible placement failure and measures Place, error, signal, and source text directly
+[2026-08-25] ledgered acceptance port selection as best-effort isolation, not collision-proof reservation — bind-zero sockets close before child startup and retain a narrow TOCTOU window

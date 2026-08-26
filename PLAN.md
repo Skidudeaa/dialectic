@@ -12,7 +12,7 @@ bytes, activation, and human qualification separate. Do not call them all
 | Isolated worktree | `/root/DwoodAmo/.worktrees/world-lens-truth-before-spectacle` |
 | Branch | `codex/world-lens-truth-before-spectacle` |
 | Safe baseline | `origin/codex/world-lens-pre-phase2.5-20260825` = `3eabd4a` preserves prior Phase 0–2 source off-host. |
-| Task commits | Plan `a690fe6`; lineage `91014b8..808e17e`; review `fef716a..32e8333`; causal Field `0d2ae3c..472cc5a`; WorldSignal `48e9288..3dd9089`; participant sight/docs `e751968` + `7906e21`; independent-review fixes `0eadc74` + `987472d`; final evidence fixes `160a92e`. |
+| Task commits | Plan `a690fe6`; lineage `91014b8..808e17e`; review `fef716a..32e8333`; causal Field `0d2ae3c..472cc5a`; WorldSignal `48e9288..3dd9089`; participant sight/docs `e751968` + `7906e21`; independent-review fixes `0eadc74` + `987472d`; final evidence fixes `160a92e`; narrow final-review fixes `8252760`. |
 | Push/publication | **Not pushed** unless later evidence says otherwise. The safety ref is not publication of this branch. |
 | Production migration 022 | **Not applied.** Exercised only on isolated/test PostgreSQL. |
 | Backend runtime | **Not restarted or loaded from this worktree.** |
@@ -37,7 +37,9 @@ bytes, activation, and human qualification separate. Do not call them all
    person copies current same-room server bytes into a durable scope.
 5. `world_query` composes `GeoScopeService`, scope-specific bounded
    `FieldMarkService` semantic roles with exact total/omitted/completeness,
-   and `WorldSignalStore`; it is exact-room, read-only, bounded, and preserves
+   and `WorldSignalStore`; the causal owner query accepts an uncapped valid
+   lineage and obtains candidates plus the exact total in one SQL statement.
+   Output remains exact-room, read-only, bounded, and preserves
    not-configured/unavailable/unknown/empty/zero. `propose_geo_scope` remains
    the sole participant geography writer and creates a reviewed proposal only.
 6. Provider envelope expiry overrides every child signal; both snapshots and
@@ -92,18 +94,37 @@ Fresh final-wave evidence on `160a92e`: relevant backend/PostgreSQL `118
 passed`; focused World/Focus frontend `32 passed`; changed Python Ruff and
 changed TypeScript ESLint passed; production frontend build passed inside the
 isolated harness; authenticated browser/migration harness `47/47 passed`.
-The harness used a unique disposable DB/evidence directory and kernel-assigned
-ports, measured 44 px Place and 12 px signal/source metadata at 390 px,
+The harness used a unique disposable DB/evidence directory and dynamically
+selected loopback ports, measured 44 px Place and 12 px signal/source metadata
+at 390 px,
 collapsed failed WebGL to a zero-height canvas, reached its row after 17 real
 Tab stops, and observed no page errors, HTTP 500s, reset markers, or ASGI
 exceptions. Per final-wave instruction, full repo suites were not rerun; the
 main integration agent owns that fresh final verification.
+
+Fresh narrow-review evidence on `8252760`: relevant backend/PostgreSQL `124
+passed`; focused World/Focus frontend `57 passed`; changed Python Ruff and
+changed TypeScript ESLint passed; production frontend build passed inside the
+isolated harness; authenticated browser/migration harness `50/50 passed`. The
+owner query used one PostgreSQL statement while finding a root binding through
+a 52-revision lineage and returned bounded rows with truthful
+total/omitted/completeness. The browser measured Place and its real visible
+offline error at 12 px, with no page errors, HTTP 500s, reset markers, or ASGI
+exceptions. Per instruction, full repo suites were not rerun; the main
+integration agent owns fresh final verification.
 
 ## Remaining operational caveat — explicit, not lost
 
 The Task 1–4 deferred correctness gaps are closed in `160a92e`: route token
 and serialized-lineage coverage, complete per-revision provenance, expired
 binding/load semantics, strict provider chronology, and the 12 px/44 px floor.
+
+The acceptance harness gives each run a unique database and evidence path.
+Its loopback ports are selected by binding to port zero, then releasing that
+socket before the child process binds; this leaves a small time-of-check/time-
+of-use collision window and is **not collision-proof**. Serialize or retry a
+local acceptance run if another process takes a selected port. A true socket
+handoff is deferred rather than overstated as current evidence.
 
 Migration 021/schema declare `geo_scopes.room_id ... ON DELETE CASCADE`, while
 migration 022 deliberately rejects every GeoScope DELETE. A room delete that
