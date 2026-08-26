@@ -58,6 +58,15 @@ function destinationLabel(destination: GeoSubjectDestination): string {
   return parts.join(' · ')
 }
 
+function isHttpUrl(value: string): boolean {
+  try {
+    const protocol = new URL(value).protocol
+    return protocol === 'http:' || protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 function ScopeProvenance({ scope, label }: { scope: GeoScope; label: string }) {
   const provenance = scope.provenance
   return (
@@ -68,9 +77,9 @@ function ScopeProvenance({ scope, label }: { scope: GeoScope; label: string }) {
       <div>
         <dt>Exact URL</dt>
         <dd>
-          {provenance.url
+          {provenance.url && isHttpUrl(provenance.url)
             ? <a href={provenance.url}>{provenance.url}</a>
-            : 'Not supplied'}
+            : (provenance.url || 'Not supplied')}
         </dd>
       </div>
       <div><dt>Credit</dt><dd>{provenance.credit || 'Not supplied'}</dd></div>
@@ -106,10 +115,16 @@ export function ScopeReview({
   const [causalRelation, setCausalRelation] = useState<FieldRelation>('supports')
   const [nodeId, setNodeId] = useState('')
   const requestRef = useRef(0)
+  const bindingRequestRef = useRef(0)
   const canonicalizedRef = useRef<string | null>(null)
 
   const load = useCallback(async () => {
     const ticket = ++requestRef.current
+    bindingRequestRef.current += 1
+    setBinding(false)
+    setBindingBusy(false)
+    setStructure(null)
+    setNodeId('')
     await Promise.resolve()
     if (requestRef.current !== ticket) return
     setLoading(true)
@@ -156,10 +171,12 @@ export function ScopeReview({
   }
 
   const openBinding = async () => {
+    const ticket = ++bindingRequestRef.current
     setBindingBusy(true)
     setError(null)
     try {
       const next = await api.getThesisStructure(roomId)
+      if (bindingRequestRef.current !== ticket) return
       if (!Array.isArray(next.nodes) || next.nodes.length === 0) {
         throw new Error('This thesis has no nodes to bind.')
       }
@@ -167,11 +184,12 @@ export function ScopeReview({
       setNodeId(next.nodes[0].id)
       setBinding(true)
     } catch (err) {
+      if (bindingRequestRef.current !== ticket) return
       setStructure(null)
       setBinding(false)
       setError(err instanceof Error ? err.message : 'Thesis structure is unavailable')
     } finally {
-      setBindingBusy(false)
+      if (bindingRequestRef.current === ticket) setBindingBusy(false)
     }
   }
 
@@ -217,11 +235,12 @@ export function ScopeReview({
   const current = review.current
   const proposed = current.review_state === 'proposed'
   const accepted = current.review_state === 'accepted'
-  const bindable = accepted && current.freshness.state !== 'expired'
+  const currentIsLive = current.freshness.state !== 'expired'
+  const bindable = accepted && currentIsLive
   const bindingLoading = bindingBusy && !binding
   const canRatify = accepted && (
     current.revision_action === 'place' || current.revision_action === 'place_signal'
-  )
+  ) && current.supersedes_id === null
 
   return (
     <>
@@ -267,7 +286,7 @@ export function ScopeReview({
           ))}
         </ol>
       </section>
-      {canAct && (proposed || accepted) ? (
+      {canAct && currentIsLive && (proposed || accepted) ? (
         <section className="focus-section scope-review-actions" aria-label="Scope actions">
           <h3 className="focus-section-label">Review</h3>
           <label className="scope-review-note-label">

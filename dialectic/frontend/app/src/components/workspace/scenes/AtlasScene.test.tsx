@@ -396,6 +396,20 @@ describe('AtlasScene / World', () => {
     expect(screen.getByRole('region', { name: 'Live signals' })).toHaveTextContent('Vessel contact 1')
   })
 
+  it('shows a real placement failure in the visible signal row', async () => {
+    vi.spyOn(api, 'placeWorldSignal').mockRejectedValue(new Error('signal is expired'))
+    render(
+      <AtlasScene
+        state={readyWithWorld(rooms, [], [vesselSignal])}
+        onNavigate={vi.fn()}
+        signalRoomTokens={new Map([['room-h', 'token-h']])}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Place Vessel contact 1/i }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('signal is expired')
+  })
+
   it('keeps another-room signal visible but read-only under the current room token', () => {
     const place = vi.spyOn(api, 'placeWorldSignal')
     const otherRoomSignal: WorldSignal = {

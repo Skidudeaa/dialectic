@@ -128,7 +128,7 @@
   background: var(--color-obsidian);
   color: #c7e9fa;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   cursor: pointer;
@@ -141,7 +141,7 @@
   padding: 0.35rem 0.8rem;
   color: var(--color-danger);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
 }
 .world-source-list {
   list-style: none;

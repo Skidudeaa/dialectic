@@ -16,6 +16,7 @@ Setup expected (skipped cleanly when absent):
 
 import os
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from uuid import UUID, uuid4
 
 import asyncpg
@@ -398,6 +399,86 @@ async def test_every_mark_is_fenced_to_its_room(field_room):
 async def test_the_other_room_only_sees_its_own_mark(field_room):
     projection = await FieldMarkService(field_room).build(OTHER)
     assert [m.title for m in projection.marks] == ["OTHER-ROOM-SENTINEL"]
+
+
+@pytest.mark.asyncio
+async def test_causal_geo_bindings_are_one_atomic_bounded_newest_first_read(field_room):
+    scope_id = uuid4()
+    mark_ids = [uuid4(), uuid4(), uuid4()]
+    for index, mark_id in enumerate(mark_ids):
+        await _relation(
+            field_room, mark_id, ROOM, thread=TH, relation="supports",
+            origin="explicit", provenance="human", actor=AMO,
+            subjects=[
+                {"entity": "geo_scopes", "id": str(scope_id)},
+                {
+                    "entity": "rooms", "id": str(ROOM),
+                    "field": f"thesis_node:book:node-{index}",
+                },
+            ],
+            title=f"Causal {index}", at=BASE + timedelta(seconds=index),
+        )
+    await _review(
+        field_room, uuid4(), ROOM, mark_ids[-1], "confirm", AMO,
+        BASE + timedelta(minutes=1),
+    )
+    other_id = uuid4()
+    await _relation(
+        field_room, other_id, OTHER, thread=TH_OTHER, relation="supports",
+        origin="explicit", provenance="human", actor=AMO,
+        subjects=[
+            {"entity": "geo_scopes", "id": str(scope_id)},
+            {
+                "entity": "rooms", "id": str(OTHER),
+                "field": "thesis_node:other:sentinel",
+            },
+        ],
+        title="OTHER-ROOM-CAUSAL-SENTINEL", at=BASE + timedelta(days=1),
+    )
+
+    class ReadAudit:
+        def __init__(self, connection: asyncpg.Connection) -> None:
+            self.connection = connection
+            self.read_calls = 0
+            self.candidate_calls = 0
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self.connection, name)
+
+        async def fetch(self, query: str, *args: object) -> list[asyncpg.Record]:
+            self.read_calls += 1
+            if "jsonb_array_elements" in query:
+                self.candidate_calls += 1
+            return await self.connection.fetch(query, *args)
+
+        async def fetchrow(
+            self, query: str, *args: object,
+        ) -> asyncpg.Record | None:
+            self.read_calls += 1
+            return await self.connection.fetchrow(query, *args)
+
+        async def fetchval(self, query: str, *args: object) -> Any:
+            self.read_calls += 1
+            if "jsonb_array_elements" in query:
+                self.candidate_calls += 1
+            return await self.connection.fetchval(query, *args)
+
+    audited = ReadAudit(field_room)
+    projection = await FieldMarkService(audited).causal_geo_bindings(
+        ROOM, {scope_id}, limit=2,
+    )
+
+    assert projection.total == 3
+    assert projection.omitted == 1
+    assert projection.complete is False
+    assert [mark.id for mark in projection.marks] == [
+        f"field_mark:{mark_ids[2]}", f"field_mark:{mark_ids[1]}",
+    ]
+    assert projection.marks[0].review == "confirmed"
+    assert len(projection.marks[0].reviews) == 1
+    assert "OTHER-ROOM-CAUSAL-SENTINEL" not in projection.model_dump_json()
+    assert audited.candidate_calls == 1
+    assert audited.read_calls == 1
 
 
 @pytest.mark.asyncio

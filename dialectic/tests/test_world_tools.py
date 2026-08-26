@@ -385,6 +385,49 @@ async def test_world_query_scope_bindings_are_not_hidden_by_room_field_projectio
     ]
 
 
+@pytest.mark.asyncio
+async def test_world_query_finds_an_early_binding_across_more_than_fifty_revisions(db):
+    root_id = await _accepted_scope(db, label="Long-lived placement")
+    previous_id = root_id
+    for index in range(51):
+        previous_id = await insert_scope(
+            db, room_id=ROOM,
+            subject={"entity": "rooms", "id": str(ROOM)},
+            kind="point",
+            geometry={"type": "Point", "coordinates": [56.3, 26.5]},
+            label=f"Long-lived placement revision {index + 1}",
+            authority="human_confirmed",
+            provenance={"provider": "human", "acquisition": "human"},
+            confirmed_by=AMO, supersedes_id=previous_id,
+            revision_action="redraw", created_by=AMO,
+        )
+    mark_id = uuid4()
+    await db.execute(
+        """INSERT INTO field_marks
+               (id, room_id, mark_kind, relation, origin, provenance, subjects,
+                title, payload, actor_user_id, dedup_key)
+           VALUES ($1,$2,'relation','supports','explicit','human',$3,$4,$5,$6,$7)""",
+        mark_id, ROOM,
+        [
+            {"entity": "geo_scopes", "id": str(root_id)},
+            {"entity": "rooms", "id": str(ROOM), "field": "thesis_node:book:early"},
+        ],
+        "Early revision matters", {"node_label": "Early evidence"}, AMO,
+        f"long-lineage-{mark_id}",
+    )
+
+    out = await world.world_query(
+        db, ROOM, "Hormuz room", {"scope": f"geo_scope:{root_id}"},
+    )
+
+    assert out["scope"]["lineage"]["total"] == 52
+    assert len(out["scope"]["lineage"]["items"]) == 12
+    assert out["scope"]["lineage"]["omitted"] == 40
+    assert out["scope"]["causal_bindings_total"] == 1
+    assert out["scope"]["causal_bindings_complete"] is True
+    assert out["scope"]["causal_bindings"][0]["id"] == f"field_mark:{mark_id}"
+
+
 def _signal(now: datetime, *, source_id: str = "one") -> WorldSignal:
     return WorldSignal(
         id=f"world_signal:test_provider:{source_id}",

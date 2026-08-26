@@ -341,8 +341,14 @@ async def _review(
                     status_code=409,
                     detail="only an accepted scope can be ratified",
                 )
-            if action == "ratify" and target.revision_action == "ratify":
-                raise HTTPException(status_code=409, detail="scope is already ratified")
+            if action == "ratify" and (
+                target.supersedes_id is not None
+                or target.revision_action not in ("place", "place_signal")
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="only an original accepted placement can be ratified",
+                )
             if action in ("redraw", "supersede") and target.review_state != "accepted":
                 raise HTTPException(
                     status_code=409, detail="only an accepted scope can be revised",

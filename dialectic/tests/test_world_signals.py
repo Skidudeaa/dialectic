@@ -327,6 +327,24 @@ def test_expired_provider_envelope_hides_and_cannot_resolve_future_child() -> No
         store.resolve(ROOM_A, child.id, now=NOW)
 
 
+def test_explicitly_expired_provider_freshness_hides_and_cannot_resolve_child() -> None:
+    child = _signal("state-expired", expires_at=NOW + timedelta(minutes=20))
+    snapshot = WorldSignalSnapshot(**{
+        **_snapshot(child).model_dump(),
+        "freshness": "expired",
+        "expires_at": NOW + timedelta(minutes=10),
+    })
+    store = WorldSignalStore()
+    store.replace(snapshot)
+
+    projection = store.project({ROOM_A}, now=NOW)
+    assert projection.signals == []
+    assert projection.signal_sources.sources[0].freshness == "expired"
+    assert projection.signal_sources.sources[0].signal_count == 0
+    with pytest.raises(WorldSignalExpired):
+        store.resolve(ROOM_A, child.id, now=NOW)
+
+
 def test_resolve_distinguishes_malformed_missing_cross_room_and_expired() -> None:
     store = WorldSignalStore()
     store.replace(_snapshot(

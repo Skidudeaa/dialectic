@@ -143,32 +143,64 @@ WHERE mark_kind = 'review' AND target_mark_id = $1
 """
 
 _CAUSAL_GEO_WHERE_SQL = """
-room_id = $1
-AND mark_kind = 'relation'
-AND relation = ANY($2::text[])
-AND jsonb_array_length(subjects) = 2
+fm.room_id = $1
+AND fm.mark_kind = 'relation'
+AND fm.relation = ANY($2::text[])
+AND jsonb_array_length(fm.subjects) = 2
 AND EXISTS (
-    SELECT 1 FROM jsonb_array_elements(subjects) AS subject
+    SELECT 1 FROM jsonb_array_elements(fm.subjects) AS subject
     WHERE subject->>'entity' = 'geo_scopes'
       AND subject->>'id' = ANY($3::text[])
 )
 AND EXISTS (
-    SELECT 1 FROM jsonb_array_elements(subjects) AS subject
+    SELECT 1 FROM jsonb_array_elements(fm.subjects) AS subject
     WHERE subject->>'entity' = 'rooms'
       AND subject->>'id' = $1::text
       AND subject->>'field' ~ '^thesis_node:[^:]+:[^:]+$'
 )
 """
 
-_CAUSAL_GEO_COUNT_SQL = f"""
-SELECT count(*) FROM field_marks WHERE {_CAUSAL_GEO_WHERE_SQL}
-"""
-
-_CAUSAL_GEO_IDS_SQL = f"""
-SELECT id FROM field_marks
-WHERE {_CAUSAL_GEO_WHERE_SQL}
-ORDER BY created_at DESC, id DESC
-LIMIT $4
+_CAUSAL_GEO_BINDINGS_SQL = f"""
+WITH candidates AS (
+    SELECT fm.id, fm.room_id, fm.thread_id, fm.mark_kind, fm.relation,
+           fm.action, fm.origin, fm.deliberative_status, fm.subjects,
+           fm.target_mark_id, fm.title, fm.payload, fm.supersedes_id,
+           fm.caused_by_id, fm.actor_user_id, fm.provenance, fm.created_at,
+           count(*) OVER () AS matching_total
+    FROM field_marks fm
+    WHERE {_CAUSAL_GEO_WHERE_SQL}
+    ORDER BY fm.created_at DESC, fm.id DESC
+    LIMIT $4
+), candidate_successors AS (
+    SELECT successor.supersedes_id AS target_id
+    FROM field_marks successor
+    JOIN candidates ON candidates.id = successor.supersedes_id
+    GROUP BY successor.supersedes_id
+), candidate_reviews AS (
+    SELECT review.target_mark_id,
+           jsonb_agg(
+               jsonb_build_object(
+                   'id', review.id,
+                   'action', review.action,
+                   'actor_user_id', review.actor_user_id,
+                   'payload', review.payload,
+                   'created_at', review.created_at
+               ) ORDER BY review.created_at, review.id
+           ) AS reviews
+    FROM field_marks review
+    JOIN candidates ON candidates.id = review.target_mark_id
+    WHERE review.mark_kind = 'review'
+    GROUP BY review.target_mark_id
+)
+SELECT candidates.*,
+       candidate_successors.target_id IS NOT NULL AS has_successor,
+       COALESCE(candidate_reviews.reviews, '[]'::jsonb) AS reviews
+FROM candidates
+LEFT JOIN candidate_successors
+       ON candidate_successors.target_id = candidates.id
+LEFT JOIN candidate_reviews
+       ON candidate_reviews.target_mark_id = candidates.id
+ORDER BY candidates.created_at DESC, candidates.id DESC
 """
 
 # Every entity a subject ref may name, and how to check it belongs to the
@@ -532,23 +564,19 @@ class FieldMarkService:
                 generated_at=datetime.now(timezone.utc), room_id=room_id,
                 marks=[], total=0, omitted=0, complete=True,
             )
-        if len(scope_ids) > 50:
-            raise ValueError("causal scope lookup accepts at most 50 revisions")
         if limit < 1 or limit > 100:
             raise ValueError("causal scope lookup limit must be between 1 and 100")
         relations = list(FIELD_CAUSAL_RELATIONS)
         identifiers = [str(scope_id) for scope_id in sorted(scope_ids)]
-        total = int(await self.db.fetchval(
-            _CAUSAL_GEO_COUNT_SQL, room_id, relations, identifiers,
-        ))
         rows = await self.db.fetch(
-            _CAUSAL_GEO_IDS_SQL, room_id, relations, identifiers, limit,
+            _CAUSAL_GEO_BINDINGS_SQL, room_id, relations, identifiers, limit,
         )
+        total = int(rows[0]["matching_total"]) if rows else 0
         marks: list[FieldMark] = []
         for row in rows:
-            mark = await build_single_mark(self.db, room_id, row["id"])
-            if mark is not None:
-                marks.append(mark)
+            reviews = _jsonb_list(row["reviews"])
+            review_state = _derive_review_state(bool(row["has_successor"]), reviews)
+            marks.append(_to_field_mark(dict(row), review_state, reviews))
         omitted = max(0, total - len(marks))
         return CausalGeoBindingProjection(
             generated_at=datetime.now(timezone.utc), room_id=room_id,

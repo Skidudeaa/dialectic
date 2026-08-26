@@ -321,6 +321,42 @@ describe('FocusSurface', () => {
     )
   })
 
+  it('keeps non-http provenance URLs visible without making them active links', async () => {
+    const historical = geoScope({
+      id: 'geo_scope:historical', label: 'Unsafe historical URL',
+      provenance: {
+        provider: 'history-provider', acquisition: 'adapter:history',
+        source_id: 'history-unsafe', url: 'ftp://history.test/file', credit: 'History credit',
+      },
+    })
+    const current = geoScope({
+      id: 'geo_scope:current', label: 'Unsafe current URL', supersedes_id: 'historical',
+      provenance: {
+        provider: 'current-provider', acquisition: 'adapter:current',
+        source_id: 'current-unsafe', url: 'javascript:alert(1)', credit: 'Current credit',
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(geoReview({
+      current, lineage: [historical, current],
+    }))))
+    render(
+      <FocusSurface
+        {...baseProps}
+        objectId="geo_scope:root-1"
+        roomId="r1"
+        objects={noObjects}
+        fieldMarks={noMarks}
+      />,
+    )
+
+    const currentProvenance = await screen.findByRole('group', { name: 'Current placement provenance' })
+    expect(within(currentProvenance).getByText('javascript:alert(1)')).toBeInTheDocument()
+    expect(within(currentProvenance).queryByRole('link')).toBeNull()
+    const historicalProvenance = screen.getByRole('group', { name: 'Unsafe historical URL provenance' })
+    expect(within(historicalProvenance).getByText('ftp://history.test/file')).toBeInTheDocument()
+    expect(within(historicalProvenance).queryByRole('link')).toBeNull()
+  })
+
   it('opens the stored message subject with the exact server-derived thread and message destination', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(geoReview())))
     const onNavigate = vi.fn()
@@ -595,7 +631,7 @@ describe('FocusSurface', () => {
     expect(screen.queryByRole('button', { name: 'Add to Field' })).toBeNull()
   })
 
-  it('does not offer an expired accepted scope as causal evidence', async () => {
+  it('keeps expired accepted scope evidence readable without any review writes', async () => {
     const expired = geoScope({
       freshness: {
         state: 'expired', observed_at: '2026-08-24T12:00:00Z',
@@ -614,8 +650,35 @@ describe('FocusSurface', () => {
     )
 
     await screen.findByRole('heading', { name: 'Strait of Hormuz' })
-    expect(screen.queryByRole('button', { name: 'Bind to thesis node' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Redraw' })).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Scope history' })).toHaveTextContent('Strait of Hormuz')
+    for (const action of ['Bind to thesis node', 'Ratify', 'Redraw', 'Supersede']) {
+      expect(screen.queryByRole('button', { name: action })).toBeNull()
+    }
+  })
+
+  it('keeps expired proposed scope evidence readable without confirm or reject', async () => {
+    const expired = geoScope({
+      authority: 'machine_proposed', revision_action: 'propose', review_state: 'proposed',
+      freshness: {
+        state: 'expired', observed_at: '2026-08-24T12:00:00Z',
+        retrieved_at: '2026-08-25T00:00:00Z', expires_at: '2026-08-25T01:00:00Z',
+      },
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(geoReview({ current: expired }))))
+    render(
+      <FocusSurface
+        {...baseProps}
+        objectId="geo_scope:root-1"
+        roomId="r1"
+        objects={noObjects}
+        fieldMarks={noMarks}
+      />,
+    )
+
+    await screen.findByRole('heading', { name: 'Strait of Hormuz' })
+    expect(screen.getByRole('list', { name: 'Scope history' })).toHaveTextContent('Strait of Hormuz')
+    expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Reject' })).toBeNull()
   })
 
   it('announces thesis loading with a changed label, busy state, and status', async () => {
@@ -649,5 +712,55 @@ describe('FocusSurface', () => {
       edges: [], scenarios: [],
     }))
     expect(await screen.findByRole('button', { name: 'Add to Field' })).toBeInTheDocument()
+  })
+
+  it('discards a stale thesis response when review refresh changes the current scope', async () => {
+    let finishStructure: ((value: Response) => void) | undefined
+    const structureResponse = new Promise<Response>((resolve) => {
+      finishStructure = resolve
+    })
+    const initial = geoReview()
+    const ratified = geoScope({
+      id: 'geo_scope:ratified', supersedes_id: 'root-1', revision_action: 'ratify',
+    })
+    const refreshed = geoReview({ current: ratified, lineage: [initial.current, ratified] })
+    let reviewReads = 0
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/review')) {
+        reviewReads += 1
+        return Promise.resolve(jsonResponse(reviewReads === 1 ? initial : refreshed))
+      }
+      if (url.endsWith('/trading/structure')) return structureResponse
+      if (url.endsWith('/ratify')) return Promise.resolve(jsonResponse(ratified))
+      throw new Error(`unexpected request: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(
+      <FocusSurface
+        {...baseProps}
+        objectId="geo_scope:root-1"
+        roomId="r1"
+        objects={noObjects}
+        fieldMarks={noMarks}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Bind to thesis node' }))
+    await screen.findByRole('button', { name: 'Loading thesis structure…' })
+    fireEvent.click(screen.getByRole('button', { name: 'Ratify' }))
+    await waitFor(() => expect(reviewReads).toBe(2))
+    expect(screen.getByRole('list', { name: 'Scope history' }).getElementsByTagName('li')).toHaveLength(2)
+
+    await act(async () => {
+      finishStructure?.(jsonResponse({
+        id: 'stale-book', meta: { title: 'Stale' },
+        nodes: [{ id: 'stale', label: 'Stale', type: 'event', phase: 1, state: 'watching', x: 0, y: 0 }],
+        edges: [], scenarios: [],
+      }))
+      await Promise.resolve()
+    })
+    expect(screen.queryByRole('button', { name: 'Add to Field' })).toBeNull()
+    expect(screen.queryByLabelText('Thesis node')).toBeNull()
   })
 })

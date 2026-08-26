@@ -596,6 +596,7 @@ def exercise_browser(browser: Any) -> None:
           reduced: matchMedia('(prefers-reduced-motion: reduce)').matches,
           world: document.querySelector('[data-atlas-mode="world"]') !== null,
           placeHeight: document.querySelector('.world-signal-place')?.getBoundingClientRect().height ?? 0,
+          placeFont: parseFloat(getComputedStyle(document.querySelector('.world-signal-place')).fontSize),
           signalMetaFont: parseFloat(getComputedStyle(document.querySelector('.world-signal-meta')).fontSize),
           sourceMetaFont: parseFloat(getComputedStyle(document.querySelector('.world-source-list')).fontSize),
         })""",
@@ -603,8 +604,21 @@ def exercise_browser(browser: Any) -> None:
     check("390px World has no horizontal overflow", facts["scroll"] <= facts["client"], facts)
     check("reduced motion is honored by the browser context", facts["reduced"] is True)
     check("390px signal Place target is at least 44px", facts["placeHeight"] >= 44, facts)
+    check("390px signal Place text is at least 12px", facts["placeFont"] >= 12, facts)
     check("390px signal metadata is at least 12px", facts["signalMetaFont"] >= 12, facts)
     check("390px source metadata is at least 12px", facts["sourceMetaFont"] >= 12, facts)
+    phone.set_offline(True)
+    try:
+        phone_page.get_by_role("button", name="Place Acceptance vessel signal").click()
+        placement_error = phone_page.locator(".world-signal-error")
+        placement_error.wait_for()
+        error_facts = placement_error.evaluate(
+            "element => ({ text: element.textContent?.trim(), font: parseFloat(getComputedStyle(element).fontSize) })",
+        )
+    finally:
+        phone.set_offline(False)
+    check("390px signal placement failure is visibly rendered", bool(error_facts["text"]), error_facts)
+    check("390px signal placement error is at least 12px", error_facts["font"] >= 12, error_facts)
     phone_page.screenshot(path=str(EVIDENCE / "world-390-reduced.png"), full_page=False)
     phone.close()
 
