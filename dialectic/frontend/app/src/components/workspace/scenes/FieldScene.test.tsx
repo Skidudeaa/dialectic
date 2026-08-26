@@ -5,6 +5,7 @@ import type { FieldMark, WorkspaceObject } from '../../../types/workspace.ts'
 import type { FieldMarksState } from '../../../hooks/useFieldMarks.ts'
 import type { WorkspaceObjectsState } from '../../../hooks/useWorkspaceObjects.ts'
 import { useAppStore } from '../../../stores/appStore.ts'
+import type { CausalGeoBinding } from '../../../types/atlas.ts'
 
 const mark = (overrides: Partial<FieldMark> & { id: string; relation: FieldMark['relation'] }): FieldMark => ({
   room_id: 'r1', thread_id: null, origin: 'inferred', review: 'provisional',
@@ -15,6 +16,18 @@ const mark = (overrides: Partial<FieldMark> & { id: string; relation: FieldMark[
 })
 
 const noObjects: WorkspaceObjectsState = { status: 'ready', objects: [], generatedAt: 'x', retry: () => {} }
+
+const worldBinding: CausalGeoBinding = {
+  id: 'field_mark:causal',
+  current_scope_id: 'geo_scope:current',
+  evidence_scope_id: 'geo_scope:old-evidence',
+  relation: 'challenges',
+  review_state: 'contested',
+  provisional: false,
+  target: {
+    room_id: 'r1', book_id: 'hormuz', node_id: 'freight-rates', node_label: 'Freight rates',
+  },
+}
 
 afterEach(() => {
   useAppStore.setState({ accessToken: null })
@@ -145,5 +158,29 @@ describe('FieldScene', () => {
       'href',
       'https://td.somacura.org/builder?edit=hormuz#dialectic_token=session-token&dialectic_room=r1',
     )
+  })
+
+  it('opens the live World redraw while preserving the causal mark in Focus', () => {
+    const onOpenWorld = vi.fn()
+    const causal = mark({
+      id: 'field_mark:causal', relation: 'challenges', title: 'Hormuz challenges freight',
+      review: 'contested',
+      subjects: [
+        { entity: 'rooms', id: 'r1', field: 'thesis_node:hormuz:freight-rates' },
+        { entity: 'geo_scopes', id: 'old-evidence', field: null },
+      ],
+      payload: { node_label: 'Freight rates', scope_label: 'Strait of Hormuz' },
+    })
+    render(
+      <FieldScene
+        state={{ status: 'ready', generatedAt: 'x', refresh: () => {}, marks: [causal] }}
+        objects={noObjects}
+        worldBindings={[worldBinding]}
+        onOpenWorld={onOpenWorld}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open World evidence' }))
+    expect(onOpenWorld).toHaveBeenCalledWith('geo_scope:current', 'field_mark:causal')
   })
 })

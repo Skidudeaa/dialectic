@@ -3,7 +3,9 @@ import { api } from '../../../lib/api.ts'
 import type { GeoScope, GeoScopeReview, GeoSubjectDestination } from '../../../types/geo.ts'
 import type { ThesisStructure } from '../../../types/trading.ts'
 import type { FieldRelation } from '../../../types/workspace.ts'
+import type { CausalGeoBinding } from '../../../types/atlas.ts'
 import { AUTHORITY_LABEL, KIND_LABEL } from '../world/worldScopes.ts'
+import { CausalBindingList } from '../world/CausalBindingList.tsx'
 import { FocusHeader } from './FocusHeader.tsx'
 import { SceneLoading } from '../SceneEmpty.tsx'
 import './Focus.css'
@@ -21,6 +23,7 @@ interface ScopeReviewProps {
   }) => void
   onChanged: () => void
   onMarked: () => void
+  worldBindings?: CausalGeoBinding[]
 }
 
 function bareScopeId(id: string): string {
@@ -100,6 +103,7 @@ function navigateToSubject(
 
 export function ScopeReview({
   roomId, scopeId, canAct, onClose, onNavigate, onChanged, onMarked,
+  worldBindings = [],
 }: ScopeReviewProps) {
   const [review, setReview] = useState<GeoScopeReview | null>(null)
   const [loading, setLoading] = useState(true)
@@ -241,6 +245,13 @@ export function ScopeReview({
   const canRatify = accepted && (
     current.revision_action === 'place' || current.revision_action === 'place_signal'
   ) && current.supersedes_id === null
+  const scopeBindings = worldBindings.filter((worldBinding) => (
+    worldBinding.target.room_id === roomId
+    && (
+      worldBinding.current_scope_id === review.current.id
+      || review.lineage.some((scope) => scope.id === worldBinding.evidence_scope_id)
+    )
+  ))
 
   return (
     <>
@@ -264,6 +275,11 @@ export function ScopeReview({
         <div><dt>Freshness</dt><dd>{humanize(current.freshness.state)}</dd></div>
         <div><dt>Review decision</dt><dd>{humanize(current.review_state)}</dd></div>
       </dl>
+      <CausalBindingList
+        scopeLabel={current.label || 'Unlabelled'}
+        bindings={scopeBindings}
+        onOpenMark={(worldBinding) => onNavigate({ object: worldBinding.id })}
+      />
       <section className="focus-section scope-review-current" aria-label="Current placement">
         <h3 className="focus-section-label">Current placement</h3>
         <p>{geometrySummary(current)} · centroid {current.centroid.join(', ')}</p>

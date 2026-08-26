@@ -580,6 +580,9 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     || workspaceScene === 'field'
     || causalObjectSelected
   ))
+  const causalBindings = atlas.status === 'ready'
+    ? (atlas.projection.causal_bindings ?? [])
+    : []
   // Capabilities follow the exact room IDs the already-fenced signal
   // projection carries, then resolve against the complete saved-room list.
   // This stays bounded by Atlas rather than by the rail's activity ordering;
@@ -901,6 +904,19 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     }, target.historyMode ?? 'push')
   }
 
+  // One destination writer joins both causal doors to the same World state.
+  // The live current scope comes from the server projection; a Field mark may
+  // remain the selected object while Atlas highlights that scope beneath it.
+  const openWorldEvidence = (scopeObjectId: string, selectedObject = scopeObjectId) => {
+    void navigate({
+      roomId: currentRoom.id,
+      threadId: null,
+      scene: 'atlas',
+      object: selectedObject,
+      view: `world;room=${currentRoom.id}`,
+    }, 'push')
+  }
+
   const handleFieldReview = async (markId: string, request: FieldReviewRequest) => {
     await api.postFieldReview(currentRoom.id, bareMarkId(markId), request)
     if (fieldMarks.status === 'ready') fieldMarks.refresh()
@@ -1001,7 +1017,15 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
         }
       />
     ),
-    field: <FieldScene state={fieldMarks} objects={workspaceObjects} onOpen={openWorkspaceObject} />,
+    field: (
+      <FieldScene
+        state={fieldMarks}
+        objects={workspaceObjects}
+        onOpen={openWorkspaceObject}
+        worldBindings={causalBindings}
+        onOpenWorld={openWorldEvidence}
+      />
+    ),
     library: <LibraryScene state={workspaceObjects} onOpen={openWorkspaceObject} />,
     ledger: (
       <LedgerScene
@@ -1127,6 +1151,8 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
                     atlas.retry()
                   }}
                   onMarked={() => { if (fieldMarks.status === 'ready') fieldMarks.refresh(); else if (fieldMarks.status === 'unavailable') fieldMarks.retry() }}
+                  worldBindings={causalBindings}
+                  onOpenWorld={openWorldEvidence}
                 />
               )}
             </div>

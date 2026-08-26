@@ -77,6 +77,20 @@
     font-size: 12px;
 }
 .field-mark-builder:hover { text-decoration: underline; }
+.field-mark-world {
+    display: inline-block;
+    min-height: 44px;
+    margin-top: 0.35rem;
+    margin-left: 0.75rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--color-teal);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    cursor: pointer;
+}
+.field-mark-world:hover { text-decoration: underline; }
 
 /* Support/challenge edges: indented lines under their subject's row
    (§5.2), not a section of their own. */

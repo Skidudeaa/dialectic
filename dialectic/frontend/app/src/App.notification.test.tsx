@@ -5,7 +5,7 @@ import { api } from './lib/api.ts'
 import { useAppStore } from './stores/appStore.ts'
 import type { Message, Room, Thread, UserRoom } from './types/index.ts'
 import type { RoomNavigation } from './hooks/useRoomNavigation.ts'
-import type { AtlasGeoScope, AtlasProjection } from './types/atlas.ts'
+import type { AtlasGeoScope, AtlasProjection, CausalGeoBinding } from './types/atlas.ts'
 import type { GeoScope, WorldSignal } from './types/geo.ts'
 import { ChatLayout } from './App.tsx'
 
@@ -66,8 +66,24 @@ vi.mock('./hooks/useAtlas.ts', () => ({
   useAtlas: atlasHook,
 }))
 vi.mock('./components/workspace/focus/FocusSurface.tsx', () => ({
-  FocusSurface: ({ onGeoChanged }: { onGeoChanged: () => void }) => (
-    <button type="button" onClick={onGeoChanged}>Complete scope write</button>
+  FocusSurface: ({
+    onGeoChanged, onOpenWorld, worldBindings = [],
+  }: {
+    onGeoChanged: () => void
+    onOpenWorld?: (scopeObjectId: string, selectedObject?: string) => void
+    worldBindings?: CausalGeoBinding[]
+  }) => (
+    <>
+      <button type="button" onClick={onGeoChanged}>Complete scope write</button>
+      {worldBindings[0] && onOpenWorld ? (
+        <button
+          type="button"
+          onClick={() => onOpenWorld(worldBindings[0].current_scope_id, worldBindings[0].id)}
+        >
+          Open projected World evidence
+        </button>
+      ) : null}
+    </>
   ),
 }))
 vi.mock('./components/layout/AppLayout', () => ({
@@ -211,6 +227,18 @@ const placedScope: AtlasGeoScope = {
   created_at: '2026-08-25T18:00:00Z',
 }
 
+const causalBinding: CausalGeoBinding = {
+  id: 'field_mark:causal',
+  current_scope_id: 'geo_scope:current',
+  evidence_scope_id: 'geo_scope:old-evidence',
+  relation: 'supports',
+  review_state: 'confirmed',
+  provisional: false,
+  target: {
+    room_id: room.id, book_id: 'hormuz', node_id: 'shipping', node_label: 'Shipping chokepoint',
+  },
+}
+
 function atlasProjection(
   nodes: AtlasProjection['nodes'], scopes: AtlasGeoScope[] = [],
 ): AtlasProjection {
@@ -276,6 +304,32 @@ describe('World Synapse navigation', () => {
 
     render(<ChatLayout nav={nav} />)
     fireEvent.click(screen.getByRole('button', { name: 'World' }))
+
+    expect(nav.navigate).toHaveBeenCalledWith({
+      roomId: room.id,
+      threadId: null,
+      scene: 'atlas',
+      object: 'field_mark:causal',
+      view: `world;room=${room.id}`,
+    }, 'push')
+  })
+
+  it('uses the enhanced Atlas binding to open live World evidence from Focus', () => {
+    atlasHook.mockReturnValue({
+      status: 'ready',
+      projection: {
+        ...atlasProjection([], [
+          { ...placedScope, id: 'geo_scope:current', lineage_root_id: 'geo_scope:old-evidence' },
+        ]),
+        causal_bindings: [causalBinding],
+      },
+      retry: projections.refreshAtlas,
+    })
+    vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
+    const nav = navigation('', 'field_mark:causal')
+
+    render(<ChatLayout nav={nav} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open projected World evidence' }))
 
     expect(nav.navigate).toHaveBeenCalledWith({
       roomId: room.id,

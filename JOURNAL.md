@@ -150,3 +150,4 @@
 [2026-08-25] made participant World sight speak the same causal object language as Atlas — selected scope destinations now carry the canonical root object and binding scope IDs use the geo_scope namespace instead of bare UUIDs
 [2026-08-25] moved Atlas through the room instead of out of it — ordinary rooms now admit the same Atlas scene, House and World preserve Focus identity, and a room change deliberately clears the prior object and camera
 [2026-08-25] rendered Synapse as one selected causal object across House and World — current scope, immutable lineage root, and Field mark all highlight the same real geometry and disclose the shared bounded evidence DTO with honest omission state
+[2026-08-25] joined Field and Focus to the same live World evidence door — both preserve the selected Field mark while the server-owned current scope highlights underneath, and room-local scope review rejects cross-room Atlas bindings

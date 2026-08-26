@@ -23,6 +23,7 @@ import { FocusWorld } from './FocusWorld.tsx'
 import { ScopeReview } from './ScopeReview.tsx'
 import type { GeoScopesState } from '../../../hooks/useGeoScopes.ts'
 import { useAppStore } from '../../../stores/appStore.ts'
+import type { CausalGeoBinding } from '../../../types/atlas.ts'
 import './Focus.css'
 
 interface FocusSurfaceProps {
@@ -60,6 +61,8 @@ interface FocusSurfaceProps {
   geo?: GeoScopesState
   onGeoChanged?: () => void
   onMarked?: () => void
+  worldBindings?: CausalGeoBinding[]
+  onOpenWorld?: (scopeObjectId: string, selectedObject?: string) => void
 }
 
 const KIND_LABEL: Record<WorkspaceObject['kind'], string> = {
@@ -92,6 +95,7 @@ const KIND_LABEL: Record<WorkspaceObject['kind'], string> = {
 export function FocusSurface({
   objectId, objects, fieldMarks, canAct, onNavigate, onReview,
   roomId = null, geo, onGeoChanged, onMarked,
+  worldBindings = [], onOpenWorld,
 }: FocusSurfaceProps) {
   const accessToken = useAppStore((state) => state.accessToken)
   const onClose = () => onNavigate({ object: null })
@@ -124,6 +128,7 @@ export function FocusSurface({
           onNavigate={onNavigate}
           onChanged={onGeoChanged ?? (() => undefined)}
           onMarked={onMarked ?? (() => undefined)}
+          worldBindings={worldBindings}
         />
       </aside>
     )
@@ -166,6 +171,9 @@ export function FocusSurface({
     : KIND_LABEL[selectedObject?.kind ?? 'record_event']
   const branchId = selectedMark?.thread_id ?? selectedObject?.branch_id ?? null
   const causal = selectedMark ? causalFieldBinding(selectedMark) : null
+  const worldBinding = selectedMark
+    ? worldBindings.find((binding) => binding.id === selectedMark.id)
+    : undefined
 
   const axes: FocusAxis[] = selectedMark
     ? [
@@ -243,6 +251,15 @@ export function FocusSurface({
           Open thesis in Builder
         </a>
       )}
+      {worldBinding && selectedMark && onOpenWorld ? (
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm focus-open-branch"
+          onClick={() => onOpenWorld(worldBinding.current_scope_id, selectedMark.id)}
+        >
+          Open World evidence
+        </button>
+      ) : null}
       <FocusSources sources={sources} />
       <FocusStructure incoming={incoming} outgoing={outgoing} onOpen={(m) => onSelectObject(m.id)} />
       {selectedObject && roomId && geo && (

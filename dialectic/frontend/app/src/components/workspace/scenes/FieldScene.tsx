@@ -18,6 +18,7 @@ import {
 import { ReviewChip } from '../ReviewChip.tsx'
 import { Explain } from '../../common/Explain'
 import { useAppStore } from '../../../stores/appStore.ts'
+import type { CausalGeoBinding } from '../../../types/atlas.ts'
 import './FieldScene.css'
 
 /**
@@ -45,6 +46,8 @@ interface FieldSceneProps {
    *  mark points at stays ONE object, no second projection (§5.2). */
   objects: WorkspaceObjectsState
   onOpen?: (mark: FieldMark) => void
+  worldBindings?: CausalGeoBinding[]
+  onOpenWorld?: (scopeObjectId: string, selectedObject?: string) => void
 }
 
 function SubjectList({ mark, titles }: { mark: FieldMark; titles: Map<string, string> }) {
@@ -104,15 +107,18 @@ function HistoryDisclosure({ history, titles }: { history: FieldMark[]; titles: 
 }
 
 function MarkRow({
-  row, titles, onOpen, accessToken,
+  row, titles, onOpen, accessToken, worldBindings, onOpenWorld,
 }: {
   row: FieldRow
   titles: Map<string, string>
   onOpen?: (mark: FieldMark) => void
   accessToken: string | null
+  worldBindings?: CausalGeoBinding[]
+  onOpenWorld?: (scopeObjectId: string, selectedObject?: string) => void
 }) {
   const { mark } = row
   const causal = causalFieldBinding(mark)
+  const worldBinding = worldBindings?.find((binding) => binding.id === mark.id)
   const title = mark.title || humanizeRelation(mark.relation)
   const body = (
     <>
@@ -147,6 +153,15 @@ function MarkRow({
           Open thesis in Builder
         </a>
       )}
+      {worldBinding && onOpenWorld ? (
+        <button
+          type="button"
+          className="field-mark-world"
+          onClick={() => onOpenWorld(worldBinding.current_scope_id, mark.id)}
+        >
+          Open World evidence
+        </button>
+      ) : null}
     </li>
   )
 }
@@ -170,7 +185,9 @@ function OrphanRow({ orphan, titles }: { orphan: OrphanSupersededRow; titles: Ma
   )
 }
 
-export function FieldScene({ state, objects, onOpen }: FieldSceneProps) {
+export function FieldScene({
+  state, objects, onOpen, worldBindings, onOpenWorld,
+}: FieldSceneProps) {
   const accessToken = useAppStore((store) => store.accessToken)
   const titles = useMemo(
     () => buildObjectTitleMap(objects.status === 'ready' ? objects.objects : []),
@@ -252,6 +269,8 @@ export function FieldScene({ state, objects, onOpen }: FieldSceneProps) {
                   titles={titles}
                   onOpen={onOpen}
                   accessToken={accessToken}
+                  worldBindings={worldBindings}
+                  onOpenWorld={onOpenWorld}
                 />
               ))}
               {orphans.map((orphan) => (
