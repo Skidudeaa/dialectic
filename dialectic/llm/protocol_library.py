@@ -19,6 +19,8 @@ class ProtocolDefinition:
     total_phases: int
     phase_names: list[str]
     phase_instructions: list[str]
+    # UNCONSUMED as of 2026-08-26: conclusion persists the final-phase message
+    # itself (transport/handlers._conclude_protocol). Wire it or delete it.
     synthesis_prompt: str
     facilitator_identity: str
 
@@ -375,7 +377,7 @@ def get_protocol_instructions(protocol: "ProtocolState") -> str:
     claim = (protocol.config or {}).get("target_claim") if getattr(protocol, "config", None) is not None else None
     claim_section = ""
     if isinstance(claim, str) and claim.strip():
-        quoted = "\n".join(f"> {line}" for line in claim.strip()[:2000].splitlines())
+        quoted = "\n".join(f"> {line}" for line in claim.strip().splitlines())
         claim_section = (
             "**Claim under examination (supplied by the invoking participant):**\n"
             f"{quoted}\n\n"

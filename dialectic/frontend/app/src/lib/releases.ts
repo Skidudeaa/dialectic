@@ -51,6 +51,20 @@ export interface Release {
 /** Newest first. `releases.test.ts` pins that order at the data level. */
 export const RELEASES: Release[] = [
   {
+    id: 'protocol-fractures',
+    date: '2026-08-26',
+    title: 'Protocols keep their word',
+    body:
+      'Four repairs to structured protocols. The claim you type when you start a ' +
+      'Steelman or Devil\u2019s Advocate now reaches the facilitator, so it frames ' +
+      'your position instead of whatever the thread last said. Reloading, opening ' +
+      'the room on another device, or switching threads brings back the protocol ' +
+      'banner and its controls. When a protocol concludes, the memory it leaves ' +
+      'behind is the facilitator\u2019s actual synthesis, linked to the message it ' +
+      'came from, not a note saying one is pending. And if the connection is down ' +
+      'when you tap Invoke, the window stays open with your claim in it and tells you.',
+  },
+  {
     id: 'documents',
     date: '2026-08-22',
     title: 'A file, not a blob',
