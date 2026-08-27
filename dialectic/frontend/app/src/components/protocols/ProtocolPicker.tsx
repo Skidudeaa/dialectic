@@ -41,13 +41,14 @@ const PROTOCOLS: ProtocolDef[] = [
 ];
 
 interface ProtocolPickerProps {
-  onInvoke: (type: string, config: Record<string, unknown>) => void;
+  onInvoke: (type: string, config: Record<string, unknown>) => boolean;
   onClose: () => void;
 }
 
 export function ProtocolPicker({ onInvoke, onClose }: ProtocolPickerProps) {
   const [selected, setSelected] = useState<ProtocolDef | null>(null);
   const [claim, setClaim] = useState('');
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const canInvoke = selected && (!selected.needsClaim || claim.trim().length > 0);
 
@@ -57,8 +58,13 @@ export function ProtocolPicker({ onInvoke, onClose }: ProtocolPickerProps) {
     if (selected.needsClaim) {
       config.target_claim = claim.trim();
     }
-    onInvoke(selected.type, config);
-    onClose();
+    // A dead socket used to close the modal anyway, destroying the pasted
+    // claim. Keep the modal (and the claim) until the send actually went.
+    if (onInvoke(selected.type, config)) {
+      onClose();
+    } else {
+      setSendError('Not connected — your claim is kept. Try again in a moment.');
+    }
   };
 
   return (
@@ -96,6 +102,7 @@ export function ProtocolPicker({ onInvoke, onClose }: ProtocolPickerProps) {
           </div>
         )}
 
+        {sendError && <p className="protocol-send-error" role="alert">{sendError}</p>}
         <div className="protocol-actions">
           <button className="cancel-btn" onClick={onClose}>Cancel</button>
           <button className="invoke-btn" disabled={!canInvoke} onClick={handleInvoke}>

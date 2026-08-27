@@ -369,7 +369,19 @@ def get_protocol_instructions(protocol: "ProtocolState") -> str:
         f"**Phase {phase + 1}/{definition.total_phases}: {phase_name}**\n\n"
     )
 
-    return header + instruction
+    # The picker's target_claim used to be persisted and never read: the
+    # facilitator framed whatever the transcript happened to contain. Render
+    # it as quoted participant data, before the phase instruction.
+    claim = (protocol.config or {}).get("target_claim") if getattr(protocol, "config", None) is not None else None
+    claim_section = ""
+    if isinstance(claim, str) and claim.strip():
+        quoted = "\n".join(f"> {line}" for line in claim.strip()[:2000].splitlines())
+        claim_section = (
+            "**Claim under examination (supplied by the invoking participant):**\n"
+            f"{quoted}\n\n"
+        )
+
+    return header + claim_section + instruction
 
 
 def list_protocols() -> list[dict]:

@@ -408,6 +408,13 @@ export function useDialecticSocket(options?: {
         setProtocol(null);
         break;
 
+      // Authoritative snapshot sent after auth and every switch_thread:
+      // replace, never merge, so a cold client sees what the server holds.
+      case 'protocol_state':
+        if (!payloadMatchesActiveThread(payload)) break;
+        setProtocol((payload.protocol as ProtocolState | null) ?? null);
+        break;
+
       case 'commitment_created':
         addCommitment(payload as unknown as Commitment);
         break;
@@ -760,13 +767,12 @@ export function useDialecticSocket(options?: {
   );
 
   const invokeProtocol = useCallback(
-    (protocolType: string, config: Record<string, unknown>) => {
+    (protocolType: string, config: Record<string, unknown>): boolean =>
       send('invoke_protocol', {
         protocol_type: protocolType,
         config,
         thread_id: useAppStore.getState().currentThread?.id,
-      });
-    },
+      }),
     [send],
   );
 

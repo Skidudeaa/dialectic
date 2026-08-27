@@ -331,6 +331,7 @@ class MessageTypes:
     PROTOCOL_PHASE_ADVANCED = "protocol_phase_advanced"
     PROTOCOL_CONCLUDED = "protocol_concluded"
     PROTOCOL_ABORTED = "protocol_aborted"
+    PROTOCOL_STATE = "protocol_state"
     # Async dialogue (outbound)
     ANNOTATION_CREATED = "annotation_created"
     # Stakes / commitments (outbound)

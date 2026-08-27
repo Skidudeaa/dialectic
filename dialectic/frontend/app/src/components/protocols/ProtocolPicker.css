@@ -140,3 +140,9 @@
 }
 .protocol-actions .invoke-btn:hover { background: var(--color-amber-hot); }
 .protocol-actions .invoke-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.protocol-send-error {
+  color: var(--color-error, #c0392b);
+  font-size: 0.85rem;
+  margin: 0 0 8px;
+}

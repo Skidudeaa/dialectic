@@ -149,6 +149,30 @@ def _tool_activity_payload(thread_id: UUID, data: dict) -> dict:
     return payload
 
 
+
+async def protocol_state_payload(protocols: ProtocolManager, thread_id) -> dict:
+    """Authoritative snapshot of the thread's active protocol (or null).
+
+    WHY: the client only learned of protocols from transient lifecycle
+    broadcasts, so a reload, a second device or a thread switch showed no
+    banner while the server still held an active protocol.
+    """
+    active = await protocols.get_active(thread_id) if thread_id else None
+    protocol = None
+    if active is not None:
+        definition = get_protocol_definition(active.protocol_type.value)
+        protocol = {
+            "id": str(active.id),
+            "thread_id": str(active.thread_id),
+            "protocol_type": active.protocol_type.value,
+            "status": active.status.value,
+            "current_phase": active.current_phase,
+            "total_phases": active.total_phases,
+            "display_name": definition.display_name,
+            "current_phase_name": definition.phase_names[active.current_phase],
+        }
+    return {"thread_id": str(thread_id) if thread_id else None, "protocol": protocol}
+
 class MessageHandler:
     """
     ARCHITECTURE: Dispatches inbound WebSocket messages to appropriate handlers.
@@ -1084,6 +1108,13 @@ class MessageHandler:
         if thread_id is None:
             return
         logger.info(f"User {conn.user_id} switched to thread {thread_id}")
+        await self.send_protocol_state(conn)
+
+    async def send_protocol_state(self, conn: Connection) -> None:
+        await self.connections.send_to_user(conn.user_id, conn.room_id, OutboundMessage(
+            type=MessageTypes.PROTOCOL_STATE,
+            payload=await protocol_state_payload(self.protocols, conn.thread_id),
+        ))
 
     async def _handle_add_memory(self, conn: Connection, payload: dict) -> None:
         """Add a new memory."""
@@ -2181,16 +2212,28 @@ class MessageHandler:
         thread_id = row["thread_id"]
         definition = get_protocol_definition(protocol_type)
 
-        # Generate synthesis memory content via LLM
-        # We use the synthesis prompt from the protocol definition
+        # The synthesis IS the phase-completing facilitator message: persist
+        # that verbatim, linked to its source. (definition.synthesis_prompt is
+        # unconsumed — the final phase instruction already asks for the
+        # structured document.) The placeholder survives only when no
+        # protocol message exists at all.
         synthesis_key = f"protocol:{protocol_type}:synthesis:{str(protocol_id)[:8]}"
+        final_msg = await self.db.fetchrow(
+            """SELECT id, content FROM messages WHERE protocol_id = $1
+               ORDER BY protocol_phase DESC NULLS LAST, sequence DESC LIMIT 1""",
+            protocol_id,
+        )
+        if final_msg is None:
+            logger.warning(f"Protocol {protocol_id} concluded with no messages; writing placeholder")
 
         try:
             synthesis_memory = await self.memory.add_memory(
                 room_id=room_id,
                 key=synthesis_key,
-                content=f"[Protocol {definition.display_name} concluded — synthesis pending]",
+                content=final_msg["content"] if final_msg else
+                    f"[Protocol {definition.display_name} concluded — synthesis pending]",
                 created_by_user_id=row.get("invoked_by_user_id"),
+                source_message_id=final_msg["id"] if final_msg else None,
                 # Placeholder text is identical across protocol runs — dedup
                 # would collapse a new run onto an old run's synthesis slot.
                 dedup=False,

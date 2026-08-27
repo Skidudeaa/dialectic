@@ -25,7 +25,8 @@ from memory.cross_session import CrossSessionMemoryManager
 from llm.orchestrator import LLMOrchestrator
 from llm.briefing import BriefingHighlight, BriefingResponse, build_briefing
 from transport.websocket import ConnectionManager, InboundMessage, OutboundMessage, MessageTypes
-from transport.handlers import MessageHandler, build_message_created_payload
+from transport.handlers import MessageHandler, build_message_created_payload, protocol_state_payload
+from llm.protocol_manager import ProtocolManager
 from api.auth.routes import router as auth_router, set_db_pool as set_auth_db_pool
 from api.auth.dependencies import AuthenticatedUser, get_current_user
 from api.auth.utils import decode_token
@@ -2435,6 +2436,13 @@ async def websocket_endpoint(
             "timestamp": connected_at.isoformat(),
         },
     ), exclude_user=user_id)
+
+    # Authoritative protocol snapshot for the handshake thread (F-002).
+    async with db_pool.acquire() as db:
+        await connection_manager.send_to_user(user_id, room_id, OutboundMessage(
+            type=MessageTypes.PROTOCOL_STATE,
+            payload=await protocol_state_payload(ProtocolManager(db), thread_id),
+        ))
 
     try:
         while True:
