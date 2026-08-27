@@ -7,13 +7,15 @@ appends a new memory version (edit_memory) and links source_message_id.
     cd dialectic && python3 deploy/backfill_protocol_synthesis.py [--dry-run]
 """
 import asyncio
+import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import asyncpg  # noqa: E402
-from dotenv import dotenv_values  # noqa: E402
+from dotenv import dotenv_values, load_dotenv  # noqa: E402
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 from memory.manager import MemoryManager  # noqa: E402
 
 SQL = """
@@ -32,6 +34,11 @@ async def main(dry_run: bool) -> None:
     cfg = dotenv_values(os.path.join(os.path.dirname(__file__), "..", ".env"))
     conn = await asyncpg.connect(os.environ.get("DATABASE_URL") or cfg["DATABASE_URL"])
     try:
+        # Same jsonb codec the app pool registers; edit_memory writes a dict payload.
+        await conn.set_type_codec(
+            "jsonb", encoder=lambda v: json.dumps(v, default=str),
+            decoder=json.loads, schema="pg_catalog",
+        )
         rows = await conn.fetch(SQL)
         print(f"{len(rows)} placeholder synthesis memories")
         if dry_run:
