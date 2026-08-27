@@ -1,12 +1,17 @@
-# Handoff — the four thinking-protocol fractures are closed
+# Handoff — thinking-protocol repairs live and rollback traceable
 
 **Date:** 2026-08-26 (America/Chicago)
-**Commits:** `3b1b4b1` (the fix) and `1211b7c` (backfill script hardening), on
-`master`, pushed to `origin/master`.
-**Live from:** backend PID `3027133` (started 23:14:44 CDT); PWA release
+**Implementation/release commits:** `3b1b4b1` (initial four repairs),
+`1211b7c` (backfill script hardening), `59ddae1` (full-claim follow-up plus
+handoff), and `e96fdf4` (release coordinates), on `master`, pushed to
+`origin/master`.
+**Live from:** backend PID `3213552` (started 2026-08-27 01:14:10 CDT after
+`59ddae1`); the full-claim follow-up is loaded and health is public `ok`. PWA
+release
 `20260827T041529Z-protocol-fractures-3b1b4b1` (bundle `index-DUwqbvj-.js`);
 superseded by `20260827T045615Z-protocol-docs-59ddae1` (`index-C09f12Hp.js`),
-which adds only the What Changed entry.
+which adds the What Changed entry. The same commit contains the backend
+full-claim follow-up activated in PID `3213552`.
 **Origin:** fracture review `4bc57d094a71f126` against HEAD `c9f18a5`,
 scope repository, verdict FIX. All four findings were PREEXISTING — none was
 introduced by the World cockpit work the review was nominally aimed at.
@@ -31,14 +36,21 @@ phase instruction:
 > {claim}
 ```
 
-The claim is `strip()`ped, capped at 2000 chars, and every line is
-blockquoted — it is rendered as **participant data**, not as instruction.
+Current source `strip()`s and preserves the full persisted claim; every line is
+blockquoted, so it is rendered as **participant data**, not as instruction.
 No per-protocol branching: any protocol whose config carries `target_claim`
-gets it; Socratic and Synthesis (no claim) are byte-for-byte unchanged.
+gets it; Socratic and Synthesis (no claim) are byte-for-byte unchanged. The
+initial `3b1b4b1` repair silently capped this section at 2,000 characters;
+`59ddae1` removed that cap after Dan's 8,185-character claim exposed it.
 
-Live proof: the facilitator's framing reply quoted the sentinel verbatim
-and — usefully — recognised it as a placeholder rather than a real position,
-which is exactly the behaviour of a model that has *read* the claim.
+**Activation proof:** PID `3213552` started after `59ddae1`. A synthetic live
+Steelman stored all 8,185 claim characters; its facilitator message contained
+the three claim concepts placed only after character 2,000 (`refinery`, `36
+hours`, `limited strike`). Protocol `e5051058…` was aborted after the probe.
+
+Earlier short-claim proof: the facilitator's framing reply quoted the sentinel
+verbatim and — usefully — recognised it as a placeholder rather than a real
+position, which is exactly the behaviour of a model that has *read* the claim.
 
 ### F-002 — a new WebSocket message: `protocol_state`
 
@@ -107,7 +119,8 @@ is to keep the words on screen and let the person tap again.
 ## Tests
 
 - `tests/test_protocol_library_claim.py` — sentinel rendered as blockquote
-  and placed before `Your task:`; no-claim output identical to before.
+  and placed before `Your task:`; an 8,185-character tail reaches the prompt;
+  no-claim output identical to before.
 - `tests/test_protocol_handlers_fracture.py` — `_handle_switch_thread` emits
   exactly one `protocol_state` (parametrised with/without an active row, and
   asserts `get_active` was awaited with the validated thread id);
@@ -116,8 +129,10 @@ is to keep the words on screen and let the person tap again.
 - `ProtocolPicker.test.tsx` — `onInvoke → false` keeps the modal, the alert,
   and the typed claim; `onInvoke → true` calls `onClose` once and passes
   `{target_claim}`.
-- Mutation check: all five guard tests fail on the pre-fix tree (`git stash`
-  run). Suites at this gate: backend **2156**, frontend **604**.
+- Mutation checks: the original guards fail on the pre-fix tree; the
+  full-claim guard fails against the initial 2,000-character repair. The last
+  reported full-suite gate was backend **2156**, frontend **604**; current
+  backend collection is **2157** after the added full-claim regression.
 
 ## Live proof (production, headless)
 
@@ -134,9 +149,12 @@ Room (`e78ebe5c`, root thread `a53cd484`), JWT minted with
 5. `switch_thread` on the same thread → snapshot again, same id
 6. `abort_protocol` → `protocol_aborted`
 
-Step 4 is the F-002 proof; step 3 is F-001. **Not visually proven:** the
-F-004 alert line (unit test only). First owner with a browser should open the
-picker, go offline, tap Invoke, and see the claim stay.
+Step 4 is the F-002 proof; step 3 proves that a short claim reaches the model.
+The post-activation 8,185-character probe above independently proves the
+post-2,000-character tail on PID `3213552`.
+**Not visually proven:** the F-004 alert line (unit test only). First owner
+with a browser should open the picker, go offline, tap Invoke, and see the
+claim stay.
 
 ## Lessons (also in the memory index)
 
@@ -153,9 +171,21 @@ picker, go offline, tap Invoke, and see the claim stay.
 
 ## Rollback
 
-Backend: `git checkout c9f18a5 -- dialectic && systemctl restart dialectic`
-(no migration to reverse). Frontend: point `/var/www/dialectic-current` back
-at `20260827T003007Z-world-cockpit-0ebd535` and `systemctl reload nginx`. The
-two backfilled memories keep their v1 in `memory_versions`; reverting them is
+From a clean tracked checkout, create a traceable reverse commit before the
+backend restart. A path checkout is not a rollback: it leaves HEAD unchanged,
+stages old blobs, and retains files added after the baseline.
+
+```bash
+git diff --quiet && git diff --cached --quiet &&
+git diff --binary c9f18a5 e96fdf4 -- dialectic |
+  git apply -R --index &&
+git commit -m 'revert(protocols): roll back fracture repair' &&
+systemctl restart dialectic
+```
+
+There is no migration to reverse. Frontend: point
+`/var/www/dialectic-current` back at
+`20260827T003007Z-world-cockpit-0ebd535` and `systemctl reload nginx`. The two
+backfilled memories keep their v1 in `memory_versions`; reverting them is
 `edit_memory` back to the v1 content, but there is no reason to — the v2
 content is the message that was always on screen.

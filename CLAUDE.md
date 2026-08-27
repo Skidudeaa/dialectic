@@ -285,12 +285,16 @@ projection. Live provider activation moved to Phase 4 and remains gated.
 - No live WorldSignal adapter or geographic replay store is configured. That is
   a deliberate Phase 4/6 gate, not an inactive Phase 3 feature.
 
-## Amendment 2026-08-26 — thinking protocols: four fractures closed (amend-beside)
+## Amendment 2026-08-26 — thinking protocols: repairs live, rollback traceable (amend-beside)
 
 Fracture review `4bc57d094a71f126` found four PREEXISTING defects on the
-protocol path (Steelman / Socratic / Devil's Advocate / Synthesis); all
-fixed in `3b1b4b1`, live (backend PID `3027133`, release
-`20260827T041529Z-protocol-fractures-3b1b4b1`). Handoff:
+protocol path (Steelman / Socratic / Devil's Advocate / Synthesis). The
+initial repairs landed in `3b1b4b1` (historical backend PID `3027133`, PWA
+release `20260827T041529Z-protocol-fractures-3b1b4b1`). `59ddae1` removed the
+initial repair's silent 2,000-character claim cap; it is live in backend PID
+`3213552` (started 2026-08-27 01:14:10 CDT). An 8,185-character synthetic
+Steelman proved the facilitator received concepts placed only after character
+2,000, and the test protocol was aborted. Handoff:
 `docs/handoffs/2026-08-26-protocol-fractures.md`. Facts a future session
 should not re-derive:
 
@@ -303,7 +307,8 @@ should not re-derive:
   The client REPLACES `activeProtocol` with it.
 - **`config.target_claim` is rendered** by `get_protocol_instructions` as a
   blockquoted "Claim under examination" section — participant data, never
-  instruction. Rooms carrying no claim render unchanged.
+  instruction. Source and live PID `3213552` preserve it in full. Rooms
+  carrying no claim render unchanged.
 - **The synthesis memory is the final facilitator message**, written with
   `source_message_id` by `_conclude_protocol`. `[Protocol … synthesis
   pending]` now appears only for a protocol that concluded with zero
@@ -313,4 +318,5 @@ should not re-derive:
   before importing provider code AND `set_type_codec('jsonb', …)`
   (`deploy/backfill_protocol_synthesis.py` is the reference; ran once on
   prod, 2 memories repaired, dry-run now 0).
-- Suites at this gate: backend **2156**, frontend **604**.
+- Last reported full-suite gate: backend **2156**, frontend **604**; current
+  backend collection is **2157** after the full-claim regression.
