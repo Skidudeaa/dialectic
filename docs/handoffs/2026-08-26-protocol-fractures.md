@@ -4,7 +4,9 @@
 **Commits:** `3b1b4b1` (the fix) and `1211b7c` (backfill script hardening), on
 `master`, pushed to `origin/master`.
 **Live from:** backend PID `3027133` (started 23:14:44 CDT); PWA release
-`20260827T041529Z-protocol-fractures-3b1b4b1` (bundle `index-DUwqbvj-.js`).
+`20260827T041529Z-protocol-fractures-3b1b4b1` (bundle `index-DUwqbvj-.js`);
+superseded by `20260827T045615Z-protocol-docs-59ddae1` (`index-C09f12Hp.js`),
+which adds only the What Changed entry.
 **Origin:** fracture review `4bc57d094a71f126` against HEAD `c9f18a5`,
 scope repository, verdict FIX. All four findings were PREEXISTING — none was
 introduced by the World cockpit work the review was nominally aimed at.
