@@ -307,3 +307,134 @@ def test_a_no_floor_provider_is_always_due():
     wa._last_polled["adsb"] = 1_000.0
     assert wa.due(aircraft, now=1_000.1)
     wa._last_polled.pop("adsb", None)
+
+
+# ── one object, however many room queries saw it (F-001) ─────────────────
+
+ONE_AIRCRAFT = {"ac": [{
+    "hex": "a1b2c3", "flight": "UAE201", "lat": 25.5, "lon": 55.5,
+    "alt_baro": 37000, "track": 118.4, "seen": 4.0,
+}]}
+
+
+@pytest.mark.asyncio
+async def test_two_nearby_rooms_seeing_one_aircraft_produce_one_signal():
+    """The two rooms' BOXES do not intersect. The ADS-B query is a circle
+    around each centroid, so both room queries still return the same
+    aircraft — which is the real trigger, not the mere existence of rooms."""
+    near = wa.RoomFence(ROOM_B, 58.0, 28.0, 59.0, 29.0)
+    assert not (fence().east >= near.west and near.east >= fence().west)
+
+    async with client_returning(lambda r: httpx.Response(200, json=ONE_AIRCRAFT)) as client:
+        result = await wa.poll_aircraft(client, [fence(), near])
+
+    # Two room queries answered; one aircraft exists, so one observation does.
+    assert [o["source_id"] for o in result.observations] == ["a1b2c3"]
+    assert "(1 contacts)" in result.coverage
+
+    snapshot = wa.build_snapshot(wa.ADAPTERS[1], result, [fence(), near])
+    assert len(snapshot.signals) == 1
+    assert snapshot.signals[0].room_id == ROOM_A  # the box that contains it
+    assert snapshot.signals[0].details["track_deg"] == 118.4
+
+
+@pytest.mark.asyncio
+async def test_the_refresh_completes_and_every_later_adapter_still_polls(monkeypatch):
+    """The blocker's real consequence was ORDER: adsb raised, so iss, launch
+    and firms — every adapter after it — were never reached at all."""
+    monkeypatch.setenv("FIRMS_MAP_KEY", "test-key")
+    near = wa.RoomFence(ROOM_B, 58.0, 28.0, 59.0, 29.0)
+    polled: list[str] = []
+
+    def handler(request):
+        url = str(request.url)
+        if "adsb" in url:
+            polled.append("adsb")
+            return httpx.Response(200, json=ONE_AIRCRAFT)
+        if "wheretheiss" in url:
+            polled.append("iss")
+            return httpx.Response(200, json={
+                "latitude": 1.0, "longitude": 1.0, "timestamp": 1_700_000_000})
+        if "earthquake" in url:
+            polled.append("usgs")
+            return httpx.Response(200, json=USGS_BODY)
+        if "thespacedevs" in url:
+            polled.append("launch")
+            return httpx.Response(200, json={"results": []})
+        if "firms" in url:
+            polled.append("firms")
+            return httpx.Response(200, text="latitude,longitude\n")
+        raise AssertionError(f"unexpected request: {url}")
+
+    store = WorldSignalStore()
+    wa._last_polled.clear()
+    async with client_returning(handler) as client:
+        for adapter in wa.ADAPTERS:
+            result = await adapter.poll(client, [fence(), near])
+            snapshot = wa.build_snapshot(adapter, result, [fence(), near])
+            store.replace(snapshot)  # must not raise on any adapter
+
+    assert set(polled) == {"usgs", "adsb", "iss", "launch", "firms"}
+    reached = {s.provider for s in store.project([ROOM_A, ROOM_B]).signal_sources.sources}
+    assert reached == {"usgs", "adsb", "iss", "launch", "firms"}
+    wa._last_polled.clear()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_fire_detections_collapse_too(monkeypatch):
+    monkeypatch.setenv("FIRMS_MAP_KEY", "test-key")
+    near = wa.RoomFence(ROOM_B, 55.5, 25.5, 57.5, 27.5)
+    csv_body = (
+        "latitude,longitude,bright_ti4,acq_date,acq_time,satellite,confidence,frp\n"
+        "26.20,56.30,330.1,2026-08-26,0412,N20,n,12.4\n"
+    )
+    async with client_returning(lambda r: httpx.Response(200, text=csv_body)) as client:
+        result = await wa.poll_fires(client, [fence(), near])
+    assert len(result.observations) == 1
+    assert "(1 detections)" in result.coverage
+    snapshot = wa.build_snapshot(wa.ADAPTERS[4], result, [fence(), near])
+    assert len(snapshot.signals) == 1
+
+
+@pytest.mark.asyncio
+async def test_distinct_aircraft_are_never_collapsed():
+    body = {"ac": [
+        {"hex": "a1b2c3", "flight": "UAE201", "lat": 25.5, "lon": 55.5},
+        {"hex": "d4e5f6", "flight": "QTR340", "lat": 25.6, "lon": 55.6},
+    ]}
+    async with client_returning(lambda r: httpx.Response(200, json=body)) as client:
+        result = await wa.poll_aircraft(client, [fence()])
+    assert sorted(o["source_id"] for o in result.observations) == ["a1b2c3", "d4e5f6"]
+    snapshot = wa.build_snapshot(wa.ADAPTERS[1], result, [fence()])
+    assert len(snapshot.signals) == 2
+
+
+def test_the_survivor_is_the_provider_s_freshest_report():
+    """Deterministic selection, not iteration-order luck."""
+    stale = {"source_id": "a1", "age_s": 30.0, "observed_at": None, "label": "stale"}
+    fresh = {"source_id": "a1", "age_s": 2.0, "observed_at": None, "label": "fresh"}
+    # `seen` counts seconds SINCE the fix, so the smaller number is the newer.
+    assert wa._dedupe_by_source([stale, fresh])[0]["label"] == "fresh"
+    assert wa._dedupe_by_source([fresh, stale])[0]["label"] == "fresh"
+
+    older = datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc)
+    newer = datetime(2026, 8, 26, 12, 5, tzinfo=timezone.utc)
+    a = {"source_id": "q1", "observed_at": older, "label": "older"}
+    b = {"source_id": "q1", "observed_at": newer, "label": "newer"}
+    assert wa._dedupe_by_source([a, b])[0]["label"] == "newer"
+    assert wa._dedupe_by_source([b, a])[0]["label"] == "newer"
+
+    # A provider clock beats no clock at all, whichever order they arrive in.
+    blind = {"source_id": "q1", "observed_at": None, "label": "blind"}
+    assert wa._dedupe_by_source([blind, b])[0]["label"] == "newer"
+    assert wa._dedupe_by_source([b, blind])[0]["label"] == "newer"
+
+    # Nothing to choose between: keep the first, so a run is reproducible.
+    flat = [{"source_id": "z", "observed_at": None, "label": "first"},
+            {"source_id": "z", "observed_at": None, "label": "second"}]
+    assert wa._dedupe_by_source(flat)[0]["label"] == "first"
+
+
+def test_dedupe_preserves_order_and_leaves_singletons_alone():
+    obs = [{"source_id": s, "observed_at": None} for s in ("a", "b", "c")]
+    assert [o["source_id"] for o in wa._dedupe_by_source(obs)] == ["a", "b", "c"]

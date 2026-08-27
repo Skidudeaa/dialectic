@@ -7,7 +7,7 @@ import { scopesBounds } from './worldScopes.ts'
 import { addSignal, addTrail, signalHeight } from './worldSignals.ts'
 import { addScope } from './worldScopeEntities.ts'
 import { WorldStyles } from './worldStyleStages.ts'
-import { isWorldStyle, WORLD_STYLES, type WorldStyleKey } from './shaders/index.ts'
+import { styleForKey, type WorldStyleKey } from './shaders/index.ts'
 import { WorldHud, type WorldLayerState } from './WorldHud.tsx'
 import './World.css'
 
@@ -393,10 +393,8 @@ export default function WorldView({
         setHudVisible((visible) => !visible)
         return
       }
-      const index = Number(event.key)
-      if (!Number.isInteger(index) || index < 0 || index >= WORLD_STYLES.length) return
-      const key = WORLD_STYLES[index].key
-      if (isWorldStyle(key) && availableStyles.includes(key)) applyStyle(key)
+      const style = styleForKey(event.key, availableStyles)
+      if (style) applyStyle(style)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

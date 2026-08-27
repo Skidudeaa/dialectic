@@ -172,6 +172,10 @@
   grid-column: 2;
   grid-row: 2;
   place-self: center;
+  /* Decoration only: `.world-hud > *` restores pointer-events for every direct
+     child, and this one sits dead centre over the canvas -- where a person
+     clicks a contact and starts a drag to rotate. It must never take input. */
+  pointer-events: none;
   width: 4.5rem;
   height: 4.5rem;
   border: 1px solid rgba(86, 183, 242, 0.5);

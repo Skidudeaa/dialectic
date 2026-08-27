@@ -187,6 +187,51 @@ async def _get(client: httpx.AsyncClient, url: str, **kwargs) -> httpx.Response:
     return response
 
 
+def _newer(candidate: dict, incumbent: dict) -> bool:
+    """Is `candidate` a fresher report of the same object than `incumbent`?
+
+    Provider clocks first: an explicit ``observed_at`` on both sides settles it.
+    Failing that, ``age_s`` is the provider's own "seconds since this fix"
+    (adsb.lol's ``seen``), where SMALLER is newer. With neither, the two
+    payloads are the same fix seen through two room queries, and the first is
+    kept so the choice stays deterministic rather than iteration-order luck.
+    """
+    mine, theirs = candidate.get("observed_at"), incumbent.get("observed_at")
+    if mine is not None and theirs is not None:
+        return mine > theirs
+    if mine is not None or theirs is not None:
+        return mine is not None
+    mine_age, theirs_age = candidate.get("age_s"), incumbent.get("age_s")
+    if isinstance(mine_age, (int, float)) and isinstance(theirs_age, (int, float)):
+        return mine_age < theirs_age
+    return False
+
+
+def _dedupe_by_source(observations: list[dict]) -> list[dict]:
+    """Collapse one object reported through more than one room query.
+
+    WHY THIS EXISTS: the per-fence adapters ask each placed room's area
+    separately, and those queries overlap — adsb.lol is asked for a CIRCLE
+    around each room's centroid, so two rooms a few hundred nautical miles
+    apart both hear the same aircraft even when their boxes do not intersect.
+    A ``WorldSignal`` id is ``world_signal:<provider>:<source_id>`` and carries
+    no room, deliberately: one real aircraft is one object, not one per room.
+    Two copies of it therefore collide inside ``WorldSignalSnapshot``, which
+    rejects duplicate ids by raising — and that raise escapes the job, so
+    every adapter after this one is skipped. Collapsing here keeps the
+    identity global and leaves room containment to ``build_snapshot``.
+
+    Insertion order is preserved so a snapshot is stable between runs.
+    """
+    best: dict[str, dict] = {}
+    for observation in observations:
+        source_id = observation["source_id"]
+        incumbent = best.get(source_id)
+        if incumbent is None or _newer(observation, incumbent):
+            best[source_id] = observation
+    return list(best.values())
+
+
 def _guarded(coverage_when_down: str):
     """Turn transport failures into evidence states rather than exceptions."""
     def wrap(fn):
@@ -286,6 +331,9 @@ async def poll_aircraft(client: httpx.AsyncClient, fences: list[RoomFence]) -> A
                 "label": callsign or hexid.upper(),
                 "url": f"https://globe.adsb.lol/?icao={hexid}",
                 "observed_at": None,
+                # The provider's own recency, used only to pick between two
+                # reports of the SAME aircraft; never rendered as a time.
+                "age_s": contact.get("seen"),
                 "ttl_s": AIRCRAFT_TTL_S,
                 "details": {
                     "callsign": callsign or None,
@@ -300,12 +348,13 @@ async def poll_aircraft(client: httpx.AsyncClient, fences: list[RoomFence]) -> A
                     "seen_s": contact.get("seen"),
                 },
             })
+    contacts = _dedupe_by_source(observations)
     return AdapterResult(
         "partial" if partial else "ok",
         "current",
         f"adsb.lol ADS-B within {ADSB_MAX_NM} NM of each placed room "
-        f"({len(observations)} contacts)",
-        observations,
+        f"({len(contacts)} contacts)",
+        contacts,
     )
 
 
@@ -439,12 +488,13 @@ async def poll_fires(client: httpx.AsyncClient, fences: list[RoomFence]) -> Adap
                     "acquired": f"{acq_date} {acq_time}Z",
                 },
             })
+    detections = _dedupe_by_source(observations)
     return AdapterResult(
         "partial" if partial else "ok",
         "current",
         f"NASA FIRMS VIIRS active fires over each placed room "
-        f"({len(observations)} detections)",
-        observations,
+        f"({len(detections)} detections)",
+        detections,
     )
 
 
