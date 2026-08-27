@@ -1,296 +1,453 @@
-# God's Eye x Dialectic — live production handoff
+# Dialectic guided learning — zero-context handoff
 
-Current **2026-08-25 America/Chicago**. This is a zero-context handoff for the
-production repository at `/root/DwoodAmo`. God's Eye means the World Lens / World
-Synapse program, not an Epic EHR integration.
+Current **2026-08-26 America/Chicago**. The owner wants a complete, human-useful
+walkthrough/how-to built into the live Dialectic PWA so Dan, Nick, Scott, and
+future collaborators cannot stumble through God's Eye / World Synapse without
+learning what it is, how to use it, and where human authority begins and ends.
 
-## CURRENT PRODUCTION TRUTH
+This is a planning checkpoint, not an approved design or implementation. The
+next session must resume with the owner ruling in `OPEN QUESTIONS — ASK BEFORE
+DECIDING`; it must not infer that answer from the recommended direction.
 
-| Surface | Verified state |
-|---|---|
-| Source | `master`; live application code `85fed388444abfaea2cabe50d1af41a902fa05c0`. Resolve the later documentation-only handoff commit with `git log -1 --format=%H -- PLAN.md`. |
-| Publication | `master` is intended to be pushed to `origin/master` after this handoff is committed; verify equality before relying on it. |
-| Database | Migration `022_geo_scope_lineage.sql` applied to production. Six existing scopes survived. Columns, check, unique-successor index, and reject-UPDATE/DELETE triggers verified. |
-| Database backup | `/var/backups/dialectic/20260826T031404Z-5f50c122-world-synapse-before.dump`, SHA-256 `1dc4ffdb7988efb8f3397162abfedb96620cba81cbdacfb4d7c92e9fd210f5af`, PostgreSQL custom dump, mode 600. |
-| Backend | `dialectic.service`, checkout `/root/DwoodAmo/dialectic`, PID `1941516`, active since `2026-08-25 22:20:53 CDT`; DB, Redis, scheduler, and public/local health green. |
-| Activation | `DIALECTIC_WORLD_ENABLED` is unset and its code default is ON; the live registry contains `world_query` and `propose_geo_scope`; runtime inspection returned `world_tools_enabled=True`. |
-| Frontend | `/var/www/dialectic-current` -> `/var/www/dialectic-releases/20260826T032052Z-world-synapse-85fed38`; nginx reloaded and active. |
-| Served hashes | `index.html` `6f3babc16c004037dd5fca07f5be3debca4fb58aa48f9d17808556f4b59e9dcc`; `sw.js` `791bb5375305dce6b89d321f88ad212cae06be375d9b52b4fe9054325b068058`. Public bytes matched the selected release. |
-| Public browser | Authenticated Chromium against `https://dialectic.somacura.org`: 10/10 checks passed; House loaded no World/Cesium bytes, World fetched one lazy JS bundle, five real Hormuz scopes and all provenance rendered, canonical Focus opened, failed WebGL retained the complete list/provenance and collapsed the canvas, no page errors/HTTP 500s. |
-| Public evidence | `/var/backups/dialectic/20260826T032052Z-world-synapse-85fed38-public/`; qualified images are `public-world-globe-settled.png` and `public-world-webgl-failure.png`; `results.json` is the machine ledger. |
-| Production content | Five live Hormuz scopes project publicly. One real geographic `evidence_attachment` Field mark links a reading to the Persian Gulf. There are currently **zero** geography-to-thesis-node causal bindings; no fake binding was created for qualification. |
-| Providers | CesiumJS, OSM raster, optional Re:Earth terrain, and Natural Earth reference geometry are active under the provider ledger. No live `WorldSignal` provider adapter, poller, or sample/replay store is configured. |
-| Human qualification | Production delivery is proven. Physical phone/tablet/desktop UAT and one week of ordinary Hormuz use remain unqualified. |
+At handoff, `/root/DwoodAmo` is `master` at
+`1f8dc4f8102d2446d504f9f832555a1c63681182`, equal to `origin/master`. The
+tracked tree was clean before this handoff; preserve unrelated untracked
+`AGENTS.md`, `IMG_0197.PNG`, and
+`docs/superpowers/acceptance/__pycache__/`. Live World Synapse application code
+is `85fed38`; the current production/runtime and rollback ledger remains in
+`docs/superpowers/qualification/2026-08-25-phase-3-world-synapse.md` and Git
+history at `1f8dc4f^:PLAN.md`.
 
-The production deployment manifest is
-`/var/backups/dialectic/20260826T032052Z-world-synapse-85fed38.manifest`.
+> **Amended 2026-08-26 (evening) — these runtime coordinates are stale; prefer
+> what follows.** A parallel session shipped the World cockpit and its live
+> signal adapters after this checkpoint was written. `master` is now `0ebd535`
+> (`a8fe8ee` + three reviewed fixes), pushed; live application code is
+> `0ebd535`, not `85fed38`; the backend is PID `2832622` and the selected PWA
+> release is `20260827T003007Z-world-cockpit-0ebd535`. No migration
+> accompanied either commit. The tracked tree is no longer clean at `1f8dc4f`.
+> Everything else in this plan — the guided-learning contract and its
+> OPEN QUESTIONS — is untouched and still awaits the owner's ruling. Full
+> record: `docs/handoffs/2026-08-26-world-cockpit-live-signals.md`.
+>
+> One consequence for THIS plan: World now has live layers, sensor optics, a
+> HUD and click-to-track, so anything the guided walkthrough teaches about
+> World must cover them — including the line the product draws between
+> tracking a contact (presentation, writes nothing) and placing one
+> (authority, a human act).
+
+## LATEST INTENDED CONTRACT
+
+- The education is **inside Dialectic**, reachable from the app while using the
+  real product. An external README, video, slide deck, or docs-only page is not
+  the requested outcome.
+- It must be complete enough that a new collaborator understands the essential
+  Dialectic model, then can safely traverse House -> World -> Focus -> Field ->
+  thesis meaning without losing object identity or mistaking imagery for
+  authority.
+- It must be human-useful: concise language, visible examples, doing rather
+  than reading alone, explicit provenance and failure states, keyboard/touch/
+  mobile/reduced-motion support, and an evergreen replay door.
+- “Cannot stumble without learning” means passive Help alone is insufficient.
+  The product must bring the learning path to the user and retain progress. The
+  exact mandatory/skip/account-persistence policy is unresolved below.
+- The core walkthrough must be safe and read-only. It may navigate and inspect
+  real authorized objects, but it must not create fake production evidence,
+  Field judgments, scope reviews, or thesis edits merely to demonstrate them.
+- The participant, World, and Help must tell one consistent story: provider
+  observations/proposals are not authority; human placement creates durable
+  GeoScope lineage; explicit Field binding gives causal meaning; human review
+  adjudicates it; Builder remains the sole thesis writer.
+
+## FEATURE DOSSIER — CURRENT LEARNING SURFACES
+
+### Current surface
+
+- `RoomHeader.tsx` exposes one labeled Help button at every width.
+- `HelpDialog.tsx` is the one explanation door with two ARIA tabs:
+  `This room` and `What changed`.
+- `CapabilityMap.tsx` reads live room/scheduler capability state and tells only
+  durable rules. It currently explains the participant, thesis binding,
+  background jobs, Record/Bench/Library/Field/Ledger, glossary, and limits.
+- `WhatsNewPanel.tsx` renders authored append-only release history while reading
+  current job state from the live capabilities endpoint.
+- `lib/releases.ts` stores changelog history and a device-local last-seen release
+  ID at `dialectic-releases-seen`; this is unread-badge state, not onboarding
+  progress.
+- `App.tsx` owns `helpTab` as transient local state and mounts `HelpDialog` only
+  when the user taps Help. There is no automatic first-run/open behavior.
+- World Synapse is live, but the current Help map does not teach World, scope
+  lineage, provenance, Focus continuity, causal bindings, or failed-WebGL
+  behavior. The newest changelog entry is 2026-08-22; no World/Synapse release
+  entry exists.
+
+### Pivotal lineage
+
+- `0c2b462` — introduced the in-room Help dialog as the whole product tour.
+- `fcf1936` — made Help a visible labeled button and Escape-dismissable.
+- `3b36ac2` — replaced hardcoded deployment claims with the live capability
+  projection; established the law “facts about this deployment are read, rules
+  about the product are told.”
+- `3f36c37` — added the shared glossary, scene primers, and the self-checking
+  “What changed” shelf; browser screenshots caught visual breakage tests missed.
+- `0be95ae..85fed38` — added and activated World Lens/Synapse without extending
+  the learning surface.
+- `42f9315` in `trading/frontend` — older tradingDesk first-login tour and
+  `/welcome` guide. It proves a replayable first-run pattern was useful, but it
+  describes the retired parallel trading interface and is not the live
+  Dialectic PWA architecture.
+
+### Last alignment and present drift
+
+The current repair baseline is the live Dialectic Help architecture at
+`3f36c37` forward-ported through current `master`: one obvious Help door, live
+capability facts, authored durable rules, accessible explanations, and visual
+browser review. Do not restore the old tradingDesk tour wholesale.
+
+The drift is educational, not a broken renderer: World/Synapse acquired a deep
+object/authority workflow after the Help surface's last substantive expansion.
+Current code works, but a collaborator can open World without ever learning
+why House remains authoritative, how selection survives across surfaces, how
+provenance and lineage work, or why a causal binding is a human Field judgment.
 
 ## DECISIONS WITH RATIONALE
 
-1. **God's Eye is Dialectic's sensory body, not a second application.**
-   Rejected: iframe, fork, microfrontend, or separate globe workbench. It lost
-   because it would split object identity, navigation, authority, annotations,
-   participant state, and mobile fallback.
-2. **House and World are two views of one Atlas projection.** Rejected: make
-   World the universal home screen. It lost because geography is not meaningful
-   for every room and House is the complete accessible authority.
-3. **One canonical object identity crosses House, World, Focus, Field, URLs,
-   and participant results.** Rejected: renderer-owned marker IDs. It lost
-   because they cannot preserve lineage, review, deep links, or room fences.
-4. **Geographic authority is append-only lineage.** Rejected: UPDATE/DELETE
-   convenience. It lost because historical evidence and the decision record
-   must remain reproducible; migration 022 now enforces this in PostgreSQL.
-5. **Causal meaning is a Field-owned semantic relation.** Rejected: infer map
-   rays from proximity, text similarity, or model confidence. It lost because a
-   thesis node has no geographic coordinate and visual proximity is not causal
-   evidence.
-6. **The authority ladder is observation/proposal -> human placement -> durable
-   GeoScope -> explicit Field binding -> human review -> optional Builder edit.**
-   Rejected: provider or model auto-write into geography/thesis. It lost because
-   it collapses observation, interpretation, and authority.
-7. **Cesium is genuinely lazy and excluded from the PWA precache.** Rejected:
-   Rollup manual Cesium chunk ownership. It lost because it introduced eager
-   shell preload, a circular lazy graph, and a 495 KB service-worker burden.
-   `scripts/verify-lazy-cesium.mjs` now fails the production build on regression.
-8. **Provider signals remain ephemeral until explicitly placed.** Rejected:
-   store every tick as geographic memory. It lost because provider terms,
-   retention, coverage, replay, privacy, and ordinary-use value are unresolved.
-9. **No live signal provider was activated in this wave.** Rejected: add AIS or
-   an easy decorative feed to make the globe feel alive. It lost because AIS
-   lacks adequate terms/SLA/replay and an unselected feed is spectacle without
-   a named causal decision.
-10. **Production proof and human qualification remain separate.** Rejected:
-    call a green deployment ordinary-use success. It lost because public bytes
-    prove delivery, not whether the instrument changes Amo and Dan's reasoning.
+1. **Extend the existing Dialectic Help system.** Strongest rejected alternative:
+   a separate `/welcome` microsite. It lost because the user asked for education
+   built into the product, and a second door can remain undiscovered.
+2. **Use the old tradingDesk onboarding only as a historical pattern.**
+   Strongest rejected alternative: port its components. It lost because those
+   steps teach the retired parallel interface and its component/router state is
+   not Dialectic's PWA architecture.
+3. **Teach through safe navigation and inspection, not production writes.**
+   Strongest rejected alternative: require users to create a scope and causal
+   mark. It lost because forced training must not manufacture authoritative
+   evidence or thesis meaning.
+4. **Retain one evergreen replay door in Help.** Strongest rejected alternative:
+   a one-shot modal only. It lost because a collaborator must be able to relearn
+   after time away or when a feature becomes relevant.
+5. **Preserve the live-facts/written-rules split.** Strongest rejected
+   alternative: hardcode an all-capabilities tour. It lost because the previous
+   Help prose materially drifted from production and overstated/understated what
+   was active.
+6. **Teach World as Dialectic, not as a globe product.** Strongest rejected
+   alternative: a cinematic Cesium tour. It lost because the core lesson is
+   causal object continuity and human authority, not camera spectacle.
+7. **Keep the required core approximately five minutes and move depth into
+   optional missions.** Strongest rejected alternative: one encyclopedic
+   walkthrough. It lost because mandatory walls of text teach dismissal, not
+   competence.
+8. **Do not load Cesium merely to explain Cesium.** Strongest rejected
+   alternative: embed a live globe inside Help. It lost because House users must
+   retain the zero-World-byte shell contract and failed-WebGL users need complete
+   learning too.
+9. **Use versioned progress rather than a permanent boolean.** Strongest
+   rejected alternative: `onboarded=true`. It lost because major new learning
+   contracts must be able to re-open without erasing a person's prior history.
+10. **Target all eligible collaborators, not hardcoded display names.** Strongest
+    rejected alternative: special-case Dan/Nick/Scott. It lost because names are
+    mutable, authorization is account-based, and future members need the same
+    safety. Whether existing accounts are forced through the first version is
+    the explicit owner question below.
+
+## RECOMMENDED EXPERIENCE — NOT YET OWNER-APPROVED
+
+Add a first Help shelf named `Start here`, backed by a versioned progress owner.
+Auto-open it for accounts that have not completed the current required guide.
+Allow temporary closing and exact resume, but—if the owner approves mandatory
+completion—keep the Help action visibly marked and reopen at the next natural
+entry until the core is complete. Completion removes pressure; Help always
+retains `Start here` for replay.
+
+The core should teach six short chapters:
+
+1. **One living room:** Dialectic is the participant; Record, Bench, Library,
+   Field, Ledger, Atlas, Focus, and World are projections of the same room-owned
+   objects, not separate apps.
+2. **Human authority:** the participant can read, propose, and navigate; human
+   actions establish geographic and causal authority; Builder alone edits a
+   thesis.
+3. **House and World:** House is the complete accessible list; World is a lazy
+   spatial embodiment. Switching views preserves the selected object. A room
+   change clears the prior object/camera fence.
+4. **Inspect evidence:** select an authorized real scope when one exists, open
+   Focus, inspect provider/acquisition/source ID/URL/credit, freshness, and
+   append-only lineage. If no room scope exists, use a code-native illustration
+   and say why no live example is available; never fabricate one.
+5. **Give geography meaning:** show the exact semantic sequence `scope ->
+   supports/challenges/context -> thesis node -> review state`; explain that it
+   is DOM truth, not a measured geographic ray. If no real binding exists, say
+   so and show the grammar without pretending production contains one.
+6. **Recover and continue:** return World -> House with the same selection,
+   show failed-WebGL/list fallback, show where Help/What changed live, and state
+   the next optional practice mission.
+
+Optional missions may guide real user-chosen work—place a genuine observation,
+ratify/redraw, bind a genuine causal relation, confirm/contest/correct—but only
+after the user chooses an actual room object and the ordinary product confirms
+the write. A dedicated training room or synthetic evidence system is out of
+scope unless separately approved.
+
+## APPROACHES CONSIDERED
+
+### A. Account-owned required core + contextual practice — recommended
+
+Server stores guide version, current/completed step, and timestamps per user.
+The PWA auto-opens/resumes the core and Help replays it. Contextual prompts
+connect steps to the real current room when safe. This alone reliably reaches
+existing users across devices, but requires an authenticated API/storage change
+and production migration.
+
+### B. Device-local guided Help
+
+Reuse `localStorage` like release-seen state. Cheapest and no migration, but a
+user can complete it on one device and be interrupted forever on another, clear
+site data to reset, or never see it on an already-open device. This does not
+fully satisfy “cannot stumble without learning.”
+
+### C. Contextual coach marks only
+
+Teach each surface the first time it opens. Feels lightweight, but users can
+miss steps, never build the mental model in order, and cannot prove completion.
+Useful as optional reinforcement after the core, not as the sole design.
 
 ## DO-NOT-RELITIGATE LIST
 
-- Do not rebuild or embed the upstream God's Eye View app. The approved
-  architecture ports bounded rendering/lifecycle patterns into Dialectic's
-  existing owners.
-- Do not add a second router, object store, annotation table, agent persona, or
-  source-state vocabulary. `useRoomNavigation`, `GeoScope`, Field, the existing
-  participant, and the evidence vocabulary are settled owners.
-- Do not weaken migration 022's UPDATE/DELETE rejection or one-successor law.
-  Room deletion has no product contract; design tombstones/retention before
-  adding one instead of erasing authority by cascade.
-- Do not infer coordinates from prose or allow an LLM/provider to create
-  authoritative geometry. `propose_geo_scope` resolves only existing named
-  geometry and remains human-reviewed.
-- Do not convert unavailable, partial, stale, rate-limited, expired, or
-  unconfigured source state into empty or zero.
-- Do not auto-edit the thesis from a map interaction, signal, watch, or score.
-  Builder remains the sole thesis writer.
-- Do not make Cesium part of the shell or service-worker precache. Users who
-  never open World pay no globe JS/GPU cost.
-- Do not treat a dead globe as loss of evidence. The complete DOM list,
-  provenance, selection, Focus, and actions remain usable without WebGL.
-- Do not target `dialectic/deploy/dialectic.service` or `/opt/dialectic/current`
-  on this host. The installed unit is `/etc/systemd/system/dialectic.service`
-  and runs the production git checkout directly.
-- Do not fabricate production Field bindings or reviews for a demo. A real
-  causal mark must express a real human judgment through the visible product.
-- Do not treat loopback browser proof as physical-device UAT or one-week use.
+- Help remains the one explanation door. This is settled by the existing
+  product contract and avoids another undiscoverable guide surface.
+- Do not hardcode current room counts, active providers, scheduler flags, or
+  production causal-binding existence. The prior Help drift established that
+  runtime facts must be read.
+- Do not copy `trading/frontend/src/components/onboarding` into Dialectic. That
+  is legacy product architecture, not an implementation shortcut.
+- Do not invent a second navigation writer. Every guided destination must use
+  `useRoomNavigation.navigate`; no direct room/scene/view/object mutation.
+- Do not create fake scopes, Field marks, reviews, or thesis changes to complete
+  mandatory learning. GeoScope/Field/Builder authority is a production law.
+- Do not imply unavailable/unconfigured/empty/zero are the same source state.
+- Do not eager-import `WorldView`/Cesium from Help, guide data, illustrations,
+  tests, or a barrel export. The production build's lazy-Cesium gate is settled.
+- Do not make hover/title attributes the only explanation. Keyboard, touch,
+  screen-reader, and failed-WebGL users get the complete contract.
+- Do not use color as the only state. Existing Help/World accessibility rules
+  require words plus visual treatment.
+- Do not reduce the 44 px action target or 12 px small-text floors, and honor
+  `prefers-reduced-motion`.
+- Do not claim deployment from source tests. Migration, backend PID, selected
+  release, public bytes, activation, public browser, and human completion are
+  separate truth surfaces.
 
 ## OPEN QUESTIONS — ASK BEFORE DECIDING
 
-1. **First Sense provider:** which exact Hormuz thesis question and source can
-   change a decision? AISStream remains closed pending terms/license,
-   redistribution, outage, replay, and slow-consumer decisions. OpenSky needs a
-   written agreement. FIRMS needs a MAP_KEY plus exact dataset and causal wedge.
-   USGS is technically viable but thesis-unselected.
-2. **World Memory:** whether any provider observation may be retained, for how
-   long, under which privacy/license class, and with what deletion/export
-   policy. Do not add a sample table before this ruling.
-3. **First real causal binding:** which accepted Hormuz scope genuinely
-   supports, challenges, or contextualizes which current thesis node. The owner
-   must make this judgment in the product; do not infer or seed it.
-4. **Physical qualification:** who will execute iPhone/iPad/desktop installed-
-   PWA/browser UAT and where its evidence ledger belongs.
-5. **Phase 4 activation:** explicit owner approval after the selected layer
-   passes source terms, coverage/absence, cost, bounded-failure, list fallback,
-   and one-week protocol design.
-6. **Room retirement:** tombstone and geographic evidence retention/export
-   semantics before any room-deletion route or direct operation is introduced.
+1. **Mandatory policy — first and blocking:** should the core be mandatory once
+   per account for all existing and future users, with temporary Close but no
+   permanent Skip until completion? The prior recommendation was exactly this;
+   the owner did not answer and instead requested this handoff. Stop and ask.
+2. If mandatory is approved, should an account be allowed to use the rest of
+   Dialectic while the incomplete guide is temporarily closed, or should core
+   completion gate normal interaction? Recommendation: allow normal use, keep a
+   persistent named reminder, and resume at the next login/Help open; a hard
+   interaction lock is hostile and risky.
+3. Does “complete” mean God's Eye/World Synapse plus the minimum Dialectic mental
+   model needed to use it, or a comprehensive tour of every current Dialectic
+   capability? Recommendation: World/Synapse core plus optional broader modules;
+   an all-product mandatory tour will be too long.
+4. Is server-side per-account persistence approved, including a small migration,
+   or must the first version remain client-only? Do not invent a table or mutate
+   `users` before this decision.
+5. May guided navigation offer the real Hormuz room as an example to every user
+   who is already authorized there, or must the guide remain entirely in the
+   current room? Never widen membership for training.
+6. Is production activation part of the resumed implementation session? A
+   migration, service restart, immutable frontend release, public acceptance,
+   and account-level UAT require explicit current authorization even though the
+   droplet is production.
 
 ## REPO / ENVIRONMENT ORIENTATION
 
-### Canonical product and design
+### Canonical learning surfaces
 
-- `docs/superpowers/specs/2026-08-25-gods-eye-dialectic-fusion-program-design.md`
-  — Siamese-twin contract and Phases 3–9.
-- `docs/WORLD_LENS_VISION.md` — product direction and non-negotiable authority,
-  provenance, performance, and accessibility boundaries.
-- `docs/WORLD_PROVIDERS.md` — source-specific terms and activation ledger.
-- `docs/superpowers/qualification/2026-08-25-phase-3-world-synapse.md` — source,
-  disposable-browser, production, and public evidence ledger.
-
-### Backend owners
-
-- `dialectic/migrations/021_geo_scopes.sql` and
-  `dialectic/migrations/022_geo_scope_lineage.sql` — geographic storage and
-  immutable revision law; `dialectic/schema.sql` is the fresh-DB baseline.
-- `dialectic/geo_scopes.py`, `dialectic/api/geo.py` — scope projection and the
-  human revision door.
-- `dialectic/field_marks.py`, `dialectic/api/field.py` — causal binding DTO,
-  room/thesis validation, append-only review.
-- `dialectic/atlas_objects.py`, `dialectic/api/atlas.py` — viewer-fenced House /
-  enhanced World projection.
-- `dialectic/world_signals.py`, `dialectic/api/world_signals.py` — bounded
-  ephemeral signal owner and human placement. It intentionally starts empty.
-- `dialectic/llm/world.py`, `dialectic/llm/tools.py` — `world_query` read sight
-  and `propose_geo_scope` reviewed proposal path.
-
-### Frontend owners
-
+- `dialectic/frontend/app/src/components/layout/HelpDialog.tsx` — one Help door,
+  tab state, modal/Escape/outside-click behavior.
+- `dialectic/frontend/app/src/components/layout/HelpDialog.test.tsx` — current
+  accessible tab and dismissal contracts.
+- `dialectic/frontend/app/src/components/layout/CapabilityMap.tsx` — live facts
+  plus durable rules; keep guide copy consistent with it.
+- `dialectic/frontend/app/src/components/layout/CapabilityMap.test.tsx` — live
+  state, unknown-state, and reader-facing copy tests.
+- `dialectic/frontend/app/src/components/layout/WhatsNewPanel.tsx` and
+  `lib/releases.ts` — current-state-aware history and device-local unread state;
+  add the shipped World/guide entries here only after implementation lands.
+- `dialectic/frontend/app/src/components/layout/RoomHeader.tsx` — visible Help
+  action and unread mark.
+- `dialectic/frontend/app/src/App.tsx` — current `helpTab` owner and all Atlas /
+  World / Focus / Field navigation callbacks. Do not grow guide business logic
+  indiscriminately inside this already-large file.
 - `dialectic/frontend/app/src/hooks/useRoomNavigation.ts` — sole destination
-  writer for room/scene/view/object/camera.
+  writer.
 - `dialectic/frontend/app/src/components/workspace/scenes/AtlasScene.tsx` —
-  House list, World shell, selection, causal DOM overlay, no-WebGL fallback.
-- `dialectic/frontend/app/src/components/world/WorldView.tsx` — lazy Cesium
-  renderer; presentation only.
-- `dialectic/frontend/app/src/components/focus/FocusWorld.tsx` — lineage,
-  provenance, review, placement, and Field doors.
-- `dialectic/frontend/app/scripts/verify-lazy-cesium.mjs` and `vite.config.ts` —
-  emitted-build enforcement for shell/SW isolation.
+  House/World projection, textual scope list, causal overlay, WebGL fallback.
+- `dialectic/frontend/app/src/components/focus/FocusWorld.tsx` — provenance,
+  lineage, review, placement, Field binding doors.
+- `dialectic/frontend/app/src/components/workspace/scenes/FieldScene.tsx` —
+  causal relation/review and Builder handoff.
+- `dialectic/frontend/app/scripts/verify-lazy-cesium.mjs` — emitted-build guard.
 
-### Runtime
+### Backend if account persistence is approved
 
-- Backend unit: `/etc/systemd/system/dialectic.service`; loopback `127.0.0.1:8002`.
+- `dialectic/api/main.py` — router registration/lifespan; do not put progress
+  SQL inline here if an existing focused API module pattern fits.
+- `dialectic/api/capabilities.py` — current live Help facts; guide progress is a
+  different concern and should not contaminate deployment capability truth.
+- `dialectic/schema.sql` and numbered `dialectic/migrations/` — migration 022 is
+  current. Any guide-progress storage must update both migration and fresh-DB
+  baseline in the same change.
+- `dialectic/models.py`, authentication dependencies, and existing user-scoped
+  API modules — trace actual caller/fence patterns before naming the contract.
+- `users` currently contains identity/style fields only; there is no existing
+  onboarding/tutorial progress column or table. Do not guess a storage shape.
+
+### Legacy / misleading paths
+
+- `trading/frontend/src/components/onboarding/`,
+  `trading/frontend/src/components/welcome/`, and
+  `trading/frontend/src/pages/Welcome.tsx` teach the old tradingDesk frontend.
+  Read for interaction lessons only; tradingDesk's duplicate social/UI product
+  was culled and Dialectic is the human interface.
+- React Native packages are frozen and cannot satisfy production reach.
+- Legacy static Dialectic frontends are retired. Only
+  `dialectic/frontend/app` builds the live PWA.
+- `dialectic/deploy/dialectic.service` targets nonexistent
+  `/opt/dialectic/current`; the installed production unit runs
+  `/root/DwoodAmo/dialectic` directly.
+
+### Environment and production boundaries
+
+- Backend: `/etc/systemd/system/dialectic.service`, loopback port 8002.
 - Public origin: `https://dialectic.somacura.org`.
-- Frontend releases: `/var/www/dialectic-releases`; selected by
-  `/var/www/dialectic-current`.
-- Environment: `dialectic/.env`, never commit or print it.
-- Legacy/dead trap: checked-in `dialectic/deploy/dialectic.service` targets
-  nonexistent `/opt/dialectic/current`; do not use it.
-- Frozen/dead frontend paths: root mobile packages and legacy static frontend
-  are not the production reach surface; the React PWA is.
+- Frontend: immutable directories under `/var/www/dialectic-releases`, selected
+  by `/var/www/dialectic-current`.
+- Production environment: `dialectic/.env`; never commit or print it.
+- Current World migration: 022. Current app source: `85fed38`; later commits
+  through `1f8dc4f` are documentation only.
+- Start production work read-only. Preserve unrelated dirty/untracked files.
+  Migration/restart/release/push require their own evidence and authorization.
 
-### Invariants
+## IMPLEMENTATION SHAPE AFTER OWNER APPROVAL
 
-- Every query repeats authenticated viewer/room fences server-side.
-- Root/historical/current scope IDs resolve to one current live lineage object.
-- Scope, successor, review, and event writes remain atomic and append-only.
-- Provider credentials and inaccessible geometry never enter browser bytes,
-  URLs, screenshots, or participant context.
-- Default Atlas retains its compatibility shape; causal/signal payloads remain
-  enhanced opt-in projection fields.
-- Renderer failure may remove only spatial presentation, never evidence truth.
+Do not write code directly from this section. After the blocking owner ruling,
+finish the design, save it under
+`docs/superpowers/specs/2026-08-26-dialectic-guided-learning-design.md`, obtain
+owner review, then write a TDD implementation plan under
+`docs/superpowers/plans/2026-08-26-dialectic-guided-learning.md`.
 
-## CONTINUED PROGRAM — EPIC IN THE ACTUAL SENSE
+Likely units, subject to that approved design:
 
-Execute only after the preceding phase's hard gate; do not collapse these into
-one provider-first spectacle push.
-
-1. **Phase 4 — First Sense:** one bounded provider for one Hormuz decision,
-   truthful state/freshness/coverage, explicit human placement, seven-day
-   value/error ledger.
-2. **Phase 5 — Causal Airspace:** deterministic belief weather, drillable
-   evidence constellations, participant-directed cited tours, and a Living
-   World Brief that reports only causally material change.
-3. **Phase 6 — Time and World Memory:** separately approved immutable capture,
-   synchronized world-time/belief-time replay, and exact decision retrospectives.
-4. **Phase 7 — Competing Futures:** precommitted geographic signatures,
-   falsification watches, deterministic reality comparisons, human-adjudicated
-   scorecards, never automatic thesis mutation.
-5. **Phase 8 — World Echoes:** viewer-fenced cross-room causal implications and
-   multi-room briefs with zero inaccessible-room leakage.
-6. **Phase 9 — Command and Embodiment:** shared object/camera command, voice
-   through the same typed destinations, wall-scale Dark Roast command deck, then
-   evaluate spatial computing as a renderer—not a new authority surface.
-
-The endpoint is not “more dots.” It is an inspectable living causal world where
-every observation answers where it came from, how old it is, what claim it bears
-on, who accepted that meaning, what would falsify it, and what was believed at
-the moment of decision.
+1. A pure typed guide curriculum: stable guide/version/step IDs, durable copy,
+   optional contextual destination/action metadata, no Cesium imports.
+2. A focused progress owner: load, resume, advance, complete, and version
+   semantics; authenticated server API only if approved.
+3. A `Start here` Help shelf/stepper with semantic progress, Back/Next, Close,
+   replay, keyboard focus management, reduced motion, and responsive layout.
+4. A small coordinator outside `App.tsx` that decides whether to auto-open and
+   asks `useRoomNavigation` to perform safe guided destinations.
+5. Context adapters that truthfully say “not available in this room” and show a
+   code-native explanatory example rather than fabricating live state.
+6. A World/guide release entry and current Help copy update after the behavior
+   exists and has passed browser qualification.
 
 ## VERIFICATION
 
-### Source and publication
+### Before editing
 
 ```bash
 cd /root/DwoodAmo
 git status --short
 git rev-parse HEAD
-git fetch origin master
-git rev-list --left-right --count origin/master...HEAD
+git rev-parse origin/master
 git diff --check
 ```
 
-Pass: only known unrelated untracked paths remain; after the authorized push,
-the divergence is `0 0` and `origin/master` equals `HEAD`.
+Pass: only the known handoff/JOURNAL edits plus preserved unrelated untracked
+paths exist. Never stage the unrelated artifacts.
 
-### Database authority
+### TDD predicates
 
-```bash
-cd /root/DwoodAmo
-sha256sum dialectic/migrations/022_geo_scope_lineage.sql \
-  /var/backups/dialectic/20260826T031404Z-5f50c122-world-synapse-before.dump
-pg_restore --list \
-  /var/backups/dialectic/20260826T031404Z-5f50c122-world-synapse-before.dump \
-  >/dev/null
-```
+Write each test before implementation and observe the expected failure:
 
-Expected migration hash:
-`8f6987ef923ac18eea4455abf72e5b6bdd7c3005432593487b554fff4fcb32a3`.
-Inspect production `geo_scopes` with the application `DATABASE_URL` and verify
-the 022 columns, check, one-successor index, reject UPDATE trigger, and reject
-DELETE trigger. Never test those triggers by mutating production rows.
+- incomplete current guide auto-opens under the owner-approved policy;
+- completed current guide stays quiet but replays from Help;
+- an older completed version follows the approved re-learning policy;
+- Close preserves exact resume progress and differs from Complete;
+- progress is fenced to the authenticated user and cannot read/write another;
+- unavailable progress says unknown/retry rather than silently “complete”;
+- every step has a stable ID, meaningful heading, and named user action;
+- guided destinations pass through `useRoomNavigation` and clear room-fenced
+  object/camera state correctly;
+- a room with no scopes/provider/bindings tells that truth without fabricated
+  examples;
+- keyboard order, focus return, Escape/Close policy, 44 px controls, 12 px text,
+  reduced motion, and 390 px width remain usable;
+- importing/rendering Help loads no World/Cesium bytes;
+- failed WebGL keeps the complete instructional path.
 
-### Runtime and public bytes
-
-```bash
-systemctl is-active dialectic nginx
-systemctl show dialectic --property=MainPID,ActiveEnterTimestamp,SubState
-curl -fsS http://127.0.0.1:8002/health
-curl -fsS https://dialectic.somacura.org/health
-readlink -f /var/www/dialectic-current
-sha256sum /var/www/dialectic-current/index.html /var/www/dialectic-current/sw.js
-curl -fsS https://dialectic.somacura.org/ | sha256sum
-curl -fsS https://dialectic.somacura.org/sw.js | sha256sum
-journalctl -u dialectic --since '2026-08-25 22:20:53' --no-pager
-```
-
-Pass: both services active; health reports DB/Redis connected and scheduler
-fresh; PID is nonzero; selected release and public/local hashes match; no new
-ERROR, traceback, exception, or HTTP 500 appears.
-
-### Code gates
+Targeted commands will depend on final filenames. Full existing gates are:
 
 ```bash
 cd /root/DwoodAmo/dialectic
 DIALECTIC_TEST_DATABASE_URL=postgresql://root@localhost/dialectic_test \
   python3 -m pytest tests/ -q
+
 cd frontend/app
 npm test -- --run
 npm run lint
 npm run build
+
+cd /root/DwoodAmo
+git diff --check
 ```
 
-Last full results: backend `2125 passed`; frontend `580 passed`; lint passed;
-production build passed; emitted lazy-Cesium gate passed. Re-run before changing
-application behavior, not merely for a documentation-only commit.
+The build must end with `Lazy Cesium contract passed`. Do not accept the known
+jsdom canvas informational message as browser proof.
 
-### Public browser and human use
+### Browser acceptance
 
-Machine proof lives in
-`/var/backups/dialectic/20260826T032052Z-world-synapse-85fed38-public/results.json`.
-Re-run public authenticated acceptance after any served-code change. Physical
-qualification must record device/OS/browser or installed PWA, viewport,
-network, selected release hash, UTC time, visible sequence, screenshots, page
-errors, and failures. One-week qualification must name the causal decision each
-layer changed—or `none`—every day.
+Retain machine results and visually inspect screenshots at desktop and 390 px:
+
+1. Existing account with no current completion is brought into the core under
+   the approved policy.
+2. Close/reload resumes the exact step; completion/reload stays quiet.
+3. Help -> Start here replays from the beginning without erasing completion.
+4. Navigate House -> World -> Focus -> Field explanation -> House through
+   visible guide controls and canonical URLs.
+5. Repeat in a room with no geography and no causal binding; wording is honest.
+6. Force WebGL failure; complete the same curriculum from the text list.
+7. Run keyboard-only, reduced-motion, and mobile viewport sequences; inspect
+   focus, overflow, type size, and target geometry.
+8. Verify House/Help cold launch transfers zero World/Cesium bytes.
+9. If server progress exists, use two authenticated users and prove isolation.
+10. Observe no page errors, HTTP 500s, leaked tokens, or production evidence
+    writes from the mandatory core.
+
+### Production qualification if separately authorized
+
+Report independently: migration and backup; backend clean checkout/restart/PID;
+health and logs; immutable PWA release/symlink/nginx; served asset hashes;
+public authenticated browser; activation policy; Dan/Nick/Scott account
+eligibility; actual human completion. A green automated browser is not proof
+that any named person learned it.
 
 ### Definition of done
 
-The Phase 3 production wave is done when source is pushed, migration 022 and its
-backup are verified, the restarted backend is healthy with tools enabled, the
-selected public PWA hashes match, authenticated public acceptance passes House,
-World, Focus, provenance, laziness, and failed-WebGL contracts, and every
-remaining provider/physical/human-use gate is stated as open rather than implied.
-
-The whole fusion program is not done until Phases 4–9 each pass their own
-provider, retention, causality, privacy, accessibility, and ordinary-use gate.
+- Every eligible collaborator is brought to the current core under the owner's
+  approved policy and can resume/replay it.
+- The core teaches the six chapters above without hardcoded deployment lies,
+  fake authority, eager Cesium, inaccessible interactions, or production writes.
+- Help remains accurate, obvious, and evergreen; “What changed” records the
+  shipped feature only after it exists.
+- Source, backend, frontend, build, accessibility, browser, public delivery,
+  activation, and human completion are reported separately.
+- Dan, Nick, and Scott have each actually completed the production guide or are
+  truthfully listed as pending; account records alone are not learning proof.
 
 ## CONFLICT RULE
 
