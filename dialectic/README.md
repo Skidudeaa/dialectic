@@ -192,8 +192,8 @@ stakes/      commitments + Brier calibration
 analytics/   conversation DNA, briefings, knowledge graph
 replay/      event replay + state materialization
 frontend/app React PWA
-migrations/  018 current; schema.sql = fresh-DB baseline (014's reading_items
-             is migration-only — a fresh DB needs the migrations too)
+migrations/  024 current; schema.sql includes reading_items + immutable browser
+             revisions; existing DBs apply reviewed 023/024 separately
 tests/       pytest incl. real-Postgres integration tests
 ```
 

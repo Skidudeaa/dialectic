@@ -1172,3 +1172,18 @@ owner separately authorizes migration 023 and deployment.
   search/detail/copy/download with downloaded SHA matching PostgreSQL. Physical
   iPad, registered App Group/Keychain, Simulator Safari toolbar action, migration,
   restart, frontend release, TestFlight, and production are UNVERIFIED.
+
+## Amendment 2026-08-29 — Reading Rail master reconciliation and physical gate
+
+Production master assigned `023_drop_orphan_tables.sql` after the Reading Rail
+branch split, so browser capture revisions are migration
+`024_reading_capture_revisions.sql`; numbered migration prefixes are now tested
+for uniqueness. Preserve both master’s orphan-table removal and Reading Rail’s
+schema additions.
+
+A signed physical iPad Safari action committed an exact Example Domain capture
+through the real shared App Group and the containing app displayed it as queued.
+This closes physical extension enablement, one-tap capture, and App Group sharing.
+Cross-target Keychain delivery, migration 024, backend restart, frontend release,
+and production filing remain UNVERIFIED; the live server still returns 404 for
+the new Library routes until activation.

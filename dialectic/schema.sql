@@ -757,7 +757,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_rooms_single_home
 ALTER TABLE room_memberships ADD COLUMN IF NOT EXISTS can_manage_home BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- ============================================================
--- READING LIBRARY + IMMUTABLE BROWSER CAPTURES (migrations 014, 023)
+-- READING LIBRARY + IMMUTABLE BROWSER CAPTURES (migrations 014, 024)
 -- ============================================================
 -- reading_items is the logical/current searchable projection. Direct browser
 -- snapshots retain their exact bytes in reading_revisions and point back from

@@ -67,10 +67,15 @@ vi.mock('./hooks/useAtlas.ts', () => ({
 }))
 vi.mock('./components/workspace/focus/FocusSurface.tsx', () => ({
   FocusSurface: ({
-    onGeoChanged, onMarked, onOpenWorld, onReview, worldBindings = [],
+    onGeoChanged, onMarked, onNavigate, onOpenWorld, onReview, worldBindings = [],
   }: {
     onGeoChanged: () => void
     onMarked?: () => void
+    onNavigate?: (target: {
+      threadId?: string
+      messageId?: string
+      object: string | null
+    }) => void
     onOpenWorld?: (scopeObjectId: string, selectedObject?: string) => void
     onReview: (markId: string, request: { action: 'confirm' }) => Promise<void>
     worldBindings?: CausalGeoBinding[]
@@ -79,6 +84,14 @@ vi.mock('./components/workspace/focus/FocusSurface.tsx', () => ({
       <button type="button" onClick={onGeoChanged}>Complete scope write</button>
       {onMarked ? (
         <button type="button" onClick={onMarked}>Complete causal bind</button>
+      ) : null}
+      {onNavigate ? (
+        <button
+          type="button"
+          onClick={() => onNavigate({ threadId: 'branch-2', object: 'reading:r1' })}
+        >
+          Open fixture branch
+        </button>
       ) : null}
       <button
         type="button"
@@ -455,6 +468,23 @@ describe('Library object navigation', () => {
     expect(screen.getByRole('button', { name: 'Open fixture reading' })).toHaveAttribute(
       'data-enabled', 'false',
     )
+  })
+
+  it('preserves master branch navigation by leaving Library for Record', () => {
+    useAppStore.setState({ workspaceScene: 'library' })
+    vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
+    const nav = navigation('', 'reading:r1')
+
+    render(<ChatLayout nav={nav} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open fixture branch' }))
+
+    expect(nav.navigate).toHaveBeenCalledWith({
+      roomId: room.id,
+      threadId: 'branch-2',
+      scene: 'record',
+      object: 'reading:r1',
+      messageId: null,
+    }, 'push')
   })
 })
 
