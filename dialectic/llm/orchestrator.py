@@ -785,6 +785,10 @@ class LLMOrchestrator:
             prompt_hash=routing.prompt_hash,
             token_count=routing.response.input_tokens + routing.response.output_tokens,
             protocol=protocol,
+            # WHY: without this, a wire interruption and an organic reply are
+            # indistinguishable in the transcript -- the reason lived only in
+            # llm_decisions, not on the message itself.
+            metadata={"source": reason},
         )
 
         # Fire-and-forget: extract LLM self-memories in background

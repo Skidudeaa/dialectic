@@ -88,9 +88,9 @@ describe('resolveWorkspaceScene agrees with what is on offer', () => {
     // `field` moved out of this list in Release 3 — FieldScene.tsx renders
     // it now, so it belongs in the "accepts every scene on offer" case
     // above instead. Synapse did the same for ordinary-room `atlas`.
-    // `judgment` stays unbuilt; `focus` is a state, not a scene, and remains
-    // outside the implemented list on purpose (§5.2).
-    expect(resolveWorkspaceScene(scheme, root, 'judgment')).toBe('record')
+    // `focus` is a state, not a scene, and remains outside the implemented
+    // list on purpose (§5.2). (`judgment` was retired 2026-08-29.)
+    expect(resolveWorkspaceScene(scheme, root, 'focus')).toBe('record')
     expect(resolveWorkspaceScene(home, root, 'focus')).toBe('house')
   })
 })

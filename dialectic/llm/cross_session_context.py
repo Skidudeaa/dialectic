@@ -87,9 +87,9 @@ class CrossSessionContextBuilder:
         Returns:
             CrossSessionContext with formatted memories
         """
-        # Get auto-inject memories (user's persistent collections)
-        global_memories = await self.manager.get_auto_inject_memories(user_id)
-        global_memories = global_memories[:max_global_memories]
+        # Collections were dropped 2026-08-29 (never had a writer); the
+        # global lane is empty until something replaces them.
+        global_memories = []
         
         # Get semantically relevant memories from other rooms
         relevant_memories = []

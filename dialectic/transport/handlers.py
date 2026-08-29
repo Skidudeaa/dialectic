@@ -2213,7 +2213,7 @@ class MessageHandler:
         definition = get_protocol_definition(protocol_type)
 
         # The synthesis IS the phase-completing facilitator message: persist
-        # that verbatim, linked to its source. (definition.synthesis_prompt is
+        # that verbatim, linked to its source. (the old synthesis_prompt field was deleted 2026-08-29; it was
         # unconsumed — the final phase instruction already asks for the
         # structured document.) The placeholder survives only when no
         # protocol message exists at all.

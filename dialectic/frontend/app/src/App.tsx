@@ -898,7 +898,10 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     void navigate({
       roomId: currentRoom.id,
       threadId: target.threadId ?? currentThread?.id ?? null,
-      scene: workspaceScene,
+      // A branch jump is a jump to the transcript: from Library/Ledger/Field
+      // the thread used to change while the scene stayed put, so 'Open
+      // branch' looked like nothing happened.
+      scene: target.threadId ? 'record' : workspaceScene,
       object: target.object,
       messageId: target.messageId ?? null,
     }, target.historyMode ?? 'push')

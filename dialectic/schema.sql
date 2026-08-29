@@ -212,14 +212,6 @@ CREATE TABLE user_sessions (
 CREATE INDEX idx_user_sessions_user ON user_sessions(user_id);
 CREATE INDEX idx_user_sessions_token ON user_sessions(refresh_token_hash);
 
--- User PINs (biometric fallback unlock)
-CREATE TABLE user_pins (
-    user_id UUID PRIMARY KEY REFERENCES users(id),
-    pin_hash TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 -- ============================================================
 -- REAL-TIME PRESENCE & RECEIPTS
 -- ============================================================
@@ -357,32 +349,8 @@ CREATE TABLE IF NOT EXISTS user_memory_promotions (
 CREATE INDEX IF NOT EXISTS idx_user_memory_promotions_user
     ON user_memory_promotions(user_id, memory_id);
 
--- User memory collections: organize memories across rooms
-CREATE TABLE IF NOT EXISTS user_memory_collections (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    description TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    auto_inject BOOLEAN NOT NULL DEFAULT FALSE,
-    display_order INT NOT NULL DEFAULT 0,
-    UNIQUE (user_id, name)
-);
-
-CREATE INDEX idx_collections_user ON user_memory_collections(user_id);
-
--- Collection membership: links memories to collections (many-to-many)
-CREATE TABLE IF NOT EXISTS collection_memories (
-    collection_id UUID NOT NULL REFERENCES user_memory_collections(id) ON DELETE CASCADE,
-    memory_id UUID NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-    added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    added_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    notes TEXT,
-    PRIMARY KEY (collection_id, memory_id)
-);
-
-CREATE INDEX idx_collection_memories_memory ON collection_memories(memory_id);
+-- user_memory_collections / collection_memories / user_pins were dropped in
+-- migration 023 (2026-08-29): no code path ever wrote them.
 
 -- Global memories view: all memories accessible to a user
 CREATE OR REPLACE VIEW user_accessible_memories AS
@@ -411,8 +379,6 @@ ALTER TABLE memories ADD COLUMN IF NOT EXISTS promoted_by_user_id UUID REFERENCE
 
 COMMENT ON TABLE memory_references IS 'Tracks citations of memories across rooms/sessions';
 COMMENT ON TABLE user_memory_promotions IS 'Per-user grants for automatic cross-room recall of shared memories';
-COMMENT ON TABLE user_memory_collections IS 'User-defined collections of memories that persist across rooms';
-COMMENT ON TABLE collection_memories IS 'Many-to-many link between collections and memories';
 
 -- ============================================================
 -- LLM IDENTITY DOCUMENTS (stored as memories)

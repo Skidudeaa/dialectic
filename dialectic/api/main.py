@@ -469,12 +469,6 @@ class SendMessageRequest(BaseModel):
     metadata: Optional[dict] = None
 
 
-class ForkThreadRequest(BaseModel):
-    source_thread_id: UUID
-    fork_after_message_id: UUID
-    title: Optional[str] = None
-
-
 class AddMemoryRequest(BaseModel):
     key: str
     content: str
@@ -1448,44 +1442,6 @@ async def send_message(
         logger.exception("Post-commit message broadcast failed")
 
     return MessageResponse(**message.model_dump())
-
-
-@app.post("/threads/{thread_id}/fork")
-async def fork_thread_endpoint(
-    thread_id: UUID,
-    request: ForkThreadRequest,
-    token: str = Depends(extract_room_token),
-    current_user: AuthenticatedUser = Depends(get_current_user),
-    db=Depends(get_db),
-):
-    """Fork a thread."""
-    user_id = current_user.user_id
-    thread_row = await db.fetchrow(
-        "SELECT * FROM threads WHERE id = $1", thread_id
-    )
-    if not thread_row:
-        raise HTTPException(status_code=404, detail="Thread not found")
-
-    room = await verify_room_token(thread_row['room_id'], token, db)
-    await verify_room_member(room.id, user_id, db)
-
-    from operations import fork_thread
-    new_thread = await fork_thread(
-        db,
-        room_id=room.id,
-        source_thread_id=request.source_thread_id,
-        fork_after_message_id=request.fork_after_message_id,
-        forking_user_id=user_id,
-        title=request.title,
-    )
-
-    return ThreadResponse(
-        id=new_thread.id,
-        room_id=new_thread.room_id,
-        parent_thread_id=new_thread.parent_thread_id,
-        title=new_thread.title,
-        message_count=0,
-    )
 
 
 @app.get("/rooms/{room_id}/memories")

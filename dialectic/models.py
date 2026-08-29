@@ -361,30 +361,6 @@ class MemoryReference(BaseModel):
     relevance_score: Optional[float] = None
 
 
-class UserMemoryCollection(BaseModel):
-    """
-    ARCHITECTURE: User-defined collections of memories spanning rooms.
-    WHY: Users can curate persistent knowledge across all conversations.
-    """
-    id: UUID = Field(default_factory=uuid4)
-    user_id: UUID
-    name: str
-    description: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-    auto_inject: bool = False
-    display_order: int = 0
-
-
-class CollectionMembership(BaseModel):
-    """Link between a collection and a memory."""
-    collection_id: UUID
-    memory_id: UUID
-    added_at: datetime
-    added_by_user_id: Optional[UUID] = None
-    notes: Optional[str] = None
-
-
 class CrossRoomMemoryResult(BaseModel):
     """Memory search result with source room context."""
     memory: Memory

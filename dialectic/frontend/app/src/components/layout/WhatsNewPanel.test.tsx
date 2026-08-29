@@ -108,13 +108,11 @@ describe('WhatsNewPanel', () => {
   })
 
   it('explains a hard word in place', async () => {
-    // Releases are allowed to use plain prose. Exercise the newest authored
-    // glossary marker instead of assuming the newest release must contain one.
-    const marked = RELEASES
-      .map((release) => /\[\[([^\]|]+)\|([^\]]+)\]\]/.exec(release.body))
-      .find((match) => match !== null)
-    expect(marked).toBeDefined()
-    if (!marked) throw new Error('the release ledger has no glossary marker')
+    // The NEWEST release must carry a gloss -- that is the whole discipline.
+    // Loosened 2026-08-26 to 'any release', which passes forever; restored.
+    const marked = /\[\[([^\]|]+)\|([^\]]+)\]\]/.exec(RELEASES[0].body)
+    expect(marked).not.toBeNull()
+    if (!marked) throw new Error('the newest release has no glossary marker')
     render(<WhatsNewPanel roomId="r1" />)
     const trigger = await screen.findByRole('button', { name: marked[2] })
     fireEvent.click(trigger)

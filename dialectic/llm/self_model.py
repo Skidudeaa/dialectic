@@ -655,14 +655,10 @@ class SelfModel:
                 if "?" in (responses[0]["content"] or ""):
                     effectiveness = min(1.0, effectiveness + 0.3)
 
-            await self.db.execute(
-                """UPDATE llm_decisions
-                   SET effectiveness_score = $1,
-                       human_responded = $2,
-                       human_response_length = $3
-                   WHERE id = $4""",
-                effectiveness, human_responded, response_length, decision_id,
-            )
+            # WHY no per-decision score write: effectiveness_score /
+            # human_responded were written for 200+ decisions and read by
+            # nothing (audit 2026-08-29). The room-level engaged/ignored
+            # counters below are what the self-awareness prompt consumes.
 
             # Update participation state aggregates
             if human_responded:

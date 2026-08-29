@@ -55,7 +55,7 @@ export const RELEASES: Release[] = [
     date: '2026-08-26',
     title: 'Protocols keep their word',
     body:
-      'Four repairs to structured protocols. The claim you type when you start a ' +
+      'Four repairs to structured [[protocol|protocols]]. The claim you type when you start a ' +
       'Steelman or Devil\u2019s Advocate now reaches the facilitator, so it frames ' +
       'your position instead of whatever the thread last said. Reloading, opening ' +
       'the room on another device, or switching threads brings back the protocol ' +
@@ -72,7 +72,7 @@ export const RELEASES: Release[] = [
       'Ask the participant for a document — a brief, a newsletter, a memo, a PDF — ' +
       'and it writes the whole piece and attaches it to its reply as a download, ' +
       'instead of pasting it into the chat or saying it has no way to make a file. ' +
-      'The file sits on the message like any upload, authored by the participant.',
+      'The file sits on the message like any [[attachment|upload]], authored by the participant.',
   },
   {
     id: 'duel',

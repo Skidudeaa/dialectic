@@ -21,7 +21,6 @@ class ProtocolDefinition:
     phase_instructions: list[str]
     # UNCONSUMED as of 2026-08-26: conclusion persists the final-phase message
     # itself (transport/handlers._conclude_protocol). Wire it or delete it.
-    synthesis_prompt: str
     facilitator_identity: str
 
 
@@ -93,23 +92,6 @@ Produce a structured synthesis document.
 
 When synthesis is complete, emit [PHASE_COMPLETE: synthesis delivered] on its own line.""",
     ],
-    synthesis_prompt="""Produce a final STEELMAN SYNTHESIS MEMORY for this protocol session.
-
-Format:
-## Claim Under Examination
-[The original claim]
-
-## Steelman (Strongest Version)
-[The constructed steelman]
-
-## Vulnerabilities Found
-[Ranked list of weaknesses]
-
-## Verdict
-[Survived / Modified / Defeated — with reasoning]
-
-## Open Questions
-[Unresolved threads for future investigation]""",
     facilitator_identity="""You are a structured reasoning facilitator running the Steelman Protocol. Your role is to ensure intellectual rigor: build the strongest version of a claim, then systematically interrogate it. You are neutral — your job is the process, not a position. Guide participants through each phase with clarity and discipline.""",
 )
 
@@ -163,23 +145,6 @@ Produce a foundation map showing the full descent from claim to bedrock.
 
 When the foundation audit is complete, emit [PHASE_COMPLETE: foundations mapped] on its own line.""",
     ],
-    synthesis_prompt="""Produce a final SOCRATIC DESCENT MEMORY for this protocol session.
-
-Format:
-## Question Investigated
-[The question as framed]
-
-## Key Definitions Established
-[Each term and its agreed definition]
-
-## Foundation Map
-[The dependency tree from surface claims to bedrock assumptions]
-
-## Axiomatic Bedrock
-[Where reasoning terminates — what must be accepted without proof]
-
-## Insights
-[What the descent revealed about the question]""",
     facilitator_identity="""You are a Socratic facilitator. Your only tool is the question. You never assert — you interrogate. Demand precision in definitions, expose hidden assumptions, and trace every claim to its foundations. You are relentless but never hostile. Your goal is clarity, not victory.""",
 )
 
@@ -237,23 +202,6 @@ Produce a structured damage report.
 
 When the damage assessment is complete, emit [PHASE_COMPLETE: assessment delivered] on its own line.""",
     ],
-    synthesis_prompt="""Produce a final DEVIL'S ADVOCATE MEMORY for this protocol session.
-
-Format:
-## Original Consensus
-[The consensus as identified]
-
-## Attack Vectors Applied
-[Each angle of attack and its outcome]
-
-## What Survived
-[Robust elements of the consensus]
-
-## What Broke
-[Elements that did not withstand scrutiny]
-
-## Revised Position
-[Modified consensus incorporating the attack results, or statement of abandonment]""",
     facilitator_identity="""You are a Devil's Advocate facilitator. Your job is to attack the emerging consensus — not because you disagree, but because untested agreement is worthless. Be adversarial, creative, and thorough in your attacks. Be fair in your damage assessment. The goal is stronger thinking, not destruction for its own sake.""",
 )
 
@@ -302,23 +250,6 @@ Produce the synthesis as a coherent document, not a list.
 
 When synthesis is complete, emit [PHASE_COMPLETE: synthesis delivered] on its own line.""",
     ],
-    synthesis_prompt="""Produce a final SYNTHESIS MEMORY for this protocol session.
-
-Format:
-## Tensions Identified
-[Each tension with its classification]
-
-## Integrations Achieved
-[How tensions were resolved, with the resulting unified positions]
-
-## Irreducible Disagreements
-[Tensions that could not be resolved, with explanation of why]
-
-## Emergent Questions
-[New questions that arose from the synthesis process]
-
-## Composite Position
-[The best available integration of all perspectives]""",
     facilitator_identity="""You are a Synthesis facilitator. Your job is to find integration where others see only disagreement. Map tensions precisely, then work systematically to resolve them. Where resolution is impossible, say so clearly. Your goal is the most accurate composite understanding available from the conversation's raw materials.""",
 )
 

@@ -681,14 +681,4 @@ async def test_automatic_cross_room_search_requires_personal_promotion():
     assert search_mock.await_args.kwargs["require_global_scope"] is True
 
 
-@pytest.mark.asyncio
-async def test_auto_inject_collections_require_personal_promotion():
-    db = SimpleNamespace(fetch=AsyncMock(return_value=[]))
-    manager = CrossSessionMemoryManager(db)
-    assert await manager.get_auto_inject_memories(uuid4()) == []
-    query = db.fetch.await_args.args[0]
-    assert "user_memory_promotions" in query
-    assert "ump.user_id = $1" in query
-    assert "JOIN room_memberships" in query
-    assert "rm.user_id = $1" in query
     assert "m.scope = 'global'" not in query

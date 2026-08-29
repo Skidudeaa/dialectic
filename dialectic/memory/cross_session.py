@@ -14,7 +14,7 @@ import logging
 
 from models import (
     Memory, MemoryReference,
-    UserMemoryCollection, CollectionMembership, CrossRoomMemoryResult,
+    CrossRoomMemoryResult,
     EventType, MemoryReferencedPayload
 )
 from .embeddings import EmbeddingProvider, get_embedding_provider
@@ -421,130 +421,6 @@ class CrossSessionMemoryManager:
 
     # ================================================================
     # USER COLLECTIONS
-    # ================================================================
-
-    async def create_collection(
-        self,
-        user_id: UUID,
-        name: str,
-        description: Optional[str] = None,
-        auto_inject: bool = False,
-    ) -> UserMemoryCollection:
-        """Create a new memory collection for a user."""
-        now = datetime.now(timezone.utc)
-        collection_id = uuid4()
-
-        row = await self.db.fetchrow(
-            """
-            INSERT INTO user_memory_collections (
-                id, user_id, name, description, created_at, updated_at, auto_inject
-            ) VALUES ($1, $2, $3, $4, $5, $5, $6)
-            RETURNING *
-            """,
-            collection_id, user_id, name, description, now, auto_inject
-        )
-
-        collection = UserMemoryCollection(**dict(row))
-
-        await self._record_event(
-            EventType.COLLECTION_CREATED,
-            user_id=user_id,
-            payload={"collection_id": str(collection_id), "name": name}
-        )
-
-        return collection
-
-    async def add_memory_to_collection(
-        self,
-        collection_id: UUID,
-        memory_id: UUID,
-        user_id: UUID,
-        notes: Optional[str] = None,
-    ) -> CollectionMembership:
-        """Add a memory to a collection."""
-        now = datetime.now(timezone.utc)
-
-        row = await self.db.fetchrow(
-            """
-            INSERT INTO collection_memories (
-                collection_id, memory_id, added_at, added_by_user_id, notes
-            ) VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (collection_id, memory_id) DO UPDATE
-            SET notes = EXCLUDED.notes
-            RETURNING *
-            """,
-            collection_id, memory_id, now, user_id, notes
-        )
-
-        membership = CollectionMembership(**dict(row))
-
-        await self._record_event(
-            EventType.COLLECTION_MEMORY_ADDED,
-            user_id=user_id,
-            payload={
-                "collection_id": str(collection_id),
-                "memory_id": str(memory_id)
-            }
-        )
-
-        return membership
-
-    async def get_user_collections(
-        self,
-        user_id: UUID,
-    ) -> List[UserMemoryCollection]:
-        """Get all collections for a user."""
-        rows = await self.db.fetch(
-            """
-            SELECT * FROM user_memory_collections
-            WHERE user_id = $1
-            ORDER BY display_order, created_at
-            """,
-            user_id
-        )
-        return [UserMemoryCollection(**dict(row)) for row in rows]
-
-    async def get_collection_memories(
-        self,
-        collection_id: UUID,
-    ) -> List[Memory]:
-        """Get all memories in a collection."""
-        rows = await self.db.fetch(
-            """
-            SELECT m.* FROM memories m
-            JOIN collection_memories cm ON m.id = cm.memory_id
-            WHERE cm.collection_id = $1 AND m.status = 'active'
-            ORDER BY cm.added_at DESC
-            """,
-            collection_id
-        )
-        return [Memory(**dict(row)) for row in rows]
-
-    async def get_auto_inject_memories(
-        self,
-        user_id: UUID,
-    ) -> List[Memory]:
-        """Get all memories from user's auto-inject collections."""
-        rows = await self.db.fetch(
-            """
-            SELECT DISTINCT m.* FROM memories m
-            JOIN collection_memories cm ON m.id = cm.memory_id
-            JOIN user_memory_collections c ON cm.collection_id = c.id
-            JOIN user_memory_promotions ump
-              ON ump.memory_id = m.id AND ump.user_id = $1
-            JOIN room_memberships rm
-              ON rm.room_id = m.room_id AND rm.user_id = $1
-            WHERE c.user_id = $1 
-              AND c.auto_inject = true
-              AND m.status = 'active'
-            ORDER BY m.updated_at DESC
-            """,
-            user_id
-        )
-        return [Memory(**dict(row)) for row in rows]
-
-    # ================================================================
-    # HELPERS
     # ================================================================
 
     async def _record_event(

@@ -14,7 +14,6 @@ export const WORKSPACE_SCENES = [
   'ledger',
   'field',
   'focus',
-  'judgment',
   'atlas',
   // Added 2026-08-20 with the Mirror. It enters BOTH lists in the same
   // change on purpose -- the rule the two lists exist to enforce is that an

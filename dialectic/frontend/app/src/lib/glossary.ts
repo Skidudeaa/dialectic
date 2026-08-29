@@ -36,6 +36,19 @@ export interface GlossaryEntry {
 }
 
 export const GLOSSARY: Record<string, GlossaryEntry> = {
+  // ── ways of talking ─────────────────────────────────────────────────────
+  protocol: {
+    term: 'Protocol',
+    short: 'A structured exchange — Steelman, Socratic, Devil’s Advocate, Synthesis — the participant runs in phases and closes with a memory.',
+    long:
+      'You start one from the room header with a claim. The participant steps out of its ordinary ' +
+      'voice to facilitate the phases, and when it concludes, its final message is kept as the memory ' +
+      'of the exchange. One protocol per thread at a time.',
+  },
+  attachment: {
+    term: 'Attachment',
+    short: 'A file on a message — yours by upload, or the participant’s when it writes a document.',
+  },
   // ── scoring ─────────────────────────────────────────────────────────────
   brier: {
     term: 'Brier score',
