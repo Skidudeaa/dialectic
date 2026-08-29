@@ -109,6 +109,26 @@ vi.mock('./components/workspace/WorkspaceSceneFrame', () => ({
     content: Record<string, ReactNode>
   }) => content[scene] ?? null,
 }))
+vi.mock('./components/workspace/scenes/LibraryScene', () => ({
+  LibraryScene: ({
+    roomId,
+    onOpen,
+    enabled,
+  }: {
+    roomId: string
+    onOpen: (readingId: string) => void
+    enabled?: boolean
+  }) => (
+    <button
+      type="button"
+      data-room-id={roomId}
+      data-enabled={String(enabled)}
+      onClick={() => onOpen('reading-77')}
+    >
+      Open fixture reading
+    </button>
+  ),
+}))
 vi.mock('./components/chat/MessageList', () => ({
   MessageList: ({
     messages,
@@ -408,6 +428,33 @@ describe('World Synapse navigation', () => {
       messageId: null,
       view: `world;room=${otherRoomId}`,
     }, 'push')
+  })
+})
+
+describe('Library object navigation', () => {
+  it('writes a selected reading through the existing room navigation owner', () => {
+    useAppStore.setState({ workspaceScene: 'library' })
+    vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
+    const nav = navigation('')
+
+    render(<ChatLayout nav={nav} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open fixture reading' }))
+
+    expect(nav.navigate).toHaveBeenCalledWith({
+      roomId: room.id,
+      threadId: thread.id,
+      scene: 'library',
+      object: 'reading:reading-77',
+    }, 'push')
+  })
+
+  it('passes the JWT boundary into the Library surface for guest sessions', () => {
+    useAppStore.setState({ workspaceScene: 'library', accessToken: null })
+    vi.spyOn(api, 'getMessages').mockResolvedValue({ messages: [] })
+    render(<ChatLayout nav={navigation('')} />)
+    expect(screen.getByRole('button', { name: 'Open fixture reading' })).toHaveAttribute(
+      'data-enabled', 'false',
+    )
   })
 })
 

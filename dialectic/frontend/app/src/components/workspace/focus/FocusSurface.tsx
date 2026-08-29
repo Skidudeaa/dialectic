@@ -21,6 +21,7 @@ import { FocusHistory } from './FocusHistory.tsx'
 import { FocusActions } from './FocusActions.tsx'
 import { FocusWorld } from './FocusWorld.tsx'
 import { ScopeReview } from './ScopeReview.tsx'
+import { ReadingFocus } from './ReadingFocus.tsx'
 import type { GeoScopesState } from '../../../hooks/useGeoScopes.ts'
 import { useAppStore } from '../../../stores/appStore.ts'
 import type { CausalGeoBinding } from '../../../types/atlas.ts'
@@ -102,6 +103,7 @@ export function FocusSurface({
   const onSelectObject = (id: string) => onNavigate({ object: id })
   const isFieldMark = objectId.startsWith('field_mark:')
   const isGeoScope = objectId.startsWith('geo_scope:')
+  const isReading = objectId.startsWith('reading:')
 
   // Hooks run unconditionally, before either early return below (rules of
   // hooks) — objectList/markList fall back to [] while their projection is
@@ -129,6 +131,31 @@ export function FocusSurface({
           onChanged={onGeoChanged ?? (() => undefined)}
           onMarked={onMarked ?? (() => undefined)}
           worldBindings={worldBindings}
+        />
+      </aside>
+    )
+  }
+
+  if (isReading && roomId) {
+    if (!canAct) {
+      return (
+        <aside className="focus-surface focus-surface-reading" aria-label="Focus">
+          <button type="button" className="focus-close" onClick={onClose} aria-label="Close Focus">
+            ‹ Back
+          </button>
+          <SceneEmpty kicker="Reading" headline="Sign in to open this reading.">
+            <p>Guest room access carries no account identity for this room-fenced source.</p>
+          </SceneEmpty>
+        </aside>
+      )
+    }
+    return (
+      <aside className="focus-surface focus-surface-reading" aria-label="Focus">
+        <ReadingFocus
+          key={`${roomId}:${objectId}`}
+          roomId={roomId}
+          readingId={objectId.replace(/^reading:/, '')}
+          onClose={onClose}
         />
       </aside>
     )

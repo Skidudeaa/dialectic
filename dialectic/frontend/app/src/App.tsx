@@ -1027,7 +1027,14 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
         onOpenWorld={openWorldEvidence}
       />
     ),
-    library: <LibraryScene state={workspaceObjects} onOpen={openWorkspaceObject} />,
+    library: (
+      <LibraryScene
+        key={currentRoom.id}
+        roomId={currentRoom.id}
+        enabled={Boolean(accessToken)}
+        onOpen={(readingId) => openWorkspaceObject({ id: `reading:${readingId}` })}
+      />
+    ),
     ledger: (
       <LedgerScene
         state={workspaceObjects}

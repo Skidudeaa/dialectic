@@ -1,4 +1,20 @@
-import type { Attachment, HomeActivityProjection, HomeProposalsResponse, Memory, MirrorDiff, MirrorRoom, MirrorVersion, RoundState, Thread, ThreadNode, UserRoom } from '../types/index.ts';
+import type {
+  Attachment,
+  HomeActivityProjection,
+  HomeProposalsResponse,
+  Memory,
+  MirrorDiff,
+  MirrorRoom,
+  MirrorVersion,
+  ReadingDetail,
+  ReadingLibraryFilters,
+  ReadingLibraryResponse,
+  ReadingMarkdownDownload,
+  RoundState,
+  Thread,
+  ThreadNode,
+  UserRoom,
+} from '../types/index.ts';
 import type { AtlasProjection } from '../types/atlas.ts';
 import type { GeoScope, GeoScopeReview } from '../types/geo.ts';
 import type {
@@ -16,6 +32,15 @@ const BASE = '';  // Same origin via Vite proxy
 
 /** Message ids per attachment-list request — see listAttachments. */
 const ATTACHMENT_QUERY_BATCH = 100;
+
+function markdownFilename(disposition: string | null, readingId: string): string {
+  const shortId = readingId.replace(/[^A-Za-z0-9]/g, '').slice(0, 8);
+  const fallback = `reading-${shortId || 'download'}.md`;
+  if (!disposition) return fallback;
+  const match = disposition.match(/filename="([^"]+)"/i);
+  const candidate = match?.[1]?.split(/[\\/]/).pop()?.trim();
+  return candidate && candidate.toLowerCase().endsWith('.md') ? candidate : fallback;
+}
 
 interface MemoryPromotionResponse {
   memory_id: string;
@@ -195,6 +220,68 @@ class DialecticAPI {
     const query = kind ? `?kind=${encodeURIComponent(kind)}` : '';
     return this.fetch(`/rooms/${roomId}/workspace/objects${query}`);
   }
+
+  /** The complete room Library, unlike the 50-row metadata projection used by
+   * the other workspace scenes. Search and filters execute in PostgreSQL. */
+  async getReadingLibrary(
+    roomId: string,
+    filters: ReadingLibraryFilters = {},
+  ): Promise<ReadingLibraryResponse> {
+    const params = new URLSearchParams();
+    const q = filters.q?.trim();
+    const site = filters.site?.trim();
+    const source = filters.source?.trim();
+    if (q) params.set('q', q);
+    if (site) params.set('site', site);
+    if (source) params.set('source', source);
+    if (filters.limit !== undefined) params.set('limit', String(filters.limit));
+    if (filters.before) params.set('before', filters.before);
+    const query = params.toString();
+    return this.fetch(
+      `/rooms/${roomId}/reading/library${query ? `?${query}` : ''}`,
+    );
+  }
+
+  async getReadingDetail(roomId: string, readingId: string): Promise<ReadingDetail> {
+    return this.fetch(
+      `/rooms/${roomId}/reading/${encodeURIComponent(readingId)}`,
+    );
+  }
+
+  /** Exact server bytes. A normal link cannot be used because both the JWT
+   * and room token are headers, and rebuilding a Blob from rendered HTML would
+   * violate the stored-hash contract. */
+  async fetchReadingMarkdown(
+    roomId: string,
+    readingId: string,
+  ): Promise<ReadingMarkdownDownload> {
+    const res = await window.fetch(
+      `${BASE}/rooms/${roomId}/reading/${encodeURIComponent(readingId)}/markdown`,
+      { headers: this.authHeaders() },
+    );
+    if (!res.ok) {
+      const data = await res.json().catch(() => null) as { detail?: string } | null;
+      throw new ApiError(data?.detail ?? `Reading download error: ${res.status}`, res.status);
+    }
+    const contentType = (res.headers.get('content-type') ?? '')
+      .split(';', 1)[0]
+      .trim()
+      .toLowerCase();
+    if (contentType !== 'text/markdown') {
+      throw new ApiError(
+        'Reading download returned the wrong content type',
+        502,
+      );
+    }
+    return {
+      blob: await res.blob(),
+      filename: markdownFilename(
+        res.headers.get('content-disposition'),
+        readingId,
+      ),
+    };
+  }
+
   /**
    * The room's proposals, normalized (design v2 §8.3–8.4).
    *
