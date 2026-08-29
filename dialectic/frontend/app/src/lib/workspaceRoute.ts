@@ -98,6 +98,19 @@ export function scenesForDestination(
  * approved-but-unimplemented scene (`field`), and an implemented scene that
  * does not belong here (`bench` at Home root).
  */
+/**
+ * Where Focus's "Open branch" lands. A branch jump is a jump to the
+ * transcript: from Library/Ledger/Field the thread used to change while the
+ * scene stayed put, so the tap looked like nothing happened (2026-08-29).
+ * Object-only navigation (close, select another object) keeps the scene.
+ */
+export function sceneAfterFocusNavigate(
+  current: WorkspaceScene,
+  threadId: string | undefined,
+): WorkspaceScene {
+  return threadId ? 'record' : current
+}
+
 export function resolveWorkspaceScene(
   room: Pick<UserRoom, 'is_home'>,
   thread: Pick<Thread, 'parent_thread_id'>,

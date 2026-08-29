@@ -7,6 +7,7 @@ import {
   destinationFromSearch,
   destinationUrl,
   resolveWorkspaceScene,
+  sceneAfterFocusNavigate,
   scenesForDestination,
 } from './workspaceRoute'
 
@@ -286,5 +287,18 @@ describe('the view axis (World Lens)', () => {
   it('survives the Home-root entry fallback', () => {
     const parsed = destinationFromSearch('?scene=atlas&view=world')
     expect(entryDestination(parsed).view).toBe('world')
+  })
+})
+
+describe('Focus "Open branch"', () => {
+  // The bug this pins: from Library the thread changed but the scene stayed
+  // `library`, so the transcript never appeared (audit 2026-08-29).
+  it('lands on the Record when a thread is named', () => {
+    expect(sceneAfterFocusNavigate('library', 't1')).toBe('record')
+    expect(sceneAfterFocusNavigate('field', 't1')).toBe('record')
+  })
+
+  it('keeps the scene for object-only moves', () => {
+    expect(sceneAfterFocusNavigate('library', undefined)).toBe('library')
   })
 })

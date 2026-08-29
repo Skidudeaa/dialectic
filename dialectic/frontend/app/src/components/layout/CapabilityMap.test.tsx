@@ -160,4 +160,18 @@ describe('CapabilityMap', () => {
     expect(screen.getByText(/0 is perfect, 1 is perfectly wrong/)).toBeInTheDocument()
     expect(screen.getByText('Brier score')).toBeInTheDocument()
   })
+
+  it('says WHY a job that ships dark is off, and only while it is off', async () => {
+    vi.mocked(api.getRoomCapabilities).mockResolvedValue(caps({
+      jobs: [
+        { name: 'rss_wire', enabled: false, interval_s: 900, daily_at: null },
+        { name: 'world_signals', enabled: true, interval_s: 120, daily_at: null },
+      ],
+    }))
+    render(<CapabilityMap roomId="r1" />)
+    const rss = await screen.findByText(/Watchlist feeds/)
+    expect(rss.closest('li')?.textContent).toMatch(/no room lists a feed/)
+    expect(screen.getByText(/Live world signals/).closest('li')?.textContent)
+      .not.toMatch(/nothing reads/)
+  })
 })

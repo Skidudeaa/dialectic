@@ -383,4 +383,7 @@ def register_rss_wire_jobs(scheduler) -> None:
     scheduler.register(Job(
         "rss_wire", 900, rss_wire_watch,
         enabled_env="RSS_WIRE_ENABLED",
+        # Dark until set: no room in production lists a feed to watch, and
+        # 671 empty passes a week is not a feature (audit 2026-08-29).
+        enabled_default=False,
     ))

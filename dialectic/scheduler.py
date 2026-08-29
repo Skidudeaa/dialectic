@@ -65,11 +65,16 @@ class Job:
     # instead of interval buckets. interval_s is unused when daily_at is set.
     daily_at: Optional[str] = None
     daily_tz: Optional[str] = None
+    # What an UNSET enabled_env means. False for jobs whose inputs must be
+    # configured first (a watchlist, a signal adapter): they ship dark and
+    # the owner turns them on, instead of running hundreds of empty passes.
+    enabled_default: bool = True
 
     def enabled(self) -> bool:
         if not self.enabled_env:
             return True
-        val = os.environ.get(self.enabled_env, "1").strip().lower()
+        default = "1" if self.enabled_default else "0"
+        val = os.environ.get(self.enabled_env, default).strip().lower()
         return val not in ("0", "false", "no", "off")
 
 

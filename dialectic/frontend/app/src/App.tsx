@@ -40,7 +40,7 @@ import { MirrorPanel } from './components/workspace/MirrorPanel'
 import { FocusSurface } from './components/workspace/focus/FocusSurface.tsx'
 import { bareMarkId } from './components/workspace/fieldDisplay.ts'
 import { TradingPanel } from './components/trading/TradingPanel'
-import { scenesForDestination } from './lib/workspaceRoute.ts'
+import { sceneAfterFocusNavigate, scenesForDestination } from './lib/workspaceRoute.ts'
 import { useWorkspaceObjects } from './hooks/useWorkspaceObjects.ts'
 import { useFieldMarks } from './hooks/useFieldMarks.ts'
 import { useAtlas } from './hooks/useAtlas.ts'
@@ -898,10 +898,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     void navigate({
       roomId: currentRoom.id,
       threadId: target.threadId ?? currentThread?.id ?? null,
-      // A branch jump is a jump to the transcript: from Library/Ledger/Field
-      // the thread used to change while the scene stayed put, so 'Open
-      // branch' looked like nothing happened.
-      scene: target.threadId ? 'record' : workspaceScene,
+      scene: sceneAfterFocusNavigate(workspaceScene, target.threadId),
       object: target.object,
       messageId: target.messageId ?? null,
     }, target.historyMode ?? 'push')

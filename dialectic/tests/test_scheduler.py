@@ -41,6 +41,13 @@ class TestJobEnabled:
         job = Job("x", 60, None, enabled_env="MY_JOB_FLAG")
         assert job.enabled()
 
+    def test_enabled_default_false_ships_dark_until_set(self, monkeypatch):
+        monkeypatch.delenv("MY_JOB_FLAG", raising=False)
+        job = Job("x", 60, None, enabled_env="MY_JOB_FLAG", enabled_default=False)
+        assert not job.enabled()
+        monkeypatch.setenv("MY_JOB_FLAG", "1")
+        assert job.enabled()
+
 
 class FakeConn:
     """Ledger-conflict simulator: first insert per (job, bucket) wins."""

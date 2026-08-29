@@ -41,6 +41,8 @@ interface JobCopy {
   what: string
   /** Glossary key, when the label is a term this product defines elsewhere. */
   term?: string
+  /** Why this job ships dark, shown only while it is off. */
+  off?: string
   /**
    * The weekday of a job whose real rhythm lives in its BODY, where the Job
    * dataclass cannot see it.
@@ -80,10 +82,12 @@ const JOB_COPY: Record<string, JobCopy> = {
   rss_wire: {
     label: 'Watchlist feeds',
     what: 'reads the feeds this room watches and files what bears on the thesis — spending the same daily interruption budget as the wire, not a second one',
+    off: 'no room lists a feed to watch yet; it stays dark until one does.',
   },
   congress_watch: {
     label: 'Disclosures',
     what: 'congressional stock filings, kept only where this room’s thesis already names the ticker — filed to the Library rather than interrupting, though the Library is read by the morning brief and by Echo',
+    off: 'dark until the filings dataset is verified.',
   },
   question_round: {
     label: 'The Round',
@@ -109,6 +113,7 @@ const JOB_COPY: Record<string, JobCopy> = {
     label: 'Live world signals',
     term: 'world-signal',
     what: 'polls public feeds — aircraft, earthquakes, fires, satellites, launches — for the areas your rooms have actually placed on the map, and shows what is there right now; each observation expires on its own, and placing one is yours alone',
+    off: 'nothing reads what it gathers yet, so it stays dark rather than poll unseen.',
   },
   field_inference: {
     label: 'Field marks',
@@ -246,6 +251,7 @@ export function CapabilityMap({ roomId }: { roomId: string }) {
                         : (copy?.label ?? job.name)}
                     </strong>
                     {copy ? ` — ${copy.what}` : ''}
+                    {!job.enabled && copy?.off ? ` Off: ${copy.off}` : ''}
                     <span className="capability-cadence"> · {cadence(job, copy?.weeklyOn)}</span>
                   </span>
                 </li>

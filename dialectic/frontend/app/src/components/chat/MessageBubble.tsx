@@ -187,13 +187,13 @@ function reasonHeadline(reason: string): string {
  * channel from a decision's `reason`. `source` says which scheduled job
  * WROTE this message's content; a decision's `reason` says WHY the
  * interjection engine gave a turn to a message at all. api/decisions.py's
- * own module docstring verifies (by reading every writer in llm/) that the
- * two channels are DISJOINT today: nothing that stamps `metadata.source`
- * also logs a decision, and nothing logged as a decision stamps
- * `metadata.source`. describeProvenance below is where the precedence for
- * the day that stops being true actually lives: metadata.source wins,
- * because it is the more specific claim ("this exact job wrote this exact
- * content") — the decision reason is never hidden, only secondary.
+ * own module docstring verified (by reading every writer in llm/) that the
+ * two channels were DISJOINT until 2026-08-29. Since then force_response
+ * stamps `source` = its decision reason (wire_interjection,
+ * silence_follow_up, protocol_active, forced) so the transcript can be
+ * queried without joining llm_decisions. Those messages carry BOTH; the
+ * decision wins below because it is the richer record, and its
+ * reasonHeadline already translates every one of those reasons.
  */
 function sourceHeadline(source: string): string | null {
   switch (source) {
