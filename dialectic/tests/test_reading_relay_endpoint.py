@@ -244,3 +244,15 @@ def test_bad_room_token_is_401(monkeypatch):
     fake_db = _make_db(room_token_valid=False)
     resp = _accept(fake_db, monkeypatch, AsyncMock(), AsyncMock())
     assert resp.status_code == 401
+
+
+def test_browser_current_conflict_does_not_stamp_proposal_accepted(monkeypatch):
+    fake_db = _make_db()
+    extract = AsyncMock(return_value=dict(ARTICLE))
+    save = AsyncMock(side_effect=relay.reading_mod.BrowserCaptureIsCurrent("browser current"))
+
+    resp = _accept(fake_db, monkeypatch, extract, save)
+
+    assert resp.status_code == 409
+    fake_db._succeed.assert_not_awaited()
+    fake_db._fail.assert_awaited_once()

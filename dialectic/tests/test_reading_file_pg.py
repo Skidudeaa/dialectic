@@ -16,6 +16,7 @@ Setup expected (skipped cleanly when absent):
 """
 
 import json
+import hashlib
 import os
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
@@ -229,3 +230,49 @@ async def test_filing_twice_does_not_duplicate_the_row(room):
     assert await room.fetchval(
         "SELECT count(*) FROM reading_items WHERE room_id = $1 AND url = $2", ROOM, URL,
     ) == 1
+
+
+@pytest.mark.asyncio
+async def test_file_route_reports_browser_authority_without_false_provenance(room):
+    markdown = "# Exact browser body\n\nThe browser artifact stays current.\n"
+    capture = {
+        "capture_id": _uid(0xB07),
+        "url": URL,
+        "canonical_url": URL,
+        "title": "Browser artifact",
+        "author": None,
+        "site": "example.test",
+        "published": None,
+        "description": None,
+        "language": "en",
+        "word_count": 8,
+        "capture_mode": "article",
+        "markdown": markdown,
+        "content_sha256": hashlib.sha256(markdown.encode()).hexdigest(),
+        "captured_at": BASE,
+        "note": None,
+        "extraction": {
+            "engine": "defuddle",
+            "engine_version": "0.19.3",
+            "client_version": "0.1.0",
+            "fallback_reason": None,
+        },
+    }
+    async with room.transaction():
+        await relay.reading_mod.save_browser_capture(
+            room,
+            room_id=ROOM,
+            captured_by_user_id=AMO,
+            capture=capture,
+        )
+
+    with pytest.raises(HTTPException) as exc:
+        await _file(room)
+    assert exc.value.status_code == 409
+    stored = await room.fetchrow(
+        "SELECT content, source_message_id, source FROM reading_items WHERE url = $1",
+        URL,
+    )
+    assert stored["content"] == markdown
+    assert stored["source_message_id"] is None
+    assert stored["source"] == "browser_capture"

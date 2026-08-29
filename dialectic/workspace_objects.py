@@ -176,11 +176,12 @@ class WorkspaceObject(BaseModel):
 _READINGS_SQL = """
 SELECT ri.id, ri.url, ri.title, ri.site, ri.summary, ri.source,
        ri.source_message_id, ri.saved_by_user_id, ri.created_at,
+       ri.current_captured_at,
        m.thread_id AS branch_id
 FROM reading_items ri
 LEFT JOIN messages m ON m.id = ri.source_message_id
 WHERE ri.room_id = $1
-ORDER BY ri.created_at DESC
+ORDER BY COALESCE(ri.current_captured_at, ri.created_at) DESC, ri.id DESC
 LIMIT $2
 """
 
@@ -393,7 +394,11 @@ class WorkspaceObjectService:
             if row["branch_id"] is not None:
                 actions.append("open_branch")
             updated = row["created_at"]
-            if twin is not None and twin["updated_at"] is not None:
+            if row["current_captured_at"] is not None:
+                # Twin enrichment runs after commit; it must not make evidence
+                # look newer than the browser state the user captured.
+                updated = row["current_captured_at"]
+            elif twin is not None and twin["updated_at"] is not None:
                 updated = max(updated, twin["updated_at"])
             objects.append(WorkspaceObject(
                 id=f"reading:{row['id']}",
