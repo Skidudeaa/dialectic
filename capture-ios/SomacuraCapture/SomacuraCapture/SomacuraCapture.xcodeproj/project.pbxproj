@@ -1,0 +1,809 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		C0DEB0010000000000000001 /* CaptureCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DEC0010000000000000001 /* CaptureCore.swift */; };
+		C0DEB0020000000000000002 /* CaptureCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DEC0010000000000000001 /* CaptureCore.swift */; };
+		C0DEB0030000000000000003 /* CredentialsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DEC0020000000000000002 /* CredentialsAPI.swift */; };
+		C0DEB0040000000000000004 /* CredentialsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DEC0020000000000000002 /* CredentialsAPI.swift */; };
+		C0DEB0050000000000000005 /* CaptureDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DEC0030000000000000003 /* CaptureDelivery.swift */; };
+		C0DEB0060000000000000006 /* CaptureDelivery.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DEC0030000000000000003 /* CaptureDelivery.swift */; };
+		C0DEB0070000000000000007 /* CaptureAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DEC0040000000000000004 /* CaptureAppModel.swift */; };
+		C0DEB0080000000000000008 /* CaptureViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DEC0050000000000000005 /* CaptureViews.swift */; };
+		C0DEB0090000000000000009 /* CaptureQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DEC0090000000000000009 /* CaptureQueueTests.swift */; };
+		C0DEB00A000000000000000A /* DialecticAPIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0DEC00A000000000000000A /* DialecticAPIClientTests.swift */; };
+		C0DEB00B000000000000000B /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C0DEC00C000000000000000C /* XCTest.framework */; };
+		5AF0F08930427A33002A46A9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AF0F08830427A33002A46A9 /* AppDelegate.swift */; };
+		5AF0F08D30427A33002A46A9 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = 5AF0F08B30427A33002A46A9 /* Main.html */; };
+		5AF0F08F30427A33002A46A9 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 5AF0F08E30427A33002A46A9 /* Icon.png */; };
+		5AF0F09130427A33002A46A9 /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = 5AF0F09030427A33002A46A9 /* Style.css */; };
+		5AF0F09330427A33002A46A9 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AF0F09230427A33002A46A9 /* SceneDelegate.swift */; };
+		5AF0F09530427A33002A46A9 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AF0F09430427A33002A46A9 /* ViewController.swift */; };
+		5AF0F09830427A33002A46A9 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 5AF0F09630427A33002A46A9 /* LaunchScreen.storyboard */; };
+		5AF0F09B30427A33002A46A9 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 5AF0F09930427A33002A46A9 /* Main.storyboard */; };
+		5AF0F0A330427A35002A46A9 /* SomacuraCapture Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5AF0F0A230427A35002A46A9 /* SomacuraCapture Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5AF0F0A830427A35002A46A9 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AF0F0A730427A35002A46A9 /* SafariWebExtensionHandler.swift */; };
+		5AF0F0AA30427A35002A46A9 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5AF0F09C30427A34002A46A9 /* Assets.xcassets */; };
+		5AF0F0B930427A35002A46A9 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 5AF0F0B530427A35002A46A9 /* background.js */; };
+		5AF0F0BA30427A35002A46A9 /* icons in Resources */ = {isa = PBXBuildFile; fileRef = 5AF0F0B630427A35002A46A9 /* icons */; };
+		5AF0F0BB30427A35002A46A9 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 5AF0F0B730427A35002A46A9 /* manifest.json */; };
+		5AF0F0BC30427A35002A46A9 /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 5AF0F0B830427A35002A46A9 /* content.js */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C0DEA3050000000000000305 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5AF0F07D30427A33002A46A9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5AF0F08430427A33002A46A9;
+			remoteInfo = SomacuraCapture;
+		};
+		5AF0F0A430427A35002A46A9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5AF0F07D30427A33002A46A9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5AF0F0A130427A35002A46A9;
+			remoteInfo = "SomacuraCapture Extension";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		5AF0F0B030427A35002A46A9 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				5AF0F0A330427A35002A46A9 /* SomacuraCapture Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		C0DEC0010000000000000001 /* CaptureCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureCore.swift; sourceTree = "<group>"; };
+		C0DEC0020000000000000002 /* CredentialsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialsAPI.swift; sourceTree = "<group>"; };
+		C0DEC0030000000000000003 /* CaptureDelivery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureDelivery.swift; sourceTree = "<group>"; };
+		C0DEC0040000000000000004 /* CaptureAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureAppModel.swift; sourceTree = "<group>"; };
+		C0DEC0050000000000000005 /* CaptureViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureViews.swift; sourceTree = "<group>"; };
+		C0DEC0060000000000000006 /* SomacuraCapture.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SomacuraCapture.entitlements; sourceTree = "<group>"; };
+		C0DEC0070000000000000007 /* SomacuraCaptureExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SomacuraCaptureExtension.entitlements; sourceTree = "<group>"; };
+		C0DEC0080000000000000008 /* CaptureConfiguration.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = CaptureConfiguration.xcconfig; sourceTree = "<group>"; };
+		C0DEC0090000000000000009 /* CaptureQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureQueueTests.swift; sourceTree = "<group>"; };
+		C0DEC00A000000000000000A /* DialecticAPIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DialecticAPIClientTests.swift; sourceTree = "<group>"; };
+		C0DEC00B000000000000000B /* SomacuraCaptureTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SomacuraCaptureTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0DEC00C000000000000000C /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		5AF0F08530427A33002A46A9 /* SomacuraCapture.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SomacuraCapture.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5AF0F08830427A33002A46A9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		5AF0F08C30427A33002A46A9 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
+		5AF0F08E30427A33002A46A9 /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
+		5AF0F09030427A33002A46A9 /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
+		5AF0F09230427A33002A46A9 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		5AF0F09430427A33002A46A9 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		5AF0F09730427A33002A46A9 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		5AF0F09A30427A33002A46A9 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		5AF0F09C30427A34002A46A9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		5AF0F09D30427A34002A46A9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		5AF0F0A230427A35002A46A9 /* SomacuraCapture Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "SomacuraCapture Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		5AF0F0A730427A35002A46A9 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		5AF0F0A930427A35002A46A9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		5AF0F0B530427A35002A46A9 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = Resources/background.js; sourceTree = "<group>"; };
+		5AF0F0B630427A35002A46A9 /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = Resources/icons; sourceTree = "<group>"; };
+		5AF0F0B730427A35002A46A9 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = Resources/manifest.json; sourceTree = "<group>"; };
+		5AF0F0B830427A35002A46A9 /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = content.js; path = Resources/content.js; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5AF0F08230427A33002A46A9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C0DEA2020000000000000202 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0DEB00B000000000000000B /* XCTest.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5AF0F09F30427A35002A46A9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5AF0F07C30427A33002A46A9 = {
+			isa = PBXGroup;
+			children = (
+				C0DEA1010000000000000001 /* Shared */,
+				C0DEA1020000000000000002 /* Configuration */,
+				C0DEA1030000000000000003 /* SomacuraCaptureTests */,
+				C0DEA1040000000000000004 /* Frameworks */,
+				5AF0F08730427A33002A46A9 /* SomacuraCapture */,
+				5AF0F0A630427A35002A46A9 /* SomacuraCapture Extension */,
+				5AF0F08630427A33002A46A9 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5AF0F08630427A33002A46A9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				5AF0F08530427A33002A46A9 /* SomacuraCapture.app */,
+				5AF0F0A230427A35002A46A9 /* SomacuraCapture Extension.appex */,
+				C0DEC00B000000000000000B /* SomacuraCaptureTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5AF0F08730427A33002A46A9 /* SomacuraCapture */ = {
+			isa = PBXGroup;
+			children = (
+				C0DEC0040000000000000004 /* CaptureAppModel.swift */,
+				C0DEC0050000000000000005 /* CaptureViews.swift */,
+				C0DEC0060000000000000006 /* SomacuraCapture.entitlements */,
+				5AF0F08830427A33002A46A9 /* AppDelegate.swift */,
+				5AF0F09230427A33002A46A9 /* SceneDelegate.swift */,
+				5AF0F09430427A33002A46A9 /* ViewController.swift */,
+				5AF0F09630427A33002A46A9 /* LaunchScreen.storyboard */,
+				5AF0F09930427A33002A46A9 /* Main.storyboard */,
+				5AF0F09C30427A34002A46A9 /* Assets.xcassets */,
+				5AF0F09D30427A34002A46A9 /* Info.plist */,
+				5AF0F08A30427A33002A46A9 /* Resources */,
+			);
+			path = SomacuraCapture;
+			sourceTree = "<group>";
+		};
+		5AF0F08A30427A33002A46A9 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				5AF0F08B30427A33002A46A9 /* Main.html */,
+				5AF0F08E30427A33002A46A9 /* Icon.png */,
+				5AF0F09030427A33002A46A9 /* Style.css */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		5AF0F0A630427A35002A46A9 /* SomacuraCapture Extension */ = {
+			isa = PBXGroup;
+			children = (
+				C0DEC0070000000000000007 /* SomacuraCaptureExtension.entitlements */,
+				5AF0F0B430427A35002A46A9 /* Resources */,
+				5AF0F0A730427A35002A46A9 /* SafariWebExtensionHandler.swift */,
+				5AF0F0A930427A35002A46A9 /* Info.plist */,
+			);
+			path = "SomacuraCapture Extension";
+			sourceTree = "<group>";
+		};
+		5AF0F0B430427A35002A46A9 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				5AF0F0B530427A35002A46A9 /* background.js */,
+				5AF0F0B630427A35002A46A9 /* icons */,
+				5AF0F0B730427A35002A46A9 /* manifest.json */,
+				5AF0F0B830427A35002A46A9 /* content.js */,
+			);
+			name = Resources;
+			path = "SomacuraCapture Extension";
+			sourceTree = SOURCE_ROOT;
+		};
+		C0DEA1010000000000000001 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				C0DEC0010000000000000001 /* CaptureCore.swift */,
+				C0DEC0020000000000000002 /* CredentialsAPI.swift */,
+				C0DEC0030000000000000003 /* CaptureDelivery.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		C0DEA1020000000000000002 /* Configuration */ = {
+			isa = PBXGroup;
+			children = (
+				C0DEC0080000000000000008 /* CaptureConfiguration.xcconfig */,
+			);
+			path = Configuration;
+			sourceTree = "<group>";
+		};
+		C0DEA1030000000000000003 /* SomacuraCaptureTests */ = {
+			isa = PBXGroup;
+			children = (
+				C0DEC0090000000000000009 /* CaptureQueueTests.swift */,
+				C0DEC00A000000000000000A /* DialecticAPIClientTests.swift */,
+			);
+			path = SomacuraCaptureTests;
+			sourceTree = "<group>";
+		};
+		C0DEA1040000000000000004 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				C0DEC00C000000000000000C /* XCTest.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		C0DEA3010000000000000301 /* SomacuraCaptureTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0DEA3020000000000000302 /* Build configuration list for PBXNativeTarget "SomacuraCaptureTests" */;
+			buildPhases = (
+				C0DEA2010000000000000201 /* Sources */,
+				C0DEA2020000000000000202 /* Frameworks */,
+				C0DEA2030000000000000203 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C0DEA3060000000000000306 /* PBXTargetDependency */,
+			);
+			name = SomacuraCaptureTests;
+			packageProductDependencies = (
+			);
+			productName = SomacuraCaptureTests;
+			productReference = C0DEC00B000000000000000B /* SomacuraCaptureTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		5AF0F08430427A33002A46A9 /* SomacuraCapture */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5AF0F0B130427A35002A46A9 /* Build configuration list for PBXNativeTarget "SomacuraCapture" */;
+			buildPhases = (
+				5AF0F08130427A33002A46A9 /* Sources */,
+				5AF0F08230427A33002A46A9 /* Frameworks */,
+				5AF0F08330427A33002A46A9 /* Resources */,
+				5AF0F0B030427A35002A46A9 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5AF0F0A530427A35002A46A9 /* PBXTargetDependency */,
+			);
+			name = SomacuraCapture;
+			packageProductDependencies = (
+			);
+			productName = SomacuraCapture;
+			productReference = 5AF0F08530427A33002A46A9 /* SomacuraCapture.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5AF0F0A130427A35002A46A9 /* SomacuraCapture Extension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5AF0F0AD30427A35002A46A9 /* Build configuration list for PBXNativeTarget "SomacuraCapture Extension" */;
+			buildPhases = (
+				5AF0F09E30427A35002A46A9 /* Sources */,
+				5AF0F09F30427A35002A46A9 /* Frameworks */,
+				5AF0F0A030427A35002A46A9 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "SomacuraCapture Extension";
+			packageProductDependencies = (
+			);
+			productName = "SomacuraCapture Extension";
+			productReference = 5AF0F0A230427A35002A46A9 /* SomacuraCapture Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5AF0F07D30427A33002A46A9 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2660;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					C0DEA3010000000000000301 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 5AF0F08430427A33002A46A9;
+					};
+					5AF0F08430427A33002A46A9 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					5AF0F0A130427A35002A46A9 = {
+						CreatedOnToolsVersion = 26.6;
+					};
+				};
+			};
+			buildConfigurationList = 5AF0F08030427A33002A46A9 /* Build configuration list for PBXProject "SomacuraCapture" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 5AF0F07C30427A33002A46A9;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5AF0F08630427A33002A46A9 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				5AF0F08430427A33002A46A9 /* SomacuraCapture */,
+				5AF0F0A130427A35002A46A9 /* SomacuraCapture Extension */,
+				C0DEA3010000000000000301 /* SomacuraCaptureTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C0DEA2030000000000000203 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5AF0F08330427A33002A46A9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5AF0F08F30427A33002A46A9 /* Icon.png in Resources */,
+				5AF0F09B30427A33002A46A9 /* Main.storyboard in Resources */,
+				5AF0F09830427A33002A46A9 /* LaunchScreen.storyboard in Resources */,
+				5AF0F08D30427A33002A46A9 /* Main.html in Resources */,
+				5AF0F0AA30427A35002A46A9 /* Assets.xcassets in Resources */,
+				5AF0F09130427A33002A46A9 /* Style.css in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5AF0F0A030427A35002A46A9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5AF0F0BC30427A35002A46A9 /* content.js in Resources */,
+				5AF0F0B930427A35002A46A9 /* background.js in Resources */,
+				5AF0F0BB30427A35002A46A9 /* manifest.json in Resources */,
+				5AF0F0BA30427A35002A46A9 /* icons in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		C0DEA2010000000000000201 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0DEB0090000000000000009 /* CaptureQueueTests.swift in Sources */,
+				C0DEB00A000000000000000A /* DialecticAPIClientTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5AF0F08130427A33002A46A9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0DEB0010000000000000001 /* CaptureCore.swift in Sources */,
+				C0DEB0030000000000000003 /* CredentialsAPI.swift in Sources */,
+				C0DEB0050000000000000005 /* CaptureDelivery.swift in Sources */,
+				C0DEB0070000000000000007 /* CaptureAppModel.swift in Sources */,
+				C0DEB0080000000000000008 /* CaptureViews.swift in Sources */,
+				5AF0F09530427A33002A46A9 /* ViewController.swift in Sources */,
+				5AF0F08930427A33002A46A9 /* AppDelegate.swift in Sources */,
+				5AF0F09330427A33002A46A9 /* SceneDelegate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5AF0F09E30427A35002A46A9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0DEB0020000000000000002 /* CaptureCore.swift in Sources */,
+				C0DEB0040000000000000004 /* CredentialsAPI.swift in Sources */,
+				C0DEB0060000000000000006 /* CaptureDelivery.swift in Sources */,
+				5AF0F0A830427A35002A46A9 /* SafariWebExtensionHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C0DEA3060000000000000306 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5AF0F08430427A33002A46A9 /* SomacuraCapture */;
+			targetProxy = C0DEA3050000000000000305 /* PBXContainerItemProxy */;
+		};
+		5AF0F0A530427A35002A46A9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5AF0F0A130427A35002A46A9 /* SomacuraCapture Extension */;
+			targetProxy = 5AF0F0A430427A35002A46A9 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		5AF0F08B30427A33002A46A9 /* Main.html */ = {
+			isa = PBXVariantGroup;
+			children = (
+				5AF0F08C30427A33002A46A9 /* Base */,
+			);
+			name = Main.html;
+			sourceTree = "<group>";
+		};
+		5AF0F09630427A33002A46A9 /* LaunchScreen.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				5AF0F09730427A33002A46A9 /* Base */,
+			);
+			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+		5AF0F09930427A33002A46A9 /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				5AF0F09A30427A33002A46A9 /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		C0DEA3030000000000000303 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0DEC0080000000000000008 /* CaptureConfiguration.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SOMACURA_BUNDLE_PREFIX).SomacuraCaptureTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SomacuraCapture.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SomacuraCapture";
+			};
+			name = Debug;
+		};
+		C0DEA3040000000000000304 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0DEC0080000000000000008 /* CaptureConfiguration.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SOMACURA_BUNDLE_PREFIX).SomacuraCaptureTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SomacuraCapture.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SomacuraCapture";
+			};
+			name = Release;
+		};
+		5AF0F0AB30427A35002A46A9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		5AF0F0AC30427A35002A46A9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		5AF0F0AE30427A35002A46A9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0DEC0080000000000000008 /* CaptureConfiguration.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "SomacuraCapture Extension/SomacuraCaptureExtension.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "SomacuraCapture Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "SomacuraCapture Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SOMACURA_BUNDLE_PREFIX).SomacuraCapture.Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		5AF0F0AF30427A35002A46A9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0DEC0080000000000000008 /* CaptureConfiguration.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "SomacuraCapture Extension/SomacuraCaptureExtension.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "SomacuraCapture Extension/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "SomacuraCapture Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SOMACURA_BUNDLE_PREFIX).SomacuraCapture.Extension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		5AF0F0B230427A35002A46A9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0DEC0080000000000000008 /* CaptureConfiguration.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = SomacuraCapture/SomacuraCapture.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SomacuraCapture/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SomacuraCapture;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SOMACURA_BUNDLE_PREFIX).SomacuraCapture";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		5AF0F0B330427A35002A46A9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0DEC0080000000000000008 /* CaptureConfiguration.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = SomacuraCapture/SomacuraCapture.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SomacuraCapture/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SomacuraCapture;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(SOMACURA_BUNDLE_PREFIX).SomacuraCapture";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		C0DEA3020000000000000302 /* Build configuration list for PBXNativeTarget "SomacuraCaptureTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0DEA3030000000000000303 /* Debug */,
+				C0DEA3040000000000000304 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5AF0F08030427A33002A46A9 /* Build configuration list for PBXProject "SomacuraCapture" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5AF0F0AB30427A35002A46A9 /* Debug */,
+				5AF0F0AC30427A35002A46A9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5AF0F0AD30427A35002A46A9 /* Build configuration list for PBXNativeTarget "SomacuraCapture Extension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5AF0F0AE30427A35002A46A9 /* Debug */,
+				5AF0F0AF30427A35002A46A9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5AF0F0B130427A35002A46A9 /* Build configuration list for PBXNativeTarget "SomacuraCapture" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5AF0F0B230427A35002A46A9 /* Debug */,
+				5AF0F0B330427A35002A46A9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 5AF0F07D30427A33002A46A9 /* Project object */;
+}
