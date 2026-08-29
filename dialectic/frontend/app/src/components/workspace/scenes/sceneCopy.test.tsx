@@ -1,6 +1,5 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { LibraryScene } from './LibraryScene'
 import { LedgerScene } from './LedgerScene'
 import { FieldScene } from './FieldScene'
 import { AtlasScene } from './AtlasScene'
@@ -21,7 +20,6 @@ const readyAtlas = {
 
 describe('scene copy reads as sentences', () => {
   it.each([
-    ['Library', <LibraryScene state={ready} />],
     ['Ledger', <LedgerScene state={ready} />],
     ['Field', <FieldScene state={readyMarks} objects={ready} />],
     ['Atlas', <AtlasScene state={readyAtlas} onNavigate={vi.fn()} />],

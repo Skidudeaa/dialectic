@@ -1144,3 +1144,31 @@ unchanged at ~768 KiB precache; Cesium stays in its own on-demand chunk).
 **Not deployed by this commit.** Both units run their git working trees, so
 the deploy is the usual ritual: no migration is needed (nothing here touches
 the schema), then `systemctl restart dialectic` and a frontend release flip.
+
+## Amendment 2026-08-28 — Somacura Capture / Reading Rail (local, not activated)
+
+`feat/ipad-reading-rail` adds a native iPad Safari capture appliance and the
+server/Library vertical slice. Production remains on migration 022 until the
+owner separately authorizes migration 023 and deployment.
+
+- `POST /rooms/{id}/reading/capture` accepts exact rendered Markdown after JWT,
+  room-token, membership, UTF-8 byte-limit, URL, and SHA-256 verification. It
+  never refetches and never calls an LLM.
+- `reading_revisions` is immutable browser evidence. `capture_id` is global
+  idempotency; `(captured_at, received_at, revision_id)` determines current
+  order; raw/canonical URL aliases converge on one `reading_items` ID.
+- A current browser artifact cannot be overwritten by legacy server refetch.
+  Proposal/file routes return 409 without acceptance/provenance mutation; a
+  newer browser capture is the revision door.
+- The existing Library now uses room-fenced PostgreSQL FTS/filter/cursor list,
+  direct detail, exact Markdown download, sanitized rendering, raw copy, and
+  revision metadata. The workspace reading/twin still projects once.
+- `capture-ios/` contains the MV3 no-popup WebExtension and converter-generated
+  SwiftUI app/extension. App Group files are the commit point before network;
+  tokens stay in shared Keychain. The checked-in signing prefix is explicitly
+  unconfigured and simulator-only.
+- Local gates: backend 2188 passed / 4 browser-only skipped, frontend 629,
+  WebExtension 16, native XCTest 17, signed Simulator app launch, and isolated built-PWA
+  search/detail/copy/download with downloaded SHA matching PostgreSQL. Physical
+  iPad, registered App Group/Keychain, Simulator Safari toolbar action, migration,
+  restart, frontend release, TestFlight, and production are UNVERIFIED.

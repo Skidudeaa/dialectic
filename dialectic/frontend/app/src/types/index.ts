@@ -185,6 +185,93 @@ export interface ReadingProposal {
   accepted?: boolean;
 }
 
+/** Browser-capture modes persisted by reading_revisions. Legacy readings have
+ * no capture mode because they predate immutable browser revisions. */
+export type ReadingCaptureMode = 'selection' | 'article' | 'page_fallback';
+
+/** One newest-first row from GET /rooms/{room}/reading/library. */
+export interface ReadingLibraryItem {
+  id: string;
+  url: string;
+  title: string | null;
+  author: string | null;
+  site: string | null;
+  published: string | null;
+  summary: string;
+  source: string;
+  saved_by_user_id: string | null;
+  created_at: string;
+  current_captured_at: string | null;
+  content_sha256: string | null;
+  current_revision_id: string | null;
+  revision_count: number;
+  capture_mode: ReadingCaptureMode | null;
+}
+
+export interface ReadingLibraryResponse {
+  items: ReadingLibraryItem[];
+  next_before: string | null;
+}
+
+export interface ReadingRevisionExtraction {
+  engine?: string;
+  engine_version?: string;
+  client_version?: string;
+  fallback_reason?: string | null;
+}
+
+/** Immutable browser-capture revision metadata. The body stays on the server;
+ * release 1 renders and exports only the logical reading's current Markdown. */
+export interface ReadingRevision {
+  id: string;
+  capture_id: string;
+  capture_mode: ReadingCaptureMode;
+  content_sha256: string;
+  captured_at: string;
+  received_at: string;
+  captured_by_user_id: string;
+  actor_name: string;
+  is_current: boolean;
+  extraction: ReadingRevisionExtraction;
+  note: string | null;
+}
+
+/** Room-fenced logical reading plus its exact current Markdown. */
+export interface ReadingDetail {
+  id: string;
+  room_id: string;
+  url: string;
+  title: string | null;
+  author: string | null;
+  site: string | null;
+  published: string | null;
+  word_count: number | null;
+  markdown: string;
+  summary: string;
+  key_claims: string[];
+  source: string;
+  source_message_id: string | null;
+  saved_by_user_id: string | null;
+  created_at: string;
+  current_revision_id: string | null;
+  current_captured_at: string | null;
+  content_sha256: string | null;
+  revisions: ReadingRevision[];
+}
+
+export interface ReadingLibraryFilters {
+  q?: string;
+  site?: string;
+  source?: string;
+  limit?: number;
+  before?: string;
+}
+
+export interface ReadingMarkdownDownload {
+  blob: Blob;
+  filename: string;
+}
+
 /**
  * The deadline watcher's proposed resolution for a logged prediction. The
  * proposal writes nothing; a human tapping Mark correct/incorrect relays
