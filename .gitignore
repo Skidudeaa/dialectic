@@ -6,6 +6,10 @@ node_modules/
 
 # Generated build output
 dist/
+# The Safari converter consumes this reviewed extension bundle directly; it is
+# a release input, not an incidental frontend build directory.
+!capture-ios/web-extension/dist/
+!capture-ios/web-extension/dist/**
 *.tsbuildinfo
 
 # Generated planning/search indexes

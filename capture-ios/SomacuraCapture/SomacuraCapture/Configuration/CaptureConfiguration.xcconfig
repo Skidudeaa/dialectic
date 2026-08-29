@@ -1,0 +1,4 @@
+// Operational signing inputs. Replace this one prefix only after the owner
+// registers the app IDs and App Group; the checked-in value is simulator-only.
+SOMACURA_BUNDLE_PREFIX = com.example.unconfigured
+SOMACURA_APP_GROUP_IDENTIFIER = group.$(SOMACURA_BUNDLE_PREFIX).SomacuraCapture
