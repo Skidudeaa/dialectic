@@ -369,6 +369,25 @@ async def test_reading_and_its_twin_project_as_one_object(workroom):
 
 
 @pytest.mark.asyncio
+async def test_browser_recapture_time_is_the_reading_freshness(workroom):
+    captured_at = BASE + timedelta(hours=1)
+    await workroom.execute(
+        """UPDATE reading_items SET current_captured_at = $1
+             WHERE room_id = $2 AND url = $3""",
+        captured_at, ROOM, READING_URL,
+    )
+    await workroom.execute(
+        """UPDATE memories SET updated_at = $1
+             WHERE room_id = $2 AND key LIKE 'reading:%'""",
+        captured_at + timedelta(days=1), ROOM,
+    )
+
+    objects = await WorkspaceObjectService(workroom).build(ROOM, AMO)
+    projected = next(obj for obj in objects if obj.kind == "reading")
+    assert projected.updated_at == captured_at
+
+
+@pytest.mark.asyncio
 async def test_dossier_sql_excludes_the_reading_namespace_by_itself(workroom):
     """Assert the guard WHERE IT LIVES.
 
