@@ -4,7 +4,7 @@ Setup expected (skipped cleanly when absent):
     createdb dialectic_test && psql dialectic_test -f schema.sql
     psql dialectic_test -f migrations/013_home_base.sql
     psql dialectic_test -f migrations/014_reading_library.sql
-    psql dialectic_test -f migrations/023_reading_capture_revisions.sql
+    psql dialectic_test -f migrations/024_reading_capture_revisions.sql
 """
 
 import hashlib
@@ -83,7 +83,7 @@ async def db():
         return
     if not await conn.fetchval("SELECT to_regclass('reading_revisions')"):
         await conn.close()
-        pytest.skip("reading_revisions missing — run migration 023")
+        pytest.skip("reading_revisions missing — run migration 024")
     for typename in ("jsonb", "json"):
         await conn.set_type_codec(
             typename, encoder=json.dumps, decoder=json.loads, schema="pg_catalog",

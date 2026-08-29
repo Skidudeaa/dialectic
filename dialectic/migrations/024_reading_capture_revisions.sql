@@ -1,4 +1,4 @@
--- Immutable evidence for direct Safari captures. reading_items remains the
+-- 024: immutable evidence for direct Safari captures. reading_items remains the
 -- current searchable projection; every browser body is retained here exactly.
 
 ALTER TABLE reading_items
