@@ -187,3 +187,8 @@ the feed to be integrated, not merely lit.
   them; World draws a fire sized by FRP and rings only a NEW one.
 
 AISStream and OpenSky remain CLOSED / EXCLUDED exactly as recorded above.
+
+Later the same night: the `WORLD_DAILY_CAP` became per layer (a fire is not an airliner's
+budget), and `deploy/backfill_firms_baseline.py` seeded the ten days before activation (48 calls,
+29,087 pixels, 1,733 baseline rows) so the cold-start burst never reached the participant: with
+history, today's Persian Gulf cells scored 4 novel of 98, all under 5 MW.

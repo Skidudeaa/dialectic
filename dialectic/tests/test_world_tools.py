@@ -623,6 +623,7 @@ async def test_world_query_overview_reports_per_scope_counts(db):
             "scope_id": f"geo_scope:{scope_id}",
             "scope_label": "Strait of Hormuz (approx.)",
             "count": 2,
+            "new_fires": 0,
             "newest_at": out["observations"][0]["newest_at"],
         }
     ]

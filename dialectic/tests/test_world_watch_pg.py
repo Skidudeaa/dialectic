@@ -543,3 +543,64 @@ async def test_a_re_seen_cell_day_refreshes_frp_and_keeps_its_verdict(room, isol
     assert row["details"]["frp_mw"] == 45.0          # refreshed
     assert row["details"]["novel"] is True           # verdict survived the merge
     assert row["label"] == "Fire · 45 MW · h conf · NEW vs 30-day baseline"
+
+
+@pytest.mark.asyncio
+async def test_the_daily_cap_is_per_layer_so_aircraft_churn_cannot_silence_a_fire(
+    room, isolated_signal_store, monkeypatch,
+):
+    db, scope_id = room
+    await _bind_scope_to_node(db, scope_id)
+    calls: list = []
+    monkeypatch.setattr(world_watch.LLMOrchestrator, "force_response", _fake_force_response(calls))
+    ctx = _ctx()
+    # Aircraft spend the whole day's budget.
+    for i in range(world_watch.WORLD_DAILY_CAP):
+        isolated_signal_store.replace(_snapshot("adsb", _signal("adsb", f"ac-{i}", *INSIDE, layer="aircraft")))
+        assert (await world_watch._process_room(ctx, db, ROOM))["interjected"] is True
+    isolated_signal_store.replace(_snapshot("adsb", _signal("adsb", "ac-over", *INSIDE, layer="aircraft")))
+    assert (await world_watch._process_room(ctx, db, ROOM))["interjected"] is False
+    assert len(calls) == world_watch.WORLD_DAILY_CAP
+    stamped = await db.fetchval(
+        "SELECT metadata->'world_layers' FROM messages WHERE metadata->>'source' = $1 LIMIT 1",
+        world_watch.INTERJECTION_REASON,
+    )
+    assert stamped == ["aircraft"]
+
+    # A novel hot fire still gets its own turn.
+    isolated_signal_store.replace(_snapshot("firms", _fire("d30.cellZ", cell="26.30,56.50")))
+    detail = await world_watch._process_room(ctx, db, ROOM)
+    assert detail["interjected"] is True
+    assert len(calls) == world_watch.WORLD_DAILY_CAP + 1
+    assert "FRP 30.0 MW" in calls[-1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_interjection_names_the_recurring_flare_field_beside_the_new_cell(
+    room, isolated_signal_store, monkeypatch,
+):
+    db, scope_id = room
+    await _bind_scope_to_node(db, scope_id)
+    calls: list = []
+    monkeypatch.setattr(world_watch.LLMOrchestrator, "force_response", _fake_force_response(calls))
+    ctx = _ctx()
+    # Yesterday: two cells burn (both novel on day one -> one turn).
+    isolated_signal_store.replace(_snapshot(
+        "firms",
+        _fire("d29.a", acq_date="2026-08-29", cell="26.20,56.40"),
+        _fire("d29.b", acq_date="2026-08-29", cell="26.21,56.41", lon=56.41, lat=26.21),
+    ))
+    await world_watch._process_room(ctx, db, ROOM)
+    # Today: the same two recur and a third cell is new.
+    isolated_signal_store.replace(_snapshot(
+        "firms",
+        _fire("d30.a", cell="26.20,56.40"),
+        _fire("d30.b", cell="26.21,56.41", lon=56.41, lat=26.21),
+        _fire("d30.c", cell="26.22,56.42", lon=56.42, lat=26.22, frp=55.0),
+    ))
+    detail = await world_watch._process_room(ctx, db, ROOM)
+    assert detail["interjected"] is True
+    content = calls[-1]["content"]
+    assert "FRP 55.0 MW" in content
+    assert "2 recurring fire cell(s)" in content
+    assert "d30.a" not in content and "d30.b" not in content  # flares are context, not contacts

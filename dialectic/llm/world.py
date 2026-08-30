@@ -409,7 +409,8 @@ LIMIT $3
 """
 
 _ROOM_OBSERVATION_COUNTS_SQL = """
-SELECT scope_id, count(*) AS n, max(last_seen_at) AS newest_at
+SELECT scope_id, count(*) AS n, max(last_seen_at) AS newest_at,
+       count(*) FILTER (WHERE layer = 'fires' AND (details->>'novel')::boolean) AS new_fires
 FROM world_observations
 WHERE room_id = $1 AND last_seen_at > now() - interval '24 hours'
 GROUP BY scope_id
@@ -449,6 +450,7 @@ async def _room_observation_counts(
             "scope_id": f"geo_scope:{row['scope_id']}",
             "scope_label": scope_labels.get(str(row["scope_id"]), ""),
             "count": row["n"],
+            "new_fires": row["new_fires"],
             "newest_at": row["newest_at"].isoformat() if row["newest_at"] else None,
         }
         for row in rows

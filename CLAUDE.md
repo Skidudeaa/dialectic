@@ -343,3 +343,13 @@ first; WorldStrip shows `· N new fires`; `worldSignals.ts` sizes a fire by FRP
 and rings a NEW one. Cold start: day one is all-novel by construction.
 Known: the Hormuz room holds two live `human_confirmed` "Persian Gulf" scopes —
 every contact there persists twice; owner should retire one.
+
+Iteration, same night: **the daily cap is per layer** (`world_watch._interjections_today(conn, room, layer)`
+reads `messages.metadata.world_layers`, stamped beside the fingerprint; a pre-stamp turn counts
+against every layer) — aircraft churn can no longer silence a fire. The interjection names the
+recurring flare field beside the new cell ("Also in this scope today: N recurring fire cell(s)").
+`deploy/backfill_firms_baseline.py` seeded ten days of FIRMS history as `details.backfill` rows
+with `first/last_seen_at` = acquisition time (invisible to 24h readers, prior days for the scorer;
+mind that the live URL ends in day range 1 — the script swaps in `/5/<start>`); after it, today's
+Persian Gulf count went from 98 novel to 4, all under 5 MW. `world_query` overview counts carry
+`new_fires`.

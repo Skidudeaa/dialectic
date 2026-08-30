@@ -184,19 +184,27 @@ async def _score_fire(conn, room_id: UUID, scope_id: UUID, signal) -> dict:
     return verdict
 
 
-async def _interjections_today(conn, room_id) -> int:
-    """World interjections already posted in this room today (UTC day —
-    the wire/sweep `_interjections_today` pattern)."""
+async def _interjections_today(conn, room_id, layer: str) -> int:
+    """World interjections already posted in this room today (UTC day) that
+    spoke to THIS layer. The cap is per layer, not per room: the 08-30
+    memory's sharp edge was aircraft churn spending both daily turns before
+    a genuinely new fire arrived, and a fire and an airliner are not the
+    same budget. The layers a turn spoke to are stamped on the message
+    beside the fingerprint (`metadata.world_layers`); a turn from before
+    the stamp existed counts against every layer, conservatively."""
     start_of_day = datetime.now(timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0,
     )
     count = await conn.fetchval(
-        """SELECT COUNT(*) FROM llm_decisions
-           WHERE room_id = $1
-           AND should_interject
-           AND reason = $2
-           AND decided_at >= $3""",
-        room_id, INTERJECTION_REASON, start_of_day,
+        """SELECT COUNT(*)
+           FROM messages m
+           JOIN threads t ON t.id = m.thread_id
+           WHERE t.room_id = $1
+             AND m.metadata->>'source' = $2
+             AND m.created_at >= $3
+             AND (m.metadata->'world_layers' IS NULL
+                  OR m.metadata->'world_layers' ? $4)""",
+        room_id, INTERJECTION_REASON, start_of_day, layer,
     )
     return count or 0
 
@@ -230,13 +238,15 @@ _FIRE_NOTE = (
 )
 
 
-def _interjection_content(sections, signals_by_id: dict, fire_verdicts: Optional[dict] = None) -> str:
+def _interjection_content(sections, signals_by_id: dict, fire_info: Optional[dict] = None) -> str:
     """The synthetic SYSTEM turn: scope label, each new contact's
     label/layer/provider + credit, and the bound node ids with their
     relation — so the facilitator speaks to a thesis node, not a dot on a
     map."""
     lines = ["WORLD — new contacts just reported inside geography this room placed:"]
     fires_seen = False
+    fire_verdicts = (fire_info or {}).get("verdicts", {})
+    fire_recurring = (fire_info or {}).get("recurring", {})
     for scope, signal_ids, bindings in sections:
         scope_label = scope.label if scope is not None else "(scope)"
         lines.append(f"\nScope: {scope_label}")
@@ -249,7 +259,7 @@ def _interjection_content(sections, signals_by_id: dict, fire_verdicts: Optional
                 f"- {signal.label or signal.source_id} "
                 f"({signal.layer}, {signal.provider}) — credit: {credit}"
             )
-            verdict = (fire_verdicts or {}).get(signal_id)
+            verdict = fire_verdicts.get(signal_id)
             if verdict is not None:
                 fires_seen = True
                 sats = ", ".join(verdict.get("satellites") or []) or "VIIRS"
@@ -259,6 +269,13 @@ def _interjection_content(sections, signals_by_id: dict, fire_verdicts: Optional
                     f"{verdict.get('acquired')}, prior days in this room's "
                     f"30-day window: {verdict.get('baseline_days')}"
                 )
+        scope_key = scope.id.split(":", 1)[1] if scope is not None else None
+        recurring = fire_recurring.get(scope_key)
+        if recurring:
+            lines.append(
+                f"  Also in this scope today: {recurring} recurring fire cell(s) "
+                f"— the flare field, not news."
+            )
         for binding in bindings:
             lines.append(
                 f"Bound to thesis node {binding.target.node_id} "
@@ -276,7 +293,7 @@ def _interjection_content(sections, signals_by_id: dict, fire_verdicts: Optional
 async def _maybe_interject(
     ctx: SchedulerContext, conn, room_id: UUID,
     new_by_scope: dict[UUID, list[str]], scopes_by_id: dict, signals_by_id: dict,
-    fire_verdicts: Optional[dict] = None,
+    fire_info: Optional[dict] = None,
 ) -> bool:
     """Whether this run's new contacts earn the room one facilitator turn.
     See the module docstring's guardrail list for the five gates in order."""
@@ -285,9 +302,22 @@ async def _maybe_interject(
     )
     if room_row is None or not room_row["auto_interjection_enabled"]:
         return False
-    if await _interjections_today(conn, room_id) >= WORLD_DAILY_CAP:
-        return False
     if in_quiet_hours():
+        return False
+
+    # Per-layer cap: drop the layers that already had their turns today,
+    # keep the rest. A fire is not silenced by this morning's airliners.
+    layers = {signals_by_id[s].layer for ids in new_by_scope.values() for s in ids if s in signals_by_id}
+    open_layers = {
+        layer for layer in layers
+        if await _interjections_today(conn, room_id, layer) < WORLD_DAILY_CAP
+    }
+    new_by_scope = {
+        scope_id: [s for s in ids if s in signals_by_id and signals_by_id[s].layer in open_layers]
+        for scope_id, ids in new_by_scope.items()
+    }
+    new_by_scope = {k: v for k, v in new_by_scope.items() if v}
+    if not new_by_scope:
         return False
 
     field_service = FieldMarkService(conn)
@@ -333,7 +363,7 @@ async def _maybe_interject(
         speaker_type=SpeakerType.SYSTEM,
         user_id=None,
         message_type=MessageType.TEXT,
-        content=_interjection_content(sections, signals_by_id, fire_verdicts),
+        content=_interjection_content(sections, signals_by_id, fire_info),
     )
 
     orchestrator = LLMOrchestrator(conn, db_pool=ctx.pool)
@@ -350,9 +380,10 @@ async def _maybe_interject(
     # the turn instead of at persist time.
     await conn.execute(
         """UPDATE messages SET metadata = COALESCE(metadata, '{}'::jsonb)
-               || jsonb_build_object('world_fingerprint', $1::text)
+               || jsonb_build_object('world_fingerprint', $1::text,
+                                     'world_layers', $3::jsonb)
            WHERE id = $2""",
-        fingerprint, result.response.id,
+        fingerprint, result.response.id, sorted(open_layers),
     )
     await _broadcast_follow_up(ctx, room_id, result.response)
     return True
@@ -379,7 +410,7 @@ async def _process_room(ctx: SchedulerContext, conn, room_id: UUID) -> dict:
     new_count = 0
     seen_count = 0
     new_by_scope: dict[UUID, list[str]] = {}
-    fire_verdicts: dict[str, dict] = {}
+    fire_info: dict = {"verdicts": {}, "recurring": {}}
 
     for scope_id, scope in scopes_by_id.items():
         for signal in signals:
@@ -396,17 +427,21 @@ async def _process_room(ctx: SchedulerContext, conn, room_id: UUID) -> dict:
                 if signal.layer == "fires":
                     verdict = await _score_fire(conn, room_id, scope_id, signal)
                     if not fire_counts_as_new(verdict):
-                        continue  # persisted and labelled; a flare is not news
-                    fire_verdicts[signal.id] = verdict
+                        # persisted and labelled; a flare is not news
+                        fire_info["recurring"][str(scope_id)] = fire_info["recurring"].get(str(scope_id), 0) + 1
+                        continue
+                    fire_info["verdicts"][signal.id] = verdict
                 new_by_scope.setdefault(scope_id, []).append(signal.id)
             else:
                 seen_count += 1
+                if signal.layer == "fires":
+                    fire_info["recurring"][str(scope_id)] = fire_info["recurring"].get(str(scope_id), 0) + 1
 
     interjected = False
     if new_by_scope:
         interjected = await _maybe_interject(
             ctx, conn, room_id, new_by_scope, scopes_by_id, signals_by_id,
-            fire_verdicts,
+            fire_info,
         )
 
     return {"new": new_count, "seen": seen_count, "interjected": interjected}
