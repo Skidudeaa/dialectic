@@ -60,13 +60,11 @@ export function WorldStrip({ roomId, worldLink }: WorldStripProps) {
     null,
   )
   const age = agoLabel(newestAt)
-  // Counted client-side from the rows already fetched: `details.novel` is
-  // world_watch's verdict against the room's 30-day fire baseline.
-  const newFires = observations.status === 'ready'
-    ? observations.projection.observations.filter(
-      (o) => o.layer === 'fires' && o.details.novel === true,
-    ).length
-    : 0
+  // From the exact per-scope aggregate, not the 500-row list: a room whose
+  // aircraft churn fills the newest rows would otherwise undercount.
+  const newFires = counts
+    .filter((row) => row.layer === 'fires')
+    .reduce((sum, row) => sum + (row.novel ?? 0), 0)
 
   return (
     <p className="world-strip" data-testid="world-strip">

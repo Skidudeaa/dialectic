@@ -233,11 +233,17 @@ def test_world_observations_200_shape():
         count_rows=[{
             "scope_id": SCOPE_ID, "scope_label": "Strait of Hormuz (approx.)",
             "layer": "aircraft", "n": 3, "newest_at": datetime.now(timezone.utc),
+        }, {
+            "scope_id": SCOPE_ID, "scope_label": "Strait of Hormuz (approx.)",
+            "layer": "fires", "n": 40, "novel": 2, "newest_at": datetime.now(timezone.utc),
         }],
     )
     response = client.get(WORLD_OBS_PATH, headers=HEADERS)
     assert response.status_code == 200
     body = response.json()
+    assert [(c["layer"], c["count"], c["novel"]) for c in body["counts"]] == [
+        ("aircraft", 3, 0), ("fires", 40, 2),
+    ]
     assert len(body["observations"]) == 1
     obs = body["observations"][0]
     assert obs["scope_id"] == f"geo_scope:{SCOPE_ID}"
@@ -246,7 +252,7 @@ def test_world_observations_200_shape():
     assert obs["layer"] == "aircraft"
     assert obs["seen_count"] == 2
     assert obs["geometry"] == {"type": "Point", "coordinates": [56.3, 26.5]}
-    assert len(body["counts"]) == 1
+    assert len(body["counts"]) == 2
     count = body["counts"][0]
     assert count["scope_id"] == f"geo_scope:{SCOPE_ID}"
     assert count["layer"] == "aircraft"

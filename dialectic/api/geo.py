@@ -100,6 +100,7 @@ LIMIT $3
 
 _WORLD_OBSERVATIONS_COUNTS_SQL = """
 SELECT wo.scope_id, g.label AS scope_label, wo.layer, count(*) AS n,
+       count(*) FILTER (WHERE (wo.details->>'novel')::boolean) AS novel,
        max(wo.last_seen_at) AS newest_at
 FROM world_observations wo
 JOIN geo_scopes g ON g.id = wo.scope_id
@@ -201,6 +202,10 @@ class WorldObservationCountOut(BaseModel):
     scope_label: str
     layer: str
     count: int
+    # Fires only: cells world_watch scored NEW against the room's 30-day
+    # baseline. An exact aggregate, unlike the 500-row `observations` list,
+    # so a room whose aircraft churn fills the newest 500 still counts right.
+    novel: int = 0
     newest_at: Optional[datetime] = None
 
 
@@ -301,6 +306,7 @@ async def get_world_observations(
                 scope_label=row["scope_label"],
                 layer=row["layer"],
                 count=row["n"],
+                novel=row.get("novel", 0) or 0,
                 newest_at=row["newest_at"],
             )
             for row in count_rows

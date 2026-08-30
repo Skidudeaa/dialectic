@@ -164,6 +164,8 @@ export interface WorldObservationCount {
   scope_label: string
   layer: string
   count: number
+  /** Fires only: cells scored NEW against the room's 30-day baseline. */
+  novel?: number
   newest_at: string
 }
 

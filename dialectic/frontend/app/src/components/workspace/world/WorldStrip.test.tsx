@@ -82,8 +82,9 @@ describe('WorldStrip', () => {
       details: { frp_mw: 30, novel }, retrieved_at: 'now', first_seen_at: 'now', last_seen_at: 'now', seen_count: 1,
     })
     vi.mocked(api.getWorldObservations).mockResolvedValue({
+      // The list is capped at 500 rows server-side; the count row is exact.
       observations: [fire('a', true), fire('b', false), fire('c', false)],
-      counts: [{ scope_id: 's1', scope_label: 'Persian Gulf', layer: 'fires', count: 3, newest_at: new Date().toISOString() }],
+      counts: [{ scope_id: 's1', scope_label: 'Persian Gulf', layer: 'fires', count: 3, novel: 1, newest_at: new Date().toISOString() }],
     })
 
     render(<WorldStrip roomId="room-h" />)
