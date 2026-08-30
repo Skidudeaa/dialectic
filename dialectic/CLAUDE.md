@@ -1243,6 +1243,21 @@ is live but was unexercised at the gate. Suites: backend **2193**, frontend
 
 ## Amendment 2026-08-30 — World Lens: the consumer (amend-beside)
 
+**Deployed 2026-08-30 03:57Z:** commit `c1f372d`, backend PID `863911`
+(`/health` 200, `world_signals@120s` + `world_watch@300s` in the scheduler
+banner), migration 026 on prod and test, PWA release
+`20260830T040000Z-world-consumer` (`index-DxT7rB6-.js`). First
+`world_watch` tick: 79 adsb contacts persisted (Persian Gulf 68, Gulf of
+Oman 11) and ONE `world_interjection` fired — two Hormuz scopes were already
+human-bound (`supports` → `hormuz`). The participant's turn judged 33 Gulf
+aircraft "background-rate confirmation, not signal" and cited
+`adsb.lol (ODbL), bound to hormuz (supports)`. Suites: backend **2269**
+(one pre-existing Reading Rail unicode failure), frontend **650**. Known
+sharp edge: civil-aviation churn over a large scope (Persian Gulf) will
+spend the 2/day cap on non-signal; narrow the bound scope or gate the
+interjection by layer if it proves noisy. Seeding the other four rooms
+remains the owner's act (`deploy/seed_room_geo.py`).
+
 The owner, after Phases 0–2 (2026-08-25/26): *"it just doesn't do nearly
 enough yet."* Audit: World was pull-only (`world_query` called once in two
 weeks), `world_signals` polled five feeds into a store exactly one opt-in
