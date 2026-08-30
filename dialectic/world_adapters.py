@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 # One poll per interval per provider; the job itself runs on the scheduler's
 # 30s tick through the usual interval bucket.
-WORLD_SIGNALS_INTERVAL_S = 120
+WORLD_SIGNALS_INTERVAL_S = 300  # was 120; see ADSB_FENCE_PAUSE_S
 HTTP_TIMEOUT_S = 20.0
 # A room's area of interest is its live scopes' bbox, padded so a contact
 # approaching the place is visible before it arrives.
@@ -323,10 +323,12 @@ async def poll_earthquakes(client: httpx.AsyncClient, fences: list[RoomFence]) -
 # ── adsb.lol live aircraft ───────────────────────────────────────────────
 ADSB_URL = "https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{dist}"
 ADSB_MAX_NM = 250
-# WHY: adsb.lol answered the 4th fence of every poll with 429 once four rooms
-# owned geography (2026-08-30) -- the Sea of Japan fence was starved on every
-# tick. One second between fence requests keeps the burst under its limit.
-ADSB_FENCE_PAUSE_S = 2.0
+# WHY: adsb.lol answers roughly one request per five seconds from one IP
+# (measured 2026-08-30: at 2s spacing, three fences passed and the next
+# three got 429 -- the Pearl River, Yangtze and Bo Hai fences were starved on
+# every tick). Ten fences at 5s is ~50s per poll, which is why the job runs
+# every 300s rather than 120s: the scheduler tick is serial.
+ADSB_FENCE_PAUSE_S = 5.0
 
 
 @_guarded("adsb.lol ADS-B receivers within 250 NM of each placed room")
