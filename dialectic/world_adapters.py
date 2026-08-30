@@ -56,7 +56,11 @@ HTTP_TIMEOUT_S = 20.0
 # approaching the place is visible before it arrives.
 ROOM_BBOX_PAD_DEG = 1.5
 MAX_ROOMS = 24
-MAX_SIGNALS_PER_PROVIDER = 400
+# Raised 400 -> 1500 on 2026-08-30: with eight fenced rooms the first live
+# FIRMS tick hit exactly 400 and silently dropped the rest (adsb sat at 396).
+# The store admits 2,000 per source and 5,000 in total; two busy providers
+# at this ceiling still fit.
+MAX_SIGNALS_PER_PROVIDER = 1500
 # Aircraft move; a fix older than this is not evidence about "now".
 AIRCRAFT_TTL_S = 180
 QUAKE_TTL_S = 3600
