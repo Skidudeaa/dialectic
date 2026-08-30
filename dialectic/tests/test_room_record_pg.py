@@ -150,6 +150,117 @@ class TestRoundBlindness:
         assert "37" not in text
 
 
+async def _scope(db, *, label: str, confirmed_by: UUID = AMO,
+                  authority: str = "human_confirmed") -> UUID:
+    from geo_scopes import insert_scope
+    ring = [[55.6, 26.0], [56.2, 25.6], [57.2, 25.9], [55.6, 26.0]]
+    acquisition = "llm" if authority == "machine_proposed" else "human"
+    return await insert_scope(
+        db, room_id=ROOM, subject={"entity": "rooms", "id": str(ROOM)},
+        kind="polygon", geometry={"type": "Polygon", "coordinates": [ring]},
+        label=label, authority=authority,
+        provenance={"provider": "human", "acquisition": acquisition, "credit": "sketch"},
+        confirmed_by=confirmed_by if authority == "human_confirmed" else None,
+    )
+
+
+async def _causal_mark(db, *, scope_id: UUID, node_id: str = "hormuz",
+                        relation: str = "supports") -> None:
+    await db.execute(
+        """INSERT INTO field_marks
+               (id, room_id, thread_id, mark_kind, relation, origin,
+                title, provenance, subjects, created_at)
+           VALUES ($1, $2, $3, 'relation', $4, 'explicit', 'evidence',
+                   'human', $5, now())""",
+        uuid4(), ROOM, THREAD, relation,
+        [
+            {"entity": "geo_scopes", "id": str(scope_id)},
+            {"entity": "rooms", "id": str(ROOM), "field": f"thesis_node:book-1:{node_id}"},
+        ],
+    )
+
+
+async def _observation(db, *, scope_id: UUID, label: str, provider: str = "adsb",
+                        layer: str = "aircraft", lon: float = 56.301234,
+                        lat: float = 26.501234, seen_count: int = 1) -> None:
+    now = datetime.now(timezone.utc)
+    await db.execute(
+        """INSERT INTO world_observations
+               (id, room_id, scope_id, provider, signal_id, layer, kind, label,
+                geometry, provenance, details, observed_at, retrieved_at,
+                first_seen_at, last_seen_at, seen_count)
+           VALUES ($1, $2, $3, $4, $5, $6, 'point', $7, $8, $9, '{}', $10, $10,
+                   $10, $10, $11)""",
+        uuid4(), ROOM, scope_id, provider, f"world_signal:{provider}:{label}",
+        layer, label,
+        {"type": "Point", "coordinates": [lon, lat]},
+        {"provider": provider, "acquisition": "adapter", "credit": "test"},
+        now, seen_count,
+    )
+
+
+@pytest.mark.asyncio
+class TestGeography:
+    async def test_bound_scope_renders_relation_and_node(self, db):
+        scope_id = await _scope(db, label="Strait of Hormuz (approx.)")
+        await _causal_mark(db, scope_id=scope_id, node_id="hormuz-node")
+
+        record = await build_room_record(db, ROOM)
+        text = record.to_prompt_section()
+
+        assert "### Geography" in text
+        assert "Strait of Hormuz (approx.)" in text
+        assert "→ supports hormuz-node" in text
+
+    async def test_unbound_scope_renders_unbound(self, db):
+        await _scope(db, label="Persian Gulf")
+
+        record = await build_room_record(db, ROOM)
+        text = record.to_prompt_section()
+
+        assert "Persian Gulf" in text
+        assert "— unbound" in text
+
+    async def test_machine_proposed_scope_excluded(self, db):
+        await _scope(db, label="Guessed Region", authority="machine_proposed")
+
+        record = await build_room_record(db, ROOM)
+
+        assert record.geography_lines == []
+
+
+@pytest.mark.asyncio
+class TestSeenInTheWorld:
+    async def test_observation_row_renders_with_no_coordinates(self, db):
+        scope_id = await _scope(db, label="Strait of Hormuz (approx.)")
+        await _causal_mark(db, scope_id=scope_id, node_id="hormuz-node")
+        await _observation(
+            db, scope_id=scope_id, label="Tanker 1", lon=56.301234, lat=26.501234,
+        )
+
+        record = await build_room_record(db, ROOM)
+        text = record.to_prompt_section()
+
+        assert "### Seen in the world (24h)" in text
+        assert "Strait of Hormuz (approx.)" in text
+        assert "aircraft contact" in text
+        assert "Tanker 1" in text
+        # Coordinates never leak: neither the raw geometry digits nor the
+        # digits appear anywhere in the rendered section.
+        assert "56.301234" not in text
+        assert "26.501234" not in text
+        assert "56301234" not in text
+        assert "26501234" not in text
+
+    async def test_empty_observations_render_no_block(self, db):
+        await _scope(db, label="Persian Gulf")
+
+        record = await build_room_record(db, ROOM)
+
+        assert record.world_lines == []
+        assert "Seen in the world" not in record.to_prompt_section()
+
+
 @pytest.mark.asyncio
 class TestEmptyRoom:
     async def test_empty_room_renders_nothing(self, db):

@@ -85,6 +85,7 @@ describe('provenance disclosure', () => {
       ['question_detected', 'Your last message read as a question.'],
       ['balance_redirect', 'One of you had been quiet a while, relative to the room.'],
       ['wire_interjection', 'A news story crossed the relevance threshold it holds for the linked thesis.'],
+      ['world_interjection', 'A live feed reported something inside geography this room placed and bound to the thesis.'],
       ['silence_follow_up', 'It had asked something here and nobody had answered yet.'],
       ['protocol_active', 'A structured protocol was running, and this was its turn.'],
       ['forced', 'Something in the room asked it to respond directly.'],

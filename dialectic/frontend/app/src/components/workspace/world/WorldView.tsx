@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as Cesium from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
-import type { GeoScope, WorldSignal, WorldSignalSource } from '../../../types/geo.ts'
+import type { GeoScope, WorldObservation, WorldSignal, WorldSignalSource } from '../../../types/geo.ts'
 import type { WorldCamera } from './worldCamera.ts'
 import { scopesBounds } from './worldScopes.ts'
-import { addSignal, addTrail, signalHeight } from './worldSignals.ts'
+import { addSignal, addTrail, isTrackable, observationToSignal, signalHeight } from './worldSignals.ts'
 import { addScope } from './worldScopeEntities.ts'
 import { WorldStyles } from './worldStyleStages.ts'
 import { styleForKey, type WorldStyleKey } from './shaders/index.ts'
@@ -50,6 +50,17 @@ import './World.css'
 interface WorldViewProps {
   scopes: GeoScope[]
   signals: WorldSignal[]
+  /**
+   * Durable `world_observations` for this room — the recorded layer, dimmer
+   * and smaller than a live contact (worldSignals.ts's `addSignal`), drawn
+   * beside `signals` under one more `layers` entry ("Recorded (24h)") so a
+   * contact that left the scope an hour ago is still on the globe as
+   * evidence rather than gone. Never track-on-click (isTrackable excludes
+   * them from the pick handler's own lookup) — tracking is a live-contact
+   * presentation act, and a recorded row is a memory, not a report arriving
+   * right now.
+   */
+  observations?: WorldObservation[]
   /** Provider snapshot states, rendered as the HUD's source lamps. */
   sources?: WorldSignalSource[]
   /** Restore this camera on mount; otherwise frame every scope. */
@@ -79,6 +90,11 @@ const LAYER_LABELS: Record<string, string> = {
   satellites: 'Satellites',
   launches: 'Launches',
 }
+/** The synthetic pseudo-layer key for the recorded-observations toggle. Not
+ *  a real `signal.layer` value, so it can never collide with one — it rides
+ *  the same `hiddenLayers` Set and the same WorldHud checkbox list as every
+ *  other layer, one more row rather than a second toggle mechanism. */
+const RECORDED_LAYER_KEY = 'recorded'
 
 function reducedMotion(): boolean {
   return typeof window !== 'undefined'
@@ -131,7 +147,7 @@ function trackRange(signal: WorldSignal): number {
 }
 
 export default function WorldView({
-  scopes, signals, sources = [], initialCamera, focusScopes, focusSignals,
+  scopes, signals, observations = [], sources = [], initialCamera, focusScopes, focusSignals,
   selectedScopeId = null, onSelect, onCameraSettle,
 }: WorldViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -159,6 +175,18 @@ export default function WorldView({
     () => signals.filter((s) => !hiddenLayers.has(s.layer)),
     [signals, hiddenLayers],
   )
+  // The recorded layer: durable observations converted to the same glyph
+  // shape, dimmed by addSignal's own freshness check. Kept off `tracked` and
+  // out of the pick handler's `__signals` store entirely (below) — a click
+  // must not start tracking a memory the way it starts tracking a report.
+  const recordedSignals = useMemo(
+    () => observations.map((o) => observationToSignal(o)),
+    [observations],
+  )
+  const visibleRecordedSignals = useMemo(
+    () => (hiddenLayers.has(RECORDED_LAYER_KEY) ? [] : recordedSignals),
+    [recordedSignals, hiddenLayers],
+  )
   const tracked = useMemo(
     () => visibleSignals.find((s) => s.id === trackedId) ?? null,
     [visibleSignals, trackedId],
@@ -166,7 +194,7 @@ export default function WorldView({
   const layers = useMemo<WorldLayerState[]>(() => {
     const counts = new Map<string, number>()
     for (const signal of signals) counts.set(signal.layer, (counts.get(signal.layer) ?? 0) + 1)
-    return [...counts.entries()]
+    const rows = [...counts.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([layer, count]) => ({
         layer,
@@ -174,7 +202,18 @@ export default function WorldView({
         count,
         enabled: !hiddenLayers.has(layer),
       }))
-  }, [signals, hiddenLayers])
+    // One more row, not a second toggle system — default on, same as every
+    // live layer, and shown only when there is something recorded to hide.
+    if (recordedSignals.length > 0) {
+      rows.push({
+        layer: RECORDED_LAYER_KEY,
+        label: 'Recorded (24h)',
+        count: recordedSignals.length,
+        enabled: !hiddenLayers.has(RECORDED_LAYER_KEY),
+      })
+    }
+    return rows
+  }, [signals, recordedSignals, hiddenLayers])
 
   const toggleLayer = useCallback((layer: string) => {
     setHiddenLayers((current) => {
@@ -298,19 +337,23 @@ export default function WorldView({
   }, [])
 
   // Redraw both layers whenever the projection changes. Only scopes and
-  // signals the pick handler may resolve are copied onto the viewer.
+  // TRACKABLE signals are copied onto the pick handler's own store — the
+  // recorded layer still draws (dimmed, via addSignal's own freshness
+  // check) but is deliberately absent from `__signals`, so a click on one
+  // resolves to neither a scope nor a signal and does nothing at all.
   useEffect(() => {
     const viewer = viewerRef.current
     if (!viewer || viewer.isDestroyed()) return
     viewer.entities.removeAll()
     for (const scope of scopes) addScope(viewer, scope, scope.id === selectedScopeId)
     for (const signal of visibleSignals) addSignal(viewer, signal, signal.id === trackedId)
+    for (const signal of visibleRecordedSignals) addSignal(viewer, signal, false)
     if (tracked) addTrail(viewer, tracked, trailRef.current.positions)
     const store = viewer as unknown as { __scopes?: GeoScope[]; __signals?: WorldSignal[] }
     store.__scopes = scopes
-    store.__signals = visibleSignals
+    store.__signals = visibleSignals.filter(isTrackable)
     viewer.scene.requestRender()
-  }, [scopes, visibleSignals, selectedScopeId, trackedId, tracked])
+  }, [scopes, visibleSignals, visibleRecordedSignals, selectedScopeId, trackedId, tracked])
 
   // Follow the tracked contact: extend its trail with each received fix and
   // move the camera onto it. A contact that leaves the projection (expired,

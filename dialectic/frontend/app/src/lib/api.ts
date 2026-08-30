@@ -16,7 +16,7 @@ import type {
   UserRoom,
 } from '../types/index.ts';
 import type { AtlasProjection } from '../types/atlas.ts';
-import type { GeoScope, GeoScopeReview } from '../types/geo.ts';
+import type { GeoScope, GeoScopeReview, WorldObservationsProjection } from '../types/geo.ts';
 import type {
   FieldMark,
   FieldProjection,
@@ -392,6 +392,12 @@ class DialecticAPI {
   }
   async getGeoScopeReview(roomId: string, scopeId: string): Promise<GeoScopeReview> {
     return this.fetch(`/rooms/${roomId}/geo/${scopeId}/review`);
+  }
+  /** Durable `world_observations` for this room's confirmed scopes over the
+   *  last `hours` — the recorded layer WorldView draws beside live signals,
+   *  and what WorldStrip counts. Room token + JWT, like getGeo. */
+  async getWorldObservations(roomId: string, hours = 24): Promise<WorldObservationsProjection> {
+    return this.fetch(`/rooms/${roomId}/world/observations?hours=${hours}`);
   }
   /** Place the server-held observation. The client supplies no geometry or
    * provenance; the signal identity in the path is the complete request. */

@@ -138,6 +138,25 @@ describe('CapabilityMap', () => {
       .toMatch(/every 30 min/)
   })
 
+  // ── World Lens: the consumer (2026-08-30) ────────────────────────────────
+
+  it('names World watch, and gives Live world signals its new off-reason', async () => {
+    vi.mocked(api.getRoomCapabilities).mockResolvedValue(caps({
+      jobs: [
+        { name: 'world_watch', enabled: false, interval_s: 300, daily_at: null },
+        { name: 'world_signals', enabled: false, interval_s: 120, daily_at: null },
+      ],
+    }))
+    render(<CapabilityMap roomId="r1" />)
+
+    const watchRow = (await screen.findByText('World watch')).closest('li')
+    expect(watchRow?.textContent).toMatch(/two turns a day at most/)
+    expect(watchRow?.textContent).toMatch(/no room has bound geography to the thesis yet/)
+
+    const signalsRow = screen.getByText('Live world signals').closest('li')
+    expect(signalsRow?.textContent).toMatch(/stays dark only when no room has placed geography/)
+  })
+
   // ── the help screen defines its own vocabulary ───────────────────────────
 
   it('defines a term on tap rather than leaving it as jargon', async () => {

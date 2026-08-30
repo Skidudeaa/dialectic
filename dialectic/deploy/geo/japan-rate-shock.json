@@ -1,0 +1,21 @@
+{
+  "room_id": "b9f3b9d2-1d00-4179-957b-284b7cd4a8ad",
+  "room_name": "Japan Rate Shock Trading Room",
+  "scopes": [
+    {
+      "kind": "polygon",
+      "label": "Tokyo Bay (approx.)",
+      "ring": [
+        [139.60, 35.65], [139.75, 35.30], [140.00, 35.22],
+        [140.10, 35.45], [139.95, 35.68], [139.60, 35.65]
+      ],
+      "note": "Hand-authored sketch of Tokyo Bay — the physical anchor for boj-decision and nikkei-stress. First-pass approximation, not a chart."
+    },
+    {
+      "kind": "region",
+      "label": "Sea of Japan",
+      "natural_earth": "Sea of Japan",
+      "note": "Natural Earth 10m marine polygon, public domain — the usd-jpy trade-flow context to the west coast."
+    }
+  ]
+}

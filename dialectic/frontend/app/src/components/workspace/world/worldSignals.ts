@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium'
-import type { WorldSignal } from '../../../types/geo.ts'
+import type { WorldObservation, WorldSignal } from '../../../types/geo.ts'
 
 /**
  * Contact glyphs — one look per layer, the way God's Eye View reads a scene
@@ -21,6 +21,49 @@ const LAYER_COLORS: Record<string, string> = {
   launches: '#57E2A5',
 }
 const DEFAULT_COLOR = '#56B7F2'
+
+/**
+ * A durable `world_observations` row, drawn as the WorldSignal shape this
+ * file already knows how to glyph — same `layer` glyphs, `freshness:
+ * 'recorded'` so `addSignal` dims it and `isTrackable` excludes it.
+ *
+ * WHY NOT JUST A SEPARATE RENDER PATH: two glyph systems drift (see God's
+ * Eye parity's own history here). One shape, one dimmed rendering rule.
+ * `source_state`/`expires_at`/`coverage` are not carried by an observation
+ * row (it is not a provider snapshot), so they take the same honest
+ * placeholders WorldHud never reads for a non-tracked contact.
+ */
+export function observationToSignal(observation: WorldObservation, roomId = ''): WorldSignal {
+  return {
+    id: observation.id,
+    provider: observation.provider,
+    source_id: observation.signal_id,
+    room_id: roomId,
+    layer: observation.layer,
+    kind: observation.kind,
+    geometry: observation.geometry,
+    provenance: observation.provenance,
+    source_state: 'ok',
+    freshness: 'recorded',
+    coverage: `recorded in ${observation.scope_label}`,
+    observed_at: observation.observed_at,
+    retrieved_at: observation.retrieved_at,
+    expires_at: null,
+    label: observation.label,
+    details: observation.details,
+  }
+}
+
+/**
+ * Recorded observations are evidence about a scope, never a live contact —
+ * tracking (camera-follow, trail, telemetry-in-HUD) is a presentation act
+ * reserved for signals a provider is reporting RIGHT NOW. WorldView keeps a
+ * signal out of its click-pickable store when this is false, so clicking a
+ * dimmed glyph does nothing rather than starting a track on a memory.
+ */
+export function isTrackable(signal: WorldSignal): boolean {
+  return signal.freshness !== 'recorded'
+}
 
 function colorFor(signal: WorldSignal): Cesium.Color {
   return Cesium.Color.fromCssColorString(LAYER_COLORS[signal.layer] ?? DEFAULT_COLOR)
@@ -87,12 +130,21 @@ function labelOf(signal: WorldSignal, color: Cesium.Color, selected: boolean) {
   }
 }
 
+/** A `freshness: 'recorded'` contact is evidence, not a live report — dimmer
+ *  and smaller says so at a glance, without a second glyph vocabulary. */
+const RECORDED_ALPHA = 0.45
+const RECORDED_SCALE = 0.7
+
 /** Add one server-held observation with the glyph its layer deserves. */
 export function addSignal(
   viewer: Cesium.Viewer, signal: WorldSignal, selected = false,
 ): void {
   const g = signal.geometry
   const color = colorFor(signal)
+  const dimmed = signal.freshness === 'recorded'
+  const scale = dimmed ? RECORDED_SCALE : 1
+  const alpha = (current: number) => (dimmed ? RECORDED_ALPHA : current)
+  const size = (px: number) => Math.max(1, Math.round(px * scale))
   const base = {
     id: signal.id,
     name: signal.label || signal.layer,
@@ -112,9 +164,9 @@ export function addSignal(
         ...base,
         position,
         billboard: {
-          image: arrowFor(color),
-          width: selected ? 26 : 18,
-          height: selected ? 26 : 18,
+          image: arrowFor(dimmed ? color.withAlpha(RECORDED_ALPHA) : color),
+          width: size(selected ? 26 : 18),
+          height: size(selected ? 26 : 18),
           rotation: Cesium.Math.toRadians(-track),
           alignedAxis: Cesium.Cartesian3.ZERO,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -125,7 +177,7 @@ export function addSignal(
         polyline: height === null ? undefined : {
           positions: [Cesium.Cartesian3.fromDegrees(lon, lat), position],
           width: 1,
-          material: color.withAlpha(0.35),
+          material: color.withAlpha(alpha(0.35)),
         },
       })
       return
@@ -138,16 +190,16 @@ export function addSignal(
         ...base,
         position: Cesium.Cartesian3.fromDegrees(lon, lat),
         ellipse: {
-          semiMajorAxis: Math.pow(10, magnitude / 2) * 900,
-          semiMinorAxis: Math.pow(10, magnitude / 2) * 900,
-          material: color.withAlpha(selected ? 0.34 : 0.18),
+          semiMajorAxis: Math.pow(10, magnitude / 2) * 900 * scale,
+          semiMinorAxis: Math.pow(10, magnitude / 2) * 900 * scale,
+          material: color.withAlpha(alpha(selected ? 0.34 : 0.18)),
           outline: true,
           outlineColor: color,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         },
         point: {
-          pixelSize: selected ? 14 : 9,
-          color: color.withAlpha(0.9),
+          pixelSize: size(selected ? 14 : 9),
+          color: color.withAlpha(alpha(0.9)),
           outlineColor: Cesium.Color.WHITE.withAlpha(0.8),
           outlineWidth: 1,
           heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
@@ -162,8 +214,8 @@ export function addSignal(
       ...base,
       position,
       point: {
-        pixelSize: selected ? 17 : 12,
-        color: color.withAlpha(0.85),
+        pixelSize: size(selected ? 17 : 12),
+        color: color.withAlpha(alpha(0.85)),
         outlineColor: Cesium.Color.WHITE.withAlpha(selected ? 1 : 0.8),
         outlineWidth: selected ? 2 : 1,
         heightReference: height === null
@@ -183,7 +235,7 @@ export function addSignal(
       polyline: {
         positions: Cesium.Cartesian3.fromDegreesArray(flat),
         width: 3,
-        material: new Cesium.PolylineDashMaterialProperty({ color, dashLength: 8 }),
+        material: new Cesium.PolylineDashMaterialProperty({ color: color.withAlpha(alpha(1)), dashLength: 8 }),
         clampToGround: true,
       },
     })
@@ -197,7 +249,7 @@ export function addSignal(
       ...base,
       polygon: {
         hierarchy: new Cesium.PolygonHierarchy(Cesium.Cartesian3.fromDegreesArray(flat)),
-        material: color.withAlpha(0.14),
+        material: color.withAlpha(alpha(0.14)),
         outline: true,
         outlineColor: color,
         outlineWidth: 2,
@@ -206,7 +258,7 @@ export function addSignal(
       polyline: {
         positions: Cesium.Cartesian3.fromDegreesArray(flat),
         width: 2,
-        material: new Cesium.PolylineDashMaterialProperty({ color, dashLength: 8 }),
+        material: new Cesium.PolylineDashMaterialProperty({ color: color.withAlpha(alpha(1)), dashLength: 8 }),
         clampToGround: true,
       },
     })

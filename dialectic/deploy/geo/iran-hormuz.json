@@ -1,0 +1,47 @@
+{
+  "room_id": "56ba2f1e-5c70-4290-a77d-52404f0095da",
+  "room_name": "Iran/Hormuz Trading Room",
+  "scopes": [
+    {
+      "kind": "polygon",
+      "label": "Strait of Hormuz (approx.)",
+      "ring": [
+        [55.60, 26.05], [56.20, 25.60], [57.20, 25.85], [57.05, 26.85],
+        [56.35, 27.20], [55.60, 26.70], [55.60, 26.05]
+      ],
+      "note": "Hand-authored sketch of the water between the Musandam peninsula and the Iranian coast, Qeshm to the Gulf of Oman approaches. First-pass approximation, not a chart — the human running this script is confirming it as such."
+    },
+    {
+      "kind": "route",
+      "label": "Hormuz TSS inbound lane (approx.)",
+      "ring": [
+        [55.30, 26.42], [56.00, 26.58], [56.50, 26.60], [56.90, 26.35], [57.40, 25.75]
+      ],
+      "note": "Hand-authored approximate route through the traffic-separation scheme toward the Gulf, inbound read west to east. First-pass approximation, not a navigational lane."
+    },
+    {
+      "kind": "region",
+      "label": "Persian Gulf",
+      "natural_earth": "Persian Gulf",
+      "note": "Natural Earth 10m marine polygon, public domain — exact dataset geometry, not hand-drawn."
+    },
+    {
+      "kind": "region",
+      "label": "Gulf of Oman",
+      "natural_earth": "Gulf of Oman",
+      "note": "Natural Earth 10m marine polygon, public domain — exact dataset geometry, not hand-drawn."
+    },
+    {
+      "kind": "region",
+      "label": "Bab el Mandeb",
+      "natural_earth": "Bab el Mandeb",
+      "note": "Natural Earth 10m marine polygon, public domain — the strait linking the Red Sea to the Gulf of Aden, a freight/brent chokepoint alongside Hormuz."
+    },
+    {
+      "kind": "region",
+      "label": "Strait of Malacca",
+      "natural_earth": "Strait of Malacca",
+      "note": "Natural Earth 10m marine polygon, public domain — the downstream chokepoint Hormuz-origin freight transits toward Asian demand."
+    }
+  ]
+}

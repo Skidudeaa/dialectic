@@ -15,6 +15,7 @@ import { MorningBriefCard } from '../../trading/MorningBriefCard'
 import { ThesisNewsList } from '../../trading/ThesisNewsList'
 import { AlertEventsList } from '../../trading/AlertEventsList'
 import { ScenarioWhatIf } from '../../trading/ScenarioWhatIf'
+import { WorldStrip } from '../world/WorldStrip.tsx'
 
 /**
  * The Bench — the construction surface for what this room is building (§7.2).
@@ -85,8 +86,11 @@ export function BenchScene({
         Everything the desk sees, read-only — live states color the authored
         graph; Evaluate runs a hypothetical, never a trade. Deep edits happen
         in the Builder.
-        {worldLink}
       </p>
+      {/* World Lens: the consumer (2026-08-30) — one line of orientation
+          above the DAG hero, and the strip is now the door's one home
+          (moved out of the caption above; see cockpit.css's own note). */}
+      {roomId ? <WorldStrip roomId={roomId} worldLink={worldLink} /> : null}
       {desk.structure.status === 'ready' && desk.structure.data ? (
         <ThesisDag
           structure={desk.structure.data}

@@ -1,0 +1,30 @@
+{
+  "room_id": "6805ad0f-0d72-441d-ac1c-2cd9dc63bca3",
+  "room_name": "AI Capex Unwind Trading Room",
+  "scopes": [
+    {
+      "kind": "polygon",
+      "label": "Hsinchu–Taichung fab corridor (approx.)",
+      "ring": [
+        [120.55, 24.05], [121.05, 24.10], [121.10, 24.85],
+        [120.95, 24.90], [120.60, 24.30], [120.55, 24.05]
+      ],
+      "note": "Hand-authored sketch of Taiwan's west-coast fab corridor from Hsinchu (TSMC's advanced-node fabs) down to Taichung — the physical anchor for tsm-utilization. First-pass approximation, not a chart."
+    },
+    {
+      "kind": "polygon",
+      "label": "Northern Virginia datacenter corridor (approx.)",
+      "ring": [
+        [-77.60, 38.90], [-77.35, 38.90], [-77.30, 39.05],
+        [-77.45, 39.15], [-77.65, 39.05], [-77.60, 38.90]
+      ],
+      "note": "Hand-authored sketch of Loudoun County's \"Data Center Alley\" (Ashburn and surrounds) — the physical anchor for power-constraint and gpu-price. First-pass approximation, not a chart."
+    },
+    {
+      "kind": "region",
+      "label": "Taiwan Strait",
+      "natural_earth": "Taiwan Strait",
+      "note": "Natural Earth 10m marine polygon, public domain — shared chokepoint context with the Trump Tariffs room; a fab-corridor disruption route runs through it."
+    }
+  ]
+}

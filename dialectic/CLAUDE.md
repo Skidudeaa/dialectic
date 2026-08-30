@@ -1238,4 +1238,104 @@ is live but was unexercised at the gate. Suites: backend **2193**, frontend
   `room_personas` row and 0 persona messages before the decision.
 - Scheduled-job flags `rss_wire` and `world_signals` ship **dark by code
   default** as of `03b8cb6` — not merely env-unset in this host's `.env`; a
-  fresh checkout with no `.env` override starts both off.
+  fresh checkout with no `.env` override starts both off. **Superseded for
+  `world_signals` by the next amendment** — it has a reader now.
+
+## Amendment 2026-08-30 — World Lens: the consumer (amend-beside)
+
+The owner, after Phases 0–2 (2026-08-25/26): *"it just doesn't do nearly
+enough yet."* Audit: World was pull-only (`world_query` called once in two
+weeks), `world_signals` polled five feeds into a store exactly one opt-in
+Atlas flag read (so it had just been turned off), only the Hormuz room owned
+geography, and nothing turned a signal into a fact, an alert, or a thesis
+link. This plan builds a consumer, geography for every trading room, and the
+participant's eyes. Plan: `/root/.claude/plans/world-lens-a-sensor-for-the-thesis.md`.
+
+- **Migration `026_world_observations.sql`.** `world_observations` is the
+  first durable trace of a live feed: `scope_id` a hard FK into `geo_scopes`,
+  `UNIQUE (scope_id, signal_id)` so a contact loitering in the Strait is one
+  row with `seen_count` rising, not hundreds. `provider` is CHECK-constrained
+  to `usgs`/`adsb`/`launch` — the three terms-cleared providers (see
+  `docs/WORLD_PROVIDERS.md`'s 2026-08-30 amendment); `iss` stays
+  ephemeral-only, `firms`/AIS/OpenSky are moot or untouched. `field_marks.
+  _SUBJECT_ENTITY_TABLES` gained `world_observations` so a human can "Mark
+  as evidence here" on one exactly as on a reading.
+- **Seventeen scheduled jobs**: `world_watch` joined (300s,
+  `WORLD_WATCH_ENABLED`, `llm/world_watch.py`). Per room with confirmed
+  geography it reads the same process-local `world_signal_store` the
+  adapters write, keeps only the terms-cleared providers, and tests each
+  contact with a real **point-in-polygon** check
+  (`geo_scopes.point_in_geometry`, stdlib-only) rather than the adapters'
+  1.5°-padded bounding box — the bbox stays right for the live cockpit view,
+  wrong for a durable record (it is why a room "saw" aircraft over Kerman).
+  Matching contacts upsert into `world_observations`; a 30-day retention
+  DELETE rides the same tick. **Interjection** fires only when a genuinely
+  NEW contact lands inside a scope that already has ≥1 causal binding
+  (`FieldMarkService.causal_geo_bindings`) — i.e. a human has bound that
+  scope to a thesis node in Focus — gated by `auto_interjection_enabled`,
+  `WORLD_DAILY_CAP=2`/room/day, and a fingerprint of the new contact set so
+  a repeat poll doesn't repeat the turn. Reason `world_interjection`, routed
+  through `force_response`'s narrow tool set. Persisting an observation in
+  an UNBOUND scope is silent forever — the authority ladder working as
+  designed, not a gap.
+- **`world_signals` is back on by default** (`enabled_default=True` in
+  `world_adapters.py`) — the 2026-08-29 amendment's "ships dark" line for it
+  is superseded: the store now has a reader (`world_watch`, registered right
+  after it), so the audit's "2,000 polls a week discarded unseen" no longer
+  holds. `rss_wire` is unaffected and stays dark by default.
+- **Seeding is the owner's act, and it keeps its guard.**
+  `deploy/seed_room_geo.py --manifest deploy/geo/<room>.json --confirmed-by
+  <uuid> --geometry-inspected-by-named-human [--dry-run]` — five manifests
+  (19 scopes; hand rings are labelled "(approx.)", Natural Earth marine
+  regions by exact name). A real run REFUSES without the inspection flag: the
+  script writes `human_confirmed` rows from rings a builder drew, and the
+  flag is the named human saying they looked. `seed_hormuz_geo.py` is now a
+  wrapper over the Hormuz manifest.
+- **Two new prompt blocks** in `room_record.py`'s `## What This Room Has
+  Recorded` section: `### Geography` (the room's live human scopes, each
+  showing its bound relation/node or `— unbound`, ≤10) and `### Seen in the
+  world (24h)` (per-scope contact counts plus up to 3 newest observations in
+  BOUND scopes only, from `world_observations`) — presence and counts only,
+  never raw coordinates, so the model cannot learn to quote a position it
+  never verified. The section header's instruction line states the rule:
+  geography is what humans placed, observations are what feeds reported
+  inside it — cite the scope and the source, never invent a position.
+  `world_query` (`llm/world.py`) returns the same recent observations so the
+  tool answer and the ambient section agree.
+- **`GET /rooms/{id}/world/observations`** (`api/geo.py`, same room-token +
+  membership auth as every other geo route): `hours` clamps to `[1,168]`
+  rather than 422ing on an out-of-range value; rows cap at 500 newest,
+  counts are exact aggregates over the full window. This is the frontend's
+  read for the Bench World strip and `WorldView`'s dimmed "recorded" layer.
+- **`deploy/seed_room_geo.py`** generalises the old one-room
+  `deploy/seed_hormuz_geo.py` into a manifest-driven seeder: `--manifest
+  deploy/geo/<room>.json --confirmed-by <uuid> [--dry-run]`, one manifest
+  per live trading room (`deploy/geo/{iran-hormuz,trump-tariffs,
+  ai-capex-unwind,china-property-cascade,japan-rate-shock}.json`). Same
+  writer (`geo_scopes.insert_scope`), same idempotency-by-live-exact-label
+  rule, same `GEO_SCOPE_CREATED` event the original script used — only the
+  geometry now lives in JSON instead of the script body. Natural Earth
+  entries resolve by exact name against `data/natural_earth/marine.json`
+  (largest ring by vertex count, the original script's rule); hand-authored
+  rings are labelled "(approx.)" and carry `human_confirmed` authority.
+  **This script is the owner's act, never automatic** — running it per
+  manifest is what gives the other four trading rooms their first geography
+  (Hormuz already had six scopes; this only adds two Natural Earth regions
+  there). Binding a seeded scope to a thesis node stays human-only, done in
+  Focus, exactly as before — seeding geography does not bind it, and
+  `world_watch` will not interject about an unbound scope no matter how
+  much traffic crosses it.
+- **Known test-suite gap**: `tests/test_geo_api.py`'s two `seed_hormuz_geo`
+  tests (`test_hormuz_seed_requires_named_human_and_inspection_acknowledgement`,
+  `test_hormuz_seed_events_include_each_persisted_geometry`) pin the OLD
+  one-script contract byte-for-byte — the `--geometry-inspected-by-named-human`
+  flag, a module-level `SEEDS` list, and monkeypatching `seed_hormuz_geo.
+  asyncpg` directly. A genuine thin wrapper delegates its DB work to
+  `seed_room_geo.main()`, which owns its own `asyncpg` reference, so neither
+  test can pass against the new architecture; the underlying coverage now
+  lives in `tests/test_seed_room_geo.py` (30 tests: manifest schema
+  validation, every real manifest's Natural Earth names resolving against
+  the live data file, and real-Postgres dry-run/real-run/idempotent-rerun
+  contracts against `dialectic_test`). Whoever lands this on `tests/
+  test_geo_api.py` should delete or rewrite those two tests rather than
+  resurrect the old contract.

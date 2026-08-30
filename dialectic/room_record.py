@@ -35,7 +35,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from field_marks import FieldMarkService
+from field_marks import FieldMarkService, causal_subject_roles
+from geo_scopes import GeoScopeService
 from llm.field_inference import _correction_digest_rows, _render_digest
 from llm.news_night import COUNTER_LABEL
 from llm.reading import recent_readings
@@ -47,13 +48,18 @@ ROUND_CAP = 10
 COMMITMENTS_CAP = 10
 READINGS_CAP = 8
 READING_WINDOW = timedelta(days=3)
+GEOGRAPHY_CAP = 10
+WORLD_GROUP_CAP = 8
+WORLD_ITEM_CAP = 3
 
 _HEADER = (
     "## What This Room Has Recorded\n"
     "Confirmed and contested marks, open commitments, the open Round "
     "(forecast presence only — the numbers are sealed until both humans "
     "commit), and what was read lately. Treat as the room's own ledger; "
-    "cite it, do not restate it.\n"
+    "cite it, do not restate it. Geography is what humans placed; "
+    "observations are what feeds reported inside it — cite the scope and "
+    "the source, never invent a position.\n"
 )
 
 # Presence only. Selecting `cc.confidence` or `cc.peer_forecast` here would
@@ -85,6 +91,34 @@ _COMMITMENT_DEADLINES_SQL = (
     "SELECT id, deadline FROM commitments WHERE id = ANY($1::uuid[])"
 )
 
+# Presence-and-counts only — never `wo.geometry`. The instruction line in
+# `_HEADER` exists precisely because this section is the participant's only
+# ambient look at live feeds, and a coordinate rendered here would be a
+# position the model never verified, quoted back as if it had (World Lens
+# plan, Step 4).
+_WORLD_GROUPED_SQL = """
+SELECT g.id AS scope_id, g.label AS scope_label, wo.layer, count(*) AS n,
+       (array_agg(wo.label ORDER BY wo.last_seen_at DESC))[1] AS newest_label,
+       (array_agg(wo.provider ORDER BY wo.last_seen_at DESC))[1] AS newest_provider,
+       max(wo.last_seen_at) AS newest_at
+FROM world_observations wo
+JOIN geo_scopes g ON g.id = wo.scope_id
+WHERE wo.room_id = $1 AND wo.last_seen_at > now() - interval '24 hours'
+GROUP BY g.id, g.label, wo.layer
+ORDER BY newest_at DESC
+LIMIT $2
+"""
+
+_WORLD_RECENT_BOUND_SQL = """
+SELECT wo.label, wo.provider, wo.last_seen_at, g.label AS scope_label
+FROM world_observations wo
+JOIN geo_scopes g ON g.id = wo.scope_id
+WHERE wo.room_id = $1 AND wo.last_seen_at > now() - interval '24 hours'
+  AND wo.scope_id = ANY($2::uuid[])
+ORDER BY wo.last_seen_at DESC
+LIMIT $3
+"""
+
 
 @dataclass
 class RoomRecord:
@@ -93,6 +127,8 @@ class RoomRecord:
     round_lines: list = field(default_factory=list)
     commitment_lines: list = field(default_factory=list)
     reading_lines: list = field(default_factory=list)
+    geography_lines: list = field(default_factory=list)
+    world_lines: list = field(default_factory=list)
 
     def to_prompt_section(self, max_chars: int = 6000) -> str:
         """Nonce-delimited data section — home_activity.py's
@@ -113,6 +149,8 @@ class RoomRecord:
                 self._block("Open Round (≤10)", self.round_lines),
                 self._block("Open commitments (≤10)", self.commitment_lines),
                 self._block("Read lately (3 days, ≤8)", self.reading_lines),
+                self._block("Geography", self.geography_lines),
+                self._block("Seen in the world (24h)", self.world_lines),
             )
             if b
         ]
@@ -220,11 +258,76 @@ def _reading_lines(rows) -> list:
     return lines
 
 
+async def _geography_lines(conn, room_id: UUID, scopes) -> tuple[list, list]:
+    """`- {label} ({kind}, {authority}) → {relation} {node_id}` per causal
+    binding a live, human-authority scope carries, or `— unbound` when it
+    carries none. Returns the lines plus the bound scope ids (raw uuids,
+    not `geo_scope:`-prefixed) so `_world_lines` can find the individual
+    recent contacts worth naming instead of only aggregate counts.
+
+    WHY `causal_subject_roles` rather than trusting subject array order:
+    the same function field_marks.py itself uses to resolve a causal mark's
+    evidence/target roles — subject POSITION in the stored JSON is not
+    semantic, entity kind is (field_marks.py's own rule).
+    """
+    if not scopes:
+        return [], []
+    scope_ids = {UUID(s.id.split(":", 1)[1]) for s in scopes}
+    bindings = await FieldMarkService(conn).causal_geo_bindings(room_id, scope_ids)
+    by_scope: dict = {}
+    for mark in bindings.marks:
+        roles = causal_subject_roles(
+            mark.relation, [s.model_dump() for s in mark.subjects],
+        )
+        if roles is None:
+            continue
+        by_scope.setdefault(roles.evidence["id"], []).append(
+            (mark.relation, roles.node_id),
+        )
+    lines = []
+    for scope in scopes:
+        scope_id = scope.id.split(":", 1)[1]
+        scope_bindings = by_scope.get(scope_id, [])
+        if not scope_bindings:
+            lines.append(f"- {scope.label} ({scope.kind}, {scope.authority}) — unbound")
+            continue
+        for relation, node_id in scope_bindings:
+            lines.append(
+                f"- {scope.label} ({scope.kind}, {scope.authority}) "
+                f"→ {relation} {node_id}"
+            )
+    return lines, [UUID(sid) for sid in by_scope]
+
+
+async def _world_lines(conn, room_id: UUID, bound_scope_ids: list) -> list:
+    """Aggregate counts per scope+layer (≤8), then up to 3 individual newest
+    contacts but only inside scopes a human has already bound to a thesis
+    node — an unbound scope's contacts are evidence about a place, not yet
+    evidence about anything the room has claimed."""
+    grouped = await conn.fetch(_WORLD_GROUPED_SQL, room_id, WORLD_GROUP_CAP)
+    lines = [
+        f'- {row["scope_label"]}: {row["n"]} {row["layer"]} contact(s), '
+        f'newest "{row["newest_label"]}" {_age(row["newest_at"])} '
+        f'({row["newest_provider"]})'
+        for row in grouped
+    ]
+    if bound_scope_ids:
+        recent = await conn.fetch(
+            _WORLD_RECENT_BOUND_SQL, room_id, bound_scope_ids, WORLD_ITEM_CAP,
+        )
+        lines.extend(
+            f'- {row["label"]} in {row["scope_label"]}, '
+            f'{_age(row["last_seen_at"])}, via {row["provider"]}'
+            for row in recent
+        )
+    return lines
+
+
 async def build_room_record(conn, room_id: UUID) -> RoomRecord:
-    """Three read-only statements (Round, plus the commitments/field-marks
+    """Read-only statements (Round, plus the commitments/field-marks/geo
     reads inside their reused services) plus two reused functions — no
     writes, no new storage. Every list is independently capped;
-    `RoomRecord.to_prompt_section` renders "" when all five come back
+    `RoomRecord.to_prompt_section` renders "" when every block comes back
     empty.
     """
     marks = (await FieldMarkService(conn).build(room_id)).marks
@@ -234,6 +337,14 @@ async def build_room_record(conn, room_id: UUID) -> RoomRecord:
     readings = await recent_readings(
         conn, room_id, since=since, limit=READINGS_CAP,
     )
+    geo_scopes = [
+        s for s in (await GeoScopeService(conn).build(room_id)).scopes
+        if s.authority != "machine_proposed"
+    ][:GEOGRAPHY_CAP]
+    geography_lines, bound_scope_ids = await _geography_lines(
+        conn, room_id, geo_scopes,
+    )
+    world_lines = await _world_lines(conn, room_id, bound_scope_ids)
 
     return RoomRecord(
         field_lines=_field_lines(marks),
@@ -242,6 +353,8 @@ async def build_room_record(conn, room_id: UUID) -> RoomRecord:
             if digest_rows else []
         ),
         round_lines=_round_lines(round_rows),
+        geography_lines=geography_lines,
+        world_lines=world_lines,
         commitment_lines=await _commitment_lines(conn, room_id),
         reading_lines=_reading_lines(readings),
     )

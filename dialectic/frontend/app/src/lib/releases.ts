@@ -51,6 +51,19 @@ export interface Release {
 /** Newest first. `releases.test.ts` pins that order at the data level. */
 export const RELEASES: Release[] = [
   {
+    id: 'world-consumer',
+    date: '2026-08-30',
+    title: 'World watch',
+    body:
+      'A [[world-signal|world signal]] used to vanish the moment the next poll moved on. Now, ' +
+      'what a live feed reports inside geography a room has placed is kept — a dimmer, recorded ' +
+      'layer on the globe beside what is live, and one line on the Bench counting today’s ' +
+      'contacts across the room’s scopes. When a new one lands inside geography bound to the ' +
+      'thesis, the participant speaks up about it, at most twice a day. A room with nothing placed ' +
+      'yet gets a plain door to placing some, instead of a globe that never comes up.',
+    jobs: ['world_watch'],
+  },
+  {
     id: 'reads-the-room',
     date: '2026-08-29',
     title: 'The participant reads the room',

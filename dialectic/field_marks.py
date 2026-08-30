@@ -320,6 +320,10 @@ _SUBJECT_ENTITY_TABLES = {
         "AND authority <> 'machine_proposed'"
         f" AND {geo_scope_live_predicate('geo_scopes')}",
     ),
+    # World Lens consumer (migration 026): a durable provider observation is
+    # a citation exactly like a reading_item — "Mark as evidence here" needs
+    # no new relation and no new door, just this one row in the allowlist.
+    "world_observations": ("world_observations", "room_id", "id"),
 }
 
 

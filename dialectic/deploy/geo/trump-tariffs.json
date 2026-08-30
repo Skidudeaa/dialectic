@@ -1,0 +1,36 @@
+{
+  "room_id": "8adcabb7-817a-4802-87c6-3bfd42e6a9eb",
+  "room_name": "Trump Tariffs Trading Room",
+  "scopes": [
+    {
+      "kind": "region",
+      "label": "Taiwan Strait",
+      "natural_earth": "Taiwan Strait",
+      "note": "Natural Earth 10m marine polygon, public domain — the semiconductor supply-chain chokepoint under tariff/export-control escalation."
+    },
+    {
+      "kind": "region",
+      "label": "South China Sea",
+      "natural_earth": "South China Sea",
+      "note": "Natural Earth 10m marine polygon, public domain — the shipping lane feeding tech-supply and supply-chain nodes."
+    },
+    {
+      "kind": "polygon",
+      "label": "Port of Los Angeles / Long Beach (approx.)",
+      "ring": [
+        [-118.30, 33.70], [-118.24, 33.69], [-118.19, 33.73],
+        [-118.20, 33.79], [-118.27, 33.79], [-118.30, 33.70]
+      ],
+      "note": "Hand-authored sketch of the San Pedro Bay twin-port complex — the largest US container gateway and a direct read on tariff-driven import volume. First-pass approximation, not a chart."
+    },
+    {
+      "kind": "polygon",
+      "label": "Shanghai–Ningbo ports (approx.)",
+      "ring": [
+        [121.50, 31.50], [122.30, 31.30], [122.50, 30.60],
+        [122.30, 29.80], [121.60, 29.90], [121.40, 30.80], [121.50, 31.50]
+      ],
+      "note": "Hand-authored sketch spanning the Yangtze mouth (Shanghai/Yangshan) down to Ningbo-Zhoushan, the export-side counterpart to the LA/Long Beach ring. First-pass approximation, not a chart."
+    }
+  ]
+}

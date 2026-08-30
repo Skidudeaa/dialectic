@@ -113,7 +113,13 @@ const JOB_COPY: Record<string, JobCopy> = {
     label: 'Live world signals',
     term: 'world-signal',
     what: 'polls public feeds — aircraft, earthquakes, fires, satellites, launches — for the areas your rooms have actually placed on the map, and shows what is there right now; each observation expires on its own, and placing one is yours alone',
-    off: 'nothing reads what it gathers yet, so it stays dark rather than poll unseen.',
+    off: 'it stays dark only when no room has placed geography.',
+  },
+  world_watch: {
+    label: 'World watch',
+    term: 'world-signal',
+    what: 'files what the live feeds report inside the geography this room placed, and speaks up when a new contact lands in an area a human has bound to a thesis node — two turns a day at most',
+    off: 'no room has bound geography to the thesis yet.',
   },
   field_inference: {
     label: 'Field marks',

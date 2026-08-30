@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useMemo, useState } from 'react'
 import type { AtlasState } from '../../../hooks/useAtlas.ts'
+import { useWorldObservations } from '../../../hooks/useWorldObservations.ts'
 import type {
   AtlasEdge,
   AtlasGeoScope,
@@ -446,6 +447,11 @@ export function AtlasScene({
 }: AtlasSceneProps) {
   const worldMode = isWorldView(view)
   const decoded = useMemo(() => decodeWorldView(view), [view])
+  // Recorded observations are room-fenced by the API, so they load only for
+  // the room World is focused on; House mode (no room) draws none. Hook
+  // sits here, above every early return, per rules-of-hooks.
+  const recorded = useWorldObservations(worldMode ? decoded?.roomId ?? null : null)
+  const observations = recorded.status === 'ready' ? recorded.projection.observations : []
 
   const onCameraSettle = useCallback((camera: WorldCamera) => {
     if (!onView) return
@@ -537,6 +543,7 @@ export function AtlasScene({
           <WorldView
             scopes={scopes}
             signals={signals}
+            observations={observations}
             sources={signalSources?.sources ?? []}
             initialCamera={decoded?.camera ?? null}
             focusScopes={focusScopes}

@@ -619,7 +619,8 @@
 }
 
 /* World Lens: the Bench's one door onto Atlas / World (App decides whether
-   it exists; the caption merely hosts it). */
+   it exists; WorldStrip.css's `.world-strip` hosts it, above the DAG hero,
+   since the World Lens consumer added a strip worth putting it beside). */
 .cockpit-world-link {
   margin-left: 0.6rem;
   background: var(--color-cacao);

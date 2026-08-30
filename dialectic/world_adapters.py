@@ -664,8 +664,12 @@ def register_world_signal_jobs(scheduler) -> None:
     scheduler.register(Job(
         "world_signals", WORLD_SIGNALS_INTERVAL_S, refresh_world_signals,
         enabled_env="WORLD_SIGNALS_ENABLED",
-        # Dark until set: the store is in-memory and its one reader is the
-        # Atlas `?signals=true` flag, so 2,000 polls a week were discarded
-        # unseen (audit 2026-08-29). Turn on when something consumes it.
-        enabled_default=False,
+        # On by default again (World Lens plan, 2026-08-30): the audit's
+        # "2,000 polls a week discarded unseen" is no longer true — it has a
+        # reader now. `llm/world_watch.py`'s `world_watch` job (registered
+        # right after this one) polls this same store every 300s, persists
+        # terms-cleared contacts into `world_observations`, and can interject
+        # on a bound scope. The Atlas `?signals=true` flag remains a second,
+        # optional reader.
+        enabled_default=True,
     ))

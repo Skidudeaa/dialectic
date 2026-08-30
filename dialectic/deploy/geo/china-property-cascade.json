@@ -1,0 +1,39 @@
+{
+  "room_id": "e1ff2cca-04ed-4b50-8c38-c0df78520e21",
+  "room_name": "China Property Cascade Trading Room",
+  "scopes": [
+    {
+      "kind": "polygon",
+      "label": "Pearl River Delta (approx.)",
+      "ring": [
+        [112.95, 22.90], [113.60, 23.30], [114.45, 22.75],
+        [114.25, 22.10], [113.50, 21.85], [112.95, 22.20], [112.95, 22.90]
+      ],
+      "note": "Hand-authored sketch of the Guangzhou–Shenzhen–Hong Kong conurbation — the property-sales bellwether region in the south. First-pass approximation, not a chart."
+    },
+    {
+      "kind": "polygon",
+      "label": "Yangtze River Delta (approx.)",
+      "ring": [
+        [119.80, 31.20], [121.00, 32.20], [122.00, 31.50],
+        [121.80, 30.30], [120.50, 30.00], [119.80, 30.60], [119.80, 31.20]
+      ],
+      "note": "Hand-authored sketch of the Shanghai–Suzhou–Hangzhou–Nanjing conurbation — the property-sales bellwether region in the east. First-pass approximation, not a chart."
+    },
+    {
+      "kind": "region",
+      "label": "Bo Hai",
+      "natural_earth": "Bo Hai",
+      "note": "Natural Earth 10m marine polygon, public domain — the northern industrial-coast gulf, iron/copper freight context."
+    },
+    {
+      "kind": "polygon",
+      "label": "Pilbara iron-ore ports (approx.)",
+      "ring": [
+        [116.50, -20.65], [117.20, -20.85], [118.60, -20.55],
+        [118.70, -20.25], [117.70, -20.05], [116.60, -20.30], [116.50, -20.65]
+      ],
+      "note": "Hand-authored sketch of the Port Hedland / Dampier / Cape Lambert export coast — Australia's iron-ore supply side of the property-cascade demand link. First-pass approximation, not a chart."
+    }
+  ]
+}

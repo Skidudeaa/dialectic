@@ -98,3 +98,50 @@ The HUD readouts are **not** ported: upstream draws them inside the fragment
 shader as seven-segment glyphs, which is invisible to a screen reader and
 absent when WebGL is. `WorldHud.tsx` is ordinary DOM over the canvas, and
 every number in it also exists in the complete text list below the globe.
+
+## Amendment 2026-08-30 — `world_observations`: the first durable trace
+
+The owner's "it just doesn't do nearly enough yet" plan (World Lens: a
+sensor for the thesis) turns the process-local `WorldSignalStore` above into
+a durable table for the first time — `world_observations`, migration 026,
+written by the new `world_watch` job (`llm/world_watch.py`, 300s). This
+amendment records the terms that decision touches; nothing above changes
+for the five adapters themselves.
+
+- **Persistence is a CHECK constraint, not a policy document a future
+  adapter can forget to read.** `world_observations.provider` is
+  constrained to exactly `usgs`, `adsb`, `launch` — the three providers
+  whose terms already clear redistribution above (USGS public domain,
+  Launch Library 2 CC BY 4.0, adsb.lol ODbL). Persisting an adsb.lol
+  contact carries its credit line in the row's own `provenance` column, the
+  same field the live cockpit already reads it from — one credit string,
+  two readers.
+- **`iss` (wheretheiss.at) remains ephemeral-only.** No redistribution
+  terms were ever recorded for it (unchanged from the original 2026-08-26
+  gate), so it is not in the CHECK's allowed set and `world_watch` never
+  attempts to write one. It stays visible only in the live, in-memory
+  cockpit view.
+- **`firms` stays dark** (no `FIRMS_MAP_KEY` configured) and is therefore
+  moot for persistence the same way it is moot for the live layer — an
+  unconfigured adapter reports `not_configured` and touches neither the
+  network nor this table.
+- **AISStream and OpenSky are unchanged and untouched.** Both remain
+  CLOSED/EXCLUDED exactly as recorded above; `world_watch` reads only the
+  in-process store the five configured adapters already populate, so a
+  provider that was never activated cannot reach `world_observations`
+  either.
+- **Retention is 30 days**, enforced by a `DELETE` inside the same job tick
+  (`llm/world_watch.py`, see its own `ponytail:` comment) — a replay store
+  for older contacts is a later decision, not this one.
+- **The authority ladder is unchanged, restated because this is the row most
+  likely to be misread as an exception to it: an observation is evidence
+  ABOUT a human-confirmed scope, never geometry with authority of its own.**
+  `world_observations.scope_id` is a hard FK into `geo_scopes`; the writer
+  never calls `insert_scope`, never creates a scope, and never upgrades a
+  scope's authority. No provider writes `GeoScope` on poll — still true,
+  now with a durable table sitting right next to the ephemeral one and still
+  obeying it.
+
+See `dialectic/CLAUDE.md`'s 2026-08-30 amendment for the consumer job's
+interjection behavior and `deploy/seed_room_geo.py` for how a room acquires
+the confirmed scopes an observation needs before any of this applies to it.

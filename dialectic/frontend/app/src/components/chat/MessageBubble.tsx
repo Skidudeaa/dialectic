@@ -169,6 +169,8 @@ function reasonHeadline(reason: string): string {
       return 'One of you had been quiet a while, relative to the room.'
     case 'wire_interjection':
       return 'A news story crossed the relevance threshold it holds for the linked thesis.'
+    case 'world_interjection':
+      return 'A live feed reported something inside geography this room placed and bound to the thesis.'
     case 'silence_follow_up':
       return 'It had asked something here and nobody had answered yet.'
     case 'protocol_active':

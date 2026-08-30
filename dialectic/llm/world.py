@@ -400,6 +400,61 @@ def _signals_summary(
     }
 
 
+_SCOPE_OBSERVATIONS_SQL = """
+SELECT label, layer, provider, seen_count, last_seen_at
+FROM world_observations
+WHERE room_id = $1 AND scope_id = $2
+ORDER BY last_seen_at DESC
+LIMIT $3
+"""
+
+_ROOM_OBSERVATION_COUNTS_SQL = """
+SELECT scope_id, count(*) AS n, max(last_seen_at) AS newest_at
+FROM world_observations
+WHERE room_id = $1 AND last_seen_at > now() - interval '24 hours'
+GROUP BY scope_id
+ORDER BY newest_at DESC
+"""
+
+_WORLD_QUERY_OBSERVATION_CAP = 10
+
+
+async def _scope_observations(db: Any, room_id: UUID, scope_id: UUID) -> list[dict[str, Any]]:
+    """The scope's own newest contacts — counts and labels only, same rule
+    as room_record.py's ambient section, so the tool answer and the ambient
+    prompt block never disagree about what a room has seen."""
+    rows = await db.fetch(
+        _SCOPE_OBSERVATIONS_SQL, room_id, scope_id, _WORLD_QUERY_OBSERVATION_CAP,
+    )
+    return [
+        {
+            "label": row["label"],
+            "layer": row["layer"],
+            "provider": row["provider"],
+            "seen_count": row["seen_count"],
+            "last_seen_at": row["last_seen_at"].isoformat() if row["last_seen_at"] else None,
+        }
+        for row in rows
+    ]
+
+
+async def _room_observation_counts(
+    db: Any, room_id: UUID, scope_labels: dict[str, str],
+) -> list[dict[str, Any]]:
+    """Per-scope contact counts over the last 24h, for the room overview —
+    the same window room_record.py's "Seen in the world" block reads."""
+    rows = await db.fetch(_ROOM_OBSERVATION_COUNTS_SQL, room_id)
+    return [
+        {
+            "scope_id": f"geo_scope:{row['scope_id']}",
+            "scope_label": scope_labels.get(str(row["scope_id"]), ""),
+            "count": row["n"],
+            "newest_at": row["newest_at"].isoformat() if row["newest_at"] else None,
+        }
+        for row in rows
+    ]
+
+
 def _scope_uuid(value: str) -> UUID | None:
     if not value.startswith("geo_scope:"):
         return None
@@ -467,6 +522,12 @@ async def world_query(
             "signals": _signals_summary(store, room_id, now=current_time),
         }
         if selected_id is None:
+            scope_labels = {
+                scope.id.removeprefix("geo_scope:"): scope.label for scope in visible
+            }
+            result["observations"] = await _room_observation_counts(
+                db, room_id, scope_labels,
+            )
             return result
 
         review = await geo_service.review(room_id, selected_id)
@@ -490,6 +551,7 @@ async def world_query(
                 )
             bindings.append(binding.model_dump(mode="json"))
         result["show_on_world"]["object"] = review.root_id
+        current_uuid = UUID(review.current.id.removeprefix("geo_scope:"))
         current = _scope_summary(review.current)
         current.update({
             "root_id": review.root_id,
@@ -502,6 +564,7 @@ async def world_query(
                 "Field bindings are interpretations under human review; "
                 "provisional does not mean confirmed."
             ),
+            "observations": await _scope_observations(db, room_id, current_uuid),
         })
         result["scope"] = current
         return result

@@ -86,6 +86,32 @@ INSERT INTO events (id, timestamp, event_type, room_id, thread_id, user_id, payl
 VALUES ($1, $2, $3, $4, NULL, $5, $6)
 """
 
+_WORLD_OBSERVATIONS_LIST_SQL = """
+SELECT wo.id, wo.scope_id, g.label AS scope_label, wo.provider, wo.signal_id,
+       wo.layer, wo.kind, wo.label, wo.geometry, wo.provenance, wo.details,
+       wo.observed_at, wo.retrieved_at, wo.first_seen_at, wo.last_seen_at,
+       wo.seen_count
+FROM world_observations wo
+JOIN geo_scopes g ON g.id = wo.scope_id
+WHERE wo.room_id = $1 AND wo.last_seen_at > now() - ($2::int * interval '1 hour')
+ORDER BY wo.last_seen_at DESC
+LIMIT $3
+"""
+
+_WORLD_OBSERVATIONS_COUNTS_SQL = """
+SELECT wo.scope_id, g.label AS scope_label, wo.layer, count(*) AS n,
+       max(wo.last_seen_at) AS newest_at
+FROM world_observations wo
+JOIN geo_scopes g ON g.id = wo.scope_id
+WHERE wo.room_id = $1 AND wo.last_seen_at > now() - ($2::int * interval '1 hour')
+GROUP BY wo.scope_id, g.label, wo.layer
+ORDER BY newest_at DESC
+"""
+
+_OBSERVATIONS_CAP = 500
+_OBSERVATIONS_HOURS_MIN = 1
+_OBSERVATIONS_HOURS_MAX = 168
+
 _PLACED_SIGNAL_SQL = """
 SELECT id
 FROM geo_scopes
@@ -146,6 +172,43 @@ class GeoRedrawRequest(BaseModel):
     note: Optional[str] = None
 
 
+class WorldObservationOut(BaseModel):
+    """One durable provider contact, exactly as read — geometry included,
+    because this is the row a human explicitly asked to see (the read door
+    the plan calls out), unlike room_record.py's ambient prompt section,
+    which deliberately never renders a coordinate to the model."""
+
+    id: str
+    scope_id: str
+    scope_label: str
+    provider: str
+    signal_id: str
+    layer: str
+    kind: str
+    label: str
+    geometry: dict
+    provenance: dict
+    details: dict
+    observed_at: Optional[datetime] = None
+    retrieved_at: datetime
+    first_seen_at: datetime
+    last_seen_at: datetime
+    seen_count: int
+
+
+class WorldObservationCountOut(BaseModel):
+    scope_id: str
+    scope_label: str
+    layer: str
+    count: int
+    newest_at: Optional[datetime] = None
+
+
+class WorldObservationsResponse(BaseModel):
+    observations: list[WorldObservationOut]
+    counts: list[WorldObservationCountOut]
+
+
 def _timestamp(value: Optional[datetime]) -> Optional[str]:
     return value.isoformat() if value is not None else None
 
@@ -186,6 +249,63 @@ async def get_geo(
     """Every live scope in the room. Projects; never writes."""
     await _authorize(room_id, token, current_user.user_id, db)
     return await GeoScopeService(db).build(room_id)
+
+
+@router.get(
+    "/rooms/{room_id}/world/observations", response_model=WorldObservationsResponse,
+)
+async def get_world_observations(
+    room_id: UUID,
+    hours: int = 24,
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db=Depends(get_db),
+) -> WorldObservationsResponse:
+    """Durable provider observations inside this room's confirmed geography
+    (World Lens plan, Step 1/4) — the frontend's read of `world_observations`.
+    Same auth as every other room-scoped geo route. `hours` is CLAMPED, never
+    rejected, to [1, 168] — an out-of-range caller gets the nearest legal
+    window rather than a 422. Rows capped at the 500 newest; counts are
+    exact and unbounded (aggregates, not rows)."""
+    await _authorize(room_id, token, current_user.user_id, db)
+    bounded_hours = max(_OBSERVATIONS_HOURS_MIN, min(_OBSERVATIONS_HOURS_MAX, hours))
+    rows = await db.fetch(
+        _WORLD_OBSERVATIONS_LIST_SQL, room_id, bounded_hours, _OBSERVATIONS_CAP,
+    )
+    count_rows = await db.fetch(_WORLD_OBSERVATIONS_COUNTS_SQL, room_id, bounded_hours)
+    return WorldObservationsResponse(
+        observations=[
+            WorldObservationOut(
+                id=str(row["id"]),
+                scope_id=f"geo_scope:{row['scope_id']}",
+                scope_label=row["scope_label"],
+                provider=row["provider"],
+                signal_id=row["signal_id"],
+                layer=row["layer"],
+                kind=row["kind"],
+                label=row["label"],
+                geometry=row["geometry"],
+                provenance=row["provenance"],
+                details=row["details"],
+                observed_at=row["observed_at"],
+                retrieved_at=row["retrieved_at"],
+                first_seen_at=row["first_seen_at"],
+                last_seen_at=row["last_seen_at"],
+                seen_count=row["seen_count"],
+            )
+            for row in rows
+        ],
+        counts=[
+            WorldObservationCountOut(
+                scope_id=f"geo_scope:{row['scope_id']}",
+                scope_label=row["scope_label"],
+                layer=row["layer"],
+                count=row["n"],
+                newest_at=row["newest_at"],
+            )
+            for row in count_rows
+        ],
+    )
 
 
 @router.post("/rooms/{room_id}/geo", response_model=GeoScope, status_code=201)

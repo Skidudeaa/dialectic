@@ -1016,3 +1016,29 @@ CREATE TRIGGER geo_scopes_reject_delete BEFORE DELETE ON geo_scopes
     FOR EACH ROW EXECUTE FUNCTION reject_geo_scope_mutation();
 COMMENT ON TABLE geo_scopes IS
     'World Lens: append-only geography attached to existing rows, with authority and provenance. See geo_scopes.py.';
+
+-- ============================================================
+-- WORLD OBSERVATIONS (migration 026) — the World Lens consumer's durable row
+-- ============================================================
+CREATE TABLE IF NOT EXISTS world_observations (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    room_id       UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+    scope_id      UUID NOT NULL REFERENCES geo_scopes(id),   -- the HUMAN scope it fell inside
+    provider      TEXT NOT NULL CHECK (provider IN ('usgs', 'adsb', 'launch')),
+    signal_id     TEXT NOT NULL,                              -- world_signal:<provider>:<source_id>
+    layer         TEXT NOT NULL,
+    kind          TEXT NOT NULL,
+    label         TEXT NOT NULL DEFAULT '',
+    geometry      JSONB NOT NULL,                             -- the point as reported; provenance says whose
+    provenance    JSONB NOT NULL,                             -- provider, source id/URL, credit, licence
+    details       JSONB NOT NULL DEFAULT '{}',
+    observed_at   TIMESTAMPTZ,
+    retrieved_at  TIMESTAMPTZ NOT NULL,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    seen_count    INT NOT NULL DEFAULT 1,
+    UNIQUE (scope_id, signal_id)                               -- one row per contact per scope; upsert bumps last_seen/count
+);
+CREATE INDEX IF NOT EXISTS idx_world_observations_room ON world_observations (room_id, last_seen_at DESC);
+COMMENT ON TABLE world_observations IS
+    'World Lens consumer: provider contacts observed inside a human-confirmed scope. Evidence, never authority. See llm/world_watch.py.';

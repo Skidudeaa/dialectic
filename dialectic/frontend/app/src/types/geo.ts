@@ -119,13 +119,57 @@ export interface WorldSignal {
   geometry: { type: string; coordinates: unknown }
   provenance: GeoProvenance
   source_state: GeoSourceState
-  freshness: GeoFreshnessState
+  /**
+   * `'recorded'` is a FRONTEND-ONLY value, never emitted by the backend's
+   * `WorldSignal` (world_signals.py validates against `GEO_FRESHNESS_STATES`
+   * alone). It marks a `world_observations` row rendered on the globe as a
+   * WorldSignal-shaped glyph — see worldSignals.ts's `observationToSignal`.
+   */
+  freshness: GeoFreshnessState | 'recorded'
   coverage: string
   observed_at?: string | null
   retrieved_at: string
   expires_at?: string | null
   label: string
   details: Record<string, unknown>
+}
+
+/**
+ * A durable `world_observations` row (migration 026) — "provider P reported
+ * contact X inside human-confirmed scope S at T", never geometry with
+ * authority. Same standing as a `reading_item`: evidence, not a scope.
+ */
+export interface WorldObservation {
+  id: string
+  scope_id: string
+  scope_label: string
+  provider: string
+  signal_id: string
+  layer: string
+  kind: GeoKind
+  label: string
+  geometry: { type: string; coordinates: unknown }
+  provenance: GeoProvenance
+  details: Record<string, unknown>
+  observed_at?: string | null
+  retrieved_at: string
+  first_seen_at: string
+  last_seen_at: string
+  seen_count: number
+}
+
+/** Per-scope rollup — what WorldStrip and the World layer toggle count from. */
+export interface WorldObservationCount {
+  scope_id: string
+  scope_label: string
+  layer: string
+  count: number
+  newest_at: string
+}
+
+export interface WorldObservationsProjection {
+  observations: WorldObservation[]
+  counts: WorldObservationCount[]
 }
 
 /** Provider snapshot state stays separate from each observation's state. */

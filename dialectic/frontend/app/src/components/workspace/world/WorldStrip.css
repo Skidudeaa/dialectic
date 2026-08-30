@@ -1,0 +1,16 @@
+/* WorldStrip — one line above the Bench's DAG hero. Same voice as
+ * cockpit-caption (trading/cockpit.css): italic serif, faint, an
+ * orientation line rather than a data module of its own. */
+.world-strip {
+    margin: 0 0 0.5rem;
+    font: italic 11.5px/1.5 var(--font-serif);
+    color: var(--color-faint);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.world-strip-empty a {
+    color: var(--color-amber);
+}

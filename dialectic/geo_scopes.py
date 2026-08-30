@@ -250,6 +250,65 @@ def centroid(geometry: dict) -> list[float]:
     return [round(lon, 5), round(lat, 5)]
 
 
+def _point_in_ring(lon: float, lat: float, ring: list) -> bool:
+    """Even-odd ray cast: count crossings of a ray from (lon, lat) heading
+    east against every edge of one closed ring. Odd crossings = inside.
+
+    WHY this formula never divides by zero: the crossing test only evaluates
+    the x-intersect branch when `(yi > lat) != (yj > lat)`, which is false
+    whenever yi == yj (a horizontal edge) — so `yj - yi` is never the
+    denominator on a degenerate edge.
+    """
+    inside = False
+    n = len(ring)
+    if n < 3:
+        return False
+    x1, y1 = float(ring[-1][0]), float(ring[-1][1])
+    for point in ring:
+        x2, y2 = float(point[0]), float(point[1])
+        if (y1 > lat) != (y2 > lat):
+            x_intersect = (x2 - x1) * (lat - y1) / (y2 - y1) + x1
+            if lon < x_intersect:
+                inside = not inside
+        x1, y1 = x2, y2
+    return inside
+
+
+def _point_in_polygon_rings(rings: list, lon: float, lat: float) -> bool:
+    """A GeoJSON Polygon's `coordinates`: inside the outer ring (rings[0])
+    and outside every hole (rings[1:])."""
+    if not rings or not _point_in_ring(lon, lat, rings[0]):
+        return False
+    return not any(_point_in_ring(lon, lat, hole) for hole in rings[1:])
+
+
+def point_in_geometry(geometry: dict, lon: float, lat: float) -> bool:
+    """Whether (lon, lat) falls inside a GeoJSON Polygon or MultiPolygon.
+
+    WHY this exists (World Lens plan, Step 2): the live provider adapters
+    fence a room by its scopes' padded BOUNDING BOX (`world_adapters.
+    RoomFence`, +1.5 degrees) — cheap, but it is why a room "sees" aircraft
+    over Kerman when its actual scope is the Strait itself. A durable
+    observation needs the tighter test: literally inside the polygon a human
+    drew, not inside its box. Point and LineString scopes have no interior,
+    so a signal is never "inside" one — they return False rather than raise,
+    since a room may hold a mix of scope kinds and only the polygons/regions
+    among them can ever gate an observation.
+
+    Stdlib only, ~25 lines: shapely is not installed, and a single function
+    is not a reason to add a geometry dependency.
+    """
+    if not isinstance(geometry, dict):
+        return False
+    kind = geometry.get("type")
+    coords = geometry.get("coordinates")
+    if kind == "Polygon":
+        return _point_in_polygon_rings(coords or [], lon, lat)
+    if kind == "MultiPolygon":
+        return any(_point_in_polygon_rings(polygon, lon, lat) for polygon in (coords or []))
+    return False
+
+
 # --- subjects -------------------------------------------------------------
 
 async def resolve_subject_in_room(db, room_id: UUID, subject: dict) -> bool:

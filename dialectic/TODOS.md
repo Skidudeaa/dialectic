@@ -33,10 +33,21 @@
       reject what the participant proposes, mark from the map.
 - [ ] **AIS terms.** AISStream is beta with no formal terms; owner decision
       before any vessel layer (`docs/WORLD_PROVIDERS.md`).
-- [ ] **Phase 3 when opened:** `llm/world_feeds.py` adapters in terms-clarity
-      order (USGS → adsb.lol → FIRMS → AIS), `world_query` with the counting
-      law (every count names its scope; `unknown` never 0), migration 022
-      `world_samples` + the 900s sampler + `world_trend`, a Bench strip.
+- [x] ~~**Phase 3 when opened:** `llm/world_feeds.py` adapters in
+      terms-clarity order (USGS → adsb.lol → FIRMS → AIS), `world_query` with
+      the counting law (every count names its scope; `unknown` never 0),
+      migration 022 `world_samples` + the 900s sampler + `world_trend`, a
+      Bench strip.~~ **Tombstoned 2026-08-30**: this line described an old
+      Phase-3 sketch (handoff ledger 08-28:101). It shipped under different
+      names and a different design: live adapters landed 2026-08-26 as
+      `world_adapters.py` (not `world_feeds.py`), migration 022 turned out to
+      be geo-scope lineage (not `world_samples`) — the actual durable table
+      is `world_observations`, migration **026**, from the 2026-08-30 "World
+      Lens: the consumer" work (see `dialectic/CLAUDE.md`'s amendment of the
+      same date). There is no `world_trend` and no 900s sampler; the
+      consumer is `llm/world_watch.py`'s 300s job, point-in-polygon against
+      confirmed scopes, upsert-with-`seen_count` instead of samples. A Bench
+      strip (`WorldStrip.tsx`) shipped in the same work.
 - [ ] **Mark glyphs on the globe** once a room's geo-marks read as a layer;
       `analystEngine` port only with the first live feed.
 - [ ] **Redraw the Hormuz sketch** if a founder wants a charted lane: an

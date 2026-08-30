@@ -551,3 +551,87 @@ async def test_world_query_fences_other_rooms_and_never_calls_write_methods(db):
     assert "Foreign secret" not in json.dumps(listing)
     assert foreign["error"] == "scope_not_found"
     assert after == before
+
+
+# ---------------------------------------------------------------------------
+# world_query — observations (World Lens plan, Step 4: "the tool answer and
+# the ambient [room_record.py] section agree")
+# ---------------------------------------------------------------------------
+
+async def _observation(db, *, scope_id: UUID, label: str, provider: str = "adsb",
+                        layer: str = "aircraft", seen_count: int = 1) -> None:
+    now = datetime.now(timezone.utc)
+    await db.execute(
+        """INSERT INTO world_observations
+               (id, room_id, scope_id, provider, signal_id, layer, kind, label,
+                geometry, provenance, details, observed_at, retrieved_at,
+                first_seen_at, last_seen_at, seen_count)
+           VALUES ($1, $2, $3, $4, $5, $6, 'point', $7, $8, $9, '{}', $10, $10,
+                   $10, $10, $11)""",
+        uuid4(), ROOM, scope_id, provider, f"world_signal:{provider}:{label}",
+        layer, label,
+        {"type": "Point", "coordinates": [56.3, 26.5]},
+        {"provider": provider, "acquisition": "adapter", "credit": "test"},
+        now, seen_count,
+    )
+
+
+@pytest.mark.asyncio
+async def test_world_query_scope_detail_includes_newest_observations(db):
+    scope_id = await _accepted_scope(db, label="Strait of Hormuz (approx.)")
+    await _observation(db, scope_id=scope_id, label="Contact A", seen_count=3)
+    await _observation(db, scope_id=scope_id, label="Contact B", provider="usgs", layer="quake")
+
+    out = await world.world_query(
+        db, ROOM, "Hormuz room", {"scope": "Strait of Hormuz (approx.)"},
+    )
+
+    observations = out["scope"]["observations"]
+    assert len(observations) == 2
+    assert {o["label"] for o in observations} == {"Contact A", "Contact B"}
+    by_label = {o["label"]: o for o in observations}
+    assert by_label["Contact A"]["provider"] == "adsb"
+    assert by_label["Contact A"]["layer"] == "aircraft"
+    assert by_label["Contact A"]["seen_count"] == 3
+    assert by_label["Contact A"]["last_seen_at"] is not None
+    # Never coordinates — only presence/labels/counts.
+    assert "geometry" not in by_label["Contact A"]
+    assert "coordinates" not in json.dumps(observations)
+
+
+@pytest.mark.asyncio
+async def test_world_query_scope_detail_has_no_observations_key_when_none_exist(db):
+    await _accepted_scope(db, label="Strait of Hormuz (approx.)")
+
+    out = await world.world_query(
+        db, ROOM, "Hormuz room", {"scope": "Strait of Hormuz (approx.)"},
+    )
+
+    assert out["scope"]["observations"] == []
+
+
+@pytest.mark.asyncio
+async def test_world_query_overview_reports_per_scope_counts(db):
+    scope_id = await _accepted_scope(db, label="Strait of Hormuz (approx.)")
+    await _observation(db, scope_id=scope_id, label="Contact A")
+    await _observation(db, scope_id=scope_id, label="Contact B")
+
+    out = await world.world_query(db, ROOM, "Hormuz room", {})
+
+    assert out["observations"] == [
+        {
+            "scope_id": f"geo_scope:{scope_id}",
+            "scope_label": "Strait of Hormuz (approx.)",
+            "count": 2,
+            "newest_at": out["observations"][0]["newest_at"],
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_world_query_overview_observations_empty_when_none_exist(db):
+    await _accepted_scope(db, label="Strait of Hormuz (approx.)")
+
+    out = await world.world_query(db, ROOM, "Hormuz room", {})
+
+    assert out["observations"] == []
