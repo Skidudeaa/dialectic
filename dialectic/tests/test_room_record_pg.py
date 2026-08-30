@@ -252,6 +252,23 @@ class TestSeenInTheWorld:
         assert "56301234" not in text
         assert "26501234" not in text
 
+    async def test_fires_line_counts_new_cells_against_the_baseline(self, db):
+        scope_id = await _scope(db, label="Persian Gulf")
+        await _observation(db, scope_id=scope_id, label="Fire · 30 MW · high conf · NEW vs 30-day baseline",
+                           provider="firms", layer="fires")
+        await db.execute(
+            "UPDATE world_observations SET details = '{\"novel\": true}' WHERE layer='fires'")
+        for n in range(2):
+            await _observation(db, scope_id=scope_id, label=f"Fire · 9 MW · nominal conf · recurring {n+1}d (likely flare)",
+                               provider="firms", layer="fires", lon=50.1 + n)
+        await db.execute(
+            "UPDATE world_observations SET details = '{\"novel\": false}' WHERE layer='fires' AND details = '{}'")
+
+        text = (await build_room_record(db, ROOM)).to_prompt_section()
+
+        assert "Persian Gulf: 3 fires contact(s), 1 NEW vs 30-day baseline" in text
+        assert "NASA FIRMS" in text  # the header explains what a fires contact is
+
     async def test_empty_observations_render_no_block(self, db):
         await _scope(db, label="Persian Gulf")
 

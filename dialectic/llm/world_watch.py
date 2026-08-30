@@ -41,8 +41,16 @@ GUARDRAILS:
   - `PERSISTABLE_PROVIDERS` — usgs (PD) and launch (CC-BY) persist freely,
     adsb (ODbL) persists with its credit line carried in `provenance`. `iss`
     is ephemeral-only (no redistribution terms recorded) and is never
-    written here even though the store may hold it; `firms`/`ais`/`opensky`
-    are excluded the same way. See `docs/WORLD_PROVIDERS.md`.
+    written here even though the store may hold it; `ais`/`opensky` are
+    excluded the same way. `firms` joined 2026-08-30 (migration 027, NASA
+    open data with acknowledgement). See `docs/WORLD_PROVIDERS.md`.
+  - fires are scored, not just counted (`_score_fire`): a FIRMS contact is a
+    cell-day, and a cell this ROOM has seen on any prior day inside the
+    30-day window is a recurring source — a gas flare, a refinery, a
+    furnace — not news. Measured over the Persian Gulf, 87 of 106 daily
+    cells recur. Only a `novel` cell with FRP >= `FIRE_NOVEL_MIN_FRP_MW` and
+    non-low confidence counts as NEW for the interjection gate below;
+    everything persists either way, labelled with its baseline.
   - interjection fires only when: (a) a NEW contact (an insert, not a
     seen-count bump) landed in a scope with >=1 causal binding, (b)
     `rooms.auto_interjection_enabled`, (c) under `WORLD_DAILY_CAP`/room/day
@@ -83,17 +91,43 @@ INTERJECTION_REASON = "world_interjection"
 WORLD_DAILY_CAP = 2
 RETENTION_DAYS = 30
 
-# Never iss/firms/ais — see the module docstring's provider terms note.
-PERSISTABLE_PROVIDERS = frozenset({"usgs", "adsb", "launch"})
+# Never iss/ais — see the module docstring's provider terms note.
+PERSISTABLE_PROVIDERS = frozenset({"usgs", "adsb", "launch", "firms"})
+# A novel fire cell below this fire radiative power is edge noise, not an
+# event (novel Gulf cells on 2026-08-30 ran 58/36/34/31/21 MW at the top).
+FIRE_NOVEL_MIN_FRP_MW = 10.0
 
+# The UPDATE branch refreshes the picture, not just the counter: a fire
+# cell-day re-seen by the next satellite carries a higher FRP, and the
+# `||` merge keeps the baseline keys `_score_fire` wrote (the adapter's
+# details never carry them). The label keeps its baseline suffix (the
+# fourth ` · ` field) across the refresh.
 _UPSERT_OBSERVATION_SQL = """
 INSERT INTO world_observations
     (room_id, scope_id, provider, signal_id, layer, kind, label,
      geometry, provenance, details, observed_at, retrieved_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (scope_id, signal_id) DO UPDATE
-    SET last_seen_at = NOW(), seen_count = world_observations.seen_count + 1
+    SET last_seen_at = NOW(), seen_count = world_observations.seen_count + 1,
+        details = world_observations.details || EXCLUDED.details,
+        label = CASE WHEN world_observations.details ? 'novel'
+                     THEN EXCLUDED.label || ' · ' || split_part(world_observations.label, ' · ', 4)
+                     ELSE EXCLUDED.label END,
+        observed_at = COALESCE(EXCLUDED.observed_at, world_observations.observed_at)
 RETURNING (xmax = 0) AS inserted
+"""
+
+_FIRE_PRIOR_DAYS_SQL = """
+SELECT count(DISTINCT details->>'acq_date')
+FROM world_observations
+WHERE room_id = $1 AND layer = 'fires'
+  AND details->>'cell' = $2 AND details->>'acq_date' <> $3
+"""
+
+_FIRE_VERDICT_SQL = """
+UPDATE world_observations
+   SET details = details || $3::jsonb, label = $4
+ WHERE scope_id = $1 AND signal_id = $2
 """
 
 
@@ -109,6 +143,45 @@ async def _upsert_observation(conn, room_id: UUID, scope_id: UUID, signal) -> bo
         signal.observed_at, signal.retrieved_at,
     )
     return bool(row["inserted"])
+
+
+def fire_counts_as_new(verdict: dict) -> bool:
+    """The layer-aware gate: a fires insert is NEW only when the room has
+    never seen that cell in the window, it is hot enough, and VIIRS itself
+    did not flag the pixel low-confidence."""
+    return bool(
+        verdict.get("novel")
+        and float(verdict.get("frp_mw") or 0.0) >= FIRE_NOVEL_MIN_FRP_MW
+        and verdict.get("confidence") != "l"
+    )
+
+
+async def _score_fire(conn, room_id: UUID, scope_id: UUID, signal) -> dict:
+    """Score one freshly inserted fire cell-day against the room's own
+    history and stamp the verdict on the row. Room-scoped, so a cell known
+    in any of the room's scopes is not new to the room. Runs only on
+    inserts (~20/day), never on the bump path.
+
+    ponytail: no index on (room_id, layer, details->>'cell') — ~18k rows
+    under 30-day retention; add one if this query shows in pg_stat.
+    """
+    details = signal.details or {}
+    cell, acq_date = details.get("cell"), details.get("acq_date")
+    prior_days = 0
+    if cell and acq_date:
+        prior_days = await conn.fetchval(_FIRE_PRIOR_DAYS_SQL, room_id, cell, acq_date) or 0
+    novel = prior_days == 0
+    suffix = "NEW vs 30-day baseline" if novel else f"recurring {prior_days}d (likely flare)"
+    verdict = {
+        "baseline_days": prior_days, "novel": novel,
+        "frp_mw": details.get("frp_mw"), "confidence": details.get("confidence"),
+        "satellites": details.get("satellites"), "acquired": details.get("acquired"),
+    }
+    await conn.execute(
+        _FIRE_VERDICT_SQL, scope_id, signal.id,
+        {"baseline_days": prior_days, "novel": novel}, f"{signal.label} · {suffix}",
+    )
+    return verdict
 
 
 async def _interjections_today(conn, room_id) -> int:
@@ -149,12 +222,21 @@ async def _last_world_fingerprint(conn, room_id) -> Optional[str]:
     return row["fingerprint"] if row else None
 
 
-def _interjection_content(sections, signals_by_id: dict) -> str:
+_FIRE_NOTE = (
+    "A fires contact is a NASA FIRMS VIIRS thermal anomaly. In oil and gas "
+    "country most detections are flares and furnaces that recur every day; "
+    "a cell this room has NOT seen in 30 days, at this power, is the "
+    "exception — the question is what it could be, not that it is hot."
+)
+
+
+def _interjection_content(sections, signals_by_id: dict, fire_verdicts: Optional[dict] = None) -> str:
     """The synthetic SYSTEM turn: scope label, each new contact's
     label/layer/provider + credit, and the bound node ids with their
     relation — so the facilitator speaks to a thesis node, not a dot on a
     map."""
     lines = ["WORLD — new contacts just reported inside geography this room placed:"]
+    fires_seen = False
     for scope, signal_ids, bindings in sections:
         scope_label = scope.label if scope is not None else "(scope)"
         lines.append(f"\nScope: {scope_label}")
@@ -167,11 +249,23 @@ def _interjection_content(sections, signals_by_id: dict) -> str:
                 f"- {signal.label or signal.source_id} "
                 f"({signal.layer}, {signal.provider}) — credit: {credit}"
             )
+            verdict = (fire_verdicts or {}).get(signal_id)
+            if verdict is not None:
+                fires_seen = True
+                sats = ", ".join(verdict.get("satellites") or []) or "VIIRS"
+                lines.append(
+                    f"  FRP {verdict.get('frp_mw')} MW, confidence "
+                    f"{verdict.get('confidence')}, {sats}, acquired "
+                    f"{verdict.get('acquired')}, prior days in this room's "
+                    f"30-day window: {verdict.get('baseline_days')}"
+                )
         for binding in bindings:
             lines.append(
                 f"Bound to thesis node {binding.target.node_id} "
                 f"({binding.relation}) in book {binding.target.book_id}."
             )
+    if fires_seen:
+        lines.append(f"\n{_FIRE_NOTE}")
     lines.append(
         "\nSpeak to what this means for that node in one short turn; "
         "cite the source."
@@ -182,6 +276,7 @@ def _interjection_content(sections, signals_by_id: dict) -> str:
 async def _maybe_interject(
     ctx: SchedulerContext, conn, room_id: UUID,
     new_by_scope: dict[UUID, list[str]], scopes_by_id: dict, signals_by_id: dict,
+    fire_verdicts: Optional[dict] = None,
 ) -> bool:
     """Whether this run's new contacts earn the room one facilitator turn.
     See the module docstring's guardrail list for the five gates in order."""
@@ -238,7 +333,7 @@ async def _maybe_interject(
         speaker_type=SpeakerType.SYSTEM,
         user_id=None,
         message_type=MessageType.TEXT,
-        content=_interjection_content(sections, signals_by_id),
+        content=_interjection_content(sections, signals_by_id, fire_verdicts),
     )
 
     orchestrator = LLMOrchestrator(conn, db_pool=ctx.pool)
@@ -284,6 +379,7 @@ async def _process_room(ctx: SchedulerContext, conn, room_id: UUID) -> dict:
     new_count = 0
     seen_count = 0
     new_by_scope: dict[UUID, list[str]] = {}
+    fire_verdicts: dict[str, dict] = {}
 
     for scope_id, scope in scopes_by_id.items():
         for signal in signals:
@@ -297,6 +393,11 @@ async def _process_room(ctx: SchedulerContext, conn, room_id: UUID) -> dict:
                 continue
             if await _upsert_observation(conn, room_id, scope_id, signal):
                 new_count += 1
+                if signal.layer == "fires":
+                    verdict = await _score_fire(conn, room_id, scope_id, signal)
+                    if not fire_counts_as_new(verdict):
+                        continue  # persisted and labelled; a flare is not news
+                    fire_verdicts[signal.id] = verdict
                 new_by_scope.setdefault(scope_id, []).append(signal.id)
             else:
                 seen_count += 1
@@ -305,6 +406,7 @@ async def _process_room(ctx: SchedulerContext, conn, room_id: UUID) -> dict:
     if new_by_scope:
         interjected = await _maybe_interject(
             ctx, conn, room_id, new_by_scope, scopes_by_id, signals_by_id,
+            fire_verdicts,
         )
 
     return {"new": new_count, "seen": seen_count, "interjected": interjected}

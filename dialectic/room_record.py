@@ -59,7 +59,9 @@ _HEADER = (
     "commit), and what was read lately. Treat as the room's own ledger; "
     "cite it, do not restate it. Geography is what humans placed; "
     "observations are what feeds reported inside it — cite the scope and "
-    "the source, never invent a position.\n"
+    "the source, never invent a position. A fires contact is a NASA FIRMS "
+    "VIIRS thermal anomaly: recurring cells are flares and furnaces; only "
+    "one marked NEW against the room's 30-day baseline is unusual.\n"
 )
 
 # Presence only. Selecting `cc.confidence` or `cc.peer_forecast` here would
@@ -98,6 +100,7 @@ _COMMITMENT_DEADLINES_SQL = (
 # plan, Step 4).
 _WORLD_GROUPED_SQL = """
 SELECT g.id AS scope_id, g.label AS scope_label, wo.layer, count(*) AS n,
+       count(*) FILTER (WHERE (wo.details->>'novel')::boolean) AS novel,
        (array_agg(wo.label ORDER BY wo.last_seen_at DESC))[1] AS newest_label,
        (array_agg(wo.provider ORDER BY wo.last_seen_at DESC))[1] AS newest_provider,
        max(wo.last_seen_at) AS newest_at
@@ -306,8 +309,9 @@ async def _world_lines(conn, room_id: UUID, bound_scope_ids: list) -> list:
     evidence about anything the room has claimed."""
     grouped = await conn.fetch(_WORLD_GROUPED_SQL, room_id, WORLD_GROUP_CAP)
     lines = [
-        f'- {row["scope_label"]}: {row["n"]} {row["layer"]} contact(s), '
-        f'newest "{row["newest_label"]}" {_age(row["newest_at"])} '
+        f'- {row["scope_label"]}: {row["n"]} {row["layer"]} contact(s)'
+        + (f', {row["novel"]} NEW vs 30-day baseline' if row["layer"] == "fires" else "")
+        + f', newest "{row["newest_label"]}" {_age(row["newest_at"])} '
         f'({row["newest_provider"]})'
         for row in grouped
     ]

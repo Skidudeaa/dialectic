@@ -74,6 +74,23 @@ describe('addSignal dimming', () => {
     expect(recordedBillboard!.width).toBeLessThan(liveBillboard!.width)
   })
 
+  it('sizes a fire by radiative power and rings only a NEW cell', () => {
+    const fire = (details: Record<string, unknown>): WorldObservation => ({
+      ...observation, layer: 'fires', details,
+    })
+    const weak = collectingViewer()
+    addSignal(weak.viewer, { ...observationToSignal(fire({ frp_mw: 2, novel: false })), freshness: 'current' })
+    const strong = collectingViewer()
+    addSignal(strong.viewer, { ...observationToSignal(fire({ frp_mw: 60, novel: true })), freshness: 'current' })
+    const weakPoint = weak.added[0].point as { pixelSize: number; outlineWidth: number }
+    const strongPoint = strong.added[0].point as { pixelSize: number; outlineWidth: number }
+    expect(strongPoint.pixelSize).toBeGreaterThan(weakPoint.pixelSize)
+    expect(strongPoint.outlineWidth).toBe(2)
+    expect(weakPoint.outlineWidth).toBe(1)
+    expect((strong.added[0].label as { text: string }).text.startsWith('NEW ')).toBe(true)
+    expect((weak.added[0].label as { text: string }).text.startsWith('NEW ')).toBe(false)
+  })
+
   it('sizes a recorded earthquake ring smaller than its live counterpart', () => {
     const quake: WorldObservation = {
       ...observation, layer: 'earthquakes', details: { magnitude: 6 },

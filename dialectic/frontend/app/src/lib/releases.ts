@@ -51,6 +51,20 @@ export interface Release {
 /** Newest first. `releases.test.ts` pins that order at the data level. */
 export const RELEASES: Release[] = [
   {
+    id: 'fires',
+    date: '2026-08-30',
+    title: 'Fires',
+    body:
+      'NASA’s satellites report every hot pixel they see, and over an oil coast that is a ' +
+      'hundred a day — flares, furnaces, the same cells every night. Each fire on the globe is ' +
+      'now one square kilometre for one day, scored against what the room has seen in the last ' +
+      'thirty days: a recurring cell is labelled as the flare it almost certainly is, and only a ' +
+      'cell the room has never seen, burning hard enough, is marked NEW. The participant is ' +
+      'woken for those, and never for the flare field. The Bench counts them; ' +
+      '[[world-signal|World]] draws them sized by fire power.',
+    jobs: ['world_watch'],
+  },
+  {
     id: 'world-consumer',
     date: '2026-08-30',
     title: 'World watch',

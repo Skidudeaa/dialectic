@@ -1024,7 +1024,7 @@ CREATE TABLE IF NOT EXISTS world_observations (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     room_id       UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
     scope_id      UUID NOT NULL REFERENCES geo_scopes(id),   -- the HUMAN scope it fell inside
-    provider      TEXT NOT NULL CHECK (provider IN ('usgs', 'adsb', 'launch')),
+    provider      TEXT NOT NULL CHECK (provider IN ('usgs', 'adsb', 'launch', 'firms')),  -- 027: firms joined
     signal_id     TEXT NOT NULL,                              -- world_signal:<provider>:<source_id>
     layer         TEXT NOT NULL,
     kind          TEXT NOT NULL,

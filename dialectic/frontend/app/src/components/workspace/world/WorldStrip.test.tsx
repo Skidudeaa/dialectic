@@ -72,6 +72,26 @@ describe('WorldStrip', () => {
     expect(screen.getByRole('button', { name: 'World ↗' })).toBeInTheDocument()
   })
 
+  it('counts NEW fires from the rows, never the recurring flare field', async () => {
+    vi.mocked(api.getGeo).mockResolvedValue(geo([scope()]))
+    const fire = (id: string, novel: boolean) => ({
+      id, scope_id: 's1', scope_label: 'Persian Gulf', provider: 'firms',
+      signal_id: `world_signal:firms:${id}`, layer: 'fires', kind: 'point' as const,
+      label: 'Fire · 30 MW · high conf', geometry: { type: 'Point', coordinates: [50.6, 30.4] },
+      provenance: { provider: 'firms', acquisition: 'adapter:firms', source_id: id, url: null, credit: 'NASA FIRMS' },
+      details: { frp_mw: 30, novel }, retrieved_at: 'now', first_seen_at: 'now', last_seen_at: 'now', seen_count: 1,
+    })
+    vi.mocked(api.getWorldObservations).mockResolvedValue({
+      observations: [fire('a', true), fire('b', false), fire('c', false)],
+      counts: [{ scope_id: 's1', scope_label: 'Persian Gulf', layer: 'fires', count: 3, newest_at: new Date().toISOString() }],
+    })
+
+    render(<WorldStrip roomId="room-h" />)
+    const strip = await screen.findByTestId('world-strip')
+    expect(strip.textContent).toMatch(/3 contacts in 1 scope today/)
+    expect(strip.textContent).toMatch(/· 1 new fire$/)
+  })
+
   it('shows the count line with no age clause when this room has zero contacts yet', async () => {
     vi.mocked(api.getGeo).mockResolvedValue(geo([scope()]))
     vi.mocked(api.getWorldObservations).mockResolvedValue(observations([]))

@@ -26,6 +26,9 @@ const caps = (jobs: Caps['jobs'] = []): Caps => ({
 /** Driven off the real data, so these keep testing the shipped list. */
 const jobbed = RELEASES.find((release) => release.jobs && release.jobs.length > 0)!
 const jobName = jobbed.jobs![0]
+// Two entries may name the same job (world_watch: 'world-consumer' and 'fires');
+// the badge under test is the newest entry's, which renders first.
+const jobRow = async () => (await screen.findAllByText(jobName))[0].closest('li') as HTMLElement
 const unjobbed = RELEASES.find((release) => !release.jobs)!
 
 function entryRow(title: string): HTMLElement {
@@ -55,7 +58,7 @@ describe('WhatsNewPanel', () => {
     )
     render(<WhatsNewPanel roomId="r1" />)
 
-    const row = (await screen.findByText(jobName)).closest('li') as HTMLElement
+    const row = await jobRow()
     expect(row.textContent).toMatch(/off/i)
     expect(row.textContent).not.toMatch(/live/i)
     expect(row.textContent).toMatch(/switched off/i)
@@ -65,7 +68,7 @@ describe('WhatsNewPanel', () => {
     // Different facts: one is a flag someone can flip, one is not here at all.
     vi.mocked(api.getRoomCapabilities).mockResolvedValue(caps([]))
     render(<WhatsNewPanel roomId="r1" />)
-    const row = (await screen.findByText(jobName)).closest('li') as HTMLElement
+    const row = await jobRow()
     expect(row.textContent).toMatch(/absent/i)
     expect(row.textContent).toMatch(/not on this deployment/i)
   })
@@ -75,7 +78,7 @@ describe('WhatsNewPanel', () => {
       caps([{ name: jobName, enabled: true, interval_s: 900, daily_at: null }]),
     )
     render(<WhatsNewPanel roomId="r1" />)
-    const row = (await screen.findByText(jobName)).closest('li') as HTMLElement
+    const row = await jobRow()
     expect(row.textContent).toMatch(/live/i)
     // DEPLOYMENT-scoped, and the wording is the assertion. This read "running
     // here", which told the reader the state was per-room; the capabilities
@@ -93,7 +96,7 @@ describe('WhatsNewPanel', () => {
       caps([{ name: jobName, enabled: true, interval_s: 900, daily_at: null }]),
     )
     render(<WhatsNewPanel roomId="r1" />)
-    await screen.findByText(jobName)
+    await jobRow()
     // A green badge it did not earn would be exactly the lie this panel exists
     // to prevent — so a UI-only release gets nothing rather than something.
     expect(entryRow(unjobbed.title).querySelector('.wn-state')).toBeNull()

@@ -434,3 +434,112 @@ async def test_daily_cap_holds(room, isolated_signal_store, monkeypatch):
     assert over["new"] == 1          # persistence is unaffected by the cap
     assert over["interjected"] is False
     assert len(calls) == world_watch.WORLD_DAILY_CAP
+
+
+# ---------------------------------------------------------------------------
+# fires: cell-days scored against the room's own 30-day baseline (migration 027)
+# ---------------------------------------------------------------------------
+
+def _fire(source_id: str, *, frp: float = 30.0, confidence: str = "h",
+          acq_date: str = "2026-08-30", cell: str = "26.20,56.40",
+          lon: float = INSIDE[0], lat: float = INSIDE[1]) -> WorldSignal:
+    base = _signal("firms", source_id, lon, lat, layer="fires")
+    return base.model_copy(update={
+        "label": f"Fire · {frp:.0f} MW · {confidence} conf",
+        "details": {
+            "cell": cell, "acq_date": acq_date, "pixels": 1, "frp_mw": frp,
+            "confidence": confidence, "satellites": ["N20"],
+            "acquired": f"{acq_date} 0412Z",
+        },
+    })
+
+
+@pytest.mark.asyncio
+async def test_a_novel_hot_fire_in_a_bound_scope_interjects_with_its_verdict(
+    room, isolated_signal_store, monkeypatch,
+):
+    db, scope_id = room
+    await _bind_scope_to_node(db, scope_id)
+    isolated_signal_store.replace(_snapshot("firms", _fire("d30.cellA")))
+    calls: list = []
+    monkeypatch.setattr(world_watch.LLMOrchestrator, "force_response", _fake_force_response(calls))
+
+    detail = await world_watch._process_room(_ctx(), db, ROOM)
+    assert detail["new"] == 1 and detail["interjected"] is True
+    content = calls[0]["content"]
+    assert "FRP 30.0 MW" in content
+    assert "prior days in this room's 30-day window: 0" in content
+    assert "thermal anomaly" in content  # the flare note rides along
+    row = await db.fetchrow(
+        "SELECT label, details FROM world_observations WHERE provider = 'firms'")
+    assert row["details"]["novel"] is True and row["details"]["baseline_days"] == 0
+    assert row["label"] == "Fire · 30 MW · h conf · NEW vs 30-day baseline"
+
+
+@pytest.mark.asyncio
+async def test_a_recurring_cell_persists_labelled_as_a_flare_and_never_interjects(
+    room, isolated_signal_store, monkeypatch,
+):
+    db, scope_id = room
+    await _bind_scope_to_node(db, scope_id)
+    # Yesterday's row in the same cell: the room already knows this source.
+    isolated_signal_store.replace(_snapshot("firms", _fire("d29.cellA", acq_date="2026-08-29")))
+    calls: list = []
+    monkeypatch.setattr(world_watch.LLMOrchestrator, "force_response", _fake_force_response(calls))
+    await world_watch._process_room(_ctx(), db, ROOM)
+    assert len(calls) == 1  # the first day is novel by construction
+
+    isolated_signal_store.replace(_snapshot("firms", _fire("d30.cellA", frp=80.0)))
+    detail = await world_watch._process_room(_ctx(), db, ROOM)
+    assert detail["new"] == 1          # persisted…
+    assert detail["interjected"] is False  # …but a flare is not news
+    assert len(calls) == 1
+    row = await db.fetchrow(
+        "SELECT label, details FROM world_observations WHERE signal_id = 'world_signal:firms:d30.cellA'")
+    assert row["details"]["novel"] is False and row["details"]["baseline_days"] == 1
+    assert row["label"].endswith("· recurring 1d (likely flare)")
+
+
+@pytest.mark.asyncio
+async def test_weak_or_low_confidence_novel_fires_persist_but_do_not_wake_the_room(
+    room, isolated_signal_store, monkeypatch,
+):
+    db, scope_id = room
+    await _bind_scope_to_node(db, scope_id)
+    isolated_signal_store.replace(_snapshot(
+        "firms",
+        _fire("d30.weak", frp=4.0, cell="26.21,56.41"),
+        _fire("d30.lowc", frp=50.0, confidence="l", cell="26.22,56.42"),
+    ))
+    calls: list = []
+    monkeypatch.setattr(world_watch.LLMOrchestrator, "force_response", _fake_force_response(calls))
+    detail = await world_watch._process_room(_ctx(), db, ROOM)
+    assert detail["new"] == 2
+    assert detail["interjected"] is False
+    assert calls == []
+    assert await db.fetchval("SELECT count(*) FROM world_observations WHERE provider='firms'") == 2
+
+
+def test_fire_gate_is_the_three_conditions():
+    ok = {"novel": True, "frp_mw": 10.0, "confidence": "n"}
+    assert world_watch.fire_counts_as_new(ok)
+    assert not world_watch.fire_counts_as_new({**ok, "novel": False})
+    assert not world_watch.fire_counts_as_new({**ok, "frp_mw": 9.9})
+    assert not world_watch.fire_counts_as_new({**ok, "confidence": "l"})
+
+
+@pytest.mark.asyncio
+async def test_a_re_seen_cell_day_refreshes_frp_and_keeps_its_verdict(room, isolated_signal_store):
+    db, scope_id = room
+    isolated_signal_store.replace(_snapshot("firms", _fire("d30.cellB", frp=12.0, cell="26.23,56.43")))
+    await world_watch._process_room(_ctx(), db, ROOM)
+    # The next overpass reports the same cell hotter.
+    isolated_signal_store.replace(_snapshot("firms", _fire("d30.cellB", frp=45.0, cell="26.23,56.43")))
+    detail = await world_watch._process_room(_ctx(), db, ROOM)
+    assert detail["new"] == 0 and detail["seen"] == 1
+    row = await db.fetchrow(
+        "SELECT label, details, seen_count FROM world_observations WHERE signal_id = 'world_signal:firms:d30.cellB'")
+    assert row["seen_count"] == 2
+    assert row["details"]["frp_mw"] == 45.0          # refreshed
+    assert row["details"]["novel"] is True           # verdict survived the merge
+    assert row["label"] == "Fire · 45 MW · h conf · NEW vs 30-day baseline"

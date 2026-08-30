@@ -145,3 +145,45 @@ for the five adapters themselves.
 See `dialectic/CLAUDE.md`'s 2026-08-30 amendment for the consumer job's
 interjection behavior and `deploy/seed_room_geo.py` for how a room acquires
 the confirmed scopes an observation needs before any of this applies to it.
+
+## Amendment 2026-08-30 (late) — NASA FIRMS is ON and persists (amend-beside)
+
+Prefer this over every earlier FIRMS row. The owner supplied a MAP_KEY (verified
+against `mapserver/mapkey_status`: 5,000 transactions / 10 minutes) and asked for
+the feed to be integrated, not merely lit.
+
+| Provider | Datasets (exact IDs) | Key | Floor | Flag | State |
+|---|---|---|---|---|---|
+| NASA FIRMS | `VIIRS_NOAA20_NRT`, `VIIRS_NOAA21_NRT`, `VIIRS_SNPP_NRT`, day range 1, `/api/area/csv/{key}/{dataset}/{bbox}/1` | `FIRMS_MAP_KEY` | 600 s | `WORLD_SIGNALS_FIRMS_ENABLED` | **ON.** 3 datasets × ~6 fences ≈ 18 transactions per floor. |
+
+- **Terms**: NASA Earth science data carry no use restrictions. FIRMS requests
+  acknowledgement, which every signal's `provenance.credit` carries: *"We
+  acknowledge the use of data and/or imagery from NASA's Fire Information for
+  Resource Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of
+  NASA's Earth Observing System Data and Information System (EOSDIS)."*
+  Migration `027_world_observations_firms.sql` admits `firms` to
+  `world_observations`; `llm/world_watch.py::PERSISTABLE_PROVIDERS` mirrors it.
+- **The unit is a cell-day, not a pixel** (`world_adapters._merge_fire_cells`):
+  0.01° ≈ 1.1 km ≈ three VIIRS pixels, keyed by acquisition date. Pixels from
+  three satellites and two overlapping room boxes merge into one contact carrying
+  max FRP, best confidence, the satellites, and the newest fix (`observed_at` is
+  now parsed from `acq_date`/`acq_time`; it used to be `None`).
+- **Latency / false-positive semantics, measured 2026-08-30 over the Persian
+  Gulf fence, ten days of NOAA-20**: ~400 pixels/day → ~106 cells/day, **87 of
+  which recur on 2–6 of 6 days — gas flares and refineries**, 19 novel. NRT
+  detections land ~3 h after overpass; a cell-day's TTL in the live store is 2 h
+  from retrieval, re-polled every 10 min.
+- **Baseline law** (`world_watch._score_fire`): on first insert a fire cell-day
+  is scored against the ROOM's own `world_observations` history — `baseline_days`
+  = distinct prior acquisition dates for that cell in the 30-day retention
+  window. `novel` (0 prior days) labels the row `NEW vs 30-day baseline`;
+  otherwise `recurring {n}d (likely flare)`. Only a novel cell with FRP ≥ 10 MW
+  and non-low VIIRS confidence counts as NEW for the interjection gate; every
+  cell persists regardless. **Cold start**: the first day every cell is novel by
+  construction and the bound Hormuz scopes will earn one interjection; the
+  baseline is complete after one day of polling.
+- The participant's `### Seen in the world (24h)` line for fires carries the
+  NEW count; `world_query` orders novel fires first; the Bench strip counts
+  them; World draws a fire sized by FRP and rings only a NEW one.
+
+AISStream and OpenSky remain CLOSED / EXCLUDED exactly as recorded above.

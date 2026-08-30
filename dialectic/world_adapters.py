@@ -474,56 +474,129 @@ async def poll_launches(client: httpx.AsyncClient, fences: list[RoomFence]) -> A
 
 
 # ── NASA FIRMS active fires (free key) ───────────────────────────────────
+# Exact dataset IDs, as docs/WORLD_PROVIDERS.md demands ("FIRMS" alone is not
+# a dataset). Three VIIRS satellites means three overpasses a day instead of
+# one; 3 sources x ~6 fences = 18 transactions per 10-minute floor against a
+# documented ceiling of 5,000.
+FIRMS_SOURCES = ("VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT", "VIIRS_SNPP_NRT")
 FIRMS_URL = (
     "https://firms.modaps.eosdis.nasa.gov/api/area/csv/"
-    "{key}/VIIRS_NOAA20_NRT/{west},{south},{east},{north}/1"
+    "{key}/{source}/{west},{south},{east},{north}/1"
 )
+# A fire observation is a CELL-DAY, not a pixel. 0.01 deg is ~1.1 km, about
+# three VIIRS 375 m pixels: one burning field is one contact, and the same
+# cell re-seen by the next satellite bumps `seen_count` instead of adding a
+# row. Measured 2026-08-30 over the Persian Gulf: ~400 pixels/day collapse to
+# ~106 cells, of which ~87 recur daily (gas flares) — the recurrence is what
+# `llm/world_watch.py` scores against, and it needs a stable cell key.
+FIRE_CELL_DECIMALS = 2
+_CONFIDENCE_RANK = {"h": 3, "n": 2, "l": 1}
+_CONFIDENCE_WORD = {"h": "high", "n": "nominal", "l": "low"}
+
+
+def _fire_observed_at(acq_date: str, acq_time: str) -> Optional[datetime]:
+    try:
+        return datetime.strptime(f"{acq_date} {acq_time.zfill(4)}", "%Y-%m-%d %H%M").replace(
+            tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _float(value: Any) -> Optional[float]:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _merge_fire_cells(rows: Iterable[dict]) -> list[dict]:
+    """Collapse FIRMS pixels into one observation per cell per acquisition day,
+    keeping the strongest reading (max FRP / brightness, best confidence) and
+    the newest fix. Replaces `_dedupe_by_source` for this adapter: two rooms'
+    overlapping boxes and two satellites' overpasses both land here."""
+    cells: dict[str, dict] = {}
+    for row in rows:
+        lat, lon = _float(row.get("latitude")), _float(row.get("longitude"))
+        if lat is None or lon is None:
+            continue
+        acq_date = str(row.get("acq_date", ""))
+        acq_time = str(row.get("acq_time", "")).zfill(4)
+        cell = f"{lat:.{FIRE_CELL_DECIMALS}f},{lon:.{FIRE_CELL_DECIMALS}f}"
+        key = f"{acq_date}.{cell}"
+        # `_SOURCE_ID` admits [A-Za-z0-9._~-]: no comma, and a leading minus
+        # would be a leading '-' — so the id form swaps them out.
+        source_id = f"{acq_date}.{cell}".replace(",", "_").replace("-", "~")
+        conf = str(row.get("confidence", "") or "").lower()[:1]
+        frp = _float(row.get("frp")) or 0.0
+        bright = _float(row.get("bright_ti4")) or 0.0
+        observed = _fire_observed_at(acq_date, acq_time)
+        sat = str(row.get("satellite", "") or "")
+        cur = cells.get(key)
+        if cur is None:
+            cells[key] = {
+                "source_id": source_id,
+                "lon": round(lon, FIRE_CELL_DECIMALS),
+                "lat": round(lat, FIRE_CELL_DECIMALS),
+                "layer": "fires",
+                "url": "https://firms.modaps.eosdis.nasa.gov/",
+                "observed_at": observed,
+                "ttl_s": FIRE_TTL_S,
+                "details": {
+                    "cell": cell,
+                    "acq_date": acq_date,
+                    "pixels": 1,
+                    "frp_mw": frp,
+                    "brightness_k": bright,
+                    "confidence": conf,
+                    "satellites": [sat] if sat else [],
+                    "daynight": row.get("daynight"),
+                    "acquired": f"{acq_date} {acq_time}Z",
+                },
+            }
+            continue
+        d = cur["details"]
+        d["pixels"] += 1
+        d["frp_mw"] = max(d["frp_mw"], frp)
+        d["brightness_k"] = max(d["brightness_k"], bright)
+        if _CONFIDENCE_RANK.get(conf, 0) > _CONFIDENCE_RANK.get(d["confidence"], 0):
+            d["confidence"] = conf
+        if sat and sat not in d["satellites"]:
+            d["satellites"] = sorted([*d["satellites"], sat])
+        if observed is not None and (cur["observed_at"] is None or observed > cur["observed_at"]):
+            cur["observed_at"] = observed
+            d["acquired"] = f"{acq_date} {acq_time}Z"
+    for cell_obs in cells.values():
+        d = cell_obs["details"]
+        word = _CONFIDENCE_WORD.get(d["confidence"], "unknown")
+        cell_obs["label"] = f"Fire · {d['frp_mw']:.0f} MW · {word} conf"
+    return list(cells.values())
 
 
 @_guarded("NASA FIRMS VIIRS active fire detections, last 24 hours")
 async def poll_fires(client: httpx.AsyncClient, fences: list[RoomFence]) -> AdapterResult:
+    """VIIRS NRT thermal anomalies (NOAA-20, NOAA-21, Suomi-NPP), day range 1,
+    one area query per source per placed room, merged into cell-days."""
     key = os.environ.get("FIRMS_MAP_KEY", "").strip()
     if not key:
         return AdapterResult(
             "not_configured", "not_applicable",
             "NASA FIRMS active fires — set FIRMS_MAP_KEY to enable",
         )
-    observations: list[dict] = []
+    rows: list[dict] = []
     partial = False
     for fence in fences:
-        try:
-            body = (await _get(client, FIRMS_URL.format(
-                key=key,
-                west=round(fence.west, 3), south=round(fence.south, 3),
-                east=round(fence.east, 3), north=round(fence.north, 3),
-            ))).text
-        except (httpx.HTTPError, ValueError):
-            partial = True
-            continue
-        for row in csv.DictReader(io.StringIO(body)):
+        for source in FIRMS_SOURCES:
             try:
-                lat, lon = float(row["latitude"]), float(row["longitude"])
-            except (KeyError, TypeError, ValueError):
+                body = (await _get(client, FIRMS_URL.format(
+                    key=key, source=source,
+                    west=round(fence.west, 3), south=round(fence.south, 3),
+                    east=round(fence.east, 3), north=round(fence.north, 3),
+                ))).text
+            except (httpx.HTTPError, ValueError):
+                partial = True
                 continue
-            acq_date, acq_time = row.get("acq_date", ""), str(row.get("acq_time", "")).zfill(4)
-            observations.append({
-                "source_id": f"{acq_date}.{acq_time}.{lat:.5f}.{lon:.5f}".replace("-", "~"),
-                "lon": lon,
-                "lat": lat,
-                "layer": "fires",
-                "label": f"Fire detection {row.get('confidence', '')}".strip(),
-                "url": "https://firms.modaps.eosdis.nasa.gov/",
-                "observed_at": None,
-                "ttl_s": FIRE_TTL_S,
-                "details": {
-                    "brightness_k": row.get("bright_ti4"),
-                    "frp_mw": row.get("frp"),
-                    "confidence": row.get("confidence"),
-                    "satellite": row.get("satellite"),
-                    "acquired": f"{acq_date} {acq_time}Z",
-                },
-            })
-    detections = _dedupe_by_source(observations)
+            rows.extend(csv.DictReader(io.StringIO(body)))
+    detections = _merge_fire_cells(rows)
     return AdapterResult(
         "partial" if partial else "ok",
         "current",

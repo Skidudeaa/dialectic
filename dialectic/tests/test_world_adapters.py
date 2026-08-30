@@ -178,19 +178,75 @@ async def test_a_missing_firms_key_is_not_configured(monkeypatch):
     assert result.freshness == "not_applicable"
 
 
+FIRMS_HEADER = "latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight\n"
+
+
 @pytest.mark.asyncio
 async def test_firms_csv_rows_become_point_signals(monkeypatch):
     monkeypatch.setenv("FIRMS_MAP_KEY", "test-key")
-    csv_body = (
-        "latitude,longitude,bright_ti4,acq_date,acq_time,satellite,confidence,frp\n"
-        "26.20,56.30,330.1,2026-08-26,0412,N20,n,12.4\n"
-    )
-    async with client_returning(lambda r: httpx.Response(200, text=csv_body)) as client:
+    csv_body = FIRMS_HEADER + "26.20,56.30,330.1,0.7,0.7,2026-08-26,412,N20,VIIRS,n,2.0NRT,300,12.4,N\n"
+    urls = []
+
+    def handler(request):
+        urls.append(str(request.url))
+        # Only one satellite sees this cell; the other two return an empty day.
+        return httpx.Response(200, text=csv_body if "NOAA20" in str(request.url) else FIRMS_HEADER)
+
+    async with client_returning(handler) as client:
         result = await wa.poll_fires(client, [fence()])
     assert result.source_state == "ok"
+    # Every VIIRS dataset is asked, by its exact ID, for each fence.
+    assert {u.split("/api/area/csv/test-key/")[1].split("/")[0] for u in urls} == set(wa.FIRMS_SOURCES)
     snapshot = wa.build_snapshot(wa.ADAPTERS[4], result, [fence()])
     assert len(snapshot.signals) == 1
-    assert snapshot.signals[0].details["frp_mw"] == "12.4"
+    signal = snapshot.signals[0]
+    assert signal.details["frp_mw"] == 12.4
+    assert signal.details["cell"] == "26.20,56.30"
+    assert signal.details["acq_date"] == "2026-08-26"
+    assert signal.details["confidence"] == "n"
+    assert signal.details["satellites"] == ["N20"]
+    # acq_time 412 is 04:12Z — parsed, not left None.
+    assert signal.observed_at == datetime(2026, 8, 26, 4, 12, tzinfo=timezone.utc)
+    assert signal.label == "Fire · 12 MW · nominal conf"
+    assert signal.source_id == "2026~08~26.26.20_56.30"
+
+
+def test_fire_cells_merge_pixels_and_keep_the_strongest_reading():
+    rows = [
+        {"latitude": "26.201", "longitude": "56.299", "bright_ti4": "330", "acq_date": "2026-08-26",
+         "acq_time": "412", "satellite": "N20", "confidence": "n", "frp": "12.4", "daynight": "N"},
+        {"latitude": "26.204", "longitude": "56.303", "bright_ti4": "367", "acq_date": "2026-08-26",
+         "acq_time": "1330", "satellite": "N", "confidence": "h", "frp": "40.0", "daynight": "D"},
+        # a different day in the same cell is a different observation
+        {"latitude": "26.20", "longitude": "56.30", "bright_ti4": "300", "acq_date": "2026-08-27",
+         "acq_time": "0400", "satellite": "N21", "confidence": "l", "frp": "3", "daynight": "N"},
+        # a cell in the southern/western hemisphere still yields a legal source id
+        {"latitude": "-33.5", "longitude": "-70.6", "bright_ti4": "300", "acq_date": "2026-08-27",
+         "acq_time": "0400", "satellite": "N21", "confidence": "l", "frp": "3", "daynight": "N"},
+    ]
+    merged = {o["details"]["cell"] + o["details"]["acq_date"]: o for o in wa._merge_fire_cells(rows)}
+    assert len(merged) == 3
+    day1 = merged["26.20,56.302026-08-26"]
+    assert day1["details"]["pixels"] == 2
+    assert day1["details"]["frp_mw"] == 40.0
+    assert day1["details"]["brightness_k"] == 367.0
+    assert day1["details"]["confidence"] == "h"
+    assert day1["details"]["satellites"] == ["N", "N20"]
+    assert day1["details"]["acquired"] == "2026-08-26 1330Z"
+    assert day1["observed_at"] == datetime(2026, 8, 26, 13, 30, tzinfo=timezone.utc)
+    assert day1["label"] == "Fire · 40 MW · high conf"
+    south = merged["-33.50,-70.602026-08-27"]
+    assert south["source_id"] == "2026~08~27.~33.50_~70.60"
+    from world_signals import WorldSignal  # the id grammar must admit it
+    assert WorldSignal.model_validate({
+        "id": f"world_signal:firms:{south['source_id']}", "provider": "firms",
+        "source_id": south["source_id"], "room_id": ROOM_A, "layer": "fires", "kind": "point",
+        "geometry": {"type": "Point", "coordinates": [south["lon"], south["lat"]]},
+        "provenance": {"provider": "firms", "acquisition": "adapter:firms", "source_id": south["source_id"]},
+        "source_state": "ok", "freshness": "current", "coverage": "t",
+        "retrieved_at": datetime.now(timezone.utc), "expires_at": datetime.now(timezone.utc) + timedelta(hours=1),
+        "label": south["label"], "details": south["details"],
+    })
 
 
 # ── the store contract the projection depends on ─────────────────────────
@@ -384,12 +440,10 @@ async def test_the_refresh_completes_and_every_later_adapter_still_polls(monkeyp
 async def test_duplicate_fire_detections_collapse_too(monkeypatch):
     monkeypatch.setenv("FIRMS_MAP_KEY", "test-key")
     near = wa.RoomFence(ROOM_B, 55.5, 25.5, 57.5, 27.5)
-    csv_body = (
-        "latitude,longitude,bright_ti4,acq_date,acq_time,satellite,confidence,frp\n"
-        "26.20,56.30,330.1,2026-08-26,0412,N20,n,12.4\n"
-    )
+    csv_body = FIRMS_HEADER + "26.20,56.30,330.1,0.7,0.7,2026-08-26,0412,N20,VIIRS,n,2.0NRT,300,12.4,N\n"
     async with client_returning(lambda r: httpx.Response(200, text=csv_body)) as client:
         result = await wa.poll_fires(client, [fence(), near])
+    # two fences x three sources all report the same pixel: one cell-day
     assert len(result.observations) == 1
     assert "(1 detections)" in result.coverage
     snapshot = wa.build_snapshot(wa.ADAPTERS[4], result, [fence(), near])

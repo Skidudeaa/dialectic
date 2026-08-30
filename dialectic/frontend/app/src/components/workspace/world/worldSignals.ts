@@ -183,6 +183,32 @@ export function addSignal(
       return
     }
 
+    // A fire is a cell-day sized by fire radiative power. `details.novel`
+    // is world_watch's verdict against the room's 30-day baseline: a
+    // recurring cell (a flare) recedes, a NEW one gets the white ring.
+    if (signal.layer === 'fires') {
+      const frp = num(signal.details.frp_mw) ?? 1
+      const novel = signal.details.novel === true
+      const recurring = signal.details.novel === false
+      const px = Math.min(22, Math.max(8, 8 + 2 * Math.log2(Math.max(frp, 1))))
+      viewer.entities.add({
+        ...base,
+        position: Cesium.Cartesian3.fromDegrees(lon, lat),
+        point: {
+          pixelSize: size(selected ? px + 4 : px),
+          color: color.withAlpha(alpha(recurring ? 0.55 : 0.9)),
+          outlineColor: novel ? Cesium.Color.WHITE : Cesium.Color.WHITE.withAlpha(0.5),
+          outlineWidth: novel ? 2 : 1,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: labelOf(
+          { ...signal, label: novel ? `NEW ${signal.label}` : signal.label }, color, selected,
+        ),
+      })
+      return
+    }
+
     // A quake's ring is its magnitude; everything else is a point.
     const magnitude = num(signal.details.magnitude)
     if (signal.layer === 'earthquakes' && magnitude !== null) {

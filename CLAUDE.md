@@ -320,3 +320,26 @@ should not re-derive:
   prod, 2 memories repaired, dry-run now 0).
 - Last reported full-suite gate: backend **2156**, frontend **604**; current
   backend collection is **2157** after the full-claim regression.
+
+## Amendment 2026-08-30 (late) — NASA FIRMS: fires that mean something (amend-beside)
+
+Prefer this over the 08-30 line saying `firms` is "moot". The owner supplied a
+FIRMS MAP_KEY; the adapter that already existed (`world_adapters.py::poll_fires`)
+now polls three VIIRS datasets by exact ID and emits **cell-days** (0.01°, keyed by
+acquisition date; `observed_at` parsed, pixels merged to max FRP / best
+confidence). **Migration `027`** admits `firms` to `world_observations`;
+`world_watch.PERSISTABLE_PROVIDERS` mirrors it. What made it worth doing:
+measured over the Persian Gulf, 87 of 106 daily fire cells are recurring gas
+flares. So `world_watch._score_fire` stamps every new cell with
+`details.baseline_days`/`details.novel` against the room's own 30-day history
+and labels it `NEW vs 30-day baseline` or `recurring Nd (likely flare)`;
+`fire_counts_as_new` (novel ∧ FRP ≥ 10 MW ∧ confidence ≠ low) is the only way
+a fire reaches the interjection gate, and the interjection carries an
+FRP/confidence/satellite/baseline line plus a one-sentence flare note. The
+upsert's UPDATE branch now refreshes `details`/`label`/`observed_at` (it used
+to bump the counter only). `room_record` renders the NEW count per scope and
+its header says what a fires contact is; `world_query` orders novel fires
+first; WorldStrip shows `· N new fires`; `worldSignals.ts` sizes a fire by FRP
+and rings a NEW one. Cold start: day one is all-novel by construction.
+Known: the Hormuz room holds two live `human_confirmed` "Persian Gulf" scopes —
+every contact there persists twice; owner should retire one.

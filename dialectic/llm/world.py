@@ -404,7 +404,7 @@ _SCOPE_OBSERVATIONS_SQL = """
 SELECT label, layer, provider, seen_count, last_seen_at
 FROM world_observations
 WHERE room_id = $1 AND scope_id = $2
-ORDER BY last_seen_at DESC
+ORDER BY (details->>'novel')::boolean DESC NULLS LAST, last_seen_at DESC
 LIMIT $3
 """
 
