@@ -92,9 +92,9 @@ held Strait, TSS lane, Persian Gulf, Gulf of Oman.
   `~/.claude/plans/world-lens-a-sensor-for-the-thesis.md` (the consumer).
 - Memory: `integration-audit-2026-08-29.md`, `world-consumer-2026-08-30.md`,
   `feedback-integrate-before-adding.md`.
-- Releases: PWA `20260830T040000Z-world-consumer` was the last flip by this
-  session; check `readlink /var/www/dialectic-current` — the FIRMS session may
-  have flipped again.
+- Releases: `/var/www/dialectic-current` → `20260830T164705Z-fires-count`
+  (the FIRMS session's flip, verified at handoff time); this session's own
+  last flip was `20260830T040000Z-world-consumer`.
 - Verification one-liners: `curl -s localhost:8002/health`;
   `psql -U root dialectic -Atc "select job_name,max(started_at) from scheduled_job_runs where job_name in ('world_signals','world_watch','wire_watch') group by 1"`;
   `psql -U root dialectic -Atc "select r.name, o.provider, count(*) from world_observations o join rooms r on r.id=o.room_id group by 1,2 order by 3 desc"`.
