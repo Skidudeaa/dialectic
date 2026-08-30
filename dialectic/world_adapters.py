@@ -301,13 +301,19 @@ async def poll_earthquakes(client: httpx.AsyncClient, fences: list[RoomFence]) -
 # ── adsb.lol live aircraft ───────────────────────────────────────────────
 ADSB_URL = "https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{dist}"
 ADSB_MAX_NM = 250
+# WHY: adsb.lol answered the 4th fence of every poll with 429 once four rooms
+# owned geography (2026-08-30) -- the Sea of Japan fence was starved on every
+# tick. One second between fence requests keeps the burst under its limit.
+ADSB_FENCE_PAUSE_S = 1.0
 
 
 @_guarded("adsb.lol ADS-B receivers within 250 NM of each placed room")
 async def poll_aircraft(client: httpx.AsyncClient, fences: list[RoomFence]) -> AdapterResult:
     observations: list[dict] = []
     partial = False
-    for fence in fences:
+    for index, fence in enumerate(fences):
+        if index and ADSB_FENCE_PAUSE_S:
+            await asyncio.sleep(ADSB_FENCE_PAUSE_S)
         lon, lat = fence.centroid
         dist = int(max(25.0, min(ADSB_MAX_NM, fence.radius_nm + 50.0)))
         try:
