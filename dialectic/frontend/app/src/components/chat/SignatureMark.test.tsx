@@ -13,7 +13,6 @@ describe('SignatureMark — restrained signatures, not colored avatars', () => {
     expect(markGlyph('llm_primary', 'Dialectic')).toBe(')')
     expect(markGlyph('llm_provoker', 'Dialectic')).toBe(')')
     expect(markGlyph('llm_annotator', 'Dialectic')).toBe(')')
-    expect(markGlyph('llm_persona', 'Some Persona')).toBe(')')
   })
 
   it('never renders an inline style or class carrying a per-speaker color', () => {

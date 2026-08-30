@@ -145,6 +145,24 @@ class ToolRegistry:
         return [t.name for t in self.tools]
 
 
+# Owner decision 2026-08-29: forced turns (wire interjections, silence
+# follow-ups) get a NARROW tool set rather than the full room registry or
+# none at all. See FORCED_TOOL_MAX_ITERATIONS/_BUDGET_S in llm/orchestrator.py
+# for the scheduler-tick reasoning that bounds how far this can run.
+FORCED_TURN_TOOLS = ("draft_prediction", "read_article", "search_memories")
+
+
+def narrow_registry(registry: ToolRegistry, names) -> ToolRegistry:
+    """The subset of `registry` whose names are in `names`, in place order.
+
+    WHY a filter rather than a new class: a forced turn is the same
+    room-scoped registry a primary turn would get (same closures over this
+    room's id and book binding) — it should only ever be handed FEWER tools,
+    never a differently-built set.
+    """
+    return ToolRegistry([t for t in registry.tools if t.name in names])
+
+
 # ── payload hygiene ──────────────────────────────────────────────────
 
 

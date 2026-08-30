@@ -28,7 +28,7 @@ precacheAndRoute(self.__WB_MANIFEST)
 // proxy list in vite.config.ts.
 registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html'), {
   denylist: [
-    /^\/(api|ws|auth|rooms|threads|users|health|analytics|graph|replay|stakes|messages|memories|personas|notifications|openapi)\b/,
+    /^\/(api|ws|auth|rooms|threads|users|health|analytics|graph|replay|stakes|messages|memories|notifications|openapi)\b/,
   ],
 }))
 

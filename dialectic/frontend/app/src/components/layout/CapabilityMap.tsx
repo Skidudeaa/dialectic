@@ -118,7 +118,7 @@ const JOB_COPY: Record<string, JobCopy> = {
   field_inference: {
     label: 'Field marks',
     term: 'field-mark',
-    what: 'pencils in provisional marks about the room’s reasoning for you to confirm or contest — capped per run and per day, so a quiet room never wakes up covered in them',
+    what: 'reads the room’s memory, thesis and recent readings, then pencils in provisional marks about the room’s reasoning for you to confirm or contest — capped per run and per day, so a quiet room never wakes up covered in them',
   },
   reading_echo: {
     // No `term`: the marker wraps the LABEL, so it must define the label's own

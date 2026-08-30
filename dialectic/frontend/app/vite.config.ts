@@ -62,7 +62,6 @@ function proxyMap(): Record<string, ProxyOptions> {
     '/stakes': { target: backend, changeOrigin: true },
     '/messages': { target: backend, changeOrigin: true },
     '/memories': { target: backend, changeOrigin: true },
-    '/personas': { target: backend, changeOrigin: true },
     '/notifications': { target: backend, changeOrigin: true },
   }
 }

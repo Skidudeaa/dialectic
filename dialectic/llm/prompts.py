@@ -149,6 +149,7 @@ would have gone."""
         tools_enabled: bool = False,
         message_images: Optional[dict[UUID, list[dict]]] = None,
         home_activity_context: Optional[str] = None,
+        room_record_context: Optional[str] = None,
     ) -> AssembledPrompt:
         """
         Assemble full prompt from components.
@@ -173,6 +174,12 @@ would have gone."""
                 chart someone posted rather than reading a filename. Absent or
                 empty leaves every message in the exact string form it had
                 before vision existed.
+            room_record_context: Optional pre-rendered "## What This Room Has
+                Recorded" section from room_record.py (Field marks, open
+                Round presence, open commitments, recent reading) or its
+                unavailable marker. The orchestrator decides WHEN to fetch it
+                (primary turns only); this just places it, self-contained
+                header included, like cross_session_context.
         """
 
         # Protocol mode: use facilitator identity with protocol-specific override
@@ -199,7 +206,9 @@ would have gone."""
             protocol_section = get_protocol_instructions(protocol)
 
         # Assemble system prompt in priority order:
-        # BASE_IDENTITY → Evolved Identity → User Models → Protocol → Room → Preferences → Memory
+        # BASE_IDENTITY → Evolved Identity → User Models → Self-Awareness →
+        # Protocol → Room → Trading → Preferences → Memory → Room Record →
+        # Home Activity → Cross-Session → Tools (bookend last, when trading)
         system_parts = [identity]
 
         # Evolved identity: injected between base identity and room context
@@ -238,6 +247,14 @@ would have gone."""
             system_parts.append(f"\n\n## Participant Preferences\n{user_context}")
         if memory_context:
             system_parts.append(f"\n\n## Shared Memory (This Room)\n{memory_context}")
+        # The room's own ledger (room_record.py) — self-contained, header
+        # included, like cross_session_section below. Sits after this-room
+        # shared memory and before the Home digest: the only slot that
+        # disturbs neither test_trading_section_ordering nor
+        # test_home_section_sits_before_cross_session_memory nor
+        # TestToolsSection's tail-endswith.
+        if room_record_context:
+            system_parts.append(f"\n\n{room_record_context}")
         # Home only: the bounded cross-room digest (or its unavailable
         # marker) sits between this-room shared memory and personal
         # cross-session memory. The orchestrator decides WHEN to pass it.
@@ -657,7 +674,7 @@ would have gone."""
                 speaker_name = user_map.get(msg.user_id, "Unknown")
                 content = f"[{speaker_name}] {prefix}{msg.content}"
                 role = "user"
-            elif msg.speaker_type in (SpeakerType.LLM_PRIMARY, SpeakerType.LLM_PROVOKER, SpeakerType.LLM_ANNOTATOR, SpeakerType.LLM_PERSONA):
+            elif msg.speaker_type in (SpeakerType.LLM_PRIMARY, SpeakerType.LLM_PROVOKER, SpeakerType.LLM_ANNOTATOR):
                 content = f"{prefix}{msg.content}"
                 role = "assistant"
             else:

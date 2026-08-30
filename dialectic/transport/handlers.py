@@ -30,7 +30,6 @@ from llm.claim_check import schedule_claim_check
 from llm import research
 from llm.protocol_manager import ProtocolManager
 from llm.protocol_library import get_protocol_definition
-from llm.multi_model import MultiModelCoordinator
 from stakes.manager import CommitmentManager
 
 
@@ -45,7 +44,6 @@ def is_llm_speaker(speaker_type: SpeakerType) -> bool:
         SpeakerType.LLM_PRIMARY,
         SpeakerType.LLM_PROVOKER,
         SpeakerType.LLM_ANNOTATOR,
-        SpeakerType.LLM_PERSONA,
     )
 from presence import is_present
 from stakes.detector import CommitmentDetector
@@ -771,15 +769,6 @@ class MessageHandler:
                 },
             ))
 
-        # After LLM response, check if any persona should speak (fire-and-forget)
-        # ARCHITECTURE: Persona check runs after primary LLM, not blocking message flow.
-        # WHY: Personas are opt-in enhancement; failures should never break normal messaging.
-        asyncio.create_task(
-            self._trigger_persona_response(
-                room_id, thread_id, messages, memories, message_content,
-            )
-        )
-
         # After LLM response, check if any active commitments are relevant
         try:
             commitment_mgr = CommitmentManager(self.db)
@@ -804,98 +793,6 @@ class MessageHandler:
                 ))
         except Exception as e:
             logger.debug("Commitment surfacing failed (non-critical): %s", e)
-
-    async def _trigger_persona_response(
-        self,
-        room_id: UUID,
-        thread_id: UUID,
-        messages: list,
-        memories: list,
-        trigger_content: str,
-    ) -> None:
-        """
-        Check if any multi-model persona should speak and generate their response.
-
-        ARCHITECTURE: Fire-and-forget — runs as background task after primary LLM.
-        WHY: Persona responses are an enhancement, never blocking the main message flow.
-        TRADEOFF: Slight delay before persona response appears vs simpler sequential flow.
-        """
-        try:
-            # The handler's connection belongs to the foreground WebSocket
-            # message and may already be returned to the pool. A background
-            # persona task must own a fresh connection for its full lifetime.
-            if self.llm.db_pool is not None:
-                async with self.llm.db_pool.acquire() as background_db:
-                    await self._run_persona_response(
-                        background_db, room_id, thread_id, messages, memories,
-                        trigger_content,
-                    )
-            else:
-                await self._run_persona_response(
-                    self.db, room_id, thread_id, messages, memories,
-                    trigger_content,
-                )
-
-        except Exception as e:
-            logger.error("Persona response failed (non-critical): %s", e)
-
-    async def _run_persona_response(
-        self,
-        db,
-        room_id: UUID,
-        thread_id: UUID,
-        messages: list,
-        memories: list,
-        trigger_content: str,
-    ) -> None:
-        """Run one persona decision and response on an owned DB connection."""
-        coordinator = MultiModelCoordinator(db)
-        persona = await coordinator.get_next_persona(
-            room_id, messages, trigger_content,
-        )
-        if not persona:
-            return
-
-        logger.info(
-            "Persona %s triggered (strategy=%s) in room %s",
-            persona.name, persona.trigger_strategy, room_id,
-        )
-
-        await self.connections.broadcast(room_id, OutboundMessage(
-            type=MessageTypes.LLM_THINKING,
-            payload={
-                "thread_id": str(thread_id),
-                "persona_name": persona.name,
-            },
-        ))
-
-        content = await coordinator.generate_persona_response(
-            persona, messages, memories,
-        )
-        if not content:
-            return
-
-        response_msg = await coordinator.persist_persona_response(
-            persona, thread_id, room_id, content,
-        )
-
-        await self.connections.broadcast(room_id, OutboundMessage(
-            type=MessageTypes.PERSONA_RESPONSE,
-            payload={
-                "id": str(response_msg.id),
-                "thread_id": str(response_msg.thread_id),
-                "sequence": response_msg.sequence,
-                "created_at": response_msg.created_at.isoformat(),
-                "speaker_type": SpeakerType.LLM_PERSONA.value,
-                "user_id": None,
-                "user_name": persona.name,
-                "persona_id": str(persona.id),
-                "persona_name": persona.name,
-                "message_type": response_msg.message_type.value,
-                "content": response_msg.content,
-                "model_used": persona.model,
-            },
-        ))
 
     async def _handle_typing_start(self, conn: Connection, payload: dict) -> None:
         """Handle canonical typing_start while honoring legacy boolean payloads."""

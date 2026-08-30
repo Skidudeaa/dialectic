@@ -37,7 +37,6 @@ from analytics.graph_routes import router as graph_router, set_graph_db_pool
 from replay.routes import router as replay_router, set_replay_db_pool
 from analytics.knowledge_graph import KnowledgeGraphEngine
 from stakes.routes import router as stakes_router, set_stakes_db_pool
-from api.personas import router as personas_router, set_personas_db_pool
 from api.attachments import router as attachments_router, set_attachments_db_pool
 from api.prediction_relay import router as prediction_relay_router, set_prediction_relay_db_pool
 from api.rounds import router as rounds_router, set_rounds_db_pool
@@ -159,9 +158,6 @@ async def lifespan(app: FastAPI):
 
         # Set db_pool for stakes module
         set_stakes_db_pool(db_pool)
-
-        # Set db_pool for personas module
-        set_personas_db_pool(db_pool)
 
         # Set db_pool for attachments module
         set_attachments_db_pool(db_pool)
@@ -329,9 +325,6 @@ app.include_router(replay_router)
 
 # Include stakes router
 app.include_router(stakes_router)
-
-# Include personas router
-app.include_router(personas_router)
 
 # Include attachments router (media uploads: images / video / files)
 app.include_router(attachments_router)

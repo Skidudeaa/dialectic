@@ -573,30 +573,6 @@ async def test_confidence_update_is_broadcast_to_all_collaborators(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_background_persona_owns_a_fresh_pool_connection():
-    foreground_db = object()
-    background_db = object()
-
-    class AcquireContext:
-        async def __aenter__(self):
-            return background_db
-
-        async def __aexit__(self, *_args):
-            return False
-
-    pool = SimpleNamespace(acquire=lambda: AcquireContext())
-    llm = SimpleNamespace(db_pool=pool)
-    handler, _ = make_handler(db=foreground_db, llm=llm)
-    handler._run_persona_response = AsyncMock()
-
-    await handler._trigger_persona_response(
-        uuid4(), uuid4(), [], [], "trigger",
-    )
-
-    assert handler._run_persona_response.await_args.args[0] is background_db
-
-
-@pytest.mark.asyncio
 async def test_redis_listener_does_not_spin_before_first_subscription():
     class EmptyPubSub:
         def __init__(self):

@@ -133,6 +133,68 @@ class TestMemoryContext:
         assert "Shared Memory" not in prompt.system
 
 
+# ── Room record (room_record.py's "What This Room Has Recorded") ──
+
+
+class TestRoomRecordSection:
+    """The section is pre-rendered (header included, like cross-session) —
+    the builder only decides WHERE it sits, not whether it fires."""
+
+    def test_absent_by_default(self, builder):
+        prompt = builder.build(make_room(), [], [], [])
+        assert "What This Room Has Recorded" not in prompt.system
+
+    def test_absent_when_none(self, builder):
+        prompt = builder.build(make_room(), [], [], [], room_record_context=None)
+        assert "What This Room Has Recorded" not in prompt.system
+
+    def test_present_when_given(self, builder):
+        prompt = builder.build(
+            make_room(), [], [], [],
+            room_record_context="ROOM-RECORD-SENTINEL",
+        )
+        assert "ROOM-RECORD-SENTINEL" in prompt.system
+
+    def test_ordered_after_shared_memory_and_before_home(self, builder):
+        """Follows the .index() idiom in TestTradingContext's ordering test."""
+        mems = [make_memory(key="consensus", content="We agree on dualism")]
+        prompt = builder.build(
+            make_room(), [], [], mems,
+            room_record_context="ROOM-RECORD-SENTINEL",
+            home_activity_context="HOME-CTX-SENTINEL",
+        )
+        memory_pos = prompt.system.index("Shared Memory")
+        record_pos = prompt.system.index("ROOM-RECORD-SENTINEL")
+        home_pos = prompt.system.index("HOME-CTX-SENTINEL")
+        assert memory_pos < record_pos < home_pos
+
+    def test_ordered_before_cross_session_when_no_home(self, builder):
+        xsess = MagicMock()
+        xsess.total_injected = 1
+        xsess.to_prompt_section.return_value = "XSESS-SENTINEL"
+        prompt = builder.build(
+            make_room(), [], [], [],
+            room_record_context="ROOM-RECORD-SENTINEL",
+            cross_session_context=xsess,
+        )
+        assert (
+            prompt.system.index("ROOM-RECORD-SENTINEL")
+            < prompt.system.index("XSESS-SENTINEL")
+        )
+
+    def test_does_not_disturb_tools_section_endswith(self, builder):
+        """TestToolsSection pins the trading bookend as the LAST line — the
+        room-record section must not land after it."""
+        room = make_room(trading_config=_make_trading_config())
+        prompt = builder.build(
+            room, [], [], [], tools_enabled=True,
+            room_record_context="ROOM-RECORD-SENTINEL",
+        )
+        assert prompt.system.rstrip().endswith(
+            "Reminder: cite only values from Trading Thesis State for all financial figures."
+        )
+
+
 # ── Cross-session context ──
 
 

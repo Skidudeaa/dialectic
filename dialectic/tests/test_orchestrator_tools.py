@@ -839,20 +839,21 @@ class TestMentionCallSiteForwarding:
         assert connections.broadcasts[-1].payload["metadata"] == TRACE
 
 
-# ── force_response: self-aware + logged, no tools ────────────────────
+# ── force_response: self-aware + logged, narrow tools ─────────────────
 
 
 class TestForceResponseSelfModel:
     """The sweep (W6) calls force_response for its follow-ups, so a forced
-    turn must know itself and land in the decision log — but the gate still
-    keeps tools off every mode that comes through here."""
+    turn must know itself and land in the decision log. Since 2026-08-29 it
+    also gets the narrow forced-turn tool set — see TestForceResponseTools
+    below for that wiring; this class stays about self-model behaviour."""
 
     @pytest.mark.asyncio
     async def test_forced_turn_is_self_aware_and_logged(self, monkeypatch):
         monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
         thread = make_thread()
         router = LoopRouter(results=[loop_ok(text_response("following up"))])
-        orch = make_orchestrator(router, monkeypatch)
+        orch = make_orchestrator(router, monkeypatch, registry=forced_registry())
         orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
         orch._self_model.get_participation_snapshot = AsyncMock(return_value=object())
         orch._self_model.render_self_awareness = MagicMock(
@@ -871,8 +872,6 @@ class TestForceResponseSelfModel:
         assert log_kwargs["decision"].reason == "silence_follow_up"
         assert log_kwargs["mode"] == "primary"
         assert log_kwargs["response_message_id"] == result.response.id
-        # No tools on this path — the request went out plain.
-        assert router.requests[0].tools is None
 
     @pytest.mark.asyncio
     async def test_reason_defaults_to_forced(self, monkeypatch):
@@ -887,3 +886,186 @@ class TestForceResponseSelfModel:
         )
 
         assert result.decision.reason == "forced"
+
+
+# ── force_response: the narrow forced-turn tool set (2026-08-29) ──────
+
+
+FORCED_TOOL_NAMES = {"draft_prediction", "read_article", "search_memories"}
+
+
+def forced_registry(draft_result=None):
+    """Shaped like the real registry for narrow_registry's purposes: the
+    three forced-turn tools, plus one (get_live_quotes) that must be dropped
+    — proving the narrowing actually filters rather than passing everything
+    through."""
+    async def draft_prediction(args):
+        if draft_result is not None:
+            return draft_result
+        return {"proposal": {**args}, "provenance": {"kind": "prediction_draft"}}
+
+    async def read_article(args):
+        return {"content": "body"}
+
+    async def search_memories(args):
+        return {"memories": []}
+
+    async def get_live_quotes(args):
+        return {"price": 41.2}
+
+    return ToolRegistry(tools=[
+        Tool(name="draft_prediction", description="d", label="drafting a prediction",
+             input_schema={"type": "object", "properties": {}}, execute=draft_prediction),
+        Tool(name="read_article", description="d", label="reading the article",
+             input_schema={"type": "object", "properties": {}}, execute=read_article),
+        Tool(name="search_memories", description="d", label="searching our shared memory",
+             input_schema={"type": "object", "properties": {}}, execute=search_memories),
+        Tool(name="get_live_quotes", description="d", label="checking live prices",
+             input_schema={"type": "object", "properties": {}}, execute=get_live_quotes),
+    ])
+
+
+class TestForceResponseTools:
+    """Owner decision 2026-08-29: forced turns (wire interjections, silence
+    follow-ups) get the narrow three-tool set, capped at 2 iterations / 35s
+    (35, not 20: read_article's own guard is timeout_s=25.0) — see
+    FORCED_TURN_TOOLS and FORCED_TOOL_MAX_ITERATIONS/_BUDGET_S in
+    llm/orchestrator.py for the scheduler-serial-tick reasoning."""
+
+    @pytest.mark.asyncio
+    async def test_request_carries_exactly_the_three_forced_tools(self, monkeypatch):
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = LoopRouter(results=[loop_ok(text_response("following up"))])
+        orch = make_orchestrator(router, monkeypatch, registry=forced_registry())
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        orch._self_model.log_decision = AsyncMock(return_value=None)
+
+        captured: dict = {}
+        real_tool_loop = orchestrator_mod.ToolLoop
+
+        class SpyToolLoop(real_tool_loop):
+            def __init__(self, router, registry, max_iterations=5, loop_budget_s=60.0):
+                captured["max_iterations"] = max_iterations
+                captured["loop_budget_s"] = loop_budget_s
+                super().__init__(router, registry, max_iterations=max_iterations,
+                                  loop_budget_s=loop_budget_s)
+
+        monkeypatch.setattr(orchestrator_mod, "ToolLoop", SpyToolLoop)
+
+        await orch.force_response(
+            room=make_room(), thread=thread, users=[], messages=[], memories=[],
+            reason="silence_follow_up",
+        )
+
+        sent_names = {t["name"] for t in router.requests[0].tools}
+        assert sent_names == FORCED_TOOL_NAMES
+        assert "get_live_quotes" not in sent_names
+        assert captured == {"max_iterations": 2, "loop_budget_s": 35.0}
+        assert orch.prompt_builder.build.call_args.kwargs["tools_enabled"] is True
+
+    @pytest.mark.asyncio
+    async def test_provoker_and_protocol_still_get_no_tools(self, monkeypatch):
+        """The narrow set rides the same gate — it only ever narrows what
+        _tool_registry_for already allowed, never widens it."""
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = LoopRouter(results=[loop_ok(text_response("a quick jab"))])
+        orch = make_orchestrator(router, monkeypatch, registry=forced_registry())
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        orch._self_model.log_decision = AsyncMock(return_value=None)
+
+        await orch.force_response(
+            room=make_room(), thread=thread, users=[], messages=[], memories=[],
+            use_provoker=True,
+        )
+
+        assert router.requests[0].tools is None
+        assert orch.prompt_builder.build.call_args.kwargs["tools_enabled"] is False
+
+    @pytest.mark.asyncio
+    async def test_draft_prediction_hoists_proposal_and_source_survives(self, monkeypatch):
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = LoopRouter(results=[
+            loop_ok(tool_use_response(
+                [("draft_prediction", DRAFT_INPUT)], text="checking the numbers. ",
+            )),
+            loop_ok(text_response("Filed a draft above.")),
+        ])
+        orch = make_orchestrator(router, monkeypatch, registry=forced_registry())
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        orch._self_model.log_decision = AsyncMock(return_value=None)
+
+        await orch.force_response(
+            room=make_room(), thread=thread, users=[], messages=[], memories=[],
+            reason="silence_follow_up",
+        )
+
+        metadata = orch._persist_response.call_args.kwargs["metadata"]
+        # source must survive the merge with the tool trace.
+        assert metadata["source"] == "silence_follow_up"
+        assert metadata["proposal"] == {**DRAFT_INPUT, "accepted": False}
+        assert metadata["tools"]["iterations"] == 2
+        assert metadata["tools"]["calls"][0]["name"] == "draft_prediction"
+        assert metadata["tools"]["calls"][0]["label"] == "drafting a prediction"
+
+    @pytest.mark.asyncio
+    async def test_wire_shaped_forced_turn_persists_tool_trace(self, monkeypatch):
+        """The wire posts through this exact path (llm/wire.py:_interject,
+        reason=INTERJECTION_REASON="wire_interjection") — proving it here
+        rather than in tests/test_wire.py because that file's DB double is a
+        hand-mocked AsyncMock with no real ModelRouter/provider underneath,
+        and a REAL force_response schedules background self-memory /
+        effectiveness tasks whenever db_pool is set (wire always sets it),
+        which would need a lot more scaffolding to make safe than this
+        harness (db_pool=None, no network) already gives us for the same
+        code path."""
+        monkeypatch.delenv("DIALECTIC_TOOLS_ENABLED", raising=False)
+        thread = make_thread()
+        router = LoopRouter(results=[
+            loop_ok(tool_use_response(
+                [("search_memories", {"query": "hormuz"})], text="checking. ",
+            )),
+            loop_ok(text_response("This just broke — it bears on node 2.")),
+        ])
+        orch = make_orchestrator(router, monkeypatch, registry=forced_registry())
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        orch._self_model.log_decision = AsyncMock(return_value=None)
+
+        result = await orch.force_response(
+            room=make_room(), thread=thread, users=[], messages=[], memories=[],
+            reason="wire_interjection",
+        )
+
+        metadata = orch._persist_response.call_args.kwargs["metadata"]
+        assert metadata["source"] == "wire_interjection"
+        assert metadata["tools"]["calls"][0]["name"] == "search_memories"
+        assert result.response is not None
+
+
+# ── the room's own ledger, fetched like Home activity (Step 2) ────────
+
+
+class TestRoomRecordContext:
+    @pytest.mark.asyncio
+    async def test_returns_the_marker_when_the_builder_raises(self, monkeypatch):
+        """`from room_record import build_room_record` lives inside the
+        helper's own try block specifically so this can be monkeypatched
+        without depending on room_record.py's real behaviour (a sibling
+        module built in parallel)."""
+        import sys
+        import types
+
+        fake_module = types.ModuleType("room_record")
+
+        async def _boom(conn, room_id):
+            raise RuntimeError("boom")
+
+        fake_module.build_room_record = _boom
+        monkeypatch.setitem(sys.modules, "room_record", fake_module)
+
+        orch = LLMOrchestrator(SimpleNamespace())
+        ctx = await orch._get_room_record_context(make_room(), include=True)
+
+        assert ctx == orchestrator_mod.ROOM_RECORD_UNAVAILABLE

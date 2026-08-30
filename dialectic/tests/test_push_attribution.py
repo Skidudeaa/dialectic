@@ -14,7 +14,6 @@ from transport.handlers import is_llm_speaker
     SpeakerType.LLM_PRIMARY,
     SpeakerType.LLM_PROVOKER,
     SpeakerType.LLM_ANNOTATOR,
-    SpeakerType.LLM_PERSONA,
 ])
 def test_llm_speakers_are_llm(speaker):
     assert is_llm_speaker(speaker) is True

@@ -51,6 +51,20 @@ export interface Release {
 /** Newest first. `releases.test.ts` pins that order at the data level. */
 export const RELEASES: Release[] = [
   {
+    id: 'reads-the-room',
+    date: '2026-08-29',
+    title: 'The participant reads the room',
+    body:
+      'Before it speaks, the participant now checks what the room has already recorded: the ' +
+      'confirmed and contested field marks, any open commitments, the open ' +
+      '[[round|Round]] (forecast presence only — the numbers stay sealed until both humans ' +
+      'commit), and what was read lately. A wire post or a quiet-hours follow-up can now check ' +
+      'a memory, read an article, or draft a prediction instead of speaking with no tools at ' +
+      'all. Field inference reads the room’s memory, thesis and recent readings before ' +
+      'proposing a mark, rather than the transcript alone. And the multi-model persona feature — a second, ' +
+      'disconnected way for the app to speak, shipped early and never adopted — is gone.',
+  },
+  {
     id: 'protocol-fractures',
     date: '2026-08-26',
     title: 'Protocols keep their word',

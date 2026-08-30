@@ -222,13 +222,6 @@ export function useDialecticSocket(options?: {
         if (payload.speaker_type !== 'human') setLLMState(false, false);
         break;
 
-      case 'persona_response':
-        if (!payloadMatchesActiveThread(payload)) break;
-        addMessage(payload as unknown as Message);
-        void refreshThreads();
-        setLLMState(false, false);
-        break;
-
       case 'message_edited':
         if (typeof payload.id === 'string') {
           editMessage(

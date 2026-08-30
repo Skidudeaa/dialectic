@@ -30,6 +30,28 @@ HOME_ACTIVITY_UNAVAILABLE = (
     "[HOME ACTIVITY UNAVAILABLE — do not claim this digest is current]"
 )
 HOME_ACTIVITY_TIMEOUT_SECONDS = 2.0
+
+# Same shape, same reasoning, for room_record.py's ledger projection (Field
+# marks, corrections, the open Round, open commitments, recent reading) —
+# never presented as current when the projection failed or ran slow.
+ROOM_RECORD_UNAVAILABLE = (
+    "[ROOM RECORD UNAVAILABLE — do not claim this ledger is current]"
+)
+ROOM_RECORD_TIMEOUT_SECONDS = 2.0
+
+# WHY these caps: scheduler._tick runs jobs SERIALLY with no per-job timeout
+# (scheduler.py:174-199) — a slow forced turn blocks every other job behind
+# it, including the 60s silence sweep. Wire posts <=2 interjections/room/run
+# over <=5 linked rooms; at 60s each that is minutes of blocked ticks. Two
+# iterations, a 35s wall-clock budget, and no quote tool in the forced set
+# (its cold path alone is ~18s) keeps a full wire tick under roughly 6
+# minutes worst case. 35 rather than 20 because read_article's own guard is
+# timeout_s=25.0 -- a 20s budget would cut the one fetch a forced turn is
+# most likely to make mid-flight. Silence follow-ups are capped at
+# <=3/room/day by their own caller. Both callers' existing daily caps are
+# unchanged by this.
+FORCED_TOOL_MAX_ITERATIONS = 2
+FORCED_TOOL_BUDGET_S = 35.0
 from .context import assemble_context
 from .cross_session_context import CrossSessionContextBuilder, CrossSessionContext
 from .self_memory import LLMSelfMemory
@@ -37,7 +59,7 @@ from .self_model import SelfModel
 from .identity import LLMIdentityManager
 from .tool_loop import ToolLoop
 from .documents import bind_documents
-from .tools import ToolRegistry, build_registry
+from .tools import ToolRegistry, build_registry, narrow_registry, FORCED_TURN_TOOLS
 from .vision import count_images, load_message_images
 from memory.cross_session import CrossSessionMemoryManager
 from memory.manager import MemoryManager
@@ -135,6 +157,44 @@ def _hoisted_trade_proposal(calls: list[dict]) -> Optional[dict]:
     return None
 
 
+def _tool_metadata(loop_result, registry: ToolRegistry) -> Optional[dict]:
+    """The metadata.tools block plus any hoisted proposal, from one ToolLoop
+    run — or None when the turn made no tool calls.
+
+    WHY shared: on_message and force_response both route through ToolLoop and
+    both need this exact shape (calls stamped with the registry's own labels,
+    every proposal kind checked in the same order) — duplicating it invited
+    the two paths to drift on which proposal kinds they hoist.
+    """
+    if not loop_result.tool_trace:
+        return None
+    labels = registry.labels()
+    tool_metadata: dict = {"tools": {
+        "iterations": loop_result.iterations,
+        "degraded": loop_result.degraded,
+        # Stamp the human-facing label at write time, so a reader of a
+        # months-old trace does not need a client-side copy of the label
+        # table to make sense of it — tools.py stays the one source.
+        "calls": [
+            {**entry, "label": labels.get(entry.get("name"), "")}
+            for entry in loop_result.tool_trace
+        ],
+    }}
+    proposal = _hoisted_prediction_proposal(loop_result.tool_trace)
+    if proposal is not None:
+        tool_metadata["proposal"] = proposal
+    thesis = _hoisted_thesis_proposal(loop_result.tool_trace)
+    if thesis is not None:
+        tool_metadata["thesis_proposal"] = thesis
+    reading = _hoisted_reading_proposal(loop_result.tool_trace)
+    if reading is not None:
+        tool_metadata["reading_proposal"] = reading
+    trade = _hoisted_trade_proposal(loop_result.tool_trace)
+    if trade is not None:
+        tool_metadata["trade_proposal"] = trade
+    return tool_metadata
+
+
 @dataclass
 class OrchestrationResult:
     """
@@ -221,6 +281,48 @@ class LLMOrchestrator:
         except Exception:
             logger.exception("Home activity context unavailable")
             return HOME_ACTIVITY_UNAVAILABLE
+
+    async def _get_room_record_context(
+        self,
+        room: Room,
+        *,
+        include: bool,
+    ) -> Optional[str]:
+        """Bounded room-ledger context (Field marks, corrections, the open
+        Round, open commitments, recent reading) for turns that argue
+        substance.
+
+        WHY the import lives inside the try: room_record.py is a sibling
+        module built alongside this one. If it is missing or a call into it
+        fails for any reason, that is exactly the "unavailable" case every
+        other bounded context in this file already has a marker for — never
+        a reason to lose the turn, and never a reason for this module to fail
+        to import. Mirrors `_get_home_activity_context` in shape: pool-aware
+        acquire so a racy cancel from the timeout never lands on the
+        connection the rest of the turn is using, a hard wait_for budget, and
+        a broad except that never lets a slow or broken projection through as
+        if it were current.
+        """
+        if not include:
+            return None
+        try:
+            from room_record import build_room_record
+
+            if self.db_pool is not None:
+                async with self.db_pool.acquire() as conn:
+                    record = await asyncio.wait_for(
+                        build_room_record(conn, room.id),
+                        timeout=ROOM_RECORD_TIMEOUT_SECONDS,
+                    )
+            else:
+                record = await asyncio.wait_for(
+                    build_room_record(self.db, room.id),
+                    timeout=ROOM_RECORD_TIMEOUT_SECONDS,
+                )
+            return record.to_prompt_section(max_chars=6000)
+        except Exception:
+            logger.exception("Room record context unavailable")
+            return ROOM_RECORD_UNAVAILABLE
 
     async def _get_cross_session_context(
         self, messages: list[Message], room_id: UUID,
@@ -475,6 +577,9 @@ class LLMOrchestrator:
             room, truncated_messages,
             include=not decision.use_provoker and protocol is None,
         )
+        room_record_context = await self._get_room_record_context(
+            room, include=not decision.use_provoker and protocol is None,
+        )
 
         prompt = self.prompt_builder.build(
             room=room,
@@ -490,6 +595,7 @@ class LLMOrchestrator:
             tools_enabled=registry is not None,
             message_images=message_images,
             home_activity_context=home_activity_context,
+            room_record_context=room_record_context,
         )
 
         router = self._get_router(room)
@@ -502,32 +608,9 @@ class LLMOrchestrator:
 
         tool_metadata: Optional[dict] = None
         if registry is not None:
-            labels = registry.labels()
             loop_result = await ToolLoop(router, registry).run(request)
             routing = loop_result.routing
-            if loop_result.tool_trace:
-                tool_metadata = {"tools": {
-                    "iterations": loop_result.iterations,
-                    "degraded": loop_result.degraded,
-                    # Stamp the human-facing label at write time, same as the
-                    # streaming path — tools.py stays the one source.
-                    "calls": [
-                        {**entry, "label": labels.get(entry.get("name"), "")}
-                        for entry in loop_result.tool_trace
-                    ],
-                }}
-                proposal = _hoisted_prediction_proposal(loop_result.tool_trace)
-                if proposal is not None:
-                    tool_metadata["proposal"] = proposal
-                thesis = _hoisted_thesis_proposal(loop_result.tool_trace)
-                if thesis is not None:
-                    tool_metadata["thesis_proposal"] = thesis
-                reading = _hoisted_reading_proposal(loop_result.tool_trace)
-                if reading is not None:
-                    tool_metadata["reading_proposal"] = reading
-                trade = _hoisted_trade_proposal(loop_result.tool_trace)
-                if trade is not None:
-                    tool_metadata["trade_proposal"] = trade
+            tool_metadata = _tool_metadata(loop_result, registry)
         else:
             routing = await router.route(request)
 
@@ -682,9 +765,12 @@ class LLMOrchestrator:
 
         `reason` overrides the decision's recorded why (default keeps the
         historic "protocol_active"/"forced"); the participation sweep uses it
-        to mark follow-ups it triggered itself. Tools are deliberately NOT
-        wired here — the gate in _tool_registry_for excludes every mode that
-        calls this path, so there is nothing to route through a loop.
+        to mark follow-ups it triggered itself. Since 2026-08-29 this path
+        gets the NARROW forced-turn tool set (draft_prediction, read_article,
+        search_memories, FORCED_TURN_TOOLS in llm/tools.py) whenever
+        _tool_registry_for would hand the primary turn tools at all — the
+        gate still excludes provoker and protocol turns, and every write
+        those tools could produce is a proposal, never a persisted change.
 
         FSM note: this path deliberately does NOT apply participation-FSM
         events. Its only FSM-aware caller is the silence sweep, which applies
@@ -734,6 +820,17 @@ class LLMOrchestrator:
             room, truncated_messages,
             include=not use_provoker and protocol is None,
         )
+        room_record_context = await self._get_room_record_context(
+            room, include=not use_provoker and protocol is None,
+        )
+
+        # Same gate the primary turn uses, then narrowed to the three tools a
+        # forced turn may reach for — see FORCED_TURN_TOOLS in llm/tools.py.
+        # The gate already returns None for provoker/protocol and honours
+        # DIALECTIC_TOOLS_ENABLED, so those modes stay tool-less for free.
+        registry = self._tool_registry_for(room, use_provoker, protocol)
+        if registry is not None:
+            registry = narrow_registry(registry, FORCED_TURN_TOOLS)
 
         prompt = self.prompt_builder.build(
             room=room,
@@ -746,8 +843,10 @@ class LLMOrchestrator:
             evolved_identity=evolved_identity,
             user_models=user_models,
             self_awareness=self_awareness_section,
+            tools_enabled=registry is not None,
             message_images=message_images,
             home_activity_context=home_activity_context,
+            room_record_context=room_record_context,
         )
 
         router = self._get_router(room)
@@ -757,7 +856,17 @@ class LLMOrchestrator:
             model=room.provoker_model if use_provoker else room.primary_model,
         )
 
-        routing = await router.route(request)
+        tool_metadata: Optional[dict] = None
+        if registry is not None:
+            loop_result = await ToolLoop(
+                router, registry,
+                max_iterations=FORCED_TOOL_MAX_ITERATIONS,
+                loop_budget_s=FORCED_TOOL_BUDGET_S,
+            ).run(request)
+            routing = loop_result.routing
+            tool_metadata = _tool_metadata(loop_result, registry)
+        else:
+            routing = await router.route(request)
 
         if not routing.success:
             error_message = await self._emit_system_error(thread, routing)
@@ -785,10 +894,14 @@ class LLMOrchestrator:
             prompt_hash=routing.prompt_hash,
             token_count=routing.response.input_tokens + routing.response.output_tokens,
             protocol=protocol,
-            # WHY: without this, a wire interruption and an organic reply are
-            # indistinguishable in the transcript -- the reason lived only in
-            # llm_decisions, not on the message itself.
-            metadata={"source": reason},
+            # WHY the merge: without `source`, a wire interruption and an
+            # organic reply are indistinguishable in the transcript -- the
+            # reason lived only in llm_decisions, not on the message itself.
+            # `source` must survive alongside whatever the tool loop produced.
+            metadata={**(tool_metadata or {}), "source": reason},
+        )
+        attachments = await self._bind_documents(
+            thread.room_id, response_message.id, tool_metadata,
         )
 
         # Fire-and-forget: extract LLM self-memories in background
@@ -827,6 +940,7 @@ class LLMOrchestrator:
             routing=routing,
             prompt_used=prompt,
             phase_complete_signal=phase_complete_signal,
+            attachments=attachments,
         )
 
     async def stream_response(
@@ -879,12 +993,28 @@ class LLMOrchestrator:
 
         registry = self._tool_registry_for(room, use_provoker=use_provoker)
 
+        # Fetch self-awareness context (the LLM's own participation state) —
+        # gap fix: this streaming (@Claude / summon_llm) path never fetched
+        # this, so the most common way a human reaches the LLM was the one
+        # path where it had no idea of its own participation state or track
+        # record, unlike on_message and force_response.
+        self_awareness_section = None
+        try:
+            snapshot = await self._self_model.get_participation_snapshot(room.id)
+            if snapshot:
+                self_awareness_section = self._self_model.render_self_awareness(snapshot)
+        except Exception as e:
+            logger.debug("Self-awareness context unavailable: %s", e)
+
         message_images = await self._load_message_images(
             thread.room_id, truncated_messages, use_provoker=use_provoker,
         )
 
         home_activity_context = await self._get_home_activity_context(
             room, truncated_messages, include=not use_provoker,
+        )
+        room_record_context = await self._get_room_record_context(
+            room, include=not use_provoker,
         )
 
         # Build prompt with truncated messages
@@ -897,9 +1027,11 @@ class LLMOrchestrator:
             cross_session_context=cross_ctx,
             evolved_identity=evolved_identity,
             user_models=user_models,
+            self_awareness=self_awareness_section,
             tools_enabled=registry is not None,
             message_images=message_images,
             home_activity_context=home_activity_context,
+            room_record_context=room_record_context,
         )
 
         # Create request for streaming

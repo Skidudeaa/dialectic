@@ -62,6 +62,8 @@ from field_marks import (
     compute_dedup_key,
     resolve_subjects_in_room,
 )
+from llm.reading import recent_readings
+from memory.manager import MemoryManager
 from models import EventType
 from scheduler import Job, SchedulerContext
 
@@ -85,6 +87,16 @@ FIELD_INFERENCE_ROOM_CAP = 6
 FIELD_INFERENCE_DAILY_CAP = 20
 MAX_TOKENS = 1500
 TEMPERATURE = 0.2
+
+# Room context read alongside the transcript (Step 4: the participant reads
+# the room). Mirrors the caps other jobs already use for the same sources —
+# news_night's THESIS_CONTEXT_CAP (4000) trimmed to 3000 since this prompt
+# already carries messages/marks/digest; recent_readings' 7-day/6-row shape
+# matches home_activity's reading window.
+MEMORY_CONTEXT_LIMIT = 12
+THESIS_CONTEXT_CAP = 3000
+READING_CONTEXT_LOOKBACK_DAYS = 7
+READING_CONTEXT_LIMIT = 6
 
 
 async def _active_rooms(conn) -> list:
@@ -160,6 +172,20 @@ async def _correction_digest_rows(conn, room_id: UUID) -> list:
     )
 
 
+async def _thesis_context(conn, room_id: UUID) -> str:
+    """The room's live trading snapshot, capped — the `SELECT
+    trading_config::text` pattern from news_night._linked_rooms (:96-99), not
+    prompts._build_trading_context, which needs a full Room and adds banners
+    this candidate-extraction prompt has no use for."""
+    row = await conn.fetchrow(
+        "SELECT trading_config::text AS trading_config FROM rooms WHERE id = $1",
+        room_id,
+    )
+    if row is None or not row["trading_config"]:
+        return ""
+    return row["trading_config"][:THESIS_CONTEXT_CAP]
+
+
 def _render_messages(messages: list) -> str:
     lines = []
     for row in reversed(messages):  # chronological in the prompt
@@ -187,6 +213,54 @@ def _render_digest(rows: list) -> str:
         for row in rows
     ]
     return "\n".join(lines)
+
+
+def _render_memories(memories) -> str:
+    lines = []
+    for m in memories:
+        content = " ".join(str(m.content or "").split())[:300]
+        lines.append(f"- {content}")
+    return "\n".join(lines)
+
+
+def _render_readings(readings) -> str:
+    lines = []
+    for r in readings:
+        title = r.get("title") or r.get("url") or "(untitled)"
+        summary = " ".join(str(r.get("summary") or "").split())[:300]
+        lines.append(f"- {title} — {summary}" if summary else f"- {title}")
+    return "\n".join(lines)
+
+
+# Each of these renders only when its source has rows, so a room with no
+# memory/thesis/reading history gets the same prompt shape it had before this
+# step — the instruction line names the constraint that keeps this context
+# from becoming a second candidate source: it is read for JUDGING a relation
+# already visible in the transcript, never as a thing to cite. A memory id, a
+# thesis snapshot, and a reading URL are not `messages` rows, so
+# `_candidate_valid` would drop a subject built from any of them anyway; the
+# instruction just stops the model from wasting a candidate slot trying.
+_CONTEXT_INSTRUCTION = (
+    "These are context for judging the relation; candidates still cite "
+    "message ids as subjects."
+)
+
+
+def _render_context_sections(memories, thesis: str, readings) -> str:
+    sections = []
+    if memories:
+        sections.append(
+            f"\n\nROOM MEMORY. {_CONTEXT_INSTRUCTION}\n{_render_memories(memories)}"
+        )
+    if thesis:
+        sections.append(
+            f"\n\nTHESIS CONTEXT. {_CONTEXT_INSTRUCTION}\n{thesis}"
+        )
+    if readings:
+        sections.append(
+            f"\n\nRECENTLY READ. {_CONTEXT_INSTRUCTION}\n{_render_readings(readings)}"
+        )
+    return "".join(sections)
 
 
 FIELD_INFERENCE_SYSTEM = """You extract STRUCTURE from a room's conversation
@@ -228,7 +302,8 @@ def _parse_candidates(text: str) -> Optional[list]:
 
 
 async def _generate_candidates(
-    messages: list, active_marks: list, digest_rows: list,
+    messages: list, active_marks: list, digest_rows: list, *,
+    memories=(), thesis: str = "", readings=(),
 ) -> Optional[list]:
     """One FIELD_MODEL call. Provider import stays lazy (news_night/
     reading_echo pattern) so importing this module never touches provider
@@ -237,6 +312,15 @@ async def _generate_candidates(
 
     Kept as its own function (rather than inlined into `run`) so tests can
     monkeypatch it directly and exercise the real database around it.
+
+    `memories`/`thesis`/`readings` are room context (Step 4: the participant
+    reads the room before it marks it) — background for JUDGING whether a
+    transcript span supports/challenges/contradicts something, never a
+    second source of candidates. They are appended read-only, after the
+    digest, each behind `_CONTEXT_INSTRUCTION`; `_candidate_valid` still
+    requires every subject to resolve to a `messages` row in this room, so a
+    memory id, a thesis snapshot, or a reading URL can never become a
+    subject even if the model tried.
     """
     from llm.providers import LLMRequest, ProviderName, get_provider
 
@@ -250,6 +334,7 @@ async def _generate_candidates(
                 f"CURRENTLY ACTIVE MARKS:\n{_render_active_marks(active_marks)}\n\n"
                 "THE HUMANS HAVE RULED ON THESE — do not re-assert:\n"
                 f"{_render_digest(digest_rows)}"
+                f"{_render_context_sections(memories, thesis, readings)}"
             ),
         }],
         system=FIELD_INFERENCE_SYSTEM,
@@ -367,9 +452,29 @@ async def run(ctx: SchedulerContext) -> dict:
                 ]
                 digest_rows = await _correction_digest_rows(conn, room["id"])
 
-                candidates = await _generate_candidates(messages, active_marks, digest_rows)
+                memories = tuple(await MemoryManager(conn).get_context_for_prompt(
+                    room["id"], query=None, max_memories=MEMORY_CONTEXT_LIMIT,
+                ))
+                thesis = await _thesis_context(conn, room["id"])
+                readings = tuple(await recent_readings(
+                    conn, room["id"],
+                    since=datetime.now(timezone.utc)
+                        - timedelta(days=READING_CONTEXT_LOOKBACK_DAYS),
+                    limit=READING_CONTEXT_LIMIT,
+                ))
+                context = {
+                    "memories": len(memories), "readings": len(readings),
+                    "thesis": bool(thesis),
+                }
+
+                candidates = await _generate_candidates(
+                    messages, active_marks, digest_rows,
+                    memories=memories, thesis=thesis, readings=readings,
+                )
                 if not candidates:
-                    detail["skipped"].append({"room": room_key, "reason": "no_candidates"})
+                    detail["skipped"].append({
+                        "room": room_key, "reason": "no_candidates", "context": context,
+                    })
                     continue
 
                 inserted = []
@@ -393,7 +498,7 @@ async def run(ctx: SchedulerContext) -> dict:
 
                 detail["processed"].append({
                     "room": room_key, "candidates": len(candidates),
-                    "inserted": len(inserted),
+                    "inserted": len(inserted), "context": context,
                 })
             except Exception:
                 logger.exception("field inference failed for room %s", room_key)

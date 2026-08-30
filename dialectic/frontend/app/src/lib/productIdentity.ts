@@ -10,7 +10,6 @@ export const ORIGIN_IMPRINT = 'DwoodAmo'
 
 export function participantDisplayName(
   speakerType: Message['speaker_type'],
-  personaName?: string | null,
 ): string {
   switch (speakerType) {
     case 'llm_primary':
@@ -19,8 +18,6 @@ export function participantDisplayName(
       return `${PARTICIPANT_NAME} · Provoker`
     case 'llm_annotator':
       return `${PARTICIPANT_NAME} · Note`
-    case 'llm_persona':
-      return personaName?.trim() || PARTICIPANT_NAME
     case 'system':
       return 'System'
     default:
@@ -42,7 +39,7 @@ export function participantDisplayName(
  * voice, a dimmer gold for the provoker). That is exactly the encoding the
  * spec forbids. A human's mark is the first letter of their own name, so it
  * changes with who they actually are rather than which seat they sit in.
- * Every Dialectic mode — primary, provoker, annotator, a named persona —
+ * Every Dialectic mode — primary, provoker, annotator —
  * gets the same product glyph, because the voice is still Dialectic's; the
  * mode is already named in the byline text ("Dialectic · Provoker"), which
  * is where a mode distinction belongs, not in the mark.

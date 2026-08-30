@@ -226,8 +226,6 @@ function roleFallback(speakerType: Message['speaker_type']): string {
       return 'A provoker turn — no decision record survives for this one.'
     case 'llm_primary':
       return 'A primary turn — no decision record survives for this one.'
-    case 'llm_persona':
-      return 'Posted by a persona turn.'
     case 'system':
       return 'A system notice, not a participant turn.'
     default:

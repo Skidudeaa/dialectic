@@ -200,7 +200,7 @@ async def test_no_new_messages_gate_spends_no_llm_call(inference_room, monkeypat
     # below is scoped to ROOM's own thread, not a global call count.
     called_threads = []
 
-    async def _spy(messages, active_marks, digest_rows):
+    async def _spy(messages, active_marks, digest_rows, **kwargs):
         called_threads.append(messages[0]["thread_id"] if messages else None)
         return [_candidate()]
 
@@ -378,7 +378,7 @@ async def test_daily_cap_skips_before_any_llm_call(inference_room, monkeypatch):
 
     called_threads = []
 
-    async def _spy(messages, active_marks, digest_rows):
+    async def _spy(messages, active_marks, digest_rows, **kwargs):
         called_threads.append(messages[0]["thread_id"] if messages else None)
         return [_candidate()]
 
@@ -433,3 +433,70 @@ async def test_the_14_5_guarantee_contest_then_identical_candidate_zero_inserts(
 
     after = await _inserted_rows(inference_room, ROOM)
     assert len(after) == 1, "the contested mark's dedup_key must have blocked the re-insert"
+
+
+# ---------------------------------------------------------------------------
+# room context (Step 4: the participant reads the room before it marks it)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_room_context_reaches_generate_candidates_when_present(
+    inference_room, monkeypatch,
+):
+    now = datetime.now(timezone.utc)
+    await inference_room.execute(
+        """INSERT INTO memories
+               (id, room_id, created_at, updated_at, scope, key, content, status)
+           VALUES ($1,$2,$3,$3,'room','test-memory',
+                   'the strait closure would spike Brent past $100','active')""",
+        uuid4(), ROOM, now,
+    )
+    await inference_room.execute(
+        """INSERT INTO reading_items
+               (id, room_id, url, title, content, summary, source, created_at)
+           VALUES ($1,$2,'https://example.com/a','An article',
+                   'body text here', 'a short summary', 'human', $3)""",
+        uuid4(), ROOM, now,
+    )
+    await inference_room.execute(
+        "UPDATE rooms SET trading_config = $1 WHERE id = $2",
+        {"cascadePhase": "watching"}, ROOM,
+    )
+
+    # Keyed by thread — FOREIGN_ROOM is a second legitimately-active room in
+    # this fixture (no memory/reading/trading_config of its own) and would
+    # otherwise clobber ROOM's captured kwargs depending on iteration order.
+    captured_by_thread = {}
+
+    async def _fake(messages, active_marks, digest_rows, **kwargs):
+        thread_id = messages[0]["thread_id"] if messages else None
+        captured_by_thread[thread_id] = kwargs
+        return [_candidate()]
+
+    monkeypatch.setattr(field_inference, "_generate_candidates", _fake)
+    await field_inference.run(SchedulerContext(pool=_FakePool(inference_room)))
+
+    captured = captured_by_thread[TH]
+    assert captured["memories"], "the seeded memory row must reach the candidate call"
+    assert captured["readings"], "the seeded reading row must reach the candidate call"
+    assert captured["thesis"], "the seeded trading_config must reach the candidate call"
+
+
+@pytest.mark.asyncio
+async def test_room_context_is_empty_tuples_when_nothing_recorded(
+    inference_room, monkeypatch,
+):
+    captured_by_thread = {}
+
+    async def _fake(messages, active_marks, digest_rows, **kwargs):
+        thread_id = messages[0]["thread_id"] if messages else None
+        captured_by_thread[thread_id] = kwargs
+        return [_candidate()]
+
+    monkeypatch.setattr(field_inference, "_generate_candidates", _fake)
+    await field_inference.run(SchedulerContext(pool=_FakePool(inference_room)))
+
+    captured = captured_by_thread[TH]
+    assert captured["memories"] == ()
+    assert captured["readings"] == ()
+    assert captured["thesis"] == ""

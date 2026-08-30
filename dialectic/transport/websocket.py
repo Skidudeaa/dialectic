@@ -342,7 +342,5 @@ class MessageTypes:
     COMMITMENT_CONFIDENCE_UPDATED = "commitment_confidence_updated"
     COMMITMENT_RESOLVED = "commitment_resolved"
     COMMITMENT_SURFACED = "commitment_surfaced"
-    # Multi-model personas (outbound)
-    PERSONA_RESPONSE = "persona_response"
     # Trading integration (inbound/outbound)
     TRADING_UPDATE = "trading_update"

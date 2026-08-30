@@ -1187,3 +1187,51 @@ This closes physical extension enablement, one-tap capture, and App Group sharin
 Cross-target Keychain delivery, migration 024, backend restart, frontend release,
 and production filing remain UNVERIFIED; the live server still returns 404 for
 the new Library routes until activation.
+
+## Amendment 2026-08-29 (later) — the participant reads the room (amend-beside)
+
+The 2026-08-29 integration audit found every feature since 08-12 was a spoke
+that never routed back through the hub — the participant wrote 99% of the
+Field and read none of it, never saw an open Round, and the ~63% of its
+messages that come from cron via `force_response` had no tools at all. Plan:
+`/root/.claude/plans/ok-now-the-plan-fizzy-planet.md`. This entry covers the
+personas deletion and the shape of the fix, landed in the working tree.
+Migration not yet run on any database; no restart, no frontend flip — those
+are the plan's own Deploy steps and are owner-gated (the classifier blocks
+DROP on prod).
+
+- **New prompt section, `## What This Room Has Recorded`** (`room_record.py`),
+  fetched on all three orchestrator paths (`on_message`, `force_response`,
+  `stream_response` — which also gained the `self_awareness` fetch it was
+  missing) between `## Shared Memory (This Room)` and `## Shared Home
+  Activity`. Contents: confirmed/contested-or-human-authored Field marks
+  (≤25, newest first) plus the last 10 human corrections; open Round lines
+  showing **forecast presence only** ("forecasts in: 1 of 2 humans, house");
+  open non-round commitments (≤10); readings from the last 3 days (≤8,
+  `COUNTER:`-prefixed when `news_night`'s stance suffix is present).
+  **Deliberately excluded**: forecast values, peer guesses and house numbers
+  (sealed until both humans commit — `api/rounds._round_state` is the only
+  reader allowed to decide that) and the participant's own provisional
+  inferred marks (would just echo its own drafts back to it). 6,000-char hard
+  cap, wrapped in the same `[DATA-ONLY-BLOCK-<nonce>]` convention
+  `home_activity.py` uses.
+- **Forced-turn tool policy**: primary/heuristic turns keep the full registry
+  at 5 iterations / 60s. Forced turns (wire, silence follow-up) now get a
+  narrow three-tool set — `draft_prediction`, `read_article`,
+  `search_memories` — at 2 iterations / 35s (35 because `read_article`'s
+  own guard is 25s; 20 would cut the fetch mid-flight), so a full wire tick
+  stays bounded under `scheduler._tick`'s serial job loop. Provoker/protocol turns
+  stay tool-less, unchanged.
+- **`field_inference` now reads the room's memory, thesis snapshot and recent
+  readings** (last 7 days) before proposing a Field mark candidate, instead
+  of the transcript alone. Caps (6/room/run, 20/room/day) unchanged.
+- **Multi-model personas deleted.** `api/personas.py`, `llm/multi_model.py`,
+  `SpeakerType.LLM_PERSONA`, `models.RoomPersona`/`TriggerStrategy`, the
+  `room_personas` table and `messages.persona_id` are gone —
+  `migrations/025_drop_personas.sql` (owner-applied; blocked on prod by the
+  DROP classifier). It was a second, disconnected speaking path that bypassed
+  memory, tools and the self-model entirely; production held exactly 1 orphan
+  `room_personas` row and 0 persona messages before the decision.
+- Scheduled-job flags `rss_wire` and `world_signals` ship **dark by code
+  default** as of `03b8cb6` — not merely env-unset in this host's `.env`; a
+  fresh checkout with no `.env` override starts both off.

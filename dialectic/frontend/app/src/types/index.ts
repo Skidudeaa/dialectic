@@ -329,12 +329,11 @@ export interface Message {
   thread_id: string;
   sequence: number;
   created_at: string;
-  speaker_type: 'human' | 'llm_primary' | 'llm_provoker' | 'llm_annotator' | 'llm_persona' | 'system';
+  speaker_type: 'human' | 'llm_primary' | 'llm_provoker' | 'llm_annotator' | 'system';
   user_id: string | null;
   message_type: 'text' | 'claim' | 'question' | 'definition' | 'counterexample';
   content: string;
   user_name?: string;
-  persona_name?: string;
   protocol_id?: string;
   protocol_phase?: number;
   references_message_id?: string | null;
@@ -669,7 +668,7 @@ export type InboundMessageType =
   | 'ping' | 'presence_heartbeat';
 
 export type OutboundMessageType =
-  | 'message_created' | 'persona_response' | 'user_typing'
+  | 'message_created' | 'user_typing'
   | 'user_joined' | 'user_left' | 'presence_update'
   | 'llm_thinking' | 'llm_streaming' | 'llm_tool_activity'
   | 'llm_done' | 'llm_error' | 'llm_cancelled'

@@ -81,9 +81,7 @@ function getAuthorName(msg: Message, userNames: Record<string, string>): string 
     if (msg.user_name) return msg.user_name
     return (msg.user_id && userNames[msg.user_id]) || msg.user_id?.slice(0, 8) || 'Human'
   }
-  // persona_name matters here: the old copy had no llm_persona arm at all, so
-  // a persona turn fell through to the human branch and rendered as 'Human'.
-  return participantDisplayName(msg.speaker_type, msg.persona_name)
+  return participantDisplayName(msg.speaker_type)
 }
 
 function dayLabel(iso: string): string {
