@@ -438,3 +438,29 @@ def test_the_survivor_is_the_provider_s_freshest_report():
 def test_dedupe_preserves_order_and_leaves_singletons_alone():
     obs = [{"source_id": s, "observed_at": None} for s in ("a", "b", "c")]
     assert [o["source_id"] for o in wa._dedupe_by_source(obs)] == ["a", "b", "c"]
+
+
+@pytest.mark.asyncio
+async def test_room_fences_split_far_apart_scopes_and_merge_touching_ones():
+    # AI Capex holds Northern Virginia AND Taiwan: one box per room put the
+    # centroid in Libya (2026-08-30). Per-scope boxes, merged only when they
+    # touch, give that room two fences and a room with adjacent scopes one.
+    def poly(w, s, e, n):
+        return {"type": "Polygon", "coordinates": [[[w, s], [e, s], [e, n], [w, n], [w, s]]]}
+
+    class Conn:
+        async def fetch(self, _sql):
+            return [
+                {"room_id": ROOM_A, "geometry": poly(-77.6, 38.9, -77.3, 39.1)},   # Virginia
+                {"room_id": ROOM_A, "geometry": poly(120.5, 24.0, 121.1, 24.9)},   # Taiwan
+                {"room_id": ROOM_B, "geometry": poly(55.6, 25.6, 57.2, 27.2)},     # Strait
+                {"room_id": ROOM_B, "geometry": poly(56.0, 24.0, 58.5, 26.0)},     # Gulf of Oman, touching
+            ]
+
+    fences = await wa.room_fences(Conn())
+    by_room = {}
+    for f in fences:
+        by_room.setdefault(f.room_id, []).append(f)
+    assert len(by_room[ROOM_A]) == 2
+    assert all(f.radius_nm < 300 for f in by_room[ROOM_A])
+    assert len(by_room[ROOM_B]) == 1

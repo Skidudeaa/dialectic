@@ -176,9 +176,14 @@ class WorldSignalSnapshot(BaseModel):
                 raise ValueError(
                     "every signal room must belong to the snapshot configured rooms",
                 )
-            if signal.id in ids:
+            # WHY (room_id, id): a signal is a contact AS SEEN BY A ROOM. Two
+            # rooms whose geography overlaps (Taiwan Strait sits in both the
+            # Tariffs and AI Capex rooms since 2026-08-30) legitimately carry
+            # the same aircraft; the store's resolve() is keyed by room too.
+            key = (signal.room_id, signal.id)
+            if key in ids:
                 raise ValueError(f"duplicate signal id in snapshot: {signal.id}")
-            ids.add(signal.id)
+            ids.add(key)
         return self
 
 

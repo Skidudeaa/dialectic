@@ -122,10 +122,39 @@ class RoomFence:
         return self.west <= lon <= self.east and self.south <= lat <= self.north
 
 
+def _merge_boxes(boxes: list[list[float]]) -> list[list[float]]:
+    """Union boxes that touch; leave far-apart ones separate. Repeats until
+    stable because a merge can bridge two boxes that were disjoint before."""
+    merged = [list(b) for b in boxes]
+    changed = True
+    while changed:
+        changed = False
+        out: list[list[float]] = []
+        for b in merged:
+            for m in out:
+                if not (b[2] < m[0] or b[0] > m[2] or b[3] < m[1] or b[1] > m[3]):
+                    m[0], m[1] = min(m[0], b[0]), min(m[1], b[1])
+                    m[2], m[3] = max(m[2], b[2]), max(m[3], b[3])
+                    changed = True
+                    break
+            else:
+                out.append(b)
+        merged = out
+    return merged
+
+
 async def room_fences(conn) -> list[RoomFence]:
-    """Rooms that own confirmed geography, with their padded bounding boxes."""
+    """Fences for rooms that own confirmed geography: one padded box PER
+    SCOPE, merged with its neighbours when they touch.
+
+    WHY not one box per room (the 2026-08-26 shape): a room whose scopes are
+    far apart -- AI Capex holds Northern Virginia AND Taiwan -- got a single
+    box spanning half the globe whose centroid fell in Libya, so the 250 nm
+    adsb poll covered nothing the room cared about. Per-scope boxes keep each
+    poll on the geography that asked for it; a room may own several fences.
+    """
     rows = await conn.fetch(_ROOM_SCOPES_SQL)
-    boxes: dict[UUID, list[float]] = {}
+    per_room: dict[UUID, list[list[float]]] = {}
     for row in rows:
         geometry = row["geometry"]
         if isinstance(geometry, str):
@@ -137,29 +166,22 @@ async def room_fences(conn) -> list[RoomFence]:
         positions = _coords(geometry)
         if not positions:
             continue
-        room_id = row["room_id"]
-        box = boxes.get(room_id)
         lons = [p[0] for p in positions]
         lats = [p[1] for p in positions]
-        candidate = [min(lons), min(lats), max(lons), max(lats)]
-        if box is None:
-            boxes[room_id] = candidate
-        else:
-            box[0] = min(box[0], candidate[0])
-            box[1] = min(box[1], candidate[1])
-            box[2] = max(box[2], candidate[2])
-            box[3] = max(box[3], candidate[3])
+        per_room.setdefault(row["room_id"], []).append([
+            max(-180.0, min(lons) - ROOM_BBOX_PAD_DEG),
+            max(-90.0, min(lats) - ROOM_BBOX_PAD_DEG),
+            min(180.0, max(lons) + ROOM_BBOX_PAD_DEG),
+            min(90.0, max(lats) + ROOM_BBOX_PAD_DEG),
+        ])
 
     fences: list[RoomFence] = []
-    for room_id, (w, s, e, n) in list(boxes.items())[:MAX_ROOMS]:
-        fences.append(RoomFence(
-            room_id,
-            max(-180.0, w - ROOM_BBOX_PAD_DEG),
-            max(-90.0, s - ROOM_BBOX_PAD_DEG),
-            min(180.0, e + ROOM_BBOX_PAD_DEG),
-            min(90.0, n + ROOM_BBOX_PAD_DEG),
-        ))
-    return fences
+    for room_id, boxes in per_room.items():
+        for w, s, e, n in _merge_boxes(boxes):
+            fences.append(RoomFence(room_id, w, s, e, n))
+    # ponytail: MAX_ROOMS now caps FENCES (a room may own several); raise it or
+    # rank by room activity if the house ever places more geography than this.
+    return fences[:MAX_ROOMS]
 
 
 class AdapterResult:
@@ -304,12 +326,16 @@ ADSB_MAX_NM = 250
 # WHY: adsb.lol answered the 4th fence of every poll with 429 once four rooms
 # owned geography (2026-08-30) -- the Sea of Japan fence was starved on every
 # tick. One second between fence requests keeps the burst under its limit.
-ADSB_FENCE_PAUSE_S = 1.0
+ADSB_FENCE_PAUSE_S = 2.0
 
 
 @_guarded("adsb.lol ADS-B receivers within 250 NM of each placed room")
 async def poll_aircraft(client: httpx.AsyncClient, fences: list[RoomFence]) -> AdapterResult:
     observations: list[dict] = []
+    # One aircraft can sit inside two fences (a room's neighbouring scopes, or
+    # two rooms sharing the Strait). Keep the first report per hex; the fence
+    # fan-out in build_snapshot assigns it to every room that contains it.
+    seen_hex: set[str] = set()
     partial = False
     for index, fence in enumerate(fences):
         if index and ADSB_FENCE_PAUSE_S:
@@ -326,8 +352,9 @@ async def poll_aircraft(client: httpx.AsyncClient, fences: list[RoomFence]) -> A
         for contact in payload.get("ac", []) or []:
             hexid = str(contact.get("hex") or "").strip()
             c_lat, c_lon = contact.get("lat"), contact.get("lon")
-            if not hexid or c_lat is None or c_lon is None:
+            if not hexid or c_lat is None or c_lon is None or hexid in seen_hex:
                 continue
+            seen_hex.add(hexid)
             callsign = str(contact.get("flight") or "").strip()
             observations.append({
                 "source_id": hexid,

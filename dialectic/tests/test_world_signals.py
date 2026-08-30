@@ -362,3 +362,13 @@ def test_resolve_distinguishes_malformed_missing_cross_room_and_expired() -> Non
         store.resolve(ROOM_A, "world_signal:ais:other-room", now=NOW)
     with pytest.raises(WorldSignalExpired):
         store.resolve(ROOM_A, "world_signal:ais:expired", now=NOW)
+
+
+def test_the_same_contact_may_be_seen_by_two_rooms() -> None:
+    # Taiwan Strait sits in two rooms since 2026-08-30. A snapshot carrying the
+    # same signal id under two room ids is two room-fenced sightings, not a
+    # duplicate; the duplicate rule is (room_id, id).
+    store = WorldSignalStore()
+    store.replace(_snapshot(_signal("shared", room_id=ROOM_A), _signal("shared", room_id=ROOM_B)))
+    assert [s.room_id for s in store.project({ROOM_A}, now=NOW).signals] == [ROOM_A]
+    assert [s.room_id for s in store.project({ROOM_B}, now=NOW).signals] == [ROOM_B]
