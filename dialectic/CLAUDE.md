@@ -1195,10 +1195,12 @@ that never routed back through the hub — the participant wrote 99% of the
 Field and read none of it, never saw an open Round, and the ~63% of its
 messages that come from cron via `force_response` had no tools at all. Plan:
 `/root/.claude/plans/ok-now-the-plan-fizzy-planet.md`. This entry covers the
-personas deletion and the shape of the fix, landed in the working tree.
-Migration not yet run on any database; no restart, no frontend flip — those
-are the plan's own Deploy steps and are owner-gated (the classifier blocks
-DROP on prod).
+personas deletion and the shape of the fix. **Deployed 2026-08-29 evening:**
+commit `76055ae`, backend PID `764959` (`/health` 200); migration 025
+applied to `dialectic_test` only — on prod it is owner-run (the classifier
+blocks DROP), and the code no longer references the table so the order is
+free. Frontend build passed the lazy-Cesium contract; the release flip is
+owner-run too. Suites at this gate: backend **2193**, frontend **633**.
 
 - **New prompt section, `## What This Room Has Recorded`** (`room_record.py`),
   fetched on all three orchestrator paths (`on_message`, `force_response`,
