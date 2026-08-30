@@ -1197,10 +1197,12 @@ messages that come from cron via `force_response` had no tools at all. Plan:
 `/root/.claude/plans/ok-now-the-plan-fizzy-planet.md`. This entry covers the
 personas deletion and the shape of the fix. **Deployed 2026-08-29 evening:**
 commit `76055ae`, backend PID `764959` (`/health` 200); migration 025
-applied to `dialectic_test` only — on prod it is owner-run (the classifier
-blocks DROP), and the code no longer references the table so the order is
-free. Frontend build passed the lazy-Cesium contract; the release flip is
-owner-run too. Suites at this gate: backend **2193**, frontend **633**.
+applied to prod AND `dialectic_test` (`messages.persona_id` gone); PWA
+release `20260830T020500Z-reads-the-room-76055ae` selected, nginx serving
+`index-D4OmgLIv.js`. First tool-enabled `wire_watch` tick ran 45s and
+posted nothing (no articles cleared threshold) — the forced-turn tool path
+is live but was unexercised at the gate. Suites: backend **2193**, frontend
+**633**.
 
 - **New prompt section, `## What This Room Has Recorded`** (`room_record.py`),
   fetched on all three orchestrator paths (`on_message`, `force_response`,
