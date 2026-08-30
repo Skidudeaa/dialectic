@@ -1258,6 +1258,23 @@ spend the 2/day cap on non-signal; narrow the bound scope or gate the
 interjection by layer if it proves noisy. Seeding the other four rooms
 remains the owner's act (`deploy/seed_room_geo.py`).
 
+**Same day, after seeding three rooms (AI Capex, China Property, Japan —
+9 scopes, `human_confirmed` by Amo; Tariffs blocked: Amo is not a member):**
+three defects surfaced only once geography existed outside Hormuz, fixed in
+`4a7a3fc`/`fd8d687`/`e29cbf0`. (1) `room_fences` built ONE box per room, so
+AI Capex (Virginia + Taiwan) polled a 250 nm circle centred in Libya — now
+one padded box per scope, merged only when boxes touch (`_merge_boxes`);
+`MAX_ROOMS` caps fences. (2) The snapshot validator rejected the same
+signal id in two rooms — with Taiwan Strait in two rooms that would have
+dropped every adsb snapshot; the duplicate key is now `(room_id, id)`, and
+`poll_aircraft` dedupes hexes across fences. (3) adsb.lol allows ~1
+request / 5 s per IP: `ADSB_FENCE_PAUSE_S=5.0`, `WORLD_SIGNALS_INTERVAL_S=300`
+(a 10-fence poll is ~50 s on the serial tick). Proof: 12/12 fences 200,
+384 contacts, three rooms persisting. **Known data defect, owner's call:**
+Hormuz holds TWO live `human_confirmed` "Persian Gulf" rows (identical
+geometry, 08-25 seed run twice before the label check existed), so every
+Gulf contact is recorded twice; retire one through the review door, not SQL.
+
 The owner, after Phases 0–2 (2026-08-25/26): *"it just doesn't do nearly
 enough yet."* Audit: World was pull-only (`world_query` called once in two
 weeks), `world_signals` polled five feeds into a store exactly one opt-in
