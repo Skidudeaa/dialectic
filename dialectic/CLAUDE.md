@@ -1270,10 +1270,11 @@ dropped every adsb snapshot; the duplicate key is now `(room_id, id)`, and
 `poll_aircraft` dedupes hexes across fences. (3) adsb.lol allows ~1
 request / 5 s per IP: `ADSB_FENCE_PAUSE_S=5.0`, `WORLD_SIGNALS_INTERVAL_S=300`
 (a 10-fence poll is ~50 s on the serial tick). Proof: 12/12 fences 200,
-384 contacts, three rooms persisting. **Known data defect, owner's call:**
-Hormuz holds TWO live `human_confirmed` "Persian Gulf" rows (identical
-geometry, 08-25 seed run twice before the label check existed), so every
-Gulf contact is recorded twice; retire one through the review door, not SQL.
+384 contacts, three rooms persisting. **Data defect resolved 08-31:**
+Hormuz briefly held TWO live "Persian Gulf" rows (08-25 seed run twice);
+the owner superseded one via Focus — `4bd7b8bc` (the mark-bearing row) is
+the one live scope. A supersede successor is itself non-live by
+`live_predicate`; count live scopes with the predicate, never by authority.
 
 The owner, after Phases 0–2 (2026-08-25/26): *"it just doesn't do nearly
 enough yet."* Audit: World was pull-only (`world_query` called once in two

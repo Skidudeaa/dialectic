@@ -41,11 +41,11 @@ held Strait, TSS lane, Persian Gulf, Gulf of Oman.
   the manifest seeded 4 scopes (Taiwan Strait, South China Sea, LA/Long Beach,
   Shanghai–Ningbo). All five trading rooms now own confirmed geography and
   appear in the `world_watch` loop.
-- **Duplicate live "Persian Gulf" scope in Hormuz** (two `human_confirmed`
-  rows, identical geometry, 08-25 seed run twice) — every Gulf contact is
-  recorded twice. Retire one through the review door (Focus → scope review),
-  never SQL (migration 022 forbids UPDATE/DELETE anyway). Keep the row the
-  causal marks point at.
+- **Duplicate "Persian Gulf" scope: RETIRED by the owner** (supersede via
+  Focus, 08-31 01:30Z). One live row remains — `4bd7b8bc`, the one the causal
+  marks point at. Note for future review reads: a supersede SUCCESSOR row is
+  itself non-live (`revision_action='supersede'` is excluded by
+  `live_predicate`); do not count human_confirmed rows without applying it.
 - Binding scopes to thesis nodes is **human-only** (Focus). Hormuz has two
   bound (`supports → hormuz`); the other rooms have none, so `world_watch`
   persists there but never speaks — by design.
@@ -62,7 +62,7 @@ held Strait, TSS lane, Persian Gulf, Gulf of Oman.
 ## 5. Open items, ranked
 
 1. ~~Tariffs membership + seed~~ — done same day, see §3.
-2. Retire the duplicate Persian Gulf scope (owner, §3).
+2. ~~Retire the duplicate Persian Gulf scope~~ — owner did, see §3.
 3. Noise watch: aircraft churn over a large bound scope can spend the 2/day
    cap on non-signal; if tomorrow's interjections are all "background rate",
    bind the Strait polygon instead of the Gulf, or gate interjections by
