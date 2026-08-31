@@ -36,10 +36,11 @@ AI Capex (Hsinchu–Taichung, N. Virginia, Taiwan Strait), China Property
 (PRD, YRD, Bo Hai, Pilbara), Japan (Tokyo Bay, Sea of Japan). Hormuz already
 held Strait, TSS lane, Persian Gulf, Gulf of Oman.
 
-- **Trump Tariffs is NOT seeded** — Amo is not a member (room has had zero
-  members since creation); the classifier blocked an ad-hoc membership insert.
-  Owner: insert the membership, then
-  `python3 deploy/seed_room_geo.py --manifest deploy/geo/trump-tariffs.json --confirmed-by de883378-a6ef-4af0-a8bc-462265ca7a54 --geometry-inspected-by-named-human`.
+- **Trump Tariffs: RESOLVED later the same day** — Amo joined via the app's
+  own `POST /rooms/{id}/join` (room token + JWT, `{"status":"joined"}`), then
+  the manifest seeded 4 scopes (Taiwan Strait, South China Sea, LA/Long Beach,
+  Shanghai–Ningbo). All five trading rooms now own confirmed geography and
+  appear in the `world_watch` loop.
 - **Duplicate live "Persian Gulf" scope in Hormuz** (two `human_confirmed`
   rows, identical geometry, 08-25 seed run twice) — every Gulf contact is
   recorded twice. Retire one through the review door (Focus → scope review),
@@ -60,7 +61,7 @@ held Strait, TSS lane, Persian Gulf, Gulf of Oman.
 
 ## 5. Open items, ranked
 
-1. Tariffs membership + seed (owner, §3).
+1. ~~Tariffs membership + seed~~ — done same day, see §3.
 2. Retire the duplicate Persian Gulf scope (owner, §3).
 3. Noise watch: aircraft churn over a large bound scope can spend the 2/day
    cap on non-signal; if tomorrow's interjections are all "background rate",
