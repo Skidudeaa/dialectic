@@ -1,0 +1,359 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "God's Eye — World Sensors in Dialectic",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1370,
+      840
+    ],
+    "views": [
+      {
+        "id": "sensor-sweep",
+        "label": "The sensor sweep",
+        "focus": [
+          "scheduler",
+          "adapters",
+          "firms",
+          "feeds",
+          "store"
+        ],
+        "note": "Every 300s the scheduler sweeps five free feeds through each room's confirmed geographic fences."
+      },
+      {
+        "id": "the-gate",
+        "label": "The interjection gate",
+        "focus": [
+          "store",
+          "watch",
+          "pg",
+          "room"
+        ],
+        "note": "world_watch scores each contact against the room's own 30-day history before it may speak."
+      },
+      {
+        "id": "the-doors",
+        "label": "Human and participant doors",
+        "focus": [
+          "geoapi",
+          "tools",
+          "world_ui"
+        ],
+        "note": "Humans confirm geography over JWT; the participant reads room-fenced and only ever proposes."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "firms",
+      "type": "external",
+      "label": "NASA FIRMS",
+      "sublabel": "VIIRS active fires",
+      "tag": "3 sats · 24h",
+      "pos": [
+        30,
+        180
+      ],
+      "size": [
+        190,
+        70
+      ]
+    },
+    {
+      "id": "feeds",
+      "type": "external",
+      "label": "Live feeds",
+      "sublabel": "USGS · adsb · ISS · launches",
+      "tag": "free tiers",
+      "pos": [
+        30,
+        430
+      ],
+      "size": [
+        190,
+        84
+      ]
+    },
+    {
+      "id": "scheduler",
+      "type": "backend",
+      "label": "Scheduler",
+      "sublabel": "world_signals · world_watch",
+      "tag": "300s, advisory-locked",
+      "pos": [
+        295,
+        60
+      ],
+      "size": [
+        200,
+        70
+      ]
+    },
+    {
+      "id": "adapters",
+      "type": "backend",
+      "label": "world_adapters.py",
+      "sublabel": "5 adapters · per-feed floors",
+      "tag": "kill switches",
+      "pos": [
+        295,
+        310
+      ],
+      "size": [
+        200,
+        76
+      ]
+    },
+    {
+      "id": "store",
+      "type": "backend",
+      "label": "WorldSignalStore",
+      "sublabel": "process-local snapshots",
+      "pos": [
+        580,
+        180
+      ],
+      "size": [
+        190,
+        72
+      ]
+    },
+    {
+      "id": "watch",
+      "type": "security",
+      "label": "world_watch",
+      "sublabel": "scorer + interjection gate",
+      "tag": "flare baseline",
+      "pos": [
+        580,
+        430
+      ],
+      "size": [
+        190,
+        80
+      ]
+    },
+    {
+      "id": "pg",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "geo_scopes · world_observations",
+      "tag": "021/022 · 027",
+      "pos": [
+        575,
+        680
+      ],
+      "size": [
+        200,
+        74
+      ]
+    },
+    {
+      "id": "room",
+      "type": "messagebus",
+      "label": "Room transcript",
+      "sublabel": "messages + WS broadcast",
+      "pos": [
+        875,
+        180
+      ],
+      "size": [
+        190,
+        70
+      ]
+    },
+    {
+      "id": "geoapi",
+      "type": "backend",
+      "label": "api/geo.py",
+      "sublabel": "observations · scope review",
+      "tag": "JWT, human door",
+      "pos": [
+        875,
+        430
+      ],
+      "size": [
+        190,
+        72
+      ]
+    },
+    {
+      "id": "tools",
+      "type": "backend",
+      "label": "LLM participant",
+      "sublabel": "world_query · propose_geo_scope",
+      "tag": "tools 22/23",
+      "pos": [
+        870,
+        680
+      ],
+      "size": [
+        200,
+        74
+      ]
+    },
+    {
+      "id": "world_ui",
+      "type": "frontend",
+      "label": "World surfaces",
+      "sublabel": "WorldView · Strip · Focus",
+      "tag": "God's Eye",
+      "pos": [
+        1140,
+        430
+      ],
+      "size": [
+        200,
+        84
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "open-sky providers",
+      "wraps": [
+        "firms",
+        "feeds"
+      ],
+      "pad": 18
+    },
+    {
+      "kind": "security-group",
+      "label": "dialectic.service · :8002",
+      "wraps": [
+        "scheduler",
+        "adapters",
+        "store",
+        "watch",
+        "geoapi",
+        "tools",
+        "room"
+      ],
+      "pad": 18
+    },
+    {
+      "kind": "region",
+      "label": "React PWA (browser)",
+      "wraps": [
+        "world_ui"
+      ],
+      "pad": 18
+    }
+  ],
+  "connections": [
+    {
+      "from": "scheduler",
+      "to": "adapters",
+      "label": "world_signals tick",
+      "labelAt": [
+        395,
+        215
+      ],
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "adapters",
+      "to": "firms",
+      "label": "VIIRS CSV · 600s floor"
+    },
+    {
+      "from": "adapters",
+      "to": "feeds",
+      "label": "HTTPS polls"
+    },
+    {
+      "from": "adapters",
+      "to": "pg",
+      "label": "confirmed scopes as fences",
+      "variant": "dashed"
+    },
+    {
+      "from": "adapters",
+      "to": "store",
+      "label": "snapshots fanned per room"
+    },
+    {
+      "from": "store",
+      "to": "watch",
+      "label": "per-room signals",
+      "labelAt": [
+        675,
+        340
+      ]
+    },
+    {
+      "from": "watch",
+      "to": "pg",
+      "label": "upsert vs 30-day baseline",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        675,
+        600
+      ]
+    },
+    {
+      "from": "watch",
+      "to": "room",
+      "label": "gated interjection",
+      "variant": "emphasis"
+    },
+    {
+      "from": "geoapi",
+      "to": "pg",
+      "label": "observations · scope review"
+    },
+    {
+      "from": "tools",
+      "to": "pg",
+      "label": "query · propose",
+      "labelDy": 26
+    },
+    {
+      "from": "world_ui",
+      "to": "geoapi",
+      "label": "GET world data (JWT)",
+      "labelAt": [
+        1103,
+        528
+      ]
+    },
+    {
+      "from": "room",
+      "to": "world_ui",
+      "label": "WS events"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "The interjection gate",
+      "items": [
+        "A fire speaks only when novel vs the room's 30-day baseline, FRP ≥ 10 MW, confidence not low",
+        "The daily cap is per layer — aircraft churn cannot silence a fire",
+        "Recurring flare fields are named beside every new cell"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Authority is a column",
+      "items": [
+        "geo_scopes: human_confirmed · source_reported · machine_proposed, append-only with lineage",
+        "propose_geo_scope reuses existing geometry and always lands as a human-reviewed proposal",
+        "Coordinates are never taken from the model"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Polite polling, durable contacts",
+      "items": [
+        "Each provider has its own kill switch and floor rate; FIRMS pixels merge to 0.01° cell-days",
+        "usgs · adsb · launch · firms persist to world_observations; the ISS stays ephemeral",
+        "Cesium ships as its own lazy chunk, outside the PWA precache"
+      ]
+    }
+  ]
+}
