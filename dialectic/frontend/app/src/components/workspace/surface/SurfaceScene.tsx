@@ -190,32 +190,44 @@ export function SurfaceScene({
   return (
     <div className={`surf${wide ? ' surf--wide' : ''}`} data-testid="surface">
       <header className="surf-head">
-        <span className="surf-head-title">
-          <em>{structure?.meta.title ?? roomName}</em>
-        </span>
-        {tradingConfig?.revision != null && <span>revision {tradingConfig.revision}</span>}
-        {tradingConfig?.cascadePhase && (
-          <span>phase {tradingConfig.cascadePhase.number} · {tradingConfig.cascadePhase.key}</span>
-        )}
-        {structure && (
-          <span className="surf-head-stat">
-            <b>{spokenCount}</b> of <b>{nodeCount}</b> nodes have a human word
+        <div className="surf-head-identity">
+          <span className="surf-head-title">
+            <em>{structure?.meta.title ?? roomName}</em>
           </span>
+          {tradingConfig?.revision != null && <span className="surf-head-coordinate">revision {tradingConfig.revision}</span>}
+          {tradingConfig?.cascadePhase && (
+            <span className="surf-head-coordinate">
+              phase {tradingConfig.cascadePhase.number} · {tradingConfig.cascadePhase.key}
+            </span>
+          )}
+        </div>
+        {(structure || fireHeadline) && (
+          <div className="surf-head-stats">
+            {structure && (
+              <span className="surf-head-stat">
+                <b>{spokenCount}</b> of <b>{nodeCount}</b> nodes have a human word
+              </span>
+            )}
+            {fireHeadline && (
+              <span className="surf-head-stat surf-head-stat--hot">
+                <b>{fireHeadline.total}</b> new fire{fireHeadline.total === 1 ? '' : 's'} in {fireHeadline.scope}
+              </span>
+            )}
+          </div>
         )}
-        {fireHeadline && (
-          <span className="surf-head-stat surf-head-stat--hot">
-            <b>{fireHeadline.total}</b> new fire{fireHeadline.total === 1 ? '' : 's'} in {fireHeadline.scope}
-          </span>
-        )}
-        {flags.annotator !== null && (
-          <span className={`surf-head-flag${flags.annotator ? ' surf-head-flag--off' : ''}`}>
-            Annotator {flags.annotator ? 'speaking' : 'silent · writes marks only'}
-          </span>
-        )}
-        {flags.addressed !== null && (
-          <span className={`surf-head-flag${flags.addressed ? '' : ' surf-head-flag--off'}`}>
-            {PARTICIPANT_NAME} speaks {flags.addressed ? 'when addressed or a gate fires' : 'on its own judgment'}
-          </span>
+        {(flags.annotator !== null || flags.addressed !== null) && (
+          <div className="surf-head-flags">
+            {flags.annotator !== null && (
+              <span className={`surf-head-flag${flags.annotator ? ' surf-head-flag--off' : ''}`}>
+                Annotator {flags.annotator ? 'speaking' : 'silent · writes marks only'}
+              </span>
+            )}
+            {flags.addressed !== null && (
+              <span className={`surf-head-flag${flags.addressed ? '' : ' surf-head-flag--off'}`}>
+                {PARTICIPANT_NAME} speaks {flags.addressed ? 'when addressed or a gate fires' : 'on its own judgment'}
+              </span>
+            )}
+          </div>
         )}
         {structure && (
           <span className="surf-head-hint">

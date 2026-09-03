@@ -28,10 +28,10 @@ interface Segment {
 
 function segmentsFor(row: DailyActivityRow): Segment[] {
   return [
-    { key: 'human', value: row.human, fill: 'var(--color-teal)' },
-    { key: 'llm_primary', value: row.llm_primary, fill: 'var(--color-amber)' },
-    { key: 'llm_provoker', value: row.llm_provoker, fill: 'var(--color-warning)' },
-    { key: 'llm_annotator', value: row.llm_annotator, fill: 'var(--color-steel)' },
+    { key: 'human', value: row.human, fill: 'url(#surf-signal-human)' },
+    { key: 'llm_primary', value: row.llm_primary, fill: 'url(#surf-signal-primary)' },
+    { key: 'llm_provoker', value: row.llm_provoker, fill: 'url(#surf-signal-provoker)' },
+    { key: 'llm_annotator', value: row.llm_annotator, fill: 'url(#surf-signal-annotator)' },
   ]
 }
 
@@ -48,6 +48,23 @@ function VolumeChart({ rows }: { rows: DailyActivityRow[] }) {
 
   return (
     <svg className="surf-signal-chart" viewBox={`0 0 ${VIEW_W} 130`} role="img" aria-label="Volume, last days">
+      <defs>
+        <pattern id="surf-signal-human" width="4" height="4" patternUnits="userSpaceOnUse">
+          <rect width="4" height="4" fill="var(--color-bone)" />
+        </pattern>
+        <pattern id="surf-signal-primary" width="5" height="5" patternUnits="userSpaceOnUse">
+          <rect width="5" height="5" fill="var(--color-well)" />
+          <path d="M-1 5 L5 -1 M2 7 L7 2" stroke="var(--color-bone)" strokeWidth="1.25" />
+        </pattern>
+        <pattern id="surf-signal-provoker" width="6" height="6" patternUnits="userSpaceOnUse">
+          <rect width="6" height="6" fill="var(--color-well)" />
+          <path d="M0 0 L6 6 M6 0 L0 6" stroke="var(--color-bone)" strokeWidth="1" />
+        </pattern>
+        <pattern id="surf-signal-annotator" width="6" height="6" patternUnits="userSpaceOnUse">
+          <rect width="6" height="6" fill="var(--color-well)" />
+          <circle cx="3" cy="3" r="1.25" fill="var(--color-bone)" />
+        </pattern>
+      </defs>
       {rows.map((row, i) => {
         const x = 10 + i * slot + (slot - barW) / 2
         const dialecticTotal = row.llm_primary + row.llm_provoker + row.llm_annotator
@@ -118,6 +135,12 @@ export function ShapeSignal({ activity, status, error, annotatorEnabled, address
       {status === 'ready' && (
         <>
           <VolumeChart rows={rows} />
+          <div className="surf-signal-legend" aria-label="Chart patterns">
+            <span><i className="surf-signal-key surf-signal-key--human" aria-hidden="true" />human</span>
+            <span><i className="surf-signal-key surf-signal-key--primary" aria-hidden="true" />Dialectic</span>
+            <span><i className="surf-signal-key surf-signal-key--provoker" aria-hidden="true" />provoker</span>
+            <span><i className="surf-signal-key surf-signal-key--annotator" aria-hidden="true" />annotator</span>
+          </div>
           <table className="surf-signal-totals">
             <thead>
               <tr><th>humans</th><th>Dialectic</th><th>provoker</th><th>annotator</th></tr>

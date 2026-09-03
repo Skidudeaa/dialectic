@@ -31,9 +31,74 @@ const SVG_WIDTH = 720
 const SVG_HEIGHT = 300
 const PADDING = 28
 const GRATICULE_STEP = 2
+const LABEL_CHAR_WIDTH = 7.2
+const LABEL_HEIGHT = 16
+const LABEL_GUTTER = 4
+const LABEL_OFFSETS: ReadonlyArray<readonly [number, number]> = [
+  [0, -10], [0, 18], [0, -30], [0, 38], [38, -10], [-38, -10], [48, 20], [-48, 20],
+]
 // Only reached when every scope's geometry is unwalkable (malformed rows) —
 // a small, arbitrary box so the projector still has a valid bbox to fit.
 const FALLBACK_BBOX: BBox = [-1, -1, 1, 1]
+
+interface LabelBox { left: number; top: number; right: number; bottom: number }
+interface ScopeLabelPlacement { x: number; y: number; cx: number; cy: number }
+
+function labelBox(label: string, x: number, y: number): LabelBox {
+  const halfWidth = Math.min(132, Math.max(22, label.length * LABEL_CHAR_WIDTH * 0.5))
+  return {
+    left: x - halfWidth - LABEL_GUTTER,
+    top: y - LABEL_HEIGHT + 2 - LABEL_GUTTER,
+    right: x + halfWidth + LABEL_GUTTER,
+    bottom: y + 3 + LABEL_GUTTER,
+  }
+}
+
+function boxesOverlap(a: LabelBox, b: LabelBox): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+}
+
+/** Deterministic label placement for a cramped inline atlas. Broad regions
+ *  get first choice; narrow TSS/lane labels take the next clear slot. The
+ *  geometry and scope order are untouched — this only prevents two names at
+ *  near-identical centroids from painting over one another. */
+function placeScopeLabels(
+  scopes: GeoScope[],
+  project: ReturnType<typeof makeProjector>,
+): Map<string, ScopeLabelPlacement> {
+  const occupied: LabelBox[] = []
+  const placements = new Map<string, ScopeLabelPlacement>()
+  const ordered = scopes
+    .map((scope, index) => ({ scope, index, isLane: /\b(?:lane|tss)\b/i.test(scope.label) }))
+    .sort((a, b) => Number(a.isLane) - Number(b.isLane) || a.index - b.index)
+
+  for (const { scope, isLane } of ordered) {
+    const [cx, cy] = project(scope.centroid[0], scope.centroid[1])
+    let chosen: { x: number; y: number; box: LabelBox } | null = null
+    for (const [dx, dy] of LABEL_OFFSETS) {
+      const width = Math.min(264, Math.max(44, scope.label.length * LABEL_CHAR_WIDTH))
+      const x = Math.max(width / 2 + 8, Math.min(SVG_WIDTH - width / 2 - 8, cx + dx))
+      const y = Math.max(18, Math.min(SVG_HEIGHT - 8, cy + dy))
+      const box = labelBox(scope.label, x, y)
+      if (!occupied.some((other) => boxesOverlap(box, other))) {
+        chosen = { x, y, box }
+        break
+      }
+    }
+    // In a pathological cluster, a secondary lane label yields to the
+    // surrounding named regions; primary region labels still remain visible.
+    if (!chosen && isLane) continue
+    const fallback = chosen ?? (() => {
+      const width = Math.min(264, Math.max(44, scope.label.length * LABEL_CHAR_WIDTH))
+      const x = Math.max(width / 2 + 8, Math.min(SVG_WIDTH - width / 2 - 8, cx))
+      const y = Math.max(18, Math.min(SVG_HEIGHT - 8, cy - 10))
+      return { x, y, box: labelBox(scope.label, x, y) }
+    })()
+    occupied.push(fallback.box)
+    placements.set(scope.id, { x: fallback.x, y: fallback.y, cx, cy })
+  }
+  return placements
+}
 
 function pointCoords(geometry: GeoJSONGeometry | null | undefined): [number, number] | null {
   if (!geometry || geometry.type !== 'Point') return null
@@ -108,6 +173,7 @@ export function SurfaceAtlas(props: SurfaceAtlasProps): JSX.Element {
   const [minLon, minLat, maxLon, maxLat] = bbox
   const lonLines = graticuleValues(minLon, maxLon, GRATICULE_STEP)
   const latLines = graticuleValues(minLat, maxLat, GRATICULE_STEP)
+  const scopeLabels = placeScopeLabels(scopes, project)
 
   const pointObservations = observations
     .map((obs) => ({ obs, coords: pointCoords(obs.geometry) }))
@@ -153,7 +219,7 @@ export function SurfaceAtlas(props: SurfaceAtlasProps): JSX.Element {
           <g className="surf-atlas-scopes">
             {scopes.map((scope) => {
               const d = geometryPath(scope.geometry, project)
-              const [cx, cy] = project(scope.centroid[0], scope.centroid[1])
+              const label = scopeLabels.get(scope.id)
               const proposed = scope.authority === 'machine_proposed'
               return (
                 <g key={scope.id}>
@@ -163,9 +229,22 @@ export function SurfaceAtlas(props: SurfaceAtlasProps): JSX.Element {
                       className={proposed ? 'surf-atlas-scope surf-atlas-scope--proposed' : 'surf-atlas-scope'}
                     />
                   )}
-                  <text x={cx} y={cy - 6} className="surf-atlas-scope-label" textAnchor="middle">
-                    {scope.label}
-                  </text>
+                  {label && (
+                    <g className="surf-atlas-scope-label-group">
+                      {Math.hypot(label.x - label.cx, label.y - label.cy) > 14 && (
+                        <line
+                          x1={label.cx}
+                          y1={label.cy}
+                          x2={label.x}
+                          y2={label.y - 5}
+                          className="surf-atlas-scope-label-leader"
+                        />
+                      )}
+                      <text x={label.x} y={label.y} className="surf-atlas-scope-label" textAnchor="middle">
+                        {scope.label}
+                      </text>
+                    </g>
+                  )}
                 </g>
               )
             })}

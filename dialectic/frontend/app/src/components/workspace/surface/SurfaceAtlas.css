@@ -5,12 +5,13 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    min-width: 0;
     font-family: var(--font-mono);
-    background: var(--color-cacao);
+    background: var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     padding: 12px 14px 14px;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--bezel-raised);
 }
 
 .surf-atlas-header {
@@ -18,26 +19,33 @@
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: 0.45rem 0.8rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid var(--color-bean);
 }
 
 .surf-atlas-title {
     font-size: 12px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: .06em;
-    color: var(--color-secondary);
+    letter-spacing: .13em;
+    line-height: 1.4;
+    color: var(--color-bone);
+    text-shadow: var(--engrave);
 }
 
 .surf-atlas-world-btn {
     font-family: var(--font-mono);
     font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: .06em;
+    letter-spacing: .1em;
     color: var(--color-secondary);
     background: var(--color-espresso);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
-    padding: 4px 8px;
+    min-height: 34px;
+    padding: 4px 10px;
+    box-shadow: var(--bezel-key);
     cursor: pointer;
     transition: color 120ms ease, border-color 120ms ease;
 }
@@ -45,6 +53,11 @@
 .surf-atlas-world-btn:hover {
     color: var(--color-amber);
     border-color: var(--color-amber-mute);
+}
+
+.surf-atlas-world-btn:active {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
 }
 
 .surf-atlas-world-btn:focus-visible {
@@ -90,10 +103,24 @@
 
 .surf-atlas-scope-label {
     font-family: var(--font-mono);
-    font-size: 11px;
-    fill: var(--color-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    fill: var(--color-ink);
+    stroke: var(--color-well);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+    paint-order: stroke fill;
     text-transform: uppercase;
-    letter-spacing: .04em;
+    letter-spacing: .08em;
+    pointer-events: none;
+}
+
+.surf-atlas-scope-label-leader {
+    stroke: var(--color-faint);
+    stroke-width: 1px;
+    stroke-dasharray: 2 3;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
 }
 
 .surf-atlas-marker {
@@ -147,12 +174,23 @@
 .surf-atlas-quiet {
     margin: 0;
     font-size: 12px;
+    line-height: 1.45;
     color: var(--color-ghost);
 }
 
 .surf-atlas-legend {
     margin: 0;
-    font-size: 11px;
-    letter-spacing: .02em;
+    padding-top: 0.45rem;
+    border-top: 1px solid var(--color-bean);
+    font-size: 12px;
+    line-height: 1.4;
+    letter-spacing: .05em;
+    text-transform: uppercase;
     color: var(--color-ghost);
+}
+
+@media (max-width: 680px) {
+    .surf-atlas { padding: 10px; }
+    .surf-atlas-header { align-items: flex-start; }
+    .surf-atlas-title { flex: 1 1 16rem; }
 }
