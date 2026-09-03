@@ -19,7 +19,9 @@
         "graph conv"
         "atlas conv"
         "updates updates";
-    overflow: hidden;
+    /* The surface scrolls as one page; the conversation column stays put
+       (sticky) so the composer is never scrolled away from. */
+    overflow-y: auto;
 }
 .surf--wide {
     grid-template-columns: minmax(0, 1fr);
@@ -38,7 +40,16 @@
 .surf-head    { grid-area: head; }
 .surf-graph-pane   { grid-area: graph; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
 .surf-atlas-pane   { grid-area: atlas; min-width: 0; }
-.surf-conv    { grid-area: conv; min-height: 0; min-width: 0; }
+.surf-conv    {
+    grid-area: conv;
+    min-height: 0;
+    min-width: 0;
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: min(calc(100dvh - 250px), 100%);
+    max-height: 100%;
+}
 .surf-updates-pane { grid-area: updates; min-width: 0; }
 
 /* The graph fills its row: ThesisDag's own chrome (toolbar + canvas) sits
@@ -204,7 +215,11 @@
 .surf-atlas-pane, .surf-updates-pane { min-height: 0; }
 /* The atlas is a strip under the graph, not a second hero: cap the map so
    the graph row above keeps the height the grid promised it. */
-.surf-atlas-pane .surf-atlas-svg { max-height: 220px; height: auto; }
+/* An explicit height, not `auto`: an inline SVG with a percentage width
+   contributes no intrinsic height to grid track sizing, so an `auto` row
+   sized itself short and the map painted over the tray beneath it. */
+.surf-atlas-pane .surf-atlas-svg { height: 220px; max-height: 220px; }
+.surf-atlas-pane { overflow: hidden; }
 .surf-atlas-pane .surf-atlas-scope-label { font-size: 10px; }
 
 /* ── Narrow: one column, conversation first ──────────────────────────── */
