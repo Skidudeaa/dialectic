@@ -59,11 +59,55 @@ export interface ToolCallTrace {
  * Carried on the live llm_done event and, since the REST projection learned
  * the field, on history reloads too.
  */
+/**
+ * What a message is ABOUT on the working surface (2026-09-02): a thesis node
+ * or an edge of the room's causal graph. Written by the human composer when
+ * a node is focused, inherited by the participant's reply to that message.
+ * Mirrors proposal_intake.validate_anchor — the server re-shapes it.
+ */
+export interface MessageAnchor {
+  kind: 'node' | 'edge';
+  id: string;
+  label: string;
+}
+
+/**
+ * An object a message USED or ATTACHED — a reading, a fire cell, a mark, a
+ * memory, a scope, a thesis node. `entity` is the server's table name
+ * (proposal_intake.REF_ENTITIES); `thesis_node` is the one non-row entity.
+ * The participant's tool loop stamps these from what its tools returned;
+ * a human's composer stamps them when an update is dropped onto a node.
+ */
+export interface MessageRef {
+  entity: string;
+  id: string;
+  label: string;
+}
+
+/** One row of GET /rooms/{id}/activity/daily — the surface's volume chart. */
+export interface DailyActivityRow {
+  day: string;
+  human: number;
+  llm_primary: number;
+  llm_provoker: number;
+  llm_annotator: number;
+  system: number;
+}
+
+export interface DailyActivity {
+  days: number;
+  rows: DailyActivityRow[];
+}
+
 export interface MessageMetadata {
   /** Human-applied tags from a fixed vocabulary (MESSAGE_TAGS on the server).
    *  NOT a proposal: nothing accepts it, nothing relays it, it stamps no
    *  state. It exists so product-meta, bugs and ideas can be found again. */
   tags?: string[];
+  /** The node or edge this message speaks to (working surface). */
+  anchor?: MessageAnchor;
+  /** The objects this message used or attached (working surface). */
+  refs?: MessageRef[];
   /** Set on research-mode briefs ('deep_dive') — the message came from the
    *  long tool loop, not an ordinary turn. */
   source?: string;

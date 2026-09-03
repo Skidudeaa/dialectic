@@ -1,0 +1,158 @@
+/* SurfaceAtlas — the surface's inline 2-D map. Same instrument-card idiom as
+   ThesisDag.css (glass panel over a chassis card); Dark Roast tokens only. */
+
+.surf-atlas {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px 14px;
+    box-shadow: var(--shadow-sm);
+}
+
+.surf-atlas-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.surf-atlas-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-secondary);
+}
+
+.surf-atlas-world-btn {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-secondary);
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: color 120ms ease, border-color 120ms ease;
+}
+
+.surf-atlas-world-btn:hover {
+    color: var(--color-amber);
+    border-color: var(--color-amber-mute);
+}
+
+.surf-atlas-world-btn:focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 1px;
+}
+
+/* The recessed glass panel — mirrors .thesis-dag-canvas's well/bezel. */
+.surf-atlas-canvas {
+    position: relative;
+    width: 100%;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control, var(--radius-sm));
+    background: var(--color-well);
+    box-shadow: var(--bezel-well, var(--shadow-inset));
+    overflow: hidden;
+}
+
+.surf-atlas-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.surf-atlas-graticule line {
+    stroke: var(--color-bean);
+    stroke-width: 0.5px;
+    opacity: 0.35;
+}
+
+.surf-atlas-scope {
+    fill: var(--color-teal);
+    fill-opacity: 0.06;
+    stroke: var(--color-teal);
+    stroke-width: 1.25px;
+}
+
+/* machine_proposed authority renders provisional (World Lens: geometry
+   authority is a column, not a style choice we get to skip). */
+.surf-atlas-scope--proposed {
+    stroke-dasharray: 4, 3;
+}
+
+.surf-atlas-scope-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    fill: var(--color-secondary);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.surf-atlas-marker {
+    cursor: pointer;
+    outline: none;
+}
+
+.surf-atlas-marker:focus-visible circle:first-of-type {
+    stroke: var(--color-amber);
+    stroke-width: 2px;
+}
+
+.surf-atlas-dot--fires {
+    fill: var(--color-amber);
+}
+
+.surf-atlas-dot--fires-novel {
+    fill: var(--color-scarlet);
+}
+
+.surf-atlas-dot--aircraft {
+    fill: var(--color-steel);
+}
+
+.surf-atlas-dot--other {
+    fill: var(--color-faint);
+}
+
+.surf-atlas-ring--earthquakes {
+    fill: none;
+    stroke: var(--color-plum);
+    stroke-width: 1.5px;
+}
+
+.surf-atlas-ring--novel {
+    fill: none;
+    stroke: var(--color-scarlet);
+    stroke-width: 1.25px;
+}
+
+/* Selection halo — a second ring in cream, per design: shape/color are
+   reinforcement, never the only signal (the .is-selected class + aria state
+   already carry the fact). */
+.surf-atlas-halo {
+    fill: none;
+    stroke: var(--color-cream);
+    stroke-width: 1.5px;
+}
+
+.surf-atlas-empty,
+.surf-atlas-quiet {
+    margin: 0;
+    font-size: 12px;
+    color: var(--color-ghost);
+}
+
+.surf-atlas-legend {
+    margin: 0;
+    font-size: 11px;
+    letter-spacing: .02em;
+    color: var(--color-ghost);
+}

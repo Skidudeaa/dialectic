@@ -12,10 +12,13 @@
 # the same content would be the whole point of the fence undone.
 
 import logging
+from datetime import date, datetime, timedelta
 from typing import Optional
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from api.auth.dependencies import AuthenticatedUser, get_current_user
 from api.token_utils import extract_room_token
@@ -120,3 +123,62 @@ async def get_workspace_objects(
             "objects": [o for o in projection.objects if o.kind == kind],
         })
     return projection
+
+
+# ── The signal shape: who spoke how much, per day ────────────────────
+#
+# The working surface's "cut the volume" measurement (2026-09-02): the
+# enjoyment experiment watches ONE number — human messages per day — and
+# this is where the surface reads it. Days are the room's own days
+# (America/Chicago, the scheduler's daily clock), zero-filled so a quiet
+# day is a bar of height zero, not a missing bar.
+ROOM_TZ = ZoneInfo("America/Chicago")
+_SPEAKER_COLUMNS = ("human", "llm_primary", "llm_provoker", "llm_annotator", "system")
+
+
+class DailyActivityRow(BaseModel):
+    day: str
+    human: int = 0
+    llm_primary: int = 0
+    llm_provoker: int = 0
+    llm_annotator: int = 0
+    system: int = 0
+
+
+class DailyActivity(BaseModel):
+    days: int
+    rows: list[DailyActivityRow]
+
+
+@router.get("/rooms/{room_id}/activity/daily", response_model=DailyActivity)
+async def get_daily_activity(
+    room_id: UUID,
+    days: int = Query(14, ge=1, le=90),
+    token: str = Depends(extract_room_token),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Messages per day per speaker type over the last `days` room-days."""
+    await _authorize(room_id, token, current_user.user_id, db)
+    rows = await db.fetch(
+        """SELECT (m.created_at AT TIME ZONE 'America/Chicago')::date AS day,
+                  m.speaker_type, count(*)::int AS n
+           FROM messages m
+           JOIN threads t ON t.id = m.thread_id
+           WHERE t.room_id = $1
+             AND m.is_deleted = FALSE
+             AND m.created_at >= now() - ($2::int * interval '1 day')
+           GROUP BY 1, 2""",
+        room_id, days,
+    )
+    today = datetime.now(ROOM_TZ).date()
+    by_day: dict[date, DailyActivityRow] = {
+        today - timedelta(days=offset): DailyActivityRow(day=(today - timedelta(days=offset)).isoformat())
+        for offset in range(days - 1, -1, -1)
+    }
+    for row in rows:
+        bucket = by_day.get(row["day"])
+        if bucket is None or row["speaker_type"] not in _SPEAKER_COLUMNS:
+            continue
+        setattr(bucket, row["speaker_type"], int(row["n"]))
+    return DailyActivity(days=days, rows=list(by_day.values()))

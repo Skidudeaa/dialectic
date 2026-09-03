@@ -1409,3 +1409,52 @@ numbers: human messages per day, and whether both humans forecast.
   by construction — Dan sees the lintel, nothing is taken from him.
 - Rollback is the four env lines back to their old values and a restart; no
   migration.
+
+## Amendment 2026-09-03 — the working surface (amend-beside)
+
+The owner's surface mocks (handoff 2026-09-02 §3: "neither is code in the
+app") are code now. Prefer this over anything above that calls Record the
+default scene of an ordinary room.
+
+- **`surface` is a scene**, in `WORKSPACE_SCENES` and
+  `IMPLEMENTED_WORKSPACE_SCENES` together, and **the DEFAULT for a scheme
+  room's ROOT** (`defaultWorkspaceScene`); a branch still defaults to Record
+  and does not offer the surface. Consequence for URLs: `/?room=X` opens the
+  surface, and `scene=record` is now serialized for a root that asks for the
+  Record. `AppLayout.css` hides the right context column under
+  `.app-main-scene-surface` on desktop (`:has`).
+- **`components/workspace/surface/`**: `SurfaceScene` (layout + verbs +
+  staging), `SurfaceConversation` (shape switcher + composer with the anchor
+  chip), `shapes/` (Stream + context rail, Tree, Lanes, Signal, one
+  `SurfaceMessage` renderer), `SurfaceAtlas` (pure SVG over `GeoScope`
+  geometry + `WorldObservation` points; `geoProject.ts`; **never Cesium**),
+  `SurfaceUpdates` (fires/readings/marks since `last_read_at`, draggable
+  cards), `surfaceModel.ts` (the ONE view model — `toSurfaceMessages`,
+  `humanWordsByNode`, `refFocusId`).
+- **`ThesisDag` is extended, not forked**: opt-in `humanWords`,
+  `focusedNodeId`/`onFocusNode` (controlled), `verbs`, `onDropRef`
+  (`DAG_DROP_MIME = application/x-dialectic-ref`), `onEdgeSelect`, `height`.
+  The Bench passes none and renders as before.
+- **Two message metadata slots**: `anchor` `{kind: node|edge, id, label}`
+  and `refs` `[{entity, id, label}]` — `proposal_intake.validate_anchor` /
+  `validate_refs` (`REF_ENTITIES` mirrors `field_marks._SUBJECT_ENTITY_TABLES`
+  plus `thesis_node`), accepted on the WS door and the REST door; row refs
+  are resolved IN THIS ROOM via `field_marks.resolve_subjects_in_room`.
+  `prompts._format_messages` renders a human's anchor as `[on <label>] ` and
+  refs as `(attached: …)` — data, never instruction. `sendMessage` gained an
+  `extra` argument; `MessageInput` gained an imperative `composerRef`
+  (`insert`/`focus`).
+- **The write-path fix**: a tool result may carry `refs`; `ToolLoop._execute`
+  lifts them onto the trace entry and `orchestrator._hoisted_refs` stamps up
+  to 12 on `metadata.refs`. Done for `search_memories`, `search_reading`
+  (`llm/reading.search_reading` now returns `id`) and `world_query` (scopes +
+  the selected scope's observations). `_inherit_anchor` copies the latest
+  human message's anchor onto the reply on `on_message` and `stream_response`
+  only — forced turns never inherit.
+- **`GET /rooms/{id}/activity/daily?days=`** (`api/workspace.py`): messages
+  per America/Chicago day per speaker type, zero-filled. `RoomCapabilities`
+  gained `annotator_enabled` / `addressed_only`, read from the live gates.
+- No migration. Suites at this gate: backend 2286 passed + 7 pre-existing
+  `test_world_watch_pg` failures (reproduced on a clean HEAD worktree; not
+  this work), frontend 690+ (`tsc -b`, eslint and the lazy-Cesium build
+  contract clean).

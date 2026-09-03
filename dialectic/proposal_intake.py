@@ -37,6 +37,7 @@
 
 from datetime import date
 from typing import Any
+from uuid import UUID
 
 from proposal_envelope import PROPOSAL_LIST_SLOT, PROPOSAL_SLOTS
 
@@ -109,6 +110,84 @@ def validate_tags(value: Any) -> list[str]:
             )
         if cleaned not in out:
             out.append(cleaned)
+    return out
+
+
+# ── Anchors and refs (the working surface, 2026-09-02) ───────────────
+#
+# An ANCHOR says what a message is ABOUT on the room's causal graph: a
+# thesis node or an edge. A REF says which objects a message USED or
+# ATTACHED — a reading, a fire cell, a mark, a memory. Both ride the same
+# metadata document through the same doors as tags, and are validated here
+# for the same reason: one vocabulary, one gate.
+#
+# WHY shape-only for the anchor: thesis nodes live in tradingDesk, not in
+# this database, so there is no row to resolve against. The label is
+# rendered as participant data (a "[on Hormuz Closure]" prefix), never as
+# instruction. Refs to database rows ARE resolved — at the door, in SQL,
+# by field_marks.resolve_subjects_in_room — because a ref to a row this
+# room does not own is a claim the surface would then render as fact.
+ANCHOR_SLOT = "anchor"
+REFS_SLOT = "refs"
+ANCHOR_KINDS = ("node", "edge")
+# Mirrors field_marks._SUBJECT_ENTITY_TABLES for the row-backed kinds; the
+# one non-row kind is thesis_node (the graph lives desk-side).
+REF_ENTITIES = (
+    "reading_items", "world_observations", "field_marks", "memories",
+    "messages", "geo_scopes", "commitments", "thesis_node",
+)
+_MAX_REFS = 12
+
+
+def validate_anchor(value: Any) -> dict:
+    """One {kind, id, label} the composer wrote when a node was focused."""
+    if not isinstance(value, dict):
+        raise ProposalMetadataError(f"{ANCHOR_SLOT} must be an object")
+    kind = str(value.get("kind") or "").strip()
+    if kind not in ANCHOR_KINDS:
+        raise ProposalMetadataError(
+            f"{ANCHOR_SLOT}.kind must be one of {', '.join(ANCHOR_KINDS)}"
+        )
+    ident = _require_str(value, "id", max_len=160)
+    label = _require_str(value, "label", max_len=200)
+    return {"kind": kind, "id": ident, "label": label}
+
+
+def validate_refs(value: Any) -> list[dict]:
+    """A message's refs: {entity, id, label}, deduplicated, at most 12.
+
+    Row-backed ids must parse as UUIDs here; whether the row is IN THIS
+    ROOM is the door's job (it has the connection). thesis_node ids are
+    the desk's own strings.
+    """
+    if not isinstance(value, list):
+        raise ProposalMetadataError(f"{REFS_SLOT} must be a list")
+    if not value:
+        raise ProposalMetadataError(f"{REFS_SLOT} must not be empty")
+    if len(value) > _MAX_REFS:
+        raise ProposalMetadataError(f"{REFS_SLOT} carries at most {_MAX_REFS} refs")
+    out: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for ref in value:
+        if not isinstance(ref, dict):
+            raise ProposalMetadataError(f"each {REFS_SLOT} entry must be an object")
+        entity = str(ref.get("entity") or "").strip()
+        if entity not in REF_ENTITIES:
+            raise ProposalMetadataError(
+                f"unknown ref entity '{entity}' — expected one of {', '.join(REF_ENTITIES)}"
+            )
+        ident = _require_str(ref, "id", max_len=160)
+        if entity != "thesis_node":
+            try:
+                ident = str(UUID(ident))
+            except ValueError:
+                raise ProposalMetadataError(f"{REFS_SLOT} id for {entity} must be a UUID")
+        label = _require_str(ref, "label", max_len=200)
+        key = (entity, ident)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"entity": entity, "id": ident, "label": label})
     return out
 
 
@@ -244,6 +323,14 @@ def validate_human_proposal_metadata(metadata: Any) -> dict:
     for slot, value in metadata.items():
         if slot == TAGS_SLOT:
             out[slot] = validate_tags(value)
+            continue
+
+        if slot == ANCHOR_SLOT:
+            out[slot] = validate_anchor(value)
+            continue
+
+        if slot == REFS_SLOT:
+            out[slot] = validate_refs(value)
             continue
 
         if slot == PROPOSAL_LIST_SLOT:

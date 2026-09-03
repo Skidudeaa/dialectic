@@ -10,7 +10,9 @@ import logging
 
 import asyncpg
 
-from proposal_intake import ProposalMetadataError, validate_tags
+from proposal_intake import (
+    ProposalMetadataError, validate_anchor, validate_refs, validate_tags,
+)
 from models import (
     Room, User, Thread, Message, Memory, Event, EventType,
     SpeakerType, MessageType, MessageCreatedPayload,
@@ -31,6 +33,7 @@ from llm import research
 from llm.protocol_manager import ProtocolManager
 from llm.protocol_library import get_protocol_definition
 from stakes.manager import CommitmentManager
+from field_marks import resolve_subjects_in_room
 
 
 def is_llm_speaker(speaker_type: SpeakerType) -> bool:
@@ -326,6 +329,33 @@ class MessageHandler:
                 await self._send_error(conn, f"Invalid tags: {exc}")
                 return
 
+        # The working surface's two slots ride beside tags: an ANCHOR (the
+        # node or edge this message speaks to) and REFS (the objects it
+        # attaches — a fire cell dropped onto a node, a reading). Same gate
+        # as tags; refs to database rows are additionally resolved IN THIS
+        # ROOM in SQL, because a ref the surface renders as evidence must
+        # not be trusted because the shape looked right.
+        message_meta: dict = {"tags": message_tags} if message_tags else {}
+        if payload.get("anchor") is not None:
+            try:
+                message_meta["anchor"] = validate_anchor(payload.get("anchor"))
+            except ProposalMetadataError as exc:
+                await self._send_error(conn, f"Invalid anchor: {exc}")
+                return
+        if payload.get("refs") is not None:
+            try:
+                message_refs = validate_refs(payload.get("refs"))
+            except ProposalMetadataError as exc:
+                await self._send_error(conn, f"Invalid refs: {exc}")
+                return
+            row_refs = [r for r in message_refs if r["entity"] != "thesis_node"]
+            if row_refs and not await resolve_subjects_in_room(
+                self.db, conn.room_id, row_refs,
+            ):
+                await self._send_error(conn, "refs do not resolve to rows in this room")
+                return
+            message_meta["refs"] = message_refs
+
         references_message_id = payload.get("references_message_id")
 
         requested_thread_id = payload.get("thread_id") or conn.thread_id
@@ -405,7 +435,7 @@ class MessageHandler:
                         message_id, thread_id, now,
                         SpeakerType.HUMAN.value, conn.user_id, message_type.value,
                         content, refs_msg_id,
-                        {"tags": message_tags} if message_tags else None,
+                        message_meta or None,
                     )
                     bound_attachments = []
                     for attachment_id in attachment_ids:
@@ -436,7 +466,7 @@ class MessageHandler:
             message_type=message_type,
             content=content,
             references_message_id=refs_msg_id,
-            metadata={"tags": message_tags} if message_tags else None,
+            metadata=message_meta or None,
         )
 
         event = Event(

@@ -51,6 +51,21 @@ export interface Release {
 /** Newest first. `releases.test.ts` pins that order at the data level. */
 export const RELEASES: Release[] = [
   {
+    id: 'working-surface',
+    date: '2026-09-03',
+    title: 'The working surface',
+    body:
+      'A scheme room now opens on one surface with everything it is about side by side: the ' +
+      'causal graph with the last human word under every node, the room’s geography with the ' +
+      'fires and aircraft the feeds saw inside it, the conversation, and the updates that arrived ' +
+      'while you were away. Focus a node and what you write lands on it; drop an update onto a ' +
+      'node to attach it as evidence; tap an edge to dispute it. The conversation can be read ' +
+      'as a stream with a context rail, a tree of replies with its [[branch|branches]], lanes ' +
+      'per person with whose move it is, or the volume chart the experiment is measured by. ' +
+      'The participant’s replies now carry the [[reading|readings]], memories and scopes its ' +
+      'tools actually used, and land on the node you were speaking to.',
+  },
+  {
     id: 'your-move',
     date: '2026-09-02',
     title: 'Your move',

@@ -1,0 +1,219 @@
+/* The working surface (2026-09-02) — panes side by side.
+   Dark Roast tokens only. The graph and the atlas share the left column, the
+   conversation owns the right, the updates tray runs the width underneath.
+   Tree / lanes / signal shapes need the width, so they take the whole
+   surface and push the graph and atlas beneath the conversation. */
+.surf {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    display: grid;
+    gap: 10px;
+    padding: 10px 14px 12px;
+    grid-template-columns: minmax(0, 1.5fr) minmax(360px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+        "head head"
+        "graph conv"
+        "atlas conv"
+        "updates updates";
+    overflow: hidden;
+}
+.surf--wide {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas:
+        "head"
+        "conv"
+        "graph"
+        "atlas"
+        "updates";
+    overflow-y: auto;
+}
+.surf--wide .surf-graph-pane,
+.surf--wide .surf-conv { min-height: 420px; }
+
+.surf-head    { grid-area: head; }
+.surf-graph-pane   { grid-area: graph; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.surf-atlas-pane   { grid-area: atlas; min-width: 0; }
+.surf-conv    { grid-area: conv; min-height: 0; min-width: 0; }
+.surf-updates-pane { grid-area: updates; min-width: 0; }
+
+/* The graph fills its row: ThesisDag's own chrome (toolbar + canvas) sits
+   inside a flex column and the canvas takes what is left. */
+.surf-graph-pane .thesis-dag { flex: 1 1 auto; min-height: 0; }
+.surf-graph-pane .thesis-dag-canvas { flex: 1 1 auto; min-height: 240px; }
+.surf-graph-pane .thesis-dag-svg { height: 100%; }
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+.surf-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 18px;
+    padding: 6px 2px 8px;
+    border-bottom: 1px solid var(--color-bean);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: .06em;
+    color: var(--color-secondary);
+}
+.surf-head-title {
+    font-family: var(--font-serif);
+    font-size: 18px;
+    letter-spacing: 0;
+    color: var(--color-display);
+}
+.surf-head-title em { font-style: normal; color: var(--scene-accent, var(--color-copper)); }
+.surf-head-hint { color: var(--color-ghost); text-transform: uppercase; }
+.surf-head-stat { color: var(--color-ink); }
+.surf-head-stat b { color: var(--color-bone); font-weight: 600; }
+.surf-head-stat--hot b { color: var(--color-scarlet); }
+.surf-head-flag { color: var(--color-faint); }
+.surf-head-flag::before { content: '☑ '; color: var(--color-teal); }
+.surf-head-flag--off::before { content: '☐ '; color: var(--color-ghost); }
+
+/* ── Conversation pane ───────────────────────────────────────────────── */
+.surf-conv {
+    display: flex;
+    flex-direction: column;
+    background: var(--color-sheet);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+.surf-conv-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-bean);
+    background: var(--color-cacao);
+}
+.surf-conv-kicker {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--color-secondary);
+}
+.surf-conv-kicker b { color: var(--color-bone); font-weight: 600; }
+.surf-shapes {
+    display: inline-flex;
+    margin-left: auto;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    overflow: hidden;
+}
+.surf-shape {
+    min-height: 32px;
+    padding: 4px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--color-secondary);
+    background: var(--color-chassis);
+    border: 0;
+    border-right: 1px solid var(--color-bean);
+    cursor: pointer;
+}
+.surf-shape:last-child { border-right: 0; }
+.surf-shape[aria-pressed="true"] {
+    color: var(--color-display);
+    background: var(--color-espresso);
+    box-shadow: var(--bezel-key-down);
+}
+.surf-shape:focus-visible { outline: 2px solid var(--color-amber); outline-offset: -2px; }
+.surf-conv-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-faint);
+    cursor: pointer;
+}
+.surf-conv-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0 12px;
+}
+/* Shapes that are not the stream scroll themselves. */
+.surf-conv-body--scroll { overflow-y: auto; padding-top: 10px; }
+.surf-conv-empty {
+    padding: 28px 8px;
+    font-family: var(--font-serif);
+    font-style: italic;
+    color: var(--color-faint);
+    text-align: center;
+}
+
+/* ── Composer block ──────────────────────────────────────────────────── */
+.surf-compose {
+    border-top: 1px solid var(--color-bean);
+    background: var(--color-cacao);
+}
+.surf-compose-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 6px 12px 0;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-faint);
+}
+.surf-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 26px;
+    padding: 2px 8px;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    background: var(--color-sheet);
+    color: var(--color-ink);
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+.surf-chip--anchor { border-color: var(--scene-accent, var(--color-copper)); color: var(--color-bone); }
+.surf-chip button {
+    min-width: 22px;
+    min-height: 22px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-faint);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+}
+.surf-chip button:hover { color: var(--color-amber); }
+.surf-compose-line--foot { margin: 0; padding-bottom: 6px; }
+.surf-compose .input-area { border-top: 0; }
+
+/* ── Atlas + updates rows ────────────────────────────────────────────── */
+.surf-atlas-pane, .surf-updates-pane { min-height: 0; }
+
+/* ── Narrow: one column, conversation first ──────────────────────────── */
+@media (max-width: 1099.98px) {
+    .surf, .surf--wide {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(360px, 60vh) auto auto auto;
+        grid-template-areas:
+            "head"
+            "conv"
+            "graph"
+            "atlas"
+            "updates";
+        overflow-y: auto;
+        padding: 8px 10px 12px;
+    }
+    .surf-graph-pane { min-height: 320px; }
+}

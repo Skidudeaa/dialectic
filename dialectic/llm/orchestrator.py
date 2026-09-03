@@ -192,7 +192,45 @@ def _tool_metadata(loop_result, registry: ToolRegistry) -> Optional[dict]:
     trade = _hoisted_trade_proposal(loop_result.tool_trace)
     if trade is not None:
         tool_metadata["trade_proposal"] = trade
+    refs = _hoisted_refs(loop_result.tool_trace)
+    if refs:
+        tool_metadata["refs"] = refs
     return tool_metadata
+
+
+def _hoisted_refs(trace: list[dict]) -> list[dict]:
+    """Every object the turn's tools touched, deduplicated by (entity, id),
+    at most twelve — the message's own refs (metadata.refs), the same slot a
+    human's composer writes. See proposal_intake.REF_ENTITIES."""
+    out: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for entry in trace:
+        for ref in entry.get("refs") or []:
+            entity = str(ref.get("entity") or "")
+            ident = str(ref.get("id") or "")
+            if not entity or not ident or (entity, ident) in seen:
+                continue
+            seen.add((entity, ident))
+            out.append({"entity": entity, "id": ident, "label": str(ref.get("label") or ident)[:200]})
+            if len(out) >= 12:
+                return out
+    return out
+
+
+def _inherit_anchor(metadata: Optional[dict], messages: list) -> Optional[dict]:
+    """A reply to a message written ON a node is itself on that node.
+
+    Only the latest HUMAN message decides, and only when the turn is a
+    reply to it (on_message / stream_response) — forced turns (wire,
+    world_watch) are not about whatever a person last pointed at.
+    """
+    latest = next(
+        (m for m in reversed(messages) if m.speaker_type == SpeakerType.HUMAN), None,
+    )
+    anchor = (latest.metadata or {}).get("anchor") if latest and isinstance(latest.metadata, dict) else None
+    if not isinstance(anchor, dict):
+        return metadata
+    return {**(metadata or {}), "anchor": anchor}
 
 
 @dataclass
@@ -649,7 +687,7 @@ class LLMOrchestrator:
             prompt_hash=routing.prompt_hash,
             token_count=routing.response.input_tokens + routing.response.output_tokens,
             protocol=protocol,
-            metadata=tool_metadata,
+            metadata=_inherit_anchor(tool_metadata, messages),
         )
         attachments = await self._bind_documents(thread.room_id, response_message.id, tool_metadata)
 
@@ -1141,7 +1179,7 @@ class LLMOrchestrator:
                 model_used=model_used,
                 prompt_hash=prompt_hash,
                 token_count=0,  # Not available from streaming
-                metadata=tool_metadata,
+                metadata=_inherit_anchor(tool_metadata, messages),
             )
             attachments = await self._bind_documents(thread.room_id, response_message.id, tool_metadata)
 

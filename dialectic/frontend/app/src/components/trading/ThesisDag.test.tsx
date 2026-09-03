@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ThesisDag } from './ThesisDag'
 import type { ThesisStructure } from '../../types/trading'
 
@@ -122,5 +122,53 @@ describe('normalizeLayout (via render)', () => {
     render(<ThesisDag structure={authored} />)
     const a = screen.getByRole('button', { name: /^A/ })
     expect(a.getAttribute('transform')).toBe('translate(40, 500)')
+  })
+})
+
+// ── The working surface's affordances (2026-09-02) ───────────────────────
+describe('ThesisDag on the surface', () => {
+  const words = { n1: { authorName: 'Dan', createdAt: new Date().toISOString(), quote: 'For the first time on record' } }
+
+  it('renders a human word under a spoken node and "quiet" under the rest', () => {
+    render(<ThesisDag structure={structure} humanWords={words} />)
+    expect(screen.getAllByText(/For the first time/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('quiet').length).toBe(3)
+    expect(screen.getByRole('button', { name: /Oil spikes.*Dan spoke on it/ })).toBeInTheDocument()
+  })
+
+  it('is controlled by focusedNodeId, reports focus, and offers verbs on the focused node', () => {
+    const onFocusNode = vi.fn()
+    const run = vi.fn()
+    const { rerender } = render(
+      <ThesisDag structure={structure} focusedNodeId={null} onFocusNode={onFocusNode} verbs={[{ label: 'Speak to it', run }]} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Crude \$95/ }))
+    expect(onFocusNode).toHaveBeenCalledWith(expect.objectContaining({ id: 'n2' }))
+    // Controlled: nothing opens until the parent installs the focus.
+    expect(screen.queryByRole('region', { name: /detail/ })).toBeNull()
+    rerender(
+      <ThesisDag structure={structure} focusedNodeId="n2" onFocusNode={onFocusNode} verbs={[{ label: 'Speak to it', run }]} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Speak to it' }))
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ id: 'n2' }))
+  })
+
+  it('accepts a dropped ref on a node and reports an edge tap', () => {
+    const onDropRef = vi.fn()
+    const onEdgeSelect = vi.fn()
+    const { container } = render(<ThesisDag structure={structure} onDropRef={onDropRef} onEdgeSelect={onEdgeSelect} />)
+    const node = screen.getByRole('button', { name: /^Fed pauses/ })
+    const ref = { entity: 'world_observations', id: 'o1', label: 'fire cell' }
+    const dataTransfer = {
+      types: ['application/x-dialectic-ref'],
+      getData: (mime: string) => (mime === 'application/x-dialectic-ref' ? JSON.stringify(ref) : ''),
+      dropEffect: 'none',
+    }
+    fireEvent.dragOver(node, { dataTransfer })
+    fireEvent.drop(node, { dataTransfer })
+    expect(onDropRef).toHaveBeenCalledWith(expect.objectContaining({ id: 'n3' }), ref)
+    const edge = container.querySelector('.thesis-dag-edge--clickable') as SVGGElement
+    fireEvent.click(edge)
+    expect(onEdgeSelect).toHaveBeenCalledWith(expect.objectContaining({ mechanism: 'inventory shock' }))
   })
 })

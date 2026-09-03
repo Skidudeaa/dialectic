@@ -24,10 +24,15 @@ const root = { id: 'main', parent_thread_id: null } as Pick<Thread, 'id' | 'pare
 const branch = { id: 'br', parent_thread_id: 'main' } as Pick<Thread, 'id' | 'parent_thread_id'>
 
 describe('scenesForDestination', () => {
-  it('gives an ordinary room the six workroom scenes', () => {
+  it('gives an ordinary room the surface and the six workroom scenes', () => {
     // Synapse brings the same Atlas House/World embodiment through the room;
-    // it does not create a second router or move room work into Home.
+    // it does not create a second router or move room work into Home. The
+    // working surface (2026-09-02) leads the root; a branch is an ordinary
+    // conversation and does not carry it.
     expect(scenesForDestination(scheme, root)).toEqual([
+      'surface', 'record', 'bench', 'field', 'atlas', 'library', 'ledger',
+    ])
+    expect(scenesForDestination(scheme, { parent_thread_id: 'root' })).toEqual([
       'record', 'bench', 'field', 'atlas', 'library', 'ledger',
     ])
   })
@@ -61,7 +66,7 @@ describe('scenesForDestination', () => {
     // The first entry is what a bare URL opens, so the list doubles as the
     // switcher's order and cannot disagree with defaultWorkspaceScene.
     expect(scenesForDestination(home, root)[0]).toBe('house')
-    expect(scenesForDestination(scheme, root)[0]).toBe('record')
+    expect(scenesForDestination(scheme, root)[0]).toBe('surface')
   })
 })
 
@@ -81,7 +86,7 @@ describe('resolveWorkspaceScene agrees with what is on offer', () => {
     expect(resolveWorkspaceScene(home, root, 'library')).toBe('house')
     expect(resolveWorkspaceScene(home, root, 'ledger')).toBe('house')
     expect(resolveWorkspaceScene(home, branch, 'bench')).toBe('record')
-    expect(resolveWorkspaceScene(scheme, root, 'house')).toBe('record')
+    expect(resolveWorkspaceScene(scheme, root, 'house')).toBe('surface')
   })
 
   it('still falls back from approved but unbuilt scenes', () => {
@@ -90,7 +95,7 @@ describe('resolveWorkspaceScene agrees with what is on offer', () => {
     // above instead. Synapse did the same for ordinary-room `atlas`.
     // `focus` is a state, not a scene, and remains outside the implemented
     // list on purpose (§5.2). (`judgment` was retired 2026-08-29.)
-    expect(resolveWorkspaceScene(scheme, root, 'focus')).toBe('record')
+    expect(resolveWorkspaceScene(scheme, root, 'focus')).toBe('surface')
     expect(resolveWorkspaceScene(home, root, 'focus')).toBe('house')
   })
 })

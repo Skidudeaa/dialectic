@@ -78,6 +78,12 @@
     .app-main::before { animation: none; }
 }
 
+/* The working surface (2026-09-02) uses the width: the context column
+   yields to it on desktop. Memory, branches and stakes stay one tap away
+   in every other scene; the surface carries its own conversation pane. */
+.app-layout:has(.app-main-scene-surface) { grid-template-columns: 260px minmax(0, 1fr); }
+.app-layout:has(.app-main-scene-surface) .app-right-panel { display: none; }
+
 /* Right cockpit panel — cacao */
 .app-right-panel {
     background: var(--color-cacao);
@@ -114,7 +120,8 @@
         transition: transform 180ms ease;
         box-shadow: 0 0 32px rgba(0, 0, 0, 0.55);
     }
-    .app-layout.right-panel-closed .app-right-panel {
+    .app-layout.right-panel-closed .app-right-panel,
+    .app-layout:has(.app-main-scene-surface) .app-right-panel {
         display: flex;
     }
     .app-sidebar {

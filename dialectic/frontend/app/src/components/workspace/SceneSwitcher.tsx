@@ -7,6 +7,7 @@ import './SceneSwitcher.css'
 
 const PRIMARY_SCENES = new Set<ImplementedWorkspaceScene>([
   'house',
+  'surface',
   'record',
   'bench',
   'field',

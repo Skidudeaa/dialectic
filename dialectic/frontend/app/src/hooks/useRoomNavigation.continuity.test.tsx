@@ -234,7 +234,7 @@ describe('what gets remembered', () => {
     const { result } = renderHook(() => useRoomNavigation())
     await waitFor(() => expect(result.current.ready).toBe(true))
     expect(restoreScene(USER_ID, [HOME, SCHEME])).toEqual({
-      roomId: SCHEME.id, threadId: null, scene: 'record', object: null,
+      roomId: SCHEME.id, threadId: null, scene: 'surface', object: null,
     })
   })
 

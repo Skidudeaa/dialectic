@@ -323,6 +323,13 @@ class ToolLoop:
 
         content = serialize_tool_result(raw)
         entry["ok"] = True
+        # The working surface's write-path fix (2026-09-02): a tool that
+        # touched objects names them as {entity, id, label} refs, and the
+        # trace keeps them so the message can carry what it used. Ids were
+        # dropped at write before this; every shape over the conversation
+        # was empty for that one reason.
+        if isinstance(raw, dict) and isinstance(raw.get("refs"), list):
+            entry["refs"] = [r for r in raw["refs"] if isinstance(r, dict)][:12]
         if isinstance(raw, dict) and isinstance(raw.get("provenance"), dict):
             entry["provenance"] = raw["provenance"]
         return (

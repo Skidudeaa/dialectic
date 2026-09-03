@@ -37,6 +37,7 @@ import { LibraryScene } from './components/workspace/scenes/LibraryScene'
 import { LedgerScene } from './components/workspace/scenes/LedgerScene'
 import { FieldScene } from './components/workspace/scenes/FieldScene'
 import { AtlasScene } from './components/workspace/scenes/AtlasScene'
+import { SurfaceScene } from './components/workspace/surface/SurfaceScene'
 import { MirrorPanel } from './components/workspace/MirrorPanel'
 import { FocusSurface } from './components/workspace/focus/FocusSurface.tsx'
 import { bareMarkId } from './components/workspace/fieldDisplay.ts'
@@ -925,8 +926,64 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     atlas.retry()
   }
 
+  // The working surface (2026-09-02): the same message list, socket send,
+  // desk, geo and Field hooks the other scenes read — composed side by side.
+  // Its composer sends through the ONE sendMessage with the anchor and refs
+  // slots; nothing here is a second write path.
+  const surfaceScene = (
+    <SurfaceScene
+      key={currentRoom.id}
+      roomId={currentRoom.id}
+      roomName={currentRoom.name ?? 'Dialectic'}
+      currentUserId={user.id}
+      messages={displayMessages}
+      streamingId={isLLMStreaming ? STREAMING_ID : null}
+      userNames={userNames}
+      unreadSince={unreadSince}
+      desk={desk}
+      tradingConfig={tradingConfig}
+      geo={roomGeo}
+      fieldMarks={fieldMarks}
+      composer={{
+        send: (content, messageType, attachmentIds, tags, opts) => {
+          const sent = sendMessage(content, messageType, opts.replyToId, attachmentIds, tags, {
+            anchor: opts.anchor,
+            refs: opts.refs,
+          })
+          if (sent) setComposerDraft('')
+          return sent
+        },
+        onTypingStart: sendTypingStart,
+        onTypingStop: sendTypingStop,
+        onTypingContent: (content) => {
+          sendTypingContent(content)
+          setComposerDraft(content)
+        },
+        disabled: !isConnected || !currentThread,
+        memberNames,
+      }}
+      typingUsers={typingDisplay}
+      activityLabel={toolActivityLabel}
+      onOpenObject={(objectId) => openWorkspaceObject({ id: objectId })}
+      onOpenWorld={() => {
+        void navigate({
+          roomId: currentRoom.id,
+          threadId: null,
+          scene: 'atlas',
+          object: objectId,
+          view: `world;room=${currentRoom.id}`,
+        }, 'push')
+      }}
+      onOpenBench={() => {
+        void navigate({ roomId: currentRoom.id, threadId: currentThread?.id ?? null, scene: 'bench' }, 'push')
+      }}
+      onFork={forkFromMessage}
+    />
+  )
+
   const sceneContent = {
     house: houseSurface,
+    surface: surfaceScene,
     // Home root only. The Mirror is about the reader, not about a room --
     // and it is fenced in the SQL to `user_model:<caller>`, so there is no
     // room or user id to hand it and deliberately no way to ask for anyone

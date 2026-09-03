@@ -9,6 +9,7 @@ import type { ImplementedWorkspaceScene } from '../../types'
 // parts of it. "Library" says what it holds; "Evidence Management" would not.
 export const SCENE_LABELS: Record<ImplementedWorkspaceScene, string> = {
   house: 'House',
+  surface: 'Surface',
   record: 'Record',
   bench: 'Bench',
   field: 'Field',
@@ -25,6 +26,7 @@ export const SCENE_LABELS: Record<ImplementedWorkspaceScene, string> = {
 // meaning is also barred by the accessibility gate.
 export const SCENE_HINTS: Record<ImplementedWorkspaceScene, string> = {
   house: 'Movement across every scheme you share — each item links to its source.',
+  surface: 'The working surface — the conversation on the causal graph, the room’s geography, and what changed since you left.',
   record: 'The exact transcript — searchable, attributable, never paraphrased.',
   bench: 'The thesis under construction — causal graph, live market, open trades, what-ifs.',
   field: 'Provisional reasoning — support, tension, and synthesis candidates awaiting review.',
@@ -56,6 +58,13 @@ export const SCENE_PRIMER: Record<ImplementedWorkspaceScene, string> = {
     'transcript, the pulse shows who is here, what needs a body, and what moved in the ' +
     'schemes you share — each line links to its source. Scheme work stays in the scheme’s ' +
     'own room: a thesis cannot be created here, on purpose.',
+  surface:
+    'Everything the room is about, side by side: the causal graph with the last human word on ' +
+    'each node, the geography with what the feeds saw inside it, the conversation, and the ' +
+    'updates that arrived while you were away. Focus a node and what you write lands on it; ' +
+    'drop an update onto a node to attach it as evidence. The conversation can be read as a ' +
+    'stream, a tree of replies, lanes per person, or the volume chart the experiment is ' +
+    'measured by. Nothing here writes anywhere the Record does not.',
   record:
     'The conversation itself, kept whole — attributable, searchable, and never paraphrased ' +
     'into a summary that replaces it. Fork any message to open a branch, which inherits ' +
@@ -103,6 +112,7 @@ export const SCENE_PRIMER: Record<ImplementedWorkspaceScene, string> = {
 // Each place's mark, shown on the masthead's glyph plate beside the name.
 export const SCENE_GLYPHS: Record<ImplementedWorkspaceScene, string> = {
   house: '⌂',
+  surface: '◫',
   record: '¶',
   bench: '⚒',
   field: '※',

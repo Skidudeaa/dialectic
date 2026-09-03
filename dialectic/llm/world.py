@@ -401,7 +401,7 @@ def _signals_summary(
 
 
 _SCOPE_OBSERVATIONS_SQL = """
-SELECT label, layer, provider, seen_count, last_seen_at
+SELECT id, label, layer, provider, seen_count, last_seen_at
 FROM world_observations
 WHERE room_id = $1 AND scope_id = $2
 ORDER BY (details->>'novel')::boolean DESC NULLS LAST, last_seen_at DESC
@@ -429,6 +429,7 @@ async def _scope_observations(db: Any, room_id: UUID, scope_id: UUID) -> list[di
     )
     return [
         {
+            "id": str(row["id"]),
             "label": row["label"],
             "layer": row["layer"],
             "provider": row["provider"],
@@ -530,6 +531,7 @@ async def world_query(
             result["observations"] = await _room_observation_counts(
                 db, room_id, scope_labels,
             )
+            result["refs"] = _scope_refs(visible[:_WORLD_QUERY_SCOPE_CAP])
             return result
 
         review = await geo_service.review(room_id, selected_id)
@@ -569,7 +571,25 @@ async def world_query(
             "observations": await _scope_observations(db, room_id, current_uuid),
         })
         result["scope"] = current
+        # The message's own refs: the scope it read and the newest contacts
+        # inside it (novel fires first, the SQL's own order), capped so a
+        # busy strait does not turn one reply into a wall of chips.
+        result["refs"] = _scope_refs([review.current]) + [
+            {
+                "entity": "world_observations",
+                "id": obs["id"],
+                "label": f"{obs['label']} · {review.current.label}"[:200],
+            }
+            for obs in current["observations"][:8]
+        ]
         return result
+
+
+def _scope_refs(scopes: list[GeoScope]) -> list[dict[str, Any]]:
+    return [
+        {"entity": "geo_scopes", "id": scope.id.removeprefix("geo_scope:"), "label": scope.label[:200]}
+        for scope in scopes
+    ]
 
 
 WORLD_QUERY_DESCRIPTION = (

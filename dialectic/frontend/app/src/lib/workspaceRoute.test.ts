@@ -126,8 +126,13 @@ describe('destinationUrl', () => {
     expect(destinationUrl(scheme, branch)).toBe(
       '/?room=scheme-room&thread=branch-thread',
     )
-    expect(destinationUrl(scheme, root, 'record', null, 'root-message')).toBe(
+    // A scheme root defaults to the Surface now (2026-09-02); asking for the
+    // Record there is a non-default scene and serializes as one.
+    expect(destinationUrl(scheme, root, 'surface', null, 'root-message')).toBe(
       '/?room=scheme-room&thread=main-thread&message=root-message',
+    )
+    expect(destinationUrl(scheme, root, 'record', null, 'root-message')).toBe(
+      '/?room=scheme-room&thread=main-thread&scene=record&message=root-message',
     )
     expect(destinationUrl(home, root, 'house', null, 'home-message')).toBe(
       '/?room=home-room&thread=main-thread&message=home-message',
@@ -173,6 +178,10 @@ describe('workspace scenes', () => {
     // THE one scenesForDestination definition (§5.2) — Field joins Bench
     // between Bench and Library; Home holds no Field at all.
     expect(scenesForDestination(scheme, root)).toEqual([
+      'surface', 'record', 'bench', 'field', 'atlas', 'library', 'ledger',
+    ])
+    // A branch is an ordinary conversation — the surface belongs to the root.
+    expect(scenesForDestination(scheme, branch)).toEqual([
       'record', 'bench', 'field', 'atlas', 'library', 'ledger',
     ])
     expect(scenesForDestination(home, root))
@@ -180,15 +189,15 @@ describe('workspace scenes', () => {
     expect(scenesForDestination(home, branch)).toEqual(['record'])
   })
 
-  it('defaults Home root to House and every other destination to Record', () => {
+  it('defaults Home root to House, a scheme root to the Surface, and every branch to Record', () => {
     expect(defaultWorkspaceScene(home, root)).toBe('house')
     expect(defaultWorkspaceScene(home, branch)).toBe('record')
-    expect(defaultWorkspaceScene(scheme, root)).toBe('record')
+    expect(defaultWorkspaceScene(scheme, root)).toBe('surface')
     expect(defaultWorkspaceScene(scheme, branch)).toBe('record')
   })
 
   it('rejects an invalid House request outside Home root', () => {
-    expect(resolveWorkspaceScene(scheme, root, 'house')).toBe('record')
+    expect(resolveWorkspaceScene(scheme, root, 'house')).toBe('surface')
     expect(resolveWorkspaceScene(home, branch, 'house')).toBe('record')
   })
 
@@ -198,7 +207,7 @@ describe('workspace scenes', () => {
     // production holds zero commitments and zero briefs, so Judgment and the
     // rest stay unbuilt on purpose.
     expect(resolveWorkspaceScene(home, root, 'field')).toBe('house')
-    expect(resolveWorkspaceScene(scheme, root, 'focus')).toBe('record')
+    expect(resolveWorkspaceScene(scheme, root, 'focus')).toBe('surface')
   })
 
   it('canonicalizes a known but unavailable scene back to the destination default', () => {
@@ -210,7 +219,9 @@ describe('workspace scenes', () => {
   it('omits the default scene and serializes only a non-default scene', () => {
     expect(destinationUrl(home, root, 'house')).toBe('/')
     expect(destinationUrl(home, root, 'record')).toBe('/?scene=record')
-    expect(destinationUrl(scheme, root, 'record')).toBe('/?room=scheme-room')
+    expect(destinationUrl(scheme, root, 'surface')).toBe('/?room=scheme-room')
+    expect(destinationUrl(scheme, root, 'record')).toBe('/?room=scheme-room&scene=record')
+    expect(destinationUrl(scheme, branch, 'record')).toBe('/?room=scheme-room&thread=branch-thread')
     expect(destinationUrl(home, branch, 'record')).toBe(
       '/?room=home-room&thread=branch-thread',
     )

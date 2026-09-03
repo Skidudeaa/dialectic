@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type Ref } from 'react'
 import type { Attachment, Message } from '../../types'
 import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
 import { api } from '../../lib/api'
@@ -57,6 +57,19 @@ interface MessageInputProps {
   memberNames?: string[]
   /** Home hides claim/question/definition — those are scheme-room speech acts. */
   quiet?: boolean
+  /**
+   * An imperative handle for the working surface (2026-09-02): a verb on a
+   * graph node ("Ask Dialectic", "Dispute") puts words in the composer and
+   * focuses it. Imperative rather than a prop-driven seed so the textarea
+   * stays uncontrolled and nothing fights the user's typing.
+   */
+  composerRef?: Ref<MessageInputHandle>
+}
+
+export interface MessageInputHandle {
+  /** Append text to the draft (a space between when there is a draft) and focus. */
+  insert: (text: string) => void
+  focus: () => void
 }
 
 /**
@@ -79,7 +92,7 @@ const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
   { value: 'definition', label: 'Definition' },
 ]
 
-export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTypingStop, onTypingContent, onResearch, researchActive = false, disabled, replyTo, onCancelReply, placeholder = `Think out loud... paste a link and ${PARTICIPANT_NAME} reads it`, memberNames = [], quiet = false }: MessageInputProps) {
+export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTypingStop, onTypingContent, onResearch, researchActive = false, disabled, replyTo, onCancelReply, placeholder = `Think out loud... paste a link and ${PARTICIPANT_NAME} reads it`, memberNames = [], quiet = false, composerRef }: MessageInputProps) {
   const [content, setContent] = useState(initialValue ?? '')
   const [messageType, setMessageType] = useState<MessageType>('text')
   const [sendError, setSendError] = useState(false)
@@ -103,6 +116,27 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
     textareaRef.current.style.height = 'auto'
     textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px'
   }, [])
+
+  useImperativeHandle(composerRef, () => ({
+    insert: (text: string) => {
+      setContent((current) => {
+        const next = current && !current.endsWith(' ') && text ? `${current} ${text}` : `${current}${text}`
+        onTypingContent?.(next)
+        return next
+      })
+      const el = textareaRef.current
+      if (el) {
+        el.focus()
+        // Let React commit the new value before measuring.
+        window.requestAnimationFrame(() => {
+          el.style.height = 'auto'
+          el.style.height = Math.min(el.scrollHeight, 200) + 'px'
+          el.setSelectionRange(el.value.length, el.value.length)
+        })
+      }
+    },
+    focus: () => textareaRef.current?.focus(),
+  }), [onTypingContent])
 
   const patchUpload = useCallback((key: string, patch: Partial<ComposerUpload>) => {
     setUploads((list) => list.map((entry) => (entry.key === key ? { ...entry, ...patch } : entry)))

@@ -16,6 +16,7 @@
    (no color-only signals). */
 .workspace-scene-house   { --scene-accent: var(--color-sage);  --scene-tint: var(--sage-12); }
 .workspace-scene-record  { --scene-accent: var(--color-cream); --scene-tint: rgba(246,236,218,.09); }
+.workspace-scene-surface { --scene-accent: var(--color-copper); --scene-tint: rgba(201,122,61,.12); }
 .workspace-scene-bench   { --scene-accent: var(--color-amber); --scene-tint: var(--amber-12); }
 .workspace-scene-field   { --scene-accent: var(--color-plum);  --scene-tint: var(--plum-12); }
 .workspace-scene-library { --scene-accent: var(--color-steel); --scene-tint: var(--steel-12); }

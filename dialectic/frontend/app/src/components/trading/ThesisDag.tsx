@@ -17,8 +17,27 @@ import type {
   PointerEvent as ReactPointerEvent,
   WheelEvent as ReactWheelEvent,
 } from 'react'
-import type { ThesisStructure, ThesisStructureNode } from '../../types/trading'
+import type { ThesisStructure, ThesisStructureEdge, ThesisStructureNode } from '../../types/trading'
+import type { MessageRef } from '../../types'
+import { agoLabel } from '../../lib/relativeTime'
 import './ThesisDag.css'
+
+/** The last thing a human said ON a node (the working surface). */
+export interface DagHumanWord {
+  authorName: string
+  createdAt: string
+  quote: string
+}
+
+/** A verb the surface offers on the focused node — rendered as a button in
+ *  the detail card. The graph knows nothing about what a verb does. */
+export interface DagVerb {
+  label: string
+  run: (node: ThesisStructureNode) => void
+}
+
+/** The drag payload the updates tray writes; the graph only reads it. */
+export const DAG_DROP_MIME = 'application/x-dialectic-ref'
 
 interface ThesisDagProps {
   structure: ThesisStructure
@@ -26,10 +45,29 @@ interface ThesisDagProps {
   nodeStates?: Record<string, string>
   /** Snapshot backing nodeStates is stale — shown, never hidden. */
   stale?: boolean
+  /**
+   * The working surface (2026-09-02). When given, every node grows a slot
+   * under it carrying the last human word on that node, or "quiet". A
+   * record keyed by node id; an absent key is quiet.
+   */
+  humanWords?: Record<string, DagHumanWord>
+  /** Controlled focus: the surface owns which node is selected. */
+  focusedNodeId?: string | null
+  onFocusNode?: (node: ThesisStructureNode | null) => void
+  /** Verbs offered on the focused node, in the detail card. */
+  verbs?: DagVerb[]
+  /** An update dropped onto a node (drag from the tray). */
+  onDropRef?: (node: ThesisStructureNode, ref: MessageRef) => void
+  /** An edge tapped — the surface disputes it. */
+  onEdgeSelect?: (edge: ThesisStructureEdge) => void
+  /** Canvas height in px (the surface fits it to its pane). */
+  height?: number
 }
 
 const NODE_W = 180
 const NODE_H = 56
+const HUMAN_WORD_SLOT_H = 30
+const HUMAN_WORD_SLOT_GAP = 4
 const PADDING = 60
 const PHASE_HEADER_SPACE = 30
 const MIN_ZOOM = 0.4
@@ -157,10 +195,14 @@ function NodeDetailCard({
   node,
   stateDisplay,
   onClose,
+  verbs,
+  humanWord,
 }: {
   node: ThesisStructureNode
   stateDisplay: string
   onClose: () => void
+  verbs?: DagVerb[]
+  humanWord?: DagHumanWord
 }) {
   return (
     <div className="thesis-dag-detail" role="region" aria-label={`${node.label} detail`}>
@@ -170,6 +212,23 @@ function NodeDetailCard({
           &times;
         </button>
       </div>
+      {verbs && verbs.length > 0 && (
+        <div className="thesis-dag-verbs" role="group" aria-label={`Actions on ${node.label}`}>
+          {verbs.map((verb) => (
+            <button key={verb.label} type="button" className="thesis-dag-verb" onClick={() => verb.run(node)}>
+              {verb.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {humanWord && (
+        <blockquote className="thesis-dag-detail-word">
+          <span className="thesis-dag-detail-word-who">
+            {humanWord.authorName} · {agoLabel(humanWord.createdAt) ?? humanWord.createdAt}
+          </span>
+          {ellipsize(humanWord.quote, 280)}
+        </blockquote>
+      )}
       <dl className="thesis-dag-detail-fields">
         <div className="thesis-dag-detail-row">
           <dt>Type</dt>
@@ -250,13 +309,28 @@ function normalizeLayout(nodes: ThesisStructureNode[]): ThesisStructureNode[] {
   })
 }
 
-export function ThesisDag({ structure, nodeStates, stale }: ThesisDagProps) {
+export function ThesisDag({
+  structure, nodeStates, stale, humanWords, focusedNodeId, onFocusNode, verbs, onDropRef, onEdgeSelect, height,
+}: ThesisDagProps) {
   const nodes = useMemo(() => normalizeLayout(structure.nodes ?? []), [structure.nodes])
   const edges = useMemo(() => structure.edges ?? [], [structure.edges])
   const svgRef = useRef<SVGSVGElement>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [internalSelectedId, setInternalSelectedId] = useState<string | null>(null)
+  // Controlled when the surface passes focusedNodeId; the Bench keeps its
+  // own local selection exactly as before.
+  const controlled = focusedNodeId !== undefined
+  const selectedId = controlled ? focusedNodeId : internalSelectedId
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
 
   const nodesById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes])
+
+  const setSelectedId = useCallback((id: string | null) => {
+    setInternalSelectedId(id)
+    onFocusNode?.(id ? nodesById.get(id) ?? null : null)
+  }, [nodesById, onFocusNode])
+
+  // The human-word slot hangs under the node; the canvas must include it.
+  const slotH = humanWords ? HUMAN_WORD_SLOT_H + HUMAN_WORD_SLOT_GAP : 0
 
   const { baseViewBox, graphMinY } = useMemo(() => {
     if (nodes.length === 0) {
@@ -270,7 +344,7 @@ export function ThesisDag({ structure, nodeStates, stale }: ThesisDagProps) {
       minX = Math.min(minX, n.x)
       minY = Math.min(minY, n.y)
       maxX = Math.max(maxX, n.x + NODE_W)
-      maxY = Math.max(maxY, n.y + NODE_H)
+      maxY = Math.max(maxY, n.y + NODE_H + slotH)
     }
     return {
       baseViewBox: {
@@ -281,7 +355,7 @@ export function ThesisDag({ structure, nodeStates, stale }: ThesisDagProps) {
       },
       graphMinY: minY,
     }
-  }, [nodes])
+  }, [nodes, slotH])
 
   const [viewBox, setViewBox] = useState<ViewBox>(baseViewBox)
 
@@ -366,14 +440,14 @@ export function ThesisDag({ structure, nodeStates, stale }: ThesisDagProps) {
     dragRef.current = null
     if (d && !d.moved) setSelectedId(null)
     ;(e.target as Element).releasePointerCapture?.(e.pointerId)
-  }, [])
+  }, [setSelectedId])
 
   const handleNodeKeyDown = useCallback((e: ReactKeyboardEvent<SVGGElement>, id: string) => {
     if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
       e.preventDefault()
       setSelectedId(id)
     }
-  }, [])
+  }, [setSelectedId])
 
   // Escape closes the detail card from anywhere, not just while a node has
   // focus — the card itself has no focusable trap.
@@ -384,7 +458,7 @@ export function ThesisDag({ structure, nodeStates, stale }: ThesisDagProps) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId])
+  }, [selectedId, setSelectedId])
 
   const phaseColumns = useMemo(() => {
     const byPhase = new Map<number, { minX: number; maxX: number }>()
@@ -469,10 +543,11 @@ export function ThesisDag({ structure, nodeStates, stale }: ThesisDagProps) {
         </div>
       </div>
 
-      <div className="thesis-dag-canvas">
+      <div className="thesis-dag-canvas" style={height ? { maxHeight: height } : undefined}>
         {stale && <div className="thesis-dag-stale-badge">live colors from a stale snapshot</div>}
         <svg
           ref={svgRef}
+          style={height ? { height } : undefined}
           className="thesis-dag-svg"
           viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
           preserveAspectRatio="xMidYMid meet"
@@ -512,7 +587,14 @@ export function ThesisDag({ structure, nodeStates, stale }: ThesisDagProps) {
 
           <g className="thesis-dag-edges">
             {edgePaths.map(({ key, d, mx, my, strength, edge }) => (
-              <g key={key}>
+              <g
+                key={key}
+                className={onEdgeSelect ? 'thesis-dag-edge thesis-dag-edge--clickable' : 'thesis-dag-edge'}
+                onClick={onEdgeSelect ? (e) => { e.stopPropagation(); onEdgeSelect(edge) } : undefined}
+              >
+                {onEdgeSelect && (
+                  <path d={d} className="thesis-dag-edge-hit" strokeWidth={14} fill="none" />
+                )}
                 <path
                   d={d}
                   className="thesis-dag-edge-path"
@@ -542,7 +624,10 @@ export function ThesisDag({ structure, nodeStates, stale }: ThesisDagProps) {
               const meta = STATE_META[stateKey]
               const isSelected = selectedId === node.id
               const label = ellipsize(node.label, 24)
-              const ariaLabel = `${node.label}, ${meta.label}${dimmed ? ', authored only, no live reading' : ''}`
+              const word = humanWords?.[node.id]
+              const ariaLabel = `${node.label}, ${meta.label}${dimmed ? ', authored only, no live reading' : ''}${
+                humanWords ? (word ? `, ${word.authorName} spoke on it` : ', quiet') : ''
+              }`
               return (
                 <g
                   key={node.id}
@@ -556,6 +641,7 @@ export function ThesisDag({ structure, nodeStates, stale }: ThesisDagProps) {
                     `thesis-dag-node--${stateKey}`,
                     dimmed ? 'thesis-dag-node--dimmed' : '',
                     isSelected ? 'thesis-dag-node--selected' : '',
+                    dropTargetId === node.id ? 'thesis-dag-node--droptarget' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
@@ -564,6 +650,25 @@ export function ThesisDag({ structure, nodeStates, stale }: ThesisDagProps) {
                     setSelectedId(node.id)
                   }}
                   onKeyDown={(e) => handleNodeKeyDown(e, node.id)}
+                  onDragOver={onDropRef ? (e) => {
+                    if (!e.dataTransfer.types.includes(DAG_DROP_MIME)) return
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'link'
+                    if (dropTargetId !== node.id) setDropTargetId(node.id)
+                  } : undefined}
+                  onDragLeave={onDropRef ? () => setDropTargetId((cur) => (cur === node.id ? null : cur)) : undefined}
+                  onDrop={onDropRef ? (e) => {
+                    e.preventDefault()
+                    setDropTargetId(null)
+                    const raw = e.dataTransfer.getData(DAG_DROP_MIME)
+                    if (!raw) return
+                    try {
+                      const ref = JSON.parse(raw) as MessageRef
+                      if (ref && typeof ref.entity === 'string' && typeof ref.id === 'string') onDropRef(node, ref)
+                    } catch {
+                      // A foreign drop: nothing to attach.
+                    }
+                  } : undefined}
                 >
                   <title>{node.label}</title>
                   <rect className="thesis-dag-node-rect" width={NODE_W} height={NODE_H} rx={4} />
@@ -577,6 +682,29 @@ export function ThesisDag({ structure, nodeStates, stale }: ThesisDagProps) {
                   <text className="thesis-dag-node-phase" x={NODE_W / 2} y={46} textAnchor="middle">
                     P{node.phase} &middot; {meta.label}
                   </text>
+                  {humanWords && (
+                    <g
+                      className={word ? 'thesis-dag-word' : 'thesis-dag-word thesis-dag-word--quiet'}
+                      transform={`translate(0, ${NODE_H + HUMAN_WORD_SLOT_GAP})`}
+                    >
+                      <rect className="thesis-dag-word-rect" width={NODE_W} height={HUMAN_WORD_SLOT_H} rx={3} />
+                      {word ? (
+                        <>
+                          <text className="thesis-dag-word-who" x={8} y={12}>
+                            {ellipsize(word.authorName, 14)} &middot; {agoLabel(word.createdAt) ?? ''}
+                          </text>
+                          <text className="thesis-dag-word-quote" x={8} y={24}>
+                            &ldquo;{ellipsize(word.quote.replace(/\s+/g, ' '), 30)}&rdquo;
+                          </text>
+                        </>
+                      ) : (
+                        <>
+                          <text className="thesis-dag-word-who" x={8} y={12}>quiet</text>
+                          <text className="thesis-dag-word-quote" x={8} y={24}>no human word yet</text>
+                        </>
+                      )}
+                    </g>
+                  )}
                 </g>
               )
             })}
@@ -596,6 +724,8 @@ export function ThesisDag({ structure, nodeStates, stale }: ThesisDagProps) {
           node={selectedNode}
           stateDisplay={describeState(selectedNode, nodeStates)}
           onClose={() => setSelectedId(null)}
+          verbs={verbs}
+          humanWord={humanWords?.[selectedNode.id]}
         />
       )}
     </div>

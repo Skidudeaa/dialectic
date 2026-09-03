@@ -8,6 +8,10 @@
 // nothing.
 export const WORKSPACE_SCENES = [
   'house',
+  // The working surface (2026-09-02): conversation anchored to the causal
+  // graph, the room's geography, and what changed since you left — panes
+  // side by side. Enters BOTH lists in the same change, like `mirror`.
+  'surface',
   'record',
   'bench',
   'library',
@@ -43,6 +47,7 @@ export type WorkspaceScene = (typeof WORKSPACE_SCENES)[number]
 // approved-but-unbuilt name.
 export const IMPLEMENTED_WORKSPACE_SCENES = [
   'house',
+  'surface',
   'record',
   'bench',
   'field',

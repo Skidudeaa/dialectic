@@ -510,7 +510,7 @@ async def search_reading(
 ) -> list[dict[str, Any]]:
     """FTS over the library, ranked extracts via ts_headline."""
     rows = await db.fetch(
-        """SELECT url, title, author, site, published, summary, source,
+        """SELECT id, url, title, author, site, published, summary, source,
                   created_at,
                   ts_rank_cd(fts, websearch_to_tsquery('english', $2)) AS rank,
                   ts_headline('english', content,
@@ -525,6 +525,7 @@ async def search_reading(
     )
     return [
         {
+            "id": str(row["id"]),
             "url": row["url"],
             "title": row["title"],
             "author": row["author"],

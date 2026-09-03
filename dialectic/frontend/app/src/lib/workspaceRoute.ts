@@ -49,9 +49,11 @@ export function defaultWorkspaceScene(
   room: Pick<UserRoom, 'is_home'>,
   thread: Pick<Thread, 'parent_thread_id'>,
 ): ImplementedWorkspaceScene {
-  return room.is_home && thread.parent_thread_id === null
-    ? 'house'
-    : 'record'
+  // An ordinary room opens on the working surface (2026-09-02): the
+  // conversation is still the base unit there, drawn beside the graph it is
+  // about instead of in a scene of its own. The Record stays one tap away.
+  if (room.is_home) return thread.parent_thread_id === null ? 'house' : 'record'
+  return thread.parent_thread_id === null ? 'surface' : 'record'
 }
 
 /**
@@ -88,7 +90,12 @@ export function scenesForDestination(
       ? (['house', 'atlas', 'mirror', 'record'] as const)
       : (['record'] as const)
   }
-  return ['record', 'bench', 'field', 'atlas', 'library', 'ledger'] as const
+  // A branch is an ordinary conversation: the surface belongs to the
+  // room's root, where the thesis and its geography live.
+  if (thread.parent_thread_id !== null) {
+    return ['record', 'bench', 'field', 'atlas', 'library', 'ledger'] as const
+  }
+  return ['surface', 'record', 'bench', 'field', 'atlas', 'library', 'ledger'] as const
 }
 
 /**

@@ -14,6 +14,8 @@ import type {
   Reaction,
   LLMToolActivity,
   MessageMetadata,
+  MessageAnchor,
+  MessageRef,
   Attachment,
 } from '../types/index.ts'
 
@@ -664,6 +666,10 @@ export function useDialecticSocket(options?: {
       referencesMessageId?: string | null,
       attachmentIds?: string[],
       tags?: string[],
+      // The working surface's slots: what the message is ABOUT (a node or
+      // edge of the causal graph) and what it ATTACHES (an update dropped
+      // onto that node). Validated by proposal_intake at the door.
+      extra?: { anchor?: MessageAnchor | null; refs?: MessageRef[] },
     ): boolean => (
       send('send_message', {
         content,
@@ -679,6 +685,8 @@ export function useDialecticSocket(options?: {
         // tags against a fixed vocabulary whenever the key is present, and an
         // empty list is an error there rather than "no tags".
         ...(tags && tags.length > 0 ? { tags } : {}),
+        ...(extra?.anchor ? { anchor: extra.anchor } : {}),
+        ...(extra?.refs && extra.refs.length > 0 ? { refs: extra.refs } : {}),
       })
     ),
     [send],

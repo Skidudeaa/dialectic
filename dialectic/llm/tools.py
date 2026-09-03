@@ -929,6 +929,11 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
         out = {"query": query, "count": len(results), "memories": results}
         if not results:
             out["note"] = "Nothing in shared memory matches. Say so rather than inventing one."
+        # What this turn USED, for the message's own refs (working surface).
+        out["refs"] = [
+            {"entity": "memories", "id": str(m.memory_id), "label": (m.key or m.content or "")[:200]}
+            for m in matches
+        ]
         return _shrink(out, TOOL_RESULT_CHAR_CAP)
 
     async def search_transcript(args: dict) -> dict:
@@ -1289,6 +1294,10 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
                 "Nothing in the reading library matches. Say so rather than "
                 "inventing an article we never filed."
             )
+        out["refs"] = [
+            {"entity": "reading_items", "id": r["id"], "label": (r.get("title") or r.get("url") or "")[:200]}
+            for r in results if r.get("id")
+        ]
         return _shrink(out, TOOL_RESULT_CHAR_CAP)
 
     async def write_document(args: dict) -> dict:

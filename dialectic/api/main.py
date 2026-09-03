@@ -52,6 +52,7 @@ from api.atlas import router as atlas_router, set_atlas_db_pool
 from api.geo import router as geo_router, set_geo_db_pool
 from api.decisions import router as decisions_router, set_decisions_db_pool
 from api.rate_limit import check_rate_limit
+from field_marks import resolve_subjects_in_room
 from proposal_intake import (
     MESSAGE_TAGS,
     ProposalMetadataError,
@@ -1339,6 +1340,15 @@ async def send_message(
         metadata = validate_human_proposal_metadata(request.metadata) or None
     except ProposalMetadataError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    # Refs to database rows must resolve IN THIS ROOM (same rule as the
+    # WebSocket door in transport/handlers.py); shape alone is not enough.
+    row_refs = [
+        r for r in (metadata or {}).get("refs", []) if r["entity"] != "thesis_node"
+    ]
+    if row_refs and not await resolve_subjects_in_room(db, room.id, row_refs):
+        raise HTTPException(
+            status_code=422, detail="refs do not resolve to rows in this room",
+        )
 
     try:
         message_type = MessageType(request.message_type)

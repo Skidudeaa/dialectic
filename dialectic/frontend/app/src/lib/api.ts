@@ -1,5 +1,6 @@
 import type {
   Attachment,
+  DailyActivity,
   HomeActivityProjection,
   HomeProposalsResponse,
   Memory,
@@ -867,8 +868,16 @@ class DialecticAPI {
     interjection_turn_threshold: number;
     scheduler_running: boolean;
     jobs: { name: string; enabled: boolean; interval_s: number; daily_at: string | null }[];
+    /** The enjoyment experiment's voice flags, read from the live gates. */
+    annotator_enabled?: boolean;
+    addressed_only?: boolean;
   }> {
     return this.fetch(`/rooms/${roomId}/capabilities`);
+  }
+
+  /** Messages per room-day per speaker type (the surface's volume chart). */
+  async getDailyActivity(roomId: string, days = 14): Promise<DailyActivity> {
+    return this.fetch(`/rooms/${roomId}/activity/daily?days=${days}`);
   }
 
   // Auth (no room token needed)

@@ -76,6 +76,8 @@ def require_guest_access() -> None:
             detail="Guest access is closed. Ask Amo for an invite.",
         )
 from api.token_utils import extract_room_token
+from llm.annotator import annotator_enabled
+from llm.heuristics import addressed_only
 
 router = APIRouter(tags=["capabilities"])
 
@@ -125,6 +127,12 @@ class RoomCapabilities(BaseModel):
     interjection_turn_threshold: int
     scheduler_running: bool
     jobs: list[ScheduledJob] = []
+    # The enjoyment experiment's two voice flags (2026-09-02), read at call
+    # time from the same functions the gates themselves call — so the
+    # surface's "Annotator silent" line can never say the opposite of what
+    # the room is doing.
+    annotator_enabled: bool = True
+    addressed_only: bool = False
 
 
 @router.get("/rooms/{room_id}/capabilities", response_model=RoomCapabilities)
@@ -185,4 +193,6 @@ async def get_room_capabilities(
         interjection_turn_threshold=int(room["interjection_turn_threshold"]),
         scheduler_running=scheduler is not None,
         jobs=jobs,
+        annotator_enabled=annotator_enabled(),
+        addressed_only=addressed_only(),
     )

@@ -32,6 +32,29 @@ class AssembledPrompt:
     messages: list[dict]
 
 
+
+def _anchor_prefix(msg: Message) -> str:
+    """`[on Hormuz Closure] ` when the human wrote ON a node of the causal
+    graph (the working surface's anchor). Participant DATA, never an
+    instruction: the label is what the desk calls that node, quoted."""
+    anchor = (msg.metadata or {}).get("anchor") if isinstance(msg.metadata, dict) else None
+    if not isinstance(anchor, dict):
+        return ""
+    label = str(anchor.get("label") or "").strip()
+    return f"[on {label}] " if label else ""
+
+
+def _refs_suffix(msg: Message) -> str:
+    """The objects a human ATTACHED to their message — a fire cell dropped
+    onto a node, a reading — named so the model knows what was handed to
+    it without a tool call. Labels only, never ids or coordinates."""
+    refs = (msg.metadata or {}).get("refs") if isinstance(msg.metadata, dict) else None
+    if not isinstance(refs, list) or not refs:
+        return ""
+    labels = [str(r.get("label") or "").strip() for r in refs if isinstance(r, dict)]
+    labels = [l for l in labels if l][:12]
+    return f"\n(attached: {'; '.join(labels)})" if labels else ""
+
 class PromptBuilder:
     """
     ARCHITECTURE: Layered prompt construction.
@@ -672,7 +695,10 @@ would have gone."""
 
             if msg.speaker_type == SpeakerType.HUMAN:
                 speaker_name = user_map.get(msg.user_id, "Unknown")
-                content = f"[{speaker_name}] {prefix}{msg.content}"
+                content = (
+                    f"[{speaker_name}] {prefix}{_anchor_prefix(msg)}{msg.content}"
+                    f"{_refs_suffix(msg)}"
+                )
                 role = "user"
             elif msg.speaker_type in (SpeakerType.LLM_PRIMARY, SpeakerType.LLM_PROVOKER, SpeakerType.LLM_ANNOTATOR):
                 content = f"{prefix}{msg.content}"
