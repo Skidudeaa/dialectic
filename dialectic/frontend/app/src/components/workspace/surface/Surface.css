@@ -13,7 +13,10 @@
     grid-template-columns: minmax(0, 1.55fr) minmax(380px, 0.95fr);
     /* The graph row is firm: the atlas beneath it is capped (below), so a
        tall room cannot starve the hero of its height. */
-    grid-template-rows: auto minmax(360px, 1fr) auto auto;
+    /* max-content, not auto: in a height-constrained scrolling grid an auto
+       track is sized to min-content and the atlas and tray collapsed to their
+       headers; max-content sizes them to what they hold and the grid scrolls. */
+    grid-template-rows: auto minmax(360px, 1fr) max-content max-content;
     grid-template-areas:
         "head head"
         "graph conv"
@@ -25,7 +28,7 @@
 }
 .surf--wide {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(440px, 1fr) minmax(380px, auto) auto auto;
+    grid-template-rows: auto minmax(440px, 1fr) minmax(380px, max-content) max-content max-content;
     grid-template-areas:
         "head"
         "conv"
@@ -53,9 +56,12 @@
     position: sticky;
     top: 0;
     align-self: start;
-    height: min(calc(100dvh - 238px), 760px);
-    min-height: 520px;
-    max-height: calc(100dvh - 238px);
+    /* 100dvh minus the chrome above the grid (~250px) and the head row
+       (~150px): the composer is in view before any scroll, and stays in
+       view once the column sticks. */
+    height: calc(100dvh - 400px);
+    min-height: 440px;
+    max-height: none;
 }
 .surf-updates-pane { grid-area: updates; min-width: 0; }
 
@@ -307,7 +313,7 @@
 @media (max-width: 1099.98px) {
     .surf, .surf--wide {
         grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: auto minmax(440px, 66dvh) minmax(380px, 54dvh) auto auto;
+        grid-template-rows: auto minmax(440px, 66dvh) minmax(380px, 54dvh) max-content max-content;
         grid-template-areas:
             "head"
             "conv"
@@ -340,7 +346,7 @@
 
 @media (max-width: 680px) {
     .surf, .surf--wide {
-        grid-template-rows: auto minmax(440px, 72dvh) 380px auto auto;
+        grid-template-rows: auto minmax(440px, 72dvh) 380px max-content max-content;
         gap: 8px;
         padding: 8px 8px 14px;
     }
