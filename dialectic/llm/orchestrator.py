@@ -19,7 +19,7 @@ from models import (
 )
 from .providers import ProviderName, LLMRequest
 from .router import ModelRouter, RoutingResult
-from .heuristics import InterjectionEngine, InterjectionDecision
+from .heuristics import InterjectionEngine, InterjectionDecision, addressed_only
 from .participation_fsm import ParticipationFSM, decision_event
 from .prompts import PromptBuilder, AssembledPrompt
 from home_activity import HomeActivityService
@@ -485,15 +485,24 @@ class LLMOrchestrator:
             # and been settable since the beginning and neither reached the
             # engine: it is constructed with no arguments, so every room ran
             # the module defaults no matter what its row said.
-            decision = self.heuristics.decide(
-                messages=messages,
-                mentioned=mentioned,
-                semantic_novelty=semantic_novelty,
-                turn_threshold=room.interjection_turn_threshold,
-                novelty_threshold=room.semantic_novelty_threshold,
-                unsurfaced_memory_count=unsurfaced_memory_count,
-                speaker_balance=speaker_balance,
-            )
+            if addressed_only() and not mentioned:
+                # Scarce by policy: the engine is not consulted, so no rung
+                # (turn count, novelty, silence, unsurfaced memory) can fire.
+                decision = InterjectionDecision(
+                    should_interject=False, reason="addressed_only_mode",
+                    confidence=1.0, use_provoker=False,
+                    considered_reasons=["addressed_only_mode"],
+                )
+            else:
+                decision = self.heuristics.decide(
+                    messages=messages,
+                    mentioned=mentioned,
+                    semantic_novelty=semantic_novelty,
+                    turn_threshold=room.interjection_turn_threshold,
+                    novelty_threshold=room.semantic_novelty_threshold,
+                    unsurfaced_memory_count=unsurfaced_memory_count,
+                    speaker_balance=speaker_balance,
+                )
 
         # Participation FSM (W6): every turn is one event — the message
         # arrival plus this decision — and the machine's new state rides the

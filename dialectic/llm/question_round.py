@@ -86,7 +86,34 @@ def is_round_day(today: date) -> bool:
     """Sunday only. The scheduler has daily slots, not weekly ones, so the
     job wakes every day at its hour and returns immediately six days out of
     seven — cheaper than teaching the scheduler a new cadence for one job."""
+    if round_is_daily():
+        return True
     return today.weekday() == ROUND_WEEKDAY
+
+
+def round_is_daily() -> bool:
+    """ROUND_DAILY=1 makes every morning a round morning. The 2026-09-02
+    experiment: one question a day beats twenty on a Sunday that nobody
+    answers. _already_ran_today keeps a restart from asking twice."""
+    return os.getenv("ROUND_DAILY", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def rooms_per_day() -> int:
+    """ROUND_ROOMS_PER_DAY caps how many qualifying rooms get a round on one
+    morning; 0 (default) means all of them. With the cap, rooms rotate: the
+    one whose last round is oldest goes first, never-asked rooms before all."""
+    try:
+        return max(0, int(os.getenv("ROUND_ROOMS_PER_DAY", "0")))
+    except ValueError:
+        return 0
+
+
+def rotate_rooms(rooms, last_round_at: dict, cap: int) -> list:
+    """Pure: order rooms by last round (never first, then oldest) and take cap."""
+    if cap <= 0:
+        return list(rooms)
+    ordered = sorted(rooms, key=lambda r: (last_round_at.get(str(r["id"])) is not None, last_round_at.get(str(r["id"])) or 0))
+    return ordered[:cap]
 
 
 ROUND_SYSTEM = """You write forecasting questions for two former IARPA/ACE Good \
@@ -512,6 +539,14 @@ async def question_round(ctx: SchedulerContext) -> dict:
                       WHERE rm.room_id = r.id) >= 2
                GROUP BY r.id, r.name, r.trading_config"""
         )
+        cap = rooms_per_day()
+        if cap:
+            last = await conn.fetch(
+                """SELECT room_id, max(created_at) AS at FROM commitments
+                   WHERE category = 'round' GROUP BY room_id"""
+            )
+            last_at = {str(r["room_id"]): r["at"].timestamp() for r in last}
+            rooms = rotate_rooms(rooms, last_at, cap)
         for room in rooms:
             key = str(room["id"])
             if await _already_ran_today(conn, room["id"], today):

@@ -1372,3 +1372,40 @@ participant's eyes. Plan: `/root/.claude/plans/world-lens-a-sensor-for-the-thesi
   contracts against `dialectic_test`). Whoever lands this on `tests/
   test_geo_api.py` should delete or rewrite those two tests rather than
   resurrect the old contract.
+
+## Amendment 2026-09-02 — the enjoyment experiment: scarce voice, one move a day (amend-beside)
+
+Owner, after the working-surface mocks: *"do it."* Measured first: 938
+messages all time, 629 machine to 309 human (the annotator alone 326); in the
+Hormuz room's last 30 days, 277 machine to 113 human, 4 replies, 0 readings
+linked to the message that produced them; the Round fired every Sunday since
+2026-08-23 and its blind-reveal payoff never triggered once. The bet: the
+lever is the machine's voice and a daily move, not layout. Two weeks, two
+numbers: human messages per day, and whether both humans forecast.
+
+- **`ANNOTATOR_ENABLED=0`** (`llm/annotator.annotator_enabled`, read at call
+  time, default on; the one gate in `transport/handlers.py`). The annotator
+  posts nothing; `field_inference` keeps writing marks.
+- **`DIALECTIC_ADDRESSED_ONLY=1`** (`llm/heuristics.addressed_only`): the
+  orchestrator does not consult the interjection engine unless the message
+  mentions the participant. Gates are untouched by construction because they
+  never pass through `decide()`: trading curator alerts, `world_watch`,
+  `prediction_watch`, the Round, protocols, forced turns, `claim_check`.
+  "Speaks when it disagrees" is NOT implemented — it needs a stance signal
+  that does not exist yet.
+- **Chatty jobs off in `.env`**: `PARTICIPATION_SWEEP_ENABLED=0`,
+  `READING_ECHO_ENABLED=0`, `WIRE_ENABLED=0`, `NEWS_DIGEST_ENABLED=0`. The
+  07:00 morning brief stays: it is the "what changed since you left" strip.
+- **The Round is daily, one room at a time**: `ROUND_DAILY=1` makes every
+  morning a round morning (`is_round_day`), `ROUND_ROOMS_PER_DAY=1` rotates
+  qualifying rooms by oldest last round (`rotate_rooms`, pure), and
+  `QUESTIONS_PER_ROUND=1`. `_already_ran_today` still guards a restart.
+- **`GET /rounds/moves`** (`api/rounds.py`): open round questions across the
+  caller's rooms with `mine` and `peers_moved` (names only — the blindness
+  rule holds; the house never appears). **`YourMove.tsx`** is the lintel over
+  Home, above the pulse: peers-moved-and-not-you first.
+- Tests: `tests/test_annotator_kill_switch.py`, `TestAddressedOnlyMode`,
+  `TestDailyRound`, `YourMove.test.tsx`. The frontend "flag flip" is opt-in
+  by construction — Dan sees the lintel, nothing is taken from him.
+- Rollback is the four env lines back to their old values and a restart; no
+  migration.

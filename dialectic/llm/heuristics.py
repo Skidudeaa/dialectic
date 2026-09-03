@@ -39,6 +39,15 @@ class InterjectionDecision:
     considered_reasons: list[str] = field(default_factory=list)
 
 
+def addressed_only() -> bool:
+    """DIALECTIC_ADDRESSED_ONLY: the participant speaks unprompted only when a
+    human addresses it. Gates (trading alerts, world contacts, prediction
+    deadlines, the Round, protocols, forced turns) do not pass through the
+    heuristics engine and are unaffected. Read at call time; default off.
+    """
+    return os.getenv("DIALECTIC_ADDRESSED_ONLY", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 class InterjectionEngine:
     """
     ARCHITECTURE: Rule-based + heuristic interjection triggers (Inner Thoughts 8-heuristic framework).

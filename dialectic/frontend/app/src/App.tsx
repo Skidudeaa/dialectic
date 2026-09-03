@@ -28,6 +28,7 @@ import { ProtocolPicker } from './components/protocols/ProtocolPicker'
 import { ProtocolBanner } from './components/protocols/ProtocolBanner'
 import { HomeActivityPulse } from './components/home/HomeActivityPulse'
 import { ProposalInbox } from './components/home/ProposalInbox'
+import { YourMove } from './components/home/YourMove'
 import { BriefingPanel } from './components/analytics/BriefingPanel'
 import { CommitmentSurface } from './components/stakes/CommitmentSurface'
 import { WorkspaceSceneFrame } from './components/workspace/WorkspaceSceneFrame'
@@ -842,6 +843,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // over it. Everything demoted is one <details> away, not gone.
   const houseSurface = (
     <>
+      <YourMove onNavigate={(destination) => navigate(destination, 'push')} refreshVersion={homeRefreshVersion} />
       <HomeActivityPulse
         onNavigate={(destination) => navigate(destination, 'push')}
         refreshVersion={homeRefreshVersion}

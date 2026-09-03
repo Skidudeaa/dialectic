@@ -417,3 +417,56 @@ def _score_question(question, humans, house_rows=()) -> list[dict]:
     for key, entry in scores:
         entry.update(peers.get(key, {"peer": None, "contested_days": 0}))
     return [entry for _, entry in scores]
+
+
+@router.get("/rounds/moves")
+async def round_moves(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    pool: asyncpg.Pool = Depends(get_pool),
+):
+    """Open round questions across every room the caller belongs to, with
+    whether the caller has forecast and which peers have.
+
+    WHY: Home should open on "Dan moved on Brent. Your move." (2026-09-02).
+    Blindness rule as in _round_state: this carries names, never numbers —
+    that a peer has moved is membership-grade information; where they landed
+    stays sealed until both have committed. The house never appears here.
+    """
+    async with pool.acquire() as db:
+        rows = await db.fetch(
+            """SELECT c.id, c.room_id, r.name AS room_name, c.thread_id,
+                      c.source_message_id, c.claim, c.deadline,
+                      EXISTS (SELECT 1 FROM commitment_confidence cc
+                               WHERE cc.commitment_id = c.id AND cc.user_id = $1
+                                 AND cc.actor = 'human') AS mine,
+                      COALESCE((SELECT array_agg(DISTINCT u.display_name)
+                                  FROM commitment_confidence cc
+                                  JOIN users u ON u.id = cc.user_id
+                                 WHERE cc.commitment_id = c.id AND cc.user_id <> $1
+                                   AND cc.actor = 'human'), ARRAY[]::text[]) AS peers_moved
+               FROM commitments c
+               JOIN rooms r ON r.id = c.room_id
+               JOIN room_memberships rm ON rm.room_id = c.room_id AND rm.user_id = $1
+               WHERE c.category = 'round' AND c.status = 'active'
+                 AND c.deadline > now()
+               ORDER BY c.deadline ASC
+               LIMIT 50""",
+            current_user.user_id,
+        )
+    moves = [
+        {
+            "commitment_id": str(r["id"]),
+            "room_id": str(r["room_id"]),
+            "room_name": r["room_name"],
+            "thread_id": str(r["thread_id"]) if r["thread_id"] else None,
+            "message_id": str(r["source_message_id"]) if r["source_message_id"] else None,
+            "claim": r["claim"],
+            "closes": r["deadline"].date().isoformat() if r["deadline"] else None,
+            "mine": bool(r["mine"]),
+            "peers_moved": list(r["peers_moved"] or []),
+        }
+        for r in rows
+    ]
+    # Your move first: a peer has committed and you have not.
+    moves.sort(key=lambda m: (m["mine"], not m["peers_moved"], m["closes"] or ""))
+    return {"moves": moves, "your_move": sum(1 for m in moves if not m["mine"])}

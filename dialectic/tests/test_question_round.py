@@ -313,3 +313,32 @@ class TestThePromptTellsTheTruth:
         from llm.question_round import _horizon_dates
         dates = _horizon_dates(TODAY)
         assert len(dates) == len(set(dates)) == QUESTIONS_PER_ROUND
+
+
+class TestDailyRound:
+    """2026-09-02 experiment: one question a day, one room a day."""
+
+    def test_daily_flag_makes_a_monday_a_round_day(self, monkeypatch):
+        from llm.question_round import round_is_daily
+        monkeypatch.setenv("ROUND_DAILY", "1")
+        assert round_is_daily() is True
+        assert is_round_day(date(2026, 8, 24)) is True  # a Monday
+
+    def test_without_the_flag_sunday_rule_holds(self, monkeypatch):
+        monkeypatch.delenv("ROUND_DAILY", raising=False)
+        assert is_round_day(date(2026, 8, 24)) is False
+
+    def test_rotation_takes_never_asked_then_oldest(self):
+        from llm.question_round import rotate_rooms
+        rooms = [{"id": "a"}, {"id": "b"}, {"id": "c"}]
+        last = {"a": 200.0, "c": 100.0}  # b never asked
+        assert [r["id"] for r in rotate_rooms(rooms, last, 1)] == ["b"]
+        assert [r["id"] for r in rotate_rooms(rooms, last, 2)] == ["b", "c"]
+        assert [r["id"] for r in rotate_rooms(rooms, last, 0)] == ["a", "b", "c"]
+
+    def test_rooms_per_day_reads_env(self, monkeypatch):
+        from llm.question_round import rooms_per_day
+        monkeypatch.setenv("ROUND_ROOMS_PER_DAY", "1")
+        assert rooms_per_day() == 1
+        monkeypatch.setenv("ROUND_ROOMS_PER_DAY", "junk")
+        assert rooms_per_day() == 0

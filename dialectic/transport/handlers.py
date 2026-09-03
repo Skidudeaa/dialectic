@@ -25,7 +25,7 @@ from memory.manager import MemoryManager
 from proposal_envelope import ACCEPT_LIST_ITEM_SQL, acceptance_stamp
 from llm.mentions import contains_explicit_llm_mention
 from llm.orchestrator import LLMOrchestrator
-from llm.annotator import AnnotatorEngine
+from llm.annotator import AnnotatorEngine, annotator_enabled
 from llm.claim_check import schedule_claim_check
 from llm import research
 from llm.protocol_manager import ProtocolManager
@@ -522,7 +522,7 @@ class MessageHandler:
         )
         annotation = None
         related = None
-        if member_count >= 2:
+        if member_count >= 2 and annotator_enabled():
             # Returns the recalled context to build the annotation from, or None
             # to stay silent — the gate and the material are one decision.
             related = await annotator.prepare_annotation(

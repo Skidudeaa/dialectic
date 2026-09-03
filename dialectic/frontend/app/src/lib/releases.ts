@@ -51,6 +51,19 @@ export interface Release {
 /** Newest first. `releases.test.ts` pins that order at the data level. */
 export const RELEASES: Release[] = [
   {
+    id: 'your-move',
+    date: '2026-09-02',
+    title: 'Your move',
+    body:
+      'Home now opens on whose turn it is. Every open question in the ' +
+      '[[round|daily Round]] across your rooms sits at the top, the ones the other person has ' +
+      'answered and you have not first, by name and never by number. The Round itself is ' +
+      'one question a day now, one room at a time, instead of twenty on a Sunday. And the ' +
+      'participant is quieter by policy: the annotator no longer posts, and Dialectic speaks ' +
+      'unprompted only when you address it or a gate fires.',
+    jobs: ['question_round', 'house_forecast_sweep'],
+  },
+  {
     id: 'fires',
     date: '2026-08-30',
     title: 'Fires',

@@ -1,0 +1,13 @@
+/* The lintel over Home: whose move it is, before anything else. */
+.your-move { margin: 0 0 12px; padding: 12px 16px 10px; border: 1px solid var(--color-espresso); border-left: 3px solid var(--color-amber); background: var(--color-cacao); }
+.your-move-head { display: flex; align-items: baseline; gap: 12px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-faint); }
+.your-move-head b { color: var(--color-display); letter-spacing: 0.04em; text-transform: none; font-size: 13px; font-weight: 600; }
+.your-move-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.your-move-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: baseline; width: 100%; padding: 8px 10px; min-height: 44px; border: 1px solid var(--color-espresso); background: var(--color-chassis); color: var(--color-bone); text-align: left; cursor: pointer; }
+.your-move-item:hover, .your-move-item:focus-visible { border-color: var(--color-amber); }
+.your-move-claim { font-family: var(--font-serif); font-size: 15px; line-height: 1.3; }
+.your-move-meta { font-family: var(--font-mono); font-size: 11px; color: var(--color-ghost); white-space: nowrap; }
+.your-move-meta b { color: var(--color-teal); font-weight: 500; }
+.your-move-item.done .your-move-claim { color: var(--color-faint); }
+.your-move-item.done .your-move-meta b { color: var(--color-ghost); }
+.your-move-quiet { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-ghost); margin-top: 6px; }

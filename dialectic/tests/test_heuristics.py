@@ -765,3 +765,19 @@ class TestPerRoomThresholds:
         engine = InterjectionEngine(turn_threshold=5, semantic_novelty_threshold=0.9)
         msgs = [make_message(f"turn {i}") for i in range(5)]
         assert engine.decide(msgs).reason.startswith("turn_threshold_exceeded")
+
+
+class TestAddressedOnlyMode:
+    """DIALECTIC_ADDRESSED_ONLY (2026-09-02): the participant speaks unprompted
+    only when mentioned. The orchestrator checks the flag before consulting
+    the engine; this pins the flag's reading."""
+
+    def test_off_by_default(self, monkeypatch):
+        from llm.heuristics import addressed_only
+        monkeypatch.delenv("DIALECTIC_ADDRESSED_ONLY", raising=False)
+        assert addressed_only() is False
+
+    def test_on(self, monkeypatch):
+        from llm.heuristics import addressed_only
+        monkeypatch.setenv("DIALECTIC_ADDRESSED_ONLY", "1")
+        assert addressed_only() is True

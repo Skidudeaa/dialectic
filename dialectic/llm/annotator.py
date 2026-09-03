@@ -28,6 +28,16 @@ logger = logging.getLogger(__name__)
 # below. 0 disables annotation entirely.
 ANNOTATOR_DAILY_CAP = int(os.getenv("ANNOTATOR_DAILY_CAP", "12"))
 
+
+def annotator_enabled() -> bool:
+    """Kill switch for annotation posts, read at call time (ANNOTATOR_ENABLED, default on).
+
+    WHY: 2026-09-02, the annotator alone had posted more messages than both
+    humans combined (326 vs 309). The experiment is to silence it and watch
+    whether the humans speak more; field_inference keeps writing marks.
+    """
+    return os.getenv("ANNOTATOR_ENABLED", "1").strip().lower() not in ("0", "false", "no", "off")
+
 # The worth gate. The annotator's stated job is to CONNECT and SURFACE — to
 # leave the absent person a breadcrumb tying this message to what the room
 # already knows. When recall finds nothing to tie it to, there is no breadcrumb

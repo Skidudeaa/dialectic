@@ -160,6 +160,15 @@ class DialecticAPI {
   async getHomeProposals(): Promise<HomeProposalsResponse> {
     return this.fetch('/users/me/home/proposals');
   }
+
+  /**
+   * Open Round questions across every room the viewer belongs to, with who
+   * has moved. Names only, never numbers: the blindness rule holds here too.
+   * Feeds the "Your move" lintel on Home (2026-09-02).
+   */
+  async getRoundMoves(): Promise<RoundMovesResponse> {
+    return this.fetch('/rounds/moves');
+  }
   /**
    * Create the scheme's room from Home, carrying Home's membership into it.
    *
@@ -899,6 +908,23 @@ class DialecticAPI {
   async unregisterWebPushSubscription(endpoint: string) {
     return this.fetch('/notifications/web-subscriptions', { method: 'DELETE', body: JSON.stringify({ endpoint }) });
   }
+}
+
+export interface RoundMove {
+  commitment_id: string
+  room_id: string
+  room_name: string
+  thread_id: string | null
+  message_id: string | null
+  claim: string
+  closes: string | null
+  mine: boolean
+  peers_moved: string[]
+}
+
+export interface RoundMovesResponse {
+  moves: RoundMove[]
+  your_move: number
 }
 
 export const api = new DialecticAPI();
