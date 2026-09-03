@@ -10,7 +10,9 @@
     display: grid;
     gap: 12px;
     padding: 12px 16px 18px;
-    grid-template-columns: minmax(0, 1.55fr) minmax(380px, 0.95fr);
+    /* The conversation is the base unit (owner): it takes the wider column;
+       the graph pans and zooms, the transcript does not. */
+    grid-template-columns: minmax(0, 1fr) minmax(440px, 1.15fr);
     /* The graph row is firm: the atlas beneath it is capped (below), so a
        tall room cannot starve the hero of its height. */
     /* max-content, not auto: in a height-constrained scrolling grid an auto
@@ -43,7 +45,8 @@
     position: relative;
     top: auto;
     align-self: stretch;
-    max-height: 760px;
+    height: calc(100dvh - 340px);
+    max-height: none;
 }
 
 .surf-head    { grid-area: head; }
@@ -59,7 +62,7 @@
     /* 100dvh minus the chrome above the grid (~250px) and the head row
        (~150px): the composer is in view before any scroll, and stays in
        view once the column sticks. */
-    height: calc(100dvh - 400px);
+    height: calc(100dvh - 340px);
     min-height: 440px;
     max-height: none;
 }
@@ -85,11 +88,10 @@
     grid-template-columns: minmax(260px, 0.85fr) minmax(0, 1.15fr);
     grid-template-areas:
         "identity stats"
-        "flags flags"
-        "hint hint";
+        "flags hint";
     align-items: center;
-    gap: 8px 20px;
-    padding: 10px 12px 11px;
+    gap: 6px 20px;
+    padding: 8px 12px 9px;
     background: var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
@@ -135,11 +137,11 @@
     display: flex;
     flex-wrap: wrap;
     gap: 5px 18px;
-    padding-top: 8px;
-    border-top: 1px solid var(--color-bean);
 }
 .surf-head-hint {
     grid-area: hint;
+    justify-self: end;
+    text-align: right;
     color: var(--color-ghost);
     text-transform: uppercase;
     line-height: 1.45;
@@ -178,6 +180,8 @@
     color: var(--color-secondary);
 }
 .surf-conv-kicker b { color: var(--color-bone); font-weight: 600; }
+.surf-wide-toggle { margin-left: auto; }
+.surf-wide-toggle + .surf-shapes { margin-left: 0; }
 .surf-shapes {
     display: inline-flex;
     margin-left: auto;

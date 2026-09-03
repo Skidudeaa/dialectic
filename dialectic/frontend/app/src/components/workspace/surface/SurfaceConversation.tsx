@@ -41,6 +41,9 @@ export interface SurfaceConversationProps {
   humans: SurfaceAuthor[]
   shape: ConversationShape
   onShape: (shape: ConversationShape) => void
+  /** The stream takes the whole width (the wide shapes always do). */
+  wide: boolean
+  onToggleWide: () => void
   /** The focused node or disputed edge — what the composer lands on. */
   anchor: MessageAnchor | null
   onClearAnchor: () => void
@@ -60,7 +63,7 @@ export interface SurfaceConversationProps {
 }
 
 export function SurfaceConversation({
-  roomId, messages, humans, shape, onShape, anchor, onClearAnchor, onAnchor,
+  roomId, messages, humans, shape, onShape, wide, onToggleWide, anchor, onClearAnchor, onAnchor,
   pendingRefs, onRemovePendingRef, onClearPendingRefs, composer, composerRef,
   typingUsers, activityLabel, onOpenRef, onFork, annotatorEnabled, addressedOnly,
 }: SurfaceConversationProps) {
@@ -156,6 +159,17 @@ export function SurfaceConversation({
             only on {anchor.label}
           </label>
         )}
+        <div className="surf-shapes surf-wide-toggle" role="group" aria-label="Conversation width">
+          <button
+            type="button"
+            className="surf-shape"
+            aria-pressed={wide}
+            title={wide ? 'Put the graph beside the conversation' : 'Give the conversation the whole width'}
+            onClick={onToggleWide}
+          >
+            {wide ? '⇥ Split' : '⇔ Wide'}
+          </button>
+        </div>
         <div className="surf-shapes" role="group" aria-label="Conversation shape">
           {(Object.keys(SHAPE_LABELS) as ConversationShape[]).map((candidate) => (
             <button

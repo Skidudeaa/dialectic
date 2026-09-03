@@ -63,6 +63,7 @@ export interface SurfaceSceneProps {
 }
 
 const OBSERVATION_HOURS = 48
+const WIDE_KEY = 'dialectic.surface.wide'
 
 /** Same freshness rule as the Bench: under an hour is fresh. */
 function snapshotIsStale(timestamp?: string): boolean {
@@ -79,6 +80,18 @@ export function SurfaceScene({
   const [anchor, setAnchor] = useState<MessageAnchor | null>(null)
   const [pendingRefs, setPendingRefs] = useState<MessageRef[]>([])
   const [shape, setShape] = useState<ConversationShape>('stream')
+  // "Wide": the conversation takes the whole width and the graph and atlas
+  // follow beneath — the owner's balance control, remembered per device.
+  const [wideStream, setWideStream] = useState<boolean>(() => {
+    try { return localStorage.getItem(WIDE_KEY) === '1' } catch { return false }
+  })
+  const toggleWide = useCallback(() => {
+    setWideStream((current) => {
+      const next = !current
+      try { localStorage.setItem(WIDE_KEY, next ? '1' : '0') } catch { /* private mode */ }
+      return next
+    })
+  }, [])
   const [selectedUpdateId, setSelectedUpdateId] = useState<string | null>(null)
   const composerRef = useRef<MessageInputHandle>(null)
 
@@ -184,7 +197,7 @@ export function SurfaceScene({
     setSelectedUpdateId(obs ? obs.id : null)
   }, [])
 
-  const wide = WIDE_SHAPES.has(shape)
+  const wide = WIDE_SHAPES.has(shape) || wideStream
   const unbound = desk.structure.status === 'empty' || (!desk.bound && desk.structure.status !== 'loading')
 
   return (
@@ -284,6 +297,8 @@ export function SurfaceScene({
         humans={humans}
         shape={shape}
         onShape={setShape}
+        wide={wideStream}
+        onToggleWide={toggleWide}
         anchor={anchor}
         onClearAnchor={() => setAnchor(null)}
         onAnchor={setAnchor}
