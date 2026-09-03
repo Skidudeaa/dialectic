@@ -25,6 +25,9 @@ export interface SurfaceAtlasProps {
   onOpenWorld?: () => void
   /** Hours the observations window covers, for the header line (default 48). */
   hours?: number
+  /** The observations fetch's own state — a loading or failed read must not
+   *  render as "no fire cells" (design v2 §7.5). */
+  contactsStatus?: 'loading' | 'ready' | 'unavailable'
 }
 
 const SVG_WIDTH = 720
@@ -142,7 +145,16 @@ function markerTitle(obs: WorldObservation): string {
 /** counts drives the header, never the raw observation list — a room's Bench
  *  World strip uses the same per-scope aggregate (WorldStrip.tsx) so a
  *  window-capped observation list can't undercount. */
-function headerLine(scopeCount: number, counts: WorldObservationCount[], hours: number): string {
+function headerLine(
+  scopeCount: number, counts: WorldObservationCount[], hours: number,
+  contactsStatus: 'loading' | 'ready' | 'unavailable',
+): string {
+  if (contactsStatus === 'loading') {
+    return `Atlas · ${scopeCount} confirmed area${scopeCount === 1 ? '' : 's'} · reading contacts…`
+  }
+  if (contactsStatus === 'unavailable') {
+    return `Atlas · ${scopeCount} confirmed area${scopeCount === 1 ? '' : 's'} · contacts unavailable`
+  }
   const fireRows = counts.filter((c) => c.layer === 'fires')
   const fireTotal = fireRows.reduce((sum, c) => sum + c.count, 0)
   const fireNovel = fireRows.reduce((sum, c) => sum + (c.novel ?? 0), 0)
@@ -158,7 +170,7 @@ function headerLine(scopeCount: number, counts: WorldObservationCount[], hours: 
 }
 
 export function SurfaceAtlas(props: SurfaceAtlasProps): JSX.Element {
-  const { scopes, observations, counts, selectedId, onSelect, onOpenWorld, hours = 48 } = props
+  const { scopes, observations, counts, selectedId, onSelect, onOpenWorld, hours = 48, contactsStatus = 'ready' } = props
 
   if (scopes.length === 0) {
     return (
@@ -179,7 +191,7 @@ export function SurfaceAtlas(props: SurfaceAtlasProps): JSX.Element {
     .map((obs) => ({ obs, coords: pointCoords(obs.geometry) }))
     .filter((row): row is { obs: WorldObservation; coords: [number, number] } => row.coords !== null)
 
-  const header = headerLine(scopes.length, counts, hours)
+  const header = headerLine(scopes.length, counts, hours, contactsStatus)
 
   function selectOrClear(obs: WorldObservation, isSelected: boolean): void {
     onSelect(isSelected ? null : obs)
@@ -298,7 +310,7 @@ export function SurfaceAtlas(props: SurfaceAtlasProps): JSX.Element {
           </g>
         </svg>
       </div>
-      {observations.length === 0 && (
+      {observations.length === 0 && contactsStatus === 'ready' && (
         <p className="surf-atlas-quiet">no contacts recorded in {hours}h</p>
       )}
       <p className="surf-atlas-legend">● recurring fire  ◎ new vs 30-day  · aircraft  ○ quake</p>

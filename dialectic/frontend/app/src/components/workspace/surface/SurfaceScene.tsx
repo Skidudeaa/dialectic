@@ -274,6 +274,7 @@ export function SurfaceScene({
           onSelect={selectObservation}
           onOpenWorld={scopes.length > 0 ? onOpenWorld : undefined}
           hours={OBSERVATION_HOURS}
+          contactsStatus={observations.status}
         />
       </section>
 

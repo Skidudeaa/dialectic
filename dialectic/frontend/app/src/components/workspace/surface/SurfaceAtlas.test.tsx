@@ -248,3 +248,28 @@ describe('SurfaceAtlas', () => {
     expect(screen.queryByRole('button', { name: 'World ↗' })).toBeNull()
   })
 })
+
+describe('SurfaceAtlas contacts status', () => {
+  it('never reads a loading or failed contacts read as "no fire cells"', () => {
+    const scope = {
+      id: 'geo_scope:s1', room_id: 'r', subject: { entity: 'rooms', id: 'r', field: null }, kind: 'polygon',
+      geometry: { type: 'Polygon', coordinates: [[[55, 25], [57, 25], [57, 27], [55, 27], [55, 25]]] },
+      label: 'Persian Gulf', authority: 'human_confirmed', provenance: {}, source_state: 'ok',
+      revision_action: 'create', review_state: 'confirmed', freshness: {}, centroid: [56, 26] as [number, number],
+      retrieved_at: '', created_at: '',
+    } as unknown as import('../../../types/geo.ts').GeoScope
+    const { rerender } = render(
+      <SurfaceAtlas scopes={[scope]} observations={[]} counts={[]} selectedId={null} onSelect={() => {}} contactsStatus="loading" />,
+    )
+    expect(screen.getByText(/reading contacts/)).toBeInTheDocument()
+    expect(screen.queryByText(/no fire cells/)).toBeNull()
+    rerender(
+      <SurfaceAtlas scopes={[scope]} observations={[]} counts={[]} selectedId={null} onSelect={() => {}} contactsStatus="unavailable" />,
+    )
+    expect(screen.getByText(/contacts unavailable/)).toBeInTheDocument()
+    rerender(
+      <SurfaceAtlas scopes={[scope]} observations={[]} counts={[]} selectedId={null} onSelect={() => {}} contactsStatus="ready" />,
+    )
+    expect(screen.getByText(/no fire cells in 48h/)).toBeInTheDocument()
+  })
+})
