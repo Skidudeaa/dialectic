@@ -11,7 +11,9 @@
     gap: 10px;
     padding: 10px 14px 12px;
     grid-template-columns: minmax(0, 1.5fr) minmax(360px, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    /* The graph row is firm: the atlas beneath it is capped (below), so a
+       tall room cannot starve the hero of its height. */
+    grid-template-rows: auto minmax(340px, 1fr) auto auto;
     grid-template-areas:
         "head head"
         "graph conv"
@@ -200,6 +202,10 @@
 
 /* ── Atlas + updates rows ────────────────────────────────────────────── */
 .surf-atlas-pane, .surf-updates-pane { min-height: 0; }
+/* The atlas is a strip under the graph, not a second hero: cap the map so
+   the graph row above keeps the height the grid promised it. */
+.surf-atlas-pane .surf-atlas-svg { max-height: 220px; height: auto; }
+.surf-atlas-pane .surf-atlas-scope-label { font-size: 10px; }
 
 /* ── Narrow: one column, conversation first ──────────────────────────── */
 @media (max-width: 1099.98px) {

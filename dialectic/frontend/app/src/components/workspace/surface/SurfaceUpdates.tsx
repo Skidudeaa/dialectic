@@ -84,8 +84,18 @@ export function SurfaceUpdates(props: SurfaceUpdatesProps) {
 
   const readingItems = readings.status === 'ready' ? readings.items : []
 
+  // "Since you left" is the question; but an empty tray under a header
+  // that counts new fires is a contradiction the reader cannot resolve. When
+  // nothing is newer than the last read, fall back to the latest and say so.
+  const anyNew = since !== null && (
+    observations.some((o) => o.layer === 'fires' && isAfter(o.first_seen_at, since))
+    || readingItems.some((r) => isAfter(r.current_captured_at ?? r.created_at, since))
+    || marks.some((m) => isAfter(m.created_at, since))
+  )
+  const fellBack = since !== null && !anyNew && readings.status !== 'loading'
+  const effectiveSince = fellBack ? null : since
   const filteredFires = observations.filter(
-    (o) => o.layer === 'fires' && (since === null || isAfter(o.first_seen_at, since)),
+    (o) => o.layer === 'fires' && (effectiveSince === null || isAfter(o.first_seen_at, effectiveSince)),
   )
   const novelFires = filteredFires.filter((o) => o.details.novel === true)
   const recurringFires = filteredFires.filter((o) => o.details.novel !== true)
@@ -96,7 +106,7 @@ export function SurfaceUpdates(props: SurfaceUpdatesProps) {
 
   const filteredReadings = readingItems.filter((r) => {
     const date = r.current_captured_at ?? r.created_at
-    return since === null || isAfter(date, since)
+    return effectiveSince === null || isAfter(date, effectiveSince)
   })
   const sortedReadings = [...filteredReadings].sort((a, b) => {
     const da = a.current_captured_at ?? a.created_at
@@ -104,7 +114,7 @@ export function SurfaceUpdates(props: SurfaceUpdatesProps) {
     return new Date(db).getTime() - new Date(da).getTime()
   })
 
-  const filteredMarks = marks.filter((m) => since === null || isAfter(m.created_at, since))
+  const filteredMarks = marks.filter((m) => effectiveSince === null || isAfter(m.created_at, effectiveSince))
   const sortedMarks = [...filteredMarks].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   )
@@ -134,7 +144,9 @@ export function SurfaceUpdates(props: SurfaceUpdatesProps) {
   ]
   const capped = cards.slice(0, TRAY_CAP)
 
-  const headerTitle = since === null ? 'Latest updates' : 'Updates since you left'
+  const headerTitle = effectiveSince === null
+    ? (fellBack ? 'Latest updates · nothing new since you left' : 'Latest updates')
+    : 'Updates since you left'
   const countsLabel = [
     plural(sortedNovelFires.length, 'new fire'),
     plural(filteredReadings.length, 'reading'),
@@ -143,7 +155,7 @@ export function SurfaceUpdates(props: SurfaceUpdatesProps) {
   const rightText = attachTargetLabel
     ? `drag onto a node to attach as evidence · tap to select · attaching to ${attachTargetLabel}`
     : 'drag onto a node to attach as evidence · tap to select'
-  const emptyText = since === null ? 'Nothing recorded yet.' : 'Nothing new since you left.'
+  const emptyText = effectiveSince === null ? 'Nothing recorded yet.' : 'Nothing new since you left.'
 
   function activate(card: Card) {
     onSelect(card.selId === selectedId ? null : card.ref)
