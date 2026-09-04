@@ -82,8 +82,11 @@ export function SurfaceScene({
   const [shape, setShape] = useState<ConversationShape>('stream')
   // "Wide": the conversation takes the whole width and the graph and atlas
   // follow beneath — the owner's balance control, remembered per device.
+  // Wide by default (owner, 2026-09-03): the conversation is the base unit
+  // and takes the whole width; Split is the opt-in. Only an explicit '0'
+  // remembers Split, so a device that never chose gets the default.
   const [wideStream, setWideStream] = useState<boolean>(() => {
-    try { return localStorage.getItem(WIDE_KEY) === '1' } catch { return false }
+    try { return localStorage.getItem(WIDE_KEY) !== '0' } catch { return true }
   })
   const toggleWide = useCallback(() => {
     setWideStream((current) => {
