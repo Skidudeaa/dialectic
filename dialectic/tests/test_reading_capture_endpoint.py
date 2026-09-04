@@ -5,6 +5,7 @@ separate from the real-PostgreSQL ordering tests.
 """
 
 import hashlib
+import json
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 from uuid import UUID
@@ -93,6 +94,7 @@ def _post(
     db=None,
     authenticated: bool = True,
     twin_error: Exception | None = None,
+    escaped_json: bool = False,
 ):
     db = db or _db()
     result = {
@@ -134,10 +136,20 @@ def _post(
             display_name="Caller",
         )
     try:
-        response = TestClient(main_mod.app).post(
-            f"/rooms/{ROOM_ID}/reading/capture",
-            json=payload,
-        )
+        if escaped_json:
+            # httpx json= serializes with ensure_ascii=False, which cannot
+            # carry a lone surrogate onto the wire; a real browser's
+            # JSON.stringify sends it as the ASCII escape sequence.
+            response = TestClient(main_mod.app).post(
+                f"/rooms/{ROOM_ID}/reading/capture",
+                content=json.dumps(payload),
+                headers={"Content-Type": "application/json"},
+            )
+        else:
+            response = TestClient(main_mod.app).post(
+                f"/rooms/{ROOM_ID}/reading/capture",
+                json=payload,
+            )
     finally:
         main_mod.app.dependency_overrides.clear()
     return response, save, twin, extract
@@ -213,7 +225,7 @@ def test_capture_rejects_non_postgresql_text_without_database_write(monkeypatch)
     surrogate_payload = _payload()
     surrogate_payload["markdown"] = "\ud800"
     surrogate_payload["content_sha256"] = "0" * 64
-    response, save, _, _ = _post(monkeypatch, surrogate_payload)
+    response, save, _, _ = _post(monkeypatch, surrogate_payload, escaped_json=True)
     assert response.status_code == 422
     save.assert_not_awaited()
 

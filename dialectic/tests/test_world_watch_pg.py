@@ -155,6 +155,16 @@ def isolated_signal_store(monkeypatch):
     return store
 
 
+@pytest.fixture(autouse=True)
+def outside_quiet_hours(monkeypatch):
+    """_maybe_interject's quiet-hours gate reads the real wall clock
+    (23:00-07:00 America/Chicago, llm.silence_sweep.in_quiet_hours), so an
+    unpatched suite run inside that window suppresses every interjection
+    these contracts assert on. Quiet hours themselves are silence_sweep's
+    own tests' subject; here the gate is pinned open."""
+    monkeypatch.setattr(world_watch, "in_quiet_hours", lambda: False)
+
+
 async def _bind_scope_to_node(db, scope_id: UUID, *, node_id="hormuz", book_id="hormuz-graph"):
     """A human 'Mark as evidence' causal Field mark: scope -> supports -> node."""
     mark_id = uuid4()
