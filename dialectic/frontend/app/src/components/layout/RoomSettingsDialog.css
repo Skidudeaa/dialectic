@@ -5,16 +5,38 @@
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: rgba(8, 5, 4, 0.78);
-  backdrop-filter: blur(4px);
+  /* The room dims behind the sheet: void-dark scrim + a little defocus. */
+  background: rgba(7, 4, 2, 0.72);
+  backdrop-filter: blur(5px);
+  animation: settingsScrimIn var(--dur-med, 220ms) var(--ease-out);
+}
+
+@keyframes settingsScrimIn {
+  from { opacity: 0; }
 }
 
 .settings-dialog {
   width: min(520px, 100%);
   padding: 1.25rem;
   border: 1px solid var(--color-bean);
+  border-radius: var(--radius-chassis);
+  /* The sheet is dossier paper lifted off the desk, with a machined outer
+     edge so it reads as an instrument face, not a floating div. */
   background: var(--color-cacao);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+  box-shadow:
+    var(--bezel-raised),
+    inset 0 1px 0 rgba(255,249,240,.06),
+    0 24px 80px rgba(0, 0, 0, 0.55);
+  animation: settingsRiseIn var(--dur-slow, 360ms) var(--ease-spring);
+}
+
+@keyframes settingsRiseIn {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-overlay,
+  .settings-dialog { animation: none; }
 }
 
 .settings-dialog-header,
@@ -26,10 +48,43 @@
   gap: 1rem;
 }
 
-.settings-dialog-header h2 { color: var(--color-bone); }
+.settings-dialog-header {
+  padding-bottom: 0.85rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid var(--color-bean);
+}
+.settings-dialog-header h2 {
+  color: var(--color-display);
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  letter-spacing: .01em;
+  text-shadow: var(--engrave);
+}
 .settings-dialog-header p,
 .settings-toggle small,
 .settings-loading { color: var(--color-secondary); }
+
+/* The Esc affordance: closing works from the keyboard, so the keyboard is
+   named on the face of the dialog, beside the × it mirrors. */
+.settings-close-cluster {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.dialog-esc-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+  padding: 2px 6px;
+  border: 1px solid var(--color-bean);
+  border-radius: var(--radius-control);
+  background: var(--color-well);
+  box-shadow: var(--bezel-key);
+  text-shadow: var(--engrave);
+}
 
 .settings-fields {
   display: grid;
@@ -80,7 +135,23 @@
     box-shadow: var(--bezel-key);
     cursor: grab;
 }
+.settings-fields input[type='range']:focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 4px;
+    border-radius: var(--radius-control);
+}
+.settings-fields input[type='range']::-webkit-slider-thumb {
+    transition: box-shadow var(--dur-fast, 140ms) var(--ease-out);
+}
+.settings-fields input[type='range']:hover::-webkit-slider-thumb {
+    box-shadow: var(--bezel-key), var(--shadow-glow-amber);
+}
+.settings-fields input[type='range']:active::-webkit-slider-thumb {
+    cursor: grabbing;
+    box-shadow: var(--bezel-key-down);
+}
 .settings-toggle { justify-content: flex-start; }
 .settings-toggle span { display: grid; }
-.settings-error { margin-top: 1rem; color: var(--color-danger, #f28b82); }
+.settings-toggle input[type='checkbox'] { accent-color: var(--color-amber); }
+.settings-error { margin-top: 1rem; color: var(--color-error); }
 .settings-actions { justify-content: flex-end; margin-top: 1rem; }

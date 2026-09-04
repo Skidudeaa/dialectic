@@ -39,7 +39,7 @@ export function FocusHistory({ reviews, lineage }: FocusHistoryProps) {
         <ul className="focus-history-reviews">
           {reviews.map((review) => (
             <li key={review.id} className="focus-history-review">
-              <span className="focus-history-action">{review.action}</span>
+              <span className="focus-history-action" data-action={review.action}>{review.action}</span>
               <span className="focus-history-when">{relativeWhen(review.created_at)}</span>
               {review.note && <p className="focus-history-note">&ldquo;{review.note}&rdquo;</p>}
             </li>

@@ -1,19 +1,29 @@
 /* One neutral treatment for every participant. The letter carries identity;
-   nothing here varies by who is speaking (design v2 §16.4). */
+   nothing here varies by who is speaking (design v2 §16.4).
+
+   The mark is a wax seal pressed beside the byline: round, raised off the
+   page by the key bezel, with the letter stencil-cut and letterpressed into
+   it. It is decorative (aria-hidden — the author name beside it carries the
+   accessible name), so it takes no hover/pressed state of its own. */
 .signature-mark {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 1.5em;
-    height: 1.5em;
+    min-width: 1.6em;
+    height: 1.6em;
     padding: 0 0.2em;
-    border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 600;
+    border: 1px solid var(--color-crater);
+    border-radius: 50%;
+    font-family: var(--font-stencil);
+    font-size: 11px;
+    font-weight: 400;
     color: var(--color-bone);
-    background: transparent;
+    text-shadow: var(--engrave);
+    background:
+        radial-gradient(circle at 35% 28%, var(--color-espresso) 0%, var(--color-cacao) 68%);
+    box-shadow:
+        var(--bezel-key),
+        inset 0 0 0 2px rgba(0, 0, 0, 0.28);
     flex-shrink: 0;
     line-height: 1;
 }

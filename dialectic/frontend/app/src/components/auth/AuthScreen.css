@@ -1,4 +1,4 @@
-/* Auth screen — centered on void background */
+/* Auth screen — the classified-dossier front door, centered on void. */
 /* WHY min-height and not height: the card now carries the product premise, so
    it is taller than a bare form. At `height: 100vh` a centered overflowing
    child is clipped at BOTH ends with no scrollbar to recover it — on a phone
@@ -12,15 +12,66 @@
     background: var(--color-void);
     padding: 1rem;
 }
+/* Ambient ember field — the candlelight the dossier is read by. Three warm
+   pools (one cool counterpoint) drifting slower than attention, fixed to the
+   viewport so scrolling the card never shears the light. Alphas stay under
+   the amber-08/teal-10 token fills so text contrast is untouched. */
+.auth-screen::before {
+    content: '';
+    position: fixed;
+    inset: -25%;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(36% 30% at 22% 26%, var(--amber-08), transparent 70%),
+        radial-gradient(30% 26% at 80% 72%, rgba(242,162,74,.06), transparent 70%),
+        radial-gradient(24% 20% at 62% 16%, rgba(84,216,198,.05), transparent 72%);
+    animation: authEmberDrift 48s ease-in-out infinite alternate;
+}
+@keyframes authEmberDrift {
+    from { transform: translate3d(-1.4%, -1%, 0) scale(1); }
+    to   { transform: translate3d(1.4%, 1.6%, 0) scale(1.045); }
+}
 .auth-card {
+    position: relative;
+    z-index: 1;
     width: 100%;
     max-width: 420px;
     background: var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
-    padding: 2rem;
-    box-shadow: var(--shadow-md);
-    animation: fadeInScale 0.4s var(--ease-out);
+    padding: 1.4rem 2rem 2rem;
+    box-shadow: var(--shadow-md), 0 26px 52px rgba(0,0,0,.5);
+    animation: fadeInScale var(--dur-slow, 360ms) var(--ease-out);
+}
+/* Classification strip across the cover — pure chrome, aria-hidden in the TSX. */
+.auth-stamp-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 1.2rem;
+}
+.auth-stamp {
+    font-family: var(--font-stencil);
+    font-size: 9px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--color-faint);
+    white-space: nowrap;
+}
+.auth-stamp--hot {
+    color: var(--color-amber-mute);
+    border: 1px solid var(--amber-30);
+    border-radius: var(--radius-sm);
+    padding: 2px 7px 1px;
+    transform: rotate(1.6deg);
+    box-shadow: var(--shadow-sm);
+}
+.auth-stamp-rule {
+    flex: 1;
+    height: 1px;
+    background: var(--color-bean);
+    opacity: .7;
 }
 .auth-header {
     text-align: center;
@@ -28,10 +79,11 @@
 }
 .auth-logo {
     font-family: var(--font-stencil);
-    font-size: 1.5rem;
+    font-size: 1.9rem;
     color: var(--color-amber);
-    letter-spacing: .08em;
+    letter-spacing: .12em;
     text-transform: uppercase;
+    text-shadow: 0 0 22px rgba(242,162,74,.28);
 }
 .auth-subtitle {
     color: var(--color-faint);
@@ -41,34 +93,55 @@
     letter-spacing: .18em;
     margin-top: 0.3rem;
 }
+/* Tab row as a machined selector bank set into the chassis: recessed track,
+   the live tab a raised key with an amber underbar. */
 .auth-tabs {
     display: flex;
     gap: 2px;
-    background: var(--color-espresso);
+    background: var(--color-chassis);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
     padding: 3px;
     margin-bottom: 1.5rem;
 }
 .auth-tab {
+    position: relative;
     flex: 1;
-    padding: 5px 8px;
+    padding: 5px 8px 9px;
     background: transparent;
-    border: none;
-    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
     color: var(--color-faint);
     font-family: var(--font-mono);
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
+    text-shadow: var(--engrave);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: color var(--dur-fast, 140ms) var(--ease-out),
+                background var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                transform var(--dur-fast, 140ms) var(--ease-out);
 }
 .auth-tab:hover { color: var(--color-secondary); }
+.auth-tab:active { transform: translateY(1px); }
 .auth-tab.active {
-    background: var(--color-cacao);
+    background: var(--color-espresso);
     color: var(--color-bone);
-    border: 1px solid var(--color-bean);
+    border-color: var(--color-bean);
+    box-shadow: var(--bezel-key);
+}
+.auth-tab.active::after {
+    content: '';
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 3px;
+    height: 2px;
+    background: var(--color-amber);
+    box-shadow: var(--shadow-glow-amber);
 }
 .auth-form {
     display: flex;
@@ -84,36 +157,93 @@
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--color-secondary);
+    text-shadow: var(--engrave);
 }
-/* Error: uses --color-error (warm orange-red, not scarlet on structural border) */
-/* Informational, not a failure: the previous session ended for a known reason
-   (signed in elsewhere, password changed). Warning amber rather than error
-   red — nothing the user did on this screen went wrong. */
-.auth-notice {
-    background: rgba(191,161,98,.08);
-    border: 1px solid rgba(191,161,98,.25);
-    color: var(--color-warning);
+/* Labeled wells: focus lands as an amber edge-glow around the recessed glass,
+   layered over the bezel so the well keeps its depth. */
+.auth-card .form-input {
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
+}
+.auth-card .form-input:hover { border-color: var(--color-crater); }
+.auth-card .form-input:focus {
+    border-color: var(--color-amber);
+    box-shadow: var(--bezel-well),
+                0 0 0 2px var(--amber-12),
+                0 0 16px rgba(242,162,74,.14);
+}
+/* The submit key: a working lamp punches in beside the label while the
+   request is in flight. The label text changes too ("Signing in..."), so the
+   lamp is emphasis, never the only signal. */
+.auth-key-lamp {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--color-void);
+    box-shadow: 0 0 0 1px rgba(10,6,3,.45);
+    animation: led-blink 0.9s var(--ease-out) infinite;
+}
+.auth-form .btn-primary[aria-busy="true"] {
+    opacity: .8;
+    cursor: wait;
+}
+/* Slips — stamped paper notes pinned above the form. Icon + stamped word +
+   hue together; the message text always carries the substance. Hues track the
+   token values: --color-error #DD6B3F, --color-warning #D8B668. */
+.auth-notice,
+.auth-error {
+    display: flex;
+    align-items: center;
+    gap: 9px;
     font-family: var(--font-mono);
     font-size: 12px;
-    padding: 7px 10px;
+    padding: 8px 11px;
     border-radius: var(--radius-sm);
     margin-bottom: 0.5rem;
+    box-shadow: var(--shadow-sm);
+    animation: authSlipStamp var(--dur-med, 220ms) var(--ease-out);
+}
+.auth-notice {
+    background: rgba(216,182,104,.09);
+    border: 1px solid rgba(216,182,104,.28);
+    border-left: 3px solid rgba(216,182,104,.55);
+    color: var(--color-warning);
 }
 .auth-error {
-    background: rgba(199,91,57,.08);
-    border: 1px solid rgba(199,91,57,.25);
+    background: rgba(221,107,63,.1);
+    border: 1px solid rgba(221,107,63,.3);
+    border-left: 3px solid rgba(221,107,63,.6);
     color: var(--color-error);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    padding: 7px 10px;
-    border-radius: var(--radius-sm);
-    margin-bottom: 0.5rem;
 }
+@keyframes authSlipStamp {
+    0%   { opacity: 0; transform: scale(1.05) rotate(-1.1deg); }
+    60%  { opacity: 1; transform: scale(.99) rotate(.2deg); }
+    100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+.auth-slip-icon {
+    flex: none;
+    width: 14px;
+    height: 14px;
+}
+.auth-slip-tag {
+    flex: none;
+    font-family: var(--font-stencil);
+    font-size: 9px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    border: 1px solid currentColor;
+    border-radius: var(--radius-sm);
+    padding: 2px 5px 1px;
+    transform: rotate(-2deg);
+    opacity: .92;
+}
+.auth-slip-text { min-width: 0; }
 /* The premise. Serif and actually readable, deliberately unlike the 9px mono
    chrome around it — this is the one block on the screen meant to be READ, and
    it is the only place the product says what it is. */
 .auth-premise {
-    border-left: 2px solid var(--color-bean);
+    border-left: 2px solid var(--amber-30);
     padding: 0 0 0 0.85rem;
     margin-bottom: 1.5rem;
     display: flex;
@@ -134,8 +264,8 @@
 
 /* A closed door, stated plainly and with somewhere to go. */
 .auth-closed {
-    background: rgba(191,161,98,.06);
-    border: 1px solid rgba(191,161,98,.2);
+    background: rgba(216,182,104,.07);
+    border: 1px dashed rgba(216,182,104,.3);
     border-radius: var(--radius-sm);
     padding: 0.9rem 1rem;
     display: flex;
@@ -173,4 +303,14 @@
 }
 .auth-limits-caveat {
     color: var(--color-faint);
+}
+
+/* Non-trivial motion above is decorative; the state words carry the meaning. */
+@media (prefers-reduced-motion: reduce) {
+    .auth-screen::before { animation: none; }
+    .auth-notice,
+    .auth-error { animation: none; }
+    .auth-key-lamp { animation: none; }
+    .auth-tab,
+    .auth-card .form-input { transition: none; }
 }

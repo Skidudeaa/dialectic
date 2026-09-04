@@ -15,6 +15,10 @@ import './WorldHud.css'
  * IT NEVER BECOMES THE ONLY COPY. Layer toggles, source states and the
  * tracked contact's telemetry all exist in the complete list below the globe
  * as well; the HUD is a second view of them, not a second source.
+ *
+ * PANELS COLLAPSE NATIVELY: Layers and Optics are <details> elements — the
+ * fold is browser behaviour with zero component state, and the summary is
+ * keyboard-focusable like every other control here.
  */
 
 export interface WorldLayerState {
@@ -85,56 +89,60 @@ export function WorldHud({
     <div className="world-hud" data-visible={hudVisible ? 'true' : 'false'}>
       {hudVisible ? <div className="hud-reticle" aria-hidden="true" /> : null}
 
-      <div className="hud-panel hud-layers" role="group" aria-label="Signal layers">
-        <h4>Layers</h4>
-        {layers.length === 0 ? (
-          <p className="hud-quiet">No live layer is reporting into your rooms.</p>
-        ) : (
-          <ul>
-            {layers.map((layer) => (
-              <li key={layer.layer}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={layer.enabled}
-                    onChange={() => onToggleLayer(layer.layer)}
-                  />
-                  <span className="hud-layer-name" data-layer={layer.layer}>{layer.label}</span>
-                  <span className="hud-count">{layer.count}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        )}
-        {sources.length > 0 ? (
-          <ul className="hud-sources" aria-label="Source states">
-            {sources.map((source) => (
-              <li key={source.provider} data-tone={SOURCE_TONE[source.source_state] ?? 'off'}>
-                <span className="hud-source-name">{source.provider}</span>
-                <span className="hud-source-state">{source.source_state.replace(/_/g, ' ')}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
+      <details className="hud-panel hud-layers" role="group" aria-label="Signal layers" open>
+        <summary className="hud-summary">Layers</summary>
+        <div className="hud-panel-body">
+          {layers.length === 0 ? (
+            <p className="hud-quiet">No live layer is reporting into your rooms.</p>
+          ) : (
+            <ul>
+              {layers.map((layer) => (
+                <li key={layer.layer}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={layer.enabled}
+                      onChange={() => onToggleLayer(layer.layer)}
+                    />
+                    <span className="hud-layer-name" data-layer={layer.layer}>{layer.label}</span>
+                    <span className="hud-count">{layer.count}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+          {sources.length > 0 ? (
+            <ul className="hud-sources" aria-label="Source states">
+              {sources.map((source) => (
+                <li key={source.provider} data-tone={SOURCE_TONE[source.source_state] ?? 'off'}>
+                  <span className="hud-source-name">{source.provider}</span>
+                  <span className="hud-source-state">{source.source_state.replace(/_/g, ' ')}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </details>
 
-      <div className="hud-panel hud-styles" role="group" aria-label="Sensor style">
-        <h4>Optics</h4>
-        <ul>
-          {styleOptions.map((option, index) => (
-            <li key={option.key}>
-              <button
-                type="button"
-                aria-pressed={style === option.key}
-                onClick={() => onStyle(option.key)}
-              >
-                <span className="hud-key">{index}</span>
-                {option.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
+      <details className="hud-panel hud-styles" role="group" aria-label="Sensor style" open>
+        <summary className="hud-summary">Optics</summary>
+        <div className="hud-panel-body">
+          <ul>
+            {styleOptions.map((option, index) => (
+              <li key={option.key}>
+                <button
+                  type="button"
+                  aria-pressed={style === option.key}
+                  onClick={() => onStyle(option.key)}
+                >
+                  <span className="hud-key">{index}</span>
+                  {option.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </details>
 
       {hudVisible && camera ? (
         <dl className="hud-panel hud-readout" aria-label="Camera">

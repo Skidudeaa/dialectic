@@ -1,5 +1,6 @@
-/* Dialog-mode chrome for the one Create/Join surface. Screen mode reuses
-   the RoomSelector card styles unchanged. */
+/* Dialog-mode chrome for the one Create/Join surface, plus the permit-form
+   treatment shared by both modes. Screen mode reuses the RoomSelector desk
+   card styles; the room-form/error/folder styling lives in RoomSelector.css. */
 
 .room-access-overlay {
   position: fixed;
@@ -11,17 +12,25 @@
   padding: 16px;
 }
 
+/* Warm dim, not a dead black — the desk stays faintly present under the
+   dialog, so the permit reads as paper held over the workspace. */
 .room-access-scrim {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(10, 6, 3, 0.68);
+  backdrop-filter: blur(2px);
 }
 
-.room-access-dialog {
+/* Compound selector: RoomSelector.css loads after this file, so plain
+   `.room-access-dialog` would lose box-shadow/animation ties to `.room-card`. */
+.room-card.room-access-dialog {
   position: relative;
   width: min(440px, 100%);
   max-height: min(80vh, 640px);
   overflow-y: auto;
+  border-color: var(--color-crater);
+  box-shadow: var(--bezel-raised), 0 32px 64px rgba(0, 0, 0, 0.55);
+  animation: fadeInScale var(--dur-med, 220ms) var(--ease-out);
 }
 
 .room-access-dialog-head {
@@ -33,4 +42,43 @@
 
 .room-access-dialog-head .room-list-title {
   margin: 0;
+}
+
+/* ── The stamped permit form ───────────────────────────────────────────
+   Both room-forms (create = "new file", join = "access permit") open with a
+   stencil overline and a rule — the form reads as a titled slip, not a bare
+   field stack. */
+.permit-overline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 2px;
+  font-family: var(--font-stencil);
+  font-size: 10px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+.permit-overline::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-bean);
+  opacity: .7;
+}
+
+/* Code entry in spaced mono — each character lands in its own slot, the way
+   a stamped permit number reads. Case is left untouched (tokens are
+   case-sensitive); only spacing changes. */
+.room-form .form-input.permit-code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: .14em;
+}
+.room-form .form-input.permit-code::placeholder {
+  letter-spacing: .05em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-card.room-access-dialog { animation: none; }
 }

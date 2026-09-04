@@ -213,14 +213,17 @@ export function TrackRecordPanel() {
       <h3>Track Record</h3>
       <p className="track-record-intro">{INTRO}</p>
       <div className="track-record-headline">
-        <span>{calibration.total_predictions ?? 0} resolved</span>
+        <span className="track-record-stat is-count">
+          {calibration.total_predictions ?? 0} resolved
+        </span>
         {typeof brier === 'number' && (
-          <span>
+          <span className="track-record-stat">
             <Explain term="brier">Brier {brier.toFixed(2)}</Explain>
           </span>
         )}
         {typeof bss === 'number' && (
-          <span>
+          <span className="track-record-stat" data-dir={bss >= 0 ? 'up' : 'down'}>
+            <DeltaArrow value={bss} />
             <Explain term="bss">
               BSS {bss >= 0 ? '+' : ''}{bss.toFixed(2)}
             </Explain>
@@ -237,11 +240,11 @@ export function TrackRecordPanel() {
             <thead>
               <tr>
                 <th>Source</th>
-                <th>n</th>
-                <th>Brier</th>
-                <th>BSS</th>
-                <th>Acc</th>
-                <th>Bias</th>
+                <th className="num">n</th>
+                <th className="num">Brier</th>
+                <th className="num">BSS</th>
+                <th className="num">Acc</th>
+                <th className="num">Bias</th>
               </tr>
             </thead>
             <tbody>
@@ -258,20 +261,22 @@ export function TrackRecordPanel() {
                       </span>
                     )}
                   </td>
-                  <td>{row.n ?? '—'}</td>
-                  <td>{typeof row.brier === 'number' ? row.brier.toFixed(2) : '—'}</td>
-                  <td>
+                  <td className="num">{row.n ?? '—'}</td>
+                  <td className="num">{typeof row.brier === 'number' ? row.brier.toFixed(2) : '—'}</td>
+                  <td className="num">
+                    {typeof row.bss === 'number' && <DeltaArrow value={row.bss} />}
                     {typeof row.bss === 'number'
                       ? `${row.bss >= 0 ? '+' : ''}${row.bss.toFixed(2)}`
                       : '—'}
                     {row.bss_vs && <span className="track-record-vs"> {row.bss_vs}</span>}
                   </td>
-                  <td>
+                  <td className="num">
                     {typeof row.accuracy === 'number'
                       ? `${Math.round(row.accuracy * 100)}%`
                       : '—'}
                   </td>
-                  <td>
+                  <td className="num">
+                    {typeof row.bias === 'number' && <DeltaArrow value={row.bias} />}
                     {typeof row.bias === 'number'
                       ? `${row.bias >= 0 ? '+' : ''}${row.bias.toFixed(2)}`
                       : '—'}
@@ -314,6 +319,8 @@ export function TrackRecordPanel() {
               <div
                 key={point.confidence}
                 className="track-record-bucket"
+                role="img"
+                aria-label={`${Math.round(point.confidence * 100)}% confident, ${Math.round(point.accuracy * 100)}% came in`}
                 title={`${Math.round(point.confidence * 100)}% confident → ${Math.round(point.accuracy * 100)}% correct`}
               >
                 <div
@@ -360,7 +367,7 @@ export function EquitySparkline({
   const path = (pick: (p: { equity: number; benchmark: number }) => number) =>
     points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i)} ${y(pick(p))}`).join(' ')
   return (
-    <>
+    <div className="track-record-spark-well">
       <svg
         className="track-record-sparkline"
         width={w}
@@ -377,6 +384,20 @@ export function EquitySparkline({
         <span className="track-record-swatch is-spy" aria-hidden="true" />
         <Explain term="spy-benchmark">the same cash in SPY</Explain>
       </p>
-    </>
+    </div>
+  )
+}
+
+/**
+ * The direction glyph paired with every signed delta — up/down arrows, so a
+ * positive or negative read never rides on hue alone (§17.4). Decorative:
+ * the signed number beside it already says the direction in text.
+ */
+function DeltaArrow({ value }: { value: number }) {
+  const up = value >= 0
+  return (
+    <span className={`track-record-arrow ${up ? 'is-up' : 'is-down'}`} aria-hidden="true">
+      {up ? '▲' : '▼'}
+    </span>
   )
 }

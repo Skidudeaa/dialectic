@@ -1,3 +1,9 @@
+/* The Field — pencil-work on paper (§16.7 editorial bands, §16.4 review
+   encoding). Drafting character: hand-font voices for everything still
+   provisional, dashed penciled rules instead of machined lines, the scene's
+   plum accent marking work that has not landed. Confirmed marks go solid
+   ink + teal stamp; contested carry the scarlet flag (see fieldDisplay.css). */
+
 .field-scene {
     display: flex;
     flex-direction: column;
@@ -10,14 +16,30 @@
     gap: 0.2rem;
 }
 
+/* Section labels: a penciled rule under a drafting-tag label. The plum tick
+   ties each band to the scene accent so the Field never reads as the Bench
+   or the Record. */
 .field-section-label {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
     font-family: var(--font-mono);
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .14em;
     color: var(--color-secondary);
     padding-bottom: 0.35rem;
-    border-bottom: 1px solid var(--color-bean);
+    border-bottom: 1px dashed var(--color-bean);
+}
+.field-section-label::before {
+    content: '';
+    align-self: center;
+    width: 7px;
+    height: 7px;
+    border: 1.5px solid var(--scene-accent, var(--color-plum));
+    border-radius: 1px;
+    transform: rotate(45deg);
+    flex: 0 0 auto;
 }
 
 .field-section-list {
@@ -26,12 +48,15 @@
     flex-direction: column;
 }
 
-/* Plain rows with a hairline rule between them — not rounded cards (§16.7). */
+/* Plain rows with a hairline rule between them — not rounded cards (§16.7).
+   The rule is dashed pencil while the scene is the drafting surface. */
 .field-section-list > li {
-    border-bottom: 1px solid var(--color-bean);
+    border-bottom: 1px dashed var(--color-bean);
     padding: 0.6rem 0 0.6rem 0.75rem;
+    transition: background-color var(--dur-fast, 140ms) var(--ease-out);
 }
 .field-section-list > li:last-child { border-bottom: none; }
+.field-section-list > li:hover { background: var(--scene-accent-soft, var(--plum-12)); }
 
 .field-mark-open {
     display: block;
@@ -43,9 +68,12 @@
     color: inherit;
     font: inherit;
     cursor: pointer;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out);
 }
+.field-mark-open:hover .field-mark-title { color: var(--color-bone); }
+.field-mark-open:active { transform: translateY(1px); }
 .field-mark-open:focus-visible {
-    outline: 2px solid var(--color-amber);
+    outline: 2px solid var(--scene-accent, var(--color-plum));
     outline-offset: 2px;
 }
 
@@ -60,6 +88,17 @@
     font-size: 13.5px;
     color: var(--color-bone);
     line-height: 1.35;
+    transition: color var(--dur-fast, 140ms) var(--ease-out);
+}
+/* Provisional marks are pencil, not ink: the hand voice, lit plum, slightly
+   larger (Caveat runs small at serif sizes). Confirmed/contested/superseded
+   stay in the reading serif — the hand is reserved for work still in pencil. */
+.field-mark-row.is-provisional .field-mark-title,
+.field-mark-nested.is-provisional {
+    font-family: var(--font-hand);
+    font-size: 16.5px;
+    color: var(--scene-accent, var(--color-plum));
+    font-weight: 500;
 }
 .field-mark-subjects {
     font-family: var(--font-mono);
@@ -104,7 +143,7 @@
     align-items: baseline;
     gap: 0.5rem;
 }
-.field-mark-nested.is-provisional { opacity: .72; }
+.field-mark-nested.is-provisional { opacity: .85; font-size: 15px; }
 
 .field-mark-history { margin-top: 0.4rem; }
 .field-mark-history-toggle {
@@ -120,8 +159,13 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    transition: color var(--dur-fast, 140ms) var(--ease-out);
 }
 .field-mark-history-toggle:hover { color: var(--color-secondary); }
+.field-mark-history-toggle:focus-visible {
+    outline: 2px solid var(--scene-accent, var(--color-plum));
+    outline-offset: 2px;
+}
 .field-mark-history-list {
     list-style: none;
     margin-top: 0.4rem;
@@ -138,12 +182,23 @@
 
 .field-mark-orphan { padding-left: 0.75rem; }
 
-/* The orientation line above the bands. Quieter than a section label and set
-   in the reading serif, so it reads as the scene speaking rather than as a
-   first row of data. `.scene-body > *` already caps its measure at 1180px. */
+/* The orientation line above the bands: the scene speaking in the margin,
+   in the hand voice — an annotation, not a row of data. `.scene-body > *`
+   already caps its measure at 1180px. */
 .field-lede {
     margin: 0;
-    font: italic 12.5px/1.55 var(--font-serif);
-    color: var(--color-faint);
+    font: 500 16px/1.5 var(--font-hand);
+    color: var(--color-secondary);
     text-wrap: pretty;
+    border-left: 2px dashed var(--scene-accent, var(--color-plum));
+    padding-left: 0.6rem;
+}
+.field-lede strong { color: var(--color-bone); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+    .field-section-list > li,
+    .field-mark-open,
+    .field-mark-title,
+    .field-mark-history-toggle { transition: none; }
+    .field-mark-open:active { transform: none; }
 }

@@ -1,4 +1,6 @@
-/* The passage marker: a small menu that appears over a selection. */
+/* The passage marker: a small menu that appears over a selection.
+   v3: a machined plate that pops off the page — brushed chassis, raised
+   bezel — because it is a tool the desk offers, not a word on the dossier. */
 .passage-marker {
     /* FIXED, not absolute: inside the message it is trapped in `.msg`'s
        stacking context and a later message's byline paints over it. */
@@ -8,11 +10,14 @@
     align-items: center;
     gap: 2px;
     padding: 3px;
-    background: var(--color-cacao);
+    background:
+        var(--chassis-brush),
+        var(--color-chassis);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-raised), 0 6px 20px rgba(0, 0, 0, 0.45);
     white-space: nowrap;
+    animation: fadeInScale var(--dur-fast, 140ms) var(--ease-out);
 }
 .passage-marker-btn {
     padding: 3px 8px;
@@ -24,8 +29,15 @@
     font-size: 12px;
     letter-spacing: 0.03em;
     cursor: pointer;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out);
 }
-.passage-marker-btn:hover:not(:disabled) { color: var(--color-amber); background: var(--amber-08); }
+.passage-marker-btn:hover:not(:disabled) {
+    color: var(--color-amber);
+    background: var(--amber-08);
+}
+.passage-marker-btn:active:not(:disabled) { transform: translateY(1px); }
 .passage-marker-btn:disabled { opacity: 0.5; cursor: progress; }
 .passage-marker-error {
     padding: 0 6px;
@@ -38,7 +50,7 @@
 .msg-marks {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
     margin-top: 6px;
     padding-left: 10px;
     border-left: 1px solid var(--color-bean);
@@ -55,26 +67,61 @@
 /* Contested marks are dimmed AND chipped — the chip is the non-color signal. */
 .msg-mark.is-contested { opacity: 0.75; }
 .msg-mark.is-superseded { opacity: 0.55; text-decoration: line-through; }
-.msg-mark-relation { color: var(--color-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+/* The relation word is a field stamp: stencil outline chip, letterpressed —
+   the way a clerk marks a passage in the margin of the dossier. */
+.msg-mark-relation {
+    color: var(--color-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-family: var(--font-stencil);
+    font-size: 10px;
+    padding: 1px 5px;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    text-shadow: var(--engrave);
+}
 .msg-mark-title {
     color: var(--color-ink);
     font-family: var(--font-serif);
+    font-style: italic;
     font-size: 0.8rem;
     max-width: 42ch;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* Review keys: they lift like wax seals being offered and press like the
+   seal landing — a judgement is a physical act here. */
 .msg-mark-action {
     padding: 1px 7px;
-    background: none;
+    background: var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-radius: 999px;
+    box-shadow: var(--bezel-key);
     color: var(--color-secondary);
     font-family: inherit;
     font-size: 12px;
     cursor: pointer;
+    transition: transform var(--dur-fast, 140ms) var(--ease-spring),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out);
 }
-.msg-mark-action:hover:not(:disabled) { color: var(--color-teal); border-color: var(--teal-30); }
+.msg-mark-action:hover:not(:disabled) {
+    color: var(--color-teal);
+    border-color: var(--teal-30);
+    transform: translateY(-1px);
+}
+.msg-mark-action:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
+}
 .msg-mark-action:disabled { opacity: 0.5; cursor: progress; }
 .msg-mark-error { color: var(--error); }
+
+@media (prefers-reduced-motion: reduce) {
+    .passage-marker { animation: none; }
+    .passage-marker-btn,
+    .msg-mark-action { transition: none; }
+    .msg-mark-action:hover:not(:disabled) { transform: none; }
+}

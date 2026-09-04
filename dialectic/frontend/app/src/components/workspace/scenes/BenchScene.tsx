@@ -81,7 +81,11 @@ export function BenchScene({
   if (state.status === 'loading') return <SceneLoading kicker="Bench" />
 
   const cockpit = desk.bound && roomId ? (
-    <>
+    /* The bay: one recessed machined rack the modules bolt into — see
+       .bench-cockpit in cockpit.css. The plate tags the station without
+       adding copy the caption doesn't already carry. */
+    <div className="bench-cockpit">
+      <span className="bench-cockpit-plate" aria-hidden="true">Bench · Live Desk</span>
       <p className="cockpit-caption">
         Everything the desk sees, read-only — live states color the authored
         graph; Evaluate runs a hypothetical, never a trade. Deep edits happen
@@ -127,7 +131,7 @@ export function BenchScene({
         <MorningBriefCard slice={desk.brief} />
         <ThesisNewsList slice={desk.news} />
       </div>
-    </>
+    </div>
   ) : null
 
   if (state.status === 'unavailable') {

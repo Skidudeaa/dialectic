@@ -11,6 +11,25 @@
     flex-shrink: 0;
     gap: 1rem;
     z-index: 5;
+    position: relative;
+}
+/* Scene keyline — the faceplate carries a thin strip of the active scene's
+   accent, fading to the right like light running out. Paired with the scene
+   name in the masthead below, so the hue is never the only signal. */
+.room-header::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: linear-gradient(90deg,
+        var(--scene-accent, var(--color-amber)) 0%,
+        var(--scene-accent-soft, rgba(242,162,74,.15)) 42%,
+        transparent 78%);
+    opacity: .85;
+    pointer-events: none;
+    transition: background var(--dur-med, 220ms) var(--ease-out);
 }
 .room-header-left {
     display: flex;
@@ -26,9 +45,27 @@
     font-size: 1.18rem;
     letter-spacing: .01em;
     color: var(--color-display);   /* case title — display ink */
+    text-shadow: var(--engrave);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+/* Index tab before the room name — a small machined tab in the scene's
+   accent. Shape + hue, and the scene is also named outright in the
+   masthead, so this never carries meaning alone. Kept inline-block inside
+   the title so the name still ellipsizes as one line box. */
+.room-title::before {
+    content: '';
+    display: inline-block;
+    width: 3px;
+    height: 1.02em;
+    margin-right: 0.45rem;
+    vertical-align: -0.12em;
+    background: var(--scene-accent, var(--color-amber));
+    border-radius: 1px;
+    box-shadow: 0 0 6px var(--scene-accent-soft, rgba(242,162,74,.15));
+    transition: background var(--dur-med, 220ms) var(--ease-out),
+                box-shadow var(--dur-med, 220ms) var(--ease-out);
 }
 .app-main-home .room-title {
     font-size: 1.35rem;
@@ -44,40 +81,77 @@
     font-size: 0.78rem;
     color: var(--color-faint);
 }
+/* The fork glyph reads in the scene accent — a second, quieter place the
+   header says which workspace this is. The glyph's shape is the signal;
+   the hue only seasons it. */
+.thread-breadcrumb > svg {
+    color: var(--scene-accent, var(--color-faint));
+    flex-shrink: 0;
+    transition: color var(--dur-med, 220ms) var(--ease-out);
+}
 .thread-breadcrumb select {
     padding: 3px 7px;
-    background: var(--color-espresso);
+    background: var(--color-well);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
     color: var(--color-secondary);
     font-size: 0.78rem;
     font-family: var(--font-mono);
     cursor: pointer;
-    outline: none;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out);
 }
-.thread-breadcrumb select:focus { border-color: var(--amber-30); }
+.thread-breadcrumb select:hover { border-color: var(--color-crater); color: var(--color-ink); }
+.thread-breadcrumb select:focus-visible { border-color: var(--amber-30); }
 .room-header-right {
     display: flex;
     align-items: center;
     gap: 0.6rem;
     flex-shrink: 0;
 }
+
+/* Faceplate keys — press travel and the global amber ring come from
+   global.css; here the plate adds a brighten on hover and an inset on the
+   held key. Ghost keys get a hairline so they read as keys, not loose text. */
+.room-header .btn:hover { color: var(--color-display); }
+.room-header .btn:active {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
+}
+.room-header .btn-ghost {
+    border-color: var(--color-bean);
+    background: var(--color-chassis);
+    box-shadow: var(--bezel-key);
+}
+.room-header .btn-ghost:hover {
+    background: var(--color-espresso);
+    border-color: var(--color-crater);
+}
+
+/* Connection readout — a recessed display well on the faceplate, lamp plus
+   word (never the lamp alone). */
 .conn-status {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.4rem;
+    padding: 3px 8px;
+    background: var(--color-well);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
     font-family: var(--font-mono);
     font-size: 0.75rem;
     color: var(--color-faint);
 }
 .conn-dot {
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    background: var(--color-ghost);   /* disconnected: dim — not red structural */
-    transition: background 0.3s;
+    background: var(--led-off);   /* disconnected: unlit lamp — not red structural */
+    transition: background 0.3s, box-shadow 0.3s;
 }
-.conn-dot.connected { background: var(--sev-stable); box-shadow: var(--led-glow-green); }   /* lit LED when connected */
+.conn-dot.connected { background: var(--led-green); box-shadow: var(--led-glow-green); }   /* lit LED when connected */
 
 /* Desktop toggles the contextual column; tablet/phone toggles fixed drawers. */
 .mobile-drawer-toggle { display: none; }
@@ -158,6 +232,8 @@
   color: var(--color-obsidian);
   font: 600 10px/1.4 var(--font-mono);
   text-align: center;
+  /* A lit lamp: the count is the signal, the glow just draws the eye. */
+  box-shadow: var(--led-glow-amber);
 }
 
 @media (max-width: 600px) {

@@ -122,10 +122,11 @@ export function RoomAccess({ mode, rooms, onRoomSelect, onRoomGranted, onClose }
 
       <div className="room-actions">
         <button
-          className="btn btn-primary"
+          className="btn btn-secondary room-new-file"
           onClick={() => { setShowCreate(true); setShowJoin(false) }}
         >
-          + Create Room
+          <span className="room-new-file-plus" aria-hidden="true">+</span>
+          Create Room
         </button>
         <button
           className="btn btn-secondary"
@@ -144,6 +145,7 @@ export function RoomAccess({ mode, rooms, onRoomSelect, onRoomGranted, onClose }
 
       {showCreate && (
         <form className="room-form" onSubmit={handleCreateRoom}>
+          <p className="permit-overline" aria-hidden="true">New file</p>
           <label className="auth-label">
             Room Name
             <input
@@ -172,11 +174,12 @@ export function RoomAccess({ mode, rooms, onRoomSelect, onRoomGranted, onClose }
 
       {showJoin && (
         <form className="room-form" onSubmit={handleJoinRoom}>
+          <p className="permit-overline" aria-hidden="true">Access permit</p>
           {!showManualJoin ? (
             <label className="auth-label">
               Invite Code
               <input
-                className="form-input"
+                className="form-input permit-code"
                 type="text"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
@@ -191,7 +194,7 @@ export function RoomAccess({ mode, rooms, onRoomSelect, onRoomGranted, onClose }
               <label className="auth-label">
                 Room ID
                 <input
-                  className="form-input"
+                  className="form-input permit-code"
                   type="text"
                   value={joinRoomId}
                   onChange={(e) => setJoinRoomId(e.target.value)}
@@ -204,7 +207,7 @@ export function RoomAccess({ mode, rooms, onRoomSelect, onRoomGranted, onClose }
               <label className="auth-label">
                 Room Token
                 <input
-                  className="form-input"
+                  className="form-input permit-code"
                   type="password"
                   value={joinToken}
                   onChange={(e) => setJoinToken(e.target.value)}
@@ -237,7 +240,7 @@ export function RoomAccess({ mode, rooms, onRoomSelect, onRoomGranted, onClose }
         </form>
       )}
 
-      <div className="room-list">
+      <div className="room-list" data-busy={enteringRoomId !== null ? 'true' : undefined}>
         <h2 className="room-list-title">Your Rooms</h2>
         {rooms.length === 0 && (
           <p className="room-empty">No rooms yet. Create one or join with an invite code.</p>
@@ -248,6 +251,8 @@ export function RoomAccess({ mode, rooms, onRoomSelect, onRoomGranted, onClose }
             className="room-item"
             onClick={() => void handleSelectRoom(room)}
             disabled={enteringRoomId !== null}
+            data-entering={enteringRoomId === room.id ? 'true' : undefined}
+            aria-busy={enteringRoomId === room.id}
           >
             <div className="room-item-header">
               <span className="room-item-name">

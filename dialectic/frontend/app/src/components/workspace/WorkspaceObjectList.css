@@ -8,15 +8,26 @@
     border-bottom: 1px solid var(--color-bean);
 }
 .object-card {
+    position: relative;
     background: var(--color-cacao);
     padding: 0.7rem 1rem;
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out);
 }
 /* The whole card is the target when there is somewhere to go — a small link
    inside a large row is a tap-target failure on a phone (§17.4). */
 .object-card.is-navigable { padding: 0; }
+/* Hover raise: the row lifts off the stack toward the reader. */
+.object-card.is-navigable:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    z-index: 1;
+}
 .object-card-open {
     width: 100%;
     text-align: left;
@@ -29,10 +40,20 @@
     cursor: pointer;
     color: inherit;
     font: inherit;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 .object-card-open:hover { background: var(--color-espresso); }
+/* Press = real travel: the raised row settles back and takes the well shadow. */
+.object-card-open:active {
+    transform: translateY(1px);
+    box-shadow: var(--shadow-inset);
+}
+/* The selection ring takes the room's own accent — the focused row is the
+   selected row, and its hue is the scene you are standing in. */
 .object-card-open:focus-visible {
-    outline: 2px solid var(--color-amber);
+    outline: 2px solid var(--scene-accent, var(--color-amber));
     outline-offset: -2px;
 }
 .object-card-head {
@@ -41,7 +62,17 @@
     justify-content: space-between;
     gap: 0.6rem;
 }
+.object-card-kind {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    margin-top: 2px;
+    display: inline-flex;
+    color: var(--scene-accent, var(--color-amber));
+}
+.object-card-kind svg { width: 14px; height: 14px; display: block; }
 .object-card-title {
+    flex: 1 1 auto;
+    min-width: 0;
     font-family: var(--font-serif);
     font-size: 13.5px;
     color: var(--color-bone);
@@ -56,7 +87,7 @@
 }
 .object-card-foot {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 0.6rem;
     font-family: var(--font-mono);
     font-size: 12px;
@@ -65,11 +96,28 @@
     color: var(--color-faint);
 }
 .object-card-origin { overflow-wrap: anywhere; }
-.object-card-when { flex: 0 0 auto; }
+.object-card-when { flex: 0 0 auto; margin-left: auto; }
 
-/* Review state is a word, never colour alone. */
+/* The supersession tag: struck from the current page, never erased — the
+   rewind mark says the old wording keeps its history. */
+.object-card-status {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--color-faint);
+}
+.object-card-status svg { width: 10px; height: 10px; display: block; }
+.object-card-status.is-superseded { color: var(--color-secondary); }
+
+/* Review state is a word, never colour alone — the stamp pairs the word with
+   a mark and a hue. */
 .object-card-review {
     flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     font-family: var(--font-mono);
     font-size: 12px;
     text-transform: uppercase;
@@ -79,11 +127,45 @@
     border: 1px solid var(--color-bean);
     color: var(--color-faint);
 }
+.object-card-review svg { width: 10px; height: 10px; display: block; }
 .object-card-review.is-awaiting_human {
     color: var(--color-warning);
     border-color: rgba(191,161,98,.35);
 }
+.object-card-review.is-accepted {
+    color: var(--color-sage);
+    border-color: rgba(156,190,122,.35);
+}
+.object-card-review.is-resolved {
+    color: var(--color-teal);
+    border-color: var(--teal-30);
+}
+.object-card-review.is-dismissed {
+    color: var(--color-ghost);
+    border-color: var(--color-bean);
+}
 .object-card-review.is-failed {
     color: var(--color-error);
     border-color: rgba(199,91,57,.35);
+}
+
+/* The dormant empty row: callers normally guard this case with a scene-level
+   empty state; if one ever does not, the shelf still reads as intentional. */
+.object-list-empty {
+    background: var(--color-cacao);
+    padding: 1.6rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-faint);
+    font-family: var(--font-serif);
+    font-size: 13px;
+    text-align: center;
+}
+.object-list-empty svg { width: 18px; height: 18px; color: var(--color-ghost); }
+
+@media (prefers-reduced-motion: reduce) {
+    .object-card.is-navigable:hover { transform: none; }
+    .object-card-open:active { transform: none; }
 }

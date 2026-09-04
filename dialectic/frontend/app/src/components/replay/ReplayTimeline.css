@@ -1,72 +1,96 @@
-/* Replay timeline — ledger / dossier style */
+/* Replay timeline — a transport deck: bezel keys, a recessed scrubber well
+   with a lit playhead, and a tick ruler under the track. */
 .replay-timeline {
-    background: var(--color-espresso);
+    background: var(--chassis-brush), var(--color-espresso);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-chassis);
     padding: 12px 14px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    box-shadow: var(--shadow-md);
+    gap: 8px;
+    box-shadow: var(--bezel-raised);
 }
 .replay-controls {
     display: flex;
     align-items: center;
     gap: 10px;
 }
+/* Play/pause — the big transport key. Round, raised, real travel. */
 .replay-controls .play-btn {
     width: 28px;
     height: 28px;
     border-radius: 50%;
     background: var(--color-amber);
-    border: none;
+    border: 1px solid var(--color-amber-hot);
+    box-shadow: var(--bezel-key);
     color: var(--color-void);
-    font-size: 12px;
+    font-size: 11px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: background 0.15s;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 .replay-controls .play-btn:hover { background: var(--color-amber-hot); }
+.replay-controls .play-btn:active { transform: translateY(1px); box-shadow: var(--bezel-key-down); }
+.replay-controls .play-btn.is-playing {
+    box-shadow: var(--bezel-key-down), var(--led-glow-amber);
+}
 .replay-timestamp {
     font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--color-secondary);
+    color: var(--color-bone);
     min-width: 140px;
+    padding: 2px 8px;
+    background: repeating-linear-gradient(0deg, rgba(255,249,240,.028) 0 1px, transparent 1px 3px),
+                var(--color-well);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .speed-selector {
     display: flex;
     gap: 2px;
-    background: var(--color-cacao);
+    background: var(--color-chassis);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
     padding: 2px;
     margin-left: auto;
 }
 .speed-selector button {
     padding: 2px 7px;
-    border: none;
-    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
     font-family: var(--font-mono);
     font-size: 12px;
     cursor: pointer;
     background: transparent;
     color: var(--color-faint);
-    transition: all 0.15s;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out);
     text-transform: uppercase;
     letter-spacing: .06em;
 }
+.speed-selector button:hover { color: var(--color-ink); }
+.speed-selector button:active { transform: translateY(1px); }
 .speed-selector button.active {
     background: var(--color-espresso);
-    color: var(--color-bone);
-    border: 1px solid var(--color-bean);
+    color: var(--color-amber);
+    border-color: var(--color-bean);
+    box-shadow: var(--bezel-key);
 }
-/* Heatmap track */
+/* Heatmap track — the scrubber well */
 .replay-track-container {
     position: relative;
-    height: 24px;
+    height: 26px;
     cursor: pointer;
 }
 .replay-heatmap {
@@ -74,26 +98,83 @@
     inset: 0;
     display: flex;
     gap: 1px;
-    border-radius: 2px;
+    border-radius: var(--radius-control);
     overflow: hidden;
     border: 1px solid var(--color-bean);
+    background: var(--color-well);
+    box-shadow: var(--bezel-well);
 }
 .heatmap-bar {
     flex: 1;
     border-radius: 1px;
-    transition: opacity 0.15s;
+    transition: opacity var(--dur-fast, 140ms) var(--ease-out);
 }
-/* Scrubber thumb */
+/* The playhead: a lit needle with a machined knob riding the top edge. */
 .replay-thumb {
     position: absolute;
-    top: -2px;
+    top: -3px;
     width: 2px;
-    height: 28px;
-    background: var(--color-amber);
+    height: 32px;
+    margin-left: -1px;
+    background: var(--scene-accent, var(--color-amber));
     border-radius: 1px;
     pointer-events: none;
-    box-shadow: 0 0 6px rgba(242,162,74,.4);
+    box-shadow: 0 0 6px var(--scene-accent-soft, rgba(242,162,74,.4));
     transition: left 0.05s linear;
+}
+.replay-thumb::before {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, var(--color-bone), var(--scene-accent, var(--color-amber)) 70%);
+    border: 1px solid rgba(0,0,0,.55);
+    box-shadow: 0 1px 2px rgba(0,0,0,.5);
+}
+/* Tick ruler under the track — decile marks drawn in metal. */
+.replay-ticks {
+    height: 5px;
+    margin: 0 1px;
+    background: repeating-linear-gradient(90deg,
+        var(--color-crater) 0 1px,
+        transparent 1px calc(10% - 1px),
+        transparent calc(10% - 1px) 10%);
+    opacity: .55;
+}
+/* Hover time readout — a small dossier tag riding above the cursor. */
+.replay-hover-tip {
+    position: absolute;
+    bottom: calc(100% + 5px);
+    transform: translateX(-50%);
+    padding: 2px 7px;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: .04em;
+    color: var(--color-bone);
+    white-space: nowrap;
+    pointer-events: none;
+    animation: fadeInScale var(--dur-fast, 140ms) var(--ease-out);
+}
+.replay-hover-tip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    width: 6px;
+    height: 6px;
+    transform: translate(-50%, -3px) rotate(45deg);
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-top: none;
+    border-left: none;
 }
 .replay-loading {
     text-align: center;
@@ -103,4 +184,9 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .replay-thumb { transition: none; }
+    .replay-hover-tip { animation: none; }
 }

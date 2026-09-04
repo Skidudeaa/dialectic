@@ -1,70 +1,119 @@
-/* Protocol banner — espresso card with amber accent */
+/* Protocol banner — the room is IN a mode: a lit strip on the chassis, not a
+   memo. Machined band, a live LED, the mode glyph, the engraved name, and a
+   recessed phase readout. Hue (amber) is always paired with icon + word. */
 .protocol-banner {
-    background: var(--amber-08);
+    background: var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
-    border-left: 2px solid var(--amber-30);
-    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--color-amber);
+    border-radius: var(--radius-chassis);
     padding: 10px 14px;
     margin-bottom: 12px;
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--bezel-raised), 0 0 16px rgba(242,162,74,.10);
+    animation: fadeIn var(--dur-med, 220ms) var(--ease-out);
 }
 .protocol-banner-top {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
     margin-bottom: 8px;
 }
 .protocol-banner-info {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
+    min-width: 0;
 }
+
+/* The mode LED — the same socketed lamp idiom as the Console's. */
 .protocol-banner-info .protocol-icon {
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
+    flex-shrink: 0;
     border-radius: 50%;
-    background: var(--color-amber);
+    background: var(--led-amber);
+    border: 1px solid rgba(0,0,0,.6);
+    box-shadow: var(--led-glow-amber), inset 0 1px 1px rgba(255,249,240,.3);
     animation: protocol-pulse 2s ease-in-out infinite;
 }
 @keyframes protocol-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.4; }
 }
+
+.protocol-glyph {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    color: var(--color-amber);
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 3px rgba(242,162,74,.4));
+}
+
 .protocol-banner-info .protocol-name {
     font-family: var(--font-stencil);
     font-size: 12px;
-    letter-spacing: .06em;
+    letter-spacing: .08em;
     color: var(--color-amber);
     text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(242,162,74,.35);
+    white-space: nowrap;
 }
+
+/* The phase as a recessed readout — where in the mode the room sits. */
 .protocol-banner-info .protocol-phase {
     font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--color-secondary);
+    font-size: 11px;
+    letter-spacing: .04em;
+    color: var(--color-bone);
+    background: repeating-linear-gradient(0deg, rgba(255,249,240,.028) 0 1px, transparent 1px 3px),
+                var(--color-well);
+    padding: 3px 8px;
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
+
 .protocol-banner-actions {
     display: flex;
     gap: 6px;
 }
+/* Bezel keys: raised at rest, real travel on press. */
 .protocol-banner-actions button {
     padding: 4px 10px;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
     font-family: var(--font-stencil);
     font-size: 12px;
     letter-spacing: .04em;
     cursor: pointer;
     border: 1px solid var(--color-bean);
-    transition: opacity 0.15s;
+    box-shadow: var(--bezel-key);
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
     text-transform: uppercase;
+}
+.protocol-banner-actions button:active {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
 }
 .protocol-banner-actions .advance-btn {
     background: var(--color-amber);
     color: var(--color-void);
-    border-color: var(--color-amber);
+    border-color: var(--color-amber-hot);
 }
 .protocol-banner-actions .advance-btn:hover { background: var(--color-amber-hot); }
 .protocol-banner-actions .abort-btn {
-    background: transparent;
+    background: var(--color-chassis);
     color: var(--color-faint);
     border-color: var(--color-bean);
 }
@@ -73,28 +122,37 @@
     color: var(--color-error);
     border-color: rgba(199,91,57,.4);
 }
+
+/* Progress — a recessed channel with a lit fill riding in it. */
 .protocol-progress {
-    height: 2px;
-    background: var(--color-void);
+    height: 5px;
+    background: var(--color-well);
     border-radius: 2px;
     overflow: hidden;
     border: 1px solid var(--color-bean);
+    box-shadow: var(--bezel-well);
 }
 .protocol-progress-fill {
     height: 100%;
-    background: var(--color-amber);
-    transition: width 0.4s var(--ease-out);
+    background: linear-gradient(90deg, var(--color-amber-mute), var(--color-amber));
+    box-shadow: var(--led-glow-amber);
+    transition: width var(--dur-slow, 360ms) var(--ease-out);
 }
+
+/* Concluded — the mode releases; the strip cools to teal. */
 .protocol-concluded {
-    background: var(--teal-10);
+    background: var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
-    border-left: 2px solid var(--teal-30);
-    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--color-teal);
+    border-radius: var(--radius-chassis);
     padding: 10px 14px;
     margin-bottom: 12px;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 10px;
+    box-shadow: var(--bezel-raised);
+    animation: fadeIn var(--dur-med, 220ms) var(--ease-out);
 }
 .protocol-concluded span {
     font-family: var(--font-stencil);
@@ -104,10 +162,28 @@
     letter-spacing: .04em;
 }
 .protocol-concluded .dismiss-btn {
-    background: transparent;
-    border: none;
+    background: var(--color-chassis);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    padding: 3px 9px;
     color: var(--color-faint);
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
     cursor: pointer;
+    box-shadow: var(--bezel-key);
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
+}
+.protocol-concluded .dismiss-btn:hover { color: var(--color-ink); border-color: var(--color-crater); }
+.protocol-concluded .dismiss-btn:active { transform: translateY(1px); box-shadow: var(--bezel-key-down); }
+
+@media (prefers-reduced-motion: reduce) {
+    .protocol-banner,
+    .protocol-concluded { animation: none; }
+    .protocol-banner-info .protocol-icon { animation: none; }
+    .protocol-progress-fill { transition: none; }
 }

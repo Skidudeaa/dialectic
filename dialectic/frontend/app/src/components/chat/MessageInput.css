@@ -1,9 +1,12 @@
-/* P3-8: Composer box — cacao surface, bean border, inset shadow */
+/* P3-8: The composer is the desk's keybed — a recessed well (--color-well,
+   --bezel-well) that the textarea, keys and selectors are set INTO. Focusing
+   anywhere inside lifts the bed and lights an amber edge, so the room can
+   see where the operator's hands are. */
 .input-area {
     padding: 8px 16px 11px;
     border-top: 1px solid var(--color-bean);
-    /* Void, like the stream around the sheet — the composer's own cacao box
-       is what reads as "the writing surface". */
+    /* Void, like the stream around the sheet — the composer's own well is
+       what reads as "the writing surface". */
     background: var(--color-void);
     flex-shrink: 0;
 }
@@ -13,12 +16,29 @@
     /* The drop target is the whole composer, so the outline below has something
        to hang off without shifting anything when it appears. */
     position: relative;
-    border-radius: var(--radius-sm);
+    padding: 9px 10px 7px;
+    background: var(--color-well);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
     outline: 1px dashed transparent;
     outline-offset: 6px;
-    transition: outline-color 0.12s;
+    transition:
+        outline-color var(--dur-fast, 140ms) var(--ease-out),
+        border-color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-med, 220ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
 }
 .input-area-inner.input-dragging { outline-color: var(--color-amber); }
+/* A held draft wakes the bed: the rim steps up a tier so the composer reads
+   "loaded" before the eye reaches the send key. */
+.input-area-inner[data-has-draft="true"] { border-color: var(--color-crater); }
+/* Focus lifts the keybed out of its recess and lights the amber edge. */
+.input-area-inner:focus-within {
+    transform: translateY(-1px);
+    border-color: var(--amber-30);
+    box-shadow: var(--bezel-well), var(--shadow-glow-amber);
+}
 
 /* Attachment chips — one per file the composer is holding */
 .attach-chips {
@@ -40,7 +60,9 @@
     font-size: 12px;
     color: var(--color-ink);
     overflow: hidden;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out);
 }
+.attach-chip:hover { border-color: var(--color-crater); }
 .attach-chip-ready { border-color: var(--amber-30); }
 .attach-chip-failed { border-color: var(--error); color: var(--error); }
 .attach-chip-name {
@@ -62,7 +84,7 @@
     cursor: pointer;
 }
 .attach-chip-retry { text-decoration: underline; color: var(--color-amber); }
-.attach-chip-remove { font-size: 13px; line-height: 1; }
+.attach-chip-remove { font-size: 13px; line-height: 1; transition: color var(--dur-fast, 140ms) var(--ease-out); }
 .attach-chip-remove:hover { color: var(--color-bone); }
 /* Progress reads as a filling underline rather than a bar that needs its own
    row — the chip is already the unit of "this file". */
@@ -75,7 +97,8 @@
     transition: width 0.15s linear;
 }
 
-/* Attach button — quiet sibling of the send button, never solid amber */
+/* Attach key — quiet sibling of the send key, never solid amber. Same
+   machined cap, same travel. */
 .attach-input { display: none; }
 .attach-btn {
     height: 44px;
@@ -87,14 +110,21 @@
     justify-content: center;
     background: var(--color-cacao);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
     color: var(--color-secondary);
     cursor: pointer;
     flex-shrink: 0;
-    transition: color 0.15s, border-color 0.15s;
+    box-shadow: var(--bezel-key);
+    transition:
+        color var(--dur-fast, 140ms) var(--ease-out),
+        border-color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
 }
 .attach-btn:hover:not(:disabled) { color: var(--color-amber); border-color: var(--amber-30); }
-.attach-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.attach-btn:active:not(:disabled) { transform: translateY(1px); box-shadow: var(--bezel-key-down); }
+.attach-btn:focus-visible { outline: 1.5px solid var(--color-amber); outline-offset: 2px; }
+.attach-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 .attach-btn svg { width: 16px; height: 16px; }
 
 /* Reply preview */
@@ -127,6 +157,7 @@
     font-size: 1.1rem;
     padding: 0 0.2rem;
     font-family: inherit;
+    transition: color var(--dur-fast, 140ms) var(--ease-out);
 }
 .cancel-reply:hover { color: var(--color-secondary); }
 
@@ -147,16 +178,21 @@
     cursor: pointer;
     text-transform: uppercase;
     letter-spacing: .06em;
-    transition: all 0.15s;
+    transition:
+        color var(--dur-fast, 140ms) var(--ease-out),
+        background-color var(--dur-fast, 140ms) var(--ease-out),
+        border-color var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
 }
-.type-btn:hover { color: var(--color-faint); }
+.type-btn:hover { color: var(--color-secondary); border-color: var(--color-bean); }
+.type-btn:active { transform: translateY(1px); }
 .type-btn.active {
     background: var(--color-espresso);
     border-color: var(--color-bean);
     color: var(--color-secondary);
 }
 
-/* P3-8: The cbox — cacao surface, bean border, inset shadow */
+/* P3-8: The cbox — a paper slip set into the keybed's well */
 .input-row {
     display: flex;
     gap: 0.5rem;
@@ -173,6 +209,7 @@
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     color: var(--color-bone);
+    caret-color: var(--color-amber);
     font-family: var(--font-serif);
     font-size: 15px;  /* matches the transcript's raised body type */
     line-height: 1.5;
@@ -181,14 +218,19 @@
     max-height: 120px;
     outline: none;
     box-shadow: var(--shadow-inset);
-    transition: border-color 0.15s;
+    transition:
+        border-color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 .msg-textarea:focus {
     border-color: var(--amber-30);
+    box-shadow: var(--shadow-inset), 0 0 0 1px var(--amber-08);
 }
 .msg-textarea::placeholder { color: var(--color-faint); font-style: italic; }
 
-/* P3-8: Send button — solid amber, the only solid-amber object on the page */
+/* P3-8: The send key — the one solid-amber object on the page while armed.
+   bezel-key gives it a machined cap; :active is real travel, not a color
+   flicker; disabled is an UNLIT key, not a faded lit one. */
 .send-btn {
     padding: 6px 12px;
     height: 44px;
@@ -197,23 +239,38 @@
     justify-content: center;
     gap: 6px;
     background: var(--color-amber);
-    border: none;
-    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-amber-hot);
+    border-radius: var(--radius-control);
     color: var(--color-void);
     font-family: var(--font-stencil);
     font-size: 12px;
     letter-spacing: .06em;
     cursor: pointer;
-    transition: background 0.15s;
     flex-shrink: 0;
     white-space: nowrap;
+    box-shadow: var(--bezel-key);
+    transition:
+        background var(--dur-fast, 140ms) var(--ease-out),
+        color var(--dur-fast, 140ms) var(--ease-out),
+        border-color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
 }
 .send-btn:hover:not(:disabled) { background: var(--color-amber-hot); }
-.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.send-btn:active:not(:disabled) { transform: translateY(1px); box-shadow: var(--bezel-key-down); }
+.send-btn:focus-visible { outline: 1.5px solid var(--color-amber); outline-offset: 2px; }
+/* Unlit: the same machined cap with the lamp off (--led-off glyph) — the
+   armed state stays obvious without leaning on opacity. */
+.send-btn:disabled {
+    background: var(--color-espresso);
+    border-color: var(--color-bean);
+    color: var(--led-off);
+    cursor: not-allowed;
+}
 .send-btn svg { width: 16px; height: 16px; }
 
-/* Research button — the attach button's text-labelled sibling: cacao
-   surface, never solid amber (that's the send button's one job) */
+/* Research key — the attach key's text-labelled sibling: cacao
+   surface, never solid amber (that's the send key's one job) */
 .research-btn {
     height: 44px;
     padding: 6px 10px;
@@ -222,7 +279,7 @@
     justify-content: center;
     background: var(--color-cacao);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
     color: var(--color-secondary);
     font-family: var(--font-stencil);
     font-size: 12px;
@@ -231,19 +288,63 @@
     cursor: pointer;
     flex-shrink: 0;
     white-space: nowrap;
-    transition: color 0.15s, border-color 0.15s;
+    box-shadow: var(--bezel-key);
+    transition:
+        color var(--dur-fast, 140ms) var(--ease-out),
+        border-color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
 }
 .research-btn:hover:not(:disabled) { color: var(--color-amber); border-color: var(--amber-30); }
-.research-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.research-btn:active:not(:disabled) { transform: translateY(1px); box-shadow: var(--bezel-key-down); }
+.research-btn:focus-visible { outline: 1.5px solid var(--color-amber); outline-offset: 2px; }
+.research-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
 /* Hints line */
 .input-hints {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     margin-top: 6px;
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--color-faint);
+}
+.input-hints-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.9rem;
+    flex: none;
+}
+/* Keycap chips for the keyboard affordances on this line. */
+.input-hints kbd {
+    display: inline-block;
+    padding: 0 5px;
+    background: var(--color-chassis);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-key);
+    color: var(--color-bone);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.7;
+}
+/* Draft state cue: a lit lamp plus a live count — the lamp is never the only
+   carrier of "you have an unsent draft". */
+.draft-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--color-secondary);
+    letter-spacing: .04em;
+}
+.draft-count::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--led-amber);
+    box-shadow: var(--led-glow-amber);
 }
 /* Delivery failure reads at body weight, not hint weight — it is the one thing
    on this line the user must not skim past. */
@@ -297,6 +398,7 @@
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    animation: fadeIn var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .mention-option {
@@ -313,6 +415,9 @@
     font-size: 0.85rem;
     text-align: left;
     cursor: pointer;
+    transition:
+        background-color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 
 /* Selection is a background AND a left rule — keyboard position must not be
@@ -359,12 +464,50 @@
     font-size: 12px;
     letter-spacing: 0.04em;
     cursor: pointer;
+    transition:
+        color var(--dur-fast, 140ms) var(--ease-out),
+        background-color var(--dur-fast, 140ms) var(--ease-out),
+        border-color var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
 }
 .tag-btn:hover { color: var(--color-secondary); }
+.tag-btn:active { transform: translateY(1px); }
 /* Active is a color AND a filled pill — never color alone. */
 .tag-btn.active {
     color: var(--color-amber);
     border-color: var(--color-amber);
     background: var(--amber-08);
     font-weight: 600;
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────
+   The keybed lift, key travel and picker entrances are decoration around
+   states that remain fully visible statically, so turning them off loses
+   nothing. */
+@media (prefers-reduced-motion: reduce) {
+    .input-area-inner,
+    .attach-chip,
+    .attach-chip-remove,
+    .cancel-reply,
+    .type-btn,
+    .tag-btn,
+    .msg-textarea,
+    .send-btn,
+    .attach-btn,
+    .research-btn,
+    .mention-option {
+        transition: none;
+    }
+    .input-area-inner:focus-within,
+    .send-btn:active:not(:disabled),
+    .attach-btn:active:not(:disabled),
+    .research-btn:active:not(:disabled),
+    .type-btn:active,
+    .tag-btn:active {
+        transform: none;
+    }
+    .reply-preview-bar.active,
+    .mention-picker {
+        animation: none;
+    }
 }

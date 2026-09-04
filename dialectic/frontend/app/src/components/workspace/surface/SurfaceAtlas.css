@@ -12,6 +12,13 @@
     border-radius: var(--radius-sm);
     padding: 12px 14px 14px;
     box-shadow: var(--bezel-raised);
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out), box-shadow var(--dur-med, 220ms) var(--ease-out);
+}
+
+/* The pane that holds focus reads active (see Surface.css's pane idiom). */
+.surf-atlas:focus-within {
+    border-color: var(--scene-accent, var(--color-copper));
+    box-shadow: var(--bezel-raised), inset 0 0 0 1px var(--scene-accent, var(--color-copper));
 }
 
 .surf-atlas-header {
@@ -23,6 +30,8 @@
     padding-bottom: 0.45rem;
     border-bottom: 1px solid var(--color-bean);
 }
+
+.surf-atlas-header .surf-pane-lamp { margin-right: -4px; }
 
 .surf-atlas-title {
     font-size: 12px;
@@ -47,7 +56,8 @@
     padding: 4px 10px;
     box-shadow: var(--bezel-key);
     cursor: pointer;
-    transition: color 120ms ease, border-color 120ms ease;
+    transition: color var(--dur-fast, 140ms) var(--ease-out), border-color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out), transform var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .surf-atlas-world-btn:hover {
@@ -133,6 +143,45 @@
     stroke-width: 2px;
 }
 
+/* Hover/focus raise — transform-box keeps the scale centered on the dot
+   itself rather than the SVG origin. The pulse ring animates separately. */
+.surf-atlas-marker .surf-atlas-dot,
+.surf-atlas-marker .surf-atlas-halo {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out);
+}
+.surf-atlas-marker:hover .surf-atlas-dot,
+.surf-atlas-marker:focus-visible .surf-atlas-dot {
+    transform: scale(1.4);
+}
+
+/* The dossier tag: an evidence-tag tooltip that follows the pointer over a
+   marker (the native <title> was unstyleable; aria-label carries AT). */
+.surf-atlas-tip {
+    position: absolute;
+    z-index: 5;
+    transform: translate(-50%, calc(-100% - 12px));
+    max-width: 240px;
+    padding: 5px 9px;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-left: 2px solid var(--scene-accent, var(--color-copper));
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.45;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--color-ink);
+    pointer-events: none;
+    animation: surf-atlas-tip-in var(--dur-fast, 140ms) var(--ease-out) backwards;
+}
+@keyframes surf-atlas-tip-in {
+    from { opacity: 0; transform: translate(-50%, calc(-100% - 7px)); }
+}
+
 .surf-atlas-dot--fires {
     fill: var(--color-amber);
 }
@@ -159,8 +208,17 @@
     fill: none;
     stroke: var(--color-scarlet);
     stroke-width: 1.25px;
+    /* New activity: the novel-fire ring pulses outward until the cell is no
+       longer novel. Killed under prefers-reduced-motion (below). */
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: surf-atlas-novel-pulse 2.6s var(--ease-out) infinite;
 }
-
+@keyframes surf-atlas-novel-pulse {
+    0% { transform: scale(1); opacity: .85; }
+    60% { transform: scale(1.9); opacity: 0; }
+    100% { transform: scale(1.9); opacity: 0; }
+}
 /* Selection halo — a second ring in cream, per design: shape/color are
    reinforcement, never the only signal (the .is-selected class + aria state
    already carry the fact). */
@@ -179,6 +237,9 @@
 }
 
 .surf-atlas-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 14px;
     margin: 0;
     padding-top: 0.45rem;
     border-top: 1px solid var(--color-bean);
@@ -189,8 +250,30 @@
     color: var(--color-ghost);
 }
 
+.surf-atlas-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Legend glyphs echo their markers' hues; the words always accompany them. */
+.surf-atlas-legend-glyph { font-style: normal; }
+.surf-atlas-legend-glyph--fires { color: var(--color-amber); }
+.surf-atlas-legend-glyph--novel { color: var(--color-scarlet); }
+.surf-atlas-legend-glyph--aircraft { color: var(--color-steel); }
+.surf-atlas-legend-glyph--quakes { color: var(--color-plum); }
+
 @media (max-width: 680px) {
     .surf-atlas { padding: 10px; }
     .surf-atlas-header { align-items: flex-start; }
     .surf-atlas-title { flex: 1 1 16rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .surf-atlas,
+    .surf-atlas-world-btn,
+    .surf-atlas-marker .surf-atlas-dot,
+    .surf-atlas-marker .surf-atlas-halo { transition: none; }
+    .surf-atlas-ring--novel { animation: none; }
+    .surf-atlas-tip { animation: none; }
 }

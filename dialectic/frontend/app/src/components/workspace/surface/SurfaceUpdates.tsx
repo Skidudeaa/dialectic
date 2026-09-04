@@ -4,6 +4,7 @@ import { agoLabel } from '../../../lib/relativeTime.ts'
 import type { MessageRef, ReadingLibraryItem } from '../../../types'
 import type { WorldObservation } from '../../../types/geo.ts'
 import type { FieldMark } from '../../../types/workspace.ts'
+import { refGlyph } from './surfaceModel.ts'
 import './SurfaceUpdates.css'
 
 /** Matches ThesisDag.tsx's DAG_DROP_MIME (out of scope to import here — see
@@ -24,6 +25,9 @@ export interface SurfaceUpdatesProps {
   onOpen: (ref: MessageRef) => void
   onAttach: (ref: MessageRef) => void
   attachTargetLabel: string | null
+  /** Styling-only: tells the scene a card is mid-drag so the graph pane can
+   *  announce its drop zone. Optional — standalone renders never set it. */
+  onDragStateChange?: (dragging: boolean) => void
 }
 
 type ReadingsSlice =
@@ -58,8 +62,12 @@ function frpOf(details: Record<string, unknown>): number {
 export function SurfaceUpdates(props: SurfaceUpdatesProps) {
   const {
     roomId, since, observations, marks, selectedId, onSelect, onOpen, onAttach, attachTargetLabel,
+    onDragStateChange,
   } = props
   const [readings, setReadings] = useState<ReadingsSlice>({ status: 'loading' })
+  // Key of the card currently being dragged — styling only (lift shadow,
+  // grabbing cursor), plus the scene-level drop-zone announcement.
+  const [dragKey, setDragKey] = useState<string | null>(null)
   const ticketRef = useRef(0)
 
   useEffect(() => {
@@ -162,8 +170,9 @@ export function SurfaceUpdates(props: SurfaceUpdatesProps) {
   }
 
   return (
-    <section className="surf-upd" aria-label={headerTitle}>
+    <section className={`surf-upd${dragKey !== null ? ' surf-upd--dragging' : ''}`} aria-label={headerTitle}>
       <div className="surf-upd-header">
+        <span className="surf-pane-lamp" aria-hidden="true" />
         <span className="surf-upd-header-title">{headerTitle} · {countsLabel}</span>
         <span className="surf-upd-header-right">{rightText}</span>
       </div>
@@ -176,6 +185,14 @@ export function SurfaceUpdates(props: SurfaceUpdatesProps) {
         <div className="surf-upd-tray">
           {capped.map((card) => {
             const isSelected = card.selId === selectedId
+            const isNovelFire = card.kind === 'fire' && card.obs.details.novel === true
+            const cardClass = [
+              'surf-upd-card',
+              `surf-upd-card--${card.kind}`,
+              isNovelFire ? 'surf-upd-card--novel' : '',
+              isSelected ? 'is-selected' : '',
+              dragKey === card.key ? 'is-dragging' : '',
+            ].filter(Boolean).join(' ')
             return (
               <div
                 key={card.key}
@@ -183,11 +200,17 @@ export function SurfaceUpdates(props: SurfaceUpdatesProps) {
                 tabIndex={0}
                 draggable
                 aria-pressed={isSelected}
-                className={`surf-upd-card${isSelected ? ' is-selected' : ''}`}
+                className={cardClass}
                 onDragStart={(e) => {
                   e.dataTransfer.setData(DRAG_MIME, JSON.stringify(card.ref))
                   e.dataTransfer.setData('text/plain', card.ref.label)
                   e.dataTransfer.effectAllowed = 'link'
+                  setDragKey(card.key)
+                  onDragStateChange?.(true)
+                }}
+                onDragEnd={() => {
+                  setDragKey(null)
+                  onDragStateChange?.(false)
                 }}
                 onClick={() => activate(card)}
                 onKeyDown={(e) => {
@@ -201,6 +224,12 @@ export function SurfaceUpdates(props: SurfaceUpdatesProps) {
                   <>
                     <div className="surf-upd-card-kicker">
                       <span className={card.obs.details.novel === true ? 'surf-upd-fire-new' : 'surf-upd-fire-recurring'}>
+                        <span
+                          className={`surf-upd-kind-glyph${isNovelFire ? ' surf-upd-kind-glyph--fire-new' : ' surf-upd-kind-glyph--fire'}`}
+                          aria-hidden="true"
+                        >
+                          {refGlyph('world_observations')}
+                        </span>
                         {card.obs.details.novel === true
                           ? 'FIRE · NEW'
                           : `FIRE · recurring ${String(card.obs.details.baseline_days ?? '?')}d`}
@@ -218,7 +247,14 @@ export function SurfaceUpdates(props: SurfaceUpdatesProps) {
                 )}
                 {card.kind === 'reading' && (
                   <>
-                    <div className="surf-upd-card-kicker">READING · {card.item.site ?? card.item.source}</div>
+                    <div className="surf-upd-card-kicker">
+                      <span className="surf-upd-kind">
+                        <span className="surf-upd-kind-glyph surf-upd-kind-glyph--reading" aria-hidden="true">
+                          {refGlyph('reading_items')}
+                        </span>
+                        READING · {card.item.site ?? card.item.source}
+                      </span>
+                    </div>
                     <div className="surf-upd-card-title">{card.item.title ?? card.item.url}</div>
                     <div className="surf-upd-card-meta">
                       saved {agoLabel(card.item.current_captured_at ?? card.item.created_at)}
@@ -227,7 +263,14 @@ export function SurfaceUpdates(props: SurfaceUpdatesProps) {
                 )}
                 {card.kind === 'mark' && (
                   <>
-                    <div className="surf-upd-card-kicker">MARK · {card.mark.relation}</div>
+                    <div className="surf-upd-card-kicker">
+                      <span className="surf-upd-kind">
+                        <span className="surf-upd-kind-glyph surf-upd-kind-glyph--mark" aria-hidden="true">
+                          {refGlyph('field_marks')}
+                        </span>
+                        MARK · {card.mark.relation}
+                      </span>
+                    </div>
                     <div className="surf-upd-card-title">{card.mark.title}</div>
                     <div className="surf-upd-card-meta">{card.mark.origin} · {card.mark.review}</div>
                   </>
@@ -235,7 +278,7 @@ export function SurfaceUpdates(props: SurfaceUpdatesProps) {
                 <div className="surf-upd-card-actions">
                   <button
                     type="button"
-                    className="surf-upd-action"
+                    className="surf-upd-action surf-upd-action--open"
                     onClick={(e) => { e.stopPropagation(); onOpen(card.ref) }}
                   >
                     open

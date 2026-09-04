@@ -66,3 +66,58 @@
 }
 
 /* Scrollbar — defined in global.css for Dark Roast */
+
+/* ── Foundation additions (2026-09-03) ─────────────────────────────────
+   New keyframes for the interaction contract; everything above is
+   untouched. Durations/easings are chosen at the USE SITE from the
+   --dur-* / --ease-* tokens. The global prefers-reduced-motion rule in
+   global.css neuters all of these for users who ask for stillness. */
+
+/* Press / squash — one-shot tactile keypress for buttons, chips, and
+   faceplate keys. Run once at var(--dur-fast) on :active / pointerdown;
+   pairs with the inset --bezel-key-down shadow for real travel. */
+@keyframes pressSquash {
+    0%   { transform: translateY(0) scale(1); }
+    35%  { transform: translateY(1px) scale(0.97, 0.93); }
+    100% { transform: translateY(0) scale(1); }
+}
+
+/* Glow pulse — ambient halo keyed to --energy-level so a resting desk
+   (level 0) stays fully dark: keyframe values beat any static rule, so
+   the multiplication matters (same rationale as energyPulse above).
+   Give the element a static border/shadow for its resting state and use
+   --energy-color so the Console's presence lamp steers the hue. */
+@keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 calc(var(--energy-level) * 8px)  calc(var(--energy-level) * 1px) var(--energy-color); }
+    50%      { box-shadow: 0 0 calc(var(--energy-level) * 18px) calc(var(--energy-level) * 4px) var(--energy-color); }
+}
+
+/* Rise in — panel/card entrance: a real 14px travel plus fade. Apply
+   with var(--dur-med) and var(--ease-out); stagger siblings via
+   animation-delay at the use site. */
+@keyframes riseIn {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Skeleton shimmer — refined sweep for loading placeholders. Needs a
+   200%-wide gradient at the use site, e.g.:
+     background: linear-gradient(90deg, var(--color-cacao) 25%,
+                 var(--color-espresso) 50%, var(--color-cacao) 75%);
+     background-size: 200% 100%;
+     animation: skeletonShimmer calc(var(--dur-ambient) * 0.6) linear infinite; */
+@keyframes skeletonShimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Ember drift — slow ambient pan for scene-background gradients, as if
+   candlelight shifted across the desk. Requires background-size well
+   above 100% (e.g. 220% 220%) at the use site; run for a multiple of
+   var(--dur-ambient), linear, infinite. */
+@keyframes emberDrift {
+    0%   { background-position: 0% 0%; }
+    33%  { background-position: 65% 35%; }
+    66%  { background-position: 30% 70%; }
+    100% { background-position: 0% 0%; }
+}

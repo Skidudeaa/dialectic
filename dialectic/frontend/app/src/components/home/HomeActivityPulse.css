@@ -7,10 +7,37 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
     /* v3: the House's lintel is a chassis band over the paper transcript. */
-    background: var(--color-chassis);
+    background: var(--chassis-brush), var(--color-chassis);
     box-shadow: var(--bezel-raised);
     border-bottom: 1px solid var(--color-bean);
+}
+
+/* The living strip: a slow accent sweep across the top edge of the band,
+   brightening with the Console's --energy-level, calm at rest. */
+.home-house::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg,
+        transparent 0,
+        var(--scene-accent, var(--color-amber)) 45%,
+        var(--scene-accent, var(--color-amber)) 55%,
+        transparent 100%);
+    background-size: 38% 100%;
+    background-repeat: no-repeat;
+    opacity: calc(0.3 + var(--energy-level, 0) * 0.7);
+    animation: home-pulse-sweep 9s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes home-pulse-sweep {
+    from { background-position: -40% 0; }
+    to   { background-position: 140% 0; }
 }
 
 .home-house-note {
@@ -53,14 +80,32 @@
 
 .home-resident.is-claude { color: var(--color-amber); }
 
+/* Presence as panel lamps — hue is paired with shape: lit-with-glow =
+   online, lit = away, hollow = offline. */
 .home-resident .presence-dot {
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
+    flex: 0 0 auto;
 }
-.home-resident .presence-dot.online  { background: var(--sev-stable); }
-.home-resident .presence-dot.away    { background: var(--color-warning); }
-.home-resident .presence-dot.offline { background: var(--color-ghost); }
+.home-resident .presence-dot.online {
+    background: var(--led-green);
+    box-shadow: var(--led-glow-green);
+    animation: home-led-breathe 2.8s ease-in-out infinite;
+}
+.home-resident .presence-dot.away {
+    background: var(--led-amber);
+    box-shadow: var(--led-glow-amber);
+}
+.home-resident .presence-dot.offline {
+    background: transparent;
+    border: 1px solid var(--color-ghost);
+}
+
+@keyframes home-led-breathe {
+    0%, 100% { box-shadow: var(--led-glow-green); }
+    50%      { box-shadow: 0 0 0 0 rgba(163,188,66,0); }
+}
 
 .home-resident-ago {
     color: var(--color-faint);
@@ -96,6 +141,9 @@
 .home-needs h2,
 .home-wings h2 {
     margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-family: var(--font-mono);
     font-size: 0.75rem;
     font-weight: normal;
@@ -103,6 +151,18 @@
     text-transform: uppercase;
     color: var(--color-secondary);
 }
+
+.home-needs h2::before,
+.home-wings h2::before {
+    content: '';
+    flex: 0 0 auto;
+    width: 14px;
+    height: 2px;
+    background: var(--scene-accent, var(--color-amber));
+}
+
+/* "Needs you" sits at the top of the house hierarchy — raise the head. */
+.home-needs h2 { color: var(--color-bone); }
 
 .home-needs-list {
     display: flex;
@@ -123,13 +183,36 @@
     padding: 6px 10px;
     cursor: pointer;
     color: inherit;
+    transition: background var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                transform var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 
+/* Kind edge + kicker hue pair with the kicker's own words ("Due …",
+   "… asked", "… unread") — hue is reinforcement, never the only signal. */
 .home-need.due { border-left-color: var(--color-amber); }
 .home-need.question { border-left-color: var(--color-teal); }
-.home-need.unread { border-left-color: var(--amber-30); }
+.home-need.unread { border-left-color: var(--scene-accent, var(--color-amber)); }
 
-.home-need:hover { background: var(--amber-08); }
+.home-need.due .home-need-kicker { color: var(--color-amber); }
+.home-need.question .home-need-kicker { color: var(--color-teal); }
+
+.home-need:hover {
+    background: var(--scene-accent-soft, rgba(242,162,74,.15));
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.home-need:active {
+    transform: translateY(1px);
+    box-shadow: var(--shadow-inset);
+}
+
+.home-need:focus-visible {
+    outline: 1.5px solid var(--scene-accent, var(--color-amber));
+    outline-offset: -1.5px;
+}
 
 .home-need-kicker {
     font-family: var(--font-mono);
@@ -159,10 +242,15 @@
     text-overflow: ellipsis;
 }
 
+/* Quiet but styled: an empty bay, not a blank hole. */
 .home-house-empty {
     color: var(--color-faint);
     font-size: 0.78rem;
     margin: 0;
+    padding: 10px 12px;
+    border: 1px dashed var(--color-bean);
+    border-radius: var(--radius-sm);
+    background: var(--color-obsidian);
 }
 
 .home-doors {
@@ -174,20 +262,39 @@
 .home-door {
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
-    background: var(--color-obsidian);
+    background: var(--color-cacao);
+    box-shadow: var(--shadow-sm);
     padding: 12px 14px 13px;
     min-height: 7.5rem;
     display: flex;
     flex-direction: column;
+    transition: transform var(--dur-med, 220ms) var(--ease-out),
+                border-color var(--dur-med, 220ms) var(--ease-out),
+                box-shadow var(--dur-med, 220ms) var(--ease-out);
 }
 
-.home-door.unread { border-color: var(--amber-30); }
+.home-door:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-crater);
+    box-shadow: var(--shadow-md);
+}
+
+/* Unread doors carry the scene accent as a physical edge — you can tell
+   which house you're in from the door frames alone. */
+.home-door.unread {
+    border-color: var(--scene-accent, var(--amber-30));
+    box-shadow: inset 3px 0 0 var(--scene-accent, var(--color-amber)), var(--shadow-sm);
+}
+
+.home-door.unread:hover {
+    border-color: var(--scene-accent, var(--color-amber));
+    box-shadow: inset 3px 0 0 var(--scene-accent, var(--color-amber)), var(--shadow-md);
+}
 
 .home-door-open {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
+    gap: 0.45rem;
     width: 100%;
     background: none;
     border: none;
@@ -195,6 +302,12 @@
     cursor: pointer;
     text-align: left;
     color: var(--color-display);
+    border-radius: var(--radius-sm);
+}
+
+.home-door-open:focus-visible {
+    outline: 1.5px solid var(--scene-accent, var(--color-amber));
+    outline-offset: 3px;
 }
 
 .home-door-name {
@@ -207,11 +320,35 @@
     white-space: nowrap;
 }
 
-.home-door-open:hover .home-door-name { text-decoration: underline; }
+.home-door-open:hover .home-door-name {
+    text-decoration: underline;
+    text-decoration-color: var(--scene-accent, var(--color-amber));
+    text-underline-offset: 3px;
+}
+
+/* The go-arrow: appears on hover/focus so the door reads as a door. */
+.home-door-go {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    color: var(--color-faint);
+    opacity: 0;
+    transform: translateX(-3px);
+    transition: opacity var(--dur-fast, 140ms) var(--ease-out),
+                transform var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out);
+}
+
+.home-door-open:hover .home-door-go,
+.home-door-open:focus-visible .home-door-go {
+    opacity: 1;
+    transform: translateX(0);
+    color: var(--scene-accent, var(--color-amber));
+}
 
 .home-door .unread-badge {
     position: static;
     flex-shrink: 0;
+    margin-left: auto;
 }
 
 .home-door-kicker {
@@ -252,9 +389,21 @@
     font-size: 0.7rem;
     padding: 2px 6px;
     cursor: pointer;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                transform var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 
-.home-door-branch:hover { border-color: var(--amber-30); }
+.home-door-branch:hover {
+    border-color: var(--scene-accent, var(--amber-30));
+    color: var(--color-ink);
+}
+
+.home-door-branch:active {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
+}
 
 @media (max-width: 700px) {
     .home-need {
@@ -317,6 +466,8 @@
     text-transform: uppercase;
     color: var(--color-secondary);
     user-select: none;
+    transition: color var(--dur-fast, 140ms) var(--ease-out),
+                background var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .home-fold > summary::-webkit-details-marker { display: none; }
@@ -330,17 +481,26 @@
 
 .home-fold[open] > summary::before { transform: rotate(90deg); }
 
-.home-fold > summary:hover { color: var(--color-ink); }
+.home-fold > summary:hover {
+    color: var(--color-ink);
+    background: var(--scene-accent-soft, rgba(242,162,74,.15));
+}
 
 .home-fold > summary:focus-visible {
-    outline: 2px solid var(--color-amber);
+    outline: 2px solid var(--scene-accent, var(--color-amber));
     outline-offset: -2px;
 }
+
+.home-fold > summary:hover::before { color: var(--scene-accent, var(--color-amber)); }
 
 .home-fold-count {
     color: var(--color-faint);
     text-transform: none;
     letter-spacing: 0;
+    font-family: var(--font-mono);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-full);
+    padding: 0 7px;
 }
 
 /* Bounded so an opened fold never pushes the composer off-screen. */
@@ -351,5 +511,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .home-house::before { animation: none; }
+    .home-resident .presence-dot.online { animation: none; }
     .home-fold > summary::before { transition: none; }
+    .home-need,
+    .home-door,
+    .home-door-branch,
+    .home-door-go,
+    .home-fold > summary { transition: none; }
 }

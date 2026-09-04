@@ -42,7 +42,7 @@ function TradeRows({ trades }: { trades: OpenTrade[] }) {
           <tr>
             <th>Ticker</th>
             <th>Book</th>
-            <th>Ref Price</th>
+            <th className="cockpit-num">Ref Price</th>
             <th>Predicates</th>
           </tr>
         </thead>
@@ -71,7 +71,7 @@ function TradeRows({ trades }: { trades: OpenTrade[] }) {
                     <span className="cockpit-expand-caret">{'▸'}</span> {t.ticker}
                   </td>
                   <td>{t.book ?? '—'}</td>
-                  <td>{t.ref_price !== undefined ? t.ref_price : '—'}</td>
+                  <td className="cockpit-num cockpit-seg">{t.ref_price !== undefined ? t.ref_price : '—'}</td>
                   <td>
                     {predicates.length} {predicates.length === 1 ? 'predicate' : 'predicates'}
                     {first && <> — {summarizePredicate(first)}</>}

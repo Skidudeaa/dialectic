@@ -31,23 +31,28 @@ function PositionRows({ positions }: { positions: PortfolioPosition[] }) {
         <thead>
           <tr>
             <th>Symbol</th>
-            <th>Qty</th>
-            <th>Avg Cost</th>
-            <th>Price</th>
-            <th>Value</th>
-            <th>Unrealized</th>
+            <th className="cockpit-num">Qty</th>
+            <th className="cockpit-num">Avg Cost</th>
+            <th className="cockpit-num">Price</th>
+            <th className="cockpit-num">Value</th>
+            <th className="cockpit-num">Unrealized</th>
           </tr>
         </thead>
         <tbody>
           {positions.map((p) => (
             <tr key={p.symbol}>
               <td>{p.symbol}</td>
-              <td>{qty(p.qty)}</td>
-              <td>{dollars(p.avg_cost)}</td>
-              <td>{dollars(p.price)}</td>
-              <td>{dollars(p.value)}</td>
-              <td>
-                {p.unrealized >= 0 ? '+' : '−'}{dollars(Math.abs(p.unrealized))}
+              <td className="cockpit-num">{qty(p.qty)}</td>
+              <td className="cockpit-num">{dollars(p.avg_cost)}</td>
+              <td className="cockpit-num cockpit-seg">{dollars(p.price)}</td>
+              <td className="cockpit-num">{dollars(p.value)}</td>
+              <td className="cockpit-num">
+                <span className={`cockpit-signed ${p.unrealized >= 0 ? 'cockpit-signed--pos' : 'cockpit-signed--neg'}`}>
+                  <span className="cockpit-signed-glyph" aria-hidden="true">
+                    {p.unrealized >= 0 ? '▲' : '▼'}
+                  </span>
+                  {p.unrealized >= 0 ? '+' : '−'}{dollars(Math.abs(p.unrealized))}
+                </span>
               </td>
             </tr>
           ))}

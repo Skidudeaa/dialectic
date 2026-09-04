@@ -67,6 +67,20 @@ export function CommitmentDashboard({
     return true;
   });
 
+  // Register counts — the summary readouts and per-tab tallies
+  const counts = {
+    total: commitments.length,
+    active: commitments.filter((c) => c.status === 'active').length,
+    resolved: commitments.filter((c) => c.status === 'resolved').length,
+    missed: commitments.filter((c) => c.status === 'expired' || c.status === 'voided').length,
+  };
+  const tabCounts: Record<FilterTab, number> = {
+    all: counts.total,
+    active: counts.active,
+    resolved: counts.resolved,
+    expired: counts.missed,
+  };
+
   const handleCreate = () => {
     if (!claim.trim() || !criteria.trim()) return;
     onCreateCommitment(claim.trim(), criteria.trim(), category, deadline || undefined, initialConf);
@@ -82,10 +96,34 @@ export function CommitmentDashboard({
     <div className="commitment-dashboard">
       <h3>Predictions & Commitments</h3>
 
+      <div className="stakes-summary" role="group" aria-label="Stakes register summary">
+        <div className="readout readout-total">
+          <span className="readout-led" aria-hidden="true" />
+          <span className="readout-label">Filed</span>
+          <span className="readout-value"><span className="seg">{counts.total}</span></span>
+        </div>
+        <div className="readout readout-pending">
+          <span className="readout-led" aria-hidden="true" />
+          <span className="readout-label">Pending</span>
+          <span className="readout-value"><span className="seg">{counts.active}</span></span>
+        </div>
+        <div className="readout readout-kept">
+          <span className="readout-led" aria-hidden="true" />
+          <span className="readout-label">Kept</span>
+          <span className="readout-value"><span className="seg">{counts.resolved}</span></span>
+        </div>
+        <div className="readout readout-missed">
+          <span className="readout-led" aria-hidden="true" />
+          <span className="readout-label">Missed</span>
+          <span className="readout-value"><span className="seg">{counts.missed}</span></span>
+        </div>
+      </div>
+
       <div className="commitment-tabs">
         {(['all', 'active', 'resolved', 'expired'] as FilterTab[]).map((t) => (
-          <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
+          <button key={t} className={tab === t ? 'active' : ''} aria-pressed={tab === t} onClick={() => setTab(t)}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
+            <span className="tab-count">{tabCounts[t]}</span>
           </button>
         ))}
       </div>
@@ -128,6 +166,11 @@ export function CommitmentDashboard({
           + New Prediction
         </button>
       )}
+
+      <div className="stakes-section-header">
+        <span className="stakes-section-title">Contract slips</span>
+        <span className="stakes-section-count">{filtered.length}</span>
+      </div>
 
       <div className="commitment-list">
         {filtered.length === 0 ? (

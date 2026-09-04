@@ -1,16 +1,19 @@
 import type { ConversationDNA } from '../../types';
 import './DNAGlyph.css';
 
+/* Archetype hues are read off the token set (styles/tokens.css) rather than a
+   local hex ramp, so the glyph stays inside the Dark Roast band. The word is
+   always printed under the glyph — hue is never the only signal. */
 const ARCHETYPE_COLORS: Record<string, { fill: string; stroke: string; glow: string; text: string }> = {
-  Crucible:   { fill: 'rgba(239,68,68,0.2)',   stroke: '#ef4444', glow: 'rgba(239,68,68,0.3)',   text: '#f87171' },
-  'Deep Dive': { fill: 'rgba(59,130,246,0.2)', stroke: '#2563eb', glow: 'rgba(37,99,235,0.3)',   text: '#60a5fa' },
-  Rhizome:    { fill: 'rgba(34,197,94,0.2)',    stroke: '#16a34a', glow: 'rgba(22,163,74,0.3)',   text: '#4ade80' },
-  Symposium:  { fill: 'rgba(234,179,8,0.2)',    stroke: '#ca8a04', glow: 'rgba(202,138,4,0.3)',   text: '#facc15' },
-  Forge:      { fill: 'rgba(245,158,11,0.2)',   stroke: '#f59e0b', glow: 'rgba(245,158,11,0.3)', text: '#fbbf24' },
-  'Open Field': { fill: 'rgba(148,163,184,0.15)', stroke: '#64748b', glow: 'rgba(100,116,139,0.2)', text: '#94a3b8' },
+  Crucible:   { fill: 'var(--scar-10)',   stroke: 'var(--color-error)',  glow: 'var(--scar-18)',  text: 'var(--color-error)' },
+  'Deep Dive': { fill: 'var(--steel-12)', stroke: 'var(--color-steel)',  glow: 'var(--steel-30)', text: 'var(--color-steel)' },
+  Rhizome:    { fill: 'var(--sage-12)',   stroke: 'var(--color-sage)',   glow: 'var(--sage-12)',  text: 'var(--color-sage)' },
+  Symposium:  { fill: 'var(--gold-12)',   stroke: 'var(--color-gold)',   glow: 'var(--gold-12)',  text: 'var(--color-gold)' },
+  Forge:      { fill: 'var(--amber-08)',  stroke: 'var(--color-amber)',  glow: 'var(--amber-18)', text: 'var(--color-amber)' },
+  'Open Field': { fill: 'transparent',    stroke: 'var(--color-faint)',  glow: 'transparent',     text: 'var(--color-faint)' },
 };
 
-const DEFAULT_COLORS = { fill: 'rgba(129,140,248,0.2)', stroke: '#818cf8', glow: 'rgba(99,102,241,0.3)', text: '#818cf8' };
+const DEFAULT_COLORS = { fill: 'var(--plum-12)', stroke: 'var(--color-plum)', glow: 'var(--plum-12)', text: 'var(--color-plum)' };
 
 const AXES: (keyof Pick<ConversationDNA, 'tension' | 'velocity' | 'asymmetry' | 'depth' | 'divergence' | 'memory_density'>)[] =
   ['tension', 'velocity', 'asymmetry', 'depth', 'divergence', 'memory_density'];
@@ -75,7 +78,7 @@ export function DNAGlyph({ dna, size = 'large' }: DNAGlyphProps) {
               dominantBaseline="middle"
               fill="var(--text-tertiary)"
               fontSize={9}
-              fontFamily="Inter, sans-serif"
+              fontFamily="var(--font-mono)"
             >
               {axis.replace('_', ' ')}
             </text>

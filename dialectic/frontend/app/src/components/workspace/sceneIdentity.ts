@@ -109,7 +109,8 @@ export const SCENE_PRIMER: Record<ImplementedWorkspaceScene, string> = {
     'model at all.',
 }
 
-// Each place's mark, shown on the masthead's glyph plate beside the name.
+// Each place's mark, shown on the switcher tray's keys beside the label (the
+// masthead's glyph plate carries the drawn SCENE_MOTIFS below instead).
 export const SCENE_GLYPHS: Record<ImplementedWorkspaceScene, string> = {
   house: '⌂',
   surface: '◫',
@@ -120,4 +121,59 @@ export const SCENE_GLYPHS: Record<ImplementedWorkspaceScene, string> = {
   ledger: '☰',
   atlas: '✦',
   mirror: '☾',
+}
+
+// ── Scene accents — one place, one light ──────────────────────────────────
+// The hue each scene wears, drawn ONLY from the token counterpoint band
+// (tokens.css) — never a raw hex. This is the registry half of the contract:
+// src/styles/scenes.css turns the same mapping into [data-scene] rules that
+// set --scene-accent / --scene-accent-soft / --scene-ambient, and the two are
+// changed together or not at all. A total Record, like the rest: a scene
+// without a light is a build error, not a dark room.
+//
+// The Mirror is deliberately a MIX, plum cooled through steel, so it can
+// never be mistaken for the Field's straight plum — the two most easily
+// confused rooms wear the two most deliberately separated hues.
+export interface SceneAccent {
+  /** The counterpoint-band token this scene wears. */
+  token:
+    | 'amber' | 'copper' | 'cream' | 'teal' | 'plum'
+    | 'sage' | 'gold' | 'steel' | 'plum-steel'
+  /** var()/color-mix() reference to the hue itself. */
+  accent: string
+  /** Low-alpha fill of the same hue — washes, rules, glows. */
+  soft: string
+}
+
+export const SCENE_ACCENTS: Record<ImplementedWorkspaceScene, SceneAccent> = {
+  house:   { token: 'amber',      accent: 'var(--color-amber)',  soft: 'var(--amber-12)' },
+  surface: { token: 'copper',     accent: 'var(--color-copper)', soft: 'rgba(201,122,61,.15)' },
+  record:  { token: 'cream',      accent: 'var(--color-cream)',  soft: 'rgba(246,236,218,.12)' },
+  bench:   { token: 'teal',       accent: 'var(--color-teal)',   soft: 'var(--teal-10)' },
+  field:   { token: 'plum',       accent: 'var(--color-plum)',   soft: 'var(--plum-12)' },
+  library: { token: 'sage',       accent: 'var(--color-sage)',   soft: 'var(--sage-12)' },
+  ledger:  { token: 'gold',       accent: 'var(--color-gold)',   soft: 'var(--gold-12)' },
+  atlas:   { token: 'steel',      accent: 'var(--color-steel)',  soft: 'var(--steel-12)' },
+  mirror: {
+    token: 'plum-steel',
+    accent: 'color-mix(in oklab, var(--color-plum) 55%, var(--color-steel))',
+    soft: 'rgba(162,148,208,.14)',
+  },
+}
+
+// Each place's drawn motif — SVG path data (24×24, stroke in currentColor)
+// for the masthead's glyph plate. Unique geometry per room, not nine flavors
+// of the same icon: the Ledger is ruled lines, the Atlas a crosshair, the
+// Bench a delta, the Field a survey flag, the Mirror a crescent lit from the
+// left — the only mark drawn closing toward the reader.
+export const SCENE_MOTIFS: Record<ImplementedWorkspaceScene, readonly string[]> = {
+  house:   ['M4.5 11.5 L12 5 L19.5 11.5', 'M7 10 V19.5 H17 V10'],
+  surface: ['M4 9 H20', 'M7 14 H17', 'M10 19 H14'],
+  record:  ['M7 5.5 H17', 'M7 10 H17', 'M7 14.5 H13', 'M7 19 H15.5'],
+  bench:   ['M12 5 L20 19 H4 Z', 'M12 10.5 V14.5'],
+  field:   ['M8.5 20.5 V5', 'M8.5 5.5 L16.5 8.5 L8.5 11.5'],
+  library: ['M6 4.5 H9 V19.5 H6 Z', 'M11.5 4.5 H14.5 V19.5 H11.5 Z', 'M16.5 6 L19.5 7 L17.7 19.5 L14.7 18.5 Z'],
+  ledger:  ['M4 6.5 H20', 'M4 11 H20', 'M4 15.5 H20', 'M4 20 H20', 'M8.5 3.5 V21'],
+  atlas:   ['M12 12 m-5.5 0 a5.5 5.5 0 1 0 11 0 a5.5 5.5 0 1 0 -11 0', 'M12 3.5 V7', 'M12 17 V20.5', 'M3.5 12 H7', 'M17 12 H20.5'],
+  mirror:  ['M17.29 4.72 A9 9 0 1 0 17.29 19.28 A7.5 7.5 0 0 0 17.29 4.72 Z'],
 }

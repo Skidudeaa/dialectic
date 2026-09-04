@@ -1,7 +1,11 @@
+/* The evidence-state chip: a small lamp beside the printed state word.
+   Tone is carried three ways at once — LED hue, LED shape, and the word
+   itself — so it survives grayscale and reduced vision. Hues come from the
+   severity ramp tokens. */
 .source-state {
   display: inline-flex;
-  align-items: baseline;
-  gap: 0.3em;
+  align-items: center;
+  gap: 0.35em;
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.04em;
@@ -12,7 +16,39 @@
   padding: 0.05em 0.45em;
   white-space: nowrap;
 }
-.source-state[data-tone="good"] { color: var(--color-teal); border-color: color-mix(in srgb, var(--color-teal) 40%, var(--color-bean)); }
-.source-state[data-tone="warn"] { color: var(--color-warning); border-color: color-mix(in srgb, var(--color-warning) 40%, var(--color-bean)); }
-.source-state[data-tone="off"]  { color: var(--color-ghost); border-style: dashed; }
+.source-state-led {
+  flex: 0 0 auto;
+  width: 0.5em;
+  height: 0.5em;
+}
+/* good — a lit round lamp */
+.source-state[data-tone="good"] {
+  color: var(--sev-resolve);
+  border-color: color-mix(in srgb, var(--sev-resolve) 45%, var(--color-bean));
+}
+.source-state[data-tone="good"] .source-state-led {
+  border-radius: 50%;
+  background: var(--led-teal);
+  box-shadow: var(--led-glow-teal);
+}
+/* warn — an amber diamond */
+.source-state[data-tone="warn"] {
+  color: var(--sev-improve);
+  border-color: color-mix(in srgb, var(--sev-improve) 45%, var(--color-bean));
+}
+.source-state[data-tone="warn"] .source-state-led {
+  border-radius: 1px;
+  background: var(--led-amber);
+  box-shadow: var(--led-glow-amber);
+  transform: rotate(45deg);
+}
+/* off — a hollow dashed ring, no lamp lit */
+.source-state[data-tone="off"] {
+  color: var(--color-ghost);
+  border-style: dashed;
+}
+.source-state[data-tone="off"] .source-state-led {
+  border: 1px dashed var(--color-ghost);
+  border-radius: 50%;
+}
 .source-state-age { text-transform: none; letter-spacing: 0; color: var(--color-faint); }

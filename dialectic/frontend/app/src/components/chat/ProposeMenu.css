@@ -7,7 +7,8 @@
 }
 
 /* The trigger is a text-labelled button, never an icon-only affordance and
-   never revealed on hover (§17.4) — always visible, always tappable. */
+   never revealed on hover (§17.4) — always visible, always tappable. It is a
+   physical key on the keybed: machined edge, real travel on press. */
 .propose-trigger {
     height: 42px;
     padding: 6px 10px;
@@ -16,7 +17,7 @@
     justify-content: center;
     background: var(--color-cacao);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
     color: var(--color-secondary);
     font-family: var(--font-stencil);
     font-size: 12px;
@@ -25,11 +26,18 @@
     cursor: pointer;
     flex-shrink: 0;
     white-space: nowrap;
-    transition: color 0.15s, border-color 0.15s;
+    box-shadow: var(--bezel-key);
+    transition:
+        color var(--dur-fast, 140ms) var(--ease-out),
+        border-color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
 }
 .propose-trigger:hover:not(:disabled) { color: var(--color-amber); border-color: var(--amber-30); }
+.propose-trigger:active:not(:disabled) { transform: translateY(1px); box-shadow: var(--bezel-key-down); }
 .propose-trigger[aria-expanded="true"] { color: var(--color-amber); border-color: var(--amber-30); }
-.propose-trigger:disabled { opacity: 0.4; cursor: not-allowed; }
+.propose-trigger:focus-visible { outline: 1.5px solid var(--color-amber); outline-offset: 2px; }
+.propose-trigger:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
 /* The panel anchors to the composer (`.input-area-inner` is `position:
    relative`), opening UPWARD so it never gets clipped by the keyboard on a
@@ -45,9 +53,13 @@
     padding: 12px;
     background: var(--color-espresso);
     border: 1px solid var(--color-bean);
+    /* The accent crown ties the panel to whichever scene's composer opened it. */
+    border-top: 2px solid var(--scene-accent, var(--color-amber));
     border-radius: var(--radius-sm);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     z-index: 20;
+    transform-origin: bottom right;
+    animation: fadeInScale var(--dur-med, 220ms) var(--ease-out);
 }
 
 .propose-hint {
@@ -58,23 +70,82 @@
     line-height: 1.4;
 }
 
+/* The kind picker: one full-width row per move — icon + label + hint — so the
+   choice reads as a menu of distinct instruments, not a row of chips. */
 .propose-kinds {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    flex-direction: column;
+    gap: 4px;
 }
 .propose-kind-btn {
-    padding: 7px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 7px 9px;
     background: var(--color-cacao);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
     color: var(--color-bone);
     font-family: var(--font-serif);
     font-size: 13px;
+    text-align: left;
     cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
+    transition:
+        transform var(--dur-fast, 140ms) var(--ease-out),
+        background-color var(--dur-fast, 140ms) var(--ease-out),
+        border-color var(--dur-fast, 140ms) var(--ease-out);
 }
-.propose-kind-btn:hover { color: var(--color-amber); border-color: var(--amber-30); }
+/* Hover slides the row toward the hand and warms the icon well. */
+.propose-kind-btn:hover {
+    transform: translateX(3px);
+    background: var(--amber-08);
+    border-color: var(--amber-30);
+}
+.propose-kind-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    flex: none;
+    color: var(--color-secondary);
+    background: var(--color-well);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    transition:
+        color var(--dur-fast, 140ms) var(--ease-out),
+        border-color var(--dur-fast, 140ms) var(--ease-out);
+}
+.propose-kind-btn:hover .propose-kind-icon {
+    color: var(--color-amber);
+    border-color: var(--amber-30);
+}
+.propose-kind-icon svg { width: 13px; height: 13px; }
+.propose-kind-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+.propose-kind-label { font-weight: 600; }
+.propose-kind-hint {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Reserved for a destructive move — none of the current four kinds is one.
+   When one arrives it is weight + mark + hue together, never hue alone. */
+.propose-kind-btn.danger { color: var(--color-error); }
+.propose-kind-btn.danger,
+.propose-kind-btn.danger .propose-kind-icon { border-color: var(--scar-18); }
+.propose-kind-btn.danger .propose-kind-icon { color: var(--color-error); }
+.propose-kind-btn.danger .propose-kind-label { text-decoration: underline; }
+.propose-kind-btn.danger:hover { background: var(--scar-10); border-color: var(--scar-35); }
 
 .propose-form { display: flex; flex-direction: column; gap: 8px; }
 
@@ -85,7 +156,10 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .05em;
+    transition: color var(--dur-fast, 140ms) var(--ease-out);
 }
+/* The label of the field you're in steps up a tier — a quiet "you are here". */
+.propose-field:focus-within label { color: var(--color-secondary); }
 .propose-field input,
 .propose-field textarea,
 .propose-field select {
@@ -94,10 +168,12 @@
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     color: var(--color-bone);
+    caret-color: var(--color-amber);
     font-family: var(--font-serif);
     font-size: 13px;
     resize: vertical;
     outline: none;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out);
 }
 .propose-field input:focus,
 .propose-field textarea:focus,
@@ -123,30 +199,42 @@
     padding: 6px 12px;
     background: transparent;
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
     color: var(--color-faint);
     font-family: var(--font-stencil);
     font-size: 12px;
     letter-spacing: .05em;
     cursor: pointer;
+    box-shadow: var(--bezel-key);
+    transition:
+        color var(--dur-fast, 140ms) var(--ease-out),
+        border-color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
 }
-.propose-cancel:hover:not(:disabled) { color: var(--color-secondary); }
-.propose-cancel:disabled { opacity: 0.4; cursor: not-allowed; }
+.propose-cancel:hover:not(:disabled) { color: var(--color-secondary); border-color: var(--color-crater); }
+.propose-cancel:active:not(:disabled) { transform: translateY(1px); box-shadow: var(--bezel-key-down); }
+.propose-cancel:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
 .propose-submit {
     padding: 6px 14px;
     background: var(--color-amber);
-    border: none;
-    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-amber-hot);
+    border-radius: var(--radius-control);
     color: var(--color-void);
     font-family: var(--font-stencil);
     font-size: 12px;
     letter-spacing: .05em;
     cursor: pointer;
-    transition: background 0.15s;
+    box-shadow: var(--bezel-key);
+    transition:
+        background var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
 }
 .propose-submit:hover:not(:disabled) { background: var(--color-amber-hot); }
-.propose-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+.propose-submit:active:not(:disabled) { transform: translateY(1px); box-shadow: var(--bezel-key-down); }
+.propose-submit:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
 .propose-sent {
     display: flex;
@@ -168,5 +256,29 @@
         left: 50%;
         transform: translateX(-50%);
         width: min(360px, calc(100vw - 24px));
+        /* The default fadeInScale would drop the centering translate while it
+           runs — this variant carries it through the animation. */
+        animation-name: propose-panel-in-centered;
     }
+}
+@keyframes propose-panel-in-centered {
+    from { opacity: 0; transform: translateX(-50%) scale(0.95) translateY(6px); }
+    to { opacity: 1; transform: translateX(-50%) scale(1) translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .propose-panel { animation: none; }
+    .propose-trigger,
+    .propose-kind-btn,
+    .propose-kind-icon,
+    .propose-field label,
+    .propose-field input,
+    .propose-field textarea,
+    .propose-field select,
+    .propose-cancel,
+    .propose-submit { transition: none; }
+    .propose-trigger:active:not(:disabled),
+    .propose-cancel:active:not(:disabled),
+    .propose-submit:active:not(:disabled),
+    .propose-kind-btn:hover { transform: none; }
 }

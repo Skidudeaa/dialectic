@@ -1,29 +1,118 @@
+/* ══════════════════════════════════════════════════════════════
+   COMMITMENT DASHBOARD — the stakes register.
+   Chassis summary readouts (Filed/Pending/Kept/Missed), segmented
+   filter tabs with lamp + underline active state, ruled section
+   headers, contract slips dealt in below.
+   NOTE: .calibration-section is shared with TrackRecordPanel.
+   ══════════════════════════════════════════════════════════════ */
 .commitment-dashboard {
     display: flex;
     flex-direction: column;
     gap: 14px;
 }
+/* Ruled register header */
 .commitment-dashboard h3 {
     margin: 0;
-    font-family: var(--font-mono);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-stencil);
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .18em;
-    color: var(--color-secondary);
+    color: var(--color-bone);
+    text-shadow: var(--engrave);
 }
+.commitment-dashboard h3::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid var(--color-bean);
+    box-shadow: 0 1px 0 rgba(255,249,240,.04);
+}
+
+/* Summary strip — instrument readouts on a machined band */
+.stakes-summary {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;  /* gaps become machined dividers via the bean base */
+    background: var(--color-bean);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-chassis);
+    overflow: hidden;
+    box-shadow: var(--bezel-raised);
+    animation: dash-rise var(--dur-med, 220ms) var(--ease-out) backwards;
+}
+@keyframes dash-rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.stakes-summary .readout {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 7px;
+    align-items: center;
+    padding: 8px 10px 9px;
+    background: var(--chassis-brush), var(--color-chassis);
+}
+.readout-led {
+    grid-row: 1 / 3;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--led-off);
+}
+/* Every readout pairs its hue with an engraved label — no color-only signals */
+.readout-total   .readout-led { background: var(--led-amber);    box-shadow: var(--led-glow-amber); }
+.readout-pending .readout-led { background: var(--color-warning); box-shadow: 0 0 6px 1px rgba(216,182,104,.55); }
+.readout-kept    .readout-led { background: var(--led-teal);     box-shadow: var(--led-glow-teal); }
+.readout-missed  .readout-led { background: var(--color-error);   box-shadow: 0 0 6px 1px rgba(221,107,63,.5); }
+.readout-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--color-secondary);
+    text-shadow: var(--engrave);
+}
+.readout-value {
+    justify-self: start;
+    margin-top: 3px;
+    padding: 1px 6px 2px;
+    background: var(--color-well);
+    box-shadow: var(--bezel-well);
+    border-radius: var(--radius-control);
+}
+.readout-value .seg {
+    font-family: var(--font-seg);
+    font-size: 14px;
+    line-height: 1.2;
+    color: var(--color-amber);
+}
+.readout-pending .seg { color: var(--color-warning); }
+.readout-kept .seg { color: var(--color-teal); }
+.readout-missed .seg { color: var(--color-error); }
+
+/* Filter tabs — segmented chassis keys. Active = fill + 2px underline
+   bar + lamp dot + weight, never hue alone. */
 .commitment-tabs {
     display: flex;
     gap: 3px;
-    background: var(--color-espresso);
+    background: var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
     padding: 3px;
+    box-shadow: var(--bezel-raised);
 }
 .commitment-tabs button {
     flex: 1;
-    padding: 4px 10px;
-    border: none;
-    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
     font-family: var(--font-mono);
     font-size: 12px;
     text-transform: uppercase;
@@ -31,26 +120,103 @@
     cursor: pointer;
     background: transparent;
     color: var(--color-faint);
-    transition: all 0.15s var(--ease-out);
+    transition: background var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                transform var(--dur-fast, 140ms) var(--ease-out);
+}
+.commitment-tabs button:hover { color: var(--color-bone); }
+.commitment-tabs button:active { transform: translateY(1px); }
+.commitment-tabs button:focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: -1px;
 }
 .commitment-tabs button.active {
-    background: var(--color-cacao);
+    background: var(--color-espresso);
     color: var(--color-bone);
-    border: 1px solid var(--color-bean);
+    border-color: var(--color-bean);
+    font-weight: 700;
+    box-shadow: var(--bezel-key-down),
+                inset 0 -2px 0 var(--scene-accent, var(--color-amber));
 }
+.commitment-tabs button.active::before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--scene-accent, var(--color-amber));
+    box-shadow: var(--led-glow-amber);
+}
+.commitment-tabs .tab-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.4;
+    min-width: 16px;
+    text-align: center;
+    padding: 0 4px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--color-bean);
+    background: var(--color-well);
+    color: var(--color-secondary);
+}
+.commitment-tabs button.active .tab-count {
+    color: var(--color-bone);
+    border-color: var(--color-crater);
+}
+
+/* Ruled section header above the slips */
+.stakes-section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.stakes-section-header::before,
+.stakes-section-header::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid var(--color-bean);
+}
+.stakes-section-title {
+    font-family: var(--font-stencil);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    color: var(--color-secondary);
+}
+.stakes-section-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.6;
+    color: var(--color-faint);
+    border: 1px solid var(--color-bean);
+    background: var(--color-well);
+    border-radius: var(--radius-full);
+    padding: 0 6px;
+}
+
 .commitment-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
+/* Dealt-in stagger for the first slips (rise-in lives on the card) */
+.commitment-list .commitment-card:nth-child(2) { animation-delay: 40ms; }
+.commitment-list .commitment-card:nth-child(3) { animation-delay: 80ms; }
+.commitment-list .commitment-card:nth-child(4) { animation-delay: 120ms; }
+.commitment-list .commitment-card:nth-child(5) { animation-delay: 160ms; }
+.commitment-list .commitment-card:nth-child(n+6) { animation-delay: 200ms; }
 .commitment-empty {
     text-align: center;
     padding: 32px 16px;
     color: var(--color-ghost);
     font-family: var(--font-mono);
     font-size: 12px;
+    border: 1px dashed var(--color-bean);
+    border-radius: var(--radius-sm);
 }
-/* New commitment button — dashed bean border */
+
+/* New commitment — a blank slip slot */
 .new-commitment-btn {
     background: transparent;
     border: 1px dashed var(--color-bean);
@@ -63,12 +229,22 @@
     letter-spacing: .08em;
     cursor: pointer;
     text-align: center;
-    transition: border-color 0.15s;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                background var(--dur-fast, 140ms) var(--ease-out),
+                transform var(--dur-fast, 140ms) var(--ease-out);
 }
 .new-commitment-btn:hover {
     border-color: var(--amber-30);
     color: var(--color-amber);
+    background: var(--amber-08);
 }
+.new-commitment-btn:active { transform: translateY(1px); }
+.new-commitment-btn:focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 1px;
+}
+
 /* Create form */
 .commitment-create-form {
     background: var(--color-espresso);
@@ -79,6 +255,7 @@
     flex-direction: column;
     gap: 10px;
     box-shadow: var(--shadow-md);
+    animation: dash-rise var(--dur-med, 220ms) var(--ease-out) backwards;
 }
 .commitment-create-form label {
     font-family: var(--font-mono);
@@ -93,20 +270,30 @@
 .commitment-create-form input,
 .commitment-create-form textarea,
 .commitment-create-form select {
-    background: var(--color-void);
+    background: var(--color-well);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
+    box-shadow: var(--bezel-well);
     color: var(--color-bone);
     font-family: var(--font-serif);
     font-size: 13px;
     padding: 7px 9px;
     outline: none;
-    transition: border-color 0.15s;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 .commitment-create-form input:focus,
 .commitment-create-form textarea:focus,
-.commitment-create-form select:focus { border-color: var(--amber-30); }
+.commitment-create-form select:focus {
+    border-color: var(--amber-30);
+    box-shadow: var(--bezel-well), inset 0 0 0 1px var(--amber-30);
+}
 .commitment-create-form textarea { resize: vertical; min-height: 60px; }
+.commitment-create-form input[type="range"] {
+    accent-color: var(--color-amber);
+    box-shadow: none;
+    padding: 0;
+}
 .form-row { display: flex; gap: 10px; }
 .form-row label { flex: 1; }
 .form-actions {
@@ -114,39 +301,89 @@
     justify-content: flex-end;
     gap: 6px;
 }
+/* Chassis keys — raised bezel, real travel on press */
 .form-actions button {
     padding: 5px 12px;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
     font-family: var(--font-stencil);
     font-size: 12px;
     letter-spacing: .04em;
     text-transform: uppercase;
     cursor: pointer;
+    box-shadow: var(--bezel-key);
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                background var(--dur-fast, 140ms) var(--ease-out);
+}
+.form-actions button:active {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
+}
+.form-actions button:focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 1px;
 }
 .form-actions .cancel-btn {
-    background: transparent;
+    background: var(--color-chassis);
     color: var(--color-secondary);
     border: 1px solid var(--color-bean);
 }
+.form-actions .cancel-btn:hover { color: var(--color-bone); border-color: var(--color-crater); }
 .form-actions .submit-btn {
     background: var(--color-amber);
     color: var(--color-void);
     border: 1px solid var(--color-amber);
 }
+.form-actions .submit-btn:hover:not(:disabled) {
+    background: var(--color-amber-hot);
+    border-color: var(--color-amber-hot);
+}
 .form-actions .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-/* Calibration chart */
+
+/* Calibration chart — instrument panel with display glass.
+   Shared with TrackRecordPanel (kept deliberately). */
 .calibration-section {
-    background: var(--color-espresso);
+    background: var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-chassis);
     padding: 14px;
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--bezel-raised);
 }
 .calibration-section h4 {
     margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
     font-family: var(--font-mono);
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--color-secondary);
+    text-shadow: var(--engrave);
+}
+.calibration-section h4::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid var(--color-bean);
+}
+.calibration-section svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    background: var(--color-well);
+    box-shadow: var(--bezel-well);
+    border-radius: var(--radius-control);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .stakes-summary,
+    .commitment-create-form { animation: none; }
+    .commitment-list .commitment-card { animation-delay: 0ms; }
+    .commitment-tabs button,
+    .new-commitment-btn,
+    .form-actions button,
+    .commitment-create-form input,
+    .commitment-create-form textarea,
+    .commitment-create-form select { transition: none; }
 }

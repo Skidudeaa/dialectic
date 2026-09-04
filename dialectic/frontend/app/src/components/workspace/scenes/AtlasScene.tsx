@@ -150,17 +150,19 @@ function buildTree(nodes: AtlasNode[]) {
   return { rooms, branchesByRoom, artifactsByBranch, artifactsByRoomOnly }
 }
 
-function RoomSection({ room, branchesByRoom, artifactsByBranch, artifactsByRoomOnly, onNavigate }: {
+function RoomSection({ room, branchesByRoom, artifactsByBranch, artifactsByRoomOnly, onNavigate, spotlit = false }: {
   room: AtlasNode
   branchesByRoom: Map<string, AtlasNode[]>
   artifactsByBranch: Map<string, AtlasNode[]>
   artifactsByRoomOnly: Map<string, AtlasNode[]>
   onNavigate: (d: AtlasNavigateDestination) => void
+  /** The room that owns the currently selected map object gets the spotlight. */
+  spotlit?: boolean
 }) {
   const branches = branchesByRoom.get(room.room_id) ?? []
   const roomOnly = artifactsByRoomOnly.get(room.room_id) ?? []
   return (
-    <li className="atlas-room-section">
+    <li className="atlas-room-section" data-spotlit={spotlit ? 'true' : undefined}>
       <ul className="atlas-list">
         <NodeRow node={room} onNavigate={onNavigate} />
         {roomOnly.map((a) => <NodeRow key={a.id} node={a} onNavigate={onNavigate} depth={1} />)}
@@ -191,7 +193,7 @@ function EchoesGroup({ edges, nodesById, onNavigate }: {
   const echoes = edges.filter((e) => e.kind === 'echo_citation')
   if (echoes.length === 0) return null
   return (
-    <section className="atlas-group" aria-label="Echoes">
+    <section className="atlas-group atlas-group-echoes" aria-label="Echoes">
       <h3 className="atlas-group-title">Echoes</h3>
       <ul className="atlas-list">
         {echoes.map((edge, i) => {
@@ -285,7 +287,7 @@ function OnTheMapGroup({
 }) {
   if (scopes.length === 0) {
     return (
-      <p className="world-note">
+      <p className="world-note world-note-quiet">
         Nothing is placed on the world yet. A room's Strait, a reading's
         region, a mark's location — each arrives as a scope a person confirmed
         or a source reported, never as a guess drawn by {PARTICIPANT_NAME}.
@@ -475,19 +477,21 @@ export function AtlasScene({
 
   if (nodes.length === 0) {
     return (
-      <SceneEmpty kicker="Atlas" headline="Nothing to map yet.">
-        <p>
-          Atlas is the map of everywhere you can go — every room you belong
-          to, its branches, and what each one holds: a thesis, a reading, a
-          brief, a commitment, a question still open.
-        </p>
-        <p>
-          It fills in as you join rooms and those rooms fill in — nothing is
-          built here on its own. {PARTICIPANT_NAME} draws only the
-          connections a real row backs: a branch's parent, a citation across
-          rooms, a source an article came from.
-        </p>
-      </SceneEmpty>
+      <div className="atlas-empty">
+        <SceneEmpty kicker="Atlas" headline="Nothing to map yet.">
+          <p>
+            Atlas is the map of everywhere you can go — every room you belong
+            to, its branches, and what each one holds: a thesis, a reading, a
+            brief, a commitment, a question still open.
+          </p>
+          <p>
+            It fills in as you join rooms and those rooms fill in — nothing is
+            built here on its own. {PARTICIPANT_NAME} draws only the
+            connections a real row backs: a branch's parent, a citation across
+            rooms, a source an article came from.
+          </p>
+        </SceneEmpty>
+      </div>
     )
   }
 
@@ -594,6 +598,7 @@ export function AtlasScene({
             artifactsByBranch={artifactsByBranch}
             artifactsByRoomOnly={artifactsByRoomOnly}
             onNavigate={onNavigate}
+            spotlit={selectedScope != null && room.room_id === selectedScope.room_id}
           />
         ))}
       </ul>

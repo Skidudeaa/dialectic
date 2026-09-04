@@ -22,7 +22,8 @@ describe('YourMove', () => {
       move({ commitment_id: 'dan', peers_moved: ['Dan'] }),
     ] })
     render(<YourMove onNavigate={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText(/Your move · 1/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Your move')).toBeInTheDocument())
+    expect(screen.getByLabelText('1 waiting on you')).toBeInTheDocument()
     const items = screen.getAllByRole('button')
     expect(items[0]).toHaveTextContent('Dan moved')
     expect(items[1]).toHaveTextContent('you forecast')

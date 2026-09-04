@@ -1,0 +1,175 @@
+/* LibraryScene — the card catalog. Everything here is scoped under
+   .library-scene-body so it outranks the unscoped shelf silhouette in
+   WorkspaceSceneFrame.css without editing that file. The accent is the
+   scene's own — sage at rest — read through the shared contract vars with a
+   fallback so the sheet is valid before the identity layer lands. */
+
+/* ── The toolbar: a catalog drawer face ─────────────────────────────────── */
+.library-scene-body .library-toolbar {
+    border-top: 2px solid var(--scene-accent, var(--color-sage));
+    background:
+        var(--chassis-brush),
+        var(--color-chassis);
+}
+.library-scene-body .library-filter > span { text-shadow: var(--engrave); }
+
+/* ── The refresh affordance: a small brass crank on the drawer ──────────── */
+.library-refresh {
+    align-self: end;
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--scene-accent, var(--color-sage));
+}
+.library-refresh:hover { color: var(--color-bone); }
+.library-refresh-glyph { width: 12px; height: 12px; display: block; }
+.library-refresh[data-working="true"] .library-refresh-glyph {
+    animation: library-refresh-spin 0.9s linear infinite;
+}
+@keyframes library-refresh-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ── The catalog card: ruled index stock with a margin line and a punched
+     hole, lifted and tilted a degree on hover like a card pulled from the
+     drawer ──────────────────────────────────────────────────────────────── */
+.library-scene-body .library-card {
+    position: relative;
+    background:
+        linear-gradient(
+            to right,
+            transparent 0 27px,
+            var(--scene-accent-soft, var(--sage-12)) 27px 28px,
+            transparent 28px
+        ),
+        repeating-linear-gradient(
+            to bottom,
+            transparent 0 25px,
+            var(--scene-accent-soft, var(--sage-12)) 25px 26px
+        ),
+        var(--color-cacao);
+    border-left: 3px solid var(--scene-accent, var(--color-sage));
+    transform-origin: 50% 100%;
+    transition: transform var(--dur-med, 220ms) var(--ease-out),
+                box-shadow var(--dur-med, 220ms) var(--ease-out),
+                border-color var(--dur-med, 220ms) var(--ease-out);
+}
+/* The punched hole on the margin. */
+.library-scene-body .library-card::before {
+    content: '';
+    position: absolute;
+    top: 9px;
+    left: 10px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--color-void);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.6), 0 1px 0 rgba(255,249,240,.05);
+    pointer-events: none;
+}
+.library-scene-body .library-card:hover {
+    transform: perspective(900px) rotateX(1deg) rotateZ(-.5deg) translateY(-3px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-crater);
+    border-left-color: var(--scene-accent, var(--color-sage));
+}
+/* Press = real travel: the lifted card settles back onto the drawer. */
+.library-scene-body .library-card:has(> .library-card-open:active) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Text clears the margin line; the hover wash is a tint, not a fill, so the
+   ruling stays visible under the reader's hand. */
+.library-scene-body .library-card-open {
+    padding-left: 36px;
+    transition: background-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
+}
+.library-scene-body .library-card-open:hover {
+    background: var(--scene-accent-soft, var(--sage-12));
+}
+.library-scene-body .library-card-open:focus-visible {
+    outline: 2px solid var(--scene-accent, var(--color-sage));
+    outline-offset: -2px;
+    box-shadow: 0 0 0 4px var(--scene-accent-soft, var(--sage-12));
+}
+
+/* The call number: the source domain, set in mono with a catalog mark. */
+.library-scene-body .library-card-site {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    color: var(--color-ink);
+    letter-spacing: .1em;
+}
+.library-card-site-mark {
+    color: var(--scene-accent, var(--color-sage));
+    font-size: 10px;
+}
+
+/* The excerpt: the kept quote, set in serif italic against a pencilled rule. */
+.library-scene-body .library-card-summary {
+    font-style: italic;
+    border-left: 2px solid var(--scene-accent-soft, var(--sage-12));
+    padding-left: 10px;
+}
+
+/* The revision tag files itself in the scene's ink. */
+.library-scene-body .library-card-revisions {
+    border-color: var(--scene-accent, var(--color-sage));
+    color: var(--scene-accent, var(--color-sage));
+    background: var(--scene-accent-soft, var(--sage-12));
+}
+
+/* ── The provenance stamp: a rubber stamp, struck slightly off-square.
+     Word + mark + border style carry the meaning; hue is the garnish.
+     "Filed by you" is a solid struck stamp; "filed by wire" is perforated —
+     machine-filed. ───────────────────────────────────────────────────────── */
+.library-card-stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 1px 7px;
+    border: 1px solid;
+    border-radius: var(--radius-control);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    transform: rotate(-1.1deg);
+    transform-origin: left center;
+}
+.library-card-stamp-glyph { width: 11px; height: 11px; display: block; }
+.library-scene-body .library-card-stamp.is-you {
+    color: var(--scene-accent, var(--color-sage));
+    border-color: var(--scene-accent, var(--color-sage));
+    background: var(--scene-accent-soft, var(--sage-12));
+}
+.library-scene-body .library-card-stamp.is-wire {
+    color: var(--color-steel);
+    border-color: var(--steel-30);
+    border-style: dashed;
+    background: var(--steel-12);
+}
+
+/* ── Paging ─────────────────────────────────────────────────────────────── */
+.library-scene-body .library-more {
+    padding-top: 4px;
+    border-top: 1px dashed var(--color-bean);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .library-refresh[data-working="true"] .library-refresh-glyph { animation: none; }
+    .library-scene-body .library-card:hover { transform: none; }
+    .library-scene-body .library-card:has(> .library-card-open:active) { transform: none; }
+}
+
+@media (max-width: 760px) {
+    .library-scene-body .library-refresh { justify-self: stretch; width: 100%; justify-content: center; }
+}

@@ -179,6 +179,11 @@ export function AuthScreen() {
   return (
     <div className="auth-screen">
       <div className="auth-card">
+        <div className="auth-stamp-row" aria-hidden="true">
+          <span className="auth-stamp">Case dossier</span>
+          <span className="auth-stamp-rule" />
+          <span className="auth-stamp auth-stamp--hot">Eyes only</span>
+        </div>
         <div className="auth-header">
           <h1 className="auth-logo">&#9671; {PRODUCT_NAME}</h1>
           <p className="auth-subtitle">Where two people and {PARTICIPANT_NAME} think about one thing together</p>
@@ -204,10 +209,28 @@ export function AuthScreen() {
         </div>
 
         {signedOutReason && !error && (
-          <div className="auth-notice" role="status">{signedOutReason}</div>
+          <div className="auth-notice" role="status">
+            <svg className="auth-slip-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M8 7.4v3.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="8" cy="4.9" r=".95" fill="currentColor" />
+            </svg>
+            <span className="auth-slip-tag" aria-hidden="true">Notice</span>
+            <span className="auth-slip-text">{signedOutReason}</span>
+          </div>
         )}
 
-        {error && <div className="auth-error" role="alert">{error}</div>}
+        {error && (
+          <div className="auth-error" role="alert">
+            <svg className="auth-slip-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M8 1.6 14.8 14H1.2Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+              <path d="M8 6.2v3.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="8" cy="11.7" r=".95" fill="currentColor" />
+            </svg>
+            <span className="auth-slip-tag" aria-hidden="true">Error</span>
+            <span className="auth-slip-text">{error}</span>
+          </div>
+        )}
 
         {activeTab === 'signin' && (
           <form className="auth-form" id="auth-panel-signin" role="tabpanel" aria-labelledby="auth-tab-signin" onSubmit={handleSignIn}>
@@ -235,7 +258,8 @@ export function AuthScreen() {
                 autoComplete="current-password"
               />
             </label>
-            <button className="btn btn-primary btn-full" type="submit" disabled={loading}>
+            <button className="btn btn-primary btn-full" type="submit" disabled={loading} aria-busy={loading}>
+              {loading && <span className="auth-key-lamp" aria-hidden="true" />}
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
             <button
@@ -305,7 +329,8 @@ export function AuthScreen() {
                 autoComplete="new-password"
               />
             </label>
-            <button className="btn btn-primary btn-full" type="submit" disabled={loading}>
+            <button className="btn btn-primary btn-full" type="submit" disabled={loading} aria-busy={loading}>
+              {loading && <span className="auth-key-lamp" aria-hidden="true" />}
               {loading ? 'Creating...' : 'Create Account'}
             </button>
           </form>
@@ -336,7 +361,8 @@ export function AuthScreen() {
                 you have an account.
               </p>
             </div>
-            <button className="btn btn-primary btn-full" type="submit" disabled={loading}>
+            <button className="btn btn-primary btn-full" type="submit" disabled={loading} aria-busy={loading}>
+              {loading && <span className="auth-key-lamp" aria-hidden="true" />}
               {loading ? 'Joining...' : 'Continue as guest'}
             </button>
           </form>

@@ -50,6 +50,7 @@ export function SourceState({ state, observedAt }: { state: GeoSourceState; obse
   const age = formatAge(observedAt)
   return (
     <span className="source-state" data-tone={TONE[state]} data-state={state}>
+      <span className="source-state-led" aria-hidden="true" />
       <span className="source-state-word">{LABEL[state]}</span>
       {age && <span className="source-state-age">· {age}</span>}
     </span>

@@ -1,4 +1,5 @@
 import type { HomeActivityMovement, RoomDestination } from '../../types'
+import { agoLabel } from '../../lib/relativeTime.ts'
 import './HouseMovement.css'
 
 const KIND_LABELS: Record<HomeActivityMovement['kind'], string> = {
@@ -15,6 +16,9 @@ const KIND_LABELS: Record<HomeActivityMovement['kind'], string> = {
 interface HouseMovementProps {
   movement: HomeActivityMovement[]
   onNavigate: (destination: RoomDestination) => Promise<boolean> | void
+  /** Room names by id, so a ticker row can NAME its destination instead of
+   *  being a bare door. Optional: tests and unknown rooms render without it. */
+  roomNames?: Record<string, string>
 }
 
 /**
@@ -26,29 +30,36 @@ interface HouseMovementProps {
  * pattern useRoomNavigation exists to prevent. The server's `destination` is
  * carried for provenance and asserted against in tests.
  */
-export function HouseMovement({ movement, onNavigate }: HouseMovementProps) {
+export function HouseMovement({ movement, onNavigate, roomNames }: HouseMovementProps) {
   if (movement.length === 0) return null
 
   return (
     <section className="house-movement" aria-label="What moved">
       <h2>What moved</h2>
       <div className="house-movement-list">
-        {movement.map((item) => (
-          <button
-            key={`${item.kind}:${item.object_id ?? item.occurred_at}`}
-            type="button"
-            className={`house-movement-item${item.requires_judgment ? ' needs-judgment' : ''}`}
-            onClick={() => {
-              void onNavigate({
-                roomId: item.room_id,
-                threadId: item.thread_id,
-              })
-            }}
-          >
-            <span className="house-movement-kind">{KIND_LABELS[item.kind]}</span>
-            <span className="house-movement-title">{item.title}</span>
-          </button>
-        ))}
+        {movement.map((item) => {
+          const room = roomNames?.[item.room_id]
+          const ago = agoLabel(item.occurred_at)
+          return (
+            <button
+              key={`${item.kind}:${item.object_id ?? item.occurred_at}`}
+              type="button"
+              className={`house-movement-item${item.requires_judgment ? ' needs-judgment' : ''}`}
+              onClick={() => {
+                void onNavigate({
+                  roomId: item.room_id,
+                  threadId: item.thread_id,
+                })
+              }}
+            >
+              <span className="house-movement-kind">{KIND_LABELS[item.kind]}</span>
+              <span className="house-movement-title">{item.title}</span>
+              {room && <span className="house-movement-room">{room}</span>}
+              {ago && <span className="house-movement-time">{ago}</span>}
+              <span className="house-movement-arrow" aria-hidden="true">→</span>
+            </button>
+          )
+        })}
       </div>
     </section>
   )

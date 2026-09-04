@@ -1,17 +1,43 @@
+/* The household drawer: one elevated panel in the right rail, its three
+   sections ruled apart like faceplate bays. */
+
 .home-settings {
     display: flex;
     flex-direction: column;
-    gap: 1.15rem;
+    gap: 0.9rem;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--bezel-raised);
+    padding: 12px 14px;
+}
+
+.home-settings section + section {
+    border-top: 1px solid var(--color-bean);
+    padding-top: 0.9rem;
 }
 
 .home-settings h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-family: var(--font-mono);
     font-size: 0.75rem;
     font-weight: normal;
     text-transform: uppercase;
     letter-spacing: 0.16em;
     color: var(--color-secondary);
+    text-shadow: var(--engrave);
     margin: 0 0 0.45rem;
+}
+
+/* Section bay tick — the same instrumented marker as the house strip. */
+.home-settings h3::before {
+    content: '';
+    flex: 0 0 auto;
+    width: 12px;
+    height: 2px;
+    background: var(--scene-accent, var(--color-amber));
 }
 
 .home-settings-note {
@@ -37,6 +63,8 @@
     padding: 4px 0;
 }
 
+.home-household li + li { border-top: 1px solid var(--color-espresso); }
+
 .home-held li {
     grid-template-columns: 1fr;
     gap: 0.15rem;
@@ -46,15 +74,29 @@
 
 .home-held li:last-child { border-bottom: none; }
 
+/* Household presence as panel lamps — the status word sits at the end of
+   the row, and shape backs the hue: lit-with-glow = online, lit = away,
+   hollow = offline. */
 .home-household-dot {
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
+    flex: 0 0 auto;
+    align-self: center;
     background: var(--color-ghost);
 }
-.home-household-dot.online { background: var(--sev-stable); }
-.home-household-dot.away { background: var(--color-warning); }
-.home-household-dot.offline { background: var(--color-ghost); }
+.home-household-dot.online {
+    background: var(--led-green);
+    box-shadow: var(--led-glow-green);
+}
+.home-household-dot.away {
+    background: var(--led-amber);
+    box-shadow: var(--led-glow-amber);
+}
+.home-household-dot.offline {
+    background: transparent;
+    border: 1px solid var(--color-ghost);
+}
 
 .home-household-name {
     font-family: var(--font-serif);
@@ -82,12 +124,6 @@
     line-height: 1.35;
 }
 
-.home-settings-note {
-    color: var(--color-faint);
-    font-size: 0.76rem;
-    line-height: 1.4;
-}
-
 .home-settings-form {
     display: flex;
     flex-wrap: wrap;
@@ -96,19 +132,52 @@
 
 .home-settings-form .form-input { flex: 1; min-width: 0; }
 
+/* Control focus rings: the scene accent on every control in the panel. */
+.home-settings .form-input:focus {
+    border-color: var(--scene-accent, var(--amber-30));
+    box-shadow: 0 0 0 2px var(--scene-accent-soft, rgba(242,162,74,.15));
+}
+
+.home-settings .form-input:focus-visible,
+.home-settings .btn:focus-visible {
+    outline: 2px solid var(--scene-accent, var(--color-amber));
+    outline-offset: 1px;
+}
+
+/* The member-add confirmation is a raised key bay: accent edge, elevated. */
 .home-settings-confirm {
     border: 1px solid var(--color-bean);
+    border-left: 3px solid var(--scene-accent, var(--color-amber));
     border-radius: var(--radius-sm);
-    padding: 8px;
+    background: var(--color-espresso);
+    box-shadow: var(--bezel-raised);
+    padding: 10px 12px;
     font-size: 0.78rem;
     color: var(--color-secondary);
 }
 
+.home-settings-confirm p { margin: 0; }
+.home-settings-confirm strong { color: var(--color-bone); }
+
 .home-settings-confirm-actions {
     display: flex;
     gap: 0.4rem;
-    margin-top: 6px;
+    margin-top: 8px;
 }
 
-.home-settings-result { color: var(--color-secondary); font-size: 0.76rem; }
-.home-settings-error { color: var(--color-error, #c0605d); font-size: 0.76rem; }
+/* Outcomes get a state edge, not just a hue — the bar is the shape. */
+.home-settings-result {
+    color: var(--color-secondary);
+    font-size: 0.76rem;
+    margin: 0.4rem 0 0;
+    padding-left: 10px;
+    border-left: 2px solid var(--led-teal);
+}
+
+.home-settings-error {
+    color: var(--color-error, #c0605d);
+    font-size: 0.76rem;
+    margin: 0.4rem 0 0;
+    padding-left: 10px;
+    border-left: 2px solid var(--color-error);
+}

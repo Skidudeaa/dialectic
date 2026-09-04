@@ -1,16 +1,17 @@
 import type { ImplementedWorkspaceScene } from '../../types'
-import { SCENE_LABELS, SCENE_HINTS, SCENE_GLYPHS, SCENE_PRIMER } from './sceneIdentity'
+import { SCENE_LABELS, SCENE_HINTS, SCENE_MOTIFS, SCENE_PRIMER } from './sceneIdentity'
 import './SceneMasthead.css'
 
 /**
  * SceneMasthead — the place-maker (2026-08-18, owner: "I don't know where I
  * am or why I'm there").
  *
- * Every scene opens by naming itself: a glyph plate, the scene name set large
- * in the scene's own accent color, and its purpose line promoted from the old
- * one-line switcher hint. Paired with the per-scene `--scene-accent` set in
- * WorkspaceSceneFrame.css, this is what makes the Library feel like a
- * different room than the Ledger instead of a different filter.
+ * Every scene opens by naming itself: a glyph plate carrying the scene's
+ * drawn motif, the scene name set large in the scene's own accent color, and
+ * its purpose line promoted from the old one-line switcher hint. Paired with
+ * the per-scene `--scene-accent` set by src/styles/scenes.css, this is what
+ * makes the Library feel like a different room than the Ledger instead of a
+ * different filter.
  *
  * The transcript surfaces (record, house) get the COMPACT variant — a single
  * quiet line — because the sheet is their identity and the masthead must not
@@ -53,7 +54,22 @@ export function SceneMasthead({ scene }: { scene: ImplementedWorkspaceScene }) {
     <header className={`scene-masthead${compact ? ' scene-masthead-compact' : ''}`}>
       <details className="scene-masthead-primer" key={scene}>
         <summary className="scene-masthead-inner">
-          <span className="scene-masthead-glyph" aria-hidden="true">{SCENE_GLYPHS[scene]}</span>
+          <span className="scene-masthead-glyph" aria-hidden="true">
+            <svg
+              className="scene-masthead-motif"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              focusable="false"
+            >
+              {SCENE_MOTIFS[scene].map((d) => (
+                <path key={d} d={d} />
+              ))}
+            </svg>
+          </span>
           <div className="scene-masthead-text">
             <h2 className="scene-masthead-name">{SCENE_LABELS[scene]}</h2>
             <p className="scene-masthead-purpose" aria-live="polite">{SCENE_HINTS[scene]}</p>

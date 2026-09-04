@@ -31,8 +31,14 @@ export function YourMove({ onNavigate, refreshVersion = 0 }: {
   return (
     <section className="your-move" aria-label="Your move">
       <div className="your-move-head">
-        <b>{pending.length ? `Your move · ${pending.length}` : 'No open question waits on you'}</b>
-        <span>{moves.length} open in the Round</span>
+        <b>{pending.length ? 'Your move' : 'No open question waits on you'}</b>
+        {pending.length > 0 && (
+          <span className="your-move-count" aria-label={`${pending.length} waiting on you`}>
+            <span className="your-move-count-led" aria-hidden="true" />
+            {pending.length}
+          </span>
+        )}
+        <span className="your-move-total">{moves.length} open in the Round</span>
       </div>
       {moves.length > 0 && (
         <ul className="your-move-list">

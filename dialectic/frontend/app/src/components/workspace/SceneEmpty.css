@@ -1,7 +1,11 @@
 /* The empty state is a primary surface here, not a placeholder: most rooms in
    production hold nothing, so this is what a new user actually reads. It is set
-   to be read — serif, measured line length — rather than glanced past. */
+   to be read — serif, measured line length — rather than glanced past, and it
+   keeps the room's own light: the kicker, the rule above the headline and the
+   card's edge all key off --scene-accent (set by styles/scenes.css), so an
+   empty Ledger does not read like an empty Field. */
 .scene-empty {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -9,13 +13,28 @@
     max-width: 52ch;
     margin: 0 auto;
     text-align: center;
+    border: 1px solid var(--scene-accent-soft, rgba(242,162,74,.10));
+    border-radius: var(--radius-chassis);
+    background: linear-gradient(180deg, var(--scene-accent-soft, transparent), transparent 45%);
+    box-shadow: var(--shadow-sm);
+}
+/* The quiet ornament: one short rule in the room's own hue, fading at both
+   ends — a station mark, not a decoration. */
+.scene-empty::before {
+    content: '';
+    align-self: center;
+    width: 56px;
+    height: 2px;
+    margin-bottom: 0.35rem;
+    background: linear-gradient(90deg, transparent, var(--scene-accent, var(--color-bean)), transparent);
+    opacity: .55;
 }
 .scene-empty-kicker {
     font-family: var(--font-mono);
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .18em;
-    color: var(--color-faint);
+    color: var(--scene-accent, var(--color-faint));
 }
 .scene-empty-headline {
     font-family: var(--font-serif);
@@ -43,10 +62,32 @@
 }
 .scene-empty-action { margin-top: 0.75rem; }
 
-/* Unavailable is deliberately warning-toned, never neutral: it must not read
-   as "there is nothing here". */
+/* Unavailable is deliberately warning-toned, never neutral, and it drops the
+   scene's accent entirely: a failed projection must not wear the room's light
+   as if the room were merely quiet. */
+.scene-unavailable {
+    border-color: rgba(216,182,104,.32);
+    background: linear-gradient(180deg, rgba(216,182,104,.06), transparent 45%);
+}
+.scene-unavailable::before {
+    background: linear-gradient(90deg, transparent, var(--color-warning), transparent);
+}
+.scene-unavailable .scene-empty-kicker { color: var(--color-warning); }
 .scene-unavailable .scene-empty-headline { color: var(--color-warning); }
-.scene-loading .scene-empty-body { color: var(--color-faint); }
+
+/* Loading is the quietest state: the room's rule stays, the body waits. */
+.scene-loading { border-style: dashed; }
+.scene-loading .scene-empty-body {
+    color: var(--color-faint);
+    animation: scene-empty-wait 2.2s ease-in-out infinite;
+}
+@keyframes scene-empty-wait {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: .55; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .scene-loading .scene-empty-body { animation: none; }
+}
 
 @media (max-width: 640px) {
     .scene-empty { padding: 2rem 1rem; }

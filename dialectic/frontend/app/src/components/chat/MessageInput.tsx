@@ -409,6 +409,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
     <div className="input-area">
       <div
         className={`input-area-inner${isDragging ? ' input-dragging' : ''}`}
+        data-has-draft={content.trim().length > 0 || undefined}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -585,11 +586,16 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
             <span className="input-notice" role="status">{notice}</span>
           ) : (
             <span>
-              Enter to send &middot; links get read &amp; fact-checked &middot;
+              <kbd>Enter</kbd> to send &middot; links get read &amp; fact-checked &middot;
               {onResearch ? ' ✦ Research = deep dive with sources' : ' paste or drop files'}
             </span>
           )}
-          <span>? for shortcuts</span>
+          <span className="input-hints-right">
+            {content.length > 0 && (
+              <span className="draft-count">draft &middot; {content.length} char{content.length === 1 ? '' : 's'}</span>
+            )}
+            <span>? for shortcuts</span>
+          </span>
         </div>
       </div>
     </div>

@@ -21,13 +21,25 @@
     /* v3 INSTRUMENT PANEL: the "instrument cards" this file always promised,
        now machined — raised chassis face with a dual-light bezel edge and a
        brushed grain. The paper shadow idiom stays with the dossier sheet;
-       the Bench is hardware. */
+       the Bench is hardware. The 2px top rail carries the scene accent
+       (amber on the Bench) so the module reads as bolted into THIS desk. */
     background: var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
+    border-top: 2px solid var(--scene-accent, var(--color-amber));
     border-radius: var(--radius-chassis);
     padding: 12px 14px 14px;
     box-shadow: var(--bezel-raised);
     position: relative;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
+}
+/* The whole face responds to approach — a real raise, not a color hint. */
+.cockpit-module:hover {
+    transform: translateY(-1px);
+    border-color: var(--color-crater);
+    border-top-color: var(--scene-accent, var(--color-amber));
+    box-shadow: var(--bezel-raised), 0 6px 16px rgba(0,0,0,.26);
 }
 
 /* Faceplate screws — two machined heads on the top rail. Decorative only. */
@@ -64,6 +76,32 @@
     letter-spacing: .18em;
     color: var(--color-bone);
     text-shadow: var(--engrave); /* engraved plate */
+}
+
+/* LIVE lamp — hue (teal) paired with the word LIVE and a ROUND lamp shape;
+   hover anywhere on the module freezes the blink (the pause affordance). */
+.cockpit-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--color-teal);
+    white-space: nowrap;
+}
+.cockpit-live-lamp {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--led-teal);
+    box-shadow: var(--led-glow-teal);
+    animation: led-blink calc(var(--dur-ambient, 2400ms) * 0.8) ease-in-out infinite;
+}
+.cockpit-module:hover .cockpit-live-lamp {
+    animation-play-state: paused;
 }
 .cockpit-header-right {
     display: flex;
@@ -123,11 +161,25 @@
     flex-shrink: 0;
 }
 .cockpit-stale-note {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     font-family: var(--font-mono);
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--color-warning);
+}
+/* Stale lamp: SQUARE amber LED — hue + shape distinguish it from the round
+   teal LIVE lamp and from the word "Stale" it accompanies. */
+.cockpit-stale-note::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 1px;
+    flex-shrink: 0;
+    background: var(--led-amber);
+    box-shadow: var(--led-glow-amber);
 }
 
 /* --- One-line facts (PortfolioPanel: cash, equity vs benchmark) --- */
@@ -170,6 +222,10 @@
     font-size: 12px;
     line-height: 1.4;
     max-width: 100%;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out);
+}
+.cockpit-chip:hover {
+    border-color: var(--color-crater);
 }
 .cockpit-chip-symbol {
     color: var(--color-bone);
@@ -189,6 +245,40 @@
     text-shadow: 0 0 4px rgba(242,162,74,.45);
     white-space: nowrap;
 }
+/* Tick flash — a moved quote flares once in its direction's hue (the arrow
+   glyph carries the direction as shape, so the hue never works alone). The
+   value span remounts per price change, which restarts the one-shot. */
+.cockpit-chip-value--up {
+    color: var(--color-teal);
+    animation: cockpit-tick-up var(--dur-slow, 360ms) var(--ease-out);
+}
+.cockpit-chip-value--down {
+    color: var(--color-scarlet);
+    animation: cockpit-tick-down var(--dur-slow, 360ms) var(--ease-out);
+}
+@keyframes cockpit-tick-up {
+    0% { text-shadow: 0 0 12px rgba(84,216,198,.95); }
+    100% { text-shadow: 0 0 4px rgba(84,216,198,.45); }
+}
+@keyframes cockpit-tick-down {
+    0% { text-shadow: 0 0 12px rgba(222,81,81,.95); }
+    100% { text-shadow: 0 0 4px rgba(222,81,81,.45); }
+}
+.cockpit-chip-value--up { text-shadow: 0 0 4px rgba(84,216,198,.45); }
+.cockpit-chip-value--down { text-shadow: 0 0 4px rgba(222,81,81,.45); }
+/* Hovering the strip freezes every in-flight flash. */
+.cockpit-chip-row:hover .cockpit-chip-value {
+    animation-play-state: paused;
+}
+/* Direction arrow — the shape half of the up/down signal. */
+.cockpit-chip-tick {
+    font-size: 9px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.cockpit-chip-tick--up { color: var(--color-teal); }
+.cockpit-chip-tick--down { color: var(--color-scarlet); }
+.cockpit-chip-tick--flat { color: var(--color-ghost); }
 .cockpit-chip-sub {
     color: var(--color-faint);
     font-size: 12px;
@@ -213,6 +303,7 @@
     font-size: 12px;
     font-weight: normal;
     color: var(--color-ghost);
+    text-shadow: var(--engrave);
     padding: 4px 6px;
     border-bottom: 1px solid var(--color-bean);
     white-space: nowrap;
@@ -223,11 +314,46 @@
     color: var(--color-ink);
     vertical-align: top;
 }
+/* Column hierarchy: the leading identifier column carries the weight. */
+.cockpit-table tbody td:first-child,
+.cockpit-mini-table tbody td:first-child {
+    color: var(--color-bone);
+}
+/* Zebra: a faint warm wash on even rows keeps long tables scannable. */
+.cockpit-table tbody tr:nth-child(even),
+.cockpit-mini-table tbody tr:nth-child(even) {
+    background: color-mix(in srgb, var(--color-amber) 4%, transparent);
+}
+.cockpit-table tbody tr,
+.cockpit-mini-table tbody tr {
+    transition: background-color var(--dur-fast, 140ms) var(--ease-out);
+}
+.cockpit-table tbody tr:hover,
+.cockpit-mini-table tbody tr:hover {
+    background: var(--amber-08);
+}
+/* Numeric cells: right-aligned, tabular figures; .cockpit-seg upgrades the
+   digits to the seven-segment display face (units fall back to mono). */
+.cockpit-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+th.cockpit-num { text-align: right; }
+.cockpit-seg {
+    font-family: var(--font-seg);
+    letter-spacing: .08em;
+}
+/* Signed figures pair an arrow glyph with the hue — never color alone. */
+.cockpit-signed { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cockpit-signed--pos { color: var(--sev-stable); }
+.cockpit-signed--neg { color: var(--color-scarlet); }
+.cockpit-signed-glyph { font-size: 9px; margin-right: 2px; }
 .cockpit-table-row[data-expandable="true"] {
     cursor: pointer;
 }
 .cockpit-table-row[data-expandable="true"]:hover {
-    background: var(--color-cacao);
+    background: var(--amber-08);
 }
 .cockpit-table-row[data-expandable="true"]:focus-visible {
     outline: 1px solid var(--color-amber);
@@ -237,7 +363,8 @@
     display: inline-block;
     width: 0.9em;
     color: var(--color-faint);
-    transition: transform .15s var(--ease-out);
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out);
 }
 .cockpit-table-row[aria-expanded="true"] .cockpit-expand-caret {
     transform: rotate(90deg);
@@ -274,9 +401,16 @@
     border-radius: var(--radius-control);
     box-shadow: var(--bezel-key);
     cursor: pointer;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 .cockpit-btn:hover:not(:disabled) {
     border-color: var(--color-crater);
+    background: color-mix(in srgb, var(--scene-accent, var(--color-amber)) 8%, var(--color-espresso));
+    color: var(--color-bone);
 }
 .cockpit-btn:active:not(:disabled) {
     transform: translateY(1px);
@@ -313,6 +447,9 @@
     text-transform: uppercase;
     letter-spacing: .08em;
     cursor: pointer;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out);
 }
 .cockpit-refresh-btn:hover {
     border-color: var(--color-crater);
@@ -320,6 +457,11 @@
 }
 .cockpit-refresh-btn:active {
     transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
+}
+.cockpit-refresh-btn:focus-visible {
+    outline: 1px solid var(--color-amber);
+    outline-offset: 1px;
 }
 
 /* --- Preformatted text block (MorningBriefCard) --- */
@@ -365,10 +507,11 @@
     text-decoration-color: var(--scar-50);
 }
 .cockpit-diff-arrow {
-    color: var(--color-faint);
+    color: var(--color-teal); /* the transition itself is the live signal */
 }
 .cockpit-diff-new {
     color: var(--color-amber);
+    font-variant-numeric: tabular-nums;
 }
 .cockpit-diff-compact {
     font-family: var(--font-mono);
@@ -428,6 +571,13 @@
     border-bottom: 1px solid rgba(60, 42, 30, .4);
     font-family: var(--font-mono);
     font-size: 12px;
+    transition: background-color var(--dur-fast, 140ms) var(--ease-out);
+}
+.cockpit-alert-row:nth-child(even) {
+    background: color-mix(in srgb, var(--color-amber) 4%, transparent);
+}
+.cockpit-alert-row:hover {
+    background: var(--amber-08);
 }
 .cockpit-alert-row:last-child {
     border-bottom: none;
@@ -518,8 +668,12 @@
     margin-right: 0.25em;
 }
 .cockpit-scenario-prob-authored { color: var(--color-secondary); }
-.cockpit-scenario-prob-live { color: var(--color-amber); }
-.cockpit-scenario-net-impact { color: var(--color-ink); }
+/* Live readings are the desk's teal — authored figures stay warm. */
+.cockpit-scenario-prob-live {
+    color: var(--color-teal);
+    text-shadow: 0 0 4px rgba(84,216,198,.4);
+}
+.cockpit-scenario-net-impact { color: var(--color-ink); font-variant-numeric: tabular-nums; }
 .cockpit-scenario-net-impact--neg { color: var(--color-error); }
 .cockpit-scenario-net-impact--pos { color: var(--sev-stable); }
 .cockpit-scenario-notes {
@@ -638,3 +792,60 @@
 .cockpit-world-link:hover { background: var(--color-espresso); }
 .cockpit-world-link:focus-visible { outline: 2px solid var(--color-amber); outline-offset: -2px; }
 .cockpit-world-link-count { color: var(--color-faint); margin-left: 0.35rem; }
+
+/* ── The Bench bay (2026-09-03) ────────────────────────────────────────
+   BenchScene wraps the whole cockpit in .bench-cockpit: one recessed
+   machined bay the raised modules bolt into, so the trading desk reads as
+   a single instrument rack — a silhouette no other scene has. The scene
+   accent (amber on the Bench) washes in from the top rail and fades. */
+.bench-cockpit {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 14px 14px 16px;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-chassis);
+    background:
+        linear-gradient(180deg, var(--scene-accent-soft, rgba(242,162,74,.15)) -40px, transparent 150px),
+        var(--color-void);
+    box-shadow: var(--bezel-well);
+}
+/* Bay plate: the engraved station tag riveted to the top-left rail. */
+.bench-cockpit-plate {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: -4px 0 -2px 2px;
+    font-family: var(--font-stencil);
+    font-size: 10px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--color-secondary);
+    text-shadow: var(--engrave);
+}
+.bench-cockpit-plate::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #5A4330, #241710 72%);
+    box-shadow: inset 0 1px 1px rgba(0,0,0,.65), 0 1px 0 rgba(255,249,240,.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cockpit-module,
+    .cockpit-chip,
+    .cockpit-table tbody tr,
+    .cockpit-mini-table tbody tr,
+    .cockpit-alert-row,
+    .cockpit-btn,
+    .cockpit-refresh-btn,
+    .cockpit-expand-caret {
+        transition: none;
+    }
+    .cockpit-module:hover { transform: none; }
+    .cockpit-chip-value--up,
+    .cockpit-chip-value--down { animation: none; }
+    .cockpit-live-lamp { animation: none; }
+}

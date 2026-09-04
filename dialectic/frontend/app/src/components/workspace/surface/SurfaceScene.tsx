@@ -96,6 +96,9 @@ export function SurfaceScene({
     })
   }, [])
   const [selectedUpdateId, setSelectedUpdateId] = useState<string | null>(null)
+  // Styling-only flag while an update card is mid-drag: the root carries
+  // .surf--dragging-ref so the graph pane can announce the drop zone.
+  const [refDragging, setRefDragging] = useState(false)
   const composerRef = useRef<MessageInputHandle>(null)
 
   const observations = useWorldObservations(roomId, OBSERVATION_HOURS)
@@ -204,9 +207,10 @@ export function SurfaceScene({
   const unbound = desk.structure.status === 'empty' || (!desk.bound && desk.structure.status !== 'loading')
 
   return (
-    <div className={`surf${wide ? ' surf--wide' : ''}`} data-testid="surface">
+    <div className={`surf${wide ? ' surf--wide' : ''}${refDragging ? ' surf--dragging-ref' : ''}`} data-testid="surface">
       <header className="surf-head">
         <div className="surf-head-identity">
+          <span className="surf-head-scene">Surface</span>
           <span className="surf-head-title">
             <em>{structure?.meta.title ?? roomName}</em>
           </span>
@@ -253,6 +257,13 @@ export function SurfaceScene({
       </header>
 
       <section className="surf-graph-pane" aria-label="Causal graph">
+        <div className="surf-pane-label">
+          <span className="surf-pane-lamp" aria-hidden="true" />
+          <span>Graph · causal model</span>
+          <span className="surf-pane-label-meta">
+            {structure ? `${nodeCount} nodes · ${spokenCount} spoken` : 'no thesis bound'}
+          </span>
+        </div>
         {structure ? (
           <ThesisDag
             structure={structure}
@@ -329,6 +340,7 @@ export function SurfaceScene({
           onOpen={openRef}
           onAttach={(ref) => stageRef(ref)}
           attachTargetLabel={anchor?.kind === 'node' ? anchor.label : null}
+          onDragStateChange={setRefDragging}
         />
       </section>
     </div>

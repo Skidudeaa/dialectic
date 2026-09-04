@@ -28,11 +28,17 @@
     gap: 2px;
     min-width: 74px;
     padding: 3px 9px;
-    background: var(--color-chassis);
+    background: var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-chassis);
     box-shadow: var(--bezel-raised);
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-med, 220ms) var(--ease-out);
 }
+
+/* Tiles are read-only instruments, not controls — a hover gets a quiet
+   edge brighten, never a lift, so nothing promises a press it can't keep. */
+.console-tile:hover { border-color: var(--color-crater); }
 
 .console-tile-label {
     font: 600 9px/1 var(--font-mono);
@@ -46,13 +52,15 @@
     text-overflow: ellipsis;
 }
 
-/* The display well: recessed glass the readout glows behind. */
+/* The display well: recessed glass the readout glows behind, with a
+   scanline texture so the digits read as behind glass, not printed on. */
 .console-readout {
     display: inline-flex;
     align-items: baseline;
     gap: 4px;
     padding: 1px 6px;
-    background: var(--color-well);
+    background: repeating-linear-gradient(0deg, rgba(255,249,240,.028) 0 1px, transparent 1px 3px),
+                var(--color-well);
     border-radius: var(--radius-control);
     box-shadow: var(--bezel-well);
     font-size: 14px;
@@ -89,28 +97,62 @@
     height: 3px;
     border-radius: 1px;
     background: var(--led-off);
+    transition: background var(--dur-med, 220ms) var(--ease-out),
+                box-shadow var(--dur-med, 220ms) var(--ease-out);
 }
 .console-ledbar i.lit {
     background: var(--led-amber);
     box-shadow: var(--led-glow-amber);
 }
 
-/* The presence lamp — the participant's state, always mounted. */
+/* ── The presence lamp — the heart of the chassis ──────────────────────
+   Always mounted. Its glow follows --energy-level (set on :root by
+   Console.tsx from the lamp state), so the instrument visibly breathes
+   with the participant rather than merely naming a state. */
+.console-lamp {
+    /* Glow scales off the same runtime var the scanline reads; at level 0
+       the spread computes to 0 and the tile sits dark. color-mix tint of
+       --energy-color keeps hue without inventing new hex. */
+    box-shadow: var(--bezel-raised);
+    box-shadow: var(--bezel-raised),
+                0 0 calc(var(--energy-level, 0) * 16px) calc(var(--energy-level, 0) * 2px)
+                    color-mix(in srgb, var(--energy-color, var(--color-amber)) 38%, transparent);
+}
+
 .console-lamp-row {
     display: inline-flex;
     align-items: center;
     gap: 6px;
 }
+
+/* The LED sits in a machined socket: dark rim, top shade, bottom lip
+   highlight. Lit states add their glow OUTSIDE the socket ring. */
 .console-led {
     width: 7px;
     height: 7px;
     border-radius: 50%;
     background: var(--led-off);
-    box-shadow: inset 0 1px 1px rgba(0,0,0,.5);
+    border: 1px solid rgba(0,0,0,.6);
+    box-shadow: inset 0 1px 1px rgba(0,0,0,.5),
+                0 1px 0 rgba(255,249,240,.06);
+    transition: background var(--dur-med, 220ms) var(--ease-out),
+                box-shadow var(--dur-med, 220ms) var(--ease-out);
 }
-.console-lamp-green .console-led { background: var(--led-green); box-shadow: var(--led-glow-green); }
-.console-lamp-amber .console-led { background: var(--led-amber); box-shadow: var(--led-glow-amber); }
-.console-lamp-teal  .console-led { background: var(--led-teal);  box-shadow: var(--led-glow-teal); }
+.console-lamp-green .console-led {
+    background: var(--led-green);
+    box-shadow: var(--led-glow-green), inset 0 1px 1px rgba(255,249,240,.3),
+                0 1px 0 rgba(255,249,240,.06);
+}
+.console-lamp-amber .console-led {
+    background: var(--led-amber);
+    box-shadow: var(--led-glow-amber), inset 0 1px 1px rgba(255,249,240,.3),
+                0 1px 0 rgba(255,249,240,.06);
+}
+.console-lamp-teal .console-led {
+    background: var(--led-teal);
+    box-shadow: var(--led-glow-teal), inset 0 1px 1px rgba(255,249,240,.3),
+                0 1px 0 rgba(255,249,240,.06);
+}
 .console-led.is-blinking { animation: led-blink 1.1s step-end infinite; }
 
 .console-lamp-word {
@@ -120,9 +162,32 @@
 }
 .console-lamp-green .console-lamp-word { color: var(--color-secondary); }
 
+/* Energy meter — a recessed slit under the lamp word whose fill width is
+   read straight off --energy-level. Hue comes from --energy-color and is
+   always paired with the state word beside it. */
+.console-lamp-meter {
+    display: block;
+    height: 3px;
+    margin-top: 3px;
+    background: var(--color-well);
+    border-radius: 2px;
+    box-shadow: var(--bezel-well);
+    overflow: hidden;
+}
+.console-lamp-meter-fill {
+    display: block;
+    height: 100%;
+    width: calc(var(--energy-level, 0) * 100%);
+    background: var(--energy-color, var(--color-amber));
+    box-shadow: 0 0 4px color-mix(in srgb, var(--energy-color, var(--color-amber)) 60%, transparent);
+    transition: width var(--dur-med, 220ms) var(--ease-out),
+                background var(--dur-med, 220ms) var(--ease-out);
+}
+
 @media (prefers-reduced-motion: reduce) {
     .console-led.is-blinking { animation: none; }
     .console-tile-skeleton { animation: none; }
+    .console-lamp-meter-fill { transition: none; }
 }
 
 /* Compact tray on phones: the lamp and the first quote earn their keep;

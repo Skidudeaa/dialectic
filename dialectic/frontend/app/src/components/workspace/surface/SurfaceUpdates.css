@@ -15,6 +15,14 @@
   border-radius: var(--radius-sm);
   padding: 12px 14px 14px;
   box-shadow: var(--bezel-raised);
+  transition: border-color var(--dur-fast, 140ms) var(--ease-out), box-shadow var(--dur-med, 220ms) var(--ease-out);
+}
+
+/* The pane that holds focus reads active: accent edge + a heavier inset
+   ring (no layout shift), the lamp in the header lights (see Surface.css). */
+.surf-upd:focus-within {
+  border-color: var(--scene-accent, var(--color-copper));
+  box-shadow: var(--bezel-raised), inset 0 0 0 1px var(--scene-accent, var(--color-copper));
 }
 
 .surf-upd-header {
@@ -25,6 +33,15 @@
   gap: 0.45rem 1rem;
   padding-bottom: 0.55rem;
   border-bottom: 1px solid var(--color-bean);
+}
+
+.surf-upd-header .surf-pane-lamp {
+  align-self: center;
+  margin-right: -4px;
+}
+
+.surf-upd--dragging .surf-upd-header-right {
+  color: var(--scene-accent, var(--color-copper));
 }
 
 .surf-upd-header-title {
@@ -68,6 +85,7 @@
 }
 
 .surf-upd-card {
+  position: relative;
   flex: 0 0 auto;
   min-width: 240px;
   max-width: 290px;
@@ -76,31 +94,85 @@
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  padding: 10px 12px 11px;
+  padding: 10px 12px 11px 14px;
   border: 1px solid var(--color-bean);
   border-radius: var(--radius-sm);
   background: var(--color-well);
   box-shadow: var(--bezel-well);
-  cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  cursor: grab;
+  transition: border-color var(--dur-fast, 140ms) var(--ease-out),
+    background var(--dur-fast, 140ms) var(--ease-out),
+    box-shadow var(--dur-fast, 140ms) var(--ease-out),
+    transform var(--dur-fast, 140ms) var(--ease-out);
+  animation: surf-upd-arrive var(--dur-slow, 360ms) var(--ease-out) backwards;
+}
+
+/* New arrivals settle onto the tray in a short stagger, newest first. */
+.surf-upd-card:nth-child(2) { animation-delay: 35ms; }
+.surf-upd-card:nth-child(3) { animation-delay: 70ms; }
+.surf-upd-card:nth-child(4) { animation-delay: 105ms; }
+.surf-upd-card:nth-child(5) { animation-delay: 140ms; }
+.surf-upd-card:nth-child(6) { animation-delay: 175ms; }
+.surf-upd-card:nth-child(n+7) { animation-delay: 210ms; }
+
+@keyframes surf-upd-arrive {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+/* The left strip is both the kind code (hue is ALWAYS repeated by the
+   kicker's word: FIRE / READING / MARK) and the grip — dashed like a
+   machined pull, the drag affordance the card's grab cursor announces. */
+.surf-upd-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  background: repeating-linear-gradient(180deg, var(--color-crater) 0 3px, transparent 3px 6px);
+}
+.surf-upd-card--fire::before {
+  background: repeating-linear-gradient(180deg, var(--color-amber) 0 3px, transparent 3px 6px);
+}
+.surf-upd-card--fire.surf-upd-card--novel::before {
+  background: repeating-linear-gradient(180deg, var(--color-scarlet) 0 3px, transparent 3px 6px);
+}
+.surf-upd-card--reading::before {
+  background: repeating-linear-gradient(180deg, var(--color-steel) 0 3px, transparent 3px 6px);
+}
+.surf-upd-card--mark::before {
+  background: repeating-linear-gradient(180deg, var(--color-plum) 0 3px, transparent 3px 6px);
 }
 
 .surf-upd-card:hover {
   border-color: var(--color-crater);
   background: var(--color-cacao);
-  box-shadow: var(--bezel-raised);
-  transform: translateY(-1px);
+  box-shadow: var(--bezel-raised), var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.surf-upd-card:active { cursor: grabbing; }
+
+/* Mid-drag: the card lifts off the tray and takes the scene accent so the
+   eye can track it from tray to graph node. */
+.surf-upd-card.is-dragging {
+  cursor: grabbing;
+  border-color: var(--scene-accent, var(--color-copper));
+  background: var(--color-cacao);
+  box-shadow: var(--shadow-lg), 0 14px 28px rgba(0,0,0,.42);
+  transform: translateY(-3px) scale(1.02);
 }
 
 .surf-upd-card:focus-visible {
-  outline: 1px solid var(--color-amber);
+  outline: 2px solid var(--color-amber);
   outline-offset: 1px;
 }
 
 .surf-upd-card.is-selected {
   border-color: var(--color-amber);
   background: var(--color-cacao);
-  box-shadow: var(--bezel-raised);
+  box-shadow: var(--bezel-raised), inset 0 0 0 1px var(--color-amber);
 }
 
 .surf-upd-card-kicker {
@@ -123,6 +195,17 @@
 .surf-upd-fire-recurring {
   color: var(--color-secondary);
 }
+
+/* Kind glyphs — the ref-table glyphs (surfaceModel.REF_GLYPHS), tinted to
+   match the card's edge strip; the kicker word always accompanies them. */
+.surf-upd-kind-glyph {
+  margin-right: 6px;
+  font-style: normal;
+}
+.surf-upd-kind-glyph--fire { color: var(--color-amber); }
+.surf-upd-kind-glyph--fire-new { color: var(--color-scarlet); }
+.surf-upd-kind-glyph--reading { color: var(--color-steel); }
+.surf-upd-kind-glyph--mark { color: var(--color-plum); }
 
 .surf-upd-card-frp {
   font-family: var(--font-mono);
@@ -171,6 +254,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color var(--dur-fast, 140ms) var(--ease-out),
+    border-color var(--dur-fast, 140ms) var(--ease-out),
+    box-shadow var(--dur-fast, 140ms) var(--ease-out),
+    transform var(--dur-fast, 140ms) var(--ease-out);
+}
+
+/* Click-through: the open action names where the card's source lives. */
+.surf-upd-action--open::after {
+  content: ' ↗';
 }
 
 .surf-upd-action:hover {
@@ -184,7 +276,7 @@
 }
 
 .surf-upd-action:focus-visible {
-  outline: 1px solid var(--color-amber);
+  outline: 2px solid var(--color-amber);
   outline-offset: 1px;
 }
 
@@ -195,4 +287,11 @@
     flex-basis: min(82vw, 290px);
     min-width: min(82vw, 240px);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surf-upd,
+  .surf-upd-card,
+  .surf-upd-action { transition: none; }
+  .surf-upd-card { animation: none; }
 }

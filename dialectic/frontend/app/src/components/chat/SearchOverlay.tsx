@@ -189,9 +189,9 @@ export function SearchOverlay({ roomId, onClose, onJump }: SearchOverlayProps) {
         </div>
 
         <div className="search-hints">
-          <span>&uarr;&darr; to move</span>
-          <span>Enter to jump</span>
-          <span>Esc to close</span>
+          <span><kbd>&uarr;</kbd><kbd>&darr;</kbd> to move</span>
+          <span><kbd>Enter</kbd> to jump</span>
+          <span><kbd>Esc</kbd> to close</span>
         </div>
       </div>
     </div>

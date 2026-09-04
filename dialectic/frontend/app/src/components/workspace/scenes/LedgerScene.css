@@ -1,0 +1,93 @@
+/* LedgerScene — the bound book of record. Scoped under .ledger-scene-body so
+   these rules outrank both the base WorkspaceObjectList sheet and the frame's
+   ledger silhouette in WorkspaceSceneFrame.css, without editing either. The
+   accent is the scene's gold, read through the contract vars with a fallback
+   so the sheet is valid before the identity layer lands. */
+
+/* A ledger is a page, not a dashboard: a narrower measure than the stream. */
+.scene-body.ledger-scene-body > * { max-width: 880px; }
+
+/* The bound book — one sheet that carries the header rule and the entries. */
+.ledger-book {
+    background: var(--color-sheet);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+}
+
+/* The double-ruled header line of a bound ledger — the rule a bookkeeper
+   draws twice before the entries begin. */
+.ledger-book-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px 8px;
+    border-bottom: 3px double var(--scene-accent, var(--color-gold));
+    background: linear-gradient(
+        to bottom,
+        var(--scene-accent-soft, var(--gold-12)),
+        transparent
+    );
+}
+.ledger-book-title {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--color-secondary);
+    text-shadow: var(--engrave);
+}
+.ledger-book-count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--scene-accent, var(--color-gold));
+    font-variant-numeric: tabular-nums;
+}
+
+/* Entries are rows written into the book: the header already carries the
+   double rule, so the list itself takes a single hairline and no fill. */
+.scene-body.ledger-scene-body .object-list {
+    background: none;
+    border-top: 1px solid var(--scene-accent-soft, var(--gold-12));
+    border-bottom: none;
+}
+/* Bound rows do not lift off the page — the base sheet's hover raise is for
+   loose cards, and a ledger entry stays ruled to its line. The row answers
+   with a tint wash instead. */
+.scene-body.ledger-scene-body .object-card.is-navigable:hover {
+    transform: none;
+    box-shadow: none;
+}
+.scene-body.ledger-scene-body .object-card-open:hover {
+    background: var(--scene-accent-soft, var(--gold-12));
+}
+.scene-body.ledger-scene-body .object-card-open:active {
+    box-shadow: var(--shadow-inset);
+}
+
+/* A superseded entry is struck through but inspectable: the strike marks it
+   retired, the "superseded" tag (with its rewind mark) says why in words, and
+   the old wording brightens back under hover or keyboard focus — struck, not
+   erased. */
+.scene-body.ledger-scene-body .object-card[data-status="superseded"] .object-card-title {
+    text-decoration: line-through;
+    text-decoration-color: var(--scene-accent, var(--color-gold));
+    text-decoration-thickness: 1px;
+    color: var(--color-faint);
+}
+.scene-body.ledger-scene-body .object-card[data-status="superseded"] .object-card-summary {
+    color: var(--color-ghost);
+}
+.scene-body.ledger-scene-body .object-card[data-status="superseded"]:hover .object-card-title,
+.scene-body.ledger-scene-body .object-card[data-status="superseded"]:focus-within .object-card-title {
+    color: var(--color-ink);
+}
+.scene-body.ledger-scene-body .object-card-status.is-superseded {
+    color: var(--scene-accent, var(--color-gold));
+}

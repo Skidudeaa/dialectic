@@ -76,7 +76,9 @@ describe('WorkspaceSceneFrame', () => {
       ...screen.getAllByRole('menuitem'),
     ]
     for (const name of ['House', 'Record', 'Bench', 'Field', 'Library', 'Ledger', 'Atlas']) {
-      expect(controls.some((node) => node.textContent === name)).toBe(true)
+      // Tiles now lead with an aria-hidden scene glyph, so the accessible NAME
+      // is unchanged but textContent carries the mark — match within it.
+      expect(controls.some((node) => node.textContent?.includes(name))).toBe(true)
     }
   })
 

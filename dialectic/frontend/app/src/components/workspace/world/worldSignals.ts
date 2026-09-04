@@ -13,14 +13,17 @@ import type { WorldObservation, WorldSignal } from '../../../types/geo.ts'
  * `worldSignal` property is what keeps the two apart at the pick handler.
  */
 
+/* Glyph hues are the Dark Roast counterpoint band, as hex: Cesium draws to
+   canvas, where a CSS var() cannot reach. Keep these in step with the token
+   values in styles/tokens.css (steel/amber/scarlet/plum/sage). */
 const LAYER_COLORS: Record<string, string> = {
-  aircraft: '#56B7F2',
-  earthquakes: '#F2A93B',
-  fires: '#FF5A36',
-  satellites: '#B98CF5',
-  launches: '#57E2A5',
+  aircraft: '#7FA9CB',
+  earthquakes: '#F2A24A',
+  fires: '#DE5151',
+  satellites: '#B48AD4',
+  launches: '#9CBE7A',
 }
-const DEFAULT_COLOR = '#56B7F2'
+const DEFAULT_COLOR = '#7FA9CB'
 
 /**
  * A durable `world_observations` row, drawn as the WorldSignal shape this
@@ -101,7 +104,7 @@ function arrowCanvas(color: Cesium.Color): HTMLCanvasElement {
   ctx.closePath()
   ctx.fillStyle = color.toCssColorString()
   ctx.fill()
-  ctx.strokeStyle = 'rgba(255,255,255,0.85)'
+  ctx.strokeStyle = 'rgba(246,236,218,0.9)' /* --color-cream */
   ctx.lineWidth = 1.5
   ctx.stroke()
   return canvas
@@ -124,7 +127,7 @@ function labelOf(signal: WorldSignal, color: Cesium.Color, selected: boolean) {
     fillColor: color.brighten(0.5, new Cesium.Color()),
     pixelOffset: new Cesium.Cartesian2(0, -20),
     showBackground: true,
-    backgroundColor: Cesium.Color.fromCssColorString('#07141B').withAlpha(0.82),
+    backgroundColor: Cesium.Color.fromCssColorString('#150D07').withAlpha(0.82), /* --color-obsidian */
     distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3_000_000),
     disableDepthTestDistance: Number.POSITIVE_INFINITY,
   }

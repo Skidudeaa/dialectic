@@ -8,6 +8,69 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+    /* The card is an instrument module bolted onto the page: brushed chassis,
+       raised bezel, and a darker glass well per question inside it. */
+    background:
+        var(--chassis-brush),
+        var(--color-chassis);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-chassis);
+    box-shadow: var(--bezel-raised);
+    padding: 10px 12px 12px;
+}
+
+/* Faceplate header: status lamp, module name, state word. The lamp's hue is
+   ALWAYS paired with the word beside it — no color-only signal. */
+.round-card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 249, 240, 0.07);
+}
+.round-card-title {
+    font-family: var(--font-stencil);
+    font-size: .78rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--color-bone);
+    text-shadow: var(--engrave);
+}
+.round-card-status {
+    margin-left: auto;
+    font-family: var(--font-stencil);
+    font-size: .66rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--text-ghost);
+    text-shadow: var(--engrave);
+}
+.round-card-status.is-open { color: var(--led-green); }
+.round-card-status.is-awaiting { color: var(--led-amber); }
+.round-card-status.is-settled { color: var(--led-teal); }
+
+/* The LED itself: a round machined lamp. Off at rest is dark glass, not a
+   missing light. */
+.round-card-lamp {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--led-off);
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.6);
+    flex-shrink: 0;
+}
+.round-card-lamp.is-open {
+    background: var(--led-green);
+    box-shadow: var(--led-glow-green);
+}
+.round-card-lamp.is-awaiting {
+    background: var(--led-amber);
+    box-shadow: var(--led-glow-amber);
+    animation: led-blink 1.6s ease-in-out infinite;
+}
+.round-card-lamp.is-settled {
+    background: var(--led-teal);
+    box-shadow: var(--led-glow-teal);
 }
 
 /* The card names itself before the first number. Set as prose, not stencil --
@@ -90,12 +153,21 @@
     letter-spacing: .06em;
     text-transform: uppercase;
     padding: 4px 10px;
-    border-radius: var(--radius-sm, 4px);
+    border-radius: var(--radius-control);
     border: 0;
     cursor: pointer;
     background: var(--color-chassis, #2A1E16);
     color: var(--text-primary, #F5EFE6);
     box-shadow: var(--bezel-key);
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out);
+}
+
+.round-q-submit:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
 }
 
 .round-q-submit:disabled,
@@ -103,6 +175,7 @@
 
 .round-q-bin { background: transparent; box-shadow: none; color: var(--text-ghost); }
 .round-q-bin:hover:not(:disabled) { color: var(--color-scarlet, #DE5151); }
+.round-q-bin:active:not(:disabled) { transform: translateY(1px); }
 
 .round-q-others { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
 
@@ -167,6 +240,7 @@
     cursor: pointer;
     color: var(--color-teal, #54D8C6);
     opacity: .75;
+    transition: opacity var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .round-q-peer-open:hover:not(:disabled) { opacity: 1; }
@@ -234,6 +308,41 @@
 }
 
 .round-q-score.is-house span:first-child { color: var(--claude-primary); }
+
+/* Sections that appear on state change (reveals, scores, the verdict row)
+   rise in rather than popping — the module reads as reconfiguring itself. */
+.round-q-others,
+.round-q-scores,
+.round-q-verdict,
+.round-q-sealed,
+.round-q-mine,
+.round-q-row-peer,
+.round-q-peer-why {
+    animation: roundReveal var(--dur-med, 220ms) var(--ease-out);
+}
+@keyframes roundReveal {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.round-q-slider { cursor: pointer; }
+.round-q-slider:disabled { cursor: progress; }
+
+@media (prefers-reduced-motion: reduce) {
+    .round-card-lamp.is-awaiting { animation: none; }
+    .round-q-others,
+    .round-q-scores,
+    .round-q-verdict,
+    .round-q-sealed,
+    .round-q-mine,
+    .round-q-row-peer,
+    .round-q-peer-why { animation: none; }
+    .round-q-submit,
+    .round-q-bin,
+    .round-q-peer-open { transition: none; }
+    .round-q-submit:active:not(:disabled),
+    .round-q-bin:active:not(:disabled) { transform: none; }
+}
 
 @media (max-width: 480px) {
     .round-q-verdict { gap: 6px; }

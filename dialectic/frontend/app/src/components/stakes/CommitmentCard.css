@@ -1,13 +1,48 @@
-/* Commitment card — espresso card with paper shadow */
+/* ══════════════════════════════════════════════════════════════
+   COMMITMENT CARD — a contract slip torn from the stakes register.
+   Paper slip with a dashed tear-off stub, rubber-stamp status
+   (word + glyph + hue, never hue alone), gauge-track confidence
+   meters, chassis-key actions. Dark Roast dossier language.
+   ══════════════════════════════════════════════════════════════ */
 .commitment-card {
-    background: var(--color-espresso);
+    position: relative;
+    background:
+        linear-gradient(180deg, rgba(255,249,240,.028), rgba(255,249,240,0) 42%),
+        var(--color-espresso);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
-    padding: 14px;
-    transition: border-color 0.15s;
+    padding: 14px 14px 24px 22px;  /* left pad clears the stub rule; bottom pad clears the serial */
     box-shadow: var(--shadow-md);
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out),
+                transform var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
+    animation: slip-rise var(--dur-slow, 360ms) var(--ease-out) backwards;
 }
-.commitment-card:hover { border-color: var(--color-crater); }
+@keyframes slip-rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+/* Tear-off stub perforation along the left edge */
+.commitment-card::before {
+    content: "";
+    position: absolute;
+    left: 11px;
+    top: 9px;
+    bottom: 9px;
+    border-left: 1px dashed var(--color-bean);
+    opacity: .8;
+    pointer-events: none;
+}
+.commitment-card:hover {
+    border-color: var(--color-crater);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md), var(--shadow-glow-amber);
+}
+/* Closed files sit flatter on the pile */
+.commitment-card[data-status="resolved"],
+.commitment-card[data-status="voided"] {
+    background: var(--color-cacao);
+}
 
 .commitment-card-header {
     display: flex;
@@ -25,56 +60,93 @@
 }
 .commitment-badges {
     display: flex;
-    gap: 5px;
+    gap: 7px;
     flex-shrink: 0;
+    align-items: flex-start;
+    padding-top: 2px;  /* stamps float a hair above the claim baseline */
 }
-/* Status chips — stencil outline, transparent fill */
+
+/* Rubber stamps — double-ruled ring, ink not quite opaque, landed at
+   an angle; each status lands at its own angle like a real stamp. */
 .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     font-family: var(--font-stencil);
-    font-size: 12px;
-    padding: 2px 5px;
-    border-radius: var(--radius-sm);
+    font-size: 11px;
+    line-height: 1;
+    padding: 3px 6px;
     text-transform: uppercase;
-    letter-spacing: .03em;
-    border: 1px solid currentColor;
-    background: transparent;
+    letter-spacing: .08em;
+    border: 1.5px solid currentColor;
+    outline: 1px solid currentColor;
+    outline-offset: 1.5px;
+    border-radius: 1px;
+    opacity: .94;
+    transition: transform var(--dur-fast, 140ms) var(--ease-spring);
 }
-.status-badge.active    { color: var(--sev-stable); }
-.status-badge.resolved  { color: var(--color-teal); }
-.status-badge.expired   { color: var(--color-secondary); }
-.status-badge.voided    { color: var(--color-ghost); }
+.status-badge:hover { transform: rotate(0deg); }
+.status-badge .stamp-glyph { width: 10px; height: 10px; flex-shrink: 0; }
+.status-badge.active    { color: var(--color-warning); background: rgba(216,182,104,.10); transform: rotate(-2deg); }
+.status-badge.resolved  { color: var(--color-teal);    background: var(--teal-10);          transform: rotate(1.6deg); }
+.status-badge.expired   { color: var(--color-error);   background: rgba(221,107,63,.10);    transform: rotate(-2.6deg); }
+.status-badge.voided    { color: var(--color-ghost);   background: rgba(163,136,101,.07);   border-style: dashed; transform: rotate(2.2deg); }
 
 .category-badge {
     font-family: var(--font-stencil);
-    font-size: 12px;
-    padding: 2px 5px;
+    font-size: 11px;
+    line-height: 1;
+    padding: 3px 6px;
     border-radius: var(--radius-sm);
     background: var(--amber-08);
     color: var(--color-amber);
     border: 1px solid var(--amber-30);
     text-transform: uppercase;
-    letter-spacing: .03em;
+    letter-spacing: .06em;
 }
 
+/* Resolution criteria — the fine print, indented off a rule */
 .commitment-criteria {
     font-family: var(--font-serif);
     font-size: 12.5px;
     color: var(--color-secondary);
     margin-bottom: 10px;
     line-height: 1.45;
+    border-left: 2px solid var(--color-bean);
+    padding-left: 9px;
 }
+
+/* Due date — a filing-date box, prominent, with calendar glyph */
 .commitment-deadline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--color-faint);
+    color: var(--color-bone);
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    padding: 3px 8px;
     margin-bottom: 12px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
     text-transform: uppercase;
     letter-spacing: .06em;
 }
-.commitment-deadline.urgent { color: var(--color-warning); }
+.commitment-deadline .due-glyph { width: 11px; height: 11px; flex-shrink: 0; }
+.commitment-deadline.urgent {
+    color: var(--color-warning);
+    border-color: rgba(216,182,104,.45);
+    background: rgba(216,182,104,.08);
+}
+/* Urgency lamp — shape paired with hue */
+.commitment-deadline.urgent::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--led-amber);
+    box-shadow: var(--led-glow-amber);
+}
 
 .confidence-section { margin-bottom: 12px; }
 .confidence-section h5 {
@@ -84,6 +156,7 @@
     color: var(--color-faint);
     text-transform: uppercase;
     letter-spacing: .1em;
+    text-shadow: var(--engrave);
 }
 .confidence-bar-row {
     display: flex;
@@ -91,25 +164,46 @@
     gap: 8px;
     margin-bottom: 4px;
 }
+/* Attribution nameplate — desk (amber) vs human (teal), hue + label */
 .confidence-bar-row .conf-label {
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 11px;
     color: var(--color-secondary);
     width: 64px;
     text-align: right;
     flex-shrink: 0;
-}
-.confidence-bar-row .conf-track {
-    flex: 1;
-    height: 3px;
-    background: var(--color-void);
-    border: 1px solid var(--color-bean);
     overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.confidence-bar-row[data-owner="desk"] .conf-label { color: var(--color-amber); }
+.confidence-bar-row[data-owner="human"] .conf-label { color: var(--color-teal); }
+/* Gauge track — recessed well with tick marks */
+.confidence-bar-row .conf-track {
+    position: relative;
+    flex: 1;
+    height: 6px;
+    background: var(--color-well);
+    border: 1px solid var(--color-bean);
+    box-shadow: var(--bezel-well);
+    overflow: hidden;
+}
+.confidence-bar-row .conf-track::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(0,0,0,.55) 9px 10px);
+    pointer-events: none;
 }
 .confidence-bar-row .conf-fill {
     height: 100%;
-    background: var(--color-amber);
-    transition: width 0.3s var(--ease-out);
+    background: linear-gradient(180deg, rgba(255,249,240,.25), rgba(255,249,240,0) 45%), var(--color-amber);
+    box-shadow: 0 0 6px rgba(242,162,74,.45);
+    transition: width var(--dur-slow, 360ms) var(--ease-out);
+}
+.confidence-bar-row[data-owner="human"] .conf-fill {
+    background: linear-gradient(180deg, rgba(255,249,240,.25), rgba(255,249,240,0) 45%), var(--color-teal);
+    box-shadow: 0 0 6px rgba(84,216,198,.4);
 }
 .confidence-bar-row .conf-value {
     font-family: var(--font-mono);
@@ -123,6 +217,7 @@
     gap: 8px;
     align-items: center;
     flex-wrap: wrap;
+    margin-top: 2px;
 }
 .update-confidence {
     display: flex;
@@ -134,16 +229,23 @@
     flex: 1;
     height: 3px;
     accent-color: var(--color-amber);
+    cursor: pointer;
+}
+.update-confidence input[type="range"]:focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 2px;
 }
 .update-confidence .conf-display {
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--color-secondary);
     width: 32px;
+    text-shadow: var(--engrave);
 }
+/* Chassis keys — raised bezel, real travel on press */
 .commitment-actions button {
-    padding: 4px 12px;
-    border-radius: var(--radius-sm);
+    padding: 5px 12px;
+    border-radius: var(--radius-control);
     font-family: var(--font-stencil);
     font-size: 12px;
     letter-spacing: .04em;
@@ -151,14 +253,60 @@
     border: 1px solid var(--color-bean);
     text-transform: uppercase;
     flex-shrink: 0;
+    background: var(--color-chassis);
+    color: var(--color-ink);
+    box-shadow: var(--bezel-key);
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                background var(--dur-fast, 140ms) var(--ease-out);
+}
+.commitment-actions button:hover { border-color: var(--color-crater); }
+.commitment-actions button:active {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
+}
+.commitment-actions button:focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 1px;
 }
 .commitment-actions .resolve-btn {
     background: var(--teal-10);
     color: var(--color-teal);
     border-color: var(--teal-30);
 }
+.commitment-actions .resolve-btn:hover {
+    background: var(--teal-18);
+    border-color: var(--color-teal);
+}
+.commitment-actions .resolve-btn:active { background: var(--teal-10); }
 .commitment-actions .update-btn {
     background: var(--color-amber);
     color: var(--color-void);
     border-color: var(--color-amber);
+}
+.commitment-actions .update-btn:hover {
+    background: var(--color-amber-hot);
+    border-color: var(--color-amber-hot);
+}
+.commitment-actions .update-btn:active { background: var(--color-amber); }
+
+/* Slip serial — the register number, bottom corner like a real slip */
+.slip-serial {
+    position: absolute;
+    right: 10px;
+    bottom: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: .12em;
+    color: var(--color-ghost);
+    pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .commitment-card { animation: none; }
+    .commitment-card,
+    .status-badge,
+    .commitment-actions button,
+    .confidence-bar-row .conf-fill { transition: none; }
 }

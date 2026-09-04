@@ -21,15 +21,31 @@ body {
 /* Monospace shorthand */
 code, pre { font-family: var(--font-mono); }
 
-/* Scrollbar — Dark Roast */
-::-webkit-scrollbar { width: 7px; height: 7px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-bean); border-radius: 0; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-crater); }
+/* Selection — candlelit amber wash with display ink on top */
+::selection { background: var(--amber-30); color: var(--color-display); }
 
-/* Focus ring — amber */
+/* Scrollbar — Dark Roast: thin rail, crater thumb inset from the track,
+   brightens toward ink on hover */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+    background: var(--color-crater);
+    border: 2px solid transparent;
+    border-radius: var(--radius-full);
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-secondary); background-clip: padding-box; }
+* { scrollbar-width: thin; scrollbar-color: var(--color-crater) transparent; }
+
+/* Focus ring — one consistent amber ring app-wide (outline + offset +
+   halo), built from the --focus-ring-* tokens. Component rules with
+   their own :focus styles (e.g. .form-input) still win by specificity. */
 *:focus { outline: none; }
-*:focus-visible { outline: 1.5px solid var(--color-amber); outline-offset: 1px; }
+*:focus-visible {
+    outline: var(--focus-ring-width, 2px) solid var(--focus-ring-color, var(--color-amber));
+    outline-offset: var(--focus-ring-offset, 2px);
+    box-shadow: var(--focus-ring, 0 0 0 3px rgba(242,162,74,.22));
+}
 
 /* Every standalone action must remain finger-operable on a tablet. Inline
    prose links keep their text flow; controls and navigation links get the
@@ -57,7 +73,11 @@ a[href]:not(.prose-body a):not(.msg-content a) {
     font-weight: 500;
     font-family: inherit;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out);
     gap: 0.5rem;
 }
 
@@ -109,7 +129,8 @@ a[href]:not(.prose-body a):not(.msg-content a) {
     color: var(--color-bone);
     font-size: 0.88rem;
     font-family: inherit;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
     outline: none;
     box-shadow: var(--bezel-well);
 }
@@ -165,3 +186,22 @@ a[href]:not(.prose-body a):not(.msg-content a) {
     text-align: left;
 }
 .push-enable-chip:hover { background: var(--color-espresso); }
+
+/* ── Motion preferences ─────────────────────────────────────────────── */
+/* Smooth scroll only where the document itself scrolls (anchor jumps);
+   inner stream panels keep their own programmatic scroll untouched. */
+@media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+}
+
+/* Reduced motion — the single global kill switch. Component-level
+   guards may coexist, but nothing animates past this. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
+        scroll-behavior: auto !important;
+    }
+}

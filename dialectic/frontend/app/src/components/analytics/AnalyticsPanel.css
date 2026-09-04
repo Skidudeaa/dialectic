@@ -1,4 +1,5 @@
-/* Analytics panel — espresso card with paper shadow */
+/* Analytics panel — instrument card: big number over engraved micro-label,
+   charts framed as recessed wells, sections divided by drawn rules. */
 .analytics-panel {
     background: var(--color-espresso);
     border: 1px solid var(--color-bean);
@@ -11,11 +12,26 @@
 }
 .analytics-panel h3 {
     margin: 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-bean);
     font-family: var(--font-mono);
     font-size: 12px;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: .18em;
     color: var(--color-secondary);
+    text-shadow: var(--engrave);
+    position: relative;
+}
+/* Section rule with a scene-accent tick — a drawn mark, not a hue wash. */
+.analytics-panel h3::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 42px;
+    height: 2px;
+    background: var(--scene-accent, var(--color-amber));
 }
 .analytics-loading,
 .analytics-empty {
@@ -32,33 +48,50 @@
     grid-template-columns: 1fr 1fr 1fr;
     gap: 8px;
 }
+/* Each stat is a small instrument: raised tile, number read big and bright,
+   label read small and engraved. */
 .stat-card {
-    background: var(--color-cacao);
+    background: var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
-    padding: 11px;
+    border-radius: var(--radius-chassis);
+    box-shadow: var(--bezel-raised);
+    padding: 10px 11px 9px;
     text-align: center;
 }
 .stat-card .stat-value {
+    display: inline-block;
     font-family: var(--font-mono);
-    font-size: 20px;
+    font-weight: 600;
+    font-size: 24px;
+    line-height: 1.1;
     color: var(--color-bone);
+    padding: 2px 8px;
+    background: repeating-linear-gradient(0deg, rgba(255,249,240,.028) 0 1px, transparent 1px 3px),
+                var(--color-well);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
+    min-width: 3ch;
 }
 .stat-card .stat-label {
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 9px;
     color: var(--color-faint);
-    margin-top: 3px;
+    margin-top: 6px;
     text-transform: uppercase;
-    letter-spacing: .1em;
+    letter-spacing: .14em;
+    text-shadow: var(--engrave);
 }
 .turn-balance h4 {
     margin: 0 0 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--color-bean);
     font-family: var(--font-mono);
     font-size: 12px;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--color-secondary);
+    text-shadow: var(--engrave);
 }
 .turn-bar {
     display: flex;
@@ -74,17 +107,22 @@
     text-align: right;
     flex-shrink: 0;
 }
+/* The track is a well; the fill rides in it, keeping each speaker's hue
+   (paired with the printed name and count at either end). */
 .turn-bar .turn-track {
     flex: 1;
-    height: 4px;
-    background: var(--color-void);
+    height: 8px;
+    background: var(--color-well);
     border: 1px solid var(--color-bean);
+    border-radius: 2px;
+    box-shadow: var(--bezel-well);
     overflow: hidden;
 }
 .turn-bar .turn-fill {
     height: 100%;
     background: var(--color-amber);
-    transition: width 0.3s var(--ease-out);
+    border-radius: 1px;
+    transition: width var(--dur-slow, 360ms) var(--ease-out);
 }
 .turn-bar .turn-count {
     font-family: var(--font-mono);

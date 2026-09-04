@@ -144,6 +144,7 @@ export function SurfaceConversation({
   return (
     <section className="surf-conv" aria-label="Conversation">
       <div className="surf-conv-head">
+        <span className="surf-pane-lamp" aria-hidden="true" />
         <span className="surf-conv-kicker">
           Conversation · <b>{anchor && onlyAnchored ? anchor.label : 'whole room'}</b>
           {' · '}{humanCount} human · {machineCount} machine
@@ -161,11 +162,12 @@ export function SurfaceConversation({
         <div className="surf-shapes surf-wide-toggle" role="group" aria-label="Conversation width">
           <button
             type="button"
-            className="surf-shape"
+            className="surf-shape surf-shape--wide"
             aria-pressed={wide}
             title={wide ? 'Put the graph beside the conversation' : 'Give the conversation the whole width'}
             onClick={onToggleWide}
           >
+            <span className="surf-grip" aria-hidden="true">⠿</span>
             {wide ? '⇥ Split' : '⇔ Wide'}
           </button>
         </div>

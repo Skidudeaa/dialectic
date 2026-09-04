@@ -1,7 +1,11 @@
-/* World — the globe inside the dossier. The canvas takes a warm cast from a
-   CSS filter rather than a shader: OSM's daylight tiles read as a bright
-   rectangle on the candlelit page otherwise, and one filter line is the
-   whole "sensor look" this needs. */
+/* World — the globe inside the dossier, framed as the chart table's glass:
+   a machined bezel around the canvas, corner registration marks on the
+   stage, and steel instrument chrome for everything that rides over or
+   beside the map. The canvas takes a warm cast from a CSS filter rather
+   than a shader: OSM's daylight tiles read as a bright rectangle on the
+   candlelit page otherwise, and one filter line is the whole "sensor look"
+   this needs. Accent: the scene's steel — var(--scene-accent) with a token
+   fallback. */
 
 .world-view {
   /* .atlas-scene is a flex column of fixed height: without this the globe
@@ -10,13 +14,46 @@
   position: relative;
   border: 1px solid var(--color-bean);
   background: var(--color-void);
-  border-radius: 2px;
+  border-radius: var(--radius-chassis);
+  box-shadow: var(--bezel-raised);
   overflow: hidden;
 }
 
 /* The stage is the positioning context the HUD lays itself out over. */
 .world-stage {
   position: relative;
+}
+
+/* Corner registration marks — the chart frame's crop ticks. Painted above
+   the canvas, below the HUD (.world-hud carries z-index 1), never taking
+   input. */
+.world-stage::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: .55;
+  background-image:
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0);
+  background-size:
+    18px 1px, 1px 18px,
+    18px 1px, 1px 18px,
+    18px 1px, 1px 18px,
+    18px 1px, 1px 18px;
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+  background-repeat: no-repeat;
 }
 
 .world-canvas {
@@ -45,6 +82,7 @@
   padding: 0.25rem 0.6rem;
   font-family: var(--font-mono);
   font-size: 10.5px;
+  letter-spacing: .03em;
   color: var(--color-faint);
   background: var(--color-obsidian);
   border-top: 1px solid var(--color-bean);
@@ -62,18 +100,21 @@
 }
 
 /* Mode toggle + the on-map list live in AtlasScene; styled here so the
-   world module owns its own look. */
+   world module owns its own look. The toggle is a pair of chassis keys:
+   raised plate, engraved legends, real key travel on press. */
 .atlas-modes {
   flex: 0 0 auto;
   display: inline-flex;
   gap: 1px;
   border: 1px solid var(--color-bean);
-  border-radius: 2px;
+  border-radius: var(--radius-control);
+  background: var(--color-chassis);
+  box-shadow: var(--bezel-raised);
   overflow: hidden;
   align-self: flex-start;
 }
 .atlas-mode {
-  background: var(--color-cacao);
+  background: transparent;
   color: var(--color-secondary);
   border: none;
   font: inherit;
@@ -81,17 +122,39 @@
   font-size: 11.5px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  text-shadow: var(--engrave);
   padding: 0.4rem 0.9rem;
   min-height: 44px;
   cursor: pointer;
+  transition:
+    transform var(--dur-fast, 140ms) var(--ease-out),
+    background-color var(--dur-fast, 140ms) var(--ease-out),
+    box-shadow var(--dur-fast, 140ms) var(--ease-out),
+    color var(--dur-fast, 140ms) var(--ease-out);
+}
+.atlas-mode:hover {
+  background: var(--color-espresso);
+  color: var(--color-bone);
+}
+.atlas-mode:active {
+  transform: translateY(1px);
+  box-shadow: var(--bezel-key-down);
 }
 .atlas-mode[aria-pressed="true"] {
   background: var(--color-espresso);
-  color: var(--color-amber);
+  color: var(--scene-accent, var(--color-steel));
+  box-shadow: inset 0 2px 0 var(--scene-accent, var(--color-steel));
 }
 .atlas-mode:focus-visible { outline: 2px solid var(--color-amber); outline-offset: -2px; }
 
 .world-scope-row .atlas-row-open { align-items: center; flex-wrap: wrap; }
+/* A proposed scope is drawn with a dashed slip — the authority column still
+   carries the word "proposed"; the dash only agrees with it. */
+.world-scope-row[data-authority="machine_proposed"] .atlas-row-open {
+  border-style: dashed;
+}
+/* Coordinate readouts: tabular mono, and the meta block reads as one line
+   of instrument data. */
 .world-scope-meta {
   margin-left: auto;
   display: inline-flex;
@@ -99,6 +162,8 @@
   align-items: center;
   font-family: var(--font-mono);
   font-size: 11px;
+  letter-spacing: .03em;
+  font-variant-numeric: tabular-nums;
   color: var(--color-faint);
 }
 .world-scope-row[data-authority="machine_proposed"] .atlas-row-title {
@@ -119,14 +184,20 @@
   min-width: 0;
   gap: 0.25rem;
 }
-.world-scope-provenance dt { color: var(--color-secondary); }
+.world-scope-provenance dt {
+  color: var(--color-secondary);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 10.5px;
+  text-shadow: var(--engrave);
+}
 .world-scope-provenance dd {
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
 }
 .world-signals {
-  border-top-color: rgba(86, 183, 242, 0.38);
+  border-top-color: var(--steel-30);
 }
 .world-signal-body {
   min-height: 44px;
@@ -135,10 +206,24 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
-  background: rgba(7, 20, 27, 0.72);
-  border-left: 2px solid rgba(86, 183, 242, 0.72);
+  background: color-mix(in srgb, var(--color-steel) 7%, var(--color-void));
+  border-left: 2px solid var(--color-steel);
+  transition: background-color var(--dur-fast, 140ms) var(--ease-out);
 }
-.world-signal-row .atlas-row-title { color: #c7e9fa; }
+/* A live contact is a lit lamp beside its label. */
+.world-signal-body::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-steel);
+  box-shadow: 0 0 6px 1px var(--steel-30);
+}
+.world-signal-row:hover .world-signal-body {
+  background: color-mix(in srgb, var(--color-steel) 11%, var(--color-void));
+}
+.world-signal-row .atlas-row-title { color: var(--color-bone); }
 .world-signal-meta {
   margin-left: auto;
   display: inline-flex;
@@ -146,28 +231,46 @@
   align-items: center;
   font-family: var(--font-mono);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
   color: var(--color-faint);
 }
 .world-signal-place {
   min-height: 44px;
   padding: 0.25rem 0.65rem;
-  border: 1px solid rgba(86, 183, 242, 0.5);
-  border-radius: 2px;
-  background: var(--color-obsidian);
-  color: #c7e9fa;
+  border: 1px solid var(--steel-30);
+  border-radius: var(--radius-control);
+  background: var(--color-chassis);
+  box-shadow: var(--bezel-key);
+  color: var(--color-steel);
   font-family: var(--font-mono);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  text-shadow: var(--engrave);
   cursor: pointer;
+  transition:
+    transform var(--dur-fast, 140ms) var(--ease-out),
+    background-color var(--dur-fast, 140ms) var(--ease-out),
+    box-shadow var(--dur-fast, 140ms) var(--ease-out),
+    border-color var(--dur-fast, 140ms) var(--ease-out);
 }
-.world-signal-place:hover:not(:disabled) { background: #102630; }
+.world-signal-place:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-steel) 14%, var(--color-chassis));
+  border-color: var(--color-steel);
+  transform: translateY(-1px);
+}
+.world-signal-place:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: var(--bezel-key-down);
+}
 .world-signal-place:disabled { opacity: 0.55; cursor: wait; }
 .world-signal-place:focus-visible { outline: 2px solid var(--color-amber); }
 .world-signal-error {
   margin: 0;
   padding: 0.35rem 0.8rem;
-  color: var(--color-danger);
+  border-left: 2px solid var(--sev-crit);
+  background: var(--scar-10);
+  color: var(--color-error);
   font-family: var(--font-mono);
   font-size: 12px;
 }
@@ -184,12 +287,42 @@
 .world-source-list li {
   display: inline-flex;
   gap: 0.45rem;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--color-bean);
+  border-radius: var(--radius-sm);
+  background: var(--color-cacao);
 }
 .world-note {
   color: var(--color-secondary);
   font-family: var(--font-serif);
   font-size: 12.5px;
   margin: 0;
+}
+
+/* The quiet state for an unmapped world: a dashed survey frame and a
+   position indicator, so an empty chart still reads as a chart. */
+.world-note-quiet {
+  position: relative;
+  padding: 1rem 1.2rem 1rem 2.7rem;
+  border: 1px dashed color-mix(in srgb, var(--scene-accent, var(--color-steel)) 35%, var(--color-bean));
+  border-radius: var(--radius-sm);
+  background: var(--color-obsidian);
+  font-style: italic;
+}
+.world-note-quiet::before {
+  content: '';
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--scene-accent, var(--color-steel));
+  border-radius: 50%;
+  background:
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0) center / 8px 1px no-repeat,
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0) center / 1px 8px no-repeat;
+  opacity: .7;
 }
 
 .world-selected-chip,
@@ -201,7 +334,10 @@
 }
 
 .world-selected-chip {
-  color: var(--color-amber);
+  padding: 1px 7px;
+  border: 1px solid var(--scene-accent, var(--color-steel));
+  border-radius: var(--radius-full);
+  color: var(--scene-accent, var(--color-steel));
   text-transform: uppercase;
 }
 
@@ -209,6 +345,9 @@
   list-style: none;
   margin: 0;
   padding: 0.5rem 0.75rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .world-causal-binding {
@@ -216,10 +355,14 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.45rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--radius-sm);
   color: var(--color-cream);
   font-family: var(--font-serif);
   font-size: 13px;
+  transition: background-color var(--dur-fast, 140ms) var(--ease-out);
 }
+.world-causal-binding:hover { background: var(--teal-10); }
 
 .world-causal-binding button {
   min-height: 44px;
@@ -229,7 +372,16 @@
   color: var(--color-teal);
   font: inherit;
   cursor: pointer;
+  transition:
+    transform var(--dur-fast, 140ms) var(--ease-out),
+    background-color var(--dur-fast, 140ms) var(--ease-out),
+    color var(--dur-fast, 140ms) var(--ease-out);
 }
+.world-causal-binding button:hover {
+  background: var(--teal-18);
+  transform: translateY(-1px);
+}
+.world-causal-binding button:active { transform: translateY(1px); }
 
 .world-causal-binding button:focus-visible {
   outline: 2px solid var(--color-amber);
@@ -239,14 +391,24 @@
   margin-left: auto;
   color: var(--color-secondary);
 }
-
-.world-causal-review.is-confirmed { color: var(--color-teal); }
-.world-causal-review.is-contested { color: var(--color-warning); }
+/* Review states pair an icon with the printed word, hues from the severity
+   ramp. */
+.world-causal-review::before { margin-right: 0.3em; }
+.world-causal-review.is-confirmed { color: var(--sev-resolve); }
+.world-causal-review.is-confirmed::before { content: '✓'; }
+.world-causal-review.is-contested { color: var(--sev-improve); }
+.world-causal-review.is-contested::before { content: '!'; }
+.world-causal-review.is-provisional { color: var(--color-warning); }
+.world-causal-review.is-provisional::before { content: '?'; }
 .world-causal-review.is-superseded { color: var(--color-faint); }
+.world-causal-review.is-superseded::before { content: '⇒'; }
 
 .world-causal-overlay {
+  border: 1px solid var(--color-bean);
   border-left: 2px solid var(--color-teal);
-  background: var(--color-obsidian);
+  border-radius: var(--radius-control);
+  background: var(--chassis-brush), var(--color-chassis);
+  box-shadow: var(--bezel-raised);
 }
 
 @media (max-width: 700px) {
@@ -255,4 +417,14 @@
 
 @media (prefers-reduced-motion: reduce) {
   .world-canvas { transition: none; }
+  .atlas-mode,
+  .world-signal-body,
+  .world-signal-place,
+  .world-causal-binding,
+  .world-causal-binding button { transition: none; }
+  .atlas-mode:active,
+  .world-signal-place:active:not(:disabled),
+  .world-causal-binding button:active { transform: none; }
+  .world-signal-place:hover:not(:disabled),
+  .world-causal-binding button:hover { transform: none; }
 }

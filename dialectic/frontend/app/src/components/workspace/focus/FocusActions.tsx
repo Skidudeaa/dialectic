@@ -118,18 +118,20 @@ export function FocusActions({ mark, canAct, mergeCandidates, onReview }: FocusA
       <div className="focus-actions-row">
         <button
           type="button"
-          className="btn btn-secondary btn-sm"
+          className={`btn btn-sm focus-stamp focus-stamp-confirm${mark.review === 'confirmed' ? ' is-stamped' : ''}`}
           disabled={busy || terminal || mark.review === 'confirmed'}
           onClick={oneTap('confirm')}
         >
+          <span aria-hidden="true">✓</span>
           Confirm
         </button>
         <button
           type="button"
-          className="btn btn-secondary btn-sm"
+          className={`btn btn-sm focus-stamp focus-stamp-contest${mark.review === 'contested' ? ' is-stamped' : ''}`}
           disabled={busy || terminal || mark.review === 'contested'}
           onClick={oneTap('contest')}
         >
+          <span aria-hidden="true">⚑</span>
           Contest
         </button>
         <button

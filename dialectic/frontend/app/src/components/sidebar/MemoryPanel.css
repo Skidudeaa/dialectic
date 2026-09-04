@@ -1,4 +1,6 @@
-/* Memory as a dossier: facts first, papers last, capture on demand. */
+/* Memory as a dossier: facts first, papers last, capture on demand.
+   Cards are filed exhibits — they raise off the desk on hover — and every
+   entry carries its provenance (scope) and revision (version) in ink. */
 
 .memory-panel {
     display: flex;
@@ -10,6 +12,8 @@
     display: flex;
     align-items: baseline;
     gap: 0.45rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--color-bean);
 }
 
 .memory-head h3 {
@@ -20,6 +24,7 @@
     color: var(--color-bone);
     text-transform: none;
     letter-spacing: 0;
+    text-shadow: var(--engrave);
 }
 
 .memory-count {
@@ -43,20 +48,24 @@
 .memory-find {
     width: 100%;
     padding: 6px 9px;
-    background: var(--color-void);
+    background: var(--color-well);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
     color: var(--color-bone);
     font-family: var(--font-mono);
     font-size: 12px;
     margin-bottom: 0.35rem;
     outline: none;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .memory-form input:focus,
 .memory-form textarea:focus,
 .memory-find:focus {
     border-color: var(--amber-30);
+    box-shadow: var(--bezel-well), 0 0 0 2px rgba(242,162,74,.1);
 }
 
 .memory-form-actions {
@@ -75,11 +84,25 @@
 }
 
 .memory-card {
+    position: relative;
     padding: 8px 10px 7px;
     background: var(--color-obsidian);
     border: 1px solid var(--color-bean);
+    border-left-width: 2px;
     border-radius: var(--radius-sm);
     margin-bottom: 0.45rem;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out);
+}
+
+/* Filed cards raise off the desk under the hand. */
+.memory-card:hover {
+    transform: translateY(-1px);
+    border-color: var(--color-crater);
+    border-left-color: var(--scene-accent, var(--color-amber));
+    box-shadow: var(--shadow-md);
 }
 
 .memory-card-main {
@@ -129,6 +152,9 @@
 }
 
 .memory-version {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--color-ghost);
@@ -136,22 +162,66 @@
     letter-spacing: .1em;
 }
 
+/* Provenance chip — where this memory is filed. The label is the signal;
+   the hue is only a filing accent, so each scope keeps its text. */
+.memory-scope {
+    padding: 0 4px;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    font-size: 0.6rem;
+    letter-spacing: .08em;
+    color: var(--color-secondary);
+}
+.memory-scope-room   { color: var(--color-amber); border-color: var(--amber-30); background: var(--amber-08); }
+.memory-scope-user   { color: var(--color-teal); border-color: var(--teal-30); background: var(--teal-10); }
+.memory-scope-global { color: var(--color-plum); border-color: var(--plum-12); background: var(--plum-12); }
+.memory-scope-llm    { color: var(--color-steel); border-color: var(--steel-30); background: var(--steel-12); }
+
 .memory-promotion {
     flex: 0 0 auto;
-    padding: 2px 0;
+    padding: 2px 6px;
     background: transparent;
-    border: none;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
     color: var(--color-ghost);
     font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: .08em;
     text-transform: uppercase;
     cursor: pointer;
+    transition: color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                transform var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 
-.memory-promotion:hover:not(:disabled),
+.memory-promotion:hover:not(:disabled) {
+    color: var(--color-amber);
+    border-color: var(--amber-30);
+}
+
+.memory-promotion:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
+}
+
+/* Promoted reads as a filed pin: a dot AND the word, never hue alone. */
 .memory-promotion.is-promoted {
     color: var(--color-amber);
+    border-color: var(--amber-30);
+    background: var(--amber-08);
+}
+.memory-promotion.is-promoted::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--led-amber);
+    box-shadow: var(--led-glow-amber);
+    display: inline-block;
+    margin-right: 5px;
+    vertical-align: 1px;
 }
 
 .memory-promotion:disabled {
@@ -162,6 +232,7 @@
 .memory-error {
     padding: 6px 8px;
     border: 1px solid var(--color-bean);
+    box-shadow: inset 3px 0 0 var(--color-error);
     color: var(--color-bone);
     font-family: var(--font-mono);
     font-size: 12px;
@@ -181,6 +252,7 @@
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--color-secondary);
+    text-shadow: var(--engrave);
 }
 
 .memory-paper {
@@ -196,9 +268,16 @@
     text-align: left;
     cursor: pointer;
     color: inherit;
+    transition: background-color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                transform var(--dur-fast, 140ms) var(--ease-out);
 }
 
-.memory-paper:hover { background: var(--amber-08); }
+.memory-paper:hover {
+    background: var(--amber-08);
+    border-left-color: var(--scene-accent, var(--color-amber));
+    transform: translateX(2px);
+}
 
 .memory-paper-title {
     font-family: var(--font-serif);
@@ -217,4 +296,80 @@
     font-size: 0.75rem;
     line-height: 1.4;
     color: var(--color-secondary);
+}
+
+/* Superseded — earlier drafts stay on file, struck through but still
+   readable when opened. The word "superseded" is always spelled out so
+   the state never rests on the strikethrough or dimming alone. */
+.memory-superseded {
+    margin-top: 0.2rem;
+    padding-top: 0.55rem;
+    border-top: 1px dashed var(--color-bean);
+}
+
+.memory-superseded-head {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 3px 2px;
+    margin-bottom: 0.35rem;
+    background: none;
+    border: none;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-secondary);
+    text-shadow: var(--engrave);
+    cursor: pointer;
+    transition: color var(--dur-fast, 140ms) var(--ease-out);
+}
+.memory-superseded-head:hover { color: var(--color-bone); }
+
+.memory-superseded-chevron {
+    transition: transform var(--dur-med, 220ms) var(--ease-out);
+    transform: rotate(-90deg);
+}
+.memory-superseded-head[aria-expanded="true"] .memory-superseded-chevron {
+    transform: rotate(0deg);
+}
+
+.memory-superseded-count {
+    padding: 0 5px;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-full);
+    font-size: 0.66rem;
+    color: var(--color-faint);
+}
+
+.memory-card.is-superseded {
+    border-style: dashed;
+    border-left-style: solid;
+    background: transparent;
+}
+.memory-card.is-superseded .memory-key {
+    color: var(--color-secondary);
+    text-decoration: line-through;
+    text-decoration-color: var(--color-crater);
+}
+.memory-card.is-superseded .memory-value { color: var(--color-secondary); }
+.memory-card.is-superseded.is-open .memory-value { color: var(--color-ink); }
+
+.memory-superseded-tag {
+    padding: 0 4px;
+    border: 1px dashed var(--color-crater);
+    border-radius: var(--radius-sm);
+    font-size: 0.6rem;
+    letter-spacing: .08em;
+    color: var(--color-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .memory-card,
+    .memory-paper,
+    .memory-promotion,
+    .memory-superseded-chevron { transition: none; }
+    .memory-card:hover { transform: none; }
+    .memory-paper:hover { transform: none; }
 }

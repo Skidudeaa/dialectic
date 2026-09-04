@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { TradingSlice, PolymarketOdd } from '../../types/trading.ts'
 import './cockpit.css'
 
@@ -34,16 +35,48 @@ function formatFreshness(fetchedAt?: number): string | null {
 
 const EMPTY_COPY = 'No Polymarket bindings.'
 
+type TickDir = 'up' | 'down' | 'flat'
+
+const TICK_GLYPH: Record<TickDir, string> = { up: '▲', down: '▼', flat: '◆' }
+
 function OddsChips({ odds }: { odds: PolymarketOdd[] }) {
+  // Same tick-flash grammar as MarketStrip: directions come from comparing
+  // this slice against the previously rendered one (adjust-state-during-
+  // render), and the arrow glyph pairs with the hue — never hue alone.
+  const [prev, setPrev] = useState<{ src: PolymarketOdd[]; dirs: Map<string, TickDir> }>({
+    src: odds,
+    dirs: new Map(),
+  })
+  if (prev.src !== odds) {
+    const before = new Map(prev.src.map((o) => [o.slug, o.probability]))
+    const dirs = new Map<string, TickDir>()
+    for (const o of odds) {
+      const b = before.get(o.slug)
+      dirs.set(o.slug, b === undefined || b === o.probability ? 'flat' : o.probability > b ? 'up' : 'down')
+    }
+    setPrev({ src: odds, dirs })
+  }
+  const dirs = prev.src === odds ? prev.dirs : new Map<string, TickDir>()
   if (odds.length === 0) return <div className="cockpit-empty-line">{EMPTY_COPY}</div>
   return (
     <div className="cockpit-chip-row">
-      {odds.map((o, i) => (
-        <span className="cockpit-chip" key={`${o.slug}-${i}`}>
-          <span className="cockpit-chip-symbol">{prettifySlug(o.slug)}</span>
-          <span className="cockpit-chip-value">{formatProbability(o.probability)}</span>
-        </span>
-      ))}
+      {odds.map((o, i) => {
+        const dir = dirs.get(o.slug) ?? 'flat'
+        return (
+          <span className="cockpit-chip" key={`${o.slug}-${i}`}>
+            <span className={`cockpit-chip-tick cockpit-chip-tick--${dir}`} aria-hidden="true">
+              {TICK_GLYPH[dir]}
+            </span>
+            <span className="cockpit-chip-symbol">{prettifySlug(o.slug)}</span>
+            <span
+              key={o.probability}
+              className={dir === 'flat' ? 'cockpit-chip-value' : `cockpit-chip-value cockpit-chip-value--${dir}`}
+            >
+              {formatProbability(o.probability)}
+            </span>
+          </span>
+        )
+      })}
     </div>
   )
 }
@@ -59,6 +92,12 @@ export function PolymarketStrip({ slice }: PolymarketStripProps) {
       <div className="cockpit-header">
         <span className="cockpit-title" title="Prediction-market odds bound to this thesis">Polymarket</span>
         <div className="cockpit-header-right">
+          {slice.status === 'ready' && (
+            <span className="cockpit-live">
+              <span className="cockpit-live-lamp" aria-hidden="true" />
+              Live
+            </span>
+          )}
           {freshness && <span className="cockpit-freshness">{freshness}</span>}
         </div>
       </div>

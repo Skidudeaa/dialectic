@@ -17,9 +17,20 @@ interface ReviewChipProps {
   className?: string
 }
 
+/* Shape paired with hue (§17.4 — never color-only): the stamp ✓, the flag ⚑,
+   the pencil ✎, the retirement mark ↺. Decorative — the literal text label
+   alongside is the accessible signal, so the glyph is hidden from AT. */
+const REVIEW_GLYPH: Record<FieldReviewState, string> = {
+  confirmed: '✓',
+  contested: '⚑',
+  provisional: '✎',
+  superseded: '↺',
+}
+
 export function ReviewChip({ review, className }: ReviewChipProps) {
   return (
     <span className={`field-review-chip is-${review}${className ? ` ${className}` : ''}`}>
+      <span className="field-review-chip-glyph" aria-hidden="true">{REVIEW_GLYPH[review]}</span>
       {review}
     </span>
   )

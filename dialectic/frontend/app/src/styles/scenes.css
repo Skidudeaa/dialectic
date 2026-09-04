@@ -1,0 +1,103 @@
+/* ══════════════════════════════════════════════════════════════════
+   SCENE IDENTITY — one place, one light (Dark Roast v3)
+
+   Every implemented workspace scene owns ONE accent drawn from the
+   token counterpoint band (tokens.css), set here exactly once, keyed
+   off the [data-scene] attribute that WorkspaceSceneFrame puts on the
+   scene <section> and the SceneSwitcher puts on each tray key. Every
+   child — masthead, tray tile, module rules, empty states — reads
+   var(--scene-accent) / var(--scene-accent-soft), so a scene switch
+   changes the light, not just the labels.
+
+   The mapping is mirrored in TS at components/workspace/sceneIdentity.ts
+   (SCENE_ACCENTS): that file is the registry + docs half, this file is
+   the half the browser reads. Change one, change the other.
+
+   --scene-tint is kept as an alias of --scene-accent-soft for consumers
+   written before the contract; new CSS reads --scene-accent-soft.
+
+   Ambient washes stay at a few percent luminance, and hue is always
+   accompanied by name, glyph or geometry — classified dossier, not
+   neon, and no color-only signals.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Defaults: the House's amber stands in until a scene claims the
+   section, so children never read an un-set accent. */
+.workspace-scene {
+    --scene-accent: var(--color-amber);
+    --scene-accent-soft: var(--amber-12);
+    --scene-ambient: radial-gradient(120% 55% at 50% 0%, var(--amber-08), transparent 60%);
+}
+
+/* The compatibility alias resolves per element, so a tray key carrying
+   its own data-scene tints in ITS scene's hue, not the section's. */
+[data-scene] { --scene-tint: var(--scene-accent-soft); }
+
+/* HOUSE — the hearth: amber overhead, the light the whole house shares. */
+[data-scene="house"] {
+    --scene-accent: var(--color-amber);
+    --scene-accent-soft: var(--amber-12);
+    --scene-ambient: radial-gradient(120% 55% at 50% 0%, rgba(242,162,74,.09), transparent 60%);
+}
+
+/* SURFACE — the workbench: copper lamplight rising off the desktop. */
+[data-scene="surface"] {
+    --scene-accent: var(--color-copper);
+    --scene-accent-soft: rgba(201,122,61,.15);
+    --scene-ambient: radial-gradient(130% 60% at 50% 100%, rgba(201,122,61,.08), transparent 55%);
+}
+
+/* RECORD — the archive: cream, flat and even. Nothing glows here; the
+   transcript is the exhibit. */
+[data-scene="record"] {
+    --scene-accent: var(--color-cream);
+    --scene-accent-soft: rgba(246,236,218,.12);
+    --scene-ambient: linear-gradient(180deg, rgba(246,236,218,.035), transparent 26%);
+}
+
+/* BENCH — the instrument desk: a cool teal oscilloscope bloom, high. */
+[data-scene="bench"] {
+    --scene-accent: var(--color-teal);
+    --scene-accent-soft: var(--teal-10);
+    --scene-ambient: radial-gradient(110% 50% at 72% 0%, rgba(84,216,198,.07), transparent 58%);
+}
+
+/* FIELD — marginalia: plum pencil, falling on a slant like a note in
+   a margin. */
+[data-scene="field"] {
+    --scene-accent: var(--color-plum);
+    --scene-accent-soft: var(--plum-12);
+    --scene-ambient: linear-gradient(127deg, rgba(180,138,212,.06), transparent 42%);
+}
+
+/* LIBRARY — the shelf: sage, a quiet lamp pool from straight above. */
+[data-scene="library"] {
+    --scene-accent: var(--color-sage);
+    --scene-accent-soft: var(--sage-12);
+    --scene-ambient: radial-gradient(100% 48% at 50% 0%, rgba(156,190,122,.07), transparent 62%);
+}
+
+/* LEDGER — the bound book: gold rule-warmth settling toward the foot
+   of the page. */
+[data-scene="ledger"] {
+    --scene-accent: var(--color-gold);
+    --scene-accent-soft: var(--gold-12);
+    --scene-ambient: linear-gradient(0deg, rgba(237,179,49,.055), transparent 34%);
+}
+
+/* ATLAS — the map room: steel chart-light, cool and high. */
+[data-scene="atlas"] {
+    --scene-accent: var(--color-steel);
+    --scene-accent-soft: var(--steel-12);
+    --scene-ambient: radial-gradient(120% 52% at 50% 0%, rgba(127,169,203,.07), transparent 58%);
+}
+
+/* MIRROR — the reflection: plum cooled through steel (two tokens, so it
+   can never read as the Field's straight plum), and the only room lit
+   from BELOW — it is lit by its reader. */
+[data-scene="mirror"] {
+    --scene-accent: var(--color-plum);
+    --scene-accent: color-mix(in oklab, var(--color-plum) 55%, var(--color-steel));
+    --scene-accent-soft: rgba(162,148,208,.14);
+    --scene-ambient: radial-gradient(115% 55% at 50% 100%, rgba(162,148,208,.075), transparent 60%);
+}

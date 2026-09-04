@@ -1,3 +1,7 @@
+/* Share — the invite as a stamped credential on a chassis module.
+   The copy keys are physical: they travel on press, and a copied key
+   flashes teal WITH a check glyph and "Copied!" — never hue alone. */
+
 .share-section { padding: 0.5rem 0; }
 .share-section p {
     color: var(--color-faint);
@@ -6,38 +10,99 @@
     margin-bottom: 0.75rem;
     line-height: 1.5;
 }
+
+/* Labeled module plate — raised chassis with a brushed face. */
+.share-module {
+    padding: 10px 10px 11px;
+    background: var(--chassis-brush), var(--color-chassis);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-chassis);
+    box-shadow: var(--bezel-raised);
+}
+.share-module > p { margin-bottom: 0.6rem; }
+
 .share-link-row { display: flex; gap: 0.35rem; }
 .share-link-row input,
 .share-link-row textarea {
     flex: 1;
     min-width: 0;
     padding: 6px 9px;
-    background: var(--color-void);
+    background: var(--color-well);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
     color: var(--color-secondary);
     font-family: var(--font-mono);
     font-size: 12px;
     outline: none;
     resize: none;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out);
 }
 .share-link-row input:focus,
-.share-link-row textarea:focus { border-color: var(--amber-30); }
+.share-link-row textarea:focus {
+    border-color: var(--amber-30);
+    box-shadow: var(--bezel-well), 0 0 0 2px rgba(242,162,74,.1);
+    color: var(--color-bone);
+}
+.share-link-row input:hover,
+.share-link-row textarea:hover { border-color: var(--color-crater); }
 
+/* The invite block reads as a tear-out credential: perforation edge,
+   key glyph on the engraved label, code set in the recessed well. */
 .share-invite-row { align-items: stretch; }
+.share-invite-row textarea {
+    border-style: dashed;
+    letter-spacing: 0.04em;
+    color: var(--color-ink);
+}
 .share-invite-row button { align-self: stretch; }
+
 .share-field-label {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
     margin-bottom: 4px;
     color: var(--color-secondary);
     font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+    text-shadow: var(--engrave);
 }
+.share-label-glyph { color: var(--color-amber); }
+
+/* The copy key. Press travel comes from .btn; this adds the copied
+   confirmation: teal fill + border, a check glyph, and a short pop. */
+.share-copy-btn {
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out);
+}
+.share-copy-btn.is-copied {
+    background: var(--teal-10);
+    border-color: var(--teal-30);
+    color: var(--color-teal);
+    animation: shareCopiedPop var(--dur-med, 220ms) var(--ease-spring);
+}
+
+@keyframes shareCopiedPop {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.06); }
+    100% { transform: scale(1); }
+}
+
 .share-manual-fields {
     display: grid;
     gap: 10px;
     margin-top: 14px;
 }
 .share-hint { margin-top: 14px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .share-copy-btn { transition: none; }
+    .share-copy-btn.is-copied { animation: none; }
+}

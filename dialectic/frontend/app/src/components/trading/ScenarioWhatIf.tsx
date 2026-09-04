@@ -79,8 +79,8 @@ function PortfolioImpactTable({ portfolioImpact }: { portfolioImpact: ScenarioEv
         <thead>
           <tr>
             <th>Instrument</th>
-            <th>% Impact</th>
-            <th>$ Impact</th>
+            <th className="cockpit-num">% Impact</th>
+            <th className="cockpit-num">$ Impact</th>
             <th>From → To</th>
           </tr>
         </thead>
@@ -88,8 +88,8 @@ function PortfolioImpactTable({ portfolioImpact }: { portfolioImpact: ScenarioEv
           {sorted.map(([instrument, impact]) => (
             <tr key={instrument}>
               <td>{instrument}</td>
-              <td>{Number.isFinite(impact.pctImpact) ? `${impact.pctImpact.toFixed(1)}%` : '—'}</td>
-              <td>{formatDollar(impact.dollarImpact)}</td>
+              <td className="cockpit-num">{Number.isFinite(impact.pctImpact) ? `${impact.pctImpact.toFixed(1)}%` : '—'}</td>
+              <td className="cockpit-num">{formatDollar(impact.dollarImpact)}</td>
               <td>{impact.from ?? '—'} → {impact.to ?? '—'}</td>
             </tr>
           ))}
@@ -143,12 +143,12 @@ export function ScenarioWhatIf({ roomId, scenarios, snapshotImpacts }: ScenarioW
                     <div className="cockpit-scenario-probs">
                       <span>
                         <span className="cockpit-scenario-prob-label">Authored</span>
-                        <span className="cockpit-scenario-prob-authored">{formatPercent(scenario.probability)}</span>
+                        <span className="cockpit-scenario-prob-authored cockpit-seg">{formatPercent(scenario.probability)}</span>
                       </span>
                       {snapshotImpact && (
                         <span>
                           <span className="cockpit-scenario-prob-label">Live</span>
-                          <span className="cockpit-scenario-prob-live">{formatPercent(snapshotImpact.probability)}</span>
+                          <span className="cockpit-scenario-prob-live cockpit-seg">{formatPercent(snapshotImpact.probability)}</span>
                           {' '}
                           <span
                             className={
@@ -159,6 +159,9 @@ export function ScenarioWhatIf({ roomId, scenarios, snapshotImpacts }: ScenarioW
                                   : 'cockpit-scenario-net-impact'
                             }
                           >
+                            <span className="cockpit-signed-glyph" aria-hidden="true">
+                              {snapshotImpact.netImpact < 0 ? '▼' : snapshotImpact.netImpact > 0 ? '▲' : '◆'}
+                            </span>
                             ({formatDollar(snapshotImpact.netImpact)})
                           </span>
                         </span>
@@ -182,7 +185,7 @@ export function ScenarioWhatIf({ roomId, scenarios, snapshotImpacts }: ScenarioW
                   {row.status === 'result' && row.result && (
                     <div className="cockpit-scenario-result">
                       <div className="cockpit-scenario-result-label">Hypothetical — nothing placed</div>
-                      <div className="cockpit-scenario-result-prob">
+                      <div className="cockpit-scenario-result-prob cockpit-seg">
                         Probability: {formatPercent(row.result.probability)}
                       </div>
                       <ChangedNodeChips changedNodes={row.result.changedNodes} />

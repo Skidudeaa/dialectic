@@ -119,14 +119,45 @@
     box-shadow: var(--bezel-raised), 0 8px 24px rgba(0, 0, 0, 0.5);
     text-align: left;
     cursor: default;
+    animation: fadeInScale var(--dur-fast, 140ms) var(--ease-out);
+    transform-origin: top left;
+}
+
+/* The tag's arrow — a rotated corner of the same sheet, pointing back at the
+   marked word. Points down instead when the panel flipped above the trigger
+   (Explain.tsx writes data-placement from the same measurement pass). */
+.explain-panel::before {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: 18px;
+    width: 8px;
+    height: 8px;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-right: none;
+    border-bottom: none;
+    transform: rotate(45deg);
+}
+.explain-panel[data-placement='above'] {
+    transform-origin: bottom left;
+}
+.explain-panel[data-placement='above']::before {
+    top: auto;
+    bottom: -5px;
+    transform: rotate(225deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .explain-panel { animation: none; }
 }
 
 .explain-term {
     margin: 0 0 5px;
-    color: var(--color-secondary);
+    color: var(--color-amber);
     font-family: var(--font-mono);
     font-size: 11px;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     text-shadow: var(--engrave);
 }

@@ -7,7 +7,7 @@
     align-items: center;
     justify-content: center;
     z-index: 100;
-    animation: fadeIn .14s ease-out;
+    animation: fadeIn var(--dur-fast, 140ms) ease-out;
 }
 .protocol-picker {
     background: var(--color-cacao);
@@ -18,6 +18,7 @@
     max-height: 80vh;
     overflow-y: auto;
     box-shadow: 0 28px 70px rgba(0,0,0,.7);
+    animation: fadeInScale var(--dur-med, 220ms) var(--ease-out);
 }
 .protocol-picker h2 {
     margin: 0 0 5px;
@@ -26,9 +27,12 @@
     letter-spacing: .06em;
     text-transform: uppercase;
     color: var(--color-bone);
+    text-shadow: var(--engrave);
 }
 .protocol-picker .picker-subtitle {
     margin: 0 0 18px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--color-bean);
     font-family: var(--font-mono);
     font-size: 12px;
     text-transform: uppercase;
@@ -47,14 +51,26 @@
     border-radius: var(--radius-sm);
     padding: 12px;
     cursor: pointer;
-    transition: border-color 0.15s;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out);
     box-shadow: var(--shadow-md);
 }
-.protocol-card:hover { border-color: var(--color-crater); }
-.protocol-card.selected {
-    border-color: var(--amber-30);
-    background: linear-gradient(var(--color-espresso), var(--color-cacao));
+.protocol-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-crater);
+    box-shadow: var(--shadow-lg), 0 6px 18px rgba(0,0,0,.4);
 }
+.protocol-card:active { transform: translateY(0); }
+.protocol-card.selected {
+    border-color: var(--color-amber);
+    background: linear-gradient(var(--color-espresso), var(--color-cacao));
+    /* Selected ring — a drawn outline plus the lift shadow, so selection
+       reads as a ring and not only as a hue swap. */
+    box-shadow: 0 0 0 1px var(--amber-30), 0 0 14px rgba(242,162,74,.14), var(--shadow-md);
+}
+.protocol-card.selected:hover { transform: none; }
 .protocol-card h3 {
     margin: 0 0 5px;
     font-family: var(--font-serif);
@@ -62,6 +78,7 @@
     font-weight: 600;
     color: var(--color-bone);
 }
+.protocol-card.selected h3 { color: var(--color-display); }
 .protocol-card .card-desc {
     margin: 0 0 8px;
     font-family: var(--font-serif);
@@ -94,6 +111,7 @@
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--color-secondary);
+    text-shadow: var(--engrave);
     margin-bottom: 5px;
 }
 .protocol-config textarea {
@@ -109,9 +127,14 @@
     resize: vertical;
     box-sizing: border-box;
     outline: none;
-    transition: border-color 0.15s;
+    box-shadow: var(--shadow-inset);
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
-.protocol-config textarea:focus { border-color: var(--amber-30); }
+.protocol-config textarea:focus {
+    border-color: var(--amber-30);
+    box-shadow: var(--shadow-inset), 0 0 0 1px var(--amber-30);
+}
 .protocol-actions {
     display: flex;
     justify-content: flex-end;
@@ -119,14 +142,23 @@
 }
 .protocol-actions button {
     padding: 6px 16px;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
     font-family: var(--font-stencil);
     font-size: 12px;
     letter-spacing: .04em;
     text-transform: uppercase;
     cursor: pointer;
     border: 1px solid var(--color-bean);
-    transition: opacity 0.15s;
+    box-shadow: var(--bezel-key);
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
+}
+.protocol-actions button:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
 }
 .protocol-actions .cancel-btn {
     background: var(--color-espresso);
@@ -136,13 +168,20 @@
 .protocol-actions .invoke-btn {
     background: var(--color-amber);
     color: var(--color-void);
-    border-color: var(--color-amber);
+    border-color: var(--color-amber-hot);
 }
 .protocol-actions .invoke-btn:hover { background: var(--color-amber-hot); }
-.protocol-actions .invoke-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.protocol-actions .invoke-btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
 
 .protocol-send-error {
   color: var(--color-error, #c0392b);
   font-size: 0.85rem;
   margin: 0 0 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .protocol-picker-overlay,
+    .protocol-picker { animation: none; }
+    .protocol-card,
+    .protocol-card:hover { transition: none; transform: none; }
 }

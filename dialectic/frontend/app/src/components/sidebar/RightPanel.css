@@ -1,11 +1,15 @@
-/* Right panel tabs */
+/* Right panel — the context rail as instrument chrome: a machined tab
+   strip over a dossier panel. The active tab reads three ways at once —
+   fill, accent bar, label weight — so "where am I" never rests on hue. */
 .sidebar-tabs {
     display: flex;
-    border-bottom: 1px solid var(--color-bean);
     flex-shrink: 0;
     overflow-x: auto;
     scrollbar-width: none;
     scroll-behavior: smooth;
+    background: var(--chassis-brush), var(--color-chassis);
+    border-bottom: 1px solid var(--color-bean);
+    box-shadow: inset 0 -1px 0 rgba(0,0,0,.5), inset 0 1px 0 rgba(255,249,240,.04);
     /* Nine tabs overflow the rail — the faded edges say "more this way",
        which a hidden scrollbar otherwise says nowhere. */
     mask-image: linear-gradient(90deg,
@@ -14,6 +18,7 @@
         transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
 }
 .sidebar-tab-btn {
+    position: relative;
     flex: 0 0 auto;
     min-width: 54px;
     min-height: 44px;
@@ -27,17 +32,30 @@
     font-weight: normal;
     text-transform: uppercase;
     letter-spacing: .1em;
+    text-shadow: var(--engrave);
     border-bottom: 2px solid transparent;
-    transition: all 0.15s;
+    transition: color var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                transform var(--dur-fast, 140ms) var(--ease-out);
 }
-.sidebar-tab-btn { text-shadow: var(--engrave); }
-.sidebar-tab-btn:hover,
+.sidebar-tab-btn:hover {
+    color: var(--color-bone);
+    background: var(--amber-08);
+}
+/* A tab press travels like the other keys on the desk. */
+.sidebar-tab-btn:active { transform: translateY(1px); }
+/* The active tab: scene-accent fill + accent bar + heavier label + the
+   lit-filament glow under the bar. --scene-accent falls back to amber
+   until the scene identity layer lands. */
 .sidebar-tab-btn.active {
     color: var(--color-bone);
-    border-bottom-color: var(--led-amber);
+    font-weight: 600;
+    background: var(--scene-accent-soft, var(--amber-12));
+    border-bottom-color: var(--scene-accent, var(--color-amber));
+    box-shadow: inset 0 -8px 10px -8px var(--scene-accent, var(--color-amber));
 }
-/* The active tab's underline glows like a lit filament. */
-.sidebar-tab-btn.active { box-shadow: inset 0 -6px 8px -8px var(--color-amber); }
 .sidebar-tab-slot {
     display: contents;
 }
@@ -53,4 +71,14 @@
     overflow-y: auto;
     padding: 0.75rem;
     font-size: 14px;
+}
+/* Switching tabs remounts the panel; the new section rises in so the swap
+   reads as a page turn, not a pop. Reduced-motion users get the global
+   kill switch; the local guard keeps this honest if that rule moves. */
+.sidebar-panel > * {
+    animation: fadeIn var(--dur-med, 220ms) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+    .sidebar-panel > * { animation: none; }
+    .sidebar-tab-btn { transition: none; }
 }

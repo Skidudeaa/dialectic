@@ -47,7 +47,9 @@ export function WorldStrip({ roomId, worldLink }: WorldStripProps) {
   if (scopeCount === 0) {
     return (
       <p className="world-strip world-strip-empty" data-testid="world-strip">
-        No geography placed — <a href={seedHref()}>seed it</a>
+        <span className="world-strip-mark" aria-hidden="true" />
+        <span className="world-strip-item">No geography placed —</span>{' '}
+        <a href={seedHref()}>seed it</a>
       </p>
     )
   }
@@ -68,10 +70,19 @@ export function WorldStrip({ roomId, worldLink }: WorldStripProps) {
 
   return (
     <p className="world-strip" data-testid="world-strip">
-      World · {contactTotal} contact{contactTotal === 1 ? '' : 's'} in{' '}
-      {scopesWithContacts} scope{scopesWithContacts === 1 ? '' : 's'} today
-      {age ? ` · last ${age}` : ''}
-      {newFires > 0 ? ` · ${newFires} new fire${newFires === 1 ? '' : 's'}` : ''}
+      <span className="world-strip-mark" aria-hidden="true" />
+      <span className="world-strip-item world-strip-name">World</span>
+      {' · '}
+      <span className="world-strip-item">
+        {contactTotal} contact{contactTotal === 1 ? '' : 's'} in{' '}
+        {scopesWithContacts} scope{scopesWithContacts === 1 ? '' : 's'} today
+      </span>
+      {age ? <> · <span className="world-strip-item">last {age}</span></> : null}
+      {newFires > 0 ? (
+        <> · <span className="world-strip-item world-strip-fires">
+          {newFires} new fire{newFires === 1 ? '' : 's'}
+        </span></>
+      ) : null}
       {worldLink}
     </p>
   )

@@ -56,7 +56,10 @@ export function RoomSettingsDialog({ roomId, onClose }: RoomSettingsDialogProps)
             <h2>Room intelligence</h2>
             <p>Choose how actively {PARTICIPANT_NAME} joins this room.</p>
           </div>
-          <button className="btn btn-ghost" onClick={onClose} aria-label="Close settings">&times;</button>
+          <div className="settings-close-cluster">
+            <kbd className="dialog-esc-hint" aria-hidden="true">esc</kbd>
+            <button className="btn btn-ghost" onClick={onClose} aria-label="Close settings">&times;</button>
+          </div>
         </div>
 
         {error && <div className="settings-error">{error}</div>}

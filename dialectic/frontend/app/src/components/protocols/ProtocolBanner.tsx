@@ -16,6 +16,29 @@ const PHASE_NAMES: Record<string, string[]> = {
   synthesis: ['Position Mapping', 'Tension Points', 'Integration', 'Synthesis Statement'],
 };
 
+/* Mode glyphs — one 16px stroke figure per protocol, so the strip reads at a
+   glance even before the name does (hue + icon + word, never hue alone). */
+const PROTOCOL_GLYPHS: Record<string, React.ReactNode> = {
+  steelman: (
+    <path d="M8 1.6 L13.4 3.6 V7.8 C13.4 11.6 11 13.9 8 14.9 C5 13.9 2.6 11.6 2.6 7.8 V3.6 Z" />
+  ),
+  socratic: (
+    <>
+      <path d="M5.4 5.9 A2.6 2.6 0 1 1 9.3 8 C8.4 8.5 8 9.1 8 10.2" />
+      <circle cx="8" cy="12.9" r="0.9" fill="currentColor" stroke="none" />
+    </>
+  ),
+  devil_advocate: (
+    <path d="M8 2.2 V13.8 M4 2.2 V5.6 A4 4 0 0 0 12 5.6 V2.2" />
+  ),
+  synthesis: (
+    <>
+      <path d="M2 3.4 L7 8 L2 12.6" />
+      <path d="M7 8 H13.6 M11 5.4 L13.8 8 L11 10.6" />
+    </>
+  ),
+};
+
 interface ProtocolBannerProps {
   protocol: ProtocolState;
   onAdvance: (protocolId: string) => void;
@@ -47,6 +70,9 @@ export function ProtocolBanner({ protocol, onAdvance, onAbort }: ProtocolBannerP
       <div className="protocol-banner-top">
         <div className="protocol-banner-info">
           <div className="protocol-icon" />
+          <svg className="protocol-glyph" viewBox="0 0 16 16" aria-hidden="true">
+            {PROTOCOL_GLYPHS[protocol.protocol_type] ?? null}
+          </svg>
           <span className="protocol-name">{name}</span>
           <span className="protocol-phase">
             {phaseName} ({protocol.current_phase + 1}/{protocol.total_phases})

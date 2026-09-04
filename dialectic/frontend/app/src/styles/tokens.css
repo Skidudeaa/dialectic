@@ -224,3 +224,44 @@
     font-style: normal;
     font-display: swap;
 }
+
+/* ══════════════════════════════════════════════════════
+   MOTION & ELEVATION (2026-09-03) — foundation layer.
+   ADDITIVE ONLY: nothing above is renamed or revalued.
+
+   The interaction contract for every clickable/pressable
+   surface in the app:
+     · transition on transform / background / box-shadow /
+       border-color using --dur-fast (hovers, presses)
+     · panels and menus enter with --dur-med, scenes and
+       drawers with --dur-slow
+     · a press is REAL travel: translateY(1px) + inset
+       shadow (see --bezel-key-down)
+     · ambient loops (glows, ember drift) are multiples of
+       --dur-ambient and scale with --energy-level
+   Easings live above: --ease-out, --ease-spring.
+   ══════════════════════════════════════════════════════ */
+:root {
+    /* Durations */
+    --dur-fast:    140ms;   /* hovers, presses, focus rings */
+    --dur-med:     220ms;   /* panels, menus, card entrances */
+    --dur-slow:    360ms;   /* scene transitions, drawers */
+    --dur-ambient: 2400ms;  /* base unit for ambient loops; multiply at use site */
+
+    /* Elevation — the offset-paper shadow PLUS a soft ambient blur, so a
+       raised sheet reads as physically lifted off the desk, not just
+       nudged. Compose over the --shadow-* set; values substitute
+       textually into box-shadow. */
+    --lift-1: var(--shadow-sm), 0 6px 16px rgba(0,0,0,.26);    /* hover raise */
+    --lift-2: var(--shadow-md), 0 12px 28px rgba(0,0,0,.30);   /* cards, popovers */
+    --lift-3: var(--shadow-lg), 0 20px 44px rgba(0,0,0,.36);   /* modals, drawers */
+
+    /* Focus ring — amber outline + offset, with a soft halo companion.
+       The global :focus-visible rule in global.css consumes the whole
+       set; components building a bespoke ring use the parts. Never a
+       color-only signal: the outline draws a real shape change. */
+    --focus-ring-color:  var(--color-amber);
+    --focus-ring-width:  2px;
+    --focus-ring-offset: 2px;
+    --focus-ring:        0 0 0 3px rgba(242,162,74,.22);
+}

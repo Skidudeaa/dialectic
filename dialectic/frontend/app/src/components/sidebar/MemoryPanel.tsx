@@ -31,13 +31,15 @@ export function MemoryPanel({
   const [pendingMemoryId, setPendingMemoryId] = useState<string | null>(null)
   const [promotionError, setPromotionError] = useState<string | null>(null)
 
-  const { facts, papers } = useMemo(() => {
+  const { facts, papers, superseded } = useMemo(() => {
     const active = memories.filter((memory) => memory.status === 'active')
     return {
       facts: active.filter((memory) => paperKind(memory.key) === null),
       papers: active.filter((memory) => paperKind(memory.key) !== null),
+      superseded: memories.filter((memory) => memory.status === 'invalidated'),
     }
   }, [memories])
+  const [showSuperseded, setShowSuperseded] = useState(false)
 
   const visibleFacts = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -172,6 +174,46 @@ export function MemoryPanel({
           })}
         </section>
       )}
+
+      {superseded.length > 0 && (
+        <section className="memory-superseded">
+          <button
+            type="button"
+            className="memory-superseded-head"
+            aria-expanded={showSuperseded}
+            onClick={() => setShowSuperseded((open) => !open)}
+          >
+            <svg className="memory-superseded-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+            Superseded
+            <span className="memory-superseded-count">{superseded.length}</span>
+          </button>
+          {showSuperseded && superseded.map((memory) => (
+            <article
+              key={memory.id}
+              className={`memory-card is-superseded${expandedId === memory.id ? ' is-open' : ''}`}
+            >
+              <button
+                type="button"
+                className="memory-card-main"
+                onClick={() => setExpandedId((id) => (id === memory.id ? null : memory.id))}
+              >
+                <div className="memory-key">{memoryTitle(memory.key)}</div>
+                <div className={`memory-value${expandedId === memory.id ? '' : ' is-clamped'}`}>
+                  {memory.content}
+                </div>
+              </button>
+              <div className="memory-meta">
+                <div className="memory-version">
+                  v{memory.version}
+                  <span className="memory-superseded-tag">superseded</span>
+                </div>
+              </div>
+            </article>
+          ))}
+        </section>
+      )}
     </div>
   )
 }
@@ -195,6 +237,9 @@ function FactCard({ memory, expanded, pending, onToggle, onPromote }: {
       <div className="memory-meta">
         <div className="memory-version">
           v{memory.version}
+          <span className={`memory-scope memory-scope-${memory.scope}`}>
+            {scopeLabel(memory.scope)}
+          </span>
           {memory.personally_promoted && <span> · personal</span>}
         </div>
         <button
@@ -209,6 +254,15 @@ function FactCard({ memory, expanded, pending, onToggle, onPromote }: {
       </div>
     </article>
   )
+}
+
+function scopeLabel(scope: Memory['scope']): string {
+  switch (scope) {
+    case 'room': return 'This room'
+    case 'user': return 'Personal'
+    case 'global': return 'Every room'
+    case 'llm': return PARTICIPANT_NAME
+  }
 }
 
 function paperKind(key: string): PaperKind | null {

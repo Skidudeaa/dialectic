@@ -159,6 +159,9 @@ export function Console({ desk }: { desk: TradingDeskState }) {
           <span className={`console-led${lamp.blink ? ' is-blinking' : ''}`} aria-hidden="true" />
           <span className="console-lamp-word">{lamp.word}</span>
         </span>
+        <span className="console-lamp-meter" aria-hidden="true">
+          <span className="console-lamp-meter-fill" />
+        </span>
       </div>
     </div>
   )

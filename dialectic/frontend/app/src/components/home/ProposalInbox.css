@@ -20,10 +20,21 @@
 
 .proposal-inbox h2 {
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     color: var(--color-secondary);
     font: 12px/1 var(--font-mono);
     letter-spacing: .16em;
     text-transform: uppercase;
+}
+
+.proposal-inbox h2::before {
+    content: '';
+    flex: 0 0 auto;
+    width: 14px;
+    height: 2px;
+    background: var(--scene-accent, var(--color-amber));
 }
 
 .proposal-inbox-stale {
@@ -35,35 +46,62 @@
     gap: 0.35rem;
 }
 
+/* Quiet but styled: an empty tray, not a blank hole. */
 .proposal-inbox-empty {
     margin: 0;
     color: var(--color-faint);
     font-size: 0.8rem;
+    padding: 8px 10px;
+    border: 1px dashed var(--color-bean);
+    border-radius: var(--radius-sm);
 }
 
 .proposal-inbox-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
 }
 
+/* Inbox rows: paper cards that raise on hover and travel on press. */
 .proposal-item {
     display: flex;
     flex-direction: column;
     gap: 2px;
     width: 100%;
     text-align: left;
-    background: none;
-    border: none;
+    background: var(--color-sheet);
+    border: 1px solid var(--color-bean);
     border-left: 2px solid var(--color-bean);
-    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    padding: 7px 10px;
     cursor: pointer;
     color: inherit;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                background var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 
-.proposal-item:hover { background: var(--amber-08); }
+.proposal-item:hover {
+    background: var(--color-cacao);
+    border-color: var(--color-crater);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
 
-.proposal-item.is-proposed { border-left-color: var(--color-amber); }
+.proposal-item:active {
+    transform: translateY(1px);
+    box-shadow: var(--shadow-inset);
+}
+
+.proposal-item:focus-visible {
+    outline: 1.5px solid var(--scene-accent, var(--color-amber));
+    outline-offset: 1px;
+}
+
+/* The pending edge carries the scene accent; settled states keep their
+   semantic hues. The chip's word always says the state outright. */
+.proposal-item.is-proposed { border-left-color: var(--scene-accent, var(--color-amber)); }
 .proposal-item.is-accepted { border-left-color: var(--color-teal); }
 .proposal-item.is-dismissed,
 .proposal-item.is-failed { border-left-color: var(--color-error); }
@@ -91,10 +129,12 @@
     font: 11px/1.4 var(--font-mono);
 }
 
-/* The literal status word, never color alone — same rule as field-review-chip. */
+/* The literal status word plus a shape glyph — readable at a glance,
+   never color alone (same rule as field-review-chip). */
 .proposal-status-chip {
     display: inline-flex;
     align-items: center;
+    gap: 4px;
     flex: 0 0 auto;
     font-family: var(--font-mono);
     font-size: 11px;
@@ -106,25 +146,39 @@
     color: var(--color-faint);
 }
 
+.proposal-status-chip::before {
+    font-family: var(--font-mono);
+    line-height: 1;
+}
+
 .proposal-status-chip.is-proposed {
     color: var(--color-amber);
     border-color: var(--color-amber);
     border-style: dashed;
 }
+.proposal-status-chip.is-proposed::before { content: '◐'; }
+
 .proposal-status-chip.is-accepted {
     color: var(--color-teal);
     border-color: var(--color-teal);
 }
+.proposal-status-chip.is-accepted::before { content: '✓'; }
+
 .proposal-status-chip.is-dismissed,
 .proposal-status-chip.is-failed {
     color: var(--color-error);
     border-color: var(--color-error);
 }
+.proposal-status-chip.is-dismissed::before,
+.proposal-status-chip.is-failed::before { content: '✕'; }
+
 .proposal-status-chip.is-superseded,
 .proposal-status-chip.is-expired {
     color: var(--color-ghost);
     border-color: var(--color-ghost);
 }
+.proposal-status-chip.is-superseded::before { content: '↻'; }
+.proposal-status-chip.is-expired::before { content: '◌'; }
 
 .proposal-item-detail {
     display: flex;
@@ -174,6 +228,7 @@
     text-transform: uppercase;
     color: var(--color-secondary);
     user-select: none;
+    transition: color var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .proposal-inbox-fold > summary::-webkit-details-marker { display: none; }
@@ -189,16 +244,25 @@
 
 .proposal-inbox-fold > summary:hover { color: var(--color-ink); }
 
+.proposal-inbox-fold > summary:focus-visible {
+    outline: 1.5px solid var(--scene-accent, var(--color-amber));
+    outline-offset: -1.5px;
+}
+
 .proposal-inbox-fold-count {
     color: var(--color-faint);
     text-transform: none;
     letter-spacing: 0;
+    font-family: var(--font-mono);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-full);
+    padding: 0 7px;
 }
 
 .proposal-inbox-fold-body {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
     max-height: 30vh;
     overflow-y: auto;
 }
@@ -216,4 +280,6 @@
 
 @media (prefers-reduced-motion: reduce) {
     .proposal-inbox-fold > summary::before { transition: none; }
+    .proposal-item,
+    .proposal-inbox-fold > summary { transition: none; }
 }

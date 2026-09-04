@@ -1,14 +1,18 @@
-/* The place-maker. Reads `--scene-accent` / `--scene-tint` from the scene
-   section (WorkspaceSceneFrame.css) so the name, glyph plate and rule are
-   always in the current scene's own color. */
+/* The place-maker. Reads `--scene-accent` / `--scene-accent-soft` from the
+   scene section (src/styles/scenes.css, via the frame's [data-scene]) so the
+   name, glyph plate and rule are always in the current scene's own color. */
 
 .scene-masthead {
     flex: 0 0 auto;
     padding: 16px 22px 0;
-    /* The accent rule: a lit filament under the masthead, fading right. */
+    /* The accent rule: a lit filament under the masthead, fading right —
+       with a solid station-segment at the left where the glyph plate sits,
+       so the rule reads as anchored to the place, not just underlined. */
     background:
-        linear-gradient(90deg, var(--scene-accent) 0, var(--scene-tint) 34%, transparent 72%)
-        left bottom / 100% 2px no-repeat;
+        linear-gradient(90deg, var(--scene-accent, var(--color-amber)), var(--scene-accent, var(--color-amber)))
+            left bottom / 72px 2px no-repeat,
+        linear-gradient(90deg, var(--scene-accent, var(--color-amber)) 0, var(--scene-accent-soft, var(--amber-12)) 34%, transparent 72%)
+            left bottom / 100% 2px no-repeat;
     padding-bottom: 12px;
 }
 
@@ -73,7 +77,9 @@ summary.scene-masthead-inner:focus-visible {
     text-wrap: pretty;
 }
 
-/* Glyph plate: a small chassis tile carrying the scene's mark. */
+/* Glyph plate: a small chassis tile carrying the scene's drawn motif —
+   unique geometry per room (ruled lines for the Ledger, a crosshair for the
+   Atlas, a delta for the Bench), stroked in the scene's own accent. */
 .scene-masthead-glyph {
     display: inline-flex;
     align-items: center;
@@ -81,13 +87,27 @@ summary.scene-masthead-inner:focus-visible {
     width: 40px;
     height: 40px;
     flex: 0 0 auto;
-    font-size: 19px;
-    color: var(--scene-accent);
+    color: var(--scene-accent, var(--color-amber));
     background: var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-chassis);
     box-shadow: var(--bezel-raised);
-    text-shadow: 0 0 6px var(--scene-tint);
+}
+
+.scene-masthead-motif {
+    width: 20px;
+    height: 20px;
+    /* The room breathes: a slow glow on the motif, the one piece of ambient
+       motion on the masthead. The global reduced-motion rule kills this; the
+       local guard below is belt-and-braces for embeds without it. */
+    animation: scene-motif-breathe 7s var(--ease-out) infinite;
+}
+@keyframes scene-motif-breathe {
+    0%, 100% { opacity: .72; filter: drop-shadow(0 0 0 transparent); }
+    50%      { opacity: 1;   filter: drop-shadow(0 0 4px var(--scene-accent-soft, transparent)); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .scene-masthead-motif { animation: none; }
 }
 
 .scene-masthead-name {
@@ -96,7 +116,7 @@ summary.scene-masthead-inner:focus-visible {
     font-weight: 400;
     letter-spacing: .24em;
     text-transform: uppercase;
-    color: var(--scene-accent);
+    color: var(--scene-accent, var(--color-amber));
     text-shadow: var(--engrave);
     line-height: 1.1;
 }
@@ -114,10 +134,10 @@ summary.scene-masthead-inner:focus-visible {
 .scene-masthead-compact .scene-masthead-glyph {
     width: 22px;
     height: 22px;
-    font-size: 12px;
     border-radius: var(--radius-control);
     box-shadow: none;
 }
+.scene-masthead-compact .scene-masthead-motif { width: 13px; height: 13px; }
 .scene-masthead-compact .scene-masthead-name {
     font-size: 12px;
     letter-spacing: .2em;
@@ -149,7 +169,8 @@ summary.scene-masthead-inner:focus-visible {
 @media (max-width: 767.98px) {
     .scene-masthead { padding: 12px 16px 10px; }
     .scene-masthead-name { font-size: 16px; }
-    .scene-masthead-glyph { width: 34px; height: 34px; font-size: 16px; }
+    .scene-masthead-glyph { width: 34px; height: 34px; }
+    .scene-masthead-motif { width: 17px; height: 17px; }
     .scene-masthead-compact .scene-masthead-purpose { display: none; }
     /* The purpose line goes at this width; the way to the primer must not.
        On the compact scenes it is now the ONLY explanation on screen. */

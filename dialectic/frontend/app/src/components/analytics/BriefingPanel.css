@@ -1,15 +1,16 @@
-/* Briefing panel — field intelligence card */
+/* Briefing panel — field intelligence card: a lit header strip, stat wells,
+   and highlight slips pinned to the page. */
 .briefing-panel {
     background: var(--color-cacao);
     border: 1px solid var(--color-bean);
-    border-left: 2px solid var(--amber-30);
+    border-left: 3px solid var(--scene-accent, var(--amber-30));
     border-radius: var(--radius-sm);
     padding: 16px;
     box-shadow: var(--shadow-md);
     display: flex;
     flex-direction: column;
     gap: 14px;
-    animation: briefing-in 0.35s var(--ease-spring);
+    animation: briefing-in var(--dur-slow, 360ms) var(--ease-spring);
 }
 @keyframes briefing-in {
     from { opacity: 0; transform: translateY(-8px); }
@@ -19,29 +20,40 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-bean);
 }
 .briefing-header h3 {
     margin: 0;
     font-family: var(--font-mono);
     font-size: 12px;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: .18em;
-    color: var(--color-amber);
+    color: var(--scene-accent, var(--color-amber));
+    text-shadow: var(--engrave);
 }
 .briefing-header .dismiss-btn {
-    background: transparent;
-    border: none;
+    background: var(--color-chassis);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-key);
     color: var(--color-faint);
-    font-size: 16px;
+    font-size: 14px;
     cursor: pointer;
-    padding: 0 4px;
+    padding: 1px 8px 2px;
     line-height: 1;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
-.briefing-header .dismiss-btn:hover { color: var(--color-secondary); }
+.briefing-header .dismiss-btn:hover { color: var(--color-ink); border-color: var(--color-crater); }
+.briefing-header .dismiss-btn:active { transform: translateY(1px); box-shadow: var(--bezel-key-down); }
 .briefing-summary {
     font-family: var(--font-serif);
-    font-size: 13px;
-    color: var(--color-secondary);
+    font-size: 13.5px;
+    color: var(--color-ink);
     line-height: 1.52;
 }
 .briefing-stats {
@@ -49,26 +61,39 @@
     gap: 8px;
     flex-wrap: wrap;
 }
+/* Counts as readout wells: the number is the instrument, the label is
+   engraved on the faceplate under it. */
 .briefing-stat {
-    background: var(--color-espresso);
+    background: var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
-    padding: 9px 12px;
+    border-radius: var(--radius-chassis);
+    box-shadow: var(--bezel-raised);
+    padding: 8px 12px 7px;
     text-align: center;
     min-width: 72px;
 }
 .briefing-stat .stat-value {
+    display: inline-block;
     font-family: var(--font-mono);
-    font-size: 16px;
+    font-weight: 600;
+    font-size: 19px;
+    line-height: 1.15;
     color: var(--color-bone);
+    padding: 1px 8px;
+    background: repeating-linear-gradient(0deg, rgba(255,249,240,.028) 0 1px, transparent 1px 3px),
+                var(--color-well);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-well);
+    min-width: 2.5ch;
 }
 .briefing-stat .stat-label {
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 9px;
     color: var(--color-faint);
-    margin-top: 2px;
+    margin-top: 5px;
     text-transform: uppercase;
-    letter-spacing: .1em;
+    letter-spacing: .14em;
+    text-shadow: var(--engrave);
 }
 .briefing-highlights {
     display: flex;
@@ -79,22 +104,26 @@
     margin: 0;
     font-family: var(--font-mono);
     font-size: 12px;
+    font-weight: 600;
     color: var(--color-faint);
     text-transform: uppercase;
     letter-spacing: .1em;
+    text-shadow: var(--engrave);
 }
+/* Key moments as paper slips — sheet fill, amber pin stripe, paper shadow. */
 .highlight-card {
-    background: var(--color-espresso);
+    background: var(--color-sheet);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
-    border-left: 2px solid var(--amber-30);
+    border-left: 2px solid var(--scene-accent, var(--amber-30));
     padding: 8px 10px;
     font-family: var(--font-serif);
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--color-secondary);
     line-height: 1.45;
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-sm);
 }
+.highlight-card strong { color: var(--color-bone); }
 .briefing-loading {
     text-align: center;
     padding: 24px 16px;
@@ -103,4 +132,8 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .1em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .briefing-panel { animation: none; }
 }

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type {
   ImplementedWorkspaceScene,
 } from '../../types'
-import { SCENE_LABELS, SCENE_HINTS } from './sceneIdentity'
+import { SCENE_LABELS, SCENE_HINTS, SCENE_GLYPHS } from './sceneIdentity'
 import './SceneSwitcher.css'
 
 const PRIMARY_SCENES = new Set<ImplementedWorkspaceScene>([
@@ -46,6 +46,11 @@ export function SceneSwitcher({ scene, scenes, onSelect, signals, instruments }:
             key={candidate}
             type="button"
             className={`scene-switcher-action scene-switcher-${PRIMARY_SCENES.has(candidate) ? 'primary' : 'secondary'}${candidate === scene ? ' is-active' : ''}`}
+            /* Each key carries its OWN scene's identity — the [data-scene]
+               rules in styles/scenes.css give the tile its own accent, so the
+               tray reads as a row of instruments, each pre-lit in the color
+               of the room it opens (label + glyph always accompany the hue). */
+            data-scene={candidate}
             aria-current={candidate === scene ? 'page' : undefined}
             title={SCENE_HINTS[candidate]}
             onClick={() => {
@@ -54,6 +59,7 @@ export function SceneSwitcher({ scene, scenes, onSelect, signals, instruments }:
               if (candidate !== scene) onSelect(candidate)
             }}
           >
+            <span className="scene-switcher-glyph" aria-hidden="true">{SCENE_GLYPHS[candidate]}</span>
             {SCENE_LABELS[candidate]}
             {(signals?.[candidate]?.count ?? 0) > 0 && (
               <span className={`scene-signal scene-signal-${signals![candidate]!.tone}`}>
@@ -74,11 +80,13 @@ export function SceneSwitcher({ scene, scenes, onSelect, signals, instruments }:
                   key={candidate}
                   type="button"
                   role="menuitem"
+                  data-scene={candidate}
                   aria-current={candidate === scene ? 'page' : undefined}
                   onClick={() => {
                     if (candidate !== scene) onSelect(candidate)
                   }}
                 >
+                  <span className="scene-switcher-glyph" aria-hidden="true">{SCENE_GLYPHS[candidate]}</span>
                   {SCENE_LABELS[candidate]}
                 </button>
               ))}

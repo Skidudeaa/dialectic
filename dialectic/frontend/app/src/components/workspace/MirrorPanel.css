@@ -2,9 +2,11 @@
  *
  * The chassis, header, skeletons and freshness stamp all come from
  * cockpit.css; nothing here re-declares them. What the Instrument Desk has
- * no shape for is READING — a long serif measure meant to be gone through
- * slowly — and a stepper that walks backwards through rewrites. Only those.
- * Every color is an existing token (styles/tokens.css); no new palette.
+ * no shape for is the JOURNAL — this panel is the participant reflecting on
+ * YOU, so inside the machined module the reading surface is ruled paper with
+ * hand-written margin notes, and the accent band runs cool (plum/steel)
+ * instead of the desk's amber. Every color is an existing token
+ * (styles/tokens.css); no new palette.
  */
 
 .mirror-panel {
@@ -12,7 +14,8 @@
 }
 
 /* The one numeric readout: which rewrite you are looking at, out of how many.
-   Same recessed-glass idiom as Console.css's tiles, at panel scale. */
+   Same recessed-glass idiom as Console.css's tiles, at panel scale — the
+   machine rail stays amber even though the page below runs cool. */
 .mirror-readout {
     display: inline-flex;
     align-items: baseline;
@@ -35,8 +38,18 @@
     color: var(--color-secondary);
 }
 
+/* The date stamp becomes the journal dateline — hand scrawl on the rail,
+   cool steel, instead of the desk's mono stamp. */
+.mirror-panel .cockpit-freshness {
+    font-family: var(--font-hand);
+    font-size: 16px;
+    color: var(--color-steel);
+    letter-spacing: .02em;
+}
+
 /* Room tabs — the participant keeps a separate model per room, and they
-   diverge, so switching rooms is switching subject rather than filtering. */
+   diverge, so switching rooms is switching subject rather than filtering.
+   The current room takes the plum accent, the Mirror's cool signature. */
 .mirror-rooms {
     display: flex;
     flex-wrap: wrap;
@@ -52,29 +65,45 @@
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-control);
     cursor: pointer;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out);
 }
-.mirror-room:hover { color: var(--color-bone); border-color: var(--color-crater); }
+.mirror-room:hover { color: var(--color-bone); border-color: var(--steel-30); }
+.mirror-room:active { transform: translateY(1px); }
 .mirror-room.is-current {
-    color: var(--color-ink);
-    border-color: var(--color-amber);
-    background: var(--color-espresso);
+    color: var(--color-bone);
+    border-color: var(--scene-accent, var(--color-plum));
+    background: var(--plum-12);
 }
 
+/* The orientation note as a margin note — hand, cool ink, off the paper's
+   grid. It speaks ABOUT the page; the page itself is serif. */
 .mirror-preamble {
     margin: 0;
-    font: italic 400 12px/1.5 var(--font-serif);
-    color: var(--color-faint);
+    font: 400 17px/1.35 var(--font-hand);
+    color: var(--color-steel);
 }
 
-/* The prose. A real reading measure, serif, generous leading — deliberately
-   NOT the 12px mono the rest of the desk uses, because this is the one panel
-   whose content is an argument rather than a value. */
+/* The prose: a sheet of ruled journal paper set INTO the chassis. Serif,
+   long measure, rules in plum — this is the one panel whose content is an
+   argument rather than a value, and the only one that reads like a page. */
 .mirror-prose {
     font-family: var(--font-serif);
     font-size: 15px;
     line-height: 1.62;
     color: var(--color-ink);
     max-width: 62ch;
+    padding: 12px 18px 14px;
+    background: repeating-linear-gradient(to bottom,
+                    transparent 0 calc(1.62em - 1px),
+                    var(--plum-12) calc(1.62em - 1px) 1.62em),
+                var(--color-sheet);
+    background-position: 0 12px;
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-sm);
 }
 .mirror-prose > :first-child { margin-top: 0; }
 .mirror-prose > :last-child { margin-bottom: 0; }
@@ -85,7 +114,7 @@
     font: 600 11px/1.4 var(--font-mono);
     text-transform: uppercase;
     letter-spacing: .18em;
-    color: var(--color-amber);
+    color: var(--scene-accent, var(--color-plum));
     margin: 1.5em 0 0.5em;
     padding-bottom: 3px;
     border-bottom: 1px solid var(--color-bean);
@@ -100,13 +129,17 @@
     color: var(--color-bone);
 }
 
+/* Empty and error states read as a note left on the desk, not a system
+   message — the Mirror's failures are quiet too. */
 .mirror-quiet {
-    font-family: var(--font-mono);
-    font-size: 12px;
+    font-family: var(--font-hand);
+    font-size: 17px;
+    line-height: 1.45;
     color: var(--color-ghost);
 }
 
-/* Stepper — walking backwards is the primary move, so "Earlier" leads. */
+/* Stepper — walking backwards is the primary move, so "Earlier" leads.
+   Chassis keys with real travel; the diff key takes the steel accent. */
 .mirror-stepper {
     display: flex;
     flex-wrap: wrap;
@@ -126,19 +159,33 @@
     border-radius: var(--radius-control);
     box-shadow: var(--bezel-key);
     cursor: pointer;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 .mirror-step:hover:not(:disabled) { color: var(--color-ink); border-color: var(--color-crater); }
-.mirror-step:active:not(:disabled) { box-shadow: var(--bezel-key-down); }
+.mirror-step:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
+}
 .mirror-step:disabled { opacity: .38; cursor: default; }
-.mirror-step-diff { margin-left: auto; }
+.mirror-step-diff {
+    margin-left: auto;
+    color: var(--color-steel);
+    border-color: var(--steel-30);
+}
+.mirror-step-diff:hover:not(:disabled) { color: var(--color-steel); border-color: var(--color-steel); }
 
+/* Where you are in the rewrites, as a hand margin note. */
 .mirror-step-where {
-    font: 500 11px/1 var(--font-mono);
-    letter-spacing: .08em;
-    color: var(--color-ghost);
+    font: 400 16px/1 var(--font-hand);
+    letter-spacing: .02em;
+    color: var(--scene-accent, var(--color-plum));
 }
 
-/* Diff — mono, because here the characters ARE the subject. */
+/* Diff — mono, because here the characters ARE the subject. The + / −
+   prefixes carry the meaning; hue only underscores them. */
 .mirror-diff {
     display: flex;
     flex-direction: column;

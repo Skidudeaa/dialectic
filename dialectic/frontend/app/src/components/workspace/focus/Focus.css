@@ -12,11 +12,19 @@
     gap: 1.25rem;
     min-height: 0;
 }
+/* Ambient dimming: while an object is in Focus, the scene underneath steps
+   back — still legible, clearly not the subject. Hovering the scene lifts it
+   partway so a reader can glance back without closing the surface. */
 .workspace-with-focus > .workspace-scene {
     flex: 1 1 auto;
     min-width: 0;
+    opacity: .55;
+    transition: opacity var(--dur-med, 220ms) var(--ease-out);
 }
+.workspace-with-focus > .workspace-scene:hover { opacity: .85; }
 
+/* The focused object is the spotlight: a raised sheet against the dimmed
+   scene, edged in the scene accent, dropped shadow behind it. */
 .focus-surface {
     flex: 0 0 340px;
     max-width: 340px;
@@ -24,7 +32,11 @@
     flex-direction: column;
     gap: 1rem;
     padding: 1rem;
+    background: var(--color-sheet);
     border-left: 1px solid var(--color-bean);
+    box-shadow:
+        inset 2px 0 0 var(--scene-accent-soft, rgba(242,162,74,.15)),
+        var(--shadow-lg);
     overflow-y: auto;
 }
 .focus-surface.focus-surface-reading {
@@ -54,7 +66,13 @@
     }
 }
 
-.focus-header { display: flex; flex-direction: column; gap: 0.3rem; }
+.focus-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px dashed var(--color-bean);
+}
 .focus-close {
     align-self: flex-start;
     background: transparent;
@@ -66,21 +84,45 @@
     text-transform: uppercase;
     letter-spacing: .08em;
     cursor: pointer;
+    transition:
+        color var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
 }
-.focus-close:hover { color: var(--color-bone); }
+.focus-close:hover { color: var(--color-bone); transform: translateX(-2px); }
+.focus-close:focus-visible {
+    outline: 2px solid var(--scene-accent, var(--color-amber));
+    outline-offset: 2px;
+}
+/* "You are writing about X" — the kind chip says what sort of thing holds
+   the attention, marked in the scene accent; the title under it is display
+   type, the biggest voice on the surface. */
 .focus-kind {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
     font-family: var(--font-mono);
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .12em;
-    color: var(--color-secondary);
+    color: var(--scene-accent, var(--color-secondary));
+}
+.focus-kind::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: var(--scene-accent, var(--color-secondary));
+    border-radius: 1px;
+    transform: rotate(45deg);
+    flex: 0 0 auto;
 }
 /* Propositional serif (§16.5) — the title IS the object of attention. */
 .focus-title {
     font-family: var(--font-serif);
-    font-size: 18px;
-    line-height: 1.35;
+    font-size: 21px;
+    font-weight: 500;
+    line-height: 1.3;
     color: var(--color-display);
+    text-wrap: pretty;
 }
 
 /* A reading is the one Focus specialization whose body is meant to be read
@@ -258,8 +300,21 @@
     border: 1px solid var(--color-bean);
     border-left: 3px solid var(--color-ghost);
     background: var(--color-cacao);
+    transition:
+        transform var(--dur-fast, 140ms) var(--ease-out),
+        border-color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
-.reading-revision.is-current { border-left-color: var(--color-steel); }
+.reading-revision:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-crater);
+    box-shadow: var(--shadow-md);
+}
+.reading-revision.is-current {
+    border-left-color: var(--color-steel);
+    background: var(--color-espresso);
+}
+.reading-revision.is-current:hover { border-left-color: var(--color-steel); }
 .reading-revision-head {
     display: flex;
     justify-content: space-between;
@@ -294,10 +349,16 @@
 
 .focus-open-branch { align-self: flex-start; }
 
+/* The three epistemic axes as a small instrument readout — each value a
+   labeled cell so origin/review/status never collapse into one word. */
 .focus-axes {
     display: flex;
     flex-wrap: wrap;
     gap: 0.8rem 1.4rem;
+    padding: 0.55rem 0.7rem;
+    background: var(--color-cacao);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
 }
 .focus-axis { display: flex; flex-direction: column; gap: 0.15rem; }
 .focus-axis dt {
@@ -336,12 +397,27 @@
 .focus-source-link {
     background: transparent;
     border: none;
-    padding: 0;
+    border-left: 2px solid transparent;
+    padding: 1px 0 1px 0.4rem;
+    margin-left: -0.4rem;
     color: var(--color-amber);
     text-align: left;
     cursor: pointer;
+    transition:
+        color var(--dur-fast, 140ms) var(--ease-out),
+        border-color var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
 }
-.focus-source-link:hover { text-decoration: underline; }
+.focus-source-link:hover {
+    color: var(--color-amber-hot);
+    border-left-color: var(--scene-accent, var(--color-amber));
+    text-decoration: underline;
+    transform: translateX(2px);
+}
+.focus-source-link:focus-visible {
+    outline: 2px solid var(--scene-accent, var(--color-amber));
+    outline-offset: 2px;
+}
 .focus-source-plain { color: var(--color-secondary); }
 
 .focus-structure-group { display: flex; flex-direction: column; gap: 0.3rem; }
@@ -353,7 +429,13 @@
     color: var(--color-faint);
 }
 .focus-structure-list { list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
-.focus-structure-item.is-provisional { opacity: .72; }
+.focus-structure-item { border-left: 2px dashed transparent; padding-left: 0.4rem; }
+.focus-structure-item.is-provisional {
+    opacity: .85;
+    border-left-color: var(--scene-accent, var(--color-plum));
+}
+.focus-structure-item.is-confirmed { border-left: 2px solid var(--color-teal); }
+.focus-structure-item.is-contested { border-left: 2px solid var(--color-scarlet); }
 .focus-structure-open {
     display: flex;
     align-items: baseline;
@@ -361,13 +443,26 @@
     flex-wrap: wrap;
     background: transparent;
     border: none;
-    padding: 0;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    border-radius: var(--radius-sm);
     text-align: left;
     color: inherit;
     font: inherit;
     cursor: pointer;
     font-family: var(--font-serif);
     font-size: 12.5px;
+    transition:
+        background-color var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
+}
+.focus-structure-open:hover {
+    background: var(--scene-accent-soft, rgba(242,162,74,.15));
+    transform: translateY(-1px);
+}
+.focus-structure-open:focus-visible {
+    outline: 2px solid var(--scene-accent, var(--color-plum));
+    outline-offset: 1px;
 }
 .focus-structure-relation { color: var(--color-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
 .focus-structure-other { color: var(--color-ink); }
@@ -381,12 +476,26 @@
 }
 .focus-history-review {
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     gap: 0.5rem;
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--color-secondary);
 }
+/* Action glyph paired with the action word (never color-only): each review
+   verb carries its mark. */
+.focus-history-action::before {
+    content: '·';
+    margin-right: 0.35rem;
+    color: var(--color-faint);
+}
+.focus-history-action[data-action="confirm"]::before { content: '✓'; color: var(--color-teal); }
+.focus-history-action[data-action="contest"]::before { content: '⚑'; color: var(--color-scarlet); }
+.focus-history-action[data-action="correct"]::before { content: '✎'; color: var(--color-amber); }
+.focus-history-action[data-action="split"]::before   { content: '⑃'; color: var(--color-amber); }
+.focus-history-action[data-action="merge"]::before   { content: '⧉'; color: var(--color-amber); }
+.focus-history-action[data-action="supersede"]::before { content: '↺'; color: var(--color-ghost); }
 .focus-history-note {
     grid-column: 1 / -1;
     color: var(--color-faint);
@@ -424,6 +533,58 @@
     color: var(--color-ink);
 }
 .focus-actions-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+/* Confirm/Contest as rubber stamps: a bordered plate in the state hue with
+   the glyph beside the word, a slight set-off angle at rest, and real press
+   travel — the plate sinks into its ink pad on :active. Hue is always paired
+   with both glyph and label (§17.4). */
+.focus-stamp {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    background: var(--color-cacao);
+    border-width: 2px;
+    transform: rotate(-0.6deg);
+    transition:
+        transform var(--dur-fast, 140ms) var(--ease-out),
+        background-color var(--dur-fast, 140ms) var(--ease-out),
+        border-color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out);
+}
+.focus-stamp:not(:disabled):hover { transform: rotate(-0.6deg) translateY(-1px); box-shadow: var(--shadow-md); }
+.focus-stamp:not(:disabled):active {
+    transform: rotate(0deg) translateY(1px);
+    box-shadow: var(--bezel-key-down);
+}
+.focus-stamp:focus-visible {
+    outline: 2px solid var(--color-display);
+    outline-offset: 2px;
+}
+.focus-stamp-confirm {
+    color: var(--color-teal);
+    border-color: var(--color-teal);
+}
+.focus-stamp-confirm:not(:disabled):hover { background: var(--teal-10); }
+/* A mark already confirmed shows the stamp as LANDED — filled plate, no
+   longer pressable, still fully legible (not the generic 40% disabled fade). */
+.focus-stamp-confirm.is-stamped:disabled {
+    background: var(--teal-18);
+    color: var(--color-teal);
+    border-color: var(--color-teal);
+    opacity: .85;
+}
+.focus-stamp-contest {
+    color: var(--color-scarlet);
+    border-color: var(--color-scarlet);
+}
+.focus-stamp-contest:not(:disabled):hover { background: var(--scar-10); }
+.focus-stamp-contest.is-stamped:disabled {
+    background: var(--scar-18);
+    color: var(--color-scarlet);
+    border-color: var(--color-scarlet);
+    opacity: .85;
+}
 .focus-actions-editor {
     display: flex;
     flex-direction: column;
@@ -469,7 +630,7 @@
     color: var(--color-faint);
 }
 .focus-actions-error {
-    color: var(--field-oxblood);
+    color: var(--color-error);
     font-size: 12px;
 }
 
@@ -536,10 +697,40 @@
     font-family: var(--font-serif);
     font-size: 12.5px;
     overflow-wrap: anywhere;
+    transition:
+        border-color var(--dur-fast, 140ms) var(--ease-out),
+        background-color var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
 }
-.scope-review-history-row[data-review="proposed"] { border-left-style: dashed; }
+.scope-review-history-row:hover {
+    background: var(--color-cacao);
+    transform: translateX(2px);
+}
+/* Review queue states: glyph + hue + the existing dashed/opacity shape cue. */
+.scope-review-history-row[data-review="proposed"] {
+    border-left-style: dashed;
+    border-left-color: var(--scene-accent, var(--color-plum));
+}
+.scope-review-history-row[data-review="accepted"] { border-left-color: var(--color-teal); }
+.scope-review-history-row[data-review="rejected"] { border-left-color: var(--color-scarlet); }
 .scope-review-history-row[data-review="rejected"],
 .scope-review-history-row[data-review="superseded"] { opacity: 0.72; }
+.scope-review-history-row[data-review="proposed"] .scope-review-history-head strong::before {
+    content: '◌ ';
+    color: var(--scene-accent, var(--color-plum));
+}
+.scope-review-history-row[data-review="accepted"] .scope-review-history-head strong::before {
+    content: '✓ ';
+    color: var(--color-teal);
+}
+.scope-review-history-row[data-review="rejected"] .scope-review-history-head strong::before {
+    content: '✕ ';
+    color: var(--color-scarlet);
+}
+.scope-review-history-row[data-review="superseded"] .scope-review-history-head strong::before {
+    content: '↺ ';
+    color: var(--color-ghost);
+}
 .scope-review-history-head {
     display: grid;
     grid-template-columns: auto auto minmax(0, 1fr);
@@ -586,3 +777,33 @@
 }
 .scope-review-redraw { display: flex; flex-direction: column; gap: 0.55rem; }
 .scope-review-redraw textarea { min-height: 7rem; font-family: var(--font-mono); font-size: 12px; }
+
+/* World rows: placement entries raise slightly under the pointer so the
+   actions under them read as belonging to a tangible row. */
+.focus-world-row {
+    transition:
+        background-color var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-fast, 140ms) var(--ease-out);
+}
+.focus-world-row:hover { background: var(--color-cacao); }
+
+@media (prefers-reduced-motion: reduce) {
+    .workspace-with-focus > .workspace-scene,
+    .focus-close,
+    .focus-source-link,
+    .focus-structure-open,
+    .focus-stamp,
+    .focus-world-row,
+    .reading-revision,
+    .scope-review-history-row {
+        transition: none;
+    }
+    .focus-close:hover,
+    .focus-source-link:hover,
+    .focus-structure-open:hover,
+    .reading-revision:hover,
+    .scope-review-history-row:hover { transform: none; }
+    .focus-stamp,
+    .focus-stamp:not(:disabled):hover,
+    .focus-stamp:not(:disabled):active { transform: none; }
+}

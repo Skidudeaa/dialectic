@@ -214,7 +214,7 @@ export function CapabilityMap({ roomId }: { roomId: string }) {
         {!failed && !caps && <p className="capability-prose">Reading the room…</p>}
         {caps && (
           <ul className="capability-list">
-            <li>
+            <li className={caps.thesis_bound ? '' : 'is-off'}>
               <span className="capability-state">{caps.thesis_bound ? 'yes' : 'no'}</span>
               <span>
                 {caps.thesis_bound
@@ -222,7 +222,7 @@ export function CapabilityMap({ roomId }: { roomId: string }) {
                   : 'No thesis here yet. The Bench is where one gets drafted and created.'}
               </span>
             </li>
-            <li>
+            <li className={caps.auto_interjection ? '' : 'is-off'}>
               <span className="capability-state">
                 {caps.auto_interjection ? 'on' : 'off'}
               </span>

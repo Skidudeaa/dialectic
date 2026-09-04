@@ -1,4 +1,5 @@
-import type { JSX } from 'react'
+import { useRef, useState } from 'react'
+import type { JSX, MouseEvent as ReactMouseEvent } from 'react'
 import type { GeoScope, WorldObservation, WorldObservationCount } from '../../../types/geo.ts'
 import { geometryBBox, geometryPath, makeProjector, unionBBox } from './geoProject.ts'
 import type { BBox, GeoJSONGeometry } from './geoProject.ts'
@@ -10,9 +11,10 @@ import './SurfaceAtlas.css'
  * beside the transcript, at conversation scale, where a lazy 4.2 MB globe
  * chunk and network tiles would be the wrong tool — this is an SVG built
  * from geometry the room already holds (`GeoScope`) and observations the
- * room already recorded (`WorldObservation`), nothing fetched, nothing
- * animated. `World ↗` (via `onOpenWorld`) is the door to the real globe when
- * a viewer wants it.
+ * room already recorded (`WorldObservation`), nothing fetched. Motion is
+ * limited to a reduced-motion-safe pulse on novel-fire markers and a
+ * dossier-tag hover tooltip. `World ↗` (via `onOpenWorld`) is the door to
+ * the real globe when a viewer wants it.
  */
 export interface SurfaceAtlasProps {
   scopes: GeoScope[]
@@ -128,8 +130,9 @@ function fireRadius(details: Record<string, unknown>): number {
   return Math.min(2 + Math.sqrt(Math.max(frp, 0)) * 0.9, 12)
 }
 
-/** The one place fire/aircraft/quake tooltip text is built — every marker
- *  kind, plus the fires-only FRP/confidence/baseline clause. */
+/** The one place fire/aircraft/quake marker text is built — every marker
+ *  kind, plus the fires-only FRP/confidence/baseline clause. It feeds both
+ *  the marker's aria-label and the dossier-tag hover tooltip. */
 function markerTitle(obs: WorldObservation): string {
   let title = `${obs.label} · ${obs.layer} · ${obs.scope_label}`
   if (obs.layer === 'fires') {
@@ -172,6 +175,21 @@ function headerLine(
 export function SurfaceAtlas(props: SurfaceAtlasProps): JSX.Element {
   const { scopes, observations, counts, selectedId, onSelect, onOpenWorld, hours = 48, contactsStatus = 'ready' } = props
 
+  // The dossier-tag tooltip: follows the pointer over a marker. Keyboard and
+  // AT users get the same text through each marker's aria-label.
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const [tip, setTip] = useState<{ left: number; top: number; text: string } | null>(null)
+  const moveTip = (e: ReactMouseEvent, text: string) => {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setTip({
+      left: Math.min(Math.max(e.clientX - rect.left, 8), rect.width - 8),
+      top: Math.max(e.clientY - rect.top, 8),
+      text,
+    })
+  }
+  const hideTip = () => setTip(null)
+
   if (scopes.length === 0) {
     return (
       <div className="surf-atlas">
@@ -200,6 +218,7 @@ export function SurfaceAtlas(props: SurfaceAtlasProps): JSX.Element {
   return (
     <div className="surf-atlas">
       <div className="surf-atlas-header">
+        <span className="surf-pane-lamp" aria-hidden="true" />
         <span className="surf-atlas-title">{header}</span>
         {onOpenWorld && (
           <button type="button" className="surf-atlas-world-btn" onClick={onOpenWorld}>
@@ -207,7 +226,7 @@ export function SurfaceAtlas(props: SurfaceAtlasProps): JSX.Element {
           </button>
         )}
       </div>
-      <div className="surf-atlas-canvas">
+      <div className="surf-atlas-canvas" ref={canvasRef}>
         <svg
           viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
           width="100%"
@@ -299,8 +318,10 @@ export function SurfaceAtlas(props: SurfaceAtlasProps): JSX.Element {
                       selectOrClear(obs, isSelected)
                     }
                   }}
+                  onMouseEnter={(e) => moveTip(e, title)}
+                  onMouseMove={(e) => moveTip(e, title)}
+                  onMouseLeave={hideTip}
                 >
-                  <title>{title}</title>
                   <circle cx={x} cy={y} r={r} className={shapeClassName} />
                   {isNovelFire && <circle cx={x} cy={y} r={r + 3} className="surf-atlas-ring surf-atlas-ring--novel" />}
                   {isSelected && <circle cx={x} cy={y} r={r + 3} className="surf-atlas-halo" />}
@@ -309,11 +330,29 @@ export function SurfaceAtlas(props: SurfaceAtlasProps): JSX.Element {
             })}
           </g>
         </svg>
+        {tip && (
+          <div className="surf-atlas-tip" role="tooltip" style={{ left: tip.left, top: tip.top }}>
+            {tip.text}
+          </div>
+        )}
       </div>
       {observations.length === 0 && contactsStatus === 'ready' && (
         <p className="surf-atlas-quiet">no contacts recorded in {hours}h</p>
       )}
-      <p className="surf-atlas-legend">● recurring fire  ◎ new vs 30-day  · aircraft  ○ quake</p>
+      <p className="surf-atlas-legend">
+        <span className="surf-atlas-legend-item">
+          <i className="surf-atlas-legend-glyph surf-atlas-legend-glyph--fires" aria-hidden="true">●</i> recurring fire
+        </span>
+        <span className="surf-atlas-legend-item">
+          <i className="surf-atlas-legend-glyph surf-atlas-legend-glyph--novel" aria-hidden="true">◎</i> new vs 30-day
+        </span>
+        <span className="surf-atlas-legend-item">
+          <i className="surf-atlas-legend-glyph surf-atlas-legend-glyph--aircraft" aria-hidden="true">·</i> aircraft
+        </span>
+        <span className="surf-atlas-legend-item">
+          <i className="surf-atlas-legend-glyph surf-atlas-legend-glyph--quakes" aria-hidden="true">○</i> quake
+        </span>
+      </p>
     </div>
   )
 }

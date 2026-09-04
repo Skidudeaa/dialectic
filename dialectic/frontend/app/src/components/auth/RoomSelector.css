@@ -1,4 +1,7 @@
-/* Room selector screen */
+/* Room selector screen — the desk: a pool of lamplight on void, dossier
+   folders laid out on it. `.room-item` base styles below are shared with the
+   in-app sidebar RoomList; everything that makes these read as FOLDERS is
+   scoped to `.room-card` so the sidebar keeps its own instrument-row look. */
 .room-screen {
     display: flex;
     align-items: center;
@@ -7,15 +10,28 @@
     background: var(--color-void);
     padding: 1rem;
 }
+/* The desk lamp: one static warm pool where the card sits, vignette at the
+   edges. No drift here — the desk is the still surface, the door was the
+   glowing one. */
+.room-screen::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(58% 46% at 50% 40%, rgba(242,162,74,.055), transparent 72%),
+        radial-gradient(120% 100% at 50% 50%, transparent 58%, rgba(0,0,0,.38));
+}
 .room-card {
+    position: relative;
     width: 100%;
     max-width: 500px;
     background: var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     padding: 2rem;
-    box-shadow: var(--shadow-md);
-    animation: fadeInScale 0.4s var(--ease-out);
+    box-shadow: var(--shadow-md), 0 26px 52px rgba(0,0,0,.5);
+    animation: fadeInScale var(--dur-slow, 360ms) var(--ease-out);
 }
 /* NOTE: .room-header in RoomSelector is a local name — different from the main app header */
 .room-header {
@@ -24,12 +40,21 @@
     justify-content: space-between;
     margin-bottom: 1.5rem;
 }
+.room-overline {
+    font-family: var(--font-stencil);
+    font-size: 9px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--color-faint);
+    margin-bottom: 0.4rem;
+}
 .room-title {
     font-family: var(--font-stencil);
     font-size: 1.3rem;
     color: var(--color-amber);
     letter-spacing: .04em;
     text-transform: uppercase;
+    text-shadow: 0 0 18px rgba(242,162,74,.22);
 }
 .room-subtitle {
     color: var(--color-secondary);
@@ -39,21 +64,60 @@
     letter-spacing: .1em;
     margin-top: 0.2rem;
 }
-/* Error — non-structural, warm error color */
+/* Reject slip — non-structural, warm error hue (#DD6B3F), and it shakes once
+   when it lands. The message text is the signal; the shake is emphasis. */
 .room-error {
-    background: rgba(199,91,57,.08);
-    border: 1px solid rgba(199,91,57,.25);
+    background: rgba(221,107,63,.1);
+    border: 1px solid rgba(221,107,63,.3);
+    border-left: 3px solid rgba(221,107,63,.6);
     color: var(--color-error);
     font-family: var(--font-mono);
     font-size: 12px;
-    padding: 7px 10px;
+    padding: 8px 11px;
     border-radius: var(--radius-sm);
     margin-bottom: 1rem;
+    box-shadow: var(--shadow-sm);
+    animation: roomSlipShake var(--dur-slow, 360ms) var(--ease-out);
+}
+@keyframes roomSlipShake {
+    0%, 100% { transform: translateX(0); }
+    18%      { transform: translateX(-5px); }
+    38%      { transform: translateX(4px); }
+    58%      { transform: translateX(-3px); }
+    78%      { transform: translateX(2px); }
 }
 .room-actions {
     display: flex;
     gap: 0.5rem;
     margin-bottom: 1.5rem;
+}
+/* The create door is a 'new file', not a machined key: dashed outline, stencil
+   plus glyph, amber only on approach. Behavior is unchanged — same click
+   target, restyled. */
+.room-card .room-new-file {
+    border: 1px dashed var(--color-crater);
+    background: transparent;
+    box-shadow: none;
+    color: var(--color-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+}
+.room-card .room-new-file:hover {
+    border-color: var(--color-amber);
+    background: var(--amber-08);
+    color: var(--color-bone);
+}
+.room-card .room-new-file:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+.room-new-file-plus {
+    font-family: var(--font-stencil);
+    font-size: 14px;
+    line-height: 1;
+    color: var(--color-amber);
 }
 .room-form {
     display: flex;
@@ -64,7 +128,7 @@
     border-radius: var(--radius-sm);
     padding: 1rem;
     margin-bottom: 1.5rem;
-    animation: fadeIn 0.2s var(--ease-out);
+    animation: fadeIn var(--dur-med, 220ms) var(--ease-out);
 }
 .room-form-actions {
     display: flex;
@@ -75,6 +139,11 @@
     flex-direction: column;
     gap: 0.5rem;
 }
+/* Folders need air above them for the tab. */
+.room-card .room-list {
+    gap: 0.7rem;
+    margin-top: 0.35rem;
+}
 .room-list-title {
     font-family: var(--font-mono);
     font-size: 12px;
@@ -82,6 +151,7 @@
     text-transform: uppercase;
     letter-spacing: .1em;
     margin-bottom: 0.3rem;
+    text-shadow: var(--engrave);
 }
 .room-empty {
     color: var(--color-faint);
@@ -101,7 +171,7 @@
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: border-color 0.15s;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out);
     text-align: left;
     font-family: inherit;
     color: inherit;
@@ -110,16 +180,90 @@
 .room-item:hover {
     border-color: var(--color-crater);
 }
+/* ── Dossier folders (scoped to the desk card; the sidebar rows are another
+     surface's concern and keep their own look) ─────────────────────────── */
+.room-card .room-item {
+    position: relative;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                opacity var(--dur-med, 220ms) var(--ease-out);
+}
+/* The folder tab riding the top edge. */
+.room-card .room-item::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 12px;
+    width: 56px;
+    height: 6px;
+    background: var(--color-espresso);
+    border: 1px solid var(--color-bean);
+    border-bottom: none;
+    border-radius: 2px 2px 0 0;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out);
+}
+/* Hover: the folder lifts off the desk with a whisper of tilt. */
+.room-card .room-item:hover {
+    transform: translateY(-2px) rotate(-.35deg);
+    border-color: var(--color-crater);
+    box-shadow: var(--shadow-lg), 0 10px 22px rgba(0,0,0,.4);
+}
+.room-card .room-item:hover::before { border-color: var(--color-crater); }
+.room-card .room-item:active {
+    transform: translateY(0) rotate(0);
+    box-shadow: var(--shadow-md);
+}
+/* Keyboard focus: a drawn ring around the whole folder, scene-aware with an
+   amber fallback (auth surfaces sit outside the scene frame). */
+.room-card .room-item:focus-visible {
+    outline: 2px solid var(--scene-accent, var(--color-amber));
+    outline-offset: 2px;
+    border-color: var(--color-crater);
+}
+/* Entering — the folder you picked lights teal (the CONFIRM hue), lifts, and
+   its lamp blinks while the door opens; the rest of the desk steps back. The
+   name text also switches to "Opening…", so hue is never the only signal. */
+.room-card .room-item[data-entering="true"] {
+    transform: translateY(-2px);
+    border-color: var(--teal-30);
+    box-shadow: 0 0 0 1px var(--teal-10), 0 0 18px var(--teal-10);
+}
+.room-card .room-item[data-entering="true"]::before { border-color: var(--teal-30); }
+.room-card .room-item[data-entering="true"] .room-item-name {
+    color: var(--color-teal);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+.room-card .room-item[data-entering="true"] .room-item-name::before {
+    content: '';
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--led-teal);
+    box-shadow: var(--led-glow-teal);
+    animation: led-blink 0.9s var(--ease-out) infinite;
+}
+.room-card .room-list[data-busy="true"] .room-item:not([data-entering="true"]) {
+    opacity: .45;
+}
 .room-item-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
+/* Room name is the dossier title — serif display, top ink tier. */
 .room-item-name {
     font-family: var(--font-serif);
     font-size: 13.5px;
     font-weight: 600;
     color: var(--color-bone);
+}
+.room-card .room-item-name {
+    font-size: 14.5px;
+    letter-spacing: .01em;
 }
 .room-item-badge {
     background: var(--color-amber);
@@ -130,7 +274,9 @@
     border-radius: var(--radius-sm);
     min-width: 1.2rem;
     text-align: center;
+    box-shadow: var(--bezel-key);
 }
+/* Activity meta demoted under the title — smaller, ghost tier, wide tracking. */
 .room-item-preview {
     font-family: var(--font-mono);
     font-size: 12px;
@@ -140,4 +286,28 @@
     white-space: nowrap;
     text-transform: uppercase;
     letter-spacing: .06em;
+}
+.room-card .room-item-preview {
+    font-size: 11px;
+    color: var(--color-ghost);
+    letter-spacing: .08em;
+}
+/* RoomAccess form inputs inside the desk card share the auth well focus. */
+.room-card .form-input {
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
+}
+.room-card .form-input:hover { border-color: var(--color-crater); }
+.room-card .form-input:focus {
+    border-color: var(--color-amber);
+    box-shadow: var(--bezel-well),
+                0 0 0 2px var(--amber-12),
+                0 0 16px rgba(242,162,74,.14);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .room-error { animation: none; }
+    .room-card .room-item { transition: none; }
+    .room-card .room-item:hover { transform: none; }
+    .room-card .room-item[data-entering="true"] .room-item-name::before { animation: none; }
 }

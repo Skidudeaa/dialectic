@@ -1,4 +1,8 @@
-/* The shared fork tree — semantic nested lists, depth-driven indent. */
+/* The shared fork tree — semantic nested lists, depth-driven indent,
+   connectors drawn in CSS so the genealogy reads as a tree, not a stack.
+   Geometry: the row is indented 6px + depth*16; the twisty column is 22px
+   wide, so a child's vertical connector sits at 16px + depth*16 — the
+   parent twisty's center — and a short tick crosses into each row. */
 
 .branch-tree,
 .branch-tree ul {
@@ -7,15 +11,46 @@
     padding: 0;
 }
 
+.branch-row {
+    display: flex;
+    align-items: stretch;
+    /* Bounded indentation: depth is capped at 6 by the component. */
+    padding-left: calc(6px + var(--branch-depth, 0) * 16px);
+}
+
+.branch-toggle {
+    flex: 0 0 22px;
+    min-width: 22px;   /* twisty rides the row's 44px hit height instead */
+    min-height: 0;
+    align-self: stretch;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-faint);
+    cursor: pointer;
+    transition: color var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out);
+}
+.branch-toggle:hover { color: var(--color-bone); background: var(--color-espresso); }
+.branch-toggle svg {
+    transition: transform var(--dur-med, 220ms) var(--ease-out);
+}
+.branch-toggle[aria-expanded="false"] svg { transform: rotate(-90deg); }
+
+/* Leaf nodes keep the twisty column so titles stay aligned. */
+.branch-toggle-spacer { flex: 0 0 22px; }
+
 .branch-node {
+    flex: 1;
     display: flex;
     align-items: center;
     gap: 0.35rem;
-    width: 100%;
+    min-width: 0;
     text-align: left;
     padding: 4px 8px;
-    /* Bounded indentation: depth is capped at 6 by the component. */
-    padding-left: calc(8px + var(--branch-depth, 0) * 12px);
     background: none;
     border: none;
     border-radius: var(--radius-sm);
@@ -23,20 +58,33 @@
     font-family: var(--font-mono);
     font-size: 0.76rem;
     cursor: pointer;
-    min-width: 0;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out);
 }
 
-.branch-node:hover { background: var(--color-espresso); }
-
-.branch-node.active {
+/* Index-entry slide on hover. */
+.branch-node:hover {
     background: var(--color-espresso);
+    color: var(--color-ink);
+    transform: translateX(2px);
+}
+
+/* The current branch is unmistakable: accent bar + fill + heavier ink,
+   and a "you are here" chip so the state never rests on color alone. */
+.branch-node.active {
+    background: var(--scene-accent-soft, var(--amber-08));
+    box-shadow: inset 3px 0 0 var(--scene-accent, var(--color-amber));
     color: var(--color-display);
+    font-weight: 600;
 }
 
 .branch-fork-marker {
     flex-shrink: 0;
     color: var(--color-faint);
 }
+.branch-node.active .branch-fork-marker { color: var(--scene-accent, var(--color-amber)); }
 
 .branch-node-title {
     flex: 1;
@@ -46,11 +94,77 @@
     text-overflow: ellipsis;
 }
 
-.branch-node-count {
+.branch-here {
     flex-shrink: 0;
-    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 5px;
+    border: 1px solid var(--amber-30);
+    border-radius: var(--radius-sm);
+    background: var(--amber-08);
+    color: var(--color-amber);
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+/* Filed date — the dossier index stamp. */
+.branch-node-time {
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.04em;
     color: var(--color-faint);
 }
+
+/* Message count as an LED + number chip: the lamp is lit only on the
+   current branch, and the number always accompanies it. */
+.branch-node-count {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 1px 7px 1px 5px;
+    background: var(--color-well);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-full);
+    box-shadow: var(--bezel-well);
+    font-size: 0.72rem;
+    color: var(--color-faint);
+}
+.branch-node-count-led {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--led-off);
+}
+.branch-node.active .branch-node-count {
+    color: var(--color-bone);
+    border-color: var(--color-crater);
+}
+.branch-node.active .branch-node-count-led {
+    background: var(--led-amber);
+    box-shadow: var(--led-glow-amber);
+}
+
+/* Drawn connectors: vertical rail on the children list, tick into each
+   row. The ul inherits --branch-depth from its parent li. */
+.branch-children {
+    margin-left: calc(16px + var(--branch-depth, 0) * 16px);
+    border-left: 1px solid var(--color-bean);
+}
+.branch-children .branch-row { position: relative; }
+.branch-children .branch-row::before {
+    content: '';
+    position: absolute;
+    left: -1px;
+    top: 50%;
+    width: 6px;
+    border-top: 1px solid var(--color-bean);
+}
+.branch-row:hover::before { border-color: var(--color-crater); }
 
 /* Compact form under the active room card in the rail/drawer. */
 .branch-tree-compact {
@@ -61,4 +175,14 @@
     padding-top: 2px;
     padding-bottom: 2px;
     font-size: 0.75rem;
+}
+/* The rail stays narrow: the stamp column yields, the marker never does. */
+.branch-tree-compact .branch-node-time { display: none; }
+.branch-tree-compact .branch-here { font-size: 0.55rem; padding: 0 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .branch-node,
+    .branch-toggle,
+    .branch-toggle svg { transition: none; }
+    .branch-node:hover { transform: none; }
 }

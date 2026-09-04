@@ -30,7 +30,7 @@
     padding: 1.5rem 2rem 1rem 76px;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.75rem;
     min-height: 100%;
     justify-content: flex-end;
     background:
@@ -43,7 +43,25 @@
         ),
         var(--color-sheet);
     border-inline: 1px solid var(--color-bean);
+    /* The page has physical edges: a candle-lit catch on the left rim, a
+       falloff into the room on the right, and a soft cast shadow lifting the
+       sheet off the void beneath it. */
+    box-shadow:
+        inset 1px 0 0 rgba(255, 249, 240, 0.04),
+        inset -1px 0 0 rgba(0, 0, 0, 0.4),
+        0 0 56px rgba(0, 0, 0, 0.55);
 }
+
+/* New arrivals rise into place, staggered down the day so a burst reads as a
+   dealt hand rather than a wall flashing in. Capped at the first six per
+   group — deeper (older) messages get no delay, so opening a long thread
+   never waits on a queue. `backwards` holds the from-state during the delay. */
+.day-group > .msg:nth-child(-n + 6) { animation-fill-mode: backwards; }
+.day-group > .msg:nth-child(2) { animation-delay: 40ms; }
+.day-group > .msg:nth-child(3) { animation-delay: 80ms; }
+.day-group > .msg:nth-child(4) { animation-delay: 115ms; }
+.day-group > .msg:nth-child(5) { animation-delay: 145ms; }
+.day-group > .msg:nth-child(6) { animation-delay: 170ms; }
 
 /* P3-7: Sticky day divider — obsidian gradient so content doesn't ghost behind it */
 .day-divider {
@@ -61,12 +79,16 @@
     height: 1px;
     background: repeating-linear-gradient(90deg, var(--color-bean) 0 4px, transparent 4px 8px);
 }
+/* The date is a rubber date-stamp pressed onto the dossier page: stencil
+   letterforms, letterpressed into the sheet, filed between dashed rules. */
 .day-divider-text {
-    font-family: var(--font-mono);
+    font-family: var(--font-stencil);
     font-size: 12px;
     color: var(--color-secondary);
     text-transform: uppercase;
     letter-spacing: .24em;
+    text-shadow: var(--engrave);
+    white-space: nowrap;
 }
 
 .empty-state {
@@ -78,7 +100,11 @@
 .empty-state .empty-icon {
     font-size: 2.5rem;
     margin-bottom: 1rem;
-    opacity: 0.3;
+    color: var(--color-amber);
+    /* A waiting lamp, not decoration: the diamond breathes so an empty room
+       reads as "listening" rather than "nothing here". */
+    animation: pulse 3.2s ease-in-out infinite;
+    text-shadow: 0 0 18px var(--claude-primary-glow);
 }
 .empty-state h3 {
     color: var(--color-faint);
@@ -146,6 +172,7 @@
 .unread-divider-text {
     font-family: var(--font-mono);
     font-size: 12px;
+    font-weight: 600;
     color: var(--color-scarlet);
     text-transform: uppercase;
     letter-spacing: .2em;
@@ -168,17 +195,31 @@
     border: 1px solid var(--claude-primary-border);
     border-radius: var(--radius-full);
     background: var(--color-espresso);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--bezel-key), var(--shadow-md);
     color: var(--color-ink);
     font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: .06em;
     cursor: pointer;
-    animation: fadeIn 0.15s var(--ease-out);
+    animation: fadeIn var(--dur-med, 220ms) var(--ease-out);
+    transition: transform var(--dur-fast, 140ms) var(--ease-spring),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out);
 }
+/* A floating key: lifts toward the reader on hover, presses into its bezel
+   on tap. The transform keeps the -50% centering at every stop. */
 .jump-to-latest:hover {
+    transform: translateX(-50%) translateY(-2px);
     border-color: var(--color-amber);
     color: var(--color-bone);
+    background: var(--color-chassis);
+    box-shadow: var(--bezel-key), var(--shadow-lg), var(--shadow-glow-amber);
+}
+.jump-to-latest:active {
+    transform: translateX(-50%) translateY(1px);
+    box-shadow: var(--bezel-key-down), var(--shadow-sm);
 }
 .jump-count {
     display: inline-flex;
@@ -197,4 +238,12 @@
 
 @media (max-width: 768px) {
     .messages-container { padding: 1rem; }
+}
+
+/* Local guard in addition to the app-wide one: the stagger delays and the
+   waiting-lamp pulse are pure decoration around fully-rendered content. */
+@media (prefers-reduced-motion: reduce) {
+    .day-group > .msg:nth-child(-n + 6) { animation-delay: 0ms; }
+    .empty-state .empty-icon { animation: none; opacity: 0.55; }
+    .jump-to-latest { animation: none; transition: none; }
 }

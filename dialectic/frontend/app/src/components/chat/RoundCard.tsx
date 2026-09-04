@@ -84,6 +84,19 @@ export function RoundCard({ roomId, messageId, userNames = {} }: RoundCardProps)
 
   const today = todayLocal()
 
+  /* The module's own status lamp, derived from the same per-question state
+     the rows below render. PURELY presentational: no question's behavior is
+     decided here. The hue is never the only signal — the word beside the
+     lamp says the same thing in text (design v2: no color-only signals). */
+  const anyAwaiting = state.questions.some(
+    (q) => q.resolution === null && q.status === 'active' && !!q.closes && q.closes < today,
+  )
+  const anyOpen = state.questions.some(
+    (q) => q.resolution === null && q.status === 'active',
+  )
+  const lampState = anyAwaiting ? 'awaiting' : anyOpen ? 'open' : 'settled'
+  const lampLabel = anyAwaiting ? 'verdict due' : anyOpen ? 'open' : 'settled'
+
   const submit = async (question: RoundQuestion) => {
     const id = question.commitment_id
     const value = draft[id] ?? question.my_forecast ?? 0.5
@@ -142,6 +155,13 @@ export function RoundCard({ roomId, messageId, userNames = {} }: RoundCardProps)
 
   return (
     <div className="round-card">
+      {/* The instrument's faceplate: names itself, shows whether it needs
+          attention. The lamp's hue is paired with the status word beside it. */}
+      <div className="round-card-head">
+        <span className={`round-card-lamp is-${lampState}`} aria-hidden="true" />
+        <span className="round-card-title">The Round</span>
+        <span className={`round-card-status is-${lampState}`}>{lampLabel}</span>
+      </div>
       {/* The card names itself, once, before any number. Masthead pattern:
           a place says what it is before it says what it holds. */}
       <p className="round-card-intro">

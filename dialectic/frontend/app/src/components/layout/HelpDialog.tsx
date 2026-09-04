@@ -66,7 +66,10 @@ export function HelpDialog({ onClose, roomId, initialTab = 'room' }: HelpDialogP
             <h2>{title.heading}</h2>
             <p>{title.sub}</p>
           </div>
-          <button className="btn btn-ghost" onClick={onClose} aria-label="Close help">&times;</button>
+          <div className="help-close-cluster">
+            <kbd className="dialog-esc-hint" aria-hidden="true">esc</kbd>
+            <button className="btn btn-ghost" onClick={onClose} aria-label="Close help">&times;</button>
+          </div>
         </div>
 
         <div className="help-tabs" role="tablist" aria-label="Help sections">

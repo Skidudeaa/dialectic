@@ -3,6 +3,9 @@ import type { ImplementedWorkspaceScene } from '../../types'
 import { SceneSwitcher, type SceneSignal } from './SceneSwitcher'
 import { SceneMasthead } from './SceneMasthead'
 import './WorkspaceSceneFrame.css'
+// Scene identity lives in styles/scenes.css (the [data-scene] contract);
+// imported here so the frame is the one place that guarantees it loads.
+import '../../styles/scenes.css'
 
 interface WorkspaceSceneFrameProps {
   scene: ImplementedWorkspaceScene
@@ -42,6 +45,7 @@ export function WorkspaceSceneFrame({
   return (
     <section
       className={`workspace-scene workspace-scene-${effectiveScene}`}
+      data-scene={effectiveScene}
       data-workspace-scene={effectiveScene}
     >
       <SceneSwitcher

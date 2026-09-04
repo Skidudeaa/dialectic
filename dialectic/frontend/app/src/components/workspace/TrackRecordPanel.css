@@ -1,16 +1,31 @@
-/* TrackRecordPanel — the ledger scoreboard. Leans on the CSS custom
-   properties the stakes surfaces already use; only layout is new here. */
+/* TrackRecordPanel — the ledger's scoreboard: an instrument strip bound into
+   the book of record. Numbers set tabular and read off recessed wells; every
+   signed delta carries an arrow glyph, so direction never rides on hue alone.
+   The accent is the Ledger's gold via the scene contract vars, with fallbacks
+   so the sheet stands alone. Layout and state styles lean on the CSS custom
+   properties the stakes surfaces already use. */
 
 .track-record-panel {
   padding: 12px 14px;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   margin-top: 16px;
+  background: var(--color-sheet);
+  box-shadow: var(--shadow-sm);
 }
 
+/* The panel's name, ruled off twice like a ledger column head. */
 .track-record-panel h3 {
-  margin: 0 0 8px;
-  font-size: 0.95rem;
+  margin: 0 0 10px;
+  padding-bottom: 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--color-secondary);
+  text-shadow: var(--engrave);
+  border-bottom: 3px double var(--scene-accent, var(--color-gold));
 }
 
 /* The panel's own name for itself, above every number it draws. */
@@ -29,7 +44,13 @@
 
 /* The empty state is a paragraph of real prose, not a "no data" stub -- in
    production this is the state, and it is the only thing most readers will
-   ever have learned about the scoreboard. */
+   ever have learned about the scoreboard. The pencilled rule on its left
+   edge marks it as an annotation on a page still waiting for entries. */
+.track-record-waiting {
+  border-left: 2px solid var(--scene-accent-soft, var(--gold-12));
+  padding-left: 12px;
+}
+
 .track-record-waiting p {
   margin: 0 0 7px;
   max-width: 62ch;
@@ -48,11 +69,178 @@
   color: var(--text-ghost);
 }
 
+/* ── The headline: instrument readouts on recessed wells, the count set
+     largest — the hierarchy is numeric, not decorative. ─────────────────── */
+.track-record-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.track-record-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--color-well);
+  border: 1px solid var(--color-bean);
+  border-radius: var(--radius-control);
+  box-shadow: var(--bezel-well);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--color-bone);
+}
+
+.track-record-stat.is-count {
+  font-size: 16px;
+  color: var(--color-display);
+}
+
+.track-record-stat[data-dir="up"] { border-color: var(--teal-30); }
+.track-record-stat[data-dir="down"] { border-color: rgba(221,107,63,.35); }
+
+/* The arrow paired with a signed delta: shape + word, with hue only as the
+   garnish. */
+.track-record-arrow {
+  align-self: center;
+  font-size: .72em;
+  line-height: 1;
+}
+.track-record-arrow.is-up { color: var(--color-teal); }
+.track-record-arrow.is-down { color: var(--color-error); }
+
+.track-record-vs {
+  color: var(--text-tertiary);
+  font-size: 0.8em;
+}
+
+/* ── The leaderboard: tabular figures in ruled columns, header under the
+     double rule. ─────────────────────────────────────────────────────────── */
+.track-record-table-wrap {
+  overflow-x: auto;
+}
+
+.track-record-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.track-record-table th,
+.track-record-table td {
+  text-align: left;
+  padding: 3px 8px 3px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.track-record-table th {
+  color: var(--text-tertiary);
+  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  text-shadow: var(--engrave);
+  border-bottom: 3px double var(--scene-accent, var(--color-gold));
+}
+
+.track-record-table th.num,
+.track-record-table td.num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.track-record-table td.num { padding-right: 12px; }
+
+.track-record-table tbody tr {
+  transition: background-color var(--dur-fast, 140ms) var(--ease-out);
+}
+
+.track-record-table tbody tr:hover {
+  background: var(--scene-accent-soft, var(--gold-12));
+}
+
+.track-record-table td.num .track-record-arrow { margin-right: 4px; }
+
+.track-record-unverified {
+  color: var(--text-ghost);
+}
+
+/* ── The calibration bands: lit segments standing on the meter's axis, in
+     the same display glass as the other readouts. ────────────────────────── */
+.track-record-buckets {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 84px;
+  padding: 8px 8px 0;
+  background: var(--color-well);
+  border: 1px solid var(--color-bean);
+  border-bottom: 2px solid var(--color-crater); /* the axis the bars stand on */
+  border-radius: var(--radius-control);
+  box-shadow: var(--bezel-well);
+}
+
+.track-record-bucket {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  height: 100%;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.65rem;
+  color: var(--text-tertiary);
+}
+
+.track-record-bar {
+  width: 100%;
+  max-width: 22px;
+  background: linear-gradient(to top, var(--amber-18), var(--led-amber));
+  border: 1px solid rgba(242,162,74,.45);
+  border-bottom: none;
+  border-radius: 2px 2px 0 0;
+  opacity: 0.85;
+  box-shadow: 0 0 4px rgba(242,162,74,.35); /* lit segment, calibration as LED meter */
+  transition: filter var(--dur-fast, 140ms) var(--ease-out),
+              opacity var(--dur-fast, 140ms) var(--ease-out);
+}
+
+.track-record-bucket:hover .track-record-bar,
+.track-record-bucket:focus-visible .track-record-bar {
+  opacity: 1;
+  filter: brightness(1.15);
+}
+
+/* ── The equity curve: a chart framed as a well — recessed glass, not a
+     card floating on the page. ───────────────────────────────────────────── */
+.track-record-spark-well {
+  margin-top: 10px;
+  padding: 10px 12px 8px;
+  background: var(--color-well);
+  border: 1px solid var(--color-bean);
+  border-radius: var(--radius-control);
+  box-shadow: var(--bezel-well);
+}
+
+.track-record-sparkline {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .track-record-key {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 5px 0 0;
+  margin: 6px 0 0;
   font-size: 0.72rem;
   color: var(--text-ghost);
 }
@@ -76,73 +264,7 @@
   border-top: 1px dashed var(--text-ghost);
 }
 
-.track-record-headline {
-  display: flex;
-  gap: 14px;
-  font-size: 0.9rem;
-  margin-bottom: 8px;
-}
-
-.track-record-vs {
-  color: var(--text-tertiary);
-  font-size: 0.8em;
-}
-
-.track-record-table-wrap {
-  overflow-x: auto;
-}
-
-.track-record-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.82rem;
-}
-
-.track-record-table th,
-.track-record-table td {
-  text-align: left;
-  padding: 3px 8px 3px 0;
-  border-bottom: 1px solid var(--border-subtle);
-  white-space: nowrap;
-}
-
-.track-record-table th {
-  color: var(--text-tertiary);
-  font-weight: 500;
-}
-
-.track-record-unverified {
-  color: var(--text-ghost);
-}
-
-.track-record-buckets {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  height: 72px;
-}
-
-.track-record-bucket {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  flex: 1;
-  height: 100%;
-  font-size: 0.65rem;
-  color: var(--text-tertiary);
-}
-
-.track-record-bar {
-  width: 100%;
-  max-width: 22px;
-  background: var(--led-amber);
-  border-radius: 2px 2px 0 0;
-  opacity: 0.85;
-  box-shadow: 0 0 4px rgba(242,162,74,.35); /* lit segment, calibration as LED meter */
-}
-
-.track-record-sparkline {
-  display: block;
-  margin-top: 10px;
+@media (prefers-reduced-motion: reduce) {
+  .track-record-table tbody tr,
+  .track-record-bar { transition: none; }
 }

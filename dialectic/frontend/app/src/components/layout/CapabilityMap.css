@@ -27,10 +27,22 @@
     color: var(--color-secondary);
     text-wrap: pretty;
 }
+/* Rows answer the eye — the map is a checklist of instruments, and each
+   row lifts like one when touched. Plain bulleted rows keep their print. */
+.capability-list:not(.capability-plain) li {
+    padding: 4px 6px;
+    margin: 0 -6px;
+    border-radius: var(--radius-control);
+    transition: background-color var(--dur-fast, 140ms) var(--ease-out);
+}
+.capability-list:not(.capability-plain) li:hover {
+    background: var(--amber-08);
+}
 .capability-list li strong { color: var(--color-bone); font-weight: 600; }
 .capability-list.capability-plain li { display: list-item; margin-left: 1rem; }
 /* State is a word, not a colour — a reader who cannot distinguish the two
-   still reads "off". Dimming is secondary to the label. */
+   still reads "off". The lamp beside the word only seconds it: lit green
+   for on/yes, unlit for off/no. */
 .capability-state {
     flex: 0 0 2.4rem;
     font-family: var(--font-mono);
@@ -39,9 +51,24 @@
     letter-spacing: .12em;
     color: var(--color-amber);
     padding-top: 2px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.capability-state::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--led-green);
+    box-shadow: var(--led-glow-green);
 }
 .capability-list li.is-off { color: var(--color-faint); }
 .capability-list li.is-off .capability-state { color: var(--color-faint); }
+.capability-list li.is-off .capability-state::before {
+    background: var(--led-off);
+    box-shadow: none;
+}
 .capability-list li.is-off strong { color: var(--color-secondary); }
 .capability-cadence { color: var(--color-faint); font-family: var(--font-mono); font-size: 12px; }
 .capability-unknown {
@@ -58,10 +85,18 @@
     text-transform: uppercase;
     letter-spacing: .12em;
     color: var(--color-secondary);
+    text-shadow: var(--engrave);
     cursor: pointer;
-    padding: 0.2rem 0;
+    padding: 0.35rem 0.45rem;
+    margin-left: -0.45rem;
+    border-radius: var(--radius-control);
+    transition: color var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out);
 }
-.capability-glossary > summary:hover { color: var(--color-bone); }
+.capability-glossary > summary:hover {
+    color: var(--color-bone);
+    background: var(--amber-08);
+}
 .capability-defs {
     display: flex;
     flex-direction: column;

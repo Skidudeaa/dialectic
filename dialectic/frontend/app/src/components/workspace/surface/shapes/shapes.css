@@ -76,9 +76,22 @@
 }
 
 .surf-new {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     text-transform: uppercase;
     letter-spacing: .1em;
     color: var(--color-amber);
+}
+
+/* A small lamp beside the word — hue is never the only signal. */
+.surf-new::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: var(--radius-full);
+    background: var(--color-amber);
+    box-shadow: var(--led-glow-amber);
 }
 
 .surf-anchor-chip {
@@ -88,10 +101,14 @@
     letter-spacing: .04em;
     padding: 1px 6px;
     border: 1px solid var(--color-bean);
+    /* The anchor chip is the message's tie to the graph — edged in the
+       scene accent so "what this is about" reads at a glance. */
+    border-left: 2px solid var(--scene-accent, var(--color-copper));
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--color-secondary);
     cursor: default;
+    transition: color var(--dur-fast, 140ms) var(--ease-out), border-color var(--dur-fast, 140ms) var(--ease-out);
 }
 
 button.surf-anchor-chip {
@@ -101,6 +118,15 @@ button.surf-anchor-chip {
 button.surf-anchor-chip:hover {
     color: var(--color-amber);
     border-color: var(--color-amber-mute);
+}
+
+button.surf-anchor-chip:focus-visible,
+.surf-ref-chip:focus-visible,
+.surf-reply-btn:focus-visible,
+.surf-rail-card:focus-visible,
+.surf-tree-controls button:focus-visible {
+    outline: 1px solid var(--color-amber);
+    outline-offset: 1px;
 }
 
 .surf-reply-btn {
@@ -113,6 +139,7 @@ button.surf-anchor-chip:hover {
     text-transform: uppercase;
     letter-spacing: .06em;
     cursor: pointer;
+    transition: color var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .surf-reply-btn:hover {
@@ -185,14 +212,17 @@ button.surf-anchor-chip:hover {
     padding: 1px 6px;
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
-    background: transparent;
+    background: var(--color-cacao);
     color: var(--color-secondary);
     cursor: pointer;
+    transition: color var(--dur-fast, 140ms) var(--ease-out), border-color var(--dur-fast, 140ms) var(--ease-out),
+        background var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .surf-ref-chip:hover {
     color: var(--color-amber);
     border-color: var(--color-amber-mute);
+    background: var(--color-espresso);
 }
 
 /* ── ShapeStream ────────────────────────────────────────────── */
@@ -211,17 +241,25 @@ button.surf-anchor-chip:hover {
     min-height: 0;
     overflow-y: auto;
     padding: 4px 14px 10px;
-    background: var(--color-sheet);
+    /* The dossier page, compact: the sheet lit from the top (candlelight)
+       with the edges falling away into the desk. */
+    background:
+        linear-gradient(180deg, rgba(255,249,240,.028), rgba(255,249,240,0) 130px),
+        var(--color-sheet);
+    box-shadow: inset 0 0 46px rgba(0,0,0,.32);
 }
 
 .surf-row {
     border-left: 2px solid transparent;
     padding-left: 8px;
     margin-left: -10px;
+    transition: border-color var(--dur-med, 220ms) var(--ease-out), background var(--dur-med, 220ms) var(--ease-out);
 }
 
+/* Rows currently in view catch a warm wash off the page, not hue alone. */
 .surf-row.is-inview {
     border-left-color: var(--color-amber-mute);
+    background: linear-gradient(90deg, var(--amber-08), transparent 55%);
 }
 
 .surf-rail {
@@ -275,11 +313,18 @@ button.surf-anchor-chip:hover {
     font-family: var(--font-mono);
     font-size: 11px;
     cursor: pointer;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out), color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out), transform var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .surf-rail-card:hover {
     border-color: var(--color-amber-mute);
     color: var(--color-bone);
+}
+
+.surf-rail-card:active {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
 }
 
 .surf-rail-kind {
@@ -374,11 +419,18 @@ button.surf-anchor-chip:hover {
     letter-spacing: .04em;
     padding: 3px 8px;
     cursor: pointer;
+    transition: color var(--dur-fast, 140ms) var(--ease-out), border-color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out), transform var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .surf-tree-controls button:hover {
     color: var(--color-amber);
     border-color: var(--color-amber-mute);
+}
+
+.surf-tree-controls button:active {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
 }
 
 .surf-tree-children {
@@ -678,4 +730,10 @@ button.surf-anchor-chip:hover {
 
 @media (prefers-reduced-motion: reduce) {
     .surf-body-streaming::after { animation: none; }
+    .surf-row,
+    .surf-anchor-chip,
+    .surf-ref-chip,
+    .surf-reply-btn,
+    .surf-rail-card,
+    .surf-tree-controls button { transition: none; }
 }

@@ -23,9 +23,23 @@
     border-radius: var(--radius-sm);
     box-shadow: var(--shadow-sm);
     overflow: hidden;
-    transition: border-color 0.15s;
+    transition: transform var(--dur-fast, 140ms) var(--ease-spring),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
-.attachment-image-link:hover { border-color: var(--amber-30); }
+/* The exhibit lifts off its pins when offered — and the keyboard gets the
+   same raise, since the global focus ring alone would sit under the image. */
+.attachment-image-link:hover {
+    border-color: var(--amber-30);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md), var(--shadow-glow-amber);
+}
+.attachment-image-link:focus-visible {
+    border-color: var(--color-amber);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md), var(--shadow-glow-amber);
+}
+.attachment-image-link:active { transform: translateY(0); box-shadow: var(--shadow-sm); }
 .attachment-image-img {
     display: block;
     max-width: 100%;
@@ -46,6 +60,8 @@
     background: var(--color-cacao);
     border: 1px dashed var(--color-bean);
     border-radius: var(--radius-sm);
+    /* The frame breathes while the print develops. */
+    animation: pulse 1.8s ease-in-out infinite;
 }
 .attachment-placeholder-label {
     font-size: 12px;
@@ -80,17 +96,28 @@
     padding: 6px 10px;
     background: var(--color-cacao);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-key);
     color: var(--color-ink);
     font-size: 12px;
     text-align: left;
     cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
+    transition: transform var(--dur-fast, 140ms) var(--ease-spring),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 .attachment-video-poster:hover:not(:disabled),
 .attachment-file:hover:not(:disabled) {
     border-color: var(--amber-30);
     background: var(--color-espresso);
+    transform: translateY(-1px);
+    box-shadow: var(--bezel-key), var(--shadow-sm);
+}
+.attachment-video-poster:active:not(:disabled),
+.attachment-file:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
 }
 .attachment-file:disabled { cursor: progress; opacity: 0.7; }
 .attachment-glyph { color: var(--color-amber); font-size: 12px; line-height: 1; }
@@ -101,6 +128,8 @@
     white-space: nowrap;
 }
 .attachment-size { color: var(--color-faint); font-size: 12px; white-space: nowrap; }
+/* A failed download says so in the error hue AND in words (the size slot
+   carries the message), so the red edge is never the only signal. */
 .attachment-file-failed { border-color: var(--error); }
 .attachment-file-failed .attachment-size { color: var(--error); }
 
@@ -113,6 +142,22 @@
     color: var(--error);
     font-size: 12px;
     cursor: pointer;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out);
+}
+.attachment-error:hover { background: var(--color-espresso); }
+.attachment-error:active { transform: translateY(1px); }
+
+@media (prefers-reduced-motion: reduce) {
+    .attachment-placeholder { animation: none; }
+    .attachment-image-link,
+    .attachment-video-poster,
+    .attachment-file,
+    .attachment-error { transition: none; }
+    .attachment-image-link:hover,
+    .attachment-image-link:focus-visible,
+    .attachment-video-poster:hover:not(:disabled),
+    .attachment-file:hover:not(:disabled) { transform: none; }
 }
 
 @media (max-width: 768px) {

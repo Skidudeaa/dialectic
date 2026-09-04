@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import type { ReadingLibraryItem } from '../../../types/index.ts'
 import { api } from '../../../lib/api.ts'
 import { PARTICIPANT_NAME } from '../../../lib/productIdentity.ts'
 import { SceneEmpty, SceneLoading, SceneUnavailable } from '../SceneEmpty'
+import './LibraryScene.css'
 
 const SEARCH_DEBOUNCE_MS = 220
 const PAGE_SIZE = 50
@@ -21,6 +23,33 @@ const CAPTURE_MODE_LABELS: Record<string, string> = {
   selection: 'Selection',
   article: 'Article',
   page_fallback: 'Rendered page fallback',
+}
+
+/** Who did the filing. Feeds (wire, night shift, newsletter, congress) file
+ *  directly; a person filed the rest — a Safari capture, an accepted proposal,
+ *  or a source saved by hand. The stamp on each card says which, with a mark,
+ *  so provenance never rides on hue alone. */
+const FILED_BY_YOU = new Set(['browser_capture', 'proposal', 'human'])
+
+function filedBy(source: string): 'you' | 'wire' {
+  return FILED_BY_YOU.has(source) ? 'you' : 'wire'
+}
+
+const STAMP_GLYPHS: Record<'you' | 'wire', ReactNode> = {
+  you: (
+    <>
+      <circle cx="8" cy="5.4" r="2.2" />
+      <path d="M3.4 13.4c.7-2.5 2.5-3.9 4.6-3.9s3.9 1.4 4.6 3.9" />
+    </>
+  ),
+  wire: (
+    <>
+      <path d="M8 13.5V9.9" />
+      <path d="M5.3 7a3.8 3.8 0 0 1 5.4 0" />
+      <path d="M3.1 4.8a7 7 0 0 1 9.8 0" />
+      <circle cx="8" cy="8.8" r="1.1" fill="currentColor" stroke="none" />
+    </>
+  ),
 }
 
 interface LibraryPage {
@@ -64,9 +93,10 @@ function ReadingCard({
   const title = item.title?.trim() || item.url
   const effectiveAt = item.current_captured_at ?? item.created_at
   const revisionLabel = `${item.revision_count} ${item.revision_count === 1 ? 'revision' : 'revisions'}`
+  const manner = filedBy(item.source)
 
   return (
-    <li className="library-card" data-source={item.source}>
+    <li className="library-card" data-source={item.source} data-filed-by={manner}>
       <button
         type="button"
         className="library-card-open"
@@ -79,11 +109,28 @@ function ReadingCard({
         </div>
         {item.summary && <p className="library-card-summary">{item.summary}</p>}
         <div className="library-card-meta">
-          <span>{item.site || 'Site unavailable'}</span>
+          <span className="library-card-site">
+            <span className="library-card-site-mark" aria-hidden="true">№</span>
+            {item.site || 'Site unavailable'}
+          </span>
           {item.author && <span>{item.author}</span>}
           {item.published && <span>Published {item.published}</span>}
         </div>
         <div className="library-card-foot">
+          <span className={`library-card-stamp is-${manner}`}>
+            <svg
+              className="library-card-stamp-glyph"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              {STAMP_GLYPHS[manner]}
+            </svg>
+            {manner === 'you' ? 'Filed by you' : 'Filed by wire'}
+          </span>
           <span>{sourceLabel(item.source)}</span>
           {item.capture_mode && <span>{CAPTURE_MODE_LABELS[item.capture_mode]}</span>}
           <time dateTime={effectiveAt}>{dateLabel(effectiveAt)}</time>
@@ -129,6 +176,7 @@ export function LibraryScene({
   const currentMoreRequest = moreRequest.key === filterKey ? moreRequest : null
   const loadingMore = currentMoreRequest?.loading === true
   const moreError = currentMoreRequest?.error ?? null
+  const refreshing = enabled && (!currentPage || currentRequest?.status === 'loading')
 
   useEffect(() => {
     if (!enabled) return
@@ -344,6 +392,28 @@ export function LibraryScene({
             ))}
           </select>
         </label>
+        <button
+          type="button"
+          className="btn btn-ghost library-refresh"
+          data-working={refreshing || undefined}
+          disabled={refreshing}
+          onClick={retry}
+        >
+          <svg
+            className="library-refresh-glyph"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M13.2 8a5.2 5.2 0 1 1-1.5-3.7" />
+            <path d="M13.4 2.2v2.7h-2.7" />
+          </svg>
+          Refresh
+        </button>
         {hasFilters && (
           <button type="button" className="btn btn-ghost library-clear" onClick={clearFilters}>
             Clear

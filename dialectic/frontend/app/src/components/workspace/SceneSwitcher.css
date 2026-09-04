@@ -9,7 +9,7 @@
     background: var(--chassis-brush), var(--color-chassis);
     /* The tray's backlight bleeds downward in the CURRENT scene's color —
        switching rooms visibly changes the lighting. */
-    box-shadow: var(--bezel-raised), 0 8px 22px -8px var(--scene-tint, transparent);
+    box-shadow: var(--bezel-raised), 0 8px 22px -8px var(--scene-accent-soft, var(--scene-tint, transparent));
     /* The bezel and LED glows may paint past the band, and the more-views
        popover hangs below it — neither may be clipped. */
     overflow: visible;
@@ -19,18 +19,26 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 18px;
+    gap: 8px;
     min-height: 44px;
     padding: 0 18px;
 }
 
 /* The one-line hint moved into SceneMasthead — the tray is tiles only now. */
 
+/* Each key is an instrument selector: it wears its OWN scene's accent (via
+   the tile's data-scene, styles/scenes.css) on a tick rule, a glyph and a
+   running-light slot — so the tray reads as a row of rooms, pre-lit. The
+   label text is always present; the hue is never the only signal. */
 .scene-switcher-action {
     position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
     min-height: 44px;
-    padding: 0;
+    padding: 0 9px;
     border: 0;
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--color-secondary);
     font: 12px/1 var(--font-mono);
@@ -38,7 +46,31 @@
     text-transform: uppercase;
     text-shadow: var(--engrave);
     cursor: pointer;
+    transition:
+        transform var(--dur-fast, 140ms) var(--ease-out),
+        background-color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out),
+        color var(--dur-fast, 140ms) var(--ease-out);
 }
+
+/* The tick rule: every key owns the underline of its own scene's color;
+   hover draws it partway, the active key carries it full length. */
+.scene-switcher-action::before {
+    content: '';
+    position: absolute;
+    left: 9px;
+    right: 9px;
+    bottom: 1px;
+    height: 2px;
+    background: var(--scene-accent, var(--color-amber));
+    opacity: 0;
+    transform: scaleX(.45);
+    transition:
+        opacity var(--dur-fast, 140ms) var(--ease-out),
+        transform var(--dur-med, 220ms) var(--ease-out);
+}
+.scene-switcher-action:hover::before { opacity: .45; transform: scaleX(.8); }
+.scene-switcher-action.is-active::before { opacity: 1; transform: scaleX(1); }
 
 /* The running-dot rail: every tile owns the slot; only the active one lights. */
 .scene-switcher-action::after {
@@ -54,22 +86,43 @@
     box-shadow: inset 0 1px 1px rgba(0,0,0,.5);
 }
 
+/* The key's mark — its scene's glyph in its scene's hue, dim until touched. */
+.scene-switcher-glyph {
+    color: var(--scene-accent, var(--color-ghost));
+    font-size: 11px;
+    line-height: 1;
+    opacity: .55;
+    transition: opacity var(--dur-fast, 140ms) var(--ease-out);
+}
+.scene-switcher-action:hover .scene-switcher-glyph,
+.scene-switcher-action.is-active .scene-switcher-glyph { opacity: 1; }
+
 .scene-switcher-action:hover {
     color: var(--color-bone);
+    background: rgba(255,249,240,.028);
+    transform: translateY(-1px);
+    box-shadow: var(--bezel-key);
 }
-/* The active tile wears the CURRENT scene's own color — the same hue as the
-   masthead below it, so "which tab am I on" and "what room is this" answer
-   each other. */
+/* The active key wears its scene's own color — the same hue as the masthead
+   below it, so "which tab am I on" and "what room is this" answer each
+   other. */
 .scene-switcher-action.is-active {
     color: var(--scene-accent, var(--color-bone));
 }
+/* Press = real travel: one pixel down and into the machined well. */
 .scene-switcher-action:active {
     transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
+}
+
+.scene-switcher-action:focus-visible {
+    outline: 2px solid var(--scene-accent, var(--color-amber));
+    outline-offset: -1px;
 }
 
 .scene-switcher-action.is-active::after {
     background: var(--scene-accent, var(--led-amber));
-    box-shadow: 0 0 6px 1px var(--scene-tint, var(--amber-30));
+    box-shadow: 0 0 6px 1px var(--scene-accent-soft, var(--amber-30));
 }
 
 /* Activity signal on a tile: LED + count. Count is text — never color-only. */
@@ -135,17 +188,35 @@
     box-shadow: var(--bezel-raised), 0 14px 28px rgba(0, 0, 0, .45);
 }
 .scene-switcher-menu [role="menuitem"] {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     width: 100%;
     padding: 0 12px;
     border: 0;
+    /* The active entry wears its scene's accent as a left tick — shape and
+       label as well as hue. */
+    border-left: 2px solid transparent;
     background: transparent;
     text-align: left;
 }
-.scene-switcher-menu [role="menuitem"]:hover,
-.scene-switcher-menu [role="menuitem"][aria-current="page"] {
+.scene-switcher-menu [role="menuitem"]:hover {
     color: var(--color-bone);
-    background: var(--amber-08);
+    background: var(--scene-accent-soft, var(--amber-08));
+}
+.scene-switcher-menu [role="menuitem"][aria-current="page"] {
+    color: var(--scene-accent, var(--color-bone));
+    border-left-color: var(--scene-accent, var(--color-amber));
+    background: var(--scene-accent-soft, var(--amber-08));
+}
+
+/* Keys still click under reduced motion — they just stop travelling. */
+@media (prefers-reduced-motion: reduce) {
+    .scene-switcher-action,
+    .scene-switcher-action::before,
+    .scene-switcher-glyph { transition: none; }
+    .scene-switcher-action:hover,
+    .scene-switcher-action:active { transform: none; }
 }
 
 @media (max-width: 1279.98px) {

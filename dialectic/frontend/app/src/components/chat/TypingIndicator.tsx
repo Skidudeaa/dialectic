@@ -21,8 +21,9 @@ export function TypingIndicator({ typingUsers, activityLabel }: TypingIndicatorP
       : `${typingUsers.join(', ')} are thinking...`
 
   return (
-    <div className="typing-bar active">
-      <div className="typing-dots">
+    <div className="typing-bar active" role="status">
+      <span className={`typing-lamp${activityLabel ? ' typing-lamp-tool' : ''}`} aria-hidden="true" />
+      <div className="typing-dots" aria-hidden="true">
         <span /><span /><span />
       </div>
       <span className={activityLabel ? 'typing-tool' : undefined}>{text}</span>

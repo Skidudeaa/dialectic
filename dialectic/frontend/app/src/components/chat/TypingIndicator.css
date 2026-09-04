@@ -1,25 +1,47 @@
+/* Live presence strip — a lit lamp row, not gray text. The words always say
+   who is doing what; the lamp and dots only make it feel present. */
 .typing-bar {
     display: none;
     align-items: center;
-    gap: 0.5rem;
-    padding: 5px 1.5rem;
+    gap: 0.55rem;
+    padding: 6px 1.5rem;
     font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--color-faint);
+    color: var(--color-secondary);
     max-width: 800px;
     margin: 0 auto;
     width: 100%;
+    animation: fadeIn var(--dur-med, 220ms) var(--ease-out);
 }
 .typing-bar.active { display: flex; }
+
+/* Presence lamp: teal while a participant composes, amber while a named tool
+   check runs. Hue is always paired with the words beside it. */
+.typing-lamp {
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--led-teal);
+    box-shadow: var(--led-glow-teal);
+    animation: led-blink 1.6s var(--ease-out) infinite;
+}
+.typing-lamp-tool {
+    background: var(--led-amber);
+    box-shadow: var(--led-glow-amber);
+}
+
 .typing-dots {
     display: flex;
+    align-items: center;
     gap: 3px;
 }
 .typing-dots span {
     width: 4px;
     height: 4px;
-    background: var(--color-secondary);
+    background: var(--color-amber);
     border-radius: 50%;
+    box-shadow: 0 0 4px rgba(242, 162, 74, .45);
     animation: typingBounce 1.4s infinite;
 }
 .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
@@ -28,3 +50,9 @@
 /* A named tool check reads as progress, not as a stall — give it the amber the
    rest of the app uses for "the participant is doing something". */
 .typing-tool { color: var(--color-amber); }
+
+@media (prefers-reduced-motion: reduce) {
+    .typing-bar { animation: none; }
+    .typing-lamp { animation: none; }       /* stays lit, just steady */
+    .typing-dots span { animation: none; }  /* the text still carries the state */
+}

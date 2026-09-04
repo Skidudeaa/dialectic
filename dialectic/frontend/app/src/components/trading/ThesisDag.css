@@ -5,13 +5,31 @@
     flex-direction: column;
     gap: 0.5rem;
     font-family: var(--font-mono);
-    /* Same instrument-card surface as the cockpit modules around it. */
-    background: var(--color-cacao);
+    /* The hero instrument: same machined chassis face as the cockpit
+       modules around it, with the scene-accent rail on top. */
+    background: var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-top: 2px solid var(--scene-accent, var(--color-amber));
+    border-radius: var(--radius-chassis);
     padding: 12px 14px 14px;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--bezel-raised);
+    position: relative;
 }
+
+/* Faceplate screws — the same machined heads the cockpit modules wear. */
+.thesis-dag::before,
+.thesis-dag::after {
+    content: '';
+    position: absolute;
+    top: 7px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #5A4330, #241710 72%);
+    box-shadow: inset 0 1px 1px rgba(0,0,0,.65), 0 1px 0 rgba(255,249,240,.05);
+}
+.thesis-dag::before { left: 7px; }
+.thesis-dag::after { right: 7px; }
 
 /* Toolbar: legend left, zoom/fit controls right. Wraps on narrow rails. */
 .thesis-dag-toolbar {
@@ -49,7 +67,7 @@
 }
 
 /* 44px touch targets — mobile has no wheel, pinch is optional so these are
-   the only way to zoom on a phone. */
+   the only way to zoom on a phone. Machined keys: bezel edge, real travel. */
 .thesis-dag-btn {
     width: 44px;
     height: 44px;
@@ -62,14 +80,23 @@
     color: var(--color-secondary);
     background: var(--color-espresso);
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-control);
+    box-shadow: var(--bezel-key);
     cursor: pointer;
-    transition: color 120ms ease, border-color 120ms ease;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .thesis-dag-btn:hover {
     color: var(--color-amber);
     border-color: var(--color-amber-mute);
+}
+
+.thesis-dag-btn:active {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
 }
 
 .thesis-dag-btn:focus-visible {
@@ -109,6 +136,9 @@
     top: 8px;
     right: 8px;
     z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     font-family: var(--font-mono);
     font-size: 12px;
     text-transform: uppercase;
@@ -118,6 +148,16 @@
     border: 1px solid var(--color-warning);
     border-radius: var(--radius-sm);
     padding: 3px 6px;
+}
+/* Square amber lamp — the same shape language as the cockpit stale note. */
+.thesis-dag-stale-badge::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 1px;
+    flex-shrink: 0;
+    background: var(--led-amber);
+    box-shadow: var(--led-glow-amber);
 }
 
 .thesis-dag-background {
@@ -132,32 +172,72 @@
     letter-spacing: .1em;
 }
 
+/* Edges: drawn on the glass, strong enough to trace at a glance; strength
+   already drives width at the use site. */
 .thesis-dag-edge-path {
     fill: none;
-    stroke: var(--color-bean);
+    stroke: var(--color-crater);
+    transition: stroke var(--dur-fast, 140ms) var(--ease-out),
+                opacity var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .thesis-dag-edge-label {
     font-family: var(--font-mono);
     font-size: 12px;
     fill: var(--color-secondary);
+    /* Halo: the label stays legible over the wires it annotates. */
+    paint-order: stroke;
+    stroke: var(--color-well);
+    stroke-width: 3px;
 }
 
 .thesis-dag-arrow-head {
-    fill: var(--color-bean);
+    fill: var(--color-crater);
+}
+
+.thesis-dag-edge--clickable:hover .thesis-dag-arrow-head,
+.thesis-dag-edge:hover .thesis-dag-arrow-head {
+    fill: var(--color-amber);
 }
 
 /* Nodes */
 .thesis-dag-node {
     cursor: pointer;
     outline: none;
+    transition: opacity var(--dur-fast, 140ms) var(--ease-out),
+                filter var(--dur-fast, 140ms) var(--ease-out);
+}
+
+/* Hover lift: the node's contents rise 2px off the glass while a soft
+   contact shadow drops beneath — physical travel, not a color wink.
+   (The transform goes on the children: a CSS transform on the <g> would
+   override its positioning transform attribute.) */
+.thesis-dag-node:hover .thesis-dag-node-rect,
+.thesis-dag-node:hover text,
+.thesis-dag-node:hover .thesis-dag-word {
+    transform: translateY(-2px);
+}
+.thesis-dag-node:hover {
+    filter: drop-shadow(0 4px 4px rgba(0,0,0,.55));
+}
+.thesis-dag-node .thesis-dag-node-rect,
+.thesis-dag-node text,
+.thesis-dag-node .thesis-dag-word {
+    transition: transform var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .thesis-dag-node-rect {
     fill: var(--color-cacao);
     stroke: var(--color-bean);
     stroke-width: 1.5px;
-    transition: stroke 120ms ease, stroke-width 120ms ease;
+    transition: stroke var(--dur-fast, 140ms) var(--ease-out),
+                stroke-width var(--dur-fast, 140ms) var(--ease-out),
+                fill var(--dur-fast, 140ms) var(--ease-out);
+}
+.thesis-dag-node:hover .thesis-dag-node-rect {
+    /* Stroke COLOR and fill wash stay with the state ramp — hover only
+       thickens the border; the lift + shadow above carry the response. */
+    stroke-width: 2px;
 }
 
 .thesis-dag-node-type {
@@ -182,18 +262,44 @@
     letter-spacing: .06em;
 }
 
-/* Visible focus ring — required, not decorative (Release-3 a11y gate). */
+/* Visible focus ring — required, not decorative (Release-3 a11y gate).
+   The ring wears the SCENE accent (amber on the Bench, copper on the
+   Surface) so a selected node belongs to the room it's standing in. */
 .thesis-dag-node:focus-visible .thesis-dag-node-rect,
 .thesis-dag-node--selected .thesis-dag-node-rect {
-    stroke: var(--color-amber);
+    stroke: var(--scene-accent, var(--color-teal));
     stroke-width: 2.5px;
 }
+/* Selected = lit: a halo in the scene accent, kept when hovered (the
+   contact shadow stacks on top instead of replacing it). */
+.thesis-dag-node--selected {
+    filter: drop-shadow(0 0 6px var(--scene-accent, var(--color-teal)));
+}
+.thesis-dag-node--selected:hover {
+    filter: drop-shadow(0 0 6px var(--scene-accent, var(--color-teal)))
+            drop-shadow(0 4px 4px rgba(0,0,0,.55));
+}
 
-/* State → border color, ALWAYS paired with a distinct dot shape below (no
-   color-only meaning). */
-.thesis-dag-node--fired .thesis-dag-node-rect { stroke: var(--sev-crit); }
-.thesis-dag-node--approaching .thesis-dag-node-rect { stroke: var(--color-amber); }
-.thesis-dag-node--resolved .thesis-dag-node-rect { stroke: var(--sev-resolve); }
+/* Focus spotlight: with a node selected, the rest of the graph steps back
+   into the glass so the focused node and its detail card own the bench.
+   Opacity + the accent ring — never the hue alone. */
+.thesis-dag:has(.thesis-dag-node--selected) .thesis-dag-node:not(.thesis-dag-node--selected):not(:hover) {
+    opacity: 0.5;
+}
+.thesis-dag:has(.thesis-dag-node--selected) .thesis-dag-edges,
+.thesis-dag:has(.thesis-dag-node--selected) .thesis-dag-phase-label {
+    opacity: 0.45;
+}
+.thesis-dag-edges,
+.thesis-dag-phase-label {
+    transition: opacity var(--dur-fast, 140ms) var(--ease-out);
+}
+
+/* State → border color + fill wash, ALWAYS paired with a distinct dot
+   shape below (no color-only meaning). */
+.thesis-dag-node--fired .thesis-dag-node-rect { stroke: var(--sev-crit); fill: var(--scar-10); }
+.thesis-dag-node--approaching .thesis-dag-node-rect { stroke: var(--color-amber); fill: var(--amber-08); }
+.thesis-dag-node--resolved .thesis-dag-node-rect { stroke: var(--sev-resolve); fill: var(--teal-10); }
 .thesis-dag-node--monitoring .thesis-dag-node-rect,
 .thesis-dag-node--neutral .thesis-dag-node-rect { stroke: var(--color-bean); }
 
@@ -232,16 +338,18 @@
     color: var(--color-ghost);
 }
 
-/* Detail card — click/keyboard driven only, never hover. */
+/* Detail card — click/keyboard driven only, never hover. A chassis plate
+   docked under the glass, railed with the scene accent like the graph. */
 .thesis-dag-detail {
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
     border: 1px solid var(--color-bean);
-    border-radius: var(--radius-sm);
-    background: var(--color-cacao);
+    border-top: 2px solid var(--scene-accent, var(--color-amber));
+    border-radius: var(--radius-chassis);
+    background: var(--chassis-brush), var(--color-chassis);
     padding: 0.6rem 0.7rem;
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--bezel-raised);
 }
 
 .thesis-dag-detail-header {
@@ -272,12 +380,20 @@
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: color 120ms ease, border-color 120ms ease;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 
 .thesis-dag-detail-close:hover {
     color: var(--color-amber);
     border-color: var(--color-amber-mute);
+}
+
+.thesis-dag-detail-close:active {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
 }
 
 .thesis-dag-detail-close:focus-visible {
@@ -323,8 +439,26 @@
 @media (prefers-reduced-motion: reduce) {
     .thesis-dag-btn,
     .thesis-dag-detail-close,
-    .thesis-dag-node-rect {
+    .thesis-dag-node,
+    .thesis-dag-node .thesis-dag-node-rect,
+    .thesis-dag-node text,
+    .thesis-dag-node .thesis-dag-word,
+    .thesis-dag-edges,
+    .thesis-dag-phase-label,
+    .thesis-dag-edge-path,
+    .thesis-dag-verb {
         transition: none;
+    }
+    /* Stillness means no lift — the ring and dot shapes still say state. */
+    .thesis-dag-node:hover .thesis-dag-node-rect,
+    .thesis-dag-node:hover text,
+    .thesis-dag-node:hover .thesis-dag-word {
+        transform: none;
+    }
+    .thesis-dag-node:hover,
+    .thesis-dag-node--selected,
+    .thesis-dag-node--selected:hover {
+        filter: none;
     }
 }
 
@@ -389,8 +523,13 @@
     border-radius: var(--radius-control);
     box-shadow: var(--bezel-key);
     cursor: pointer;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 .thesis-dag-verb:hover { color: var(--color-amber); border-color: var(--color-amber-mute); }
+.thesis-dag-verb:active { transform: translateY(1px); box-shadow: var(--bezel-key-down); }
 .thesis-dag-verb:focus-visible { outline: 2px solid var(--color-amber); outline-offset: 1px; }
 .thesis-dag-detail-word {
     margin: 0;

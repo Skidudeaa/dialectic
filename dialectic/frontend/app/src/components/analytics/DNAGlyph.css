@@ -1,4 +1,6 @@
-/* DNA Glyph — identity visualization */
+/* DNA Glyph — identity visualization. The glyph idles with a slow ambient
+   breathe; the archetype word is always printed, so hue is never the only
+   signal. Colors arrive via --glyph-glow / inline fills from the token set. */
 .dna-glyph {
     display: flex;
     flex-direction: column;
@@ -6,7 +8,19 @@
     gap: 5px;
 }
 .dna-glyph svg {
-    filter: drop-shadow(0 0 6px rgba(242,162,74,.25));
+    filter: drop-shadow(0 0 6px var(--glyph-glow, var(--amber-18)));
+    transform-origin: center;
+    animation: dna-breathe 7s ease-in-out infinite;
+}
+@keyframes dna-breathe {
+    0%, 100% {
+        filter: drop-shadow(0 0 4px var(--glyph-glow, var(--amber-18)));
+        transform: scale(1);
+    }
+    50% {
+        filter: drop-shadow(0 0 10px var(--glyph-glow, var(--amber-30)));
+        transform: scale(1.015);
+    }
 }
 .dna-fingerprint {
     font-family: var(--font-mono);
@@ -21,6 +35,11 @@
     text-transform: uppercase;
     letter-spacing: .08em;
     color: var(--color-amber);
+    text-shadow: var(--engrave);
 }
 .dna-glyph.small .dna-archetype { font-size: 12px; }
 .dna-glyph.large .dna-archetype { font-size: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .dna-glyph svg { animation: none; }
+}

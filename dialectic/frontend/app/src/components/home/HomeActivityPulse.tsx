@@ -107,11 +107,15 @@ export function HomeActivityPulse({ onNavigate, refreshVersion, residents, compa
   if (!snapshot) return null
 
   const needs = collectNeeds(snapshot.rooms)
+  const roomNames = Object.fromEntries(
+    snapshot.rooms.map((room) => [room.id, schemeName(room.name)]),
+  )
 
   const elsewhere = (
     <>
       <HouseMovement
         movement={snapshot.rooms.flatMap((room) => room.movement ?? [])}
+        roomNames={roomNames}
         onNavigate={onNavigate}
       />
 
@@ -244,6 +248,7 @@ function SchemeDoor({ room, onNavigate }: {
         onClick={() => void onNavigate({ roomId: room.id })}
       >
         <span className="home-door-name">{schemeName(room.name)}</span>
+        <span className="home-door-go" aria-hidden="true">→</span>
         {unread && <span className="unread-badge">{room.unread_count}</span>}
       </button>
       <p className="home-door-kicker">{doorKicker(room)}</p>

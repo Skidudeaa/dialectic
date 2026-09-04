@@ -5,6 +5,7 @@ import { PARTICIPANT_NAME } from '../../../lib/productIdentity.ts'
 import { SceneEmpty, SceneLoading, SceneUnavailable } from '../SceneEmpty'
 import { TrackRecordPanel } from '../TrackRecordPanel'
 import { WorkspaceObjectList } from '../WorkspaceObjectList'
+import './LedgerScene.css'
 
 /**
  * The Ledger — what this room has agreed, and how it is remembered (§7.7).
@@ -65,8 +66,16 @@ export function LedgerScene({
   }
 
   return (
-    <div className="scene-body">
-      <WorkspaceObjectList objects={entries} onOpen={onOpen} label="What this room holds" />
+    <div className="scene-body ledger-scene-body">
+      <div className="ledger-book">
+        <header className="ledger-book-head">
+          <h2 className="ledger-book-title">What this room holds</h2>
+          <span className="ledger-book-count">
+            {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+          </span>
+        </header>
+        <WorkspaceObjectList objects={entries} onOpen={onOpen} label="What this room holds" />
+      </div>
       <TrackRecordPanel />
       {memoryPanel}
     </div>

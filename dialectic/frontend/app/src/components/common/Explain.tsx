@@ -107,6 +107,9 @@ export function Explain({ term, children, className }: ExplainProps) {
     if (!pos || !panel) return
     const rect = panel.getBoundingClientRect()
     let { top, left } = pos
+    // Which way the panel hangs off the trigger, written as a data attribute
+    // so the stylesheet can point the tag's arrow the right way.
+    let placement: 'below' | 'above' = 'below'
     if (left + rect.width > window.innerWidth - VIEWPORT_MARGIN) {
       left = window.innerWidth - rect.width - VIEWPORT_MARGIN
     }
@@ -116,12 +119,16 @@ export function Explain({ term, children, className }: ExplainProps) {
       // bottom margin, which still beats being cut off by the fold.
       const trigger = triggerRef.current?.getBoundingClientRect()
       const above = (trigger ? trigger.top : top) - rect.height - OFFSET
-      top = above >= VIEWPORT_MARGIN
-        ? above
-        : Math.max(VIEWPORT_MARGIN, window.innerHeight - rect.height - VIEWPORT_MARGIN)
+      if (above >= VIEWPORT_MARGIN) {
+        top = above
+        placement = 'above'
+      } else {
+        top = Math.max(VIEWPORT_MARGIN, window.innerHeight - rect.height - VIEWPORT_MARGIN)
+      }
     }
     panel.style.top = `${top}px`
     panel.style.left = `${left}px`
+    panel.dataset.placement = placement
   }, [pos, activeKey])
 
   if (!entry) return <>{children}</>

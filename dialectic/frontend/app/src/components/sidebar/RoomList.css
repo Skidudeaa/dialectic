@@ -13,6 +13,8 @@
     text-transform: uppercase;
     letter-spacing: .18em;
     color: var(--color-secondary);
+    /* Engraved into the rail, not printed on it. */
+    text-shadow: var(--engrave);
 }
 .room-list {
     flex: 1;
@@ -22,7 +24,8 @@
     flex-direction: column;
     gap: 2px;
 }
-/* Case card — bean border, gradient fill */
+/* Case card — bean border, gradient fill. Hover slides the card toward the
+   stream and brightens it, so the rail feels racked, not painted flat. */
 .room-item {
     display: block;
     width: 100%;
@@ -33,23 +36,34 @@
     cursor: pointer;
     position: relative;
     background: linear-gradient(var(--color-cacao), var(--color-obsidian));
-    transition: border-color 0.15s;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                background var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
-.room-item:hover { border-color: var(--color-crater); }
-/* Active case: amber-30 border + 4px amber top-tab (not a red underline — P1-1) */
+.room-item:hover {
+    border-color: var(--color-crater);
+    background: linear-gradient(var(--color-espresso), var(--color-cacao));
+    transform: translateX(3px);
+}
+/* Active case: accent BAR down the left + elevated fill + a real lift off
+   the rail — shape and depth, never hue alone. */
 .room-item.active {
     border-color: var(--amber-30);
     background: linear-gradient(var(--color-espresso), var(--color-cacao));
+    box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255,249,240,.05);
+    transform: translateX(3px);
 }
 .room-item.active::before {
     content: '';
     position: absolute;
     top: -1px;
-    left: 12px;
-    width: 34px;
-    height: 4px;
+    bottom: -1px;
+    left: -1px;
+    width: 3px;
     background: var(--color-amber);
-    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+    box-shadow: var(--led-glow-amber);
 }
 .room-item-name {
     font-family: var(--font-serif);
@@ -61,7 +75,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.room-item.active .room-item-name { color: var(--color-bone); }
+.room-item.active .room-item-name { color: var(--color-display); }
 .room-item-preview {
     font-family: var(--font-mono);
     font-size: 12px;
@@ -72,7 +86,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
-/* Unread badge — amber */
+/* Unread badge — a lit amber lamp with the count cut into it. The number
+   is the signal; the glow only draws the eye. */
 .unread-badge {
     position: absolute;
     top: 0.5rem;
@@ -85,12 +100,14 @@
     border-radius: var(--radius-sm);
     min-width: 16px;
     text-align: center;
+    box-shadow: var(--led-glow-amber);
 }
 .sidebar-rooms-footer {
     padding: 10px 12px;
     border-top: 1px solid var(--color-bean);
     flex-shrink: 0;
-    background: var(--color-void);
+    background: var(--chassis-brush), var(--color-chassis);
+    box-shadow: inset 0 1px 0 rgba(255,249,240,.05);
 }
 .user-info-bar {
     display: flex;
@@ -118,15 +135,41 @@
     gap: 8px;
     width: 100%;
     padding: 8px 10px;
-    border: none;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
     background: transparent;
     cursor: pointer;
     position: relative;
     text-align: left;
     color: var(--color-bone);
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                background-color var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out);
 }
-.home-pin:hover { color: var(--color-display); }
-.home-pin.active { color: var(--color-amber); }
+.home-pin:hover {
+    color: var(--color-display);
+    background: var(--amber-08);
+    transform: translateX(3px);
+}
+/* Active place: the same bar-and-fill grammar as the case cards, so "where
+   you are" reads identically on the pin and the list — never hue alone. */
+.home-pin.active {
+    color: var(--color-amber);
+    background: var(--amber-08);
+    border-color: var(--amber-30);
+}
+.home-pin.active::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    bottom: -1px;
+    left: -1px;
+    width: 3px;
+    background: var(--color-amber);
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+    box-shadow: var(--led-glow-amber);
+}
 .home-pin-icon {
     flex-shrink: 0;
     color: var(--color-secondary);
@@ -169,6 +212,12 @@
     color: var(--color-void);
     background: var(--led-green);
     box-shadow: var(--led-glow-green);
+    animation: presenceLamp 2.8s ease-in-out infinite;
+}
+
+@keyframes presenceLamp {
+    0%, 100% { box-shadow: var(--led-glow-green); }
+    50% { box-shadow: 0 0 9px 2px rgba(163,188,66,.75); }
 }
 
 /* A lamp is not information for a screen reader — the name is. */
@@ -185,5 +234,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .room-item-present-dot { box-shadow: none; }
+    .room-item,
+    .home-pin { transition: none; }
+    .room-item:hover,
+    .room-item.active,
+    .home-pin:hover { transform: none; }
+    .room-item-present-dot { box-shadow: none; animation: none; }
 }

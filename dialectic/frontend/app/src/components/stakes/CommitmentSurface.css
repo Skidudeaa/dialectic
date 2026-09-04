@@ -1,3 +1,9 @@
+/* ══════════════════════════════════════════════════════════════
+   COMMITMENT SURFACE — compact contract slips surfaced inline in
+   the stream. Same rubber-stamp language as the register cards,
+   smaller; hover/focus opens the fine-print drawer; chassis-key
+   actions with real travel.
+   ══════════════════════════════════════════════════════════════ */
 .commitment-surface {
     position: fixed;
     bottom: 80px;
@@ -5,33 +11,77 @@
     z-index: 90;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     max-width: 360px;
 }
-/* Elevated surfaced card — espresso with amber left edge */
 .surfaced-card {
-    background: var(--color-espresso);
+    position: relative;
+    background:
+        linear-gradient(180deg, rgba(255,249,240,.03), rgba(255,249,240,0) 45%),
+        var(--color-espresso);
     border: 1px solid var(--color-bean);
-    border-left: 2px solid var(--amber-30);
+    border-left: 2px solid var(--scene-accent, var(--color-amber));
     border-radius: var(--radius-sm);
     padding: 10px 12px;
     box-shadow: var(--shadow-md);
-    animation: surface-in 0.3s var(--ease-spring);
+    animation: surface-in var(--dur-slow, 360ms) var(--ease-spring) backwards;
     display: flex;
     flex-direction: column;
     gap: 6px;
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 @keyframes surface-in {
     from { opacity: 0; transform: translateY(10px) scale(0.96); }
     to   { opacity: 1; transform: translateY(0) scale(1); }
 }
+.surfaced-card:hover,
+.surfaced-card:focus-within {
+    transform: translateY(-2px);
+    border-color: var(--color-crater);
+    border-left-color: var(--scene-accent, var(--color-amber));
+    box-shadow: var(--shadow-md), var(--shadow-glow-amber);
+}
+
+.surfaced-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
 .surfaced-card .surfaced-label {
     font-family: var(--font-stencil);
     font-size: 12px;
-    color: var(--color-amber);
+    color: var(--scene-accent, var(--color-amber));
     text-transform: uppercase;
     letter-spacing: .06em;
 }
+/* Compact stamp — same ring + angle language as the register cards */
+.surfaced-stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-family: var(--font-stencil);
+    font-size: 10px;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    padding: 2px 5px;
+    border: 1.25px solid currentColor;
+    outline: 1px solid currentColor;
+    outline-offset: 1px;
+    border-radius: 1px;
+    transform: rotate(-2deg);
+    flex-shrink: 0;
+    opacity: .94;
+}
+.surfaced-stamp .stamp-glyph { width: 9px; height: 9px; }
+.surfaced-stamp.active    { color: var(--color-warning); background: rgba(216,182,104,.10); }
+.surfaced-stamp.resolved  { color: var(--color-teal);    background: var(--teal-10); }
+.surfaced-stamp.expired   { color: var(--color-error);   background: rgba(221,107,63,.10); }
+.surfaced-stamp.voided    { color: var(--color-ghost);   background: rgba(163,136,101,.07); border-style: dashed; }
+
 .surfaced-card .surfaced-claim {
     font-family: var(--font-serif);
     font-size: 13px;
@@ -45,21 +95,90 @@
     font-size: 12px;
     color: var(--color-secondary);
 }
+
+/* Fine-print drawer — revealed on hover / keyboard focus */
+.surfaced-detail {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: max-height var(--dur-med, 220ms) var(--ease-out),
+                opacity var(--dur-med, 220ms) var(--ease-out);
+}
+.surfaced-card:hover .surfaced-detail,
+.surfaced-card:focus-within .surfaced-detail {
+    max-height: 120px;
+    opacity: 1;
+}
+.surfaced-criteria {
+    font-family: var(--font-serif);
+    font-size: 12px;
+    color: var(--color-secondary);
+    line-height: 1.4;
+    border-left: 2px solid var(--color-bean);
+    padding-left: 8px;
+}
+.surfaced-deadline {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-faint);
+}
+.surfaced-deadline.urgent { color: var(--color-warning); }
+
 .surfaced-card .surfaced-actions {
     display: flex;
     justify-content: flex-end;
     gap: 6px;
 }
+/* Compact chassis keys — raised bezel, real travel on press */
 .surfaced-card .surfaced-actions button {
-    background: transparent;
-    border: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid var(--color-bean);
+    background: var(--color-chassis);
+    box-shadow: var(--bezel-key);
     font-family: var(--font-stencil);
-    font-size: 12px;
+    font-size: 11px;
     letter-spacing: .04em;
     text-transform: uppercase;
     cursor: pointer;
-    padding: 2px 7px;
-    border-radius: var(--radius-sm);
+    padding: 3px 8px;
+    border-radius: var(--radius-control);
+    transition: transform var(--dur-fast, 140ms) var(--ease-out),
+                box-shadow var(--dur-fast, 140ms) var(--ease-out),
+                border-color var(--dur-fast, 140ms) var(--ease-out),
+                background var(--dur-fast, 140ms) var(--ease-out),
+                color var(--dur-fast, 140ms) var(--ease-out);
 }
+.surfaced-card .surfaced-actions button:active {
+    transform: translateY(1px);
+    box-shadow: var(--bezel-key-down);
+}
+.surfaced-card .surfaced-actions button:focus-visible {
+    outline: 2px solid var(--color-amber);
+    outline-offset: 1px;
+}
+.surfaced-card .surfaced-actions .btn-glyph { width: 9px; height: 9px; }
 .surfaced-card .dismiss-btn { color: var(--color-faint); }
-.surfaced-card .view-btn { color: var(--color-amber); }
+.surfaced-card .dismiss-btn:hover { color: var(--color-bone); border-color: var(--color-crater); }
+.surfaced-card .view-btn {
+    color: var(--color-amber);
+    border-color: var(--amber-30);
+    background: var(--amber-08);
+}
+.surfaced-card .view-btn:hover {
+    background: var(--amber-12);
+    border-color: var(--color-amber);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .surfaced-card { animation: none; }
+    .surfaced-card,
+    .surfaced-detail,
+    .surfaced-card .surfaced-actions button { transition: none; }
+}

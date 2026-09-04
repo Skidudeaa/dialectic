@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError } from '../../lib/api'
 import { useAppStore } from '../../stores/appStore'
 import './ProposeMenu.css'
@@ -40,6 +40,32 @@ const KIND_HINT: Record<ProposeKind, string> = {
   thesis_proposal: 'Propose the room argue a tracked thesis.',
   reading_draft: "File an article into the room's library.",
   commitment_proposal: 'Put a bet or commitment on record.',
+}
+
+const ICON_PROPS = {
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+} as const
+
+/** One glyph per kind, so the picker reads as a menu of instruments before a
+ *  word is parsed. aria-hidden at the use site — the label carries the name. */
+const KIND_ICON: Record<ProposeKind, ReactNode> = {
+  prediction_draft: (
+    <svg {...ICON_PROPS}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+  ),
+  thesis_proposal: (
+    <svg {...ICON_PROPS}><path d="M5 21V4" /><path d="M5 4h12l-3 4 3 4H5" /></svg>
+  ),
+  reading_draft: (
+    <svg {...ICON_PROPS}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5z" /></svg>
+  ),
+  commitment_proposal: (
+    <svg {...ICON_PROPS}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+  ),
 }
 
 type Phase = 'closed' | 'pick' | ProposeKind | 'sent'
@@ -340,7 +366,11 @@ export function ProposeMenu({ disabled }: ProposeMenuProps) {
                     className="propose-kind-btn"
                     onClick={() => setPhase(kind)}
                   >
-                    {KIND_LABEL[kind]}
+                    <span className="propose-kind-icon" aria-hidden="true">{KIND_ICON[kind]}</span>
+                    <span className="propose-kind-text">
+                      <span className="propose-kind-label">{KIND_LABEL[kind]}</span>
+                      <span className="propose-kind-hint" aria-hidden="true">{KIND_HINT[kind]}</span>
+                    </span>
                   </button>
                 ))}
               </div>

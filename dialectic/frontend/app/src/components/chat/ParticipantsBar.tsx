@@ -27,10 +27,12 @@ export function ParticipantsBar({ participants }: ParticipantsBarProps) {
           <div
             key={p.id}
             className={`participant-chip ${p.isClaude ? 'is-claude' : ''}`}
+            data-status={status}
             title={p.isClaude ? PARTICIPANT_NAME : `${p.name} — ${status}${ago ? `, last seen ${ago}` : ''}`}
           >
-            <span className={`presence-dot ${status === 'online' ? 'online' : status === 'away' ? 'away' : 'offline'}`} />
+            <span className={`presence-dot ${status === 'online' ? 'online' : status === 'away' ? 'away' : 'offline'}`} aria-hidden="true" />
             <span className="p-name">{p.name}</span>
+            <span className="p-status-sr">{status}</span>
             {ago && <span className="p-last-seen">{ago}</span>}
           </div>
         )

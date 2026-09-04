@@ -26,6 +26,7 @@ export function RoomSelector({ nav }: { nav: RoomNavigation }) {
       <div className="room-card">
         <div className="room-header">
           <div>
+            <p className="room-overline" aria-hidden="true">Case index</p>
             <h1 className="room-title">&#9671; Dialectic</h1>
             <p className="room-subtitle">
               Welcome, {user?.display_name ?? 'Guest'}

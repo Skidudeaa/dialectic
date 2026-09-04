@@ -50,7 +50,7 @@
 }
 
 .surf-head    { grid-area: head; }
-.surf-graph-pane   { grid-area: graph; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.surf-graph-pane   { grid-area: graph; min-height: 0; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .surf-atlas-pane   { grid-area: atlas; min-width: 0; }
 .surf-conv    {
     grid-area: conv;
@@ -78,8 +78,100 @@
    while this denser working view reads as a recessed instrument. */
 .surf-graph-pane .thesis-dag {
     background: var(--chassis-brush), var(--color-chassis);
-    border-radius: var(--radius-sm);
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
     box-shadow: var(--bezel-raised);
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out), box-shadow var(--dur-med, 220ms) var(--ease-out);
+}
+
+/* ── One-desk pane idiom: engraved label strip + header lamp ──────────
+   Every pane on the table carries the same machined tag: a lamp (shape +
+   glow, never hue alone) and a micro-label. The pane that holds focus
+   reads ACTIVE: heavier border (inset ring, so no layout shift), scene-
+   accent edge, lamp lit. */
+.surf-pane-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--color-secondary);
+    text-shadow: var(--engrave);
+    background: var(--chassis-brush), var(--color-chassis);
+    border: 1px solid var(--color-bean);
+    border-bottom: 0;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    box-shadow: var(--bezel-raised);
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out);
+}
+.surf-pane-label-meta {
+    margin-left: auto;
+    color: var(--color-ghost);
+    letter-spacing: .08em;
+}
+.surf-pane-lamp {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--led-off);
+    box-shadow: inset 0 1px 1px rgba(0,0,0,.65);
+    transition: background var(--dur-med, 220ms) var(--ease-out), box-shadow var(--dur-med, 220ms) var(--ease-out);
+}
+.surf-graph-pane:focus-within .surf-pane-lamp,
+.surf-conv:focus-within .surf-pane-lamp,
+.surf-atlas:focus-within .surf-pane-lamp,
+.surf-upd:focus-within .surf-pane-lamp {
+    background: var(--scene-accent, var(--color-copper));
+    box-shadow: var(--led-glow-amber);
+    box-shadow: 0 0 6px 1px color-mix(in srgb, var(--scene-accent, var(--color-copper)) 55%, transparent);
+}
+.surf-graph-pane:focus-within .surf-pane-label { border-color: var(--scene-accent, var(--color-copper)); }
+.surf-graph-pane:focus-within .thesis-dag {
+    border-color: var(--scene-accent, var(--color-copper));
+    box-shadow: var(--bezel-raised), inset 0 0 0 1px var(--scene-accent, var(--color-copper));
+}
+.surf-conv:focus-within {
+    border-color: var(--scene-accent, var(--color-copper));
+    box-shadow: var(--bezel-raised), inset 0 0 0 1px var(--scene-accent, var(--color-copper));
+}
+
+/* ── Update → node drag affordance ────────────────────────────────────
+   While an update card is dragged (state set in SurfaceScene), the graph
+   pane announces itself as the target zone: accent ring, a floating tag
+   naming the gesture, and the hovered node's drop-target stroke moves
+   from the Bench's teal to the surface's scene accent (scoped override —
+   the Bench keeps its own). */
+.surf--dragging-ref .surf-graph-pane .thesis-dag {
+    border-color: var(--scene-accent, var(--color-copper));
+    box-shadow: var(--bezel-raised), 0 0 0 2px var(--scene-accent-soft, rgba(201,122,61,.30));
+}
+.surf--dragging-ref .surf-graph-pane .thesis-dag-node { cursor: copy; }
+.surf-graph-pane .thesis-dag-node--droptarget .thesis-dag-node-rect {
+    stroke: var(--scene-accent, var(--color-copper));
+    stroke-width: 3px;
+    fill: var(--scene-accent-soft, rgba(201,122,61,.16));
+}
+.surf--dragging-ref .surf-graph-pane::after {
+    content: '⤓ drop onto a node to attach as evidence';
+    position: absolute;
+    top: 34px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    padding: 5px 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--color-cream);
+    background: var(--color-espresso);
+    border: 1px solid var(--scene-accent, var(--color-copper));
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+    pointer-events: none;
 }
 
 /* ── Header ─────────────────────────────────────────────────────────── */
@@ -116,6 +208,24 @@
     line-height: 1.15;
     letter-spacing: 0;
     color: var(--color-display);
+}
+/* The scene stamp — which workspace this is, stencilled on the chassis
+   beside the thesis title so the room is identifiable at a glance. */
+.surf-head-scene {
+    align-self: center;
+    flex: none;
+    padding: 3px 9px 4px;
+    font-family: var(--font-stencil);
+    font-size: 13px;
+    line-height: 1.2;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--scene-accent, var(--color-copper));
+    text-shadow: var(--engrave);
+    background: var(--color-well);
+    border: 1px solid var(--color-bean);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--bezel-well);
 }
 .surf-head-title em { font-style: normal; color: var(--scene-accent, var(--color-copper)); }
 .surf-head-coordinate {
@@ -162,6 +272,7 @@
     border-radius: var(--radius-sm);
     box-shadow: var(--bezel-raised);
     overflow: hidden;
+    transition: border-color var(--dur-fast, 140ms) var(--ease-out), box-shadow var(--dur-med, 220ms) var(--ease-out);
 }
 .surf-conv-head {
     display: flex;
@@ -172,6 +283,7 @@
     border-bottom: 1px solid var(--color-bean);
     background: var(--chassis-brush), var(--color-chassis);
 }
+.surf-conv-head .surf-pane-lamp { margin-right: -4px; }
 .surf-conv-kicker {
     font-family: var(--font-mono);
     font-size: 12px;
@@ -192,6 +304,8 @@
     box-shadow: var(--bezel-well);
 }
 .surf-shape {
+    display: inline-flex;
+    align-items: center;
     min-height: 34px;
     padding: 4px 11px;
     font-family: var(--font-mono);
@@ -203,6 +317,8 @@
     border: 0;
     border-right: 1px solid var(--color-bean);
     cursor: pointer;
+    transition: background var(--dur-fast, 140ms) var(--ease-out), color var(--dur-fast, 140ms) var(--ease-out),
+        box-shadow var(--dur-fast, 140ms) var(--ease-out), transform var(--dur-fast, 140ms) var(--ease-out);
 }
 .surf-shape:last-child { border-right: 0; }
 .surf-shape[aria-pressed="true"] {
@@ -211,7 +327,18 @@
     box-shadow: var(--bezel-key-down);
 }
 .surf-shape:hover { color: var(--color-bone); }
+.surf-shape:active { transform: translateY(1px); box-shadow: var(--bezel-key-down); }
 .surf-shape:focus-visible { outline: 2px solid var(--color-amber); outline-offset: -2px; }
+/* The wide/split toggle is the desk's layout handle — it gets the grip. */
+.surf-grip {
+    margin-right: 7px;
+    font-size: 11px;
+    letter-spacing: 0;
+    color: var(--color-ghost);
+    transition: color var(--dur-fast, 140ms) var(--ease-out);
+}
+.surf-shape:hover .surf-grip { color: var(--color-bone); }
+.surf-shape[aria-pressed="true"] .surf-grip { color: var(--scene-accent, var(--color-copper)); }
 .surf-conv-filter {
     display: inline-flex;
     align-items: center;
@@ -280,7 +407,11 @@
     text-transform: none;
     letter-spacing: 0;
 }
-.surf-chip--anchor { border-color: var(--scene-accent, var(--color-copper)); color: var(--color-bone); }
+.surf-chip--anchor {
+    border-color: var(--scene-accent, var(--color-copper));
+    color: var(--color-bone);
+    box-shadow: var(--bezel-key), 0 0 0 1px var(--scene-accent-soft, rgba(201,122,61,.18));
+}
 .surf-chip button {
     min-width: 22px;
     min-height: 22px;
@@ -291,8 +422,11 @@
     font-size: 14px;
     line-height: 1;
     cursor: pointer;
+    transition: color var(--dur-fast, 140ms) var(--ease-out), transform var(--dur-fast, 140ms) var(--ease-out);
 }
 .surf-chip button:hover { color: var(--color-amber); }
+.surf-chip button:active { transform: translateY(1px); }
+.surf-chip button:focus-visible { outline: 1px solid var(--color-amber); outline-offset: 1px; }
 .surf-compose-line--foot {
     justify-content: flex-end;
     margin: 0;
@@ -385,8 +519,18 @@
         width: 100%;
         margin-left: 0;
     }
-    .surf-shape { flex: 1 1 25%; padding-inline: 5px; }
+    .surf-shape { flex: 1 1 25%; padding-inline: 5px; justify-content: center; }
     .surf-conv-filter { margin-left: 0; }
     .surf-conv-body { padding: 8px; }
     .surf-compose-line--foot { justify-content: flex-start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .surf-pane-lamp,
+    .surf-shape,
+    .surf-grip,
+    .surf-chip button,
+    .surf-conv,
+    .surf-graph-pane .thesis-dag,
+    .surf-pane-label { transition: none; }
 }

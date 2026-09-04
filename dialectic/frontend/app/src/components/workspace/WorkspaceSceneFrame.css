@@ -7,21 +7,13 @@
     overflow: hidden;
 }
 
-/* ── Scene identity (2026-08-18, owner: "every page/tab/view feels the
-   same... I don't know where I am") ─────────────────────────────────────
-   Each scene owns an accent drawn from the token counterpoint band, set
-   here ONCE and inherited by everything inside the section: the masthead,
-   the active tray tile and its running-dot, module header rules, and the
-   per-scene silhouettes below. Names and glyphs always accompany the hue
+/* ── Scene identity ─────────────────────────────────────────────────
+   The per-scene accents moved to src/styles/scenes.css, keyed off the
+   [data-scene] attribute the frame sets on this section (--scene-accent,
+   --scene-accent-soft, --scene-ambient; --scene-tint survives there as a
+   compatibility alias). The silhouette rules below keep their class hooks;
+   only the light source moved. Names and glyphs always accompany the hue
    (no color-only signals). */
-.workspace-scene-house   { --scene-accent: var(--color-sage);  --scene-tint: var(--sage-12); }
-.workspace-scene-record  { --scene-accent: var(--color-cream); --scene-tint: rgba(246,236,218,.09); }
-.workspace-scene-surface { --scene-accent: var(--color-copper); --scene-tint: rgba(201,122,61,.12); }
-.workspace-scene-bench   { --scene-accent: var(--color-amber); --scene-tint: var(--amber-12); }
-.workspace-scene-field   { --scene-accent: var(--color-plum);  --scene-tint: var(--plum-12); }
-.workspace-scene-library { --scene-accent: var(--color-steel); --scene-tint: var(--steel-12); }
-.workspace-scene-ledger  { --scene-accent: var(--color-gold);  --scene-tint: var(--gold-12); }
-.workspace-scene-atlas   { --scene-accent: var(--color-teal);  --scene-tint: var(--teal-10); }
 
 .workspace-scene-content {
     display: flex;
@@ -30,9 +22,11 @@
     min-height: 0;
     flex-direction: column;
     overflow: hidden;
-    /* Room lighting: a faint wash from above in the scene's own tint, so a
-       scene switch changes the light, not just the labels. */
-    background: radial-gradient(120% 55% at 50% 0%, var(--scene-tint, transparent), transparent 60%);
+    /* Room lighting: a faint wash in the scene's own tint, so a scene
+       switch changes the light, not just the labels. Each scene's --scene-
+       ambient aims its wash differently — the Surface glows from the desk
+       up, the Mirror from the reader below, the Record stays flat. */
+    background: var(--scene-ambient, radial-gradient(120% 55% at 50% 0%, var(--scene-tint, transparent), transparent 60%));
 }
 
 /* ── Scene body — the shared canvas every non-Record scene renders into ──
@@ -72,7 +66,7 @@
 .workspace-scene .cockpit-header { border-bottom-color: var(--scene-tint, var(--color-bean)); }
 
 /* LIBRARY — an index-card shelf, not a stack: two-up cards, each with the
-   steel edge of a filed reference, titles set larger. */
+   sage edge of a filed reference, titles set larger. */
 .workspace-scene-library .object-list {
     background: none;
     border-top: none;
@@ -97,7 +91,7 @@
 /* The complete Library has its own richer wire shape (site, capture mode,
    revision count, cursor) and therefore does not force those fields into the
    generic WorkspaceObject card shared by Bench and Ledger. It keeps the same
-   index-card silhouette and steel scene accent. */
+   index-card silhouette and sage scene accent. */
 .library-toolbar {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
@@ -176,9 +170,9 @@
 .library-card-revisions {
     flex: 0 0 auto;
     padding: 2px 6px;
-    border: 1px solid var(--steel-30);
+    border: 1px solid var(--scene-accent-soft, var(--steel-30));
     border-radius: var(--radius-control);
-    color: var(--color-steel);
+    color: var(--scene-accent, var(--color-steel));
     font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: .06em;
@@ -269,8 +263,8 @@
     padding-bottom: 4px;
 }
 
-/* ATLAS — the map room: teal is already its language; the frame just keeps
-   the accent consistent with its masthead. */
+/* ATLAS — the map room: steel chart-light is its accent; the frame just
+   keeps the hue consistent with its masthead. */
 
-/* BENCH — the hot work surface; amber is the app's own accent so the bench
-   reads as the room the rest of the house points toward. */
+/* BENCH — the instrument desk: teal, the live/kinetic hue, because the
+   Bench is where the thesis is wired to the market and watched move. */

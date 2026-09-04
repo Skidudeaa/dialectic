@@ -1,18 +1,30 @@
-/* Atlas — plain rows, hairline rules, indentation for depth. No rounded
-   cards, no force-directed layout (§1.4, §16.7's editorial-bands language
-   applied here too): a map is read, not decorated. */
+/* Atlas — the chart table. Rows are map LABELS (bordered slips pinned to the
+   sheet), depth is indentation, and a faint graticule lies under everything
+   so the room reads as cartography rather than another list (§1.4, §16.7's
+   editorial-bands language applied here too): a map is read, not decorated.
+   Accent: the scene's steel — var(--scene-accent) with a token fallback so
+   this file is valid before the identity layer lands. */
 
 .atlas-scene {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  /* Graticule — chart paper, not wallpaper: one hairline every 72px at 5% of
+     the scene accent. */
+  background-image:
+    repeating-linear-gradient(0deg,
+      color-mix(in srgb, var(--scene-accent, var(--color-steel)) 5%, transparent) 0 1px,
+      transparent 1px 72px),
+    repeating-linear-gradient(90deg,
+      color-mix(in srgb, var(--scene-accent, var(--color-steel)) 5%, transparent) 0 1px,
+      transparent 1px 72px);
 }
 
 .atlas-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
 }
 
 .atlas-room-list {
@@ -24,11 +36,25 @@
   border-top: 1px solid var(--color-bean);
 }
 
+/* Room spotlight — the room that owns the selected map object is lit, so a
+   World selection stays connected to the House list beneath it. */
+.atlas-room-section[data-spotlit="true"] {
+  box-shadow: inset 3px 0 0 var(--scene-accent, var(--color-steel));
+  background: linear-gradient(90deg,
+    var(--scene-accent-soft, rgba(242,162,74,.15)),
+    transparent 55%);
+}
+
+/* A row is a map label: a bounded slip with a drawn border and a paper
+   shadow, raising off the sheet on hover. */
 .atlas-row-open {
+  position: relative;
   width: 100%;
   text-align: left;
   background: var(--color-cacao);
-  border: none;
+  border: 1px solid var(--color-bean);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
   padding: 0.55rem 0.8rem;
   display: flex;
   align-items: baseline;
@@ -36,11 +62,89 @@
   cursor: pointer;
   color: inherit;
   font: inherit;
+  transition:
+    transform var(--dur-fast, 140ms) var(--ease-out),
+    background-color var(--dur-fast, 140ms) var(--ease-out),
+    box-shadow var(--dur-fast, 140ms) var(--ease-out),
+    border-color var(--dur-fast, 140ms) var(--ease-out);
 }
-.atlas-row-open:hover { background: var(--color-espresso); }
+.atlas-row-open:hover {
+  background: var(--color-espresso);
+  border-color: var(--color-crater);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.atlas-row-open:active {
+  transform: translateY(1px);
+  box-shadow: var(--bezel-key-down);
+}
 .atlas-row-open:focus-visible {
   outline: 2px solid var(--color-amber);
   outline-offset: -2px;
+  transform: translateY(-1px);
+}
+
+/* Kind marks — a plotted glyph beside every label. Shape pairs with the
+   printed kind word, so hue is never the only signal (§17.4). */
+.atlas-row-open::before {
+  content: '';
+  flex: 0 0 auto;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--color-secondary);
+}
+/* room — a plotted fix: a steel diamond */
+.atlas-row[data-kind="room"] .atlas-row-open::before {
+  border-color: var(--scene-accent, var(--color-steel));
+  transform: rotate(45deg);
+}
+/* branch — a stub off the room's line */
+.atlas-row[data-kind="branch"] .atlas-row-open::before {
+  width: 6px;
+  height: 6px;
+  border: 0;
+  border-left: 1px solid var(--color-secondary);
+  border-bottom: 1px solid var(--color-secondary);
+}
+.atlas-row[data-kind="thesis"] .atlas-row-open::before {
+  background: var(--color-bone);
+  border-color: var(--color-bone);
+}
+.atlas-row[data-kind="commitment"] .atlas-row-open::before {
+  border-radius: 50%;
+}
+/* field_mark — an open question is a dashed ring, never filled */
+.atlas-row[data-kind="field_mark"] .atlas-row-open::before {
+  border-radius: 50%;
+  border-style: dashed;
+  border-color: var(--scene-accent, var(--color-steel));
+}
+
+/* Click-through affordance on rooms: a position indicator that draws itself
+   on hover/focus — "land on it". Pure CSS, decorative only. */
+.atlas-row[data-kind="room"] .atlas-row-open::after {
+  content: '';
+  flex: 0 0 auto;
+  align-self: center;
+  margin-left: auto;
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--scene-accent, var(--color-steel));
+  border-radius: 50%;
+  background:
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0) center / 7px 1px no-repeat,
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0) center / 1px 7px no-repeat;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity var(--dur-fast, 140ms) var(--ease-out),
+    transform var(--dur-fast, 140ms) var(--ease-out);
+}
+.atlas-row[data-kind="room"] .atlas-row-open:hover::after,
+.atlas-row[data-kind="room"] .atlas-row-open:focus-visible::after {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .atlas-row-static {
@@ -85,7 +189,7 @@
   letter-spacing: .12em;
   padding: 2px 6px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(191,161,98,.35);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
   color: var(--color-warning);
 }
 
@@ -94,16 +198,125 @@
   padding-top: 0.6rem;
 }
 
+/* Group titles are chart captions: engraved mono with a rule running out to
+   the margin. */
 .atlas-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
   font-family: var(--font-mono);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: .12em;
-  color: var(--color-faint);
+  color: var(--color-secondary);
+  text-shadow: var(--engrave);
   margin: 0 0 0.4rem;
 }
+.atlas-group-title::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--color-bean);
+}
 
-.world-scope-row .atlas-row-open[aria-current="true"] {
-  box-shadow: inset 3px 0 0 var(--color-amber);
-  background: color-mix(in srgb, var(--color-amber) 10%, transparent);
+/* Selected map object — the spotlight row. Accent bar + accent wash, and the
+   "Selected" chip (styled in World.css) names the state in words. */
+.atlas-row-open[aria-current="true"] {
+  border-color: color-mix(in srgb, var(--scene-accent, var(--color-steel)) 45%, var(--color-bean));
+  box-shadow:
+    inset 3px 0 0 var(--scene-accent, var(--color-steel)),
+    var(--shadow-sm);
+  background: color-mix(in srgb, var(--scene-accent, var(--color-steel)) 10%, var(--color-cacao));
+}
+.atlas-row-open[aria-current="true"]:hover {
+  background: color-mix(in srgb, var(--scene-accent, var(--color-steel)) 15%, var(--color-espresso));
+}
+
+/* Echoes — citations that crossed a room boundary. Crossing edges drawn with
+   weight: a heavier rule above the group, a dashed steel edge on every row,
+   and an off-sheet arrowhead for a glyph. */
+.atlas-group-echoes {
+  border-top: 2px solid var(--color-bean);
+}
+.atlas-group-echoes .atlas-row-open {
+  border-left: 2px dashed var(--scene-accent, var(--color-steel));
+}
+.atlas-group-echoes .atlas-row-open::before {
+  width: 6px;
+  height: 6px;
+  border: 0;
+  border-top: 2px solid var(--scene-accent, var(--color-steel));
+  border-right: 2px solid var(--scene-accent, var(--color-steel));
+  transform: rotate(45deg);
+}
+.atlas-group-echoes .atlas-row-static {
+  border-left: 2px dashed var(--steel-30);
+}
+
+/* The empty atlas — a bare chart table: dashed survey frame, graticule,
+   corner registration marks, steel kicker. Scoped through .atlas-empty so
+   the shared SceneEmpty sheet is never touched for other scenes. */
+.atlas-empty .scene-empty {
+  position: relative;
+  border: 1px dashed color-mix(in srgb, var(--scene-accent, var(--color-steel)) 35%, var(--color-bean));
+  border-radius: var(--radius-sm);
+  margin-top: 3rem;
+  margin-bottom: 3rem;
+  background-image:
+    repeating-linear-gradient(0deg,
+      color-mix(in srgb, var(--scene-accent, var(--color-steel)) 6%, transparent) 0 1px,
+      transparent 1px 56px),
+    repeating-linear-gradient(90deg,
+      color-mix(in srgb, var(--scene-accent, var(--color-steel)) 6%, transparent) 0 1px,
+      transparent 1px 56px);
+  background-color: var(--color-obsidian);
+}
+.atlas-empty .scene-empty::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  pointer-events: none;
+  opacity: .6;
+  background-image:
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0),
+    linear-gradient(var(--scene-accent, var(--color-steel)) 0 0);
+  background-size:
+    16px 1px, 1px 16px,
+    16px 1px, 1px 16px,
+    16px 1px, 1px 16px,
+    16px 1px, 1px 16px;
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+  background-repeat: no-repeat;
+}
+.atlas-empty .scene-empty-kicker {
+  color: var(--scene-accent, var(--color-steel));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atlas-row-open,
+  .atlas-row[data-kind="room"] .atlas-row-open::after {
+    transition: none;
+  }
+  .atlas-row-open:hover,
+  .atlas-row-open:focus-visible {
+    transform: none;
+  }
+  .atlas-row-open:active {
+    transform: none;
+    box-shadow: var(--shadow-sm);
+  }
+  .atlas-row[data-kind="room"] .atlas-row-open:hover::after,
+  .atlas-row[data-kind="room"] .atlas-row-open:focus-visible::after {
+    transform: none;
+  }
 }
