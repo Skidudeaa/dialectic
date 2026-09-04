@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Attachment, DailyActivity, Message, MessageAnchor, MessageRef } from '../../../types'
 import { api } from '../../../lib/api.ts'
-import { PARTICIPANT_NAME } from '../../../lib/productIdentity.ts'
 import { MessageInput, type MessageInputHandle } from '../../chat/MessageInput'
 import { TypingIndicator } from '../../chat/TypingIndicator'
 import { ShapeStream } from './shapes/ShapeStream'
@@ -234,9 +233,6 @@ export function SurfaceConversation({
             return true
           }}
         />
-        <p className="surf-compose-line surf-compose-line--foot">
-          @{PARTICIPANT_NAME} to ask it · paste a link to read it
-        </p>
       </div>
     </section>
   )

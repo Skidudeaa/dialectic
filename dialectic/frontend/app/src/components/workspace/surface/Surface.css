@@ -300,7 +300,28 @@
     line-height: 1.45;
     color: var(--color-ghost);
 }
-.surf-compose .input-area { border-top: 0; }
+.surf-compose .input-area { border-top: 0; padding: 6px 12px 6px; }
+/* The composer's two selector rows (tags, message type) share ONE row here:
+   the surface's column is the conversation's whole world, and 88px of
+   chrome above the textarea was the difference between a stream you read
+   and one you peer at. Touch targets keep their 44px. */
+.surf-compose .input-area-inner {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-areas:
+        "tags types"
+        "row row"
+        "hints hints";
+    column-gap: 14px;
+    align-items: center;
+}
+.surf-compose .msg-tag-selector { grid-area: tags; }
+.surf-compose .msg-type-selector { grid-area: types; justify-content: flex-end; }
+.surf-compose .input-row { grid-area: row; }
+.surf-compose .input-hints { grid-area: hints; margin-top: 3px; }
+.surf-compose .attach-chips,
+.surf-compose .reply-preview-bar,
+.surf-compose .mention-picker { grid-column: 1 / -1; }
 
 /* ── Atlas + updates rows ────────────────────────────────────────────── */
 .surf-atlas-pane, .surf-updates-pane { min-height: 0; }
