@@ -25,6 +25,8 @@ from transport.websocket import Connection
 TEST_DATABASE_URL = os.environ.get("DIALECTIC_TEST_DATABASE_URL", "postgresql://root@localhost/dialectic_test")
 BODY = "# A shared source\n\nTankers **wait outside** the strait.\n\nThe forecast is uncertain.\n"
 QUOTE = "Tankers wait outside the strait."
+CHECKLIST = "- [ ] Check departures\n- [x] Check freight"
+CHECKLIST_QUOTE = "Check departures Check freight"
 
 
 @pytest_asyncio.fixture
@@ -126,17 +128,56 @@ async def test_quoted_reading_is_room_fenced(scene: SimpleNamespace) -> None:
 
 
 @pytest.mark.asyncio
-async def test_stored_revision_still_accepts_its_original_passage(scene: SimpleNamespace) -> None:
-    digest = hashlib.sha256(BODY.encode()).hexdigest()
+@pytest.mark.parametrize("body,quote", [(BODY, QUOTE), (CHECKLIST, CHECKLIST_QUOTE)])
+async def test_stored_revision_still_accepts_its_original_passage(scene: SimpleNamespace, body: str, quote: str) -> None:
+    digest = hashlib.sha256(body.encode()).hexdigest()
     await scene.db.execute(
         """INSERT INTO reading_revisions (reading_id,room_id,capture_id,captured_by_user_id,source_url,
               capture_mode,content,content_sha256,captured_at)
            VALUES ($1,$2,$3,$4,'https://example.com/strait','article',$5,$6,now())""",
-        scene.reading, scene.room, uuid4(), scene.amo, BODY, digest,
+        scene.reading, scene.room, uuid4(), scene.amo, body, digest,
     )
     await scene.db.execute("UPDATE reading_items SET content = 'A new report' WHERE id = $1", scene.reading)
-    original = await post(scene, "rest", scene.amo, "About the earlier report", refs=[source_ref(scene, quote=QUOTE, content_sha256=digest)])
+    original = await post(scene, "rest", scene.amo, "About the earlier report", refs=[source_ref(scene, quote=quote, content_sha256=digest)])
     assert original.metadata["refs"][0]["content_sha256"] == digest
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("door", ["rest", "websocket"])
+@pytest.mark.parametrize("body", [
+    CHECKLIST,
+    "- [ ] Check **departures**\n\n- [x] Check freight",
+    "> - [ ] Check departures\n>   - [X] Check freight",
+    "1. [ ] Check departures\n2. [X]\tCheck freight",
+    "- [ ] Check departures\n- [x] Check [freight](https://example.com)\n\n[x]: https://example.com",
+])
+async def test_task_list_selection_is_persisted_through_both_doors(scene: SimpleNamespace, door: str, body: str) -> None:
+    await scene.db.execute("UPDATE reading_items SET content = $1 WHERE id = $2", body, scene.reading)
+    expected = source_ref(scene, quote=CHECKLIST_QUOTE, content_sha256=hashlib.sha256(body.encode()).hexdigest())
+    original = await post(scene, door, scene.amo, "About this checklist", refs=[expected])
+    assert original.metadata["refs"] == [expected]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("body,visible,erased", [
+    ("- \\[ ] Check departures\n- \\[x] Check freight", "[ ] Check departures [x] Check freight", CHECKLIST_QUOTE),
+    ("- `[ ]` Check departures\n- `[x]` Check freight", "[ ] Check departures [x] Check freight", CHECKLIST_QUOTE),
+    (f"```markdown\n{CHECKLIST}\n```", "- [ ] Check departures - [x] Check freight", CHECKLIST_QUOTE),
+    ("[ ] Check departures\n\n[x] Check freight", "[ ] Check departures [x] Check freight", CHECKLIST_QUOTE),
+    ("-\n  [ ] Check departures\n-\n  [x] Check freight", "[ ] Check departures [x] Check freight", CHECKLIST_QUOTE),
+    ("- [ ]\n  Check departures\n- [x]\n  Check freight", "[ ] Check departures [x] Check freight", CHECKLIST_QUOTE),
+    ("<ul><li>[ ] Check departures</li><li>[x] Check freight</li></ul>", "[ ] Check departures [x] Check freight", CHECKLIST_QUOTE),
+    ("- [ ] Start [x] marker\n- [x] Finish", "Start [x] marker Finish", "Start marker Finish"),
+])
+async def test_task_list_extraction_preserves_literal_markers(scene: SimpleNamespace, body: str, visible: str, erased: str) -> None:
+    await scene.db.execute("UPDATE reading_items SET content = $1 WHERE id = $2", body, scene.reading)
+    digest = hashlib.sha256(body.encode()).hexdigest()
+    refs = [source_ref(scene, quote=visible, content_sha256=digest)]
+    await validate_reading_quotes(scene.db, scene.room, refs)
+    assert refs[0]["quote"] == visible
+    assert refs[0]["content_sha256"] == digest
+    with pytest.raises(ProposalMetadataError, match="does not match"):
+        await validate_reading_quotes(scene.db, scene.room, [source_ref(scene, quote=erased, content_sha256=digest)])
 
 
 @pytest.mark.asyncio

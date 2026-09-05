@@ -151,20 +151,19 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const [replyToId, setReplyToId] = useState<string | null>(
     () => restoreSceneAxes(user?.id ?? null)?.replyToId ?? null,
   )
-  // The composer's unsent text. components/chat/MessageInput.tsx owns the
-  // live textarea's `content` state (still local and uncontrolled — this is
-  // NOT a fully controlled input); it accepts an `initialValue` prop, a
-  // minimal easement granted to this task group specifically for restoration
-  // (owner ruling, see PLAN.md §5.5 amendment), used only as MessageInput's
-  // own `useState` initial value, so this seeds the textarea once on mount
-  // and does not fight the user's typing on every later render. Also
-  // captured here via the onTypingContent callback MessageInput already
-  // calls on every keystroke, purely so continuity has the latest text to
-  // remember — MessageInput remains the source of truth for what is
-  // actually on screen after the first render.
-  const [composerDraft, setComposerDraft] = useState(
-    () => restoreSceneAxes(user?.id ?? null)?.composerDraft ?? '',
-  )
+  // MessageInput owns live text; this snapshot only seeds a remounted editor.
+  // Its destination prevents room/branch carryover, and its identity lets a
+  // receipt clear the submitted draft without erasing a later edit.
+  const [draft, setDraft] = useState(() => ({
+    roomId: currentRoom?.id,
+    threadId: currentThread?.id,
+    content: restoreSceneAxes(user?.id ?? null)?.composerDraft ?? '',
+  }))
+  if (draft.roomId !== currentRoom?.id || draft.threadId !== currentThread?.id) {
+    setDraft({ roomId: currentRoom?.id, threadId: currentThread?.id, content: '' })
+  }
+  const composerDraft = draft.roomId === currentRoom?.id && draft.threadId === currentThread?.id
+    ? draft.content : ''
   const [showSearch, setShowSearch] = useState(false)
   // The nonce makes a repeat jump to the same message a distinct value, so the
   // stream re-scrolls instead of ignoring an unchanged prop.
@@ -798,6 +797,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
           />
           <TypingIndicator typingUsers={typingDisplay} activityLabel={toolActivityLabel} />
           <MessageInput
+            key={`${currentRoom.id}:${currentThread?.id ?? ''}`}
             roomId={currentRoom.id}
             memberNames={memberNames}
             initialValue={composerDraft}
@@ -816,7 +816,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
               // The composer clears its own local `content` on a successful
               // send (MessageInput.tsx) — mirror that here so continuity
               // never restores a draft that was already sent.
-              setComposerDraft('')
+              setDraft({ roomId: currentRoom.id, threadId: currentThread?.id, content: '' })
               return true
             }}
             onTypingStart={sendTypingStart}
@@ -826,7 +826,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
               // Captured for continuity only — see composerDraft's own
               // declaration above for why this does not feed back into the
               // textarea.
-              setComposerDraft(content)
+              setDraft({ roomId: currentRoom.id, threadId: currentThread?.id, content })
             }}
             onResearch={sendDeepDive}
             researchActive={isDeepDiveActive}
@@ -968,15 +968,14 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
             anchor: opts.anchor,
             refs: opts.refs,
           })
-          if (sent && useAppStore.getState().currentThread?.id === currentThread?.id
-            && useAppStore.getState().currentRoom?.id === currentRoom.id) setComposerDraft('')
+          if (sent) setDraft((current) => current === draft ? { ...current, content: '' } : current)
           return sent
         },
         onTypingStart: sendTypingStart,
         onTypingStop: sendTypingStop,
         onTypingContent: (content) => {
           sendTypingContent(content)
-          setComposerDraft(content)
+          setDraft({ roomId: currentRoom.id, threadId: currentThread?.id, content })
         },
         disabled: !isConnected || !currentThread,
         memberNames,

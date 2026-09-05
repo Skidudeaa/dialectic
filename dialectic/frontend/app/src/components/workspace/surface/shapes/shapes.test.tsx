@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { useRef, useState } from 'react'
 import type { MessageAnchor, MessageRef } from '../../../../types'
 import { WHOLE_ROOM_TOPIC, type DailyActivity, type SurfaceAuthor, type SurfaceMsg } from '../surfaceModel'
 import { SurfaceMessage } from './SurfaceMessage'
@@ -7,6 +8,9 @@ import { ShapeStream } from './ShapeStream'
 import { ShapeTree } from './ShapeTree'
 import { ShapeLanes } from './ShapeLanes'
 import { ShapeSignal } from './ShapeSignal'
+import { SurfaceConversation } from '../SurfaceConversation'
+import type { ConversationShape } from '../surfaceModel'
+import type { MessageInputHandle } from '../../../chat/MessageInput'
 import { api } from '../../../../lib/api'
 import { useAppStore } from '../../../../stores/appStore'
 
@@ -162,5 +166,41 @@ describe('ShapeSignal', () => {
     expect(screen.getByText('machine : human = 0.6 : 1')).toBeInTheDocument()
     expect(screen.getByText('Annotator silent · writes marks only')).toBeInTheDocument()
     expect(screen.getByText('Dialectic speaks when addressed or a gate fires')).toBeInTheDocument()
+  })
+})
+
+describe('conversation shape navigation', () => {
+  it.each(['Tree', 'Lanes'])('leaves Sources mode for %s and keeps the draft and reply', async (shape) => {
+    vi.spyOn(api, 'getReadingLibrary').mockResolvedValue({ items: [], next_before: null })
+    const message = msg({ author: human('u1', 'Amo'), text: 'A thought to reply to' })
+    const noop = () => undefined
+    function Conversation() {
+      const [shape, setShape] = useState<ConversationShape>('stream')
+      const [evidenceOpen, setEvidenceOpen] = useState(false)
+      const composerRef = useRef<MessageInputHandle>(null)
+      return <SurfaceConversation
+        roomId="room" messages={[message]} humans={[message.author]}
+        shape={shape} onShape={setShape} evidenceOpen={evidenceOpen} onEvidenceOpen={setEvidenceOpen}
+        wide onToggleWide={noop} anchor={null} onAnchor={noop} onClearAnchor={noop}
+        pendingRefs={[]} onRemovePendingRef={noop} onClearPendingRefs={noop}
+        composerRef={composerRef} typingUsers={[]} activityLabel={null}
+        onOpenRef={noop} onFork={noop} annotatorEnabled={false} addressedOnly
+        selectedEvidence={null} onSelectEvidence={noop} onStageRef={noop} onOpenFull={noop}
+        controls={{ messages: [message.message], currentUserId: 'u2', userNames: { u1: 'Amo' } }}
+        composer={{ draft: 'An unfinished reply', disabled: false, memberNames: ['Amo', 'Dan'],
+          send: () => false, onTypingStart: noop, onTypingStop: noop, onTypingContent: noop }}
+      />
+    }
+    const { container } = render(<Conversation />)
+    await waitFor(() => expect(api.getReadingLibrary).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Bring a source' }))
+    expect(screen.getByRole('region', { name: 'Conversation' })).toHaveClass('surf-conv--evidence-open')
+    fireEvent.click(screen.getByRole('button', { name: shape }))
+    expect(screen.getByRole('button', { name: 'Bring a source' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('region', { name: 'Conversation' })).not.toHaveClass('surf-conv--evidence-open')
+    expect(container.querySelector('.surf-evidence')).toBeNull()
+    expect(container.querySelector('textarea')).toHaveValue('An unfinished reply')
+    expect(container.querySelector('.reply-preview-bar')).toHaveTextContent('A thought to reply to')
   })
 })

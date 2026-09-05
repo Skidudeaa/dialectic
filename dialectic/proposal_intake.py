@@ -42,6 +42,7 @@ from html.parser import HTMLParser
 from typing import Any
 from uuid import UUID
 from markdown_it import MarkdownIt
+from markdown_it.rules_core import StateCore
 
 from proposal_envelope import PROPOSAL_LIST_SLOT, PROPOSAL_SLOTS
 
@@ -205,6 +206,23 @@ def validate_refs(value: Any) -> list[dict]:
     return out
 
 
+def _reading_task_lists(state: StateCore) -> None:
+    """Remove task checkboxes that the reading viewer strips from list items."""
+    for index in range(2, len(state.tokens)):
+        token, item = state.tokens[index], state.tokens[index - 2]
+        if (
+            token.type == "inline"
+            and state.tokens[index - 1].type == "paragraph_open"
+            and item.type == "list_item_open"
+            and token.map is not None
+            and item.map is not None
+            and token.map[0] == item.map[0]
+        ):
+            # Match raw first-line syntax before inline parsing can unescape
+            # literal markers or resolve [x] as a reference link.
+            token.content = re.sub(r"^\[[ xX]\][ \t]+(?=\S)", "", token.content, count=1)
+
+
 class _ReadingText(HTMLParser):
     """Extract rendered reading text so Markdown emphasis does not break a quotation."""
 
@@ -253,7 +271,9 @@ async def validate_reading_quotes(db: Any, room_id: UUID, refs: list[dict]) -> N
                 raise ProposalMetadataError("the source changed; reopen it before quoting")
             digest = requested
         parser = _ReadingText()
-        parser.feed(MarkdownIt("commonmark").enable(["table", "strikethrough"]).render(content))
+        markdown = MarkdownIt("commonmark").enable(["table", "strikethrough"])
+        markdown.core.ruler.before("inline", "reading_task_lists", _reading_task_lists)
+        parser.feed(markdown.render(content))
         if ref["quote"] not in " ".join("".join(parser.parts).split()):
             raise ProposalMetadataError("the selected passage does not match this source")
         ref["content_sha256"] = digest

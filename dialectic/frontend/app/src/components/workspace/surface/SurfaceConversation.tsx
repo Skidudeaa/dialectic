@@ -226,7 +226,7 @@ export function SurfaceConversation({
               type="button"
               className="surf-shape"
               aria-pressed={candidate === shape}
-              onClick={() => onShape(candidate)}
+              onClick={() => { onEvidenceOpen(false); onShape(candidate) }}
             >
               {SHAPE_LABELS[candidate]}
             </button>
