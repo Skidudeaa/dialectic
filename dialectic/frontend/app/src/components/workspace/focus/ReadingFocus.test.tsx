@@ -84,6 +84,15 @@ afterEach(() => {
 })
 
 describe('Reading Focus', () => {
+  it('hands the current source and version to the main conversation', async () => {
+    vi.mocked(api.getReadingDetail).mockResolvedValue(detail())
+    const onDiscussReading = vi.fn()
+    render(<FocusSurface {...baseProps} onDiscussReading={onDiscussReading} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Discuss in the main conversation' }))
+    expect(onDiscussReading).toHaveBeenCalledWith({
+      entity: 'reading_items', id: 'reading-1', label: 'Exact capture', content_sha256: 'a'.repeat(64),
+    })
+  })
   it('loads directly by room and id outside the 50-object workspace projection', async () => {
     vi.mocked(api.getReadingDetail).mockResolvedValue(detail())
     render(<FocusSurface {...baseProps} />)

@@ -1,92 +1,49 @@
-import { useMemo } from 'react'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
 import type { MessageAnchor, MessageRef } from '../../../../types'
-import { refGlyph, refKindLabel, type SurfaceMsg } from '../surfaceModel'
-import './shapes.css'
+import { MessageBubble } from '../../../chat/MessageBubble'
+import type { MessageListProps } from '../../../chat/MessageList'
+import { surfaceAuthor, type SurfaceMsg } from '../surfaceModel'
 
 export interface SurfaceMessageProps {
   msg: SurfaceMsg
+  controls?: MessageListProps
   onOpenRef?: (ref: MessageRef) => void
-  onReply?: (messageId: string) => void
-  /** Tapping the anchor chip focuses that node on the graph. */
+  onReply?: (id: string) => void
   onAnchor?: (anchor: MessageAnchor) => void
-  /** Lanes: clamp body to ~3 lines, smaller type. */
   compact?: boolean
   dimmed?: boolean
 }
 
-const ROLE_WORD: Record<string, string> = { provoker: 'PROVOKER', annotator: 'ANNOTATOR' }
-
-/**
- * One message on the working surface, shared by every shape (stream, tree,
- * lanes). Renders the SurfaceMsg view model directly — see surfaceModel.ts
- * for why the shapes never touch a raw Message.
- */
-export function SurfaceMessage({ msg, onOpenRef, onReply, onAnchor, compact, dimmed }: SurfaceMessageProps) {
-  // Same three-line idiom as MessageBubble.tsx: parse, then sanitize. No
-  // mention decoration here — that context (room roster) is not part of the
-  // surface view model.
-  const html = useMemo(
-    () => DOMPurify.sanitize(marked.parse(msg.text, { async: false }) as string),
-    [msg.text],
-  )
-  const roleWord = msg.author.role ? ROLE_WORD[msg.author.role] : undefined
-
+/** Alternate arrangements retain the exact same media, decisions and actions as Record. */
+export function SurfaceMessage({ msg, controls, onOpenRef, onReply, onAnchor, compact, dimmed }: SurfaceMessageProps) {
+  const parent = controls?.messages.find((message) => message.id === msg.parentId)
+  const names = controls?.userNames ?? {}
   return (
-    <article
-      className={`surf-msg${compact ? ' surf-msg-compact' : ''}${dimmed ? ' surf-msg-dimmed' : ''}`}
-      data-mid={msg.id}
-    >
-      <div className="surf-meta">
-        <span className="surf-glyph" aria-hidden="true">{msg.author.glyph}</span>
-        <span className="surf-author">{msg.author.name}</span>
-        {roleWord && <span className="surf-role">· {roleWord}</span>}
-        <span className="surf-time">{msg.time}</span>
-        {msg.isNew && <span className="surf-new">new</span>}
-        {msg.anchor && (
-          onAnchor ? (
-            <button
-              type="button"
-              className="surf-anchor-chip"
-              onClick={() => onAnchor(msg.anchor as MessageAnchor)}
-            >
-              ON {msg.anchor.label}
-            </button>
-          ) : (
-            <span className="surf-anchor-chip">ON {msg.anchor.label}</span>
-          )
-        )}
-        {onReply && (
-          <button type="button" className="surf-reply-btn" onClick={() => onReply(msg.id)}>
-            reply
-          </button>
-        )}
-      </div>
-      <div
-        className={`surf-body${msg.isStreaming ? ' surf-body-streaming' : ''}`}
-        dangerouslySetInnerHTML={{ __html: html }}
+    <article className={`surf-msg${compact ? ' surf-msg-compact' : ''}${dimmed ? ' surf-msg-dimmed' : ''}`} data-mid={msg.id}>
+      <MessageBubble
+        message={msg.message}
+        authorName={msg.author.name}
+        isSelf={msg.author.isSelf}
+        isStreaming={msg.isStreaming}
+        userNames={names}
+        mentionContext={{ names: Object.values(names), selfName: controls?.currentUserId ? names[controls.currentUserId] ?? null : null }}
+        currentUserId={controls?.currentUserId}
+        replyToAuthor={parent ? surfaceAuthor(parent, names, controls?.currentUserId ?? null).name : undefined}
+        replyToContent={parent?.content}
+        replyToMissing={Boolean(msg.message.references_message_id && !parent)}
+        reactions={controls?.reactions?.[msg.id]}
+        attachments={controls?.attachments?.[msg.id]}
+        marks={controls?.marksByMessage?.[msg.id]}
+        onFieldChanged={controls?.onFieldChanged}
+        onReply={onReply}
+        onFork={controls?.onFork}
+        onToggleReaction={controls?.onToggleReaction}
+        onEdit={controls?.onEditMessage}
+        onDelete={controls?.onDeleteMessage}
+        onOpenBench={controls?.onOpenBench}
+        onOpenRef={onOpenRef}
+        contextRef={controls?.contextRef}
+        onAnchor={onAnchor}
       />
-      {msg.tools.length > 0 && (
-        <div className="surf-tools">
-          checked: {msg.tools.map((t) => `${t.label}${t.ok ? '' : ' (failed)'}`).join(' · ')}
-        </div>
-      )}
-      {msg.refs.length > 0 && (
-        <div className="surf-refs">
-          {msg.refs.map((ref) => (
-            <button
-              key={`${ref.entity}:${ref.id}`}
-              type="button"
-              className="surf-ref-chip"
-              title={refKindLabel(ref.entity)}
-              onClick={() => onOpenRef?.(ref)}
-            >
-              {refGlyph(ref.entity)} {ref.label}
-            </button>
-          ))}
-        </div>
-      )}
     </article>
   )
 }

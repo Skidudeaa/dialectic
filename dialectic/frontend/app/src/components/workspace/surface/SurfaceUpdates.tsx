@@ -150,7 +150,12 @@ export function SurfaceUpdates(props: SurfaceUpdatesProps) {
       mark,
     })),
   ]
-  const capped = cards.slice(0, TRAY_CAP)
+  // A dense fire feed must not consume every slot before a person's new
+  // reading or mark gets a chance to appear. Preserve each kind's ranking.
+  const groups = ['reading', 'mark', 'fire'].map((kind) => cards.filter((card) => card.kind === kind))
+  const capped = Array.from({ length: Math.max(...groups.map((group) => group.length)) }, (_, i) =>
+    groups.flatMap((group) => group[i] ? [group[i]] : []),
+  ).flat().slice(0, TRAY_CAP)
 
   const headerTitle = effectiveSince === null
     ? (fellBack ? 'Latest updates · nothing new since you left' : 'Latest updates')

@@ -57,6 +57,7 @@ from proposal_intake import (
     MESSAGE_TAGS,
     ProposalMetadataError,
     validate_human_proposal_metadata,
+    validate_reading_quotes, inherit_reply_context,
 )
 from api.capabilities import (
     router as capabilities_router,
@@ -1349,6 +1350,10 @@ async def send_message(
         raise HTTPException(
             status_code=422, detail="refs do not resolve to rows in this room",
         )
+    try:
+        await validate_reading_quotes(db, room.id, (metadata or {}).get("refs", []))
+    except ProposalMetadataError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
     try:
         message_type = MessageType(request.message_type)
@@ -1368,6 +1373,10 @@ async def send_message(
                 status_code=404,
                 detail="Referenced message not found in this room",
             )
+        try:
+            metadata = await inherit_reply_context(db, room.id, request.references_message_id, metadata)
+        except ProposalMetadataError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
 
     now = datetime.now(timezone.utc)
     message_id = uuid4()

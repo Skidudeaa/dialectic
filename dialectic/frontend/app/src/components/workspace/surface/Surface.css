@@ -266,6 +266,7 @@
 /* ── Conversation pane ───────────────────────────────────────────────── */
 .surf-conv {
     display: flex;
+    container: conversation / inline-size;
     flex-direction: column;
     background: var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
@@ -354,7 +355,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding: 10px 12px 12px;
+    padding: 0;
     background: var(--color-obsidian);
 }
 /* Shapes that are not the stream scroll themselves. */
@@ -440,17 +441,13 @@
    chrome above the textarea was the difference between a stream you read
    and one you peer at. Touch targets keep their 44px. */
 .surf-compose .input-area-inner {
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
-    grid-template-areas:
-        "tags types"
-        "row row"
-        "hints hints";
-    column-gap: 14px;
-    align-items: center;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
 }
 .surf-compose .msg-tag-selector { grid-area: tags; }
-.surf-compose .msg-type-selector { grid-area: types; justify-content: flex-end; }
+.surf-compose .msg-type-selector { grid-area: types; flex-wrap: wrap; }
 .surf-compose .input-row { grid-area: row; }
 .surf-compose .input-hints { grid-area: hints; margin-top: 3px; }
 .surf-compose .attach-chips,
@@ -533,4 +530,97 @@
     .surf-conv,
     .surf-graph-pane .thesis-dag,
     .surf-pane-label { transition: none; }
+}
+
+/* Evidence stays beside the conversation at desk width and takes a deliberate
+   turn with it on smaller panes. Container size also covers the Split view. */
+.surf-conv .surf-stream { grid-template-columns: minmax(0, 1.45fr) minmax(290px, 1fr); border: 0; }
+.surf-conv .messages-viewport { min-width: 0; }
+.surf-conv .messages-container { padding: 14px 20px; background: var(--color-sheet); border: 0; }
+.surf-conv .surf-evidence-toggle { display: none; }
+.surf-evidence {
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding: 16px 18px 24px;
+    border-left: 1px solid var(--color-bean);
+    background: var(--color-well);
+    color: var(--color-ink);
+    font: 16px/1.55 var(--font-serif);
+}
+.surf-evidence-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--color-bean); padding-bottom: 10px; color: var(--color-bone); font: 12px var(--font-mono); text-transform: uppercase; letter-spacing: .08em; }
+.surf-evidence button { min-height: 36px; cursor: pointer; }
+.surf-evidence button:not(.drc-button) { color: var(--color-amber); background: transparent; border: 0; font: 12px var(--font-mono); text-align: left; }
+.surf-evidence button:focus-visible { outline: 2px solid var(--color-amber); outline-offset: 2px; }
+.surf-evidence-intro { margin: 14px 0; }
+.surf-evidence-search { display: grid; gap: 8px; margin-bottom: 14px; color: var(--color-faint); font: 12px var(--font-mono); }
+.surf-evidence-search input { width: 100%; padding: 10px; background: var(--color-cacao); color: var(--color-ink); border: 1px solid var(--color-bean); border-radius: var(--radius-sm); font: 14px var(--font-serif); }
+.surf-evidence h2 { font: 500 23px/1.25 var(--font-serif); color: var(--color-bone); margin: 16px 0 10px; overflow-wrap: anywhere; }
+.surf-evidence h4 { font: 12px var(--font-mono); color: var(--color-faint); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 10px; }
+.surf-evidence-actions { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-block: 12px; }
+.surf-evidence-quoted, .surf-evidence-selection { margin: 12px 0; padding: 8px 12px; border-left: 2px solid var(--color-amber); background: var(--color-cacao); overflow-wrap: anywhere; }
+.surf-evidence-selection { border-left-color: var(--color-teal); }
+.surf-evidence-exchanges { border-block: 1px solid var(--color-bean); padding-block: 14px; margin-block: 14px; }
+.surf-evidence-exchange + .surf-evidence-exchange { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--color-bean); }
+.surf-evidence .surf-evidence-word { display: grid; grid-template-columns: 1fr auto; width: 100%; gap: 6px; padding: 0; color: var(--color-ink); }
+.surf-evidence-word b { color: var(--color-bone); }
+.surf-evidence-word time { color: var(--color-faint); }
+.surf-evidence-word span { grid-column: 1 / -1; font: 16px/1.5 var(--font-serif); overflow-wrap: anywhere; }
+.surf-evidence-hint, .surf-evidence-notice { font: 12px/1.6 var(--font-mono); color: var(--color-faint); }
+.surf-evidence-notice { border-left: 2px solid var(--color-amber); padding-left: 10px; }
+.surf-evidence-document { overflow-wrap: anywhere; }
+.surf-evidence-document .reading-markdown { max-height: none; overflow: visible; }
+.surf-evidence-document ::selection { background: var(--color-amber); color: var(--color-void); }
+.surf-evidence-document img { max-width: 100%; height: auto; }
+.surf-evidence-document pre { overflow-x: auto; white-space: pre; }
+.surf-compose-passages { max-height: 120px; overflow-y: auto; padding: 6px 14px; background: var(--color-well); }
+.surf-compose-passages blockquote { margin: 4px 0; padding-left: 12px; border-left: 2px solid var(--color-amber); color: var(--color-ink); font: 15px/1.45 var(--font-serif); }
+.surf-compose-passages span { display: block; color: var(--color-faint); font: 11px/1.5 var(--font-mono); }
+.surf-conv .surf-msg { min-width: 0; }
+.surf-conv-banners { max-height: 160px; overflow-y: auto; }
+@container conversation (max-width: 760px) {
+    .surf-conv .surf-stream { grid-template-columns: minmax(0, 1fr); }
+    .surf-conv .surf-evidence { display: none; border-left: 0; }
+    .surf-conv .surf-evidence-toggle { display: inline-flex; }
+    .surf-conv--evidence-open .surf-evidence { display: block; }
+    .surf-conv--evidence-open .surf-stream > .messages-viewport { display: none; }
+    .surf-conv .messages-container { padding: 12px; }
+}
+@media (max-width: 680px) {
+    .surf-conv .surf-conv-kicker { font-size: 10px; letter-spacing: .05em; }
+    .surf-conv .surf-conv-head { padding: 7px 9px; gap: 5px; }
+    .surf-conv .surf-conv-body { padding: 0; }
+    .surf-evidence { padding: 12px; }
+}
+.surf-evidence-actions { position: sticky; top: -16px; z-index: 2; padding-block: 8px; background: var(--color-well); border-bottom: 1px solid var(--color-bean); }
+.surf-evidence-exchanges summary { cursor: pointer; font: 12px/1.6 var(--font-mono); color: var(--color-bone); }
+.surf-evidence-exchanges[open] summary { margin-bottom: 14px; }
+.surf-evidence-document .reading-focus-prose { font-size: 16px; line-height: 1.65; }
+.surf-evidence-document .reading-focus-prose :is(h1,h2,h3) { color: var(--color-bone); }
+@container conversation (max-width: 760px) {
+    .surf-conv--evidence-open .surf-compose { display: none; }
+    .surf-conv .surf-compose-line { text-transform: none; letter-spacing: 0; gap: 4px; padding-block: 5px; }
+    .surf-conv .surf-chip { overflow-wrap: anywhere; min-width: 0; }
+    .surf-conv .input-hints-right { display: none; }
+    .surf-conv .dr-companion.input-area-inner { padding: 8px; }
+    .surf-conv .input-area { padding: 5px; }
+    .surf-conv .surf-compose-passages { max-height: 80px; }
+}
+@media (max-width: 680px) {
+    .surf--wide .surf-conv, .surf .surf-conv { min-height: 560px; }
+    .surf-conv .surf-conv-head > .surf-pane-lamp,
+    .surf-conv .surf-conv-kicker,
+    .surf-conv .surf-shape--wide { display: none; }
+    .surf-conv .surf-shapes { width: auto; order: 0; }
+    .surf-conv .surf-wide-toggle { flex: 0 0 auto; }
+    .surf-conv .surf-shapes[aria-label='Conversation shape'] { flex: 1; }
+    .surf-conv .surf-shape { font-size: 11px; letter-spacing: 0; padding-inline: 6px; min-height: 36px; }
+    .surf-conv .input-hints > span:not([role]) { display: none; }
+    .surf-conv .reply-preview-bar { padding-block: 0; margin-bottom: 0; }
+}
+.surf-stream-record { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+@container conversation (max-width: 760px) {
+    .surf-conv--evidence-open .surf-stream-record { display: none; }
 }

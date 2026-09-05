@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { MessageAnchor, MessageRef } from '../../../../types'
 import { WHOLE_ROOM_TOPIC, type DailyActivity, type SurfaceAuthor, type SurfaceMsg } from '../surfaceModel'
@@ -7,6 +7,8 @@ import { ShapeStream } from './ShapeStream'
 import { ShapeTree } from './ShapeTree'
 import { ShapeLanes } from './ShapeLanes'
 import { ShapeSignal } from './ShapeSignal'
+import { api } from '../../../../lib/api'
+import { useAppStore } from '../../../../stores/appStore'
 
 function human(id: string, name: string): SurfaceAuthor {
   return { id, name, kind: 'human', glyph: name.charAt(0).toUpperCase(), isSelf: false }
@@ -32,6 +34,16 @@ function msg(overrides: Partial<SurfaceMsg> & { author: SurfaceAuthor }): Surfac
     isNew: overrides.isNew ?? false,
     isStreaming: overrides.isStreaming ?? false,
     topic: overrides.topic ?? WHOLE_ROOM_TOPIC,
+    message: overrides.message ?? {
+      id: overrides.id ?? `m${seq}`, thread_id: 'thread', sequence: seq,
+      created_at: overrides.createdAt ?? '2026-09-01T10:00:00Z',
+      speaker_type: overrides.author.kind === 'human' ? 'human' : 'llm_primary',
+      user_id: overrides.author.kind === 'human' ? overrides.author.id : null,
+      user_name: overrides.author.name,
+      content: overrides.text ?? 'hello', message_type: 'text',
+      references_message_id: overrides.parentId,
+      metadata: { ...(overrides.anchor ? { anchor: overrides.anchor } : {}), refs: overrides.refs },
+    },
   }
 }
 
@@ -59,6 +71,29 @@ describe('SurfaceMessage', () => {
 })
 
 describe('ShapeStream', () => {
+  it('keeps a Round actionable on the default Surface', async () => {
+    const previousRoom = useAppStore.getState().currentRoom
+    useAppStore.setState({ currentRoom: { id: 'room', name: 'Room', token: 'token', is_home: false } })
+    const state = { message_id: 'round', peers: [], questions: [{
+      commitment_id: 'q', claim: 'Will shipping resume by Friday?', closes: '2099-09-10', status: 'active',
+      resolution: null, my_forecast: null, my_peer_forecast: null, my_revisions: 0,
+      house_committed: false, revealed: false, waiting_on_other: false,
+    }] }
+    vi.spyOn(api, 'readRound').mockResolvedValue(state)
+    const forecast = vi.spyOn(api, 'recordForecast').mockResolvedValue(state)
+    const round = msg({ id: 'round', author: machine(), text: 'The Round' })
+    round.message.metadata = { question_round: { opened: '2026-09-05', questions: [] } }
+    try {
+      render(<ShapeStream messages={[round]} onOpenRef={vi.fn()} />)
+      await screen.findByText('Will shipping resume by Friday?')
+      fireEvent.change(screen.getByRole('slider', { name: 'you' }), { target: { value: '0.7' } })
+      fireEvent.click(screen.getByRole('button', { name: 'lock in' }))
+      await waitFor(() => expect(forecast).toHaveBeenCalledWith('room', 'q', 0.7, undefined, null))
+    } finally {
+      act(() => useAppStore.setState({ currentRoom: previousRoom }))
+    }
+  })
+
   it('renders every message', () => {
     const messages = [
       msg({ id: 'm1', author: human('u1', 'Amo'), text: 'first' }),
@@ -69,12 +104,13 @@ describe('ShapeStream', () => {
     expect(screen.getByText('second')).toBeInTheDocument()
   })
 
-  it('shows the empty-rail text when nothing is in view (jsdom has no IntersectionObserver)', () => {
+  it('keeps the source inspector available beside a conversation without viewport-dependent links', () => {
     const messages = [
       msg({ author: human('u1', 'Amo'), refs: [{ entity: 'memories', id: 'x1', label: 'a memory' }] }),
     ]
-    render(<ShapeStream messages={messages} onOpenRef={vi.fn()} />)
-    expect(screen.getByText('Nothing in view links to an object yet.')).toBeInTheDocument()
+    render(<ShapeStream messages={messages} context={<aside>Choose a reading</aside>} onOpenRef={vi.fn()} />)
+    expect(screen.getByText('Choose a reading')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /a memory/ })).toBeEnabled()
   })
 })
 

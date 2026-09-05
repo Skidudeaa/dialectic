@@ -3,6 +3,7 @@ import { PARTICIPANT_NAME } from '../../../../lib/productIdentity'
 import type { MessageRef } from '../../../../types'
 import { WHOLE_ROOM_TOPIC, type SurfaceAuthor, type SurfaceMsg } from '../surfaceModel'
 import { SurfaceMessage } from './SurfaceMessage'
+import type { MessageListProps } from '../../../chat/MessageList'
 import './shapes.css'
 
 export interface ShapeLanesProps {
@@ -11,6 +12,7 @@ export interface ShapeLanesProps {
   humans: SurfaceAuthor[]
   onOpenRef: (ref: MessageRef) => void
   onReply?: (id: string) => void
+  controls?: MessageListProps
 }
 
 interface Column {
@@ -66,7 +68,7 @@ function whoseMove(bandMessages: SurfaceMsg[], humans: SurfaceAuthor[]): string 
  * column — a per-band readout of who has spoken, how much of it is machine,
  * and whose move it reads as.
  */
-export function ShapeLanes({ messages, humans, onOpenRef, onReply }: ShapeLanesProps) {
+export function ShapeLanes({ messages, humans, onOpenRef, onReply, controls }: ShapeLanesProps) {
   const columns = useMemo(() => buildColumns(humans), [humans])
 
   const bands = useMemo(() => {
@@ -109,7 +111,7 @@ export function ShapeLanes({ messages, humans, onOpenRef, onReply }: ShapeLanesP
                   <div key={`${col.kind}:${col.id}`} className="surf-lane-cell">
                     <span className="surf-lane-cell-author">{col.label}</span>
                     {cellMsgs.map((m) => (
-                      <SurfaceMessage key={m.id} msg={m} onOpenRef={onOpenRef} onReply={onReply} compact />
+                      <SurfaceMessage key={m.id} msg={m} controls={controls} onOpenRef={onOpenRef} onReply={onReply} compact />
                     ))}
                   </div>
                 )

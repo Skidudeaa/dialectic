@@ -36,8 +36,12 @@
 # submitting "thesis_draft" metadata into, because no door stores one.
 
 from datetime import date
+import hashlib
+import re
+from html.parser import HTMLParser
 from typing import Any
 from uuid import UUID
+from markdown_it import MarkdownIt
 
 from proposal_envelope import PROPOSAL_LIST_SLOT, PROPOSAL_SLOTS
 
@@ -187,8 +191,92 @@ def validate_refs(value: Any) -> list[dict]:
         if key in seen:
             continue
         seen.add(key)
-        out.append({"entity": entity, "id": ident, "label": label})
+        clean = {"entity": entity, "id": ident, "label": label}
+        if ref.get("quote") is not None:
+            if entity != "reading_items":
+                raise ProposalMetadataError("quoted passages must refer to a reading")
+            clean["quote"] = " ".join(_require_str(ref, "quote", max_len=300).split())
+        if ref.get("content_sha256") is not None:
+            digest = ref["content_sha256"]
+            if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                raise ProposalMetadataError("source content_sha256 must be a SHA-256 digest")
+            clean["content_sha256"] = digest
+        out.append(clean)
     return out
+
+
+class _ReadingText(HTMLParser):
+    """Extract rendered reading text so Markdown emphasis does not break a quotation."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"p", "div", "li", "blockquote", "pre", "td", "th", "tr", "h1", "h2", "h3", "h4", "h5", "h6"}:
+            self.parts.append(" ")
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "br":
+            self.parts.append(" ")
+
+
+async def validate_reading_quotes(db: Any, room_id: UUID, refs: list[dict]) -> None:
+    """Validate new quotations against a room's current or immutable reading revision.
+
+    Stamp legacy readings with their actual content hash. Raises ProposalMetadataError
+    when the cited version or selected words cannot be found; never rewrites a quote.
+    """
+    for ref in refs:
+        if not ref.get("quote"):
+            continue
+        reading = await db.fetchrow(
+            "SELECT content FROM reading_items WHERE id = $1 AND room_id = $2",
+            UUID(ref["id"]), room_id,
+        )
+        if reading is None:
+            raise ProposalMetadataError("quoted reading is not in this room")
+        content = reading["content"]
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        requested = ref.get("content_sha256")
+        if requested and requested != digest:
+            content = await db.fetchval(
+                """SELECT content FROM reading_revisions
+                   WHERE reading_id = $1 AND room_id = $2 AND content_sha256 = $3
+                   ORDER BY captured_at DESC LIMIT 1""",
+                UUID(ref["id"]), room_id, requested,
+            )
+            if content is None:
+                raise ProposalMetadataError("the source changed; reopen it before quoting")
+            digest = requested
+        parser = _ReadingText()
+        parser.feed(MarkdownIt("commonmark").enable(["table", "strikethrough"]).render(content))
+        if ref["quote"] not in " ".join("".join(parser.parts).split()):
+            raise ProposalMetadataError("the selected passage does not match this source")
+        ref["content_sha256"] = digest
+
+
+async def inherit_reply_context(db: Any, room_id: UUID, parent_id: UUID, metadata: dict | None) -> dict | None:
+    """Keep a reply attached to its parent's evidence and graph anchor in the same room."""
+    parent = await db.fetchval(
+        """SELECT m.metadata FROM messages m JOIN threads t ON t.id = m.thread_id
+           WHERE m.id = $1 AND t.room_id = $2""", parent_id, room_id,
+    )
+    if not isinstance(parent, dict):
+        return metadata
+    out = dict(metadata or {})
+    if parent.get("anchor") and not out.get("anchor"):
+        out["anchor"] = parent["anchor"]
+    refs = {(r["entity"], r["id"]): r for r in parent.get("refs", [])}
+    refs.update({(r["entity"], r["id"]): r for r in out.get("refs", [])})
+    if len(refs) > _MAX_REFS:
+        raise ProposalMetadataError(f"a reply carries at most {_MAX_REFS} sources")
+    if refs:
+        out["refs"] = list(refs.values())
+    return out or None
 
 
 class ProposalMetadataError(ValueError):

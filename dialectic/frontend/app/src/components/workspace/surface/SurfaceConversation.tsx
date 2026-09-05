@@ -3,6 +3,8 @@ import type { Attachment, DailyActivity, Message, MessageAnchor, MessageRef } fr
 import { api } from '../../../lib/api.ts'
 import { MessageInput, type MessageInputHandle } from '../../chat/MessageInput'
 import { TypingIndicator } from '../../chat/TypingIndicator'
+import type { MessageListProps } from '../../chat/MessageList'
+import { SurfaceEvidence } from './SurfaceEvidence'
 import { ShapeStream } from './shapes/ShapeStream'
 import { ShapeTree } from './shapes/ShapeTree'
 import { ShapeLanes } from './shapes/ShapeLanes'
@@ -26,12 +28,13 @@ export interface SurfaceComposer {
     attachmentIds: string[],
     tags: string[],
     opts: { replyToId: string | null; anchor: MessageAnchor | null; refs: MessageRef[] },
-  ) => boolean
+  ) => boolean | Promise<boolean>
   onTypingStart: () => void
   onTypingStop: () => void
   onTypingContent: (content: string) => void
   disabled: boolean
   memberNames: string[]
+  draft?: string
 }
 
 export interface SurfaceConversationProps {
@@ -50,7 +53,7 @@ export interface SurfaceConversationProps {
   /** Refs staged for the next message (an update dropped onto a node). */
   pendingRefs: MessageRef[]
   onRemovePendingRef: (ref: MessageRef) => void
-  onClearPendingRefs: () => void
+  onClearPendingRefs: (sentRefs: MessageRef[]) => void
   composer: SurfaceComposer
   composerRef: React.Ref<MessageInputHandle>
   typingUsers: string[]
@@ -59,15 +62,51 @@ export interface SurfaceConversationProps {
   onFork: (messageId: string) => void
   annotatorEnabled: boolean | null
   addressedOnly: boolean | null
+  controls: MessageListProps
+  selectedEvidence: MessageRef | null
+  onSelectEvidence: (ref: MessageRef | null) => void
+  onStageRef: (ref: MessageRef) => void
+  onOpenFull: (ref: MessageRef) => void
+  evidenceOpen: boolean
+  onEvidenceOpen: (open: boolean) => void
+  banners?: React.ReactNode
 }
 
 export function SurfaceConversation({
   roomId, messages, humans, shape, onShape, wide, onToggleWide, anchor, onClearAnchor, onAnchor,
   pendingRefs, onRemovePendingRef, onClearPendingRefs, composer, composerRef,
   typingUsers, activityLabel, onOpenRef, onFork, annotatorEnabled, addressedOnly,
+  controls, selectedEvidence, onSelectEvidence, onStageRef, onOpenFull, banners, evidenceOpen, onEvidenceOpen,
 }: SurfaceConversationProps) {
   const [onlyAnchored, setOnlyAnchored] = useState(false)
   const [replyToId, setReplyToId] = useState<string | null>(null)
+  const [localJump, setLocalJump] = useState<{ id: string; nonce: number } | null>(null)
+  const rootRef = useRef<HTMLElement>(null)
+  const [compactPane, setCompactPane] = useState(() => window.innerWidth <= 760)
+  useEffect(() => {
+    if (!rootRef.current || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(([entry]) => setCompactPane(entry.contentRect.width <= 760))
+    observer.observe(rootRef.current)
+    return () => observer.disconnect()
+  }, [])
+
+  function reply(id: string) {
+    const message = messages.find((candidate) => candidate.id === id)
+    if (!message || message.isStreaming) return
+    setReplyToId(id)
+    if (message.anchor) onAnchor(message.anchor)
+    else onClearAnchor()
+    if (message.refs[0]) onSelectEvidence(message.refs[0])
+    if (composerRef && 'current' in composerRef) composerRef.current?.focus()
+  }
+
+  const evidence = <SurfaceEvidence
+    roomId={roomId} messages={messages} selected={selectedEvidence}
+    onSelect={onSelectEvidence} onOpenFull={onOpenFull}
+    onDiscuss={(ref) => { onStageRef(ref); onEvidenceOpen(false) }}
+    onReply={(id) => { reply(id); onEvidenceOpen(false) }}
+    onJump={(id) => { onShape('stream'); setOnlyAnchored(false); setLocalJump({ id, nonce: Date.now() }); onEvidenceOpen(false) }}
+  />
 
   const shown = useMemo(() => {
     if (!anchor || !onlyAnchored) return messages
@@ -119,7 +158,7 @@ export function SurfaceConversation({
         />
       )
     }
-    if (shown.length === 0) {
+    if (shown.length === 0 && shape !== 'stream') {
       return (
         <p className="surf-conv-empty">
           {anchor && onlyAnchored
@@ -129,20 +168,24 @@ export function SurfaceConversation({
       )
     }
     if (shape === 'tree') {
-      return <ShapeTree messages={shown} onOpenRef={onOpenRef} onReply={setReplyToId} onFork={onFork} />
+      return <ShapeTree messages={shown} controls={controls} onOpenRef={onOpenRef} onReply={reply} onFork={onFork} />
     }
     if (shape === 'lanes') {
-      return <ShapeLanes messages={shown} humans={humans} onOpenRef={onOpenRef} onReply={setReplyToId} />
+      return <ShapeLanes messages={shown} controls={controls} humans={humans} onOpenRef={onOpenRef} onReply={reply} />
     }
-    return <ShapeStream messages={shown} onOpenRef={onOpenRef} onReply={setReplyToId} onAnchor={onAnchor} />
+    const jumpTarget = (localJump?.nonce ?? 0) > (controls.jumpTarget?.nonce ?? 0) ? localJump : controls.jumpTarget
+    return <ShapeStream messages={shown} controls={{ ...controls, jumpTarget, contextRef: selectedEvidence,
+      onSeen: evidenceOpen && compactPane ? undefined : controls.onSeen }}
+      context={evidence} onOpenRef={onOpenRef} onReply={reply} onAnchor={onAnchor} />
   })()
 
   const placeholder = anchor
     ? `Think out loud… what you write lands on ${anchor.label}.`
-    : `Think out loud… it lands on the whole room. Focus a node to speak to it.`
+    : pendingRefs.length ? 'What caught your attention? What does it change?'
+    : 'Think out loud, share a link, or bring a source to the table…'
 
   return (
-    <section className="surf-conv" aria-label="Conversation">
+    <section ref={rootRef} className={`surf-conv${evidenceOpen ? ' surf-conv--evidence-open' : ''}`} aria-label="Conversation">
       <div className="surf-conv-head">
         <span className="surf-pane-lamp" aria-hidden="true" />
         <span className="surf-conv-kicker">
@@ -160,6 +203,11 @@ export function SurfaceConversation({
           </label>
         )}
         <div className="surf-shapes surf-wide-toggle" role="group" aria-label="Conversation width">
+          <button type="button" className="surf-shape surf-evidence-toggle" aria-pressed={evidenceOpen}
+            aria-label={evidenceOpen ? 'Back to conversation' : 'Bring a source'}
+            onClick={() => { onShape('stream'); onEvidenceOpen(!evidenceOpen) }}>
+            {evidenceOpen ? 'Conversation' : 'Sources'}
+          </button>
           <button
             type="button"
             className="surf-shape surf-shape--wide"
@@ -186,23 +234,23 @@ export function SurfaceConversation({
         </div>
       </div>
 
+      {banners && <div className="surf-conv-banners">{banners}</div>}
       <div className={`surf-conv-body${shape === 'stream' ? '' : ' surf-conv-body--scroll'}`}>
         {body}
       </div>
 
       <div className="surf-compose">
         <TypingIndicator typingUsers={typingUsers} activityLabel={activityLabel} />
-        {(anchor || pendingRefs.length > 0) && (
+        {(anchor || pendingRefs.length > 0 || Boolean(replyToId && messages.find((m) => m.id === replyToId)?.refs.length)) && (
           <div className="surf-compose-line">
-            <span>lands on</span>
+            {anchor && <span>lands on</span>}
             {anchor ? (
               <span className="surf-chip surf-chip--anchor">
                 {anchor.kind === 'edge' ? '⇢' : '⚒'} {anchor.label}
-                <button type="button" aria-label={`Stop speaking to ${anchor.label}`} onClick={onClearAnchor}>×</button>
+                <button type="button" aria-label={`Clear ${anchor.label}${replyToId ? ' and stop replying' : ''}`}
+                  onClick={() => { onClearAnchor(); setReplyToId(null) }}>×</button>
               </span>
-            ) : (
-              <span className="surf-chip">the whole room</span>
-            )}
+            ) : null}
             {pendingRefs.length > 0 && <span>attaching</span>}
             {pendingRefs.map((ref) => (
               <span key={`${ref.entity}:${ref.id}`} className="surf-chip">
@@ -210,11 +258,19 @@ export function SurfaceConversation({
                 <button type="button" aria-label={`Remove ${ref.label}`} onClick={() => onRemovePendingRef(ref)}>×</button>
               </span>
             ))}
+            {replyToId && pendingRefs.length === 0 && messages.find((m) => m.id === replyToId)?.refs.map((ref) => (
+              <span key={`${ref.entity}:${ref.id}`} className="surf-chip">Reply keeps {ref.label}</span>
+            ))}
           </div>
         )}
+        {pendingRefs.some((ref) => ref.quote) && <div className="surf-compose-passages" aria-label="Passages attached to your next message">
+          {pendingRefs.filter((ref) => ref.quote).map((ref) => <blockquote key={ref.id}><span>{ref.label}</span>{ref.quote}</blockquote>)}
+        </div>}
         <MessageInput
+          compactOptions
           roomId={roomId}
           composerRef={composerRef}
+          initialValue={composer.draft}
           memberNames={composer.memberNames}
           placeholder={placeholder}
           disabled={composer.disabled}
@@ -223,15 +279,15 @@ export function SurfaceConversation({
           onTypingStart={composer.onTypingStart}
           onTypingStop={composer.onTypingStop}
           onTypingContent={composer.onTypingContent}
-          onSend={(content, messageType, files: Attachment[], tags) => {
-            const sent = composer.send(content, messageType, files.map((f) => f.id), tags, {
+          onSend={async (content, messageType, files: Attachment[], tags) => {
+            const sent = await composer.send(content, messageType, files.map((f) => f.id), tags, {
               replyToId: replyTarget ? replyToId : null,
               anchor,
               refs: pendingRefs,
             })
             if (!sent) return false
-            setReplyToId(null)
-            onClearPendingRefs()
+            setReplyToId((current) => current === replyToId ? null : current)
+            onClearPendingRefs(pendingRefs)
             return true
           }}
         />

@@ -32,6 +32,8 @@ export interface SurfaceTool {
 }
 
 export interface SurfaceMsg {
+  /** Retain the complete message so every shape uses the Record renderer. */
+  message: Message
   id: string
   author: SurfaceAuthor
   /** ISO timestamp, verbatim. */
@@ -114,7 +116,7 @@ export function messageRefs(message: Pick<Message, 'metadata'>): MessageRef[] {
     const key = `${ref.entity}:${ref.id}`
     if (seen.has(key)) continue
     seen.add(key)
-    out.push({ entity: ref.entity, id: ref.id, label: ref.label || ref.id })
+    out.push({ ...ref, label: ref.label || ref.id })
   }
   return out
 }
@@ -140,6 +142,7 @@ export function toSurfaceMessages(messages: Message[], options: ToSurfaceOptions
     const isStreaming = message.id === options.streamingId
     const created = new Date(message.created_at).getTime()
     return {
+      message,
       id: message.id,
       author,
       createdAt: message.created_at,
@@ -151,7 +154,7 @@ export function toSurfaceMessages(messages: Message[], options: ToSurfaceOptions
       tools: calls.map((call) => ({ name: call.name, label: call.label ?? call.name, ok: call.ok })),
       isNew: since !== null && !author.isSelf && !isStreaming && created > since,
       isStreaming,
-      topic: anchor?.label || WHOLE_ROOM_TOPIC,
+      topic: anchor?.label || messageRefs(message)[0]?.label || WHOLE_ROOM_TOPIC,
     }
   })
 }

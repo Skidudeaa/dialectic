@@ -228,9 +228,18 @@ def _inherit_anchor(metadata: Optional[dict], messages: list) -> Optional[dict]:
         (m for m in reversed(messages) if m.speaker_type == SpeakerType.HUMAN), None,
     )
     anchor = (latest.metadata or {}).get("anchor") if latest and isinstance(latest.metadata, dict) else None
-    if not isinstance(anchor, dict):
-        return metadata
-    return {**(metadata or {}), "anchor": anchor}
+    out = dict(metadata or {})
+    if isinstance(anchor, dict):
+        out["anchor"] = anchor
+    # A reply keeps the source the human put on the table even when the
+    # participant needs no tool call to discuss the selected passage.
+    human_refs = (latest.metadata or {}).get("refs", []) if latest else []
+    refs = {(r["entity"], r["id"]): r for r in human_refs}
+    for ref in out.get("refs", []):
+        refs.setdefault((ref["entity"], ref["id"]), ref)
+    if refs:
+        out["refs"] = list(refs.values())[:12]
+    return out or None
 
 
 @dataclass

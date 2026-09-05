@@ -11,7 +11,7 @@ import { useRoomNavigation, type RoomNavigation } from './hooks/useRoomNavigatio
 import { useDocumentVisibility } from './hooks/useDocumentVisibility.ts'
 import { useAwayAlerts } from './hooks/useAwayAlerts.ts'
 import { usePushSubscription } from './hooks/usePushSubscription.ts'
-import type { Message, SearchResult, ThesisSeed, Thread, ThreadNode, TradingSnapshot } from './types/index.ts'
+import type { Message, MessageRef, SearchResult, ThesisSeed, Thread, ThreadNode, TradingSnapshot } from './types/index.ts'
 import { AppLayout } from './components/layout/AppLayout'
 import { RoomHeader } from './components/layout/RoomHeader'
 import { RoomSettingsDialog } from './components/layout/RoomSettingsDialog'
@@ -38,6 +38,7 @@ import { LedgerScene } from './components/workspace/scenes/LedgerScene'
 import { FieldScene } from './components/workspace/scenes/FieldScene'
 import { AtlasScene } from './components/workspace/scenes/AtlasScene'
 import { SurfaceScene } from './components/workspace/surface/SurfaceScene'
+import { refFocusId } from './components/workspace/surface/surfaceModel'
 import { MirrorPanel } from './components/workspace/MirrorPanel'
 import { FocusSurface } from './components/workspace/focus/FocusSurface.tsx'
 import { bareMarkId } from './components/workspace/fieldDisplay.ts'
@@ -168,6 +169,8 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // The nonce makes a repeat jump to the same message a distinct value, so the
   // stream re-scrolls instead of ignoring an unchanged prop.
   const [jumpTarget, setJumpTarget] = useState<{ id: string; nonce: number } | null>(null)
+  const [readingRequest, setReadingRequest] = useState<{ roomId: string; ref: MessageRef } | null>(null)
+  const readingReceived = useCallback(() => setReadingRequest(null), [])
 
   const handleLogout = useCallback(() => {
     if (refreshToken) void api.logoutSession(refreshToken).catch(() => undefined)
@@ -191,6 +194,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     isConnected,
     send,
     sendMessage,
+    sendMessageWithReceipt,
     sendDeepDive,
     sendTypingStart,
     sendTypingStop,
@@ -782,6 +786,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
             onFieldChanged={refreshField}
             unreadSince={unreadSince}
             onSeen={handleSeen}
+            onOpenRef={(ref) => { const id = refFocusId(ref); if (id) openWorkspaceObject({ id }) }}
             jumpTarget={jumpTarget}
             reactions={reactions}
             attachments={attachments}
@@ -932,7 +937,9 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // slots; nothing here is a second write path.
   const surfaceScene = (
     <SurfaceScene
-      key={currentRoom.id}
+      key={`${currentRoom.id}:${currentThread?.id ?? ''}`}
+      readingRequest={readingRequest?.roomId === currentRoom.id ? readingRequest.ref : null}
+      onReadingReceived={readingReceived}
       roomId={currentRoom.id}
       roomName={currentRoom.name ?? 'Dialectic'}
       currentUserId={user.id}
@@ -944,13 +951,25 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
       tradingConfig={tradingConfig}
       geo={roomGeo}
       fieldMarks={fieldMarks}
+      conversation={{
+        messages: displayMessages, currentUserId: user.id, userNames,
+        streamingMessageId: isLLMStreaming ? STREAMING_ID : null,
+        marksByMessage, onFieldChanged: refreshField, unreadSince,
+        onSeen: handleSeen, jumpTarget, reactions, attachments,
+        onToggleReaction: toggleReaction, onEditMessage: editMessageContent,
+        onDeleteMessage: deleteMessage, onFork: forkFromMessage,
+        onOpenBench: (seed) => { void openThesisSeed(seed) },
+      }}
+      banners={activeProtocol ? <ProtocolBanner protocol={activeProtocol} onAdvance={advanceProtocol} onAbort={abortProtocol} /> : null}
       composer={{
-        send: (content, messageType, attachmentIds, tags, opts) => {
-          const sent = sendMessage(content, messageType, opts.replyToId, attachmentIds, tags, {
+        draft: composerDraft,
+        send: async (content, messageType, attachmentIds, tags, opts) => {
+          const sent = await sendMessageWithReceipt(content, messageType, opts.replyToId, attachmentIds, tags, {
             anchor: opts.anchor,
             refs: opts.refs,
           })
-          if (sent) setComposerDraft('')
+          if (sent && useAppStore.getState().currentThread?.id === currentThread?.id
+            && useAppStore.getState().currentRoom?.id === currentRoom.id) setComposerDraft('')
           return sent
         },
         onTypingStart: sendTypingStart,
@@ -1205,6 +1224,12 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
                   state instead of resolving to "not here". */}
               {!isHome && objectId && (
                 <FocusSurface
+                  onDiscussReading={(ref) => {
+                    setReadingRequest({ roomId: currentRoom.id, ref })
+                    void navigate({ roomId: currentRoom.id,
+                      threadId: threads.find((thread) => thread.room_id === currentRoom.id && thread.parent_thread_id === null)?.id ?? null,
+                      scene: 'surface', object: null }, 'push')
+                  }}
                   objectId={objectId}
                   objects={workspaceObjects}
                   fieldMarks={fieldMarks}

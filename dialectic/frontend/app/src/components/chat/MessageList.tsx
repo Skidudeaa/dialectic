@@ -1,13 +1,13 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { PARTICIPANT_NAME, participantDisplayName } from '../../lib/productIdentity.ts'
-import type { Attachment, Message, Reaction , ThesisSeed } from '../../types'
+import type { Attachment, Message, MessageAnchor, MessageRef, Reaction , ThesisSeed } from '../../types'
 import { useDocumentVisibility } from '../../hooks/useDocumentVisibility'
 import { MessageBubble } from './MessageBubble'
 import type { MentionContext } from '../../lib/mentions'
 import type { FieldMark } from '../../types/workspace.ts'
 import './MessageList.css'
 
-interface MessageListProps {
+export interface MessageListProps {
   messages: Message[]
   currentUserId: string | null
   onFork?: (messageId: string) => void
@@ -38,6 +38,9 @@ interface MessageListProps {
   emptyKind?: 'dialogue' | 'hearth'
   /** Carried down to a thesis-proposal card so it can ask for the Bench. */
   onOpenBench?: (seed: ThesisSeed) => void
+  onOpenRef?: (ref: MessageRef) => void
+  contextRef?: MessageRef | null
+  onAnchor?: (anchor: MessageAnchor) => void
 }
 
 /**
@@ -60,6 +63,7 @@ function continuesPrevious(current: Message, previous: Message | undefined): boo
   // would suppress that entire row and make the tag exist only after search
   // or reload, so a tagged contribution always starts a visible entry.
   if ((current.metadata?.tags?.length ?? 0) > 0) return false
+  if (current.references_message_id || current.metadata?.refs?.length || current.metadata?.anchor) return false
   if (current.speaker_type !== previous.speaker_type) return false
   // Distinguishes the two humans; both are null for Claude, whose speaker_type
   // has already separated primary from provoker from annotator.
@@ -133,6 +137,9 @@ export function MessageList({
   onDeleteMessage,
   emptyKind = 'dialogue',
   onOpenBench,
+  onOpenRef,
+  contextRef,
+  onAnchor,
 }: MessageListProps) {
   /**
    * The room's humans, for resolving @mentions. Names come from the roster
@@ -358,6 +365,9 @@ export function MessageList({
                     onDelete={onDeleteMessage}
                     isContinuation={isContinuation}
                     onOpenBench={onOpenBench}
+                    onOpenRef={onOpenRef}
+                    contextRef={contextRef}
+                    onAnchor={onAnchor}
                   />
                   </Fragment>
                 )

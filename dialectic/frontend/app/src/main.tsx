@@ -1,6 +1,8 @@
+import '@dark-roast/companion-ui/css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
+import './styles/companion-adoption.css'
 
 /**
  * Hand-rolled SW registration (vite-plugin-pwa's injectRegister is OFF).

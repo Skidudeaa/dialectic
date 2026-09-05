@@ -1,8 +1,9 @@
+import { ResponseCard, ProposalCard, ReviewButton } from '@dark-roast/companion-ui'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { addressBlock, decorateMentions, type MentionContext } from '../../lib/mentions'
-import type { Attachment, CommitmentProposal, Message, Reaction, ThesisSeed } from '../../types'
+import type { Attachment, CommitmentProposal, Message, MessageAnchor, MessageRef, Reaction, ThesisSeed } from '../../types'
 import type { FieldMark } from '../../types/workspace.ts'
 import { api, type MessageDecisionExplain } from '../../lib/api'
 import { localProposals, type LocalProposal } from '../../lib/proposalEnvelope'
@@ -77,6 +78,9 @@ interface MessageBubbleProps {
    * at Home the destination is a room that does not exist yet.
    */
   onOpenBench?: (seed: ThesisSeed) => void
+  onOpenRef?: (ref: MessageRef) => void
+  contextRef?: MessageRef | null
+  onAnchor?: (anchor: MessageAnchor) => void
 }
 
 /**
@@ -434,6 +438,9 @@ export function MessageBubble({
   isContinuation,
   attachments = [],
   onOpenBench,
+  onOpenRef,
+  contextRef,
+  onAnchor,
 }: MessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState(message.content)
@@ -719,7 +726,25 @@ export function MessageBubble({
             )}
           </div>
         )}
-        <div className={`msg-content-frame${isFolded ? ' msg-folded' : ''}`}>
+        {message.metadata?.anchor && (
+          <button type="button" className="msg-anchor" disabled={!onAnchor}
+            onClick={() => onAnchor?.(message.metadata!.anchor!)}>
+            ON {message.metadata.anchor.label}
+          </button>
+        )}
+        {(message.metadata?.refs?.length ?? 0) > 0 && (
+          <div className="msg-evidence" aria-label="Evidence in this contribution">
+            {message.metadata!.refs!.map((ref) => (
+              <div key={`${ref.entity}:${ref.id}`} className="msg-evidence-source" data-active={contextRef?.entity === ref.entity && contextRef.id === ref.id || undefined}>
+                <button type="button" onClick={() => onOpenRef?.(ref)} disabled={!onOpenRef} aria-pressed={contextRef?.entity === ref.entity && contextRef.id === ref.id}>
+                  <span aria-hidden="true">↗</span> {ref.label}
+                </button>
+                {ref.quote && <blockquote>{ref.quote}</blockquote>}
+              </div>
+            ))}
+          </div>
+        )}
+        <ResponseCard streaming={isStreaming} className={`msg-content-frame${isFolded ? ' msg-folded' : ''}`}>
           {replyToContent !== undefined && (
             <div className="msg-quote">
               <span className="msg-quote-author">{replyToAuthor}</span>
@@ -773,7 +798,7 @@ export function MessageBubble({
               onMarked={onFieldChanged}
             />
           )}
-        </div>
+        </ResponseCard>
         {currentRoomId && (
           <MessageMarks roomId={currentRoomId} marks={marks} onReviewed={onFieldChanged} />
         )}
@@ -843,7 +868,7 @@ export function MessageBubble({
         )}
 
         {proposal && (
-          <div className="msg-proposal">
+          <ProposalCard status={proposalLogged ? 'accepted' : 'pending'} className="msg-proposal">
             <div className="msg-proposal-title">Drafted prediction</div>
             <div className="msg-proposal-statement">{proposal.statement}</div>
             <div className="msg-proposal-meta">
@@ -853,22 +878,22 @@ export function MessageBubble({
             {proposalLogged ? (
               <span className="msg-proposal-logged">logged to tradingDesk</span>
             ) : (
-              <button
+              <ReviewButton intent="accept"
                 className="msg-proposal-accept"
                 disabled={acceptState === 'accepting'}
                 onClick={acceptProposal}
               >
                 {acceptState === 'accepting' ? 'Logging…' : 'Accept'}
-              </button>
+              </ReviewButton>
             )}
             {acceptState === 'error' && !proposalLogged && (
               <span className="msg-proposal-error">could not log — try again</span>
             )}
-          </div>
+          </ProposalCard>
         )}
 
         {tradeProposal && (
-          <div className="msg-proposal">
+          <ProposalCard status={tradeFilled ? 'accepted' : 'pending'} className="msg-proposal">
             <div className="msg-proposal-title">Proposed paper trade</div>
             <div className="msg-proposal-statement">
               {tradeProposal.side === 'sell' ? 'Sell' : 'Buy'}{' '}
@@ -890,22 +915,22 @@ export function MessageBubble({
             {tradeFilled ? (
               <span className="msg-proposal-logged">filled on the paper book</span>
             ) : (
-              <button
+              <ReviewButton intent="accept"
                 className="msg-proposal-accept"
                 disabled={tradeState === 'accepting'}
                 onClick={acceptTrade}
               >
                 {tradeState === 'accepting' ? 'Filling…' : 'Accept'}
-              </button>
+              </ReviewButton>
             )}
             {tradeState === 'error' && !tradeFilled && (
               <span className="msg-proposal-error">could not fill — try again</span>
             )}
-          </div>
+          </ProposalCard>
         )}
 
         {thesisProposal && (
-          <div className="msg-proposal">
+          <ProposalCard status={'pending'} className="msg-proposal">
             <div className="msg-proposal-title">Proposed thesis</div>
             <div className="msg-proposal-statement">{thesisProposal.title}</div>
             <div className="msg-proposal-meta">{thesisProposal.claim}</div>
@@ -913,14 +938,14 @@ export function MessageBubble({
               ${(thesisProposal.monthly_budget ?? 5000).toLocaleString()}/mo
               · nothing exists until you review the draft
             </div>
-            <button className="msg-proposal-accept" onClick={openThesisCreate}>
+            <ReviewButton intent="accept" className="msg-proposal-accept" onClick={openThesisCreate}>
               Draft the cascade →
-            </button>
-          </div>
+            </ReviewButton>
+          </ProposalCard>
         )}
 
         {readingProposal && (
-          <div className="msg-proposal">
+          <ProposalCard status={readingFiled ? 'accepted' : 'pending'} className="msg-proposal">
             <div className="msg-proposal-title">File in the library</div>
             <div className="msg-proposal-statement">
               {readingProposal.title || readingProposal.url}
@@ -933,22 +958,22 @@ export function MessageBubble({
             {readingFiled ? (
               <span className="msg-proposal-logged">filed in the library</span>
             ) : (
-              <button
+              <ReviewButton intent="accept"
                 className="msg-proposal-accept"
                 disabled={readingAcceptState === 'accepting'}
                 onClick={acceptReading}
               >
                 {readingAcceptState === 'accepting' ? 'Filing…' : 'Accept'}
-              </button>
+              </ReviewButton>
             )}
             {readingAcceptState === 'error' && !readingFiled && (
               <span className="msg-proposal-error">could not file — try again</span>
             )}
-          </div>
+          </ProposalCard>
         )}
 
         {resolutionProposal && (
-          <div className="msg-proposal">
+          <ProposalCard status={resolutionLogged ? 'accepted' : resolutionProposal.verdict === 'unclear' ? 'unknown' : 'pending'} className="msg-proposal">
             <div className="msg-proposal-title">Prediction resolution</div>
             <div className="msg-proposal-statement">{resolutionProposal.statement}</div>
             <div className="msg-proposal-meta">
@@ -974,30 +999,30 @@ export function MessageBubble({
               <span className="msg-proposal-logged">resolution logged</span>
             ) : resolutionProposal.verdict !== 'unclear' ? (
               <div>
-                <button
+                <ReviewButton intent="accept"
                   className="msg-proposal-accept"
                   disabled={resolutionState === 'accepting'}
                   onClick={() => acceptResolution('correct')}
                 >
                   {resolutionState === 'accepting' ? 'Logging…' : 'Mark correct'}
-                </button>
-                <button
+                </ReviewButton>
+                <ReviewButton intent="accept"
                   className="msg-proposal-accept"
                   disabled={resolutionState === 'accepting'}
                   onClick={() => acceptResolution('incorrect')}
                 >
                   Mark incorrect
-                </button>
+                </ReviewButton>
               </div>
             ) : null}
             {resolutionState === 'error' && !resolutionLogged && (
               <span className="msg-proposal-error">could not log — try again</span>
             )}
-          </div>
+          </ProposalCard>
         )}
 
         {commitmentProposals.length > 0 && (
-          <div className="msg-proposal">
+          <ProposalCard className="msg-proposal">
             <div className="msg-proposal-title">Heard a commitment</div>
             {commitmentProposals.map((p, i) => (
               <div key={i} className="msg-commitment-item">
@@ -1009,17 +1034,17 @@ export function MessageBubble({
                   === 'accepted' ? (
                   <span className="msg-proposal-logged">on the record</span>
                 ) : (
-                  <button
+                  <ReviewButton intent="accept"
                     className="msg-proposal-accept"
                     disabled={commitAccepting !== null}
                     onClick={() => acceptCommitmentProposal(p, i)}
                   >
                     {commitAccepting === i ? 'Logging…' : 'Put it on record'}
-                  </button>
+                  </ReviewButton>
                 )}
               </div>
             ))}
-          </div>
+          </ProposalCard>
         )}
 
         {claimCheck && (

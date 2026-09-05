@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import type { ReadingDetail, ReadingRevision } from '../../../types/index.ts'
+import type { MessageRef, ReadingDetail, ReadingRevision } from '../../../types/index.ts'
 import { api } from '../../../lib/api.ts'
 import { SceneLoading, SceneUnavailable } from '../SceneEmpty.tsx'
 import { FocusHeader } from './FocusHeader.tsx'
@@ -108,7 +108,7 @@ function sanitizedMarkdown(markdown: string): string {
   return template.innerHTML
 }
 
-function RenderedMarkdown({ markdown }: { markdown: string }) {
+export function RenderedMarkdown({ markdown }: { markdown: string }) {
   const isBoundedPreview = markdown.length > MARKDOWN_PREVIEW_CHARS
   const [showFull, setShowFull] = useState(!isBoundedPreview)
   const source = showFull ? markdown : markdown.slice(0, MARKDOWN_PREVIEW_CHARS)
@@ -209,10 +209,12 @@ export function ReadingFocus({
   roomId,
   readingId,
   onClose,
+  onDiscuss,
 }: {
   roomId: string
   readingId: string
   onClose: () => void
+  onDiscuss?: (ref: MessageRef) => void
 }) {
   const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState<DetailState>({ status: 'loading' })
@@ -396,6 +398,10 @@ export function ReadingFocus({
       <FocusHeader title={title} kindLabel={`Reading · ${sourceLabel(detail.source)}`} onClose={onClose} />
 
       <div className="reading-focus-actions" role="group" aria-label="Reading actions">
+        {onDiscuss && <button type="button" className="btn btn-primary" onClick={() => onDiscuss({
+          entity: 'reading_items', id: detail.id, label: (detail.title || detail.url).slice(0, 200),
+          ...(detail.content_sha256 ? { content_sha256: detail.content_sha256 } : {}),
+        })}>Discuss in the main conversation</button>}
         <button
           type="button"
           className="btn btn-secondary"

@@ -1,3 +1,4 @@
+import { ContextInspector } from '@dark-roast/companion-ui'
 import './Focus.css'
 
 export interface FocusSourceItem {
@@ -18,22 +19,5 @@ export interface FocusSourceItem {
  */
 export function FocusSources({ sources }: { sources: FocusSourceItem[] }) {
   if (sources.length === 0) return null
-  return (
-    <section className="focus-section" aria-label="Sources">
-      <h3 className="focus-section-label">Sources</h3>
-      <ul className="focus-sources-list">
-        {sources.map((source, i) => (
-          <li key={`${source.label}:${i}`}>
-            {source.onNavigate ? (
-              <button type="button" className="focus-source-link" onClick={source.onNavigate}>
-                {source.label}
-              </button>
-            ) : (
-              <span className="focus-source-plain">{source.label}</span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
+  return <ContextInspector title="Sources" className="focus-section" sources={sources.map((source, i) => ({ id: source.label + ':' + i, label: source.label, onNavigate: source.onNavigate }))} />
 }

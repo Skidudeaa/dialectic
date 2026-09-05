@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { MessageRef } from '../../../../types'
 import { refGlyph, type SurfaceMsg } from '../surfaceModel'
 import { SurfaceMessage } from './SurfaceMessage'
+import type { MessageListProps } from '../../../chat/MessageList'
 import './shapes.css'
 
 export interface ShapeTreeProps {
@@ -9,6 +10,7 @@ export interface ShapeTreeProps {
   onOpenRef: (ref: MessageRef) => void
   onReply?: (id: string) => void
   onFork?: (id: string) => void
+  controls?: MessageListProps
 }
 
 type ChildrenMap = Map<string, SurfaceMsg[]>
@@ -45,11 +47,12 @@ function collectRefs(id: string, childrenOf: ChildrenMap, byId: Map<string, Surf
 }
 
 function TreeNode({
-  msg, isReply, childrenOf, onOpenRef, onReply, onFork,
+  msg, isReply, childrenOf, onOpenRef, onReply, onFork, controls,
 }: {
   msg: SurfaceMsg
   isReply: boolean
   childrenOf: ChildrenMap
+  controls?: MessageListProps
   onOpenRef: (ref: MessageRef) => void
   onReply?: (id: string) => void
   onFork?: (id: string) => void
@@ -62,7 +65,7 @@ function TreeNode({
     <div className="surf-tree-node">
       <div className="surf-tree-row">
         {isReply && <span className="surf-tree-glyph" aria-hidden="true">↳</span>}
-        <SurfaceMessage msg={msg} onOpenRef={onOpenRef} onReply={onReply} />
+        <SurfaceMessage msg={msg} controls={controls} onOpenRef={onOpenRef} onReply={onReply} />
       </div>
       <div className="surf-tree-controls">
         <span className="surf-tree-branches">branches: {branches}</span>
@@ -86,6 +89,7 @@ function TreeNode({
               onOpenRef={onOpenRef}
               onReply={onReply}
               onFork={onFork}
+              controls={controls}
             />
           ))}
         </div>
@@ -99,7 +103,7 @@ function TreeNode({
  * their parent, with a merge-candidates list beneath the forest for objects
  * that more than one branch converged on independently.
  */
-export function ShapeTree({ messages, onOpenRef, onReply, onFork }: ShapeTreeProps) {
+export function ShapeTree({ messages, onOpenRef, onReply, onFork, controls }: ShapeTreeProps) {
   const { roots, childrenOf } = useMemo(() => buildForest(messages), [messages])
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages])
 
@@ -124,11 +128,11 @@ export function ShapeTree({ messages, onOpenRef, onReply, onFork }: ShapeTreePro
   return (
     <div className="surf-tree">
       <div className="surf-tree-header">
-        {roots.length} root claims · {messages.length - roots.length} replies · {mergeCandidates.length} merge candidates
+        {roots.length} conversations · {messages.length - roots.length} replies · {mergeCandidates.length} shared sources
       </div>
       {roots.map((root) => (
         <section key={root.id} className="surf-claim-tree">
-          <div className="surf-claim-tree-label">CLAIM TREE</div>
+          <div className="surf-claim-tree-label">{root.topic === 'the whole room' ? 'Conversation' : root.topic}</div>
           <TreeNode
             msg={root}
             isReply={false}
@@ -136,6 +140,7 @@ export function ShapeTree({ messages, onOpenRef, onReply, onFork }: ShapeTreePro
             onOpenRef={onOpenRef}
             onReply={onReply}
             onFork={onFork}
+            controls={controls}
           />
         </section>
       ))}

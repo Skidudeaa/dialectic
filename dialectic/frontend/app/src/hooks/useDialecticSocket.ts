@@ -49,6 +49,7 @@ export function useDialecticSocket(options?: {
   const heartbeatTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const connectRef = useRef<() => void>(() => {});
   const [isConnected, setIsConnected] = useState(false);
+  const receipts = useRef(new Map<string, { resolve: (ok: boolean) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>());
 
   const user = useAppStore((s) => s.user);
   const accessToken = useAppStore((s) => s.accessToken);
@@ -205,6 +206,17 @@ export function useDialecticSocket(options?: {
     }
 
     const { type, payload } = data;
+    // Keep a submitted source contribution in its composer until the server
+    // confirms storage, or returns a rejection the writer can correct.
+    if (typeof payload.client_request_id === 'string' && (type === 'message_created' || type === 'error')) {
+      const receipt = receipts.current.get(payload.client_request_id);
+      if (receipt) {
+        clearTimeout(receipt.timer);
+        receipts.current.delete(payload.client_request_id);
+        if (type === 'message_created') receipt.resolve(true);
+        else receipt.reject(new Error(String(payload.error || 'The message was not accepted.')));
+      }
+    }
 
     switch (type) {
       case 'message_created':
@@ -669,7 +681,7 @@ export function useDialecticSocket(options?: {
       // The working surface's slots: what the message is ABOUT (a node or
       // edge of the causal graph) and what it ATTACHES (an update dropped
       // onto that node). Validated by proposal_intake at the door.
-      extra?: { anchor?: MessageAnchor | null; refs?: MessageRef[] },
+      extra?: { anchor?: MessageAnchor | null; refs?: MessageRef[]; receiptId?: string },
     ): boolean => (
       send('send_message', {
         content,
@@ -687,10 +699,28 @@ export function useDialecticSocket(options?: {
         ...(tags && tags.length > 0 ? { tags } : {}),
         ...(extra?.anchor ? { anchor: extra.anchor } : {}),
         ...(extra?.refs && extra.refs.length > 0 ? { refs: extra.refs } : {}),
+        ...(extra?.receiptId ? { client_request_id: extra.receiptId } : {}),
       })
     ),
     [send],
   );
+
+  const sendMessageWithReceipt = useCallback((...args: Parameters<typeof sendMessage>): Promise<boolean> => {
+    const receiptId = crypto.randomUUID();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        receipts.current.delete(receiptId);
+        reject(new Error('Send was not confirmed. Check the conversation before retrying; your draft is still here.'));
+      }, 15000);
+      receipts.current.set(receiptId, { resolve, reject, timer });
+      const [content, type, parent, attachments, tags, extra] = args;
+      if (!sendMessage(content, type, parent, attachments, tags, { ...extra, receiptId })) {
+        clearTimeout(timer);
+        receipts.current.delete(receiptId);
+        resolve(false);
+      }
+    });
+  }, [sendMessage]);
 
   // WHY: the server has recorded read receipts since the schema was written and
   // derives every unread badge from them, but no client ever sent one — so
@@ -872,6 +902,7 @@ export function useDialecticSocket(options?: {
     isConnected,
     send,
     sendMessage,
+    sendMessageWithReceipt,
     markMessageRead,
     editMessageContent,
     deleteMessage,

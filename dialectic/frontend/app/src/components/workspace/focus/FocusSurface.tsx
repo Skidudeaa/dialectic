@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { MessageRef } from '../../../types'
 import type { FieldReviewRequest, WorkspaceObject } from '../../../types/workspace.ts'
 import type { WorkspaceObjectsState } from '../../../hooks/useWorkspaceObjects.ts'
 import type { FieldMarksState } from '../../../hooks/useFieldMarks.ts'
@@ -64,6 +65,7 @@ interface FocusSurfaceProps {
   onMarked?: () => void
   worldBindings?: CausalGeoBinding[]
   onOpenWorld?: (scopeObjectId: string, selectedObject?: string) => void
+  onDiscussReading?: (ref: MessageRef) => void
 }
 
 const KIND_LABEL: Record<WorkspaceObject['kind'], string> = {
@@ -96,7 +98,7 @@ const KIND_LABEL: Record<WorkspaceObject['kind'], string> = {
 export function FocusSurface({
   objectId, objects, fieldMarks, canAct, onNavigate, onReview,
   roomId = null, geo, onGeoChanged, onMarked,
-  worldBindings = [], onOpenWorld,
+  worldBindings = [], onOpenWorld, onDiscussReading,
 }: FocusSurfaceProps) {
   const accessToken = useAppStore((state) => state.accessToken)
   const onClose = () => onNavigate({ object: null })
@@ -155,6 +157,7 @@ export function FocusSurface({
           key={`${roomId}:${objectId}`}
           roomId={roomId}
           readingId={objectId.replace(/^reading:/, '')}
+          onDiscuss={onDiscussReading}
           onClose={onClose}
         />
       </aside>

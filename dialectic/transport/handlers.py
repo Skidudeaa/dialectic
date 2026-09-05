@@ -12,6 +12,7 @@ import asyncpg
 
 from proposal_intake import (
     ProposalMetadataError, validate_anchor, validate_refs, validate_tags,
+    validate_reading_quotes, inherit_reply_context,
 )
 from models import (
     Room, User, Thread, Message, Memory, Event, EventType,
@@ -246,7 +247,10 @@ class MessageHandler:
                 await handler(conn, message.payload)
             except Exception as e:
                 logger.exception(f"Handler error for {message.type}: %s", e)
-                await self._send_error(conn, "An internal error occurred. Please try again.")
+                error = ("Send could not be confirmed. Check the conversation before retrying."
+                         if message.type == MessageTypes.SEND_MESSAGE
+                         else "An internal error occurred. Please try again.")
+                await self._send_error(conn, error, request_id=message.payload.get("client_request_id"))
         else:
             logger.warning(f"Unknown message type: {message.type}")
             await self._send_error(conn, f"Unknown message type: {message.type}")
@@ -289,7 +293,7 @@ class MessageHandler:
         # content is legal exactly when the message carries attachments.
         raw_attachment_ids = payload.get("attachment_ids") or []
         if not isinstance(raw_attachment_ids, list):
-            await self._send_error(conn, "Invalid attachment_ids")
+            await self._send_error(conn, "Invalid attachment_ids", request_id=payload.get("client_request_id"))
             return
         attachment_ids: list[UUID] = []
         for raw_attachment_id in raw_attachment_ids:
@@ -300,7 +304,7 @@ class MessageHandler:
                     else UUID(str(raw_attachment_id))
                 )
             except (TypeError, ValueError, AttributeError):
-                await self._send_error(conn, "Invalid attachment_ids")
+                await self._send_error(conn, "Invalid attachment_ids", request_id=payload.get("client_request_id"))
                 return
 
         if not content and not attachment_ids:
@@ -309,7 +313,7 @@ class MessageHandler:
         try:
             message_type = _message_type_from_payload(payload)
         except (TypeError, ValueError):
-            await self._send_error(conn, "Invalid message_type")
+            await self._send_error(conn, "Invalid message_type", request_id=payload.get("client_request_id"))
             return
 
         # Tags ride the ORDINARY send, not the REST proposal door, because a
@@ -326,7 +330,7 @@ class MessageHandler:
             try:
                 message_tags = validate_tags(payload.get("tags"))
             except ProposalMetadataError as exc:
-                await self._send_error(conn, f"Invalid tags: {exc}")
+                await self._send_error(conn, f"Invalid tags: {exc}", request_id=payload.get("client_request_id"))
                 return
 
         # The working surface's two slots ride beside tags: an ANCHOR (the
@@ -340,21 +344,26 @@ class MessageHandler:
             try:
                 message_meta["anchor"] = validate_anchor(payload.get("anchor"))
             except ProposalMetadataError as exc:
-                await self._send_error(conn, f"Invalid anchor: {exc}")
+                await self._send_error(conn, f"Invalid anchor: {exc}", request_id=payload.get("client_request_id"))
                 return
         if payload.get("refs") is not None:
             try:
                 message_refs = validate_refs(payload.get("refs"))
             except ProposalMetadataError as exc:
-                await self._send_error(conn, f"Invalid refs: {exc}")
+                await self._send_error(conn, f"Invalid refs: {exc}", request_id=payload.get("client_request_id"))
                 return
             row_refs = [r for r in message_refs if r["entity"] != "thesis_node"]
             if row_refs and not await resolve_subjects_in_room(
                 self.db, conn.room_id, row_refs,
             ):
-                await self._send_error(conn, "refs do not resolve to rows in this room")
+                await self._send_error(conn, "refs do not resolve to rows in this room", request_id=payload.get("client_request_id"))
                 return
             message_meta["refs"] = message_refs
+            try:
+                await validate_reading_quotes(self.db, conn.room_id, message_refs)
+            except ProposalMetadataError as exc:
+                await self._send_error(conn, str(exc), request_id=payload.get("client_request_id"))
+                return
 
         references_message_id = payload.get("references_message_id")
 
@@ -381,7 +390,7 @@ class MessageHandler:
                 conn.thread_id = thread_id
 
         if not thread_id:
-            await self._send_error(conn, "No active thread")
+            await self._send_error(conn, "No active thread", request_id=payload.get("client_request_id"))
             return
 
         now = datetime.now(timezone.utc)
@@ -391,7 +400,7 @@ class MessageHandler:
             try:
                 refs_msg_id = UUID(str(references_message_id))
             except (TypeError, ValueError, AttributeError):
-                await self._send_error(conn, "Invalid references_message_id")
+                await self._send_error(conn, "Invalid references_message_id", request_id=payload.get("client_request_id"))
                 return
             referenced_room_id = await self.db.fetchval(
                 """SELECT t.room_id
@@ -401,7 +410,12 @@ class MessageHandler:
                 refs_msg_id,
             )
             if referenced_room_id != conn.room_id:
-                await self._send_error(conn, "Referenced message not found in this room")
+                await self._send_error(conn, "Referenced message not found in this room", request_id=payload.get("client_request_id"))
+                return
+            try:
+                message_meta = await inherit_reply_context(self.db, conn.room_id, refs_msg_id, message_meta) or {}
+            except ProposalMetadataError as exc:
+                await self._send_error(conn, str(exc), request_id=payload.get("client_request_id"))
                 return
 
         # Atomic INSERT with inline sequence calculation to prevent TOCTOU race.
@@ -448,7 +462,7 @@ class MessageHandler:
                         ))
                 break
             except AttachmentBindError as exc:
-                await self._send_error(conn, f"Attachment could not be attached: {exc.detail}")
+                await self._send_error(conn, f"Attachment could not be attached: {exc.detail}", request_id=payload.get("client_request_id"))
                 return
             except asyncpg.UniqueViolationError:
                 if attempt == 2:
@@ -500,7 +514,7 @@ class MessageHandler:
 
         await self.connections.broadcast(conn.room_id, OutboundMessage(
             type=MessageTypes.MESSAGE_CREATED,
-            payload=build_message_created_payload(
+            payload={**build_message_created_payload(
                 message,
                 user_name=user_row['display_name'] if user_row else "Unknown",
                 # Bound in the insert transaction above, so this is the first
@@ -510,7 +524,7 @@ class MessageHandler:
                     _to_response(row).model_dump(mode="json")
                     for row in bound_attachments
                 ],
-            ),
+            ), **({"client_request_id": payload["client_request_id"]} if payload.get("client_request_id") else {})},
         ))
 
         # P4: implicit-commitment detection — proposal-shaped, fire-and-forget.
@@ -2473,9 +2487,9 @@ class MessageHandler:
             },
         ))
 
-    async def _send_error(self, conn: Connection, error: str) -> None:
+    async def _send_error(self, conn: Connection, error: str, *, request_id: str | None = None) -> None:
         """Send error to client."""
         await self.connections.send_to_user(conn.user_id, conn.room_id, OutboundMessage(
             type=MessageTypes.ERROR,
-            payload={"error": error},
+            payload={"error": error, **({"client_request_id": request_id} if request_id else {})},
         ))

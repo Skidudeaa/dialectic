@@ -145,6 +145,18 @@ describe('SurfaceUpdates', () => {
     expect(cards[2].textContent).toContain('Fire cell recurring')
   })
 
+  it('keeps a reading and a human mark visible when the fire feed exceeds the tray cap', async () => {
+    vi.mocked(api.getReadingLibrary).mockResolvedValue({ items: [readingItem({ id: 'source' })], next_before: null })
+    const { container } = renderSurface({
+      observations: Array.from({ length: 50 }, (_, i) => fireObs({ id: `fire-${i}` })),
+      marks: [fieldMark({ id: 'mark' })],
+    })
+    await screen.findByText('Reading source')
+    expect(container.querySelectorAll('.surf-upd-card')).toHaveLength(30)
+    expect(container.querySelectorAll('.surf-upd-card--reading')).toHaveLength(1)
+    expect(container.querySelectorAll('.surf-upd-card--mark')).toHaveLength(1)
+  })
+
   it('sets the JSON MessageRef on the drag data transfer', async () => {
     vi.mocked(api.getReadingLibrary).mockResolvedValue({ items: [], next_before: null })
     const { container } = renderSurface({

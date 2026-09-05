@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@dark-roast/companion-ui": "file:vendor/dark-roast-companion-ui-0.1.0.tgz",
     "cesium": "^1.144.0",
     "dompurify": "^3.3.1",
     "marked": "^17.0.3",

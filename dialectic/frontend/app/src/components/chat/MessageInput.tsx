@@ -1,3 +1,4 @@
+import { ComposerFrame } from '@dark-roast/companion-ui'
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type Ref } from 'react'
 import type { Attachment, Message } from '../../types'
 import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
@@ -32,7 +33,9 @@ let uploadKeySeed = 0
 const nextUploadKey = () => `upload-${++uploadKeySeed}`
 
 interface MessageInputProps {
-  onSend: (content: string, messageType: MessageType, attachments: Attachment[], tags: string[]) => boolean
+  /** Keep classification controls reachable without taking a permanent row. */
+  compactOptions?: boolean
+  onSend: (content: string, messageType: MessageType, attachments: Attachment[], tags: string[]) => boolean | Promise<boolean>
   roomId: string
   /** Seeds the composer on first mount only (device-local restoration,
    *  design v2 §15.2/§15.5) — a plain `useState` initial value, so a later
@@ -92,10 +95,11 @@ const MESSAGE_TYPES: { value: MessageType; label: string }[] = [
   { value: 'definition', label: 'Definition' },
 ]
 
-export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTypingStop, onTypingContent, onResearch, researchActive = false, disabled, replyTo, onCancelReply, placeholder = `Think out loud... paste a link and ${PARTICIPANT_NAME} reads it`, memberNames = [], quiet = false, composerRef }: MessageInputProps) {
+export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTypingStop, onTypingContent, onResearch, researchActive = false, disabled, replyTo, onCancelReply, placeholder = `Think out loud... paste a link and ${PARTICIPANT_NAME} reads it`, memberNames = [], quiet = false, compactOptions = false, composerRef }: MessageInputProps) {
   const [content, setContent] = useState(initialValue ?? '')
   const [messageType, setMessageType] = useState<MessageType>('text')
   const [sendError, setSendError] = useState(false)
+  const [sending, setSending] = useState(false)
   const [uploads, setUploads] = useState<ComposerUpload[]>([])
   const [notice, setNotice] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -200,7 +204,8 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
   const ready = uploads.filter((entry): entry is ComposerUpload & { record: Attachment } =>
     entry.status === 'ready' && Boolean(entry.record))
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
+    if (sending) return
     if (uploading.length > 0) {
       setNotice(`Still uploading ${uploading.length} file${uploading.length === 1 ? '' : 's'} — one moment.`)
       return
@@ -217,7 +222,21 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
     // accepts an attachment-only message and binds them in the send.
     if (!trimmed && ready.length === 0) return
 
-    const sent = onSend(trimmed, messageType, ready.map((entry) => entry.record), tags)
+    let sent: boolean
+    try {
+      const result = onSend(trimmed, messageType, ready.map((entry) => entry.record), tags)
+      if (typeof result === 'boolean') sent = result
+      else {
+        setSending(true)
+        sent = await result
+      }
+    } catch (cause: unknown) {
+      setSendError(false)
+      setNotice(cause instanceof Error ? cause.message : 'Message not accepted. Your draft is still here.')
+      return
+    } finally {
+      setSending(false)
+    }
     // WHY: onSend returns false when the socket is not open. This used to be a
     // silent no-op — the text stayed in the box with no indication it had not
     // been delivered, which reads as "the app ate my message."
@@ -236,7 +255,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
     }
     onTypingStop?.()
     typingRef.current = false
-  }, [content, messageType, onSend, onTypingStop, uploading, failed, ready, tags])
+  }, [content, messageType, onSend, onTypingStop, uploading, failed, ready, tags, sending])
 
   // Research mode: the composer's text is the question, and the dive runs
   // long (the server caps it at 15 iterations / 300s), so the same send
@@ -405,9 +424,10 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
 
   const hasSendable = content.trim().length > 0 || ready.length > 0
 
+  const Options = compactOptions ? 'details' : 'div'
   return (
     <div className="input-area">
-      <div
+      <ComposerFrame tone={researchActive ? 'planning' : 'conversation'} busy={researchActive || sending} inert={sending || undefined}
         className={`input-area-inner${isDragging ? ' input-dragging' : ''}`}
         data-has-draft={content.trim().length > 0 || undefined}
         onDragEnter={handleDragEnter}
@@ -463,7 +483,8 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
             ))}
           </div>
         )}
-        {!quiet && (
+        {!quiet && <Options className={`composer-options${compactOptions ? ' composer-options--compact' : ''}`}>
+          {compactOptions && <summary>Message options · {messageType}{tags.length > 0 ? ` · ${tags.map((tag) => `#${tag}`).join(' ')}` : ''}</summary>}
           <div className="msg-tag-selector">
             {MESSAGE_TAG_OPTIONS.map(t => (
               <button
@@ -482,8 +503,6 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
               </button>
             ))}
           </div>
-        )}
-        {!quiet && (
           <div className="msg-type-selector">
             {MESSAGE_TYPES.map(t => (
               <button
@@ -495,7 +514,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
               </button>
             ))}
           </div>
-        )}
+        </Options>}
         <div className="input-row">
           <input
             ref={fileInputRef}
@@ -597,7 +616,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
             <span>? for shortcuts</span>
           </span>
         </div>
-      </div>
+      </ComposerFrame>
     </div>
   )
 }

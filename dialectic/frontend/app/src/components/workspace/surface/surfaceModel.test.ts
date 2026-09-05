@@ -33,7 +33,7 @@ describe('toSurfaceMessages', () => {
     expect(out[1].parentId).toBe('a')
     expect(out[1].tools).toEqual([{ name: 'search_reading', label: 'searching', ok: true }])
     expect(out[1].isNew).toBe(true)
-    expect(out[1].topic).toBe('the whole room')
+    expect(out[1].topic).toBe('FT')
     // A parent outside the window is no parent at all.
     expect(out[2].parentId).toBeNull()
     expect(out[2].author.name).toBe('Dan')

@@ -82,6 +82,10 @@ export interface MessageRef {
   entity: string;
   id: string;
   label: string;
+  /** The passage a person selected, retained with their contribution. */
+  quote?: string;
+  /** Identifies the captured source; a later revision does not rewrite the quote. */
+  content_sha256?: string;
 }
 
 /** One row of GET /rooms/{id}/activity/daily — the surface's volume chart. */

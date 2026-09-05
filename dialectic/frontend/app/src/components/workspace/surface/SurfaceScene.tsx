@@ -10,6 +10,7 @@ import { PARTICIPANT_NAME } from '../../../lib/productIdentity.ts'
 import type { WorldObservation } from '../../../types/geo.ts'
 import { ThesisDag, type DagVerb } from '../../trading/ThesisDag'
 import type { MessageInputHandle } from '../../chat/MessageInput'
+import type { MessageListProps } from '../../chat/MessageList'
 import { SceneEmpty } from '../SceneEmpty'
 import { SurfaceAtlas } from './SurfaceAtlas'
 import { SurfaceUpdates } from './SurfaceUpdates'
@@ -60,6 +61,10 @@ export interface SurfaceSceneProps {
   onOpenWorld: () => void
   onOpenBench: () => void
   onFork: (messageId: string) => void
+  conversation: MessageListProps
+  banners?: React.ReactNode
+  readingRequest?: MessageRef | null
+  onReadingReceived?: () => void
 }
 
 const OBSERVATION_HOURS = 48
@@ -76,9 +81,13 @@ export function SurfaceScene({
   roomId, roomName, currentUserId, messages, streamingId, userNames, unreadSince,
   desk, tradingConfig, geo, fieldMarks, composer, typingUsers, activityLabel,
   onOpenObject, onOpenWorld, onOpenBench, onFork,
+  conversation, banners, readingRequest, onReadingReceived,
 }: SurfaceSceneProps) {
   const [anchor, setAnchor] = useState<MessageAnchor | null>(null)
   const [pendingRefs, setPendingRefs] = useState<MessageRef[]>([])
+  const [selectedEvidence, setSelectedEvidence] = useState<MessageRef | null>(null)
+  const [evidenceOpen, setEvidenceOpen] = useState(false)
+  const sceneRef = useRef<HTMLDivElement>(null)
   const [shape, setShape] = useState<ConversationShape>('stream')
   // "Wide": the conversation takes the whole width and the graph and atlas
   // follow beneath — the owner's balance control, remembered per device.
@@ -187,12 +196,43 @@ export function SurfaceScene({
   // ── Attaching an update to a node ────────────────────────────────────
   const stageRef = useCallback((ref: MessageRef, node?: ThesisStructureNode) => {
     if (node) setAnchor({ kind: 'node', id: node.id, label: node.label })
-    setPendingRefs((refs) => (refs.some((r) => r.entity === ref.entity && r.id === ref.id) ? refs : [...refs, ref]))
-    composerRef.current?.insert(`Evidence: ${ref.label} — `)
+    setPendingRefs((refs) => [...refs.filter((r) => !(r.entity === ref.entity && r.id === ref.id)), ref])
+    if (ref.entity === 'reading_items') setSelectedEvidence(ref)
+    sceneRef.current?.scrollTo({ top: 0 })
+    composerRef.current?.focus()
   }, [])
   const dropOnNode = useCallback((node: ThesisStructureNode, ref: MessageRef) => stageRef(ref, node), [stageRef])
 
+  useEffect(() => {
+    if (!readingRequest) return
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      stageRef(readingRequest)
+      setShape('stream')
+      setEvidenceOpen(false)
+      onReadingReceived?.()
+    })
+    return () => { cancelled = true }
+  }, [readingRequest, stageRef, onReadingReceived])
+
+  useEffect(() => {
+    if (!conversation.jumpTarget) return
+    let cancelled = false
+    queueMicrotask(() => {
+      if (!cancelled) { setShape('stream'); setEvidenceOpen(false) }
+    })
+    return () => { cancelled = true }
+  }, [conversation.jumpTarget])
+
   const openRef = useCallback((ref: MessageRef) => {
+    if (ref.entity === 'reading_items') {
+      setSelectedEvidence(ref)
+      setShape('stream')
+      setEvidenceOpen(true)
+      sceneRef.current?.scrollTo({ top: 0 })
+      return
+    }
     const focusId = refFocusId(ref)
     if (focusId) onOpenObject(focusId)
     else if (ref.entity === 'world_observations') setSelectedUpdateId(ref.id)
@@ -207,7 +247,7 @@ export function SurfaceScene({
   const unbound = desk.structure.status === 'empty' || (!desk.bound && desk.structure.status !== 'loading')
 
   return (
-    <div className={`surf${wide ? ' surf--wide' : ''}${refDragging ? ' surf--dragging-ref' : ''}`} data-testid="surface">
+    <div ref={sceneRef} className={`surf${wide ? ' surf--wide' : ''}${refDragging ? ' surf--dragging-ref' : ''}`} data-testid="surface">
       <header className="surf-head">
         <div className="surf-head-identity">
           <span className="surf-head-scene">Surface</span>
@@ -318,7 +358,7 @@ export function SurfaceScene({
         onAnchor={setAnchor}
         pendingRefs={pendingRefs}
         onRemovePendingRef={(ref) => setPendingRefs((refs) => refs.filter((r) => !(r.entity === ref.entity && r.id === ref.id)))}
-        onClearPendingRefs={() => setPendingRefs([])}
+        onClearPendingRefs={(sent) => setPendingRefs((refs) => refs.filter((ref) => !sent.includes(ref)))}
         composer={composer}
         composerRef={composerRef}
         typingUsers={typingUsers}
@@ -327,6 +367,14 @@ export function SurfaceScene({
         onFork={onFork}
         annotatorEnabled={flags.annotator}
         addressedOnly={flags.addressed}
+        controls={conversation}
+        selectedEvidence={selectedEvidence}
+        evidenceOpen={evidenceOpen}
+        onEvidenceOpen={setEvidenceOpen}
+        onSelectEvidence={setSelectedEvidence}
+        onStageRef={stageRef}
+        onOpenFull={(ref) => { const id = refFocusId(ref); if (id) onOpenObject(id) }}
+        banners={banners}
       />
 
       <section className="surf-updates-pane" aria-label="Updates">
