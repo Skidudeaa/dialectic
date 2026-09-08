@@ -87,6 +87,7 @@ export function SurfaceScene({
   const [pendingRefs, setPendingRefs] = useState<MessageRef[]>([])
   const [selectedEvidence, setSelectedEvidence] = useState<MessageRef | null>(null)
   const [evidenceOpen, setEvidenceOpen] = useState(false)
+  const [updatesOpen, setUpdatesOpen] = useState(false)
   const sceneRef = useRef<HTMLDivElement>(null)
   const [shape, setShape] = useState<ConversationShape>('stream')
   // "Wide": the conversation takes the whole width and the graph and atlas
@@ -235,20 +236,44 @@ export function SurfaceScene({
     }
     const focusId = refFocusId(ref)
     if (focusId) onOpenObject(focusId)
-    else if (ref.entity === 'world_observations') setSelectedUpdateId(ref.id)
+    else if (ref.entity === 'world_observations') { setSelectedUpdateId(ref.id); setUpdatesOpen(true) }
     else if (ref.entity === 'geo_scopes') onOpenWorld()
   }, [onOpenObject, onOpenWorld])
 
   const selectObservation = useCallback((obs: WorldObservation | null) => {
     setSelectedUpdateId(obs ? obs.id : null)
+    if (obs) setUpdatesOpen(true)
   }, [])
 
   const wide = WIDE_SHAPES.has(shape) || wideStream
   const unbound = desk.structure.status === 'empty' || (!desk.bound && desk.structure.status !== 'loading')
+  const conversationOnly = unbound && scopes.length === 0
+
+  const roomControls = <>
+    {(flags.annotator !== null || flags.addressed !== null) && (
+      <details className="surf-head-flags">
+        <summary>Room activity</summary>
+        {flags.annotator !== null && (
+          <span className={`surf-head-flag${flags.annotator ? ' surf-head-flag--off' : ''}`}>
+            Annotator {flags.annotator ? 'speaking' : 'silent · writes marks only'}
+          </span>
+        )}
+        {flags.addressed !== null && (
+          <span className={`surf-head-flag${flags.addressed ? '' : ' surf-head-flag--off'}`}>
+            {PARTICIPANT_NAME} speaks {flags.addressed ? 'when addressed or a gate fires' : 'on its own judgment'}
+          </span>
+        )}
+      </details>
+    )}
+    <button type="button" className="surf-shape surf-updates-toggle" aria-expanded={updatesOpen}
+      aria-controls="surface-updates" onClick={() => { setEvidenceOpen(false); setUpdatesOpen((open) => !open) }}>
+      {updatesOpen ? 'Close updates' : 'Updates'}
+    </button>
+  </>
 
   return (
-    <div ref={sceneRef} className={`surf${wide ? ' surf--wide' : ''}${refDragging ? ' surf--dragging-ref' : ''}`} data-testid="surface">
-      <header className="surf-head">
+    <div ref={sceneRef} className={`surf${wide ? ' surf--wide' : ''}${conversationOnly ? ' surf--conversation' : ''}${updatesOpen ? ' surf--updates-open' : ''}${refDragging ? ' surf--dragging-ref' : ''}`} data-testid="surface">
+      {!conversationOnly && <header className="surf-head">
         <div className="surf-head-identity">
           <span className="surf-head-scene">Surface</span>
           <span className="surf-head-title">
@@ -275,28 +300,18 @@ export function SurfaceScene({
             )}
           </div>
         )}
-        {(flags.annotator !== null || flags.addressed !== null) && (
-          <div className="surf-head-flags">
-            {flags.annotator !== null && (
-              <span className={`surf-head-flag${flags.annotator ? ' surf-head-flag--off' : ''}`}>
-                Annotator {flags.annotator ? 'speaking' : 'silent · writes marks only'}
-              </span>
-            )}
-            {flags.addressed !== null && (
-              <span className={`surf-head-flag${flags.addressed ? '' : ' surf-head-flag--off'}`}>
-                {PARTICIPANT_NAME} speaks {flags.addressed ? 'when addressed or a gate fires' : 'on its own judgment'}
-              </span>
-            )}
-          </div>
-        )}
         {structure && (
           <span className="surf-head-hint">
             click a node for verbs · click an edge to dispute it · drop an update onto a node
           </span>
         )}
-      </header>
+        {roomControls}
+      </header>}
+      {conversationOnly && updatesOpen && <div className="surf-mobile-updates-back">
+        <button type="button" className="surf-shape" onClick={() => setUpdatesOpen(false)}>Close updates</button>
+      </div>}
 
-      <section className="surf-graph-pane" aria-label="Causal graph">
+      {!unbound && <section className="surf-graph-pane" aria-label="Causal graph">
         <div className="surf-pane-label">
           <span className="surf-pane-lamp" aria-hidden="true" />
           <span>Graph · causal model</span>
@@ -317,22 +332,14 @@ export function SurfaceScene({
             onEdgeSelect={disputeEdge}
             height={380}
           />
-        ) : unbound ? (
-          <SceneEmpty
-            kicker="Surface"
-            headline="No thesis on this surface yet."
-            action={<button type="button" className="btn btn-ghost btn-sm" onClick={onOpenBench}>Open the Bench</button>}
-          >
-            The graph appears once this room binds a thesis on the Bench; the conversation, the geography and the updates are already here.
-          </SceneEmpty>
         ) : desk.structure.status === 'unavailable' ? (
           <SceneEmpty kicker="Surface" headline="The graph is unavailable.">{desk.structure.error ?? ''}</SceneEmpty>
         ) : (
           <SceneEmpty kicker="Surface" headline="Reading the graph…">{''}</SceneEmpty>
         )}
-      </section>
+      </section>}
 
-      <section className="surf-atlas-pane" aria-label="Atlas">
+      {scopes.length > 0 && <section className="surf-atlas-pane" aria-label="Atlas">
         <SurfaceAtlas
           scopes={scopes}
           observations={observationRows}
@@ -343,7 +350,7 @@ export function SurfaceScene({
           hours={OBSERVATION_HOURS}
           contactsStatus={observations.status}
         />
-      </section>
+      </section>}
 
       <SurfaceConversation
         roomId={roomId}
@@ -352,7 +359,9 @@ export function SurfaceScene({
         shape={shape}
         onShape={setShape}
         wide={wideStream}
-        onToggleWide={toggleWide}
+        onToggleWide={unbound ? undefined : toggleWide}
+        readingLayout={conversationOnly}
+        roomControls={conversationOnly ? roomControls : undefined}
         anchor={anchor}
         onClearAnchor={() => setAnchor(null)}
         onAnchor={setAnchor}
@@ -377,7 +386,7 @@ export function SurfaceScene({
         banners={banners}
       />
 
-      <section className="surf-updates-pane" aria-label="Updates">
+      <section id="surface-updates" className="surf-updates-pane" aria-label="Updates" hidden={!updatesOpen}>
         <SurfaceUpdates
           roomId={roomId}
           since={unreadSince}
@@ -385,7 +394,7 @@ export function SurfaceScene({
           marks={marks}
           selectedId={selectedUpdateId}
           onSelect={(ref) => setSelectedUpdateId(ref ? (ref.entity === 'world_observations' ? ref.id : refFocusId(ref) ?? ref.id) : null)}
-          onOpen={openRef}
+          onOpen={(ref) => { openRef(ref); if (ref.entity === 'reading_items') setUpdatesOpen(false) }}
           onAttach={(ref) => stageRef(ref)}
           attachTargetLabel={anchor?.kind === 'node' ? anchor.label : null}
           onDragStateChange={setRefDragging}

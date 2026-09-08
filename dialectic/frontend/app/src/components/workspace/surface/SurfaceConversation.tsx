@@ -45,7 +45,9 @@ export interface SurfaceConversationProps {
   onShape: (shape: ConversationShape) => void
   /** The stream takes the whole width (the wide shapes always do). */
   wide: boolean
-  onToggleWide: () => void
+  onToggleWide?: () => void
+  readingLayout?: boolean
+  roomControls?: React.ReactNode
   /** The focused node or disputed edge — what the composer lands on. */
   anchor: MessageAnchor | null
   onClearAnchor: () => void
@@ -76,7 +78,7 @@ export function SurfaceConversation({
   roomId, messages, humans, shape, onShape, wide, onToggleWide, anchor, onClearAnchor, onAnchor,
   pendingRefs, onRemovePendingRef, onClearPendingRefs, composer, composerRef,
   typingUsers, activityLabel, onOpenRef, onFork, annotatorEnabled, addressedOnly,
-  controls, selectedEvidence, onSelectEvidence, onStageRef, onOpenFull, banners, evidenceOpen, onEvidenceOpen,
+  controls, selectedEvidence, onSelectEvidence, onStageRef, onOpenFull, banners, evidenceOpen, onEvidenceOpen, readingLayout = false, roomControls,
 }: SurfaceConversationProps) {
   const [onlyAnchored, setOnlyAnchored] = useState(false)
   const [replyToId, setReplyToId] = useState<string | null>(null)
@@ -185,7 +187,7 @@ export function SurfaceConversation({
     : 'Think out loud, share a link, or bring a source to the table…'
 
   return (
-    <section ref={rootRef} className={`surf-conv${evidenceOpen ? ' surf-conv--evidence-open' : ''}`} aria-label="Conversation">
+    <section ref={rootRef} className={`surf-conv${evidenceOpen ? ' surf-conv--evidence-open' : ''}${readingLayout && shape === 'stream' && !compactPane ? ' surf-conv--reading-layout' : ''}`} aria-label="Conversation">
       <div className="surf-conv-head">
         <span className="surf-pane-lamp" aria-hidden="true" />
         <span className="surf-conv-kicker">
@@ -208,7 +210,7 @@ export function SurfaceConversation({
             onClick={() => { onShape('stream'); onEvidenceOpen(!evidenceOpen) }}>
             {evidenceOpen ? 'Conversation' : 'Sources'}
           </button>
-          <button
+          {onToggleWide && <button
             type="button"
             className="surf-shape surf-shape--wide"
             aria-pressed={wide}
@@ -217,7 +219,7 @@ export function SurfaceConversation({
           >
             <span className="surf-grip" aria-hidden="true">⠿</span>
             {wide ? '⇥ Split' : '⇔ Wide'}
-          </button>
+          </button>}
         </div>
         <div className="surf-shapes" role="group" aria-label="Conversation shape">
           {(Object.keys(SHAPE_LABELS) as ConversationShape[]).map((candidate) => (
@@ -232,6 +234,7 @@ export function SurfaceConversation({
             </button>
           ))}
         </div>
+        {roomControls}
       </div>
 
       {banners && <div className="surf-conv-banners">{banners}</div>}

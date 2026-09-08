@@ -80,12 +80,12 @@ describe('SceneMasthead', () => {
     expect(summary).toContainElement(screen.getByText('What is this?'))
   })
 
-  it('keeps the compact variant on the transcript scenes only', () => {
+  it('keeps conversation workspaces compact', () => {
     for (const scene of IMPLEMENTED_WORKSPACE_SCENES) {
       const { container, unmount } = render(<SceneMasthead scene={scene} />)
       const header = container.querySelector('.scene-masthead')
       const isCompact = header?.classList.contains('scene-masthead-compact')
-      expect(isCompact).toBe(scene === 'record' || scene === 'house')
+      expect(isCompact).toBe(scene === 'record' || scene === 'house' || scene === 'surface')
       unmount()
     }
   })

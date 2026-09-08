@@ -46,7 +46,7 @@ import './SceneMasthead.css'
  * as well. Every scene starts closed and is opened on purpose.
  */
 
-const COMPACT_SCENES = new Set<ImplementedWorkspaceScene>(['record', 'house'])
+const COMPACT_SCENES = new Set<ImplementedWorkspaceScene>(['record', 'house', 'surface'])
 
 export function SceneMasthead({ scene }: { scene: ImplementedWorkspaceScene }) {
   const compact = COMPACT_SCENES.has(scene)

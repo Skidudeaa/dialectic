@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from 'react'
+import { type ReactNode, useEffect, useRef } from 'react'
 import { useAppStore } from '../../stores/appStore.ts'
 import type { ImplementedWorkspaceScene } from '../../types'
 import './AppLayout.css'
@@ -24,6 +24,30 @@ export function AppLayout({ sidebar, main, rightPanel, isHome = false, homeTalki
   const mobileDrawer = useAppStore((s) => s.mobileDrawer)
   const setMobileDrawer = useAppStore((s) => s.setMobileDrawer)
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen)
+  const layoutRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const viewport = window.visualViewport
+    const layout = layoutRef.current
+    if (!viewport || !layout || workspaceScene !== 'surface') return
+    // iPad's keyboard reduces the visual viewport without changing 100dvh.
+    // Leave pinch zoom to the browser instead of reflowing the reading.
+    const fit = () => {
+      if (viewport.scale === 1) {
+        layout.style.height = `${viewport.height + viewport.offsetTop}px`
+        layout.classList.toggle('surface-short', viewport.height < 600)
+      }
+    }
+    fit()
+    viewport.addEventListener('resize', fit)
+    viewport.addEventListener('scroll', fit)
+    return () => {
+      viewport.removeEventListener('resize', fit)
+      viewport.removeEventListener('scroll', fit)
+      layout.style.removeProperty('height')
+      layout.classList.remove('surface-short')
+    }
+  }, [workspaceScene])
 
   // Destination-driven close lives in useRoomNavigation's successful
   // install (including branch changes); Escape and the scrim stay here.
@@ -37,7 +61,7 @@ export function AppLayout({ sidebar, main, rightPanel, isHome = false, homeTalki
   }, [mobileDrawer, setMobileDrawer])
 
   return (
-    <div className={`app-layout right-panel-${rightPanelOpen ? 'open' : 'closed'}${mobileDrawer ? ` drawer-open drawer-${mobileDrawer}` : ''}`}>
+    <div ref={layoutRef} className={`app-layout right-panel-${rightPanelOpen ? 'open' : 'closed'}${mobileDrawer ? ` drawer-open drawer-${mobileDrawer}` : ''}`}>
       <div className="app-sidebar" id="room-list-panel">{sidebar}</div>
       <div className={`app-main${isHome ? ' app-main-home' : ''}${workspaceScene ? ` app-main-scene-${workspaceScene}` : ''}${homeTalking ? ' app-main-home-talking' : ''}`}>{main}</div>
       <div className="app-right-panel" id="context-panel">{rightPanel}</div>

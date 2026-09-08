@@ -36,6 +36,23 @@ beforeEach(() => {
 })
 
 describe('shared evidence', () => {
+  it('opens a sole reading once and lets the reader return to all sources', async () => {
+    vi.mocked(api.getReadingLibrary).mockResolvedValue({ items: [{ ...reading, revision_count: 1, capture_mode: 'article' }], next_before: null })
+    render(<Table />)
+    await screen.findByTestId('reading-markdown')
+    fireEvent.click(screen.getByRole('button', { name: 'All sources' }))
+    expect(screen.queryByTestId('reading-markdown')).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Strait report/ })).toBeInTheDocument()
+  })
+
+  it('keeps source choice explicit when the library has multiple readings', async () => {
+    vi.mocked(api.getReadingLibrary).mockResolvedValue({ items: [{ ...reading, revision_count: 1, capture_mode: 'article' }, { ...reading, id: 'second', title: 'Other report', revision_count: 1, capture_mode: 'article' }], next_before: null })
+    render(<Table />)
+    await screen.findByRole('button', { name: /Other report/ })
+    expect(screen.queryByTestId('reading-markdown')).not.toBeInTheDocument()
+    expect(api.getReadingDetail).not.toHaveBeenCalled()
+  })
+
   it('opens a source and carries the exact rendered selection with its revision', async () => {
     render(<Table />)
     fireEvent.click(await screen.findByRole('button', { name: /Strait report/ }))

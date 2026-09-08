@@ -28,6 +28,8 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
   const [quote, setQuote] = useState('')
   const [selectionError, setSelectionError] = useState<string | null>(null)
   const sourceRef = useRef<HTMLDivElement>(null)
+  const initialLibraryRoom = useRef<string | null>(null)
+  const libraryRoom = useRef<string | null>(null)
   const selectedId = selected?.entity === 'reading_items' ? selected.id : null
 
   useEffect(() => {
@@ -36,11 +38,21 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
       setError(null)
       setLibrary(null)
       api.getReadingLibrary(roomId, { q: query || undefined, limit: 40 })
-        .then((result) => { if (!cancelled) setLibrary(result) })
+        .then((result) => { if (!cancelled) { libraryRoom.current = roomId; setLibrary(result) } })
         .catch((cause: unknown) => { if (!cancelled) setError(cause instanceof Error ? cause.message : 'Could not load the sources') })
     }, query ? 180 : 0)
     return () => { cancelled = true; window.clearTimeout(timer) }
   }, [roomId, query, attempt])
+
+  useEffect(() => {
+    if (!library || libraryRoom.current !== roomId || query || initialLibraryRoom.current === roomId) return
+    initialLibraryRoom.current = roomId
+    // Open an unambiguous starting source once, without trapping All sources.
+    if (!selected && library.items.length === 1 && !library.next_before) {
+      const item = library.items[0]
+      onSelect({ entity: 'reading_items', id: item.id, label: item.title || item.url })
+    }
+  }, [library, query, roomId, selected, onSelect])
 
   useEffect(() => {
     let cancelled = false

@@ -142,6 +142,7 @@
    one-column work surface; fixed rails stop stealing most of its width. */
 @media (max-width: 1279.98px) {
     .app-layout,
+    .app-layout:has(.app-main-scene-surface),
     .app-layout.right-panel-closed {
         grid-template-columns: minmax(0, 1fr);
     }

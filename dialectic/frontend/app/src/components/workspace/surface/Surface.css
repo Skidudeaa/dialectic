@@ -45,7 +45,7 @@
     position: relative;
     top: auto;
     align-self: stretch;
-    height: calc(100dvh - 340px);
+    height: auto;
     max-height: none;
 }
 
@@ -56,13 +56,11 @@
     grid-area: conv;
     min-height: 0;
     min-width: 0;
-    position: sticky;
-    top: 0;
-    align-self: start;
-    /* 100dvh minus the chrome above the grid (~250px) and the head row
-       (~150px): the composer is in view before any scroll, and stays in
-       view once the column sticks. */
-    height: calc(100dvh - 340px);
+    position: relative;
+    align-self: stretch;
+    /* The grid owns this pane's height; a viewport estimate can paint over
+       the following updates row when the room header wraps. */
+    height: auto;
     min-height: 440px;
     max-height: none;
 }
@@ -609,7 +607,6 @@
     .surf-conv .surf-compose-passages { max-height: 80px; }
 }
 @media (max-width: 680px) {
-    .surf--wide .surf-conv, .surf .surf-conv { min-height: 560px; }
     .surf-conv .surf-conv-head > .surf-pane-lamp,
     .surf-conv .surf-conv-kicker,
     .surf-conv .surf-shape--wide { display: none; }
@@ -624,3 +621,94 @@
 @container conversation (max-width: 760px) {
     .surf-conv--evidence-open .surf-stream-record { display: none; }
 }
+
+/* Rooms without a thesis or geography are reading/conversation workspaces.
+   Fit the actual parent; nested transcript/source scrolls own the overflow. */
+.surf.surf--conversation {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "conv";
+    gap: 6px;
+    padding: 6px 10px;
+    overflow: hidden;
+}
+.surf--conversation .surf-conv {
+    height: auto;
+    min-height: 0;
+    align-self: stretch;
+}
+.surf-head-flags { position: relative; align-self: center; }
+.surf-head-flags summary { cursor: pointer; }
+.surf-head-flags[open] .surf-head-flag { display: block; margin-top: 6px; }
+.surf-updates-toggle { margin-left: auto; grid-column: 2; justify-self: end; }
+.surf-updates-pane[hidden] { display: none; }
+.surf--conversation .surf-updates-pane { overflow: auto; }
+.surf-conv-head, .surf-compose { flex-shrink: 0; }
+.surf--conversation .surf-conv-head { padding: 4px 8px; }
+.surf--conversation .surf-conv-kicker { font-size: 10px; letter-spacing: .04em; }
+.surf--conversation .surf-evidence-document .reading-focus-prose { font-size: 18px; line-height: 1.6; }
+
+/* A source spans the transcript and its composer, so writing never steals
+   the bottom of the article. The existing pane observer selects this layout. */
+.surf-conv--reading-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "controls controls" "banners banners" "record evidence" "compose evidence";
+}
+.surf-conv--reading-layout .surf-conv-head { grid-area: controls; }
+.surf-conv--reading-layout .surf-conv-banners { grid-area: banners; }
+.surf-conv--reading-layout .surf-conv-body,
+.surf-conv--reading-layout .surf-stream { display: contents; }
+.surf-conv--reading-layout .surf-stream-record { grid-area: record; }
+.surf-conv--reading-layout .surf-evidence { grid-area: evidence; }
+.surf-conv--reading-layout .surf-compose { grid-area: compose; }
+.surf--conversation .surf-compose .input-area { padding: 5px; }
+.surf--conversation .surf-compose .input-area-inner { padding: 6px; }
+.surf--conversation .surf-compose .input-hints { display: none; }
+.surf--conversation .surf-compose .input-hints:has(.input-error, .input-notice) { display: flex; }
+.surf--conversation .msg-textarea:placeholder-shown { max-height: 44px; }
+.surf--conversation .surf-evidence { padding: 10px 18px 18px; }
+.surf--conversation .surf-evidence h2 { margin: 8px 0; }
+.surf--conversation .surf-evidence-heading { padding-bottom: 4px; }
+.surf--conversation .surf-evidence-actions { top: -10px; margin-block: 4px; padding-block: 4px; }
+.surf--conversation .surf-evidence-hint { margin-block: 4px; }
+.surf-head-flags { display: block; }
+
+/* Short visual viewports include the iPad keyboard. Keep navigation and
+   composing; the explanatory masthead returns when the keyboard closes. */
+.app-layout.surface-short .workspace-scene-surface .scene-masthead { display: none; }
+.app-layout.surface-short .app-main-scene-surface .participants-bar { display: none; }
+.app-layout.surface-short .surf--conversation .surf-conv-kicker { display: none; }
+.app-layout.surface-short .app-main-scene-surface .room-header-right { display: none; }
+.app-layout.surface-short .surf--conversation .surf-compose-passages { max-height: 48px; }
+.app-layout.surface-short .surf--conversation .msg-textarea:not(:placeholder-shown) { max-height: 80px; }
+.app-layout.surface-short .app-main-scene-surface .push-enable-chip { display: none; }
+
+/* Updates borrow width on demand, never the space under a human draft. */
+.surf.surf--conversation.surf--updates-open {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 28%);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "conv updates";
+}
+.surf--conversation .surf-updates-pane .surf-upd-tray { flex-direction: column; }
+@media (max-width: 680px) {
+    .surf.surf--conversation.surf--updates-open {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+        grid-template-areas: "head" "updates";
+    }
+    .surf--conversation.surf--updates-open .surf-conv { display: none; }
+}
+
+.surf-mobile-updates-back { display: none; grid-area: head; }
+.surf-conv-head .surf-head-flags { font: 11px var(--font-mono); color: var(--color-secondary); }
+.surf-conv-head .surf-updates-toggle { flex: 0 0 auto; font-size: 11px; letter-spacing: 0; padding-inline: 6px; margin-left: 0; }
+.app-layout.surface-short .surf-conv-head .surf-head-flags { display: none; }
+@media (max-width: 680px) {
+    .surf-mobile-updates-back { display: flex; justify-content: flex-end; }
+    .surf-conv-head .surf-head-flags { display: none; }
+}
+
+.surf--conversation .surf-updates-pane .surf-upd-card { flex-basis: auto; min-width: 0; max-width: none; min-height: 0; }
+.surf--conversation .surf-upd-header-right { display: none; }
