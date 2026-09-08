@@ -1,5 +1,6 @@
 # llm/tools.py — the tool registry the LLM participant is handed each turn
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
@@ -10,6 +11,7 @@ from uuid import UUID
 from . import cairn_client as cn
 from . import defuddle_client as dc
 from . import documents as documents_mod
+from . import reddit_client as rc
 from . import tradingdesk_client as td
 from .world import WORLD_QUERY_INNER_TIMEOUT_S
 
@@ -30,12 +32,10 @@ logger = logging.getLogger(__name__)
 THESIS_CHAR_CAP = 6000
 TOOL_RESULT_CHAR_CAP = 8000
 
-# read_article truncates the extracted body at this many characters BEFORE
-# _shrink runs. WHY not let _shrink handle it: _shrink drops whole keys, and
-# the biggest key here is "content" — dropping it would hand the model an
-# article with everything except the article. A clean cut at a character
-# boundary keeps what survives trustworthy and says where it stopped.
+# Each article window keeps its content and exposes the next exact offset.
+# _shrink drops whole keys, so it must never process a source body.
 ARTICLE_CONTENT_CAP = 6000
+
 
 # MEASURED 2026-08-09: /api/market/quotes takes ~18.5s (it re-fetches Yahoo
 # per book, uncached), while every other endpoint answers in milliseconds.
@@ -176,6 +176,63 @@ def _size(value: Any) -> int:
         return len(json.dumps(value, default=str))
     except (TypeError, ValueError):
         return len(str(value))
+
+
+def _article_window(article: dict, args: dict, url: str) -> dict:
+    """Return a complete JSON window with exact offsets and a revision fence."""
+    content = str(article.get("content") or "")
+    digest = hashlib.sha256(content.encode()).hexdigest()
+    expected = args.get("content_sha256")
+    if expected and expected != digest:
+        raise ValueError("The fetched source changed since the previous window. Read it again before continuing or quoting.")
+    start = args.get("start_char", 0)
+    if isinstance(start, bool) or not isinstance(start, int) or not 0 <= start <= len(content):
+        raise ValueError(f"start_char must be between 0 and {len(content)}")
+    find = args.get("find")
+    if find:
+        if not isinstance(find, str) or len(find) > 500:
+            raise ValueError("find must be an exact source phrase of at most 500 characters")
+        match = content.find(find, start)
+        if match < 0:
+            raise ValueError("That exact phrase was not found in the extracted source after start_char; do not invent a match.")
+        start = max(0, match - 350)
+    out = {key: article.get(key) for key in ("title", "author", "site", "published", "word_count")}
+    out.update({"url": article.get("url") or url, "content_sha256": digest,
+                "content_start": start, "content_total_chars": len(content)})
+    for key in ("source", "linked_url", "comment_count", "comments_returned", "fetched_at"):
+        if key in article:
+            out[key] = article[key]
+
+    def window(end: int) -> dict:
+        result = {**out, "content": content[start:end], "content_end": end}
+        notes = [article["content_note"]] if article.get("content_note") else []
+        if end < len(content):
+            result["next_start_char"] = end
+            notes.append(
+                f"Article body cut at character {end} of {len(content)} in a {article.get('word_count') or '?'}-word piece. "
+                f"Continue with start_char={end} and content_sha256={digest}; only quote text returned by a read."
+            )
+        if start:
+            notes.append(f"This window starts at character {start}; earlier text is omitted.")
+        if notes:
+            result["content_note"] = " ".join(notes)
+        if not content:
+            result["note"] = "The extractor found no article body. Say so rather than inventing its contents."
+        return result
+
+    # Unicode escaping can make 6,000 characters exceed the wire budget. Shrink
+    # only the window, never drop its content key or cut serialized JSON.
+    low, high = start, min(len(content), start + ARTICLE_CONTENT_CAP)
+    while low < high:
+        mid = (low + high + 1) // 2
+        if _size(window(mid)) <= TOOL_RESULT_CHAR_CAP:
+            low = mid
+        else:
+            high = mid - 1
+    result = window(low)
+    if _size(result) > TOOL_RESULT_CHAR_CAP or (content and low == start and start < len(content)):
+        raise ValueError("Source metadata is too large to return a readable content window")
+    return result
 
 
 def _shrink(payload: Any, limit: int, core: frozenset = frozenset()) -> Any:
@@ -1206,31 +1263,36 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
         if not isinstance(article, dict):
             return {"url": url, "note": "The extractor returned an unexpected shape."}
 
-        content = str(article.get("content") or "")
-        truncated = len(content) > ARTICLE_CONTENT_CAP
-        out = {
-            "url": article.get("url") or url,
-            "title": article.get("title"),
-            "author": article.get("author"),
-            "site": article.get("site"),
-            "published": article.get("published"),
-            "word_count": article.get("word_count"),
-            "content": content[:ARTICLE_CONTENT_CAP] if truncated else content,
-        }
-        if truncated:
-            out["content_note"] = (
-                f"Article body cut at {ARTICLE_CONTENT_CAP} characters to fit "
-                "the context window — what is shown is the opening, complete "
-                f"to that point, of a {article.get('word_count') or '?'}-word "
-                "piece. Do not quote from beyond the cut."
-            )
-        if not out["content"]:
-            out["note"] = (
-                "The extractor found no article body at that URL (it may be "
-                "paywalled, a JS-only app, or not an article). Say so rather "
-                "than inventing its contents."
-            )
-        return _shrink(out, TOOL_RESULT_CHAR_CAP)
+        return _article_window(article, args, url)
+
+    async def search_reddit(args: dict) -> dict:
+        result = await rc.search(
+            str(args.get("query") or "").strip(),
+            subreddit=str(args.get("subreddit") or "all"),
+            sort=str(args.get("sort") or ("relevance" if args.get("query") else "top")),
+            time_filter=str(args.get("time_filter") or "all"),
+            limit=int(args.get("limit", 5)),
+        )
+        # Drop whole trailing search hits explicitly, never their URLs or bodies.
+        omitted = 0
+        while _size(result) > TOOL_RESULT_CHAR_CAP and result["results"]:
+            result["results"].pop()
+            omitted += 1
+            result["count"] = len(result["results"])
+            result["omitted_for_size"] = omitted
+        if not result["results"] and omitted:
+            raise ValueError("Reddit search results exceed the context budget; narrow the query")
+        return result
+
+    async def read_reddit(args: dict) -> dict:
+        url = str(args.get("url") or "").strip()
+        if not url:
+            raise ValueError("url is required — a Reddit post or comment permalink")
+        article = await rc.extract_article(
+            url, comment_limit=int(args.get("comment_limit", 12)),
+            sort=str(args.get("sort") or "top"),
+        )
+        return _article_window(article, args, url)
 
     async def save_reading(args: dict) -> dict:
         """Validate and shape a library proposal. NO write — ever.
@@ -1550,8 +1612,10 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
                 "is stripped. Use it after get_thesis_news to read the full "
                 "text behind a headline — a headline alone is not evidence — "
                 "or whenever someone shares a link worth reading. Long "
-                "articles are cut at the content_note boundary; never quote "
-                "past it. If the fetch fails or returns no content, say so — "
+                "articles return a content window: continue using next_start_char "
+                "and content_sha256, or locate an exact phrase with find. "
+                "Reddit permalinks use the authenticated API with attributed comments. "
+                "If the fetch fails or returns no content, say so — "
                 "never invent an article's contents."
             ),
             input_schema={
@@ -1561,6 +1625,9 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
                         "type": "string",
                         "description": "The http(s) URL of the page to read.",
                     },
+                    "start_char": {"type": "integer", "minimum": 0, "description": "Continue at next_start_char from a prior result."},
+                    "find": {"type": "string", "description": "Exact phrase to locate after start_char, returning surrounding source text."},
+                    "content_sha256": {"type": "string", "description": "Prior result hash; continuation fails if the source changed."},
                 },
                 "required": ["url"],
             },
@@ -1569,6 +1636,47 @@ def _build_dialectic_tools(room, db) -> list[Tool]:
             # The sidecar fetches upstream (15s budget) and then parses; the
             # client's own 20s timeout must fire before the loop's.
             timeout_s=25.0,
+        ),
+        Tool(
+            name="search_reddit",
+            description=(
+                "Find public Reddit discussions about a topic through the authenticated Reddit API. "
+                "Search all communities or named subreddits; omit query and choose top, hot, or new to browse. "
+                "Returns real post permalinks, authors, scores, dates, and labeled excerpts. "
+                "Use read_reddit on a result before quoting its discussion; use read_article for its external linked source. "
+                "Votes are not verification. This tool does not post, vote, subscribe, or save anything."
+            ),
+            input_schema={
+                "type": "object", "properties": {
+                    "query": {"type": "string", "maxLength": 500},
+                    "subreddit": {"type": "string", "description": "Default all; e.g. MachineLearning or MachineLearning+LocalLLaMA."},
+                    "sort": {"type": "string", "enum": list(rc.SORTS)},
+                    "time_filter": {"type": "string", "enum": list(rc.TIME_FILTERS)},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 6},
+                }, "required": [],
+            },
+            execute=search_reddit, label="finding Reddit discussions", timeout_s=rc.TIMEOUT_S + 5.0,
+        ),
+        Tool(
+            name="read_reddit",
+            description=(
+                "Read a public Reddit post with an explicitly bounded comment sample, or read one exact comment permalink. "
+                "Preserves authors, parent IDs, comment permalinks, dates, and vote counts. "
+                "Omitted comments and linked external article bodies are not evidence you have read. "
+                "Continue a long result with next_start_char and content_sha256, or find an exact phrase. "
+                "Use save_reading with the permalink to propose keeping it in this room; humans accept the proposal."
+            ),
+            input_schema={
+                "type": "object", "properties": {
+                    "url": {"type": "string", "description": "Reddit post or specific comment permalink, or redd.it post link."},
+                    "comment_limit": {"type": "integer", "minimum": 0, "maximum": 30, "description": "Default 12; bounded loaded sample, not every comment."},
+                    "sort": {"type": "string", "enum": ["top", "new", "confidence", "controversial", "old", "q&a"]},
+                    "start_char": {"type": "integer", "minimum": 0},
+                    "find": {"type": "string", "description": "Exact text to locate in the returned post/comment sample."},
+                    "content_sha256": {"type": "string", "description": "Prior content hash for a consistent continuation."},
+                }, "required": ["url"],
+            },
+            execute=read_reddit, label="reading the Reddit discussion", timeout_s=rc.TIMEOUT_S + 5.0,
         ),
         Tool(
             name="save_reading",

@@ -35,6 +35,8 @@ EXPECTED_TOOLS = {
     "propose_thesis",
     "propose_trade",
     "read_article",
+    "search_reddit",
+    "read_reddit",
     "save_reading",
     "search_reading",
     "search_dev_sessions",
@@ -100,9 +102,9 @@ def registry(room, db):
 
 
 class TestRegistryContract:
-    def test_registers_all_twenty_three_tools(self, registry):
+    def test_registers_all_twenty_five_tools(self, registry):
         assert set(registry.names()) == EXPECTED_TOOLS
-        assert len(registry.tools) == 23
+        assert len(registry.tools) == 25
 
     def test_every_tool_guard_outlives_its_http_client(self, registry):
         """The seam's timeout law, enforced for the whole registry.

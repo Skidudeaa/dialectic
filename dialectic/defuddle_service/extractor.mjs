@@ -201,7 +201,7 @@ function sanitizedReaderTarget(parsed) {
 
 
 function readerField(header, name) {
-  const match = header.match(new RegExp(`^${name}:\\s*(.*)$`, 'mi'));
+  const match = header.match(new RegExp(`^${name}:[ \\t]*(.*)$`, 'mi'));
   return match?.[1]?.trim() || null;
 }
 
@@ -245,6 +245,10 @@ async function extractWithReader(
         throw new Error('reader returned no article content');
       }
       const header = body.slice(0, match.index);
+      const upstreamError = header.match(/^Warning: Target URL returned error ([45]\d\d):[ \t]*(.*)$/mi);
+      if (upstreamError) {
+        throw new Error(`reader target returned HTTP ${upstreamError[1]}: ${upstreamError[2]}`);
+      }
 
       return {
         title: readerField(header, 'Title'),

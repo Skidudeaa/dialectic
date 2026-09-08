@@ -12,18 +12,14 @@
     gap: 1.25rem;
     min-height: 0;
 }
-/* Ambient dimming: while an object is in Focus, the scene underneath steps
-   back — still legible, clearly not the subject. Hovering the scene lifts it
-   partway so a reader can glance back without closing the surface. */
+/* The wrapper exists with or without Focus. Reading is activity: never dim
+   the room based on pointer position or an open inspection panel. */
 .workspace-with-focus > .workspace-scene {
     flex: 1 1 auto;
     min-width: 0;
-    opacity: .55;
-    transition: opacity var(--dur-med, 220ms) var(--ease-out);
 }
-.workspace-with-focus > .workspace-scene:hover { opacity: .85; }
 
-/* The focused object is the spotlight: a raised sheet against the dimmed
+/* The focused object is the spotlight: a raised sheet beside the active
    scene, edged in the scene accent, dropped shadow behind it. */
 .focus-surface {
     flex: 0 0 340px;

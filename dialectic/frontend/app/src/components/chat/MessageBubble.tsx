@@ -807,15 +807,20 @@ export function MessageBubble({
             />
           )}
         </ResponseCard>
-        {currentRoomId && (
-          <MessageMarks roomId={currentRoomId} marks={marks} onReviewed={onFieldChanged} />
-        )}
+        {currentRoomId && (threadSource !== undefined && marks.length > 0 ? (
+          <details className="msg-marks-disclosure">
+            <summary>{marks.length} field {marks.length === 1 ? 'mark' : 'marks'}</summary>
+            <MessageMarks roomId={currentRoomId} marks={marks} onReviewed={onFieldChanged} />
+          </details>
+        ) : <MessageMarks roomId={currentRoomId} marks={marks} onReviewed={onFieldChanged} />)}
         {currentRoomId && message.metadata?.question_round && (
-          <RoundCard
-            roomId={currentRoomId}
-            messageId={message.id}
-            userNames={userNames}
-          />
+          <div hidden={threadSource !== undefined && isFolded}>
+            <RoundCard
+              roomId={currentRoomId}
+              messageId={message.id}
+              userNames={userNames}
+            />
+          </div>
         )}
 
         {foldable && (

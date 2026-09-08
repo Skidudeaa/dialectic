@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ContextInspector, ReviewButton } from '@dark-roast/companion-ui'
 import type { MessageRef, ReadingDetail, ReadingLibraryResponse } from '../../../types'
 import { api } from '../../../lib/api'
-import { anchorFromSelection, markQuote, uniqueQuoteRange, MAX_QUOTE_CHARS, normaliseQuote } from '../../../lib/passageAnchor'
+import { markQuote, uniqueQuoteRange, MAX_QUOTE_CHARS, MIN_QUOTE_CHARS, normaliseQuote } from '../../../lib/passageAnchor'
 import { RenderedMarkdown } from '../focus/ReadingFocus'
 import { passageKey, type SurfaceMsg } from './surfaceModel'
 
@@ -30,6 +30,7 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
   const [detail, setDetail] = useState<ReadingDetail | null>(null)
   const [detailError, setDetailError] = useState<string | null>(null)
   const [quote, setQuote] = useState('')
+  const [selectionPosition, setSelectionPosition] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null)
   const [selectionError, setSelectionError] = useState<string | null>(null)
   const [passageNotice, setPassageNotice] = useState<string | null>(null)
   const sourceRef = useRef<HTMLDivElement>(null)
@@ -66,6 +67,7 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
       setDetail(null)
       setDetailError(null)
       setQuote('')
+      setSelectionPosition(null)
       setSelectionError(null)
       if (!selectedId) return
       try {
@@ -171,21 +173,52 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
     onPassage?.(ref)
   }
 
-  function readSelection() {
+  const readSelection = useCallback(() => {
     const container = sourceRef.current
     if (!container) return
     const selection = window.getSelection()
-    const passage = anchorFromSelection(selection, container)
-    setSelectionError(selection && normaliseQuote(selection.toString()).length > MAX_QUOTE_CHARS
-      ? `Choose a passage of up to ${MAX_QUOTE_CHARS} characters.` : null)
-    const unique = passage && uniqueQuoteRange(container, passage.quote)
-    if (passage && !unique) setSelectionError('Those words occur more than once. Select a longer passage so the thread links to the right place.')
-    setQuote(unique ? passage!.quote : '')
-  }
+    if (!selection || selection.isCollapsed || !selection.rangeCount || !container.contains(selection.getRangeAt(0).commonAncestorContainer)) {
+      setQuote(''); setSelectionError(null); setSelectionPosition(null)
+      return
+    }
+    const raw = normaliseQuote(selection.toString())
+    if (raw.length < MIN_QUOTE_CHARS) { setQuote(''); setSelectionPosition(null); setSelectionError(null); return }
+    // The persisted quote remains bounded. Show the excerpt before filing it,
+    // so selecting an ordinary long paragraph never produces a dead action.
+    const excerpt = raw.slice(0, MAX_QUOTE_CHARS).trim()
+    const unique = uniqueQuoteRange(container, excerpt)
+    setSelectionError(!unique
+      ? 'These words repeat. Extend the selection to include a distinctive phrase.'
+      : raw.length > MAX_QUOTE_CHARS ? `Quoting the first ${MAX_QUOTE_CHARS} characters of your selection.` : null)
+    setQuote(unique ? excerpt : '')
+    const pane = container.closest('.surf-evidence')!.getBoundingClientRect()
+    const range = selection.getRangeAt(0)
+    const rect = typeof range.getBoundingClientRect === 'function' ? range.getBoundingClientRect() : pane
+    const width = Math.min(340, pane.width - 24)
+    const maxHeight = Math.min(180, pane.height - 16)
+    setSelectionPosition({
+      left: Math.max(pane.left + 12, Math.min(rect.left, pane.right - width - 12)),
+      top: Math.max(pane.top + 8, Math.min(rect.bottom + 10, pane.bottom - maxHeight - 8)),
+      width, maxHeight,
+    })
+  }, [])
+
+  useEffect(() => {
+    document.addEventListener('selectionchange', readSelection)
+    window.addEventListener('resize', readSelection)
+    const pane = sourceRef.current?.closest('.surf-evidence')
+    pane?.addEventListener('scroll', readSelection)
+    return () => {
+      document.removeEventListener('selectionchange', readSelection)
+      window.removeEventListener('resize', readSelection)
+      pane?.removeEventListener('scroll', readSelection)
+    }
+  }, [readSelection, current])
 
   function discuss(attach = false) {
     if (!current) return
     setQuote('')
+    setSelectionPosition(null)
     window.getSelection()?.removeAllRanges()
     const submit = attach && onAttach ? onAttach : onDiscuss
     submit({
@@ -211,13 +244,18 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
               ? 'The original quote stays with the contribution.' : 'You are viewing the current version.'}</p>
           )}
           <div className="surf-evidence-actions">
-            {current && <ReviewButton intent="inspect" onClick={() => discuss(Boolean(onAttach))}>{onAttach ? (quote ? 'Attach passage to reply' : 'Attach source to reply') : quote ? 'Discuss this passage' : 'Discuss this source'}</ReviewButton>}
+            {current && !quote && <ReviewButton intent="inspect" onClick={() => discuss(Boolean(onAttach))}>{onAttach ? 'Attach source to reply' : 'Discuss this source'}</ReviewButton>}
             {current && onAttach && <button type="button" onClick={() => discuss()}>Start a new thread</button>}
             <button type="button" onClick={() => onOpenFull(selected)}>Source details ↗</button>
             {current && /^https?:\/\//i.test(current.url) && <a href={current.url} target="_blank" rel="noopener noreferrer">Original ↗</a>}
           </div>
-          {quote && <blockquote className="surf-evidence-selection">{quote}</blockquote>}
-          {selectionError && <p role="status" className="surf-evidence-notice">{selectionError}</p>}
+          {selectionPosition && <div className="surf-selection-action" style={selectionPosition} role="region" aria-label="Comment on selected passage"
+            onPointerDown={(event) => event.preventDefault()}>
+            {quote && <blockquote>{quote}</blockquote>}
+            {selectionError && <p role="status">{selectionError}</p>}
+            {quote && <button type="button" onClick={() => discuss(Boolean(onAttach))}>{onAttach ? 'Attach passage to reply' : 'Discuss this passage'}</button>}
+            <button type="button" aria-label="Dismiss passage selection" onClick={() => { window.getSelection()?.removeAllRanges(); setSelectionPosition(null); setQuote(''); setSelectionError(null) }}>×</button>
+          </div>}
           {exchanges.length > 0 && <details className="surf-evidence-exchanges">
             <summary>{exchanges.length} contributions · {[...new Set(exchanges.map((m) => m.author.name))].join(' · ')}</summary>
             {exchanges.map((message) => (

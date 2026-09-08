@@ -1,5 +1,7 @@
 # Handoff — 2026-09-08: An Alien Mind reading room
 
+Owner feedback and the subsequent repair supersede this delivery snapshot. Resume from [the usability repair handoff](2026-09-08-reading-room-usability-repair.md).
+
 ## Resume here
 
 The reading-room repair and passage-thread implementation are committed and deployed. This handoff records the shipped behavior, its limits, and the next product work. The roadmap below is proposed work, not implemented functionality.

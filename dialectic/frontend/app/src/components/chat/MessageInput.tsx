@@ -514,6 +514,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
               </button>
             ))}
           </div>
+          {compactOptions && <ProposeMenu disabled={disabled} />}
         </Options>}
         <div className="input-row">
           <input
@@ -584,7 +585,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
           {/* Home hides the propose surface too — theses, predictions and
               commitments are scheme-room speech acts (§5.3); Home cannot
               bind a thesis at all (see llm/tools.py propose_thesis). */}
-          {!quiet && <ProposeMenu disabled={disabled} />}
+          {!quiet && !compactOptions && <ProposeMenu disabled={disabled} />}
           {onResearch && (
             <button
               className="research-btn"

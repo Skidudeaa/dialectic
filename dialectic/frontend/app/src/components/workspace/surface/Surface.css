@@ -742,3 +742,25 @@
 .app-layout.surface-short .surf--conversation .surf-conv-head { padding-block: 2px; gap: 3px 6px; }
 .app-layout.surface-short .surf--conversation .surf-conv-head button,
 .app-layout.surface-short .surf--conversation .surf-other-shapes summary { min-height: 32px; padding-block: 4px; }
+
+/* The passage action follows the selection, including native touch handles. */
+.surf-selection-action { position: fixed; z-index: 30; display: flex; flex-wrap: wrap; gap: 6px; box-sizing: border-box; padding: 9px; background: var(--color-obsidian); border: 1px solid var(--color-amber); border-radius: 5px; box-shadow: var(--shadow-lg); }
+.surf-selection-action blockquote { flex-basis: 100%; margin: 0; color: var(--color-ink); font: 14px/1.4 var(--font-serif); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.surf-selection-action p { flex-basis: 100%; margin: 0; color: var(--color-secondary); font: 11px/1.4 var(--font-mono); }
+.surf-selection-action button { border: 1px solid var(--color-amber); background: var(--color-well); color: var(--color-amber); padding: 6px 10px; min-height: 36px; cursor: pointer; font: 12px var(--font-mono); }
+.surf-selection-action button:last-child { margin-left: auto; }
+/* The room title and scene switcher already provide orientation. */
+.workspace-scene-surface:has(.surf--conversation) .scene-masthead { display: none; }
+@media (max-width: 680px) {
+    .workspace-scene-surface:has(.surf--conversation) .scene-switcher { padding-inline: 6px; gap: 2px; }
+    .workspace-scene-surface:has(.surf--conversation) .scene-switcher-action { padding-inline: 5px; gap: 4px; font-size: 10px; letter-spacing: 0; flex-shrink: 0; }
+    .workspace-scene-surface:has(.surf--conversation) .scene-switcher-more { font-size: 10px; letter-spacing: 0; }
+    .workspace-scene-surface:has(.surf--conversation) .scene-switcher-more summary { font-size: 10px; }
+    .workspace-scene-surface:has(.surf--conversation) .console { display: none; }
+    .surf--conversation .dr-companion .input-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) 36px; gap: 5px; }
+    .surf--conversation .input-row .attach-btn { grid-column: 1; grid-row: 1; width: 36px; padding-inline: 7px; }
+    .surf--conversation .input-row .msg-textarea { grid-column: 2; grid-row: 1; min-width: 0; order: 0; }
+    .surf--conversation .input-row .send-btn { grid-column: 3; grid-row: 1; width: 36px; padding-inline: 7px; }
+}
+.surf-selection-action { overflow-y: auto; }
+.surf-selection-action button { order: -1; }

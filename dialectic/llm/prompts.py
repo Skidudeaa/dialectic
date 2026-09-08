@@ -1,7 +1,9 @@
 # llm/prompts.py — Prompt assembly with user modifier blending
 
 import logging
+import re
 import secrets
+from statistics import median
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
@@ -30,6 +32,58 @@ except ImportError:
 class AssembledPrompt:
     system: str
     messages: list[dict]
+
+
+_EXPANDED_REPLY = re.compile(
+    r"\b(in detail|detailed|comprehensive|exhaustive|thorough|deep dive|deep research|"
+    r"step.by.step|go deep|long(?:er| form)? (?:answer|response|explanation)|"
+    r"(?:write|draft|create|make|produce)\b.{0,60}\b(?:report|document|pdf|essay|"
+    r"newsletter|code|script)|expand on|elaborate|\d{3,}\s*words)\b", re.IGNORECASE,
+)
+_BRIEF_REPLY = re.compile(
+    r"\b(brief(?:ly)?|concise(?:ly)?|short(?:er)?|brevity|tl;?dr|too long)\b|"
+    r"\b(?:don['’]t|do not|stop)\b.{0,35}\b(?:detail|detailed|elaborate|essay|long)\b",
+    re.IGNORECASE,
+)
+
+
+def response_word_budget(messages: list[Message], *, addressed: bool) -> Optional[int]:
+    """Visible words for one conversational turn; explicit extended work is uncapped."""
+    humans = [m for m in messages if m.speaker_type == SpeakerType.HUMAN][-6:]
+    if addressed and humans:
+        latest = humans[-1].content
+        if _EXPANDED_REPLY.search(latest) and not _BRIEF_REPLY.search(latest):
+            return None
+    typical_words = int(median(len(m.content.split()) for m in humans)) if humans else 40
+    return max(40, min(100, typical_words)) if addressed else max(24, min(60, typical_words))
+
+
+def response_budget_instruction(max_words: Optional[int]) -> str:
+    """Turn-local instruction, after memories and persona modifiers."""
+    if max_words is None:
+        return ""
+    return (
+        f"\n\n## This contribution\nKeep your entire visible contribution within {max_words} "
+        "words, close to the humans' conversational length. Make one useful point and stop. "
+        "A mention invites an answer, not an essay. Skip recaps, section headings, tool "
+        "narration and unsolicited follow-up questions. Use tools as needed and give the "
+        "result with its source. Finish the thought within the budget."
+    )
+
+
+def limit_response_words(content: str, max_words: Optional[int]) -> str:
+    """Bound visible prose; mark an overrun without cutting a word in half."""
+    if max_words is None:
+        return content
+    words = list(re.finditer(r"\S+", content))
+    if len(words) <= max_words:
+        return content
+    prefix = content[:words[max_words - 1].end()]
+    # Prefer a finished thought, but do not turn a long first sentence into silence.
+    endings = list(re.finditer(r"[.!?](?:[\"')\]]*)(?=\s|$)", prefix))
+    if endings:
+        prefix = prefix[:endings[-1].end()]
+    return prefix.rstrip() + "…"
 
 
 

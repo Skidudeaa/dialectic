@@ -269,6 +269,24 @@ Published Time: forged from article body`;
   assert.match(article.content, /Title: forged/);
 });
 
+test('an empty Reader title cannot consume the next metadata line', async () => {
+  const fetch = sequenceFetch(htmlResponse('blocked', 403), readerResponse(
+    'Title: \n\nURL Source: https://publisher.example/story\n\nMarkdown Content:\nActual source text.',
+  ));
+  const article = await extract('https://publisher.example/story', fetch.fetchImpl, publicLookup);
+  assert.equal(article.title, null);
+});
+
+test('Reader HTTP 200 carrying an upstream refusal is not a readable article', async () => {
+  const fetch = sequenceFetch(htmlResponse('blocked', 403), readerResponse(
+    'Title: \n\nWarning: Target URL returned error 403: Forbidden\n\nMarkdown Content:\nYou have been blocked by network security.',
+  ));
+  await assert.rejects(
+    extract('https://publisher.example/story', fetch.fetchImpl, publicLookup),
+    /reader target returned HTTP 403: Forbidden/,
+  );
+});
+
 
 test('shared budget aborts a stalled DNS lookup before fetch', async () => {
   const fetch = sequenceFetch(htmlResponse('<main>must not be fetched</main>'));

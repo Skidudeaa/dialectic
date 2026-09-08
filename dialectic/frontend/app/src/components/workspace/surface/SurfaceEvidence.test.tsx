@@ -36,6 +36,34 @@ beforeEach(() => {
 })
 
 describe('shared evidence', () => {
+  it('captures native selection changes and offers the exact quote without pointerup', async () => {
+    render(<Table initial={ref} />)
+    const prose = await screen.findByTestId('reading-markdown')
+    const range = document.createRange()
+    range.selectNodeContents(prose.querySelector('p')!)
+    const selection = window.getSelection()!
+    selection.removeAllRanges(); selection.addRange(range)
+    fireEvent(document, new Event('selectionchange'))
+    expect(screen.getByRole('region', { name: 'Comment on selected passage' })).toHaveTextContent('Tankers wait outside the strait.')
+    fireEvent.click(screen.getByRole('button', { name: 'Discuss this passage' }))
+    expect(discuss).toHaveBeenCalledWith({ ...ref, quote: 'Tankers wait outside the strait.', content_sha256: reading.content_sha256 })
+  })
+
+  it('offers an explicitly bounded excerpt when a selected paragraph exceeds the quote limit', async () => {
+    const paragraph = 'The opening of this paragraph uniquely locates its source. ' + 'Supporting detail follows. '.repeat(18)
+    vi.mocked(api.getReadingDetail).mockResolvedValue({ ...reading, markdown: paragraph })
+    render(<Table initial={ref} />)
+    const prose = await screen.findByTestId('reading-markdown')
+    const range = document.createRange()
+    range.selectNodeContents(prose.querySelector('p')!)
+    const selection = window.getSelection()!
+    selection.removeAllRanges(); selection.addRange(range)
+    fireEvent(document, new Event('selectionchange'))
+    expect(screen.getByRole('status')).toHaveTextContent('Quoting the first 300 characters')
+    fireEvent.click(screen.getByRole('button', { name: 'Discuss this passage' }))
+    expect(discuss).toHaveBeenCalledWith({ ...ref, quote: paragraph.slice(0, 300).trim(), content_sha256: reading.content_sha256 })
+  })
+
   it('opens a sole reading once and lets the reader return to all sources', async () => {
     vi.mocked(api.getReadingLibrary).mockResolvedValue({ items: [{ ...reading, revision_count: 1, capture_mode: 'article' }], next_before: null })
     render(<Table />)

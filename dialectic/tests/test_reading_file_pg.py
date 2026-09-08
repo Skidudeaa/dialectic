@@ -172,6 +172,36 @@ async def test_a_human_can_file_a_link_they_pasted(room):
 
 
 @pytest.mark.asyncio
+async def test_reddit_source_routes_through_api_and_keeps_room_and_quote_context(room: asyncpg.Connection) -> None:
+    from llm import reddit_client
+
+    url = "https://www.reddit.com/r/test/comments/post1/title/comment1/"
+    markdown = (
+        "# A question\n\nOriginal post with an explicit question about the evidence.\n\n"
+        "## Comments\n\nExact linked comment comment1; other comments are not included.\n\n"
+        "### u/Dan\n[Comment t1_comment1](" + url + ") · parent t3_post1\n\n"
+        "The interpretation depends on which experiment they actually ran."
+    )
+    article = {**ARTICLE, "url": url, "site": "Reddit · r/test", "source": "reddit_api",
+               "content": markdown, "word_count": len(markdown.split())}
+    assert 25 <= article["word_count"] < 80
+    await room.execute("UPDATE messages SET content=$1 WHERE id=$2", f"Discuss {url}", MSG_WITH_URL)
+    extract = AsyncMock(return_value=article)
+    with patch.object(reddit_client, "extract_article", extract):
+        result = await file_reading(
+            room_id=ROOM, request=FileReadingRequest(message_id=MSG_WITH_URL, url=url, summary="Inspect this reply"),
+            token=TOKEN, current_user=caller(), pool=_SingleConnectionPool(room),
+        )
+    extract.assert_awaited_once_with(url)
+    saved = await room.fetchrow("SELECT * FROM reading_items WHERE id=$1", result["reading"]["id"])
+    assert saved["room_id"] == ROOM
+    assert saved["source_message_id"] == MSG_WITH_URL
+    assert saved["saved_by_user_id"] == AMO
+    assert saved["content"] == markdown
+    assert saved["url"] == url
+
+
+@pytest.mark.asyncio
 async def test_a_url_not_in_the_message_is_refused(room):
     """Provenance that lies is worse than no provenance: source_message_id is
     what the Field's evidence marks point at."""

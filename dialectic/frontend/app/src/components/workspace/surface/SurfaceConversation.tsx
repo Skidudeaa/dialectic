@@ -205,6 +205,8 @@ export function SurfaceConversation({
   const humanCount = shown.filter((m) => m.author.kind === 'human').length
   const machineCount = shown.filter((m) => m.author.kind === 'machine').length
 
+  const jumpTarget = (localJump?.nonce ?? 0) > (controls.jumpTarget?.nonce ?? 0) ? localJump : controls.jumpTarget
+
   const body = (() => {
     if (shape === 'signal') {
       return (
@@ -218,7 +220,7 @@ export function SurfaceConversation({
       )
     }
     if (linkedShape) return <ShapeDiscussion threads={onlyAnchored ? discussionThreads(shown) : threads} controls={controls} selected={selectedEvidence}
-      active={activeThread} jump={localJump} map={shape === 'map'} mapExpanded={mapExpanded} onToggleMap={() => { setMapExpanded((value) => !value); if (compactPane && mapExpanded) onEvidenceOpen(true) }} onSelect={selectThread}
+      active={activeThread} jump={jumpTarget} map={shape === 'map'} mapExpanded={mapExpanded} onToggleMap={() => { setMapExpanded((value) => !value); if (compactPane && mapExpanded) onEvidenceOpen(true) }} onSelect={selectThread}
       onOpenRef={(ref, messageId) => { if (messageId) setActiveThread(threads.find((thread) => thread.messages.some((message) => message.id === messageId))?.id ?? null); if (ref.entity === 'reading_items') { if (shape === 'map') setMapExpanded(false); onSelectEvidence(ref); setSourceScroll((n) => n + 1); if (compactPane) onEvidenceOpen(true) } else onOpenRef(ref) }}
       onReply={reply} onJump={jumpToThread} />
     if (shown.length === 0 && shape !== 'stream') {
@@ -236,7 +238,6 @@ export function SurfaceConversation({
     if (shape === 'lanes') {
       return <ShapeLanes messages={shown} controls={controls} humans={humans} onOpenRef={onOpenRef} onReply={reply} />
     }
-    const jumpTarget = (localJump?.nonce ?? 0) > (controls.jumpTarget?.nonce ?? 0) ? localJump : controls.jumpTarget
     return <ShapeStream messages={shown} controls={{ ...controls, jumpTarget, contextRef: selectedEvidence,
       onSeen: evidenceOpen && compactPane ? undefined : controls.onSeen }}
       context={undefined} onOpenRef={onOpenRef} onReply={reply} onAnchor={onAnchor} />
@@ -268,7 +269,7 @@ export function SurfaceConversation({
         <div className="surf-shapes surf-wide-toggle" role="group" aria-label="Conversation width">
           <button type="button" className="surf-shape surf-evidence-toggle" aria-pressed={evidenceOpen}
             aria-label={evidenceOpen ? 'Back to conversation' : 'Bring a source'}
-            onClick={() => { setMapExpanded(false); if (!linkedShape && shape !== 'stream') onShape('stream'); onEvidenceOpen(!evidenceOpen) }}>
+            onClick={() => { setMapExpanded(false); if (!linkedShape && shape !== 'stream') onShape('discussion'); onEvidenceOpen(!evidenceOpen) }}>
             {evidenceOpen ? 'Conversation' : 'Sources'}
           </button>
           {onToggleWide && <button

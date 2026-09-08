@@ -746,7 +746,10 @@ button.surf-anchor-chip:focus-visible,
 .surf-thread-context button { display: grid; gap: 3px; width: 100%; padding: 0; border: 0; background: transparent; color: var(--color-ink); text-align: left; cursor: pointer; }
 .surf-thread-context button > span, .surf-thread-general { font: 11px/1.4 var(--font-mono); color: var(--color-faint); }
 .surf-thread-context q { font: 15px/1.4 var(--font-serif); overflow-wrap: anywhere; }
-.surf-branch { border-left: 1px solid var(--color-bean); padding-left: 5px; }
+.surf-branch { --reply-indent: 22px; border-left: 2px solid var(--color-crater); padding-left: 8px; }
+.surf-branch[data-depth="0"] { border-left-color: transparent; padding-left: 0; }
+.surf-branch .surf-branch { margin-block: 2px; }
+@media (max-width: 680px) { .surf-branch { --reply-indent: 14px; padding-left: 6px; } }
 .surf-discussion .surf-msg { border: 0; padding: 4px 0 2px; }
 .surf-discussion .msg { position: relative; padding: 0 2px; margin: 0; }
 .surf-discussion .msg-meta { flex-wrap: wrap; gap: 4px 7px; margin: 0 28px 2px 0; font-size: 11px; min-height: 26px; }
@@ -779,3 +782,5 @@ button.surf-anchor-chip:focus-visible,
     .surf-discussion .msg-meta, .surf-discussion .surf-inline-reply, .surf-branch-toggle, .surf-discussion .msg-actions summary { min-height: 32px; }
 }
 .surf-discussion .msg-meta { margin-right: 0; padding-right: 44px; }
+.surf-discussion .msg-marks-disclosure > summary { color: var(--color-faint); font: 11px/1.5 var(--font-mono); padding-block: 3px; cursor: pointer; }
+.surf-discussion .msg-content-frame.msg-folded { max-height: 145px; }

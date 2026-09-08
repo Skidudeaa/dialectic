@@ -552,3 +552,6 @@ class TestMorningBriefJob:
 
         assert detail == {}
         assert canned_briefing == []
+        query = next(call.args[0] for call in db.fetch.call_args_list if "FROM rooms" in call.args[0])
+        assert "m.speaker_type = 'human'" in query
+        assert "r.is_home OR r.linked_book_id IS NOT NULL" in query

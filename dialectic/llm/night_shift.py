@@ -2,7 +2,8 @@
 
 """
 ARCHITECTURE: One daily scheduler job — morning_brief at 07:00
-America/Chicago. It iterates rooms with any message in the last 48h, builds
+America/Chicago. It iterates Home and thesis rooms with human activity in
+the last 48h, builds
 the SAME briefing the /rooms/{id}/briefing endpoint serves (llm/briefing.py,
 since = now-24h), posts it as an annotator-lane message, and web-pushes the
 members who aren't looking at the room.
@@ -19,6 +20,8 @@ GUARDRAILS:
   - rooms quiet for 48h are never iterated; rooms with nothing to say
     (no missed messages, no expiring commitments, no unanswered questions)
     are skipped without an LLM call
+  - ordinary reading rooms receive no scheduled briefing; their manual
+    briefing endpoint remains available
 
 TRADEOFF: annotator posts do NOT push for free — the job calls
 send_web_notifications itself, with the trading_ingest._push_critical
@@ -43,14 +46,16 @@ NIGHT_SHIFT_LLM_CAP = 20
 
 
 async def _active_rooms(pool):
-    """Rooms with any message in the last 48h (mirror _linked_rooms)."""
+    """Home and thesis rooms with human activity in the last 48 hours."""
     async with pool.acquire() as conn:
         return await conn.fetch(
             """SELECT DISTINCT r.id, r.name
                FROM rooms r
                JOIN threads t ON t.room_id = r.id
                JOIN messages m ON m.thread_id = t.id
-               WHERE m.created_at > now() - interval '48 hours'"""
+               WHERE m.created_at > now() - interval '48 hours'
+                 AND m.speaker_type = 'human'
+                 AND (r.is_home OR r.linked_book_id IS NOT NULL)"""
         )
 
 
@@ -218,7 +223,7 @@ async def _push_brief(conn, ctx, room, briefing: BriefingResponse,
 
 
 async def morning_brief(ctx: SchedulerContext) -> dict:
-    """Post (and push) the 7am brief into every recently-active room."""
+    """Post and push the 7am brief to active Home and thesis rooms."""
     detail: dict = {}
     now = datetime.now(timezone.utc)
     since = now - timedelta(hours=BRIEF_WINDOW_HOURS)

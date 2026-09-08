@@ -506,7 +506,7 @@ async def _already_ran_today(conn, room_id, today: date) -> bool:
 
 
 async def question_round(ctx: SchedulerContext) -> dict:
-    """Sunday: post one round of forecastable questions per active room."""
+    """Post scheduled forecasting questions to active thesis rooms."""
     today = datetime.now(timezone.utc).date()
     if not is_round_day(today):
         return {"skipped": "not_sunday"}
@@ -528,6 +528,8 @@ async def question_round(ctx: SchedulerContext) -> dict:
             # rooms on their own, so `messages` alone will keep a room looking
             # alive long after both people have left it. A room nobody has
             # spoken in does not need questions.
+            # A shared article is not enrollment in a forecasting round:
+            # only rooms with a linked thesis receive scheduled questions.
             """SELECT r.id, r.name, r.trading_config
                FROM rooms r
                JOIN threads t ON t.room_id = r.id
@@ -535,6 +537,7 @@ async def question_round(ctx: SchedulerContext) -> dict:
                WHERE m.created_at > now() - interval '14 days'
                  AND m.speaker_type = 'human'
                  AND NOT r.is_home
+                 AND r.linked_book_id IS NOT NULL
                  AND (SELECT count(*) FROM room_memberships rm
                       WHERE rm.room_id = r.id) >= 2
                GROUP BY r.id, r.name, r.trading_config"""

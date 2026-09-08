@@ -211,7 +211,7 @@ export function SurfaceScene({
     queueMicrotask(() => {
       if (cancelled) return
       stageRef(readingRequest)
-      setShape('stream')
+      setShape('discussion')
       setEvidenceOpen(false)
       onReadingReceived?.()
     })
@@ -222,7 +222,7 @@ export function SurfaceScene({
     if (!conversation.jumpTarget) return
     let cancelled = false
     queueMicrotask(() => {
-      if (!cancelled) { setShape('stream'); setEvidenceOpen(false) }
+      if (!cancelled) { setShape('discussion'); setEvidenceOpen(false) }
     })
     return () => { cancelled = true }
   }, [conversation.jumpTarget])
@@ -230,7 +230,7 @@ export function SurfaceScene({
   const openRef = useCallback((ref: MessageRef) => {
     if (ref.entity === 'reading_items') {
       setSelectedEvidence(ref)
-      setShape('stream')
+      setShape('discussion')
       setEvidenceOpen(true)
       sceneRef.current?.scrollTo({ top: 0 })
       return

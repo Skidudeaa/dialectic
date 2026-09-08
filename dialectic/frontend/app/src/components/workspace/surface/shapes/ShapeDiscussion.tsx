@@ -76,7 +76,7 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
     if (ancestors.has(message.id)) return null
     const descendants = children.get(message.id) ?? []
     const closed = collapsed.has(message.id)
-    return <div className="surf-branch" key={message.id} style={{ marginLeft: depth > 0 && depth <= 5 ? 12 : 0 }}>
+    return <div className="surf-branch" key={message.id} data-depth={depth} style={{ marginLeft: depth > 0 && depth <= 5 ? 'var(--reply-indent)' : 0 }}>
       <SurfaceMessage msg={message} compact controls={{ ...controls, contextRef: selected }} onReply={onReply} onOpenRef={(ref) => onOpenRef(ref, message.id)} threadSource={threads.find((thread) => thread.messages.some((item) => item.id === message.id))?.source ?? null} />
       {descendants.length > 0 && <button type="button" className="surf-branch-toggle" aria-expanded={!closed}
         onClick={() => setCollapsed((current) => { const next = new Set(current); if (closed) next.delete(message.id); else next.add(message.id); return next })}>

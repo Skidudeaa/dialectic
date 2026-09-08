@@ -20,7 +20,7 @@ from llm.orchestrator import LLMOrchestrator
 from llm.prompts import AssembledPrompt
 from llm.tools import Tool, ToolRegistry
 from models import Message, MessageType, SpeakerType
-from tests.conftest import make_room, make_thread
+from tests.conftest import make_room, make_thread, make_message
 # The non-streaming loop path is exercised with the ToolLoop-layer router
 # fixture (scripted route() calls), not the streaming one defined below.
 from tests.test_tool_loop import (
@@ -319,9 +319,9 @@ class TestToolActivityEvents:
         assert activity[0]["latency_ms"] is None
         assert isinstance(activity[1]["latency_ms"], int)
 
-        # Preamble and answer are one message, streamed in order.
+        # Tool activity carries progress; the conversation carries the answer.
         tokens = "".join(d["token"] for k, d in events if k == "streaming")
-        assert tokens == "let me check. XOP is 41.2"
+        assert tokens == "XOP is 41.2"
 
     @pytest.mark.asyncio
     async def test_failed_tool_is_reported_as_failed(self, monkeypatch):
@@ -354,7 +354,10 @@ class TestToolActivityEvents:
         orch = make_orchestrator(router, monkeypatch)
         orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
 
-        events = await run_stream(orch, thread)
+        events = [event async for event in orch.stream_response(
+            room=make_room(), thread=thread, users=[],
+            messages=[make_message("Explain in detail")], memories=[],
+        )]
         kind, data = events[-1]
         assert kind == "error"
         assert "mid-flight" in data["error"]
@@ -945,11 +948,13 @@ class TestForceResponseTools:
         real_tool_loop = orchestrator_mod.ToolLoop
 
         class SpyToolLoop(real_tool_loop):
-            def __init__(self, router, registry, max_iterations=5, loop_budget_s=60.0):
+            def __init__(self, router, registry, max_iterations=5, loop_budget_s=60.0,
+                         max_visible_words=None):
                 captured["max_iterations"] = max_iterations
                 captured["loop_budget_s"] = loop_budget_s
                 super().__init__(router, registry, max_iterations=max_iterations,
-                                  loop_budget_s=loop_budget_s)
+                                  loop_budget_s=loop_budget_s,
+                                  max_visible_words=max_visible_words)
 
         monkeypatch.setattr(orchestrator_mod, "ToolLoop", SpyToolLoop)
 
@@ -1069,3 +1074,58 @@ class TestRoomRecordContext:
         ctx = await orch._get_room_record_context(make_room(), include=True)
 
         assert ctx == orchestrator_mod.ROOM_RECORD_UNAVAILABLE
+
+
+class TestConversationBrevity:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("tools_on", [True, False])
+    async def test_summoned_reply_is_bounded_in_stream_and_persisted_message(self, monkeypatch, tools_on):
+        monkeypatch.setenv("DIALECTIC_TOOLS_ENABLED", "1" if tools_on else "0")
+        thread = make_thread()
+        long_text = "One useful point needs evidence. " * 50
+        router = FakeRouter(event_scripts=[text_script(long_text)], tokens=[long_text])
+        orch = make_orchestrator(router, monkeypatch)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        events = [event async for event in orch.stream_response(
+            room=make_room(), thread=thread, users=[],
+            messages=[make_message("@Dialectic what do you think of that claim?")], memories=[],
+        )]
+        shown = "".join(data["token"] for kind, data in events if kind == "streaming")
+        assert 0 < len(shown.split()) <= 40
+        assert shown.endswith("…")
+        assert orch._persist_response.call_args.kwargs["content"] == shown
+
+    @pytest.mark.asyncio
+    async def test_extended_request_keeps_full_answer(self, monkeypatch):
+        monkeypatch.setenv("DIALECTIC_TOOLS_ENABLED", "1")
+        thread = make_thread()
+        long_text = "A detailed explanation needs this evidence. " * 50
+        router = FakeRouter(event_scripts=[text_script(long_text)])
+        orch = make_orchestrator(router, monkeypatch)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        events = [event async for event in orch.stream_response(
+            room=make_room(), thread=thread, users=[],
+            messages=[make_message("Explain this in detail")], memories=[],
+        )]
+        assert "".join(data["token"] for kind, data in events if kind == "streaming") == long_text
+        assert orch._persist_response.call_args.kwargs["content"] == long_text
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("mode", ["heuristic", "silence_follow_up", "wire_interjection", "world_interjection"])
+    async def test_automatic_paths_share_short_output_budget(self, monkeypatch, mode):
+        monkeypatch.setenv("DIALECTIC_TOOLS_ENABLED", "0")
+        monkeypatch.setenv("DIALECTIC_ADDRESSED_ONLY", "0")
+        thread = make_thread()
+        router = LoopRouter(results=[loop_ok(text_response("The useful fact is this. " * 70))])
+        orch = make_orchestrator(router, monkeypatch)
+        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        kwargs = dict(room=make_room(), thread=thread, users=[],
+                      messages=[make_message("What changed?")], memories=[])
+        if mode == "heuristic":
+            orch.heuristics.decide = MagicMock(return_value=interject())
+            await orch.on_message(**kwargs)
+        else:
+            await orch.force_response(**kwargs, reason=mode)
+        assert len(orch._persist_response.call_args.kwargs["content"].split()) <= 24
+        assert router.requests[0].max_tokens == 192
+        assert "within 24 words" in router.requests[0].system

@@ -48,11 +48,20 @@ def reset() -> None:
 
 
 async def extract_article(url: str) -> Any:
-    """POST /extract to the sidecar and return the parsed article payload.
+    """Read a source through Defuddle or the authenticated Reddit API.
 
-    No auth: the sidecar binds loopback only, and its own input validation
-    (http(s) only, no private/loopback targets) is the trust boundary.
+    Reddit public permalinks use app-only OAuth. Other URLs go to the local
+    sidecar, which validates public http(s) destinations and every redirect.
+    Both paths raise DefuddleError so filing reports a failed fetch consistently.
     """
+    from . import reddit_client
+
+    try:
+        if reddit_client.is_reddit_url(url):
+            return await reddit_client.extract_article(url)
+    except (reddit_client.RedditError, ValueError) as exc:
+        raise DefuddleError(str(exc)) from exc
+
     client = _get_client()
     try:
         response = await client.post(

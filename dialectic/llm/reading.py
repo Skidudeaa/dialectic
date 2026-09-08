@@ -61,6 +61,8 @@ def is_thin(article: dict, source_tag: Optional[str] = None) -> bool:
     """
     if not str(article.get("content") or "").strip():
         return True
+    if article.get("source") == "reddit_api":
+        source_tag = "social"
     floor = SOURCE_THIN_FLOORS.get(source_tag, THIN_CONTENT_MIN_WORDS)
     return (article.get("word_count") or 0) < floor
 

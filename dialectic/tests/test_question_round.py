@@ -177,6 +177,9 @@ class TestWhichRoomsGetARound:
     def test_excludes_home(self):
         assert "NOT r.is_home" in self._sql()
 
+    def test_reading_room_does_not_receive_unsolicited_forecasts(self):
+        assert "r.linked_book_id IS NOT NULL" in self._sql()
+
     def test_the_window_is_stated_once(self):
         sql = self._sql()
         assert sql.count("interval '14 days'") == 1

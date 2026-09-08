@@ -14,6 +14,7 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from presence import ONLINE_SQL, online_sql
+from .prompts import response_word_budget, response_budget_instruction, limit_response_words
 
 from models import (
     Message, Event, EventType, SpeakerType, MessageType,
@@ -67,11 +68,8 @@ When a message arrives while the other person is offline, your job is to:
 3. IDENTIFY: Note tensions or contradictions with previously stated positions
 4. CONTEXTUALIZE: Help the offline person understand what they will return to
 
-Your response format:
-Connected to: [links to prior discussions/memories]
-Tension detected: [if the new message contradicts prior positions]
-Relevant context: [memories or past threads that inform this]
-For when {other_user} returns: [suggested thread or question]
+Leave one brief connection for {other_user}: identify the relevant prior
+thought or tension and why it matters. Omit categories with nothing to add.
 
 Keep annotations concise. You are a marginalia writer, not a conversationalist.
 Do NOT engage in dialogue or make arguments. Annotate, don't participate.'''
@@ -247,6 +245,7 @@ class AnnotatorEngine:
 
         provider = get_provider(ProviderName.ANTHROPIC)
 
+        word_budget = response_word_budget([message], addressed=False)
         request = LLMRequest(
             messages=[{
                 "role": "user",
@@ -258,14 +257,15 @@ class AnnotatorEngine:
                     f"Provide your annotation."
                 ),
             }],
-            system=identity,
+            system=identity + response_budget_instruction(word_budget),
             model="claude-sonnet-5",
-            max_tokens=512,
+            max_tokens=max(192, word_budget * 4),
             temperature=0.3,
         )
 
         try:
             response = await provider.complete(request)
+            content = limit_response_words(response.content, word_budget)
 
             # Persist as LLM_ANNOTATOR message
             annotation_id = uuid4()
@@ -284,7 +284,7 @@ class AnnotatorEngine:
                    RETURNING sequence""",
                 annotation_id, thread_id, now,
                 SpeakerType.LLM_ANNOTATOR.value, MessageType.TEXT.value,
-                response.content,
+                content,
             )
             annotation_sequence = row['sequence']
 
@@ -298,7 +298,7 @@ class AnnotatorEngine:
                 {
                     "message_id": str(annotation_id),
                     "speaker_type": SpeakerType.LLM_ANNOTATOR.value,
-                    "content_preview": response.content[:100],
+                    "content_preview": content[:100],
                     "offline_user": offline_name,
                 },
             )
@@ -310,7 +310,7 @@ class AnnotatorEngine:
                 created_at=now,
                 speaker_type=SpeakerType.LLM_ANNOTATOR,
                 message_type=MessageType.TEXT,
-                content=response.content,
+                content=content,
             )
 
         except Exception as e:

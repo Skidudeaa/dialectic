@@ -458,3 +458,40 @@ class TestStreaming:
         assert [k for k, _ in events] == ["token", "loop_done"]
         assert events[-1][1]["iterations"] == 1
         assert len(router.stream_requests) == 1
+
+
+class TestBriefToolAnswer:
+    @pytest.mark.asyncio
+    async def test_tool_narration_never_consumes_the_visible_answer(self, registry):
+        router = FakeRouter(streams=[
+            stream_script(text_chunks=["I will now check a lot of things. " * 30],
+                          tool_calls=[("get_live_quotes", {"symbol": "XOP"})], stop_reason="tool_use"),
+            stream_script(text_chunks=["XOP is 41.2, according to the live quote. " * 20]),
+        ])
+        request = make_request()
+        request.max_tokens = 192
+        events = [event async for event in ToolLoop(
+            router, registry, max_iterations=2, max_visible_words=24,
+        ).run_streaming(request)]
+        shown = "".join(payload["token"] for kind, payload in events if kind == "token")
+        assert shown.startswith("XOP is 41.2")
+        assert "I will now" not in shown
+        assert len(shown.split()) <= 24
+        assert events[-1][1]["text"] == shown
+        assert any(kind == "tool_result" for kind, _ in events)
+        assert router.stream_requests[0].max_tokens == 4096
+        assert router.stream_requests[1].max_tokens == 192
+
+    @pytest.mark.asyncio
+    async def test_degraded_fallback_remains_bounded(self, registry):
+        router = FakeRouter(streams=[
+            [RuntimeError("unavailable")],
+            stream_script(text_chunks=["I could not fetch that source. " * 20]),
+        ])
+        events = [event async for event in ToolLoop(
+            router, registry, max_visible_words=24,
+        ).run_streaming(make_request())]
+        shown = "".join(payload["token"] for kind, payload in events if kind == "token")
+        assert 0 < len(shown.split()) <= 24
+        assert events[-1][1]["text"] == shown
+        assert events[-1][1]["degraded"] is True

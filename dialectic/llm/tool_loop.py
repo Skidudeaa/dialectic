@@ -7,6 +7,7 @@ from dataclasses import dataclass, field, replace
 from typing import AsyncIterator, Optional
 
 from .providers import LLMRequest, ToolCall
+from .prompts import limit_response_words
 from .router import RoutingResult
 from .tools import ToolRegistry, serialize_tool_result
 
@@ -66,11 +67,13 @@ class ToolLoop:
         registry: ToolRegistry,
         max_iterations: int = DEFAULT_MAX_ITERATIONS,
         loop_budget_s: float = DEFAULT_LOOP_BUDGET_S,
+        max_visible_words: Optional[int] = None,
     ):
         self.router = router
         self.registry = registry
         self.max_iterations = max(1, max_iterations)
         self.loop_budget_s = loop_budget_s
+        self.max_visible_words = max_visible_words
 
     # ── non-streaming ────────────────────────────────────────────────
 
@@ -91,11 +94,18 @@ class ToolLoop:
 
         for i in range(self.max_iterations):
             iterations = i + 1
+            choice = self._tool_choice(i, deadline)
             attempt = replace(
                 request,
                 messages=messages,
                 tools=schemas,
-                tool_choice=self._tool_choice(i, deadline),
+                tool_choice=choice,
+                # Proposals and document arguments need space independently of
+                # the short sentence that accompanies them in the conversation.
+                max_tokens=(max(4096, request.max_tokens)
+                            if self.max_visible_words is not None
+                            and choice["type"] == "auto"
+                            else request.max_tokens),
             )
             result = await self.router.route(attempt)
 
@@ -137,9 +147,8 @@ class ToolLoop:
     ) -> AsyncIterator[tuple[str, dict]]:
         """Yields ("token"|"tool_start"|"tool_result"|"loop_done", payload).
 
-        Text is yielded as it arrives across EVERY iteration: the "let me
-        check the tape" before a tool call and the answer after it are one
-        message in the room, not two.
+        Bounded chat emits only its final answer; tool activity has its own
+        progress events. Extended research preserves its streaming narration.
         """
         schemas = self.registry.schemas()
         labels = self.registry.labels()
@@ -154,21 +163,30 @@ class ToolLoop:
 
         for i in range(self.max_iterations):
             iterations = i + 1
+            choice = self._tool_choice(i, deadline) if schemas else None
             attempt = replace(
                 request,
                 messages=messages,
                 stream=True,
                 tools=schemas or None,
-                tool_choice=self._tool_choice(i, deadline) if schemas else None,
+                tool_choice=choice,
+                max_tokens=(max(4096, request.max_tokens)
+                            if self.max_visible_words is not None and schemas
+                            and choice["type"] == "auto"
+                            else request.max_tokens),
             )
 
             pending: list[ToolCall] = []
             stop_reason = ""
             raw_content: list[dict] = []
+            round_parts: list[str] = []
 
             try:
                 async for kind, payload in self.router.stream_events(attempt):
                     if kind == "text":
+                        if self.max_visible_words is not None:
+                            round_parts.append(payload["text"])
+                            continue
                         emitted_any = True
                         text_parts.append(payload["text"])
                         yield ("token", {"token": payload["text"]})
@@ -190,12 +208,24 @@ class ToolLoop:
                     raise
                 logger.warning("Tool stream failed before first token — degrading to text-only")
                 degraded = True
+                degraded_parts: list[str] = []
                 async for token in self._degraded_stream(request, gathered):
+                    if self.max_visible_words is not None:
+                        degraded_parts.append(token)
+                        continue
                     text_parts.append(token)
                     yield ("token", {"token": token})
+                if self.max_visible_words is not None:
+                    text = limit_response_words("".join(degraded_parts), self.max_visible_words)
+                    text_parts.append(text)
+                    yield ("token", {"token": text})
                 break
 
             if stop_reason != "tool_use" or not pending:
+                if self.max_visible_words is not None:
+                    text = limit_response_words("".join(round_parts), self.max_visible_words)
+                    text_parts.append(text)
+                    yield ("token", {"token": text})
                 break
 
             messages = messages + [{"role": "assistant", "content": raw_content}]

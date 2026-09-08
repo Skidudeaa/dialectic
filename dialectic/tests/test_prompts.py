@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 from llm.prompts import PromptBuilder, AssembledPrompt
+from llm.prompts import response_word_budget, limit_response_words
 from models import SpeakerType, MessageType, MemoryScope
 from tests.conftest import (
     make_message,
@@ -20,6 +21,50 @@ from tests.conftest import (
 @pytest.fixture
 def builder():
     return PromptBuilder()
+
+
+class TestConversationalResponseBudget:
+    def test_bot_essays_and_attached_article_do_not_inflate_human_pace(self):
+        human = make_message("a thought " * 10)
+        human.metadata = {"refs": [{"entity": "reading_items", "quote": "source " * 1000}]}
+        messages = [human, make_message("essay " * 400, speaker_type=SpeakerType.LLM_PRIMARY)]
+        assert response_word_budget(messages, addressed=True) == 40
+        assert response_word_budget(messages, addressed=False) == 24
+
+    def test_long_human_posts_still_leave_room_for_the_next_person(self):
+        messages = [make_message("word " * 500)]
+        assert response_word_budget(messages, addressed=True) == 100
+        assert response_word_budget(messages, addressed=False) == 60
+
+    @pytest.mark.parametrize("instruction", [
+        "@Dialectic explain this in detail", "Give me a comprehensive comparison",
+        "Write a 1500 word essay", "Make a PDF about this article",
+        "Write a script to reproduce the plot", "Go deep on this claim",
+    ])
+    def test_explicit_extended_work_remains_possible(self, instruction):
+        messages = [make_message(instruction)]
+        assert response_word_budget(messages, addressed=True) is None
+        assert response_word_budget(messages, addressed=False) is not None
+
+    def test_previous_request_for_detail_does_not_make_next_reply_an_essay(self):
+        messages = [make_message("Explain in detail"), make_message("Which source supports that?")]
+        assert response_word_budget(messages, addressed=True) == 40
+
+    @pytest.mark.parametrize("instruction", [
+        "Do not give me detailed responses", "That comprehensive report is too long",
+        "Be brief when you elaborate", "Don't write an essay",
+    ])
+    def test_requests_for_brevity_take_precedence(self, instruction):
+        assert response_word_budget([make_message(instruction)], addressed=True) == 40
+
+    def test_overrun_keeps_complete_sentence_and_marks_omission(self):
+        text = "That claim needs a source. The source has an important additional limitation. More."
+        result = limit_response_words(text, 11)
+        assert result == "That claim needs a source.…"
+        assert len(result.split()) <= 11
+
+    def test_long_first_sentence_is_marked_without_splitting_a_word(self):
+        assert limit_response_words("alpha beta gamma delta", 3) == "alpha beta gamma…"
 
 
 # ── Base identity ──

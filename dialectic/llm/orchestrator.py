@@ -21,7 +21,10 @@ from .providers import ProviderName, LLMRequest
 from .router import ModelRouter, RoutingResult
 from .heuristics import InterjectionEngine, InterjectionDecision, addressed_only
 from .participation_fsm import ParticipationFSM, decision_event
-from .prompts import PromptBuilder, AssembledPrompt
+from .prompts import (
+    PromptBuilder, AssembledPrompt, response_word_budget,
+    response_budget_instruction, limit_response_words,
+)
 from home_activity import HomeActivityService
 
 # What the Home prompt carries instead of a failed or slow projection —
@@ -656,15 +659,18 @@ class LLMOrchestrator:
 
         router = self._get_router(room)
 
+        word_budget = None if protocol else response_word_budget(messages, addressed=mentioned)
+        prompt.system += response_budget_instruction(word_budget)
         request = LLMRequest(
             messages=prompt.messages,
             system=prompt.system,
             model=room.provoker_model if decision.use_provoker else room.primary_model,
+            max_tokens=4096 if word_budget is None else max(192, word_budget * 4),
         )
 
         tool_metadata: Optional[dict] = None
         if registry is not None:
-            loop_result = await ToolLoop(router, registry).run(request)
+            loop_result = await ToolLoop(router, registry, max_visible_words=word_budget).run(request)
             routing = loop_result.routing
             tool_metadata = _tool_metadata(loop_result, registry)
         else:
@@ -681,7 +687,7 @@ class LLMOrchestrator:
             )
 
         # Detect and strip [PHASE_COMPLETE: ...] marker from response
-        content = routing.response.content
+        content = limit_response_words(routing.response.content, word_budget)
         phase_complete_signal = None
         match = _PHASE_COMPLETE_RE.search(content)
         if match:
@@ -906,10 +912,13 @@ class LLMOrchestrator:
         )
 
         router = self._get_router(room)
+        word_budget = None if protocol else response_word_budget(messages, addressed=False)
+        prompt.system += response_budget_instruction(word_budget)
         request = LLMRequest(
             messages=prompt.messages,
             system=prompt.system,
             model=room.provoker_model if use_provoker else room.primary_model,
+            max_tokens=4096 if word_budget is None else max(192, word_budget * 4),
         )
 
         tool_metadata: Optional[dict] = None
@@ -918,6 +927,7 @@ class LLMOrchestrator:
                 router, registry,
                 max_iterations=FORCED_TOOL_MAX_ITERATIONS,
                 loop_budget_s=FORCED_TOOL_BUDGET_S,
+                max_visible_words=word_budget,
             ).run(request)
             routing = loop_result.routing
             tool_metadata = _tool_metadata(loop_result, registry)
@@ -935,7 +945,7 @@ class LLMOrchestrator:
             )
 
         # Detect and strip [PHASE_COMPLETE: ...] marker from response
-        content = routing.response.content
+        content = limit_response_words(routing.response.content, word_budget)
         phase_complete_signal = None
         match = _PHASE_COMPLETE_RE.search(content)
         if match:
@@ -1092,11 +1102,14 @@ class LLMOrchestrator:
 
         # Create request for streaming
         model = room.provoker_model if use_provoker else room.primary_model
+        word_budget = response_word_budget(messages, addressed=not use_provoker)
+        prompt.system += response_budget_instruction(word_budget)
         request = LLMRequest(
             messages=prompt.messages,
             system=prompt.system,
             model=model,
             stream=True,
+            max_tokens=4096 if word_budget is None else max(192, word_budget * 4),
         )
 
         # WHY: Streaming previously bypassed the fallback chain entirely —
@@ -1112,9 +1125,11 @@ class LLMOrchestrator:
         try:
             if registry is not None:
                 labels = registry.labels()
-                # ToolLoop owns the whole turn: it may make several round trips
-                # and the text of all of them is ONE message in the room.
-                async for kind, payload in ToolLoop(router, registry).run_streaming(request):
+                # ToolLoop owns the whole turn, including progress and the
+                # final answer's visible budget across several round trips.
+                async for kind, payload in ToolLoop(
+                    router, registry, max_visible_words=word_budget,
+                ).run_streaming(request):
                     if kind == "token":
                         token = payload["token"]
                         accumulated_content += token
@@ -1168,13 +1183,21 @@ class LLMOrchestrator:
                             if trade is not None:
                                 tool_metadata["trade_proposal"] = trade
             else:
+                plain_parts: list[str] = []
                 async for event_type, data in router.stream(request):
                     if event_type == "attempt":
                         model_used = data["model"]
                         continue
                     token = data["token"]
+                    if word_budget is not None:
+                        plain_parts.append(token)
+                        continue
                     accumulated_content += token
                     yield ("streaming", {"token": token, "index": token_index})
+                    token_index += 1
+                if word_budget is not None:
+                    accumulated_content = limit_response_words("".join(plain_parts), word_budget)
+                    yield ("streaming", {"token": accumulated_content, "index": token_index})
                     token_index += 1
 
             # Persist the complete message
