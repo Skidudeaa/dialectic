@@ -31,7 +31,13 @@ Example request: `@Dialectic find Reddit discussions about chain-of-thought fait
 
 ## Deployment and rollback
 
-Deployment state and final public verification are recorded below after release. This release requires both `dialectic.service` and `defuddle.service` to restart after all tracked edits are committed; both run the shared working tree. Trading must retain its existing process. No migration is required.
+Implementation commit: `09dfbc3c358ae14676666ba104f5c7578b06f944`. Deployed frontend: `/var/www/dialectic-releases/20260908T205525Z-usability-repair-09dfbc3` via `/var/www/dialectic-current`. Qualification and public proof archive: `/var/backups/dialectic/20260908T205525Z-usability-repair-09dfbc3`.
+
+Both services restarted after the implementation commit with a clean tracked tree: Dialectic PID `3543878`; Defuddle PID `3543860`. Trading retained PID `1970559`. No migration or test contribution was made in production.
+
+Public HTML, JS, CSS, manifest and worker hashes match the release. The authenticated public room passed 21 layout states at seven sizes with zero page errors; its ordinary-room trading-structure 409 is expected. Public idle checks remain at opacity 1 with and without hover. Database, Redis and scheduler health passed. A fresh read-only runtime probe returned the full 20,303-character article, its exact 18,000–20,303 continuation, three real Reddit search hits, a 9,159-character post with eight sampled comments, and one exact linked comment. The actual room is excluded from the live morning-brief eligibility query.
+
+The handoff/push documentation commit follows this implementation release; documentation-only changes do not require another service restart.
 
 Runtime preparation: Async PRAW 8.0.3 and its new dependencies installed for `/usr/bin/python3`. Existing `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT` were copied from the owner's existing configuration into gitignored `dialectic/.env`. Never print or commit values.
 
