@@ -22,7 +22,7 @@ Existing brevity budgets, the idle-opacity repair, authenticated Async PRAW sear
 - A local two-browser fixture used real SQL and message handlers in a transaction. In a 37-message conversation, own-send revealed the exact accepted ID and a peer arrival preserved scroll. A 548-character repeated paragraph persisted as occurrence 1, reloaded, highlighted only the second paragraph and drew its physical connector. Selecting “right causal link” in a human thought preserved an existing draft and persisted the contextual request under the exact parent with the source quotation. Zero browser page errors. Fixture servers stopped; rollback left zero room rows.
 - Authenticated public-origin candidate checks used real room GET data and candidate assets, with mutations blocked. Twenty-one layout states and twenty-one quoted-draft states passed at seven viewport sizes; full real-article selection passed at three sizes. These are browser/geometry evidence, not physical-device or two-human acceptance.
 
-Evidence staging: `/tmp/dialectic-context-proof`, `/tmp/dialectic-branch-proof/tests.log`, `/tmp/dialectic-full-passage-tests.log`, `/tmp/dialectic-full-passage-frontend.log`. Deployment proof is appended after the selected release is verified.
+Evidence staging: `/tmp/dialectic-context-proof`, `/tmp/dialectic-branch-proof/tests.log`, `/tmp/dialectic-full-passage-tests.log`, `/tmp/dialectic-full-passage-frontend.log`. The verified release and archive are recorded below.
 
 ## Limits and next work
 
@@ -37,3 +37,13 @@ Evidence staging: `/tmp/dialectic-context-proof`, `/tmp/dialectic-branch-proof/t
 Previous source HEAD: `e1164f430499e4331c96db418d1e0b8b4fa9256f`. Previous selected frontend: `/var/www/dialectic-releases/20260908T205525Z-usability-repair-09dfbc3`.
 
 No migration or dependency/config change is required. Restart only Dialectic after a clean implementation commit; keep Defuddle and trading processes unchanged. Frontend rollback atomically restores the retained previous symlink, tests nginx and reloads it. Backend rollback reverts the implementation commit in a clean checkout, then restarts Dialectic. Never reset, stash or clean concurrent work. Older frontend quote creation remains compatible; stored new long/repeated anchors retain their metadata in SQL.
+
+## Verified deployment
+
+Implementation commit: `216165fa90eed1d3fbcc2c0e974efe43504ecf4a`. Selected frontend: `/var/www/dialectic-releases/20260908T212716Z-contextual-discussion-216165f` through `/var/www/dialectic-current`. Source tree was clean before the Dialectic restart and immutable frontend flip. No migration.
+
+Dialectic PID `3591527` replaced `3543878`; Defuddle retained `3543860` and trading retained `1970559`. Public HTML/JS/CSS/manifest/worker hashes match the release. Database, Redis and scheduler health passed. The deployed public room passed 21 layout states at seven sizes with zero page errors; ordinary-room trading-structure 409 is expected. Stationary-pointer opacity remained 1 with and without hover. Three full real-article selection/draft checks passed against the deployed assets with all production mutations blocked.
+
+Fresh read-only source probes returned the complete 20,303-character article and its 18,000–20,303 continuation, three authenticated Reddit search results, a 9,159-character post with eight sampled comments, and one exact linked comment. The reading room remains excluded from scheduled morning briefs.
+
+Qualification scripts, logs, browser screenshots, public proofs, release hashes and rollback coordinates are archived at `/var/backups/dialectic/20260908T212716Z-contextual-discussion-216165f`. A documentation-only closeout commit follows this implementation release; it needs no restart. Physical iPad/Safari and owner/Dan acceptance remain open.
