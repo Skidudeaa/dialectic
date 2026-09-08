@@ -195,8 +195,8 @@ async def deep_dive(
     NEVER raises: every failure ends in an llm_error broadcast, and the
     paired deep_dive_done fires from the finally either way.
     """
-    # Research keeps separate stream and persisted IDs; completion carries
-    # both so it cannot clear a different answer currently being streamed.
+    # Allocate before the first token and persist this identity so completion
+    # preserves its conversation row while other generations keep streaming.
     stream_message_id = uuid4()
     accumulated = ""
 
@@ -340,7 +340,7 @@ async def deep_dive(
                 metadata["reading_proposal"] = reading
 
         message = await _persist_brief(
-            db, thread, accumulated, room.primary_model, metadata,
+            db, thread, accumulated, room.primary_model, metadata, stream_message_id,
         )
 
         # llm_done, not message_created: the streamed tokens are already on
@@ -382,6 +382,7 @@ async def _persist_brief(
     content: str,
     model_used: str,
     metadata: dict,
+    message_id: UUID,
 ) -> Message:
     """Insert the brief as an llm_primary message (+ event), mirroring
     orchestrator._persist_response.
@@ -392,7 +393,7 @@ async def _persist_brief(
     drift: the atomic sequence insert with the UNIQUE-collision retry.
     """
     now = datetime.now(timezone.utc)
-    message_id = uuid4()
+    # Reuse the token identity so completion keeps the same conversation row.
     # A brief is prose — running the orchestrator's message-type heuristic
     # on it would gamble on trailing question marks.
     message_type = MessageType.TEXT

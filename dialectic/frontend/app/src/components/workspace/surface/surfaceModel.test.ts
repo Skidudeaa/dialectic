@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Message } from '../../../types'
-import { discussionThreads, humanWordsByNode, refFocusId, toSurfaceMessages } from './surfaceModel'
+import { discussionMap, focusDiscussionMap, searchDiscussionMap, passageKey, discussionThreads, humanWordsByNode, refFocusId, toSurfaceMessages } from './surfaceModel'
 
 const base = (over: Partial<Message>): Message => ({
   id: 'm', thread_id: 't', sequence: 1, created_at: '2026-09-02T12:00:00Z',
@@ -81,5 +81,55 @@ describe('passage discussion grouping', () => {
     expect(groups[0].roots.map((m) => m.id)).toEqual(['one', 'two'])
     expect(groups[0].messages.map((m) => m.id)).toEqual(['one', 'two', 'reply'])
     expect(groups[4].messages[0].message.references_message_id).toBe('outside-window')
+  })
+})
+
+
+describe('discussion map topology and search', () => {
+  const article = { entity: 'reading_items' as const, id: 'article', label: 'An Alien Mind', quote: 'A repeated observation.', content_sha256: 'a'.repeat(64), quote_occurrence: 1 }
+  const study = { entity: 'reading_items' as const, id: 'study', label: 'Timing study', quote: 'Measure the delay before judging intent.', content_sha256: 'b'.repeat(64) }
+  function fixture() {
+    const messages = toSurfaceMessages([
+      base({ id: 'root', content: 'An experience from my clinic.', metadata: { refs: [article] } }),
+      base({ id: 'child', user_id: 'dan', content: 'The delay matters more than the conclusion.', references_message_id: 'root', metadata: { refs: [study] } }),
+      base({ id: 'grandchild', content: 'What would distinguish these explanations?', references_message_id: 'child' }),
+      base({ id: 'sibling', content: 'A separate reply.', references_message_id: 'root' }),
+      base({ id: 'other', user_id: 'dan', content: 'An unrelated branch.', metadata: { refs: [{ ...article, quote_occurrence: 0 }] } }),
+      base({ id: 'machine', speaker_type: 'llm_primary', content: 'A machine contribution.', user_id: null }),
+    ], { userNames: { amo: 'Amo', dan: 'Dan' }, currentUserId: 'amo' })
+    return discussionMap(discussionThreads(messages), article)
+  }
+
+  it('searches actual people, words and full cited passages while preserving repeated passage identity', () => {
+    const graph = fixture()
+    expect(searchDiscussionMap(graph, 'DAN delay').map((node) => node.id)).toEqual(['child'])
+    expect(searchDiscussionMap(graph, 'clinic').map((node) => node.id)).toEqual(['root'])
+    expect(searchDiscussionMap(graph, 'Timing study').map((node) => node.id)).toEqual(expect.arrayContaining(['source:study', 'child']))
+    expect(searchDiscussionMap(graph, 'before judging intent').map((node) => node.id)).toEqual(expect.arrayContaining(['child', `passage:${passageKey(study)}`]))
+    expect(searchDiscussionMap(graph, 'something nobody said')).toEqual([])
+    expect(searchDiscussionMap(graph, '   ')).toEqual([])
+    const occurrences = graph.nodes.filter((node) => node.kind === 'passage' && node.ref?.id === article.id)
+    expect(occurrences.map((node) => node.ref?.quote_occurrence)).toEqual([1, 0])
+    expect(new Set(occurrences.map((node) => node.id)).size).toBe(2)
+    expect(new Set(graph.edges.map((edge) => edge.kind))).toEqual(new Set(['contains', 'discusses', 'cites', 'reply']))
+  })
+
+  it('focuses the exact actual ancestor path and its sources without siblings or invented semantic edges', () => {
+    const graph = fixture()
+    const focused = focusDiscussionMap(graph, 'grandchild', new Set(['root']))
+    expect(focused.nodes.filter((node) => node.kind === 'thought').map((node) => node.id)).toEqual(['root', 'child', 'grandchild'])
+    expect(focused.nodes.filter((node) => node.kind === 'source').map((node) => node.id)).toEqual(['source:article', 'source:study'])
+    expect(focused.nodes.filter((node) => node.kind === 'passage').map((node) => node.ref)).toEqual([article, study])
+    expect(focused.edges.filter((edge) => edge.kind === 'reply')).toEqual([{ from: 'root', to: 'child', kind: 'reply' }, { from: 'child', to: 'grandchild', kind: 'reply' }])
+    const passage = focusDiscussionMap(graph, `passage:${passageKey(study)}`, new Set())
+    expect(passage.nodes.filter((node) => node.kind === 'thought').map((node) => node.id)).toEqual(['root', 'child'])
+  })
+
+  it('collapses real descendants and their unused passages, and restores the entire graph', () => {
+    const graph = fixture()
+    const collapsed = focusDiscussionMap(graph, null, new Set(['root']))
+    expect(collapsed.nodes.filter((node) => node.kind === 'thought').map((node) => node.id)).toEqual(['root', 'other', 'machine'])
+    expect(collapsed.nodes.find((node) => node.id === `passage:${passageKey(study)}`)).toBeUndefined()
+    expect(focusDiscussionMap(graph, null, new Set())).toEqual(graph)
   })
 })

@@ -320,7 +320,8 @@ class TestSuccessfulDive:
         done = next(message.payload for message in connections.broadcasts if message.type == MessageTypes.LLM_DONE)
         assert done["stream_message_id"] == streaming["message_id"]
         assert done["message_id"] == str(args[0])
-        assert done["message_id"] != done["stream_message_id"]
+        assert done["message_id"] == done["stream_message_id"]
+        assert str(db.execute.call_args.args[7]["message_id"]) == done["message_id"]
 
         # The room watched it happen on the ordinary stream vocabulary,
         # bracketed by the deep-dive pair.

@@ -106,3 +106,30 @@ describe('MessageList — who is speaking', () => {
     expect(container.querySelector('[data-message-id="target"]')).toHaveClass('msg-flash')
   })
 })
+
+
+it('keeps two independent streamed rows and the completed row DOM identity', () => {
+  const a = { ...message('llm_primary', 'A'), content: 'A pending' }
+  const b = { ...message('llm_primary', 'B'), content: 'B pending' }
+  const { container, rerender } = render(<MessageList messages={[a, b]} currentUserId="u1" streamingMessageIds={['A', 'B']} />)
+  const aRow = container.querySelector('[data-message-id="A"]')
+  const bRow = container.querySelector('[data-message-id="B"]')
+  expect(aRow).not.toBeNull()
+  expect(bRow).not.toBeNull()
+  rerender(<MessageList messages={[{ ...a, content: 'A complete' }, b]} currentUserId="u1" streamingMessageIds={['B']} />)
+  expect(container.querySelector('[data-message-id="A"]')).toBe(aRow)
+  expect(container.querySelector('[data-message-id="B"]')).toBe(bRow)
+  expect(aRow).toHaveTextContent('A complete')
+  expect(bRow).toHaveTextContent('B pending')
+})
+
+
+it('acknowledges only persisted messages while multiple replies stream', () => {
+  const onSeen = vi.fn()
+  render(<MessageList messages={[
+    message('human', 'persisted'), message('llm_primary', 'A'), message('llm_primary', 'B'),
+  ]} currentUserId="u1" streamingMessageIds={['A', 'B']} onSeen={onSeen} />)
+  expect(onSeen).toHaveBeenCalledWith('persisted')
+  expect(onSeen).not.toHaveBeenCalledWith('A')
+  expect(onSeen).not.toHaveBeenCalledWith('B')
+})

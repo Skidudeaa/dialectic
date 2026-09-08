@@ -46,7 +46,7 @@ export interface SurfaceSceneProps {
   roomName: string
   currentUserId: string
   messages: Message[]
-  streamingId: string | null
+  streamingIds: readonly string[]
   userNames: Record<string, string>
   unreadSince: string | null
   desk: TradingDeskState
@@ -78,7 +78,7 @@ function snapshotIsStale(timestamp?: string): boolean {
 }
 
 export function SurfaceScene({
-  roomId, roomName, currentUserId, messages, streamingId, userNames, unreadSince,
+  roomId, roomName, currentUserId, messages, streamingIds, userNames, unreadSince,
   desk, tradingConfig, geo, fieldMarks, composer, typingUsers, activityLabel,
   onOpenObject, onOpenWorld, onOpenBench, onFork,
   conversation, banners, readingRequest, onReadingReceived,
@@ -134,8 +134,8 @@ export function SurfaceScene({
   }, [roomId])
 
   const surfaceMessages = useMemo(
-    () => toSurfaceMessages(messages, { userNames, currentUserId, unreadSince, streamingId }),
-    [messages, userNames, currentUserId, unreadSince, streamingId],
+    () => toSurfaceMessages(messages, { userNames, currentUserId, unreadSince, streamingIds }),
+    [messages, userNames, currentUserId, unreadSince, streamingIds],
   )
   const humanWords = useMemo(() => humanWordsByNode(surfaceMessages), [surfaceMessages])
 

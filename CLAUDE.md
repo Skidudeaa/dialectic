@@ -353,3 +353,16 @@ with `first/last_seen_at` = acquisition time (invisible to 24h readers, prior da
 mind that the live URL ends in day range 1 — the script swaps in `/5/<start>`); after it, today's
 Persian Gulf count went from 98 novel to 4, all under 5 MW. `world_query` overview counts carry
 `new_fires`.
+
+## Amendment 2026-09-08 — equal platform targets (amend-beside)
+
+**MUST:** Dialectic serves Mac and Windows desktops, iPad, Android, and
+iPhone as equal product targets. Design and verify the reading, discussion,
+source-selection, map, and composing workflows for mouse, trackpad, physical
+keyboard, touch, native text selection, and software keyboards as applicable.
+Earlier iPad-focused investigations describe the devices and failures examined;
+they do not establish an iPad-only or iPad-first product direction. Preserve
+those historical observations. Browser-engine runs and viewport/input
+simulations are engineering evidence, not acceptance on the corresponding
+physical OS/device. Name the actual platform, browser, and input tested and
+keep unobserved physical-platform and owner acceptance explicit.

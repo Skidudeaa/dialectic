@@ -47,3 +47,7 @@ Dialectic PID `3591527` replaced `3543878`; Defuddle retained `3543860` and trad
 Fresh read-only source probes returned the complete 20,303-character article and its 18,000–20,303 continuation, three authenticated Reddit search results, a 9,159-character post with eight sampled comments, and one exact linked comment. The reading room remains excluded from scheduled morning briefs.
 
 Qualification scripts, logs, browser screenshots, public proofs, release hashes and rollback coordinates are archived at `/var/backups/dialectic/20260908T212716Z-contextual-discussion-216165f`. A documentation-only closeout commit follows this implementation release; it needs no restart. Physical iPad/Safari and owner/Dan acceptance remain open.
+
+## Amendment — cross-platform map and stream continuation, 2026-09-08
+
+The owner clarified that Mac/Windows desktop, iPad, Android and iPhone are equal product targets. Earlier iPad-specific acceptance notes describe historical testing gaps, not product scope. Map navigation and simultaneous-stream work now continue in [the cross-platform handoff](2026-09-08-map-navigation-concurrent-replies.md); prefer its behavior and current qualification/release evidence over the corresponding open items above.

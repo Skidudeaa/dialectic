@@ -5,12 +5,12 @@ import { ChatLayout } from './App.tsx'
 import { useRoomNavigation, type RoomNavigation } from './hooks/useRoomNavigation.ts'
 import { api } from './lib/api.ts'
 import { useAppStore } from './stores/appStore.ts'
-import type { RoomDestination, Thread, UserRoom } from './types/index.ts'
+import type { Message, RoomDestination, Thread, UserRoom } from './types/index.ts'
 
 const socket = vi.hoisted(() => ({ sendMessageWithReceipt: vi.fn(async () => ({ id: 'accepted-comment', thread_id: 'thread-1' })) }))
 
-vi.mock('./hooks/useDialecticSocket.ts', () => ({
-  useDialecticSocket: () => ({
+vi.mock('./hooks/useDialecticSocket.ts', () => {
+  const actions = {
     isConnected: true,
     send: vi.fn(() => true),
     sendMessage: vi.fn(() => true),
@@ -34,8 +34,9 @@ vi.mock('./hooks/useDialecticSocket.ts', () => ({
     refreshReactions: vi.fn(),
     refreshAttachments: vi.fn(),
     ...socket,
-  }),
-}))
+  }
+  return { useDialecticSocket: () => actions }
+})
 vi.mock('./hooks/useDocumentVisibility.ts', () => ({ useDocumentVisibility: () => true }))
 vi.mock('./hooks/useAwayAlerts.ts', () => ({ useAwayAlerts: vi.fn() }))
 vi.mock('./hooks/usePushSubscription.ts', () => ({
@@ -249,5 +250,69 @@ describe('conversation drafts across scenes and destinations', () => {
     expect(useAppStore.getState().currentRoom?.id).toBe(otherRoom.id)
     expect(useAppStore.getState().currentThread?.id).toBe(otherThread.id)
     expect(composer()).toHaveValue('Unsent in the second room')
+  })
+})
+
+
+describe('simultaneous answers on the conversation surface', () => {
+  it.each([['answer-A', 'answer-B'], ['answer-B', 'answer-A']])('keeps both branches mounted when %s finishes before %s', async (first, second) => {
+    const refs = [{ entity: 'reading_items', id: 'article', label: 'Article', quote: 'Passage under discussion', content_sha256: 'revision', quote_occurrence: 1 }]
+    const human = (id: string): Message => ({
+      id, thread_id: thread.id, sequence: id === 'question-A' ? 1 : 2,
+      created_at: new Date().toISOString(), speaker_type: 'human', user_id: 'user-1',
+      message_type: 'text', content: `Discuss ${id}`, metadata: { refs },
+    })
+    vi.mocked(api.getMessages).mockResolvedValue([human('question-A'), human('question-B')])
+    await renderApp()
+    typeDraft('Keep my unfinished thought')
+    await act(async () => {
+      for (const [id, content] of [['answer-A', 'A1 '], ['answer-B', 'B1 '], ['answer-A', 'A2'], ['answer-B', 'B2']]) {
+        useAppStore.getState().receiveStream({ id, thread_id: thread.id, references_message_id: id.replace('answer', 'question'), metadata: { refs } }, content)
+      }
+    })
+    const row = (id: string) => document.querySelector(`[data-message-id="${id}"]`)!
+    const firstNode = row(first)
+    const secondNode = row(second)
+    expect(firstNode).not.toBeNull()
+    expect(secondNode).not.toBeNull()
+    for (const id of ['answer-A', 'answer-B']) {
+      expect(row(id)).toHaveTextContent(id === 'answer-A' ? 'A1 A2' : 'B1 B2')
+      const parent = row(id)?.closest('.surf-branch')?.parentElement
+      expect(parent?.querySelector(`[data-message-id="${id.replace('answer', 'question')}"]`)).not.toBeNull()
+      expect(row(id).closest('.surf-passage-thread')).toHaveTextContent('Passage under discussion')
+      expect(within(row(id) as HTMLElement).queryByRole('button', { name: 'Reply' })).toBeNull()
+    }
+    await act(async () => {
+      const pending = useAppStore.getState().streamingMessages[first]
+      useAppStore.getState().finishStream(first, { ...pending, sequence: 3, content: 'First final answer' })
+    })
+    expect(row(first)).toBe(firstNode)
+    expect(row(second)).toBe(secondNode)
+    expect(row(first)).toHaveTextContent('First final answer')
+    expect(within(row(first) as HTMLElement).getByRole('button', { name: 'Reply' })).toBeEnabled()
+    expect(within(row(second) as HTMLElement).queryByRole('button', { name: 'Reply' })).toBeNull()
+    await act(async () => {
+      const pending = useAppStore.getState().streamingMessages[second]
+      useAppStore.getState().finishStream(second, { ...pending, sequence: 4, content: 'Second final answer' })
+    })
+    expect(row(first)).toBe(firstNode)
+    expect(row(second)).toBe(secondNode)
+    expect(row(second)).toHaveTextContent('Second final answer')
+    expect(composer()).toHaveValue('Keep my unfinished thought')
+  })
+
+  it('retains a research row while another response streams and research completes', async () => {
+    await renderApp()
+    await act(async () => {
+      useAppStore.getState().receiveStream({ id: 'research', thread_id: thread.id }, 'Research findings')
+      useAppStore.getState().receiveStream({ id: 'summon', thread_id: thread.id }, 'An overlapping answer')
+    })
+    const researchRow = document.querySelector('[data-message-id="research"]')
+    expect(researchRow).not.toBeNull()
+    await act(async () => useAppStore.getState().finishStream('research', {
+      ...useAppStore.getState().streamingMessages.research, sequence: 1, metadata: { source: 'deep_dive' },
+    }))
+    expect(document.querySelector('[data-message-id="research"]')).toBe(researchRow)
+    expect(document.querySelector('[data-message-id="summon"]')).toHaveTextContent('An overlapping answer')
   })
 })

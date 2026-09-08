@@ -126,10 +126,14 @@ export function SurfaceConversation({
     if (compactPane) onEvidenceOpen(true)
   }
 
-  function jumpToThread(id: string) {
+  function jumpToThread(id: string, passage?: MessageRef) {
+    const thread = threads.find((candidate) => candidate.messages.some((message) => message.id === id))
+    const message = messages.find((candidate) => candidate.id === id)
+    const source = passage ?? message?.refs.find((ref) => ref.entity === 'reading_items') ?? thread?.source
+    if (source) { onSelectEvidence(source); setSourceScroll((n) => n + 1) }
     onShape('discussion')
     setOnlyAnchored(false)
-    setActiveThread(threads.find((thread) => thread.messages.some((message) => message.id === id))?.id ?? null)
+    setActiveThread(thread?.id ?? null)
     setLocalJump({ id, nonce: Date.now() })
     onEvidenceOpen(false)
   }
@@ -140,7 +144,7 @@ export function SurfaceConversation({
     passages={passages} scrollRequest={sourceScroll}
     onPassage={(ref) => {
       const message = messages.find((candidate) => candidate.refs.some((source) => passageKey(source) === passageKey(ref)))
-      if (message) { onSelectEvidence(ref); jumpToThread(message.id) }
+      if (message) jumpToThread(message.id, ref)
     }}
     onDiscuss={(ref) => { setReplyToId(null); onClearAnchor(); onStageRef(ref); onShape('discussion'); onEvidenceOpen(false) }}
     onInvestigate={(ref) => {

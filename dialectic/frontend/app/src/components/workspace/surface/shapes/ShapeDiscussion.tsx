@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MessageRef } from '../../../../types'
 import type { MessageListProps } from '../../../chat/MessageList'
 import { SurfaceMessage } from './SurfaceMessage'
-import { passageKey, type DiscussionThread, type SurfaceMsg } from '../surfaceModel'
+import { discussionMap, focusDiscussionMap, searchDiscussionMap, passageKey, type DiscussionMapNode, type DiscussionThread, type SurfaceMsg } from '../surfaceModel'
 import './shapes.css'
 
 interface Props {
@@ -30,6 +30,134 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [expandedPassages, setExpandedPassages] = useState<Set<string>>(new Set())
   const [zoom, setZoom] = useState(1)
+  const [mapQuery, setMapQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [compactPanel, setCompactPanel] = useState<'search' | 'context' | 'controls' | null>(null)
+  const [focusId, setFocusId] = useState<string | null>(null)
+  const [mapCollapsed, setMapCollapsed] = useState<Set<string>>(new Set())
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapPosition = useRef({ left: 0, top: 0 })
+  const pendingFit = useRef(false)
+  const drag = useRef<{ id: number; x: number; y: number; left: number; top: number } | null>(null)
+  const graph = useMemo(() => discussionMap(threads, selected), [threads, selected])
+  const visibleGraph = useMemo(() => focusDiscussionMap(graph, focusId, mapCollapsed), [graph, focusId, mapCollapsed])
+  const matches = useMemo(() => searchDiscussionMap(graph, mapQuery), [graph, mapQuery])
+  const focusedNode = graph.nodes.find((node) => node.id === focusId)
+  const layout = useMemo(() => {
+    const byId = new Map(visibleGraph.nodes.map((node) => [node.id, node]))
+    const nodes: (DiscussionMapNode & { x: number; y: number })[] = []
+    let row = 0
+    const placed = new Set<string>()
+    const place = (node: DiscussionMapNode, depth: number): void => {
+      if (placed.has(node.id)) return
+      placed.add(node.id)
+      nodes.push({ ...node, x: 540 + depth * 270, y: row++ * 128 })
+      for (const edge of visibleGraph.edges) if (edge.from === node.id && edge.kind === 'reply') place(byId.get(edge.to)!, depth + 1)
+    }
+    for (const node of visibleGraph.nodes) if (node.kind === 'thought' && !visibleGraph.edges.some((edge) => edge.to === node.id && edge.kind === 'reply')) place(node, 0)
+    for (const node of visibleGraph.nodes) if (node.kind === 'thought') place(node, 0)
+    for (const kind of ['source', 'passage'] as const) {
+      let sourceRow = 0
+      for (const node of visibleGraph.nodes) if (node.kind === kind) nodes.push({ ...node, x: kind === 'source' ? 0 : 270, y: sourceRow++ * 128 })
+    }
+    // A free-standing human thought does not reserve two empty source columns.
+    const left = nodes.length ? Math.min(...nodes.map((node) => node.x)) : 0
+    for (const node of nodes) node.x -= left
+    return { nodes, width: Math.max(240, ...nodes.map((node) => node.x + 240)), height: Math.max(116, ...nodes.map((node) => node.y + 116)) }
+  }, [visibleGraph])
+
+  function fitMap(): void {
+    const pane = mapRef.current
+    if (!pane?.clientWidth || !pane.clientHeight) return
+    setZoom(Math.min(1, Math.max(1, pane.clientWidth - 24) / layout.width, Math.max(1, pane.clientHeight - 24) / layout.height))
+    pane.scrollLeft = 0
+    pane.scrollTop = 0
+    mapPosition.current = { left: 0, top: 0 }
+  }
+
+  function changeZoom(value: number): void {
+    const next = Math.max(.15, Math.min(1.8, value))
+    const pane = mapRef.current
+    const center = pane ? { left: (pane.scrollLeft + pane.clientWidth / 2) / zoom, top: (pane.scrollTop + pane.clientHeight / 2) / zoom } : null
+    setZoom(next)
+    requestAnimationFrame(() => {
+      if (!pane || !center) return
+      pane.scrollLeft = Math.max(0, center.left * next - pane.clientWidth / 2)
+      pane.scrollTop = Math.max(0, center.top * next - pane.clientHeight / 2)
+      mapPosition.current = { left: pane.scrollLeft, top: pane.scrollTop }
+    })
+  }
+
+  function focusNode(id: string): void {
+    setCompactPanel(null)
+    if (id === focusId) { setSearchOpen(false); return }
+    pendingFit.current = true
+    setFocusId(id)
+    setSearchOpen(false)
+  }
+
+  function selectSearchResult(id: string): void {
+    focusNode(id)
+    // The compact search hides on selection; focus its newly visible map.
+    requestAnimationFrame(() => mapRef.current?.focus({ preventScroll: true }))
+  }
+
+  function showWholeMap(): void {
+    pendingFit.current = true
+    setFocusId(null)
+    setMapCollapsed(new Set())
+    setSearchOpen(false)
+    setCompactPanel(null)
+  }
+
+  function toggleCompactPanel(panel: 'search' | 'context' | 'controls'): void {
+    setCompactPanel((current) => current === panel ? null : panel)
+    if (panel === 'search' && compactPanel !== 'search') requestAnimationFrame(() => {
+      mapRef.current?.parentElement?.querySelector<HTMLInputElement>('.surf-map-search input')?.focus({ preventScroll: true })
+    })
+  }
+
+  function openMapNode(node: DiscussionMapNode): void {
+    if (node.kind === 'thought') onJump(node.id)
+    else if (node.kind === 'passage' && node.threadId) {
+      const thread = threads.find((candidate) => candidate.id === node.threadId)
+      if (thread) onSelect(thread)
+    } else if (node.ref) onOpenRef(node.ref, node.message?.id)
+  }
+
+  useEffect(() => {
+    if (!map) return
+    const frame = requestAnimationFrame(() => {
+      const pane = mapRef.current
+      if (pane) { pane.scrollLeft = mapPosition.current.left; pane.scrollTop = mapPosition.current.top }
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [map])
+
+  useEffect(() => {
+    if (!map || !pendingFit.current) return
+    let scrollFrame: number | undefined
+    const frame = requestAnimationFrame(() => {
+      const pane = mapRef.current
+      if (!pane?.clientWidth || !pane.clientHeight) return
+      const next = 1
+      setZoom(next)
+      const target = layout.nodes.find((node) => node.id === focusId)
+      const position = target ? { left: Math.max(0, (target.x + 120) * next - pane.clientWidth / 2), top: Math.max(0, (target.y + 58) * next - pane.clientHeight / 2) } : { left: 0, top: 0 }
+      scrollFrame = requestAnimationFrame(() => {
+        pane.scrollLeft = position.left
+        pane.scrollTop = position.top
+        mapPosition.current = { left: pane.scrollLeft, top: pane.scrollTop }
+        // A token can change layout between frames. Consume the request only
+        // after positioning, so cancellation retries against the current graph.
+        pendingFit.current = false
+      })
+    })
+    return () => {
+      cancelAnimationFrame(frame)
+      if (scrollFrame !== undefined) cancelAnimationFrame(scrollFrame)
+    }
+  }, [map, layout, focusId])
   const messages = useMemo(() => threads.flatMap((thread) => thread.messages), [threads])
   const children = useMemo(() => {
     const result = new Map<string, SurfaceMsg[]>()
@@ -94,67 +222,106 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
   }
 
   if (map) {
-    const nodes: { id: string; x: number; y: number; label: string; text: string; open: () => void; kind: string }[] = []
-    const edges: { from: string; to: string; kind: string }[] = []
-    const sources = new Map<string, MessageRef>()
-    if (selected?.entity === 'reading_items') sources.set(selected.id, selected)
-    for (const message of messages) for (const ref of message.refs) if (ref.entity === 'reading_items') sources.set(ref.id, ref)
-    let sourceRow = 0
-    for (const ref of sources.values()) nodes.push({ id: `source:${ref.id}`, x: 0, y: sourceRow++ * 112, label: 'Source', text: ref.label, open: () => onOpenRef({ ...ref, quote: undefined, quote_occurrence: undefined }), kind: 'source' })
-    let row = 0
-    for (const thread of threads) {
-      if (thread.source?.quote && !nodes.some((node) => node.id === `passage:${thread.id}`)) {
-        nodes.push({ id: `passage:${thread.id}`, x: 270, y: row * 112, label: 'Passage', text: thread.source.quote, open: () => onSelect(thread), kind: 'passage' })
-        edges.push({ from: `source:${thread.source.id}`, to: `passage:${thread.id}`, kind: 'contains' })
-      }
-      const placed = new Set<string>()
-      const place = (message: SurfaceMsg, depth: number) => {
-        if (placed.has(message.id)) return
-        placed.add(message.id)
-        nodes.push({ id: message.id, x: 540 + depth * 270, y: row++ * 112, label: message.author.name, text: message.text, open: () => onJump(message.id), kind: 'thought' })
-        if (message.parentId && messages.some((parent) => parent.id === message.parentId)) edges.push({ from: message.parentId, to: message.id, kind: 'reply' })
-        else if (thread.source) edges.push({ from: thread.source.quote ? `passage:${thread.id}` : `source:${thread.source.id}`, to: message.id, kind: 'discusses' })
-        for (const ref of message.refs) {
-          if (ref.entity !== 'reading_items') continue
-          const parent = messages.find((candidate) => candidate.id === message.parentId)
-          if (parent?.refs.some((candidate) => passageKey(candidate) === passageKey(ref))) continue
-          if (!message.parentId && thread.source && passageKey(thread.source) === passageKey(ref)) continue
-          const from = ref.quote ? `passage:${passageKey(ref)}` : `source:${ref.id}`
-          if (ref.quote && !nodes.some((node) => node.id === from)) {
-            nodes.push({ id: from, x: 270, y: 0, label: 'Passage', text: ref.quote, open: () => onOpenRef(ref, message.id), kind: 'passage' })
-            edges.push({ from: `source:${ref.id}`, to: from, kind: 'contains' })
-          }
-          edges.push({ from, to: message.id, kind: 'cites' })
+    const byId = new Map(layout.nodes.map((node) => [node.id, node]))
+    const descendantCount = (id: string): number => {
+      const descendants = new Set<string>()
+      const visit = (parent: string): void => {
+        for (const edge of graph.edges) if (edge.kind === 'reply' && edge.from === parent && !descendants.has(edge.to)) {
+          descendants.add(edge.to)
+          visit(edge.to)
         }
-        for (const child of children.get(message.id) ?? []) place(child, depth + 1)
       }
-      for (const root of thread.roots) place(root, 0)
+      visit(id)
+      return descendants.size
     }
-    let passageRow = 0
-    for (const node of nodes) if (node.kind === 'passage') node.y = passageRow++ * 112
-    const byId = new Map(nodes.map((node) => [node.id, node]))
-    const width = Math.max(800, ...nodes.map((node) => node.x + 260))
-    const height = Math.max(240, ...nodes.map((node) => node.y + 112))
-    return <div className="surf-discussion surf-mindmap">
-      <div className="surf-map-tools">{onToggleMap && <button type="button" onClick={onToggleMap}>{mapExpanded ? 'Open article' : 'Expand map'}</button>}<span>Scroll to explore · select a thought to discuss it</span>
-        <button type="button" aria-label="Zoom out map" disabled={zoom <= .5} onClick={() => setZoom((n) => Math.max(.5, n - .1))}>−</button>
-        <button type="button" aria-label="Reset map zoom" onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button>
-        <button type="button" aria-label="Zoom in map" disabled={zoom >= 1.5} onClick={() => setZoom((n) => Math.min(1.5, n + .1))}>+</button>
+    return <div className="surf-discussion surf-mindmap" data-compact-panel={compactPanel ?? undefined} onKeyDown={(event) => {
+      if (event.key === 'Escape' && compactPanel) {
+        event.currentTarget.querySelector<HTMLButtonElement>('.surf-map-compactbar button[aria-expanded="true"]')?.focus({ preventScroll: true })
+        setCompactPanel(null)
+      }
+    }}>
+      <div className="surf-map-compactbar">
+        <button type="button" aria-label="Search map" aria-expanded={compactPanel === 'search'} onClick={() => toggleCompactPanel('search')}>Search</button>
+        <button type="button" aria-label="Show selected map context" disabled={!focusedNode} aria-expanded={compactPanel === 'context'} onClick={() => toggleCompactPanel('context')}>Context</button>
+        <button type="button" aria-label="Map controls" aria-expanded={compactPanel === 'controls'} onClick={() => toggleCompactPanel('controls')}>Controls</button>
+        <button type="button" aria-label="Show complete map" disabled={!focusId && mapCollapsed.size === 0} onClick={showWholeMap}>Whole map</button>
+        <button type="button" aria-label="Fit compact map" onClick={() => { setCompactPanel(null); fitMap() }}>Fit</button>
       </div>
-      <div className="surf-map-scroll" tabIndex={0} aria-label="Mind map; scroll to explore, select a thought to open its thread">
-        <div style={{ width: width * zoom, height: height * zoom }}>
-          <div className="surf-map-canvas" style={{ width, height, transform: `scale(${zoom})` }}>
-            <svg width={width} height={height} aria-hidden="true">{edges.map((edge, i) => {
+      <div className="surf-map-controls">
+      <div className="surf-map-search">
+        <input type="search" aria-label="Search map by person, phrase, source or passage" placeholder="Find a person, phrase or passage…" value={mapQuery}
+          onFocus={() => setSearchOpen(true)} onChange={(event) => { setMapQuery(event.target.value); setSearchOpen(true) }}
+          onKeyDown={(event) => { if (event.key === 'Escape') setSearchOpen(false); if (event.key === 'Enter' && matches[0]) selectSearchResult(matches[0].id) }} />
+        {mapQuery && <button type="button" aria-label="Clear search" onClick={() => { setMapQuery(''); setSearchOpen(false) }}>×</button>}
+        <button type="button" disabled={!focusId && mapCollapsed.size === 0} onClick={showWholeMap}>Show whole map</button>
+      </div>
+      {mapQuery.trim() && searchOpen && <div className="surf-map-results" aria-label="Map search results">
+        <p role="status">{matches.length} {matches.length === 1 ? 'match' : 'matches'} in loaded discussion</p>
+        {matches.map((node) => <button type="button" key={node.id} onClick={() => selectSearchResult(node.id)}><b>{node.kind === 'passage' ? 'Passage · ' : ''}{node.label}</b>{' '}<span>{node.text}</span></button>)}
+      </div>}
+      <div className="surf-map-tools">
+        {onToggleMap && <button type="button" onClick={onToggleMap}>{mapExpanded ? 'Open article' : 'Expand map'}</button>}
+        <span>{focusedNode ? 'Focused path' : `${layout.nodes.filter((node) => node.kind === 'thought').length} thoughts`} · {graph.edges.filter((edge) => edge.kind === 'reply').length} replies</span>
+        <button type="button" onClick={fitMap}>Fit view</button>
+        <button type="button" aria-label="Zoom out map" disabled={zoom <= .15} onClick={() => changeZoom(zoom - .1)}>−</button>
+        <button type="button" aria-label="Reset map zoom" onClick={() => changeZoom(1)}>{Math.round(zoom * 100)}%</button>
+        <button type="button" aria-label="Zoom in map" disabled={zoom >= 1.8} onClick={() => changeZoom(zoom + .1)}>+</button>
+      </div>
+      </div>
+      {focusedNode && <div className="surf-map-focus-context" key={focusedNode.id} aria-label="Selected map context">
+        <div><b>{focusedNode.label}</b><button type="button" onClick={() => openMapNode(focusedNode)}>{focusedNode.kind === 'thought' ? 'Open in thread ↗' : 'Read in source ↗'}</button></div>
+        <p tabIndex={0} aria-label="Selected context text">{focusedNode.text}</p>
+      </div>}
+      <div className="surf-map-scroll" ref={mapRef} tabIndex={0} aria-label="Mind map; drag or scroll to explore. Arrow keys pan, plus and minus zoom, zero fits the map."
+        onScroll={(event) => { mapPosition.current = { left: event.currentTarget.scrollLeft, top: event.currentTarget.scrollTop } }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return
+          const pane = event.currentTarget
+          if (['+', '=', '-', '0', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) event.preventDefault()
+          if (event.key === '+' || event.key === '=') changeZoom(zoom + .1)
+          if (event.key === '-') changeZoom(zoom - .1)
+          if (event.key === '0') fitMap()
+          if (event.key === 'ArrowLeft') pane.scrollLeft -= 120
+          if (event.key === 'ArrowRight') pane.scrollLeft += 120
+          if (event.key === 'ArrowUp') pane.scrollTop -= 120
+          if (event.key === 'ArrowDown') pane.scrollTop += 120
+        }}
+        onPointerDown={(event) => {
+          if (event.pointerType !== 'mouse' || event.button !== 0 || (event.target as HTMLElement).closest('button, input, summary')) return
+          const pane = event.currentTarget
+          drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, left: pane.scrollLeft, top: pane.scrollTop }
+          pane.setPointerCapture(event.pointerId)
+          pane.focus({ preventScroll: true })
+          event.preventDefault()
+        }}
+        onPointerMove={(event) => {
+          if (!drag.current || drag.current.id !== event.pointerId) return
+          event.currentTarget.scrollLeft = drag.current.left - (event.clientX - drag.current.x)
+          event.currentTarget.scrollTop = drag.current.top - (event.clientY - drag.current.y)
+        }}
+        onPointerUp={() => { drag.current = null }} onPointerCancel={() => { drag.current = null }}>
+        <div style={{ width: layout.width * zoom, height: layout.height * zoom }}>
+          <div className="surf-map-canvas" style={{ width: layout.width, height: layout.height, transform: `scale(${zoom})` }}>
+            <svg width={layout.width} height={layout.height} aria-hidden="true">{visibleGraph.edges.map((edge, i) => {
               const from = byId.get(edge.from), to = byId.get(edge.to)
               if (!from || !to) return null
-              return <path key={i} data-kind={edge.kind} d={`M${from.x + 240},${from.y + 42} C${from.x + 260},${from.y + 42} ${to.x - 20},${to.y + 42} ${to.x},${to.y + 42}`}><title>{edge.kind}</title></path>
+              return <path key={i} data-kind={edge.kind} d={`M${from.x + 240},${from.y + 48} C${from.x + 260},${from.y + 48} ${to.x - 20},${to.y + 48} ${to.x},${to.y + 48}`}><title>{edge.kind}</title></path>
             })}</svg>
-            {nodes.map((node) => <button type="button" key={node.id} className={`surf-map-node surf-map-node--${node.kind}`} style={{ left: node.x, top: node.y }} onClick={node.open}>
-              <b>{node.label}</b><span>{node.text || 'Open contribution'}</span>
-            </button>)}
+            {layout.nodes.map((node) => {
+              const replies = node.kind === 'thought' ? descendantCount(node.id) : 0
+              return <div key={node.id} data-map-id={node.id} data-focused={node.id === focusId || undefined} className={`surf-map-node surf-map-node--${node.kind}`} style={{ left: node.x, top: node.y }}>
+                <button type="button" className="surf-map-node-open" onClick={() => openMapNode(node)}><b>{node.kind === 'passage' ? 'Passage · ' : ''}{node.label}</b>{' '}<span>{node.text || 'Open contribution'}</span></button>
+                <div className="surf-map-node-actions">
+                  <button type="button" aria-label={`Focus path for ${node.label}: ${node.text.slice(0, 60)}`} aria-pressed={node.id === focusId} onClick={() => focusNode(node.id)}>Focus path</button>
+                  {replies > 0 && !focusId && <button type="button" aria-expanded={!mapCollapsed.has(node.id)} aria-label={`${mapCollapsed.has(node.id) ? 'Show' : 'Hide'} ${replies} replies to ${node.label}`} onClick={() => setMapCollapsed((current) => {
+                    const next = new Set(current); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next
+                  })}>{mapCollapsed.has(node.id) ? '+' : '−'} {replies} {replies === 1 ? 'reply' : 'replies'}</button>}
+                </div>
+              </div>
+            })}
           </div>
         </div>
-        {nodes.length === 0 && <p>Select a source or start a thought. The map grows from your discussion.</p>}
+        {layout.nodes.length === 0 && <p>Select a source or start a thought. The map grows from your discussion.</p>}
       </div>
     </div>
   }

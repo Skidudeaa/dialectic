@@ -675,7 +675,7 @@
 .surf--conversation .surf-evidence-hint { margin-block: 4px; }
 .surf-head-flags { display: block; }
 
-/* Short visual viewports include the iPad keyboard. Keep navigation and
+/* Short visual viewports include phone/tablet keyboards and small windows. Keep navigation and
    composing; the explanatory masthead returns when the keyboard closes. */
 .app-layout.surface-short .workspace-scene-surface .scene-masthead { display: none; }
 .app-layout.surface-short .app-main-scene-surface .participants-bar { display: none; }
@@ -764,3 +764,7 @@
 }
 .surf-selection-action { overflow-y: auto; }
 .surf-selection-action button { order: -1; }
+
+/* Allocate the remaining window height even when a map has little intrinsic
+   content; its nested panes decide what scrolls inside that space. */
+.app-main-scene-surface > .workspace-with-focus { flex: 1 1 0; }

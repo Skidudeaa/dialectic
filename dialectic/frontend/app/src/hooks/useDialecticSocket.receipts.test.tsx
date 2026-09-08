@@ -75,17 +75,16 @@ describe('streamed reply identity', () => {
     const refs = [{ entity: 'reading_items', id: 'source', label: 'Article', quote: 'The second passage', quote_occurrence: 1, content_sha256: 'hash' }]
     const identity = { message_id: 'answer', thread_id: thread.id, references_message_id: 'exact-question', metadata: { refs }, speaker_type: 'llm_primary' }
     await act(async () => Socket.latest.receive('llm_streaming', { ...identity, token: 'One ' }))
-    const started = useAppStore.getState().streamingMessage
+    const started = useAppStore.getState().streamingMessages.answer
     expect(started).toMatchObject({ id: 'answer', references_message_id: 'exact-question', metadata: { refs } })
     await act(async () => Socket.latest.receive('llm_streaming', { ...identity, token: 'answer.' }))
-    expect(useAppStore.getState().streamingContent).toBe('One answer.')
-    expect(useAppStore.getState().streamingMessage?.created_at).toBe(started?.created_at)
+    expect(useAppStore.getState().streamingMessages.answer.content).toBe('One answer.')
+    expect(useAppStore.getState().streamingMessages.answer?.created_at).toBe(started?.created_at)
     await act(async () => Socket.latest.receive('llm_streaming', { ...identity, thread_id: 'elsewhere', token: 'Wrong thread' }))
-    expect(useAppStore.getState().streamingContent).toBe('One answer.')
+    expect(useAppStore.getState().streamingMessages.answer.content).toBe('One answer.')
     await act(async () => Socket.latest.receive('llm_done', { ...identity, content: 'One answer.', sequence: 9 }))
     expect(useAppStore.getState().messages).toEqual([expect.objectContaining({ id: 'answer', references_message_id: 'exact-question', content: 'One answer.', metadata: { refs } })])
-    expect(useAppStore.getState().streamingMessage).toBeNull()
-    expect(useAppStore.getState().streamingContent).toBe('')
+    expect(useAppStore.getState().streamingMessages).toEqual({})
   })
 
   it('does not mix tokens across message identities and clears ancestry when changing rooms', async () => {
@@ -93,11 +92,10 @@ describe('streamed reply identity', () => {
     renderHook(() => useDialecticSocket())
     await act(async () => Socket.latest.receive('llm_streaming', { thread_id: 'thread', message_id: 'first', token: 'First text', references_message_id: 'parent' }))
     await act(async () => Socket.latest.receive('llm_streaming', { thread_id: 'thread', message_id: 'second', token: 'Second text' }))
-    expect(useAppStore.getState().streamingContent).toBe('Second text')
-    expect(useAppStore.getState().streamingMessage?.references_message_id).toBeNull()
+    expect(useAppStore.getState().streamingMessages.second.content).toBe('Second text')
+    expect(useAppStore.getState().streamingMessages.second?.references_message_id).toBeNull()
     await act(async () => useAppStore.getState().setRoom({ id: 'next-room', name: 'Next', token: 'next', is_home: false }, 'next'))
-    expect(useAppStore.getState().streamingMessage).toBeNull()
-    expect(useAppStore.getState().streamingContent).toBe('')
+    expect(useAppStore.getState().streamingMessages).toEqual({})
   })
 })
 
@@ -112,9 +110,74 @@ it('preserves the active branch response when unrelated work finishes or stays s
   await act(async () => Socket.latest.receive('llm_cancelled', { thread_id: 'thread', reason: 'no_interjection' }))
   await act(async () => Socket.latest.receive('llm_error', { thread_id: 'thread', message_id: 'other-error', error: 'Another task failed' }))
   await act(async () => Socket.latest.receive('llm_error', { thread_id: 'thread', error: 'A different request was deleted before it started' }))
-  expect(useAppStore.getState().streamingContent).toBe('Still answering')
-  expect(useAppStore.getState().streamingMessage?.id).toBe('branch-response')
+  expect(useAppStore.getState().streamingMessages['branch-response'].content).toBe('Still answering')
+  expect(useAppStore.getState().streamingMessages['branch-response'].id).toBe('branch-response')
   expect(useAppStore.getState().messages.map((message) => message.id)).toEqual(['annotation', 'research-row'])
   await act(async () => Socket.latest.receive('llm_done', { thread_id: 'thread', message_id: 'persisted-research', stream_message_id: 'branch-response', content: 'Finished' }))
-  expect(useAppStore.getState().streamingMessage).toBeNull()
+  expect(useAppStore.getState().streamingMessages).toEqual({})
+})
+
+
+describe('overlapping responses', () => {
+  const refs = [{ entity: 'reading_items', id: 'source', label: 'Article', quote: 'Exact passage', quote_occurrence: 1, content_sha256: 'revision' }]
+  const context = (id: string) => ({ thread_id: 'thread', message_id: id, references_message_id: `human-${id}`, metadata: { refs } })
+  async function startBoth() {
+    useAppStore.setState({ currentThread: { id: 'thread', room_id: 'room', parent_thread_id: null, title: null, message_count: 0 } })
+    renderHook(() => useDialecticSocket())
+    await act(async () => {
+      for (const [id, token] of [['A', 'A1 '], ['B', 'B1 '], ['A', 'A2'], ['B', 'B2']]) {
+        Socket.latest.receive('llm_streaming', { ...context(id), token })
+      }
+      Socket.latest.receive('llm_thinking', { thread_id: 'thread' })
+    })
+    expect(useAppStore.getState().streamingMessages.A).toMatchObject({ content: 'A1 A2', references_message_id: 'human-A', metadata: { refs } })
+    expect(useAppStore.getState().streamingMessages.B).toMatchObject({ content: 'B1 B2', references_message_id: 'human-B', metadata: { refs } })
+    expect(useAppStore.getState().isLLMStreaming).toBe(true)
+  }
+
+  it.each([['A', 'B'], ['B', 'A']])('completes %s then %s without clearing another response', async (first, second) => {
+    await startBoth()
+    const other = useAppStore.getState().streamingMessages[second]
+    await act(async () => Socket.latest.receive('llm_done', { ...context(first), content: `${first} final`, stream_message_id: first }))
+    expect(Object.keys(useAppStore.getState().streamingMessages)).toEqual([second])
+    expect(useAppStore.getState().streamingMessages[second]).toBe(other)
+    expect(useAppStore.getState().isLLMStreaming).toBe(true)
+    await act(async () => Socket.latest.receive('llm_streaming', { thread_id: 'thread', message_id: second, token: ' plus' }))
+    expect(useAppStore.getState().streamingMessages[second]).toMatchObject({ content: `${second}1 ${second}2 plus`, references_message_id: `human-${second}`, metadata: { refs } })
+    await act(async () => Socket.latest.receive('llm_done', { ...context(second), content: `${second} final` }))
+    expect(useAppStore.getState().streamingMessages).toEqual({})
+    expect(useAppStore.getState().isLLMStreaming).toBe(false)
+    expect(useAppStore.getState().messages).toEqual([first, second].map((id) => expect.objectContaining({ id, content: `${id} final`, references_message_id: `human-${id}`, metadata: { refs } })))
+  })
+
+  it.each([['A', 'B'], ['B', 'A']])('fails %s independently of %s', async (failed, other) => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    await startBoth()
+    await act(async () => Socket.latest.receive('llm_error', { ...context(failed), error: 'Provider failed' }))
+    expect(Object.keys(useAppStore.getState().streamingMessages)).toEqual([other])
+    expect(useAppStore.getState().isLLMStreaming).toBe(true)
+    await act(async () => Socket.latest.receive('llm_done', { ...context(other), content: 'Finished successfully' }))
+    expect(useAppStore.getState().streamingMessages).toEqual({})
+    expect(useAppStore.getState().messages.map((message) => message.id)).toEqual([other])
+  })
+
+  it('completes a matching message_created and ignores late duplicate tokens', async () => {
+    await startBoth()
+    await act(async () => {
+      Socket.latest.receive('message_created', { id: 'A', thread_id: 'thread', speaker_type: 'llm_primary', content: 'A complete' })
+      Socket.latest.receive('llm_streaming', { ...context('A'), token: 'Late token' })
+    })
+    expect(Object.keys(useAppStore.getState().streamingMessages)).toEqual(['B'])
+    expect(useAppStore.getState().messages.map((message) => message.id)).toEqual(['A'])
+    await act(async () => Socket.latest.receive('llm_cancelled', { thread_id: 'thread' }))
+    expect(useAppStore.getState().streamingMessages).toEqual({})
+  })
+})
+
+
+it('does not erase a current-thread stream while attaching the socket to that destination', () => {
+  useAppStore.setState({ currentThread: { id: 'thread', room_id: 'room', parent_thread_id: null, title: null, message_count: 0 } })
+  useAppStore.getState().receiveStream({ id: 'active', thread_id: 'thread', references_message_id: 'question' }, 'Already arriving')
+  renderHook(() => useDialecticSocket())
+  expect(useAppStore.getState().streamingMessages.active).toMatchObject({ content: 'Already arriving', references_message_id: 'question' })
 })

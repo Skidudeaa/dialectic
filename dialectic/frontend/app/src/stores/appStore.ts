@@ -62,8 +62,8 @@ interface AppState {
    * to keep the composer's Research button disarmed until the brief lands.
    */
   isDeepDiveActive: boolean;
-  streamingContent: string;
-  streamingMessage: Pick<Message, 'id' | 'thread_id' | 'created_at' | 'speaker_type' | 'references_message_id' | 'metadata'> | null;
+  /** Each generation owns its text and context until its own terminal event. */
+  streamingMessages: Record<string, Message>;
   /**
    * Tools the LLM is using right now, keyed by thread. Transient: it exists to
    * say "checking live prices" while the room waits, and is cleared the moment
@@ -139,10 +139,10 @@ interface AppState {
   /** Bulk fill, for a thread-wide read of attachments. */
   setAllAttachments: (byMessageId: Record<string, Attachment[]>) => void;
   setMemories: (memories: Memory[]) => void;
-  setStreamingMessage: (message: NonNullable<AppState['streamingMessage']>) => void;
-  updateStreamingContent: (content: string) => void;
-  appendStreamingToken: (token: string) => void;
-  setLLMState: (thinking: boolean, streaming: boolean) => void;
+  receiveStream: (message: Pick<Message, 'id' | 'thread_id'> & Partial<Pick<Message, 'speaker_type' | 'references_message_id' | 'metadata'>>, content: string, append?: boolean) => void;
+  finishStream: (streamId?: string, message?: Message) => void;
+  setLLMThinking: (thinking: boolean) => void;
+  resetLLMState: () => void;
   setDeepDiveActive: (active: boolean) => void;
   recordToolActivity: (threadId: string, activity: LLMToolActivity) => void;
   clearToolActivity: (threadId: string) => void;
@@ -177,8 +177,7 @@ const initialRoomState = {
   isLLMThinking: false,
   isLLMStreaming: false,
   isDeepDiveActive: false,
-  streamingContent: '',
-  streamingMessage: null,
+  streamingMessages: {},
   llmToolActivity: {},
   activeProtocol: null,
   roomDNA: null,
@@ -242,8 +241,7 @@ export const useAppStore = create<AppState>()(
           typingUsers: [],
           isLLMThinking: false,
           isLLMStreaming: false,
-          streamingContent: '',
-          streamingMessage: null,
+          streamingMessages: {},
           llmToolActivity: {},
           activeProtocol: null,
           roomDNA: null,
@@ -268,7 +266,7 @@ export const useAppStore = create<AppState>()(
       setThread: (thread) => set((state) => ({
         currentThread: thread,
         ...(state.currentThread?.id !== thread.id ? {
-          isLLMThinking: false, isLLMStreaming: false, streamingContent: '', streamingMessage: null,
+          isLLMThinking: false, isLLMStreaming: false, streamingMessages: {},
         } : {}),
       })),
 
@@ -334,32 +332,55 @@ export const useAppStore = create<AppState>()(
 
       setMemories: (memories) => set({ memories }),
 
-      setStreamingMessage: (message) => set((state) => ({
-        streamingMessage: message,
-        ...(state.streamingMessage?.id !== message.id ? { streamingContent: '' } : {}),
+      receiveStream: (identity, content, append = true) => set((state) => {
+        if (identity.thread_id !== state.currentThread?.id || state.messages.some((message) => message.id === identity.id)) return state
+        const previous = state.streamingMessages[identity.id]
+        const message: Message = {
+          id: identity.id,
+          thread_id: identity.thread_id,
+          sequence: Number.MAX_SAFE_INTEGER,
+          created_at: previous?.created_at ?? new Date().toISOString(),
+          speaker_type: identity.speaker_type ?? previous?.speaker_type ?? 'llm_primary',
+          references_message_id: identity.references_message_id !== undefined ? identity.references_message_id : previous?.references_message_id ?? null,
+          metadata: identity.metadata !== undefined ? identity.metadata : previous?.metadata ?? null,
+          user_id: null,
+          message_type: 'text',
+          content: append ? (previous?.content ?? '') + content : content,
+        }
+        return {
+          streamingMessages: { ...state.streamingMessages, [identity.id]: message },
+          isLLMThinking: true,
+          isLLMStreaming: true,
+        }
+      }),
+
+      // Complete one generation atomically with its persisted row. Other
+      // generations remain mounted and keep receiving their own tokens.
+      finishStream: (streamId, message) => set((state) => {
+        const streamingMessages = { ...state.streamingMessages }
+        if (streamId) delete streamingMessages[streamId]
+        const streaming = Object.keys(streamingMessages).length > 0
+        return {
+          streamingMessages,
+          isLLMThinking: streaming,
+          isLLMStreaming: streaming,
+          ...(message && !state.messages.some((item) => item.id === message.id)
+            ? { messages: [...state.messages, message] } : {}),
+        }
+      }),
+
+      setLLMThinking: (thinking) => set((state) => ({
+        isLLMThinking: thinking || Object.keys(state.streamingMessages).length > 0,
       })),
 
-      updateStreamingContent: (content) => set({ streamingContent: content }),
-
-      // WHY: The server streams one token per llm_streaming event
-      // ({token, index}), not accumulated content — the client owns
-      // accumulation.
-      appendStreamingToken: (token) =>
-        set((state) => ({ streamingContent: state.streamingContent + token })),
-
-      setLLMState: (thinking, streaming) =>
-        set({
-          isLLMThinking: thinking,
-          isLLMStreaming: streaming,
-          ...((!thinking && !streaming) ? { streamingContent: '', streamingMessage: null } : {}),
-        }),
+      resetLLMState: () => set({
+        isLLMThinking: false, isLLMStreaming: false, streamingMessages: {},
+      }),
 
       setDeepDiveActive: (active) => set({ isDeepDiveActive: active }),
 
-      // A finished/failed event updates the entry its start created, matched on
-      // tool name — the loop never runs the same tool twice concurrently, and
-      // matching on name keeps this a one-line update instead of an id scheme
-      // the server would then have to carry.
+      // Tool activity events identify only the thread and tool name. Match the
+      // latest start; each completed message keeps its authoritative own trace.
       recordToolActivity: (threadId, activity) =>
         set((state) => {
           const current = state.llmToolActivity[threadId] ?? []

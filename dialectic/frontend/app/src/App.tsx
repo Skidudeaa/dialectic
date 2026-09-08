@@ -99,8 +99,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const isDeepDiveActive = useAppStore((s) => s.isDeepDiveActive)
   const workspaceScene = useAppStore((s) => s.workspaceScene)
   const llmToolActivity = useAppStore((s) => s.llmToolActivity)
-  const streamingContent = useAppStore((s) => s.streamingContent)
-  const streamingMessage = useAppStore((s) => s.streamingMessage)
+  const streamingMessages = useAppStore((s) => s.streamingMessages)
   const activeProtocol = useAppStore((s) => s.activeProtocol)
   const roomToken = useAppStore((s) => s.roomToken)
   const setMessages = useAppStore((s) => s.setMessages)
@@ -440,23 +439,11 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     resolveCommitment(commitmentId, normalized)
   }, [resolveCommitment])
 
-  // In-flight LLM stream rendered as a synthetic message; llm_done replaces it
-  // with the authoritative persisted message.
-  const STREAMING_ID = streamingMessage?.id ?? '__streaming__'
-  const displayMessages: Message[] = isLLMStreaming && streamingContent && !messages.some((message) => message.id === STREAMING_ID)
-    ? [...messages, {
-        id: STREAMING_ID,
-        thread_id: currentThread?.id ?? '',
-        sequence: Number.MAX_SAFE_INTEGER,
-        created_at: streamingMessage?.created_at ?? new Date().toISOString(),
-        speaker_type: streamingMessage?.speaker_type ?? 'llm_primary',
-        references_message_id: streamingMessage?.references_message_id ?? null,
-        metadata: streamingMessage?.metadata ?? null,
-        user_id: null,
-        message_type: 'text',
-        content: streamingContent,
-      } as Message]
-    : messages
+  const pendingMessages = useMemo(() => Object.values(streamingMessages).filter((message) =>
+    message.thread_id === currentThread?.id && !messages.some((saved) => saved.id === message.id),
+  ), [streamingMessages, currentThread?.id, messages])
+  const streamingMessageIds = useMemo(() => pendingMessages.map((message) => message.id), [pendingMessages])
+  const displayMessages = useMemo(() => [...messages, ...pendingMessages], [messages, pendingMessages])
 
   const userNames = useMemo(() => {
     const names: Record<string, string> = {}
@@ -674,7 +661,6 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     currentUserId: user?.id ?? null,
     roomName: currentRoom?.name ?? 'Dialectic',
     isAway: !isVisible,
-    streamingMessageId: isLLMStreaming ? STREAMING_ID : null,
     // With a live push subscription the service worker owns OS notifications.
     suppressNotifications: pushState === 'subscribed',
   })
@@ -777,12 +763,11 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
             currentUserId={user.id}
             onFork={forkFromMessage}
             onReply={(messageId) => {
-              // The in-flight stream is a synthetic placeholder with no row in
-              // the database, so it cannot be a reply target.
-              if (messageId === STREAMING_ID) return
+              // A stream has no persisted row yet and cannot be a reply target.
+              if (streamingMessageIds.includes(messageId)) return
               setReplyToId(messageId)
             }}
-            streamingMessageId={isLLMStreaming ? STREAMING_ID : null}
+            streamingMessageIds={streamingMessageIds}
             userNames={userNames}
             marksByMessage={marksByMessage}
             onFieldChanged={refreshField}
@@ -947,7 +932,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
       roomName={currentRoom.name ?? 'Dialectic'}
       currentUserId={user.id}
       messages={displayMessages}
-      streamingId={isLLMStreaming ? STREAMING_ID : null}
+      streamingIds={streamingMessageIds}
       userNames={userNames}
       unreadSince={unreadSince}
       desk={desk}
@@ -956,7 +941,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
       fieldMarks={fieldMarks}
       conversation={{
         messages: displayMessages, currentUserId: user.id, userNames,
-        streamingMessageId: isLLMStreaming ? STREAMING_ID : null,
+        streamingMessageIds,
         marksByMessage, onFieldChanged: refreshField, unreadSince,
         onSeen: handleSeen, jumpTarget, reactions, attachments,
         onToggleReaction: toggleReaction, onEditMessage: editMessageContent,

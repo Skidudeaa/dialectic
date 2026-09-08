@@ -12,7 +12,7 @@ export interface MessageListProps {
   currentUserId: string | null
   onFork?: (messageId: string) => void
   onReply?: (messageId: string) => void
-  streamingMessageId?: string | null
+  streamingMessageIds?: readonly string[]
   userNames?: Record<string, string>
   /** Field marks indexed by the message they point at (App builds it). */
   marksByMessage?: Record<string, FieldMark[]>
@@ -123,7 +123,7 @@ export function MessageList({
   currentUserId,
   onFork,
   onReply,
-  streamingMessageId,
+  streamingMessageIds,
   userNames = {},
   marksByMessage = {},
   onFieldChanged,
@@ -205,7 +205,7 @@ export function MessageList({
   // that is the whole fix for losing your place mid-history.
   useLayoutEffect(() => {
     if (isFollowing) scrollToBottom('auto')
-  }, [messages, streamingMessageId, isFollowing, scrollToBottom])
+  }, [messages, streamingMessageIds, isFollowing, scrollToBottom])
 
   const isVisible = useDocumentVisibility()
 
@@ -231,11 +231,11 @@ export function MessageList({
     if (!onSeen || !isFollowing || !isVisible) return
     for (let i = messages.length - 1; i >= 0; i--) {
       const candidate = messages[i]
-      if (candidate.id === streamingMessageId) continue
+      if (streamingMessageIds?.includes(candidate.id)) continue
       onSeen(candidate.id)
       return
     }
-  }, [messages, isFollowing, isVisible, onSeen, streamingMessageId])
+  }, [messages, isFollowing, isVisible, onSeen, streamingMessageIds])
 
   // The loaded message list is the authority for whether a jump target is on
   // this page. Derive the notice during render; mirroring it into state inside
@@ -353,7 +353,7 @@ export function MessageList({
                     onFieldChanged={onFieldChanged}
                     onFork={onFork}
                     onReply={onReply}
-                    isStreaming={msg.id === streamingMessageId}
+                    isStreaming={streamingMessageIds?.includes(msg.id)}
                     replyToAuthor={parent ? getAuthorName(parent, userNames) : undefined}
                     replyToContent={parent?.content}
                     replyToMissing={Boolean(msg.references_message_id && !parent)}

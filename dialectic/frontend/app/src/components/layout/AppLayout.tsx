@@ -30,7 +30,7 @@ export function AppLayout({ sidebar, main, rightPanel, isHome = false, homeTalki
     const viewport = window.visualViewport
     const layout = layoutRef.current
     if (!viewport || !layout || workspaceScene !== 'surface') return
-    // iPad's keyboard reduces the visual viewport without changing 100dvh.
+    // Mobile keyboards can shrink the visual viewport without changing 100dvh.
     // Leave pinch zoom to the browser instead of reflowing the reading.
     const fit = () => {
       if (viewport.scale === 1) {

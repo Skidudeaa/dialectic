@@ -128,7 +128,7 @@ export interface ToSurfaceOptions {
   currentUserId: string | null
   /** The reader's last read receipt (or join time) in this room. */
   unreadSince?: string | null
-  streamingId?: string | null
+  streamingIds?: readonly string[]
   now?: Date
 }
 
@@ -141,7 +141,7 @@ export function toSurfaceMessages(messages: Message[], options: ToSurfaceOptions
     const anchor = message.metadata?.anchor ?? null
     const parent = message.references_message_id ?? null
     const calls = message.metadata?.tools?.calls ?? []
-    const isStreaming = message.id === options.streamingId
+    const isStreaming = options.streamingIds?.includes(message.id) ?? false
     const created = new Date(message.created_at).getTime()
     return {
       message,
@@ -276,4 +276,99 @@ export function discussionThreads(messages: SurfaceMsg[]): DiscussionThread[] {
     group.messages.push(message)
   }
   return [...groups.values()]
+}
+
+export interface DiscussionMapNode {
+  id: string
+  kind: 'source' | 'passage' | 'thought'
+  label: string
+  text: string
+  message?: SurfaceMsg
+  ref?: MessageRef
+  threadId?: string
+}
+
+export interface DiscussionMap {
+  nodes: DiscussionMapNode[]
+  edges: { from: string; to: string; kind: 'contains' | 'reply' | 'discusses' | 'cites' }[]
+}
+
+/** Map only persisted references and reply ancestry; prose never implies a relationship. */
+export function discussionMap(threads: DiscussionThread[], selected: MessageRef | null): DiscussionMap {
+  const nodes = new Map<string, DiscussionMapNode>()
+  const edges: DiscussionMap['edges'] = []
+  const messages = threads.flatMap((thread) => thread.messages)
+  const byId = new Map(messages.map((message) => [message.id, message]))
+  const addRef = (ref: MessageRef, message?: SurfaceMsg, threadId?: string): string => {
+    const sourceId = `source:${ref.id}`
+    if (!nodes.has(sourceId)) nodes.set(sourceId, { id: sourceId, kind: 'source', label: 'Source', text: ref.label, ref: { ...ref, quote: undefined, quote_occurrence: undefined } })
+    if (!ref.quote) return sourceId
+    const id = `passage:${passageKey(ref)}`
+    if (!nodes.has(id)) {
+      nodes.set(id, { id, kind: 'passage', label: ref.label, text: ref.quote, ref, message, threadId })
+      edges.push({ from: sourceId, to: id, kind: 'contains' })
+    }
+    return id
+  }
+  if (selected?.entity === 'reading_items') addRef({ ...selected, quote: undefined, quote_occurrence: undefined })
+  for (const thread of threads) {
+    const origin = thread.source ? addRef(thread.source, thread.roots[0], thread.id) : null
+    for (const message of thread.messages) {
+      nodes.set(message.id, { id: message.id, kind: 'thought', label: message.author.name, text: message.text, message, threadId: thread.id })
+      const parent = message.parentId ? byId.get(message.parentId) : undefined
+      if (parent) edges.push({ from: parent.id, to: message.id, kind: 'reply' })
+      else if (origin) edges.push({ from: origin, to: message.id, kind: 'discusses' })
+      for (const ref of message.refs) {
+        if (ref.entity !== 'reading_items') continue
+        if (parent?.refs.some((candidate) => passageKey(candidate) === passageKey(ref))) continue
+        if (!parent && thread.source && passageKey(thread.source) === passageKey(ref)) continue
+        edges.push({ from: addRef(ref, message), to: message.id, kind: 'cites' })
+      }
+    }
+  }
+  return { nodes: [...nodes.values()], edges }
+}
+
+/** Search people's actual words and the full source labels/passages carried by their refs. */
+export function searchDiscussionMap(graph: DiscussionMap, query: string): DiscussionMapNode[] {
+  const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
+  if (!terms.length) return []
+  return graph.nodes.filter((node) => {
+    const refs = node.kind === 'thought' ? node.message?.refs ?? [] : []
+    const text = [node.label, node.text, ...refs.flatMap((ref) => [ref.label, ref.quote ?? ''])].join(' ').toLocaleLowerCase()
+    return terms.every((term) => text.includes(term))
+  })
+}
+
+/** Focus a thought's actual ancestors and citations, or the thoughts directly citing a source/passage. */
+export function focusDiscussionMap(graph: DiscussionMap, focusId: string | null, collapsed: ReadonlySet<string>): DiscussionMap {
+  const ids = new Set(graph.nodes.map((node) => node.id))
+  const focused = focusId !== null && ids.has(focusId)
+  const visible = new Set<string>()
+  const includeParents = (id: string): void => {
+    if (visible.has(id)) return
+    visible.add(id)
+    for (const edge of graph.edges) if (edge.to === id) includeParents(edge.from)
+  }
+  if (focused) {
+    includeParents(focusId)
+    if (graph.nodes.find((node) => node.id === focusId)?.kind !== 'thought') {
+      const contexts = new Set([focusId])
+      for (const edge of graph.edges) if (edge.from === focusId && edge.kind === 'contains') contexts.add(edge.to)
+      for (const edge of graph.edges) if (contexts.has(edge.from) && edge.kind !== 'contains') includeParents(edge.to)
+    }
+  } else {
+    const hidden = new Set<string>()
+    const hideChildren = (id: string): void => {
+      for (const edge of graph.edges) if (edge.kind === 'reply' && edge.from === id && !hidden.has(edge.to)) {
+        hidden.add(edge.to)
+        hideChildren(edge.to)
+      }
+    }
+    for (const id of collapsed) hideChildren(id)
+    for (const id of ids) if (!hidden.has(id)) visible.add(id)
+    // Hidden branches should not leave their otherwise unused citations floating in the map.
+    for (const node of graph.nodes) if (node.kind === 'passage' && !graph.edges.some((edge) => edge.from === node.id && visible.has(edge.to))) visible.delete(node.id)
+  }
+  return { nodes: graph.nodes.filter((node) => visible.has(node.id)), edges: graph.edges.filter((edge) => visible.has(edge.from) && visible.has(edge.to)) }
 }

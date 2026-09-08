@@ -60,10 +60,11 @@ export function useDialecticSocket(options?: {
 
   const addMessage = useAppStore((s) => s.addMessage);
   const setTypingUser = useAppStore((s) => s.setTypingUser);
-  const setLLMState = useAppStore((s) => s.setLLMState);
+  const setLLMThinking = useAppStore((s) => s.setLLMThinking);
+  const resetLLMState = useAppStore((s) => s.resetLLMState);
+  const finishStream = useAppStore((s) => s.finishStream);
+  const receiveStream = useAppStore((s) => s.receiveStream);
   const setDeepDiveActive = useAppStore((s) => s.setDeepDiveActive);
-  const updateStreamingContent = useAppStore((s) => s.updateStreamingContent);
-  const appendStreamingToken = useAppStore((s) => s.appendStreamingToken);
   const setThreads = useAppStore((s) => s.setThreads);
   const setMemories = useAppStore((s) => s.setMemories);
   const setOnlineUsers = useAppStore((s) => s.setOnlineUsers);
@@ -226,7 +227,8 @@ export function useDialecticSocket(options?: {
     switch (type) {
       case 'message_created':
         if (!payloadMatchesActiveThread(payload)) break;
-        addMessage(payload as unknown as Message);
+        if (payload.speaker_type === 'human') addMessage(payload as unknown as Message);
+        else finishStream(payload.id as string, payload as unknown as Message);
         // The server binds attachments inside the send transaction, so the
         // broadcast is the first read that can carry the media — no echo-bind,
         // no probe.
@@ -238,7 +240,6 @@ export function useDialecticSocket(options?: {
           setMessageAttachments(payload.id, payload.attachments as Attachment[]);
         }
         void refreshThreads();
-        if (payload.speaker_type !== 'human' && (!useAppStore.getState().streamingMessage || payload.id === useAppStore.getState().streamingMessage?.id)) setLLMState(false, false);
         break;
 
       case 'message_edited':
@@ -297,32 +298,20 @@ export function useDialecticSocket(options?: {
 
       case 'llm_thinking':
         if (!payloadMatchesActiveThread(payload)) break;
-        setLLMState(true, false);
+        setLLMThinking(true);
         break;
 
       case 'llm_streaming':
-        if (!payloadMatchesActiveThread(payload)) break;
-        if (typeof payload.message_id === 'string') {
-          const state = useAppStore.getState();
-          state.setStreamingMessage({
+        if (!payloadMatchesActiveThread(payload) || typeof payload.message_id !== 'string') break;
+        if (typeof payload.token === 'string' || typeof payload.content === 'string') {
+          receiveStream({
             id: payload.message_id,
             thread_id: payload.thread_id as string,
-            created_at: state.streamingMessage?.id === payload.message_id
-              ? state.streamingMessage.created_at : new Date().toISOString(),
-            speaker_type: (payload.speaker_type as Message['speaker_type']) ?? 'llm_primary',
-            references_message_id: (payload.references_message_id as string | undefined) ?? null,
-            metadata: (payload.metadata as MessageMetadata | undefined) ?? null,
-          });
+            speaker_type: payload.speaker_type as Message['speaker_type'] | undefined,
+            references_message_id: payload.references_message_id as string | null | undefined,
+            metadata: payload.metadata as MessageMetadata | null | undefined,
+          }, (payload.token ?? payload.content) as string, typeof payload.token === 'string');
         }
-        // Server contract: one token per event ({token, index}), matching
-        // the mobile client. The previous code read payload.content, which
-        // the server never sends — streamed text silently never rendered.
-        if (typeof payload.token === 'string') {
-          appendStreamingToken(payload.token);
-        } else if (typeof payload.content === 'string') {
-          updateStreamingContent(payload.content);
-        }
-        setLLMState(true, true);
         break;
 
       case 'llm_tool_activity': {
@@ -340,18 +329,11 @@ export function useDialecticSocket(options?: {
 
       case 'llm_done': {
         if (!payloadMatchesActiveThread(payload)) break;
-        // There is no payload.message. Build the persisted message from the
-        // authoritative fields carried by llm_done.
-        const activeStream = useAppStore.getState().streamingMessage;
-        const completedStreamId = payload.stream_message_id ?? payload.message_id;
-        if (!activeStream || activeStream.id === completedStreamId) {
-          setLLMState(false, false);
-          if (typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
-        }
+        const completedStreamId = (payload.stream_message_id ?? payload.message_id) as string | undefined;
         if (payload.message) {
-          addMessage(payload.message as unknown as Message);
+          finishStream(completedStreamId, payload.message as unknown as Message);
         } else if (typeof payload.message_id === 'string') {
-          addMessage({
+          finishStream(completedStreamId, {
             id: payload.message_id,
             thread_id: (payload.thread_id as string) ?? '',
             sequence: typeof payload.sequence === 'number'
@@ -370,8 +352,7 @@ export function useDialecticSocket(options?: {
             content: (payload.content as string) ?? '',
             references_message_id: (payload.references_message_id as string | undefined) ?? null,
             user_name: payload.speaker_type === 'llm_provoker' ? 'Provoker' : PARTICIPANT_NAME,
-            // Only path the tool trace takes to the client — the REST message
-            // list projects a fixed field set with no metadata in it.
+            // Completion supplies the authoritative source refs and tool trace.
             metadata: (payload.metadata as MessageMetadata | undefined) ?? null,
           } as Message);
           // A document the turn wrote (write_document) rides llm_done the way
@@ -380,23 +361,23 @@ export function useDialecticSocket(options?: {
             setMessageAttachments(payload.message_id, payload.attachments as Attachment[]);
           }
         }
+        if (!useAppStore.getState().isLLMStreaming && typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
         void refreshThreads();
         break;
       }
 
       case 'llm_error':
         if (!payloadMatchesActiveThread(payload)) break;
-        if (useAppStore.getState().streamingMessage && payload.message_id !== useAppStore.getState().streamingMessage?.id) break;
-        setLLMState(false, false);
-        if (typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
+        finishStream(typeof payload.message_id === 'string' ? payload.message_id : undefined);
+        if (!useAppStore.getState().isLLMStreaming && typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
         console.error('[LLM] stream error:', payload.error);
         break;
 
       case 'llm_cancelled':
         if (!payloadMatchesActiveThread(payload)) break;
-        if (payload.reason === 'no_interjection' && useAppStore.getState().streamingMessage) break;
-        setLLMState(false, false);
-        if (typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
+        if (payload.reason === 'no_interjection') setLLMThinking(false);
+        else resetLLMState();
+        if (!useAppStore.getState().isLLMStreaming && typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
         break;
 
       // Research-mode brackets: the dive between them speaks the ordinary
@@ -519,9 +500,10 @@ export function useDialecticSocket(options?: {
   }, [
     addMessage,
     setTypingUser,
-    setLLMState,
-    updateStreamingContent,
-    appendStreamingToken,
+    setLLMThinking,
+    resetLLMState,
+    receiveStream,
+    finishStream,
     setProtocol,
     updateProtocolPhase,
     addCommitment,
@@ -689,9 +671,9 @@ export function useDialecticSocket(options?: {
   // without reconnecting the room socket.
   useEffect(() => {
     if (!currentThread?.id) return;
-    setLLMState(false, false);
+    // setThread already clears old streams atomically with the destination.
     send('switch_thread', { thread_id: currentThread.id });
-  }, [currentThread?.id, send, setLLMState]);
+  }, [currentThread?.id, send]);
 
   // --- Outbound helpers ---
 
