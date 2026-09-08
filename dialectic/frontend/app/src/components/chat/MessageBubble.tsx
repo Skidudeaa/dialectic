@@ -43,6 +43,7 @@ interface MessageBubbleProps {
   authorName: string
   onFork?: (messageId: string) => void
   onReply?: (messageId: string) => void
+  onInvestigate?: (messageId: string, quote?: string) => void
   isStreaming?: boolean
   replyToAuthor?: string
   replyToContent?: string
@@ -425,6 +426,7 @@ export function MessageBubble({
   authorName,
   onFork,
   onReply,
+  onInvestigate,
   isStreaming,
   replyToAuthor,
   replyToContent,
@@ -537,8 +539,7 @@ export function MessageBubble({
     }
   }
 
-  const visibleRefs = (message.metadata?.refs ?? []).filter((ref) => !threadSource ||
-    ref.entity !== threadSource.entity || ref.id !== threadSource.id || ref.quote !== threadSource.quote || ref.content_sha256 !== threadSource.content_sha256)
+  const visibleRefs = (message.metadata?.refs ?? []).filter((ref) => !threadSource || passageKey(ref) !== passageKey(threadSource))
   const Actions = threadSource === undefined ? 'div' : 'details'
   const cls = speakerClass(message.speaker_type, isSelf)
   const streamCls = isStreaming ? (message.speaker_type === 'llm_provoker' ? ' streaming provoker-stream' : ' streaming') : ''
@@ -720,6 +721,7 @@ export function MessageBubble({
             <span className="msg-author">{authorName}</span>
             <span className="msg-time">{formatTime(message.created_at)}</span>
             {threadSource !== undefined && onReply && !isStreaming && <button type="button" className="msg-action-btn surf-inline-reply" onClick={() => onReply(message.id)}>Reply</button>}
+            {onInvestigate && !isStreaming && <button type="button" className="msg-action-btn" onClick={() => onInvestigate(message.id)}>Find and pull</button>}
             {message.message_type !== 'text' && (
               <span className="msg-type-badge">{message.message_type}</span>
             )}
@@ -804,6 +806,7 @@ export function MessageBubble({
               messageId={message.id}
               containerRef={contentRef}
               onMarked={onFieldChanged}
+              onInvestigate={onInvestigate ? (quote) => onInvestigate(message.id, quote) : undefined}
             />
           )}
         </ResponseCard>

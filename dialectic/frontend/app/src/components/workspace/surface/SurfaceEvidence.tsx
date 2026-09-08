@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ContextInspector, ReviewButton } from '@dark-roast/companion-ui'
 import type { MessageRef, ReadingDetail, ReadingLibraryResponse } from '../../../types'
 import { api } from '../../../lib/api'
-import { markQuote, uniqueQuoteRange, MAX_QUOTE_CHARS, MIN_QUOTE_CHARS, normaliseQuote } from '../../../lib/passageAnchor'
+import { markQuote, readingAnchorFromSelection, MAX_READING_QUOTE_CHARS, MIN_QUOTE_CHARS, normaliseQuote } from '../../../lib/passageAnchor'
 import { RenderedMarkdown } from '../focus/ReadingFocus'
 import { passageKey, type SurfaceMsg } from './surfaceModel'
 
@@ -13,6 +13,7 @@ interface SurfaceEvidenceProps {
   onSelect: (ref: MessageRef | null) => void
   onDiscuss: (ref: MessageRef) => void
   onAttach?: (ref: MessageRef) => void
+  onInvestigate?: (ref: MessageRef) => void
   onReply: (messageId: string) => void
   onJump: (messageId: string) => void
   onOpenFull: (ref: MessageRef) => void
@@ -22,7 +23,7 @@ interface SurfaceEvidenceProps {
 }
 
 /** Sources and the human exchanges they carry stay together while the room talks. */
-export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscuss, onAttach, onReply, onJump, onOpenFull, passages, onPassage, scrollRequest = 0 }: SurfaceEvidenceProps) {
+export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscuss, onAttach, onInvestigate, onReply, onJump, onOpenFull, passages, onPassage, scrollRequest = 0 }: SurfaceEvidenceProps) {
   const [query, setQuery] = useState('')
   const [library, setLibrary] = useState<ReadingLibraryResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +31,7 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
   const [detail, setDetail] = useState<ReadingDetail | null>(null)
   const [detailError, setDetailError] = useState<string | null>(null)
   const [quote, setQuote] = useState('')
+  const [quoteOccurrence, setQuoteOccurrence] = useState<number | undefined>()
   const [selectionPosition, setSelectionPosition] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null)
   const [selectionError, setSelectionError] = useState<string | null>(null)
   const [passageNotice, setPassageNotice] = useState<string | null>(null)
@@ -67,6 +69,7 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
       setDetail(null)
       setDetailError(null)
       setQuote('')
+      setQuoteOccurrence(undefined)
       setSelectionPosition(null)
       setSelectionError(null)
       if (!selectedId) return
@@ -106,7 +109,7 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
       return {
         id: ref.id, label: ref.label,
         description: people.length ? `${people.join(' · ')} · ${exchanges.length} contributions` : readings.get(ref.id)?.summary,
-        onNavigate: () => onSelect({ ...ref, quote: undefined }),
+        onNavigate: () => onSelect({ ...ref, quote: undefined, quote_occurrence: undefined }),
       }
     })
   }, [library, shared, query, messages, onSelect])
@@ -132,11 +135,12 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
       for (const mark of container!.querySelectorAll('mark[data-passage]')) mark.replaceWith(...mark.childNodes)
       const marks: HTMLElement[] = []
       container!.normalize()
+      const prose = container!.querySelector<HTMLElement>('.reading-focus-prose')
       const refs = new Map(anchoredPassages.filter((ref) => ref.id === current!.id && ref.quote).map((ref) => [passageKey(ref), ref]))
       if (selected?.quote) refs.set(passageKey(selected), selected)
       for (const [key, ref] of refs) {
         if (ref.content_sha256 && ref.content_sha256 !== current!.content_sha256) continue
-        const painted = markQuote(container!, ref.quote!, key)
+        const painted = prose ? markQuote(prose, ref.quote!, key, ref.quote_occurrence) : []
         for (const mark of painted) {
           mark.dataset.active = String(key === selectedKey)
           if (!anchoredPassages.some((passage) => passageKey(passage) === key)) { mark.removeAttribute('role'); mark.removeAttribute('tabindex'); mark.removeAttribute('aria-label') }
@@ -174,23 +178,21 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
   }
 
   const readSelection = useCallback(() => {
-    const container = sourceRef.current
+    const container = sourceRef.current?.querySelector<HTMLElement>('.reading-focus-prose')
     if (!container) return
     const selection = window.getSelection()
     if (!selection || selection.isCollapsed || !selection.rangeCount || !container.contains(selection.getRangeAt(0).commonAncestorContainer)) {
-      setQuote(''); setSelectionError(null); setSelectionPosition(null)
+      setQuote(''); setQuoteOccurrence(undefined); setSelectionError(null); setSelectionPosition(null)
       return
     }
     const raw = normaliseQuote(selection.toString())
-    if (raw.length < MIN_QUOTE_CHARS) { setQuote(''); setSelectionPosition(null); setSelectionError(null); return }
-    // The persisted quote remains bounded. Show the excerpt before filing it,
-    // so selecting an ordinary long paragraph never produces a dead action.
-    const excerpt = raw.slice(0, MAX_QUOTE_CHARS).trim()
-    const unique = uniqueQuoteRange(container, excerpt)
-    setSelectionError(!unique
-      ? 'These words repeat. Extend the selection to include a distinctive phrase.'
-      : raw.length > MAX_QUOTE_CHARS ? `Quoting the first ${MAX_QUOTE_CHARS} characters of your selection.` : null)
-    setQuote(unique ? excerpt : '')
+    if (raw.length < MIN_QUOTE_CHARS) { setQuote(''); setQuoteOccurrence(undefined); setSelectionPosition(null); setSelectionError(null); return }
+    const anchor = readingAnchorFromSelection(selection, container)
+    setSelectionError(anchor ? null : raw.length > MAX_READING_QUOTE_CHARS
+      ? `Select up to ${MAX_READING_QUOTE_CHARS} characters. Your selection has not been shortened.`
+      : 'This selection could not be located exactly. Include its surrounding words.')
+    setQuote(anchor?.quote ?? '')
+    setQuoteOccurrence(anchor?.occurrence)
     const pane = container.closest('.surf-evidence')!.getBoundingClientRect()
     const range = selection.getRangeAt(0)
     const rect = typeof range.getBoundingClientRect === 'function' ? range.getBoundingClientRect() : pane
@@ -215,15 +217,16 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
     }
   }, [readSelection, current])
 
-  function discuss(attach = false) {
+  function discuss(attach = false, investigate = false) {
     if (!current) return
     setQuote('')
+    setQuoteOccurrence(undefined)
     setSelectionPosition(null)
     window.getSelection()?.removeAllRanges()
-    const submit = attach && onAttach ? onAttach : onDiscuss
+    const submit = investigate && onInvestigate ? onInvestigate : attach && onAttach ? onAttach : onDiscuss
     submit({
       entity: 'reading_items', id: current.id, label: (current.title || current.url).slice(0, 200),
-      ...(quote ? { quote } : {}),
+      ...(quote ? { quote, quote_occurrence: quoteOccurrence } : {}),
       ...(current.content_sha256 ? { content_sha256: current.content_sha256 } : {}),
     })
   }
@@ -254,7 +257,8 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
             {quote && <blockquote>{quote}</blockquote>}
             {selectionError && <p role="status">{selectionError}</p>}
             {quote && <button type="button" onClick={() => discuss(Boolean(onAttach))}>{onAttach ? 'Attach passage to reply' : 'Discuss this passage'}</button>}
-            <button type="button" aria-label="Dismiss passage selection" onClick={() => { window.getSelection()?.removeAllRanges(); setSelectionPosition(null); setQuote(''); setSelectionError(null) }}>×</button>
+            {quote && onInvestigate && <button type="button" onClick={() => discuss(false, true)}>Find and pull</button>}
+            <button type="button" aria-label="Dismiss passage selection" onClick={() => { window.getSelection()?.removeAllRanges(); setSelectionPosition(null); setQuote(''); setQuoteOccurrence(undefined); setSelectionError(null) }}>×</button>
           </div>}
           {exchanges.length > 0 && <details className="surf-evidence-exchanges">
             <summary>{exchanges.length} contributions · {[...new Set(exchanges.map((m) => m.author.name))].join(' · ')}</summary>
@@ -270,7 +274,7 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
           {detailError ? <p role="alert">{detailError} <button type="button" onClick={() => setAttempt((n) => n + 1)}>Retry</button></p>
             : selectedId && !current ? <p role="status">Opening the source…</p>
             : current ? <>
-              <p className="surf-evidence-hint">Select a short passage to discuss it. Your words and the quote travel together.</p>
+              <p className="surf-evidence-hint">Select a passage to discuss it. Your words and the complete quote travel together.</p>
               <div ref={sourceRef} className="surf-evidence-document" onPointerUp={readSelection} onKeyUp={readSelection} onClick={openPassage} onKeyDown={openPassage}>
                 <RenderedMarkdown key={current.id + (current.content_sha256 ?? '')} markdown={current.markdown} />
               </div>

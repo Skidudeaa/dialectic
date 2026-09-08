@@ -7,7 +7,7 @@ import { api } from './lib/api.ts'
 import { useAppStore } from './stores/appStore.ts'
 import type { RoomDestination, Thread, UserRoom } from './types/index.ts'
 
-const socket = vi.hoisted(() => ({ sendMessageWithReceipt: vi.fn(async () => true) }))
+const socket = vi.hoisted(() => ({ sendMessageWithReceipt: vi.fn(async () => ({ id: 'accepted-comment', thread_id: 'thread-1' })) }))
 
 vi.mock('./hooks/useDialecticSocket.ts', () => ({
   useDialecticSocket: () => ({
@@ -113,7 +113,7 @@ beforeEach(() => {
     scheduler_running: false, jobs: [],
   })
   vi.spyOn(api, 'getReadingLibrary').mockResolvedValue({ items: [], next_before: null })
-  socket.sendMessageWithReceipt.mockReset().mockResolvedValue(true)
+  socket.sendMessageWithReceipt.mockReset().mockResolvedValue({ id: 'accepted-comment', thread_id: thread.id })
 })
 
 function composer(): HTMLTextAreaElement {
@@ -148,8 +148,8 @@ async function selectScene(scene: 'Surface' | 'Record' | 'Library'): Promise<voi
 }
 
 async function submitPending(content: string): Promise<() => Promise<void>> {
-  let accept: (sent: boolean) => void
-  socket.sendMessageWithReceipt.mockImplementationOnce(() => new Promise<boolean>((resolve) => {
+  let accept: (sent: { id: string; thread_id: string }) => void
+  socket.sendMessageWithReceipt.mockImplementationOnce(() => new Promise<{ id: string; thread_id: string }>((resolve) => {
     accept = resolve
   }))
   typeDraft(content)
@@ -159,7 +159,7 @@ async function submitPending(content: string): Promise<() => Promise<void>> {
   )
   expect(composer()).toHaveValue(content)
   return async () => {
-    await act(async () => { accept(true) })
+    await act(async () => { accept({ id: 'accepted-comment', thread_id: thread.id }) })
   }
 }
 

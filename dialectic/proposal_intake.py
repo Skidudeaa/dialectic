@@ -142,6 +142,7 @@ REF_ENTITIES = (
     "messages", "geo_scopes", "commitments", "thesis_node",
 )
 _MAX_REFS = 12
+MAX_READING_QUOTE_CHARS = 4000
 
 
 def validate_anchor(value: Any) -> dict:
@@ -196,7 +197,17 @@ def validate_refs(value: Any) -> list[dict]:
         if ref.get("quote") is not None:
             if entity != "reading_items":
                 raise ProposalMetadataError("quoted passages must refer to a reading")
-            clean["quote"] = " ".join(_require_str(ref, "quote", max_len=300).split())
+            clean["quote"] = _require_str(
+                {"quote": " ".join(str(ref.get("quote") or "").split())},
+                "quote", max_len=MAX_READING_QUOTE_CHARS,
+            )
+        if "quote_occurrence" in ref:
+            occurrence = ref["quote_occurrence"]
+            if "quote" not in clean:
+                raise ProposalMetadataError("quote_occurrence requires a quoted reading passage")
+            if type(occurrence) is not int or occurrence < 0:
+                raise ProposalMetadataError("quote_occurrence must be a nonnegative integer")
+            clean["quote_occurrence"] = occurrence
         if ref.get("content_sha256") is not None:
             digest = ref["content_sha256"]
             if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
@@ -246,7 +257,9 @@ async def validate_reading_quotes(db: Any, room_id: UUID, refs: list[dict]) -> N
     """Validate new quotations against a room's current or immutable reading revision.
 
     Stamp legacy readings with their actual content hash. Raises ProposalMetadataError
-    when the cited version or selected words cannot be found; never rewrites a quote.
+    when the cited version, selected words or explicit occurrence cannot be found.
+    Occurrences count non-overlapping matches in rendered, whitespace-normalized
+    text. Legacy refs without an occurrence stay unspecified; never guess one.
     """
     for ref in refs:
         if not ref.get("quote"):
@@ -274,8 +287,11 @@ async def validate_reading_quotes(db: Any, room_id: UUID, refs: list[dict]) -> N
         markdown = MarkdownIt("commonmark").enable(["table", "strikethrough"])
         markdown.core.ruler.before("inline", "reading_task_lists", _reading_task_lists)
         parser.feed(markdown.render(content))
-        if ref["quote"] not in " ".join("".join(parser.parts).split()):
+        text = " ".join("".join(parser.parts).split())
+        if ref["quote"] not in text:
             raise ProposalMetadataError("the selected passage does not match this source")
+        if "quote_occurrence" in ref and ref["quote_occurrence"] >= text.count(ref["quote"]):
+            raise ProposalMetadataError("the selected passage occurrence does not match this source")
         ref["content_sha256"] = digest
 
 

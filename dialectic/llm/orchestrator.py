@@ -1009,6 +1009,39 @@ class LLMOrchestrator:
             attachments=attachments,
         )
 
+    async def _addressed_context(
+        self, messages: list[Message], thread: Thread, trigger_message_id: UUID,
+    ) -> tuple[Message, list[Message]]:
+        """Freeze the human request and its actual ancestry in this room."""
+        by_id = {message.id: message for message in messages}
+        trigger = by_id.get(trigger_message_id)
+        if not trigger or trigger.is_deleted or trigger.thread_id != thread.id or trigger.speaker_type != SpeakerType.HUMAN:
+            raise ValueError("The human request is no longer available in this conversation.")
+        if not trigger.references_message_id:
+            return trigger, messages[:messages.index(trigger) + 1]
+
+        ancestry = [trigger]
+        seen = {trigger.id}
+        parent_id = trigger.references_message_id
+        while parent_id:
+            if parent_id in seen:
+                raise ValueError("The selected reply ancestry contains a cycle.")
+            seen.add(parent_id)
+            parent = by_id.get(parent_id)
+            if parent is None:
+                # A valid room reply may point across one of its forked threads.
+                row = await self.db.fetchrow(
+                    """SELECT m.* FROM messages m JOIN threads t ON t.id=m.thread_id
+                       WHERE m.id=$1 AND t.room_id=$2 AND NOT m.is_deleted""",
+                    parent_id, thread.room_id,
+                )
+                parent = Message(**dict(row)) if row else None
+            if parent is None or parent.is_deleted:
+                break
+            ancestry.append(parent)
+            parent_id = parent.references_message_id
+        return trigger, list(reversed(ancestry))
+
     async def stream_response(
         self,
         room: Room,
@@ -1018,6 +1051,7 @@ class LLMOrchestrator:
         memories: list[Memory],
         use_provoker: bool = False,
         reason: str = "explicit_mention",
+        trigger_message_id: Optional[UUID] = None,
     ) -> AsyncIterator[tuple[str, dict]]:
         """
         Stream LLM response token-by-token.
@@ -1028,9 +1062,13 @@ class LLMOrchestrator:
         (`explicit_mention`, the default) versus the client's own `summon_llm`
         control (`explicit_summon`).
 
+        `trigger_message_id` identifies the human request captured at send time.
+        Its reply ancestry supplies context and the answer becomes its child;
+        a later message cannot steal the answer while generation is awaiting.
+
         Yields tuples of (event_type, data) where event_type is:
         - "thinking": Processing started
-        - "streaming": Token received {"token": str, "index": int}
+        - "streaming": Token with stable message_id, reply parent and source metadata
         - "tool_activity": A tool started or finished
           {"tool": str, "label": str, "status": "started"|"finished"|"failed",
            "latency_ms": int|None}
@@ -1038,11 +1076,26 @@ class LLMOrchestrator:
           created_at, speaker_type, message_type, and the tool trace
         - "error": Failed {"error": str, "partial_content": str}
         """
-        # Signal processing started
-        yield ("thinking", {})
+        addressed_message = None
+        prompt_messages = messages
+        if trigger_message_id is not None:
+            try:
+                addressed_message, prompt_messages = await self._addressed_context(messages, thread, trigger_message_id)
+            except ValueError as exc:
+                yield ("error", {"error": str(exc), "partial_content": ""})
+                return
+        response_id = uuid4()
+        parent_id = addressed_message.id if addressed_message else None
+        inherited_metadata = _inherit_anchor(None, prompt_messages)
+        stream_identity = {
+            "message_id": str(response_id),
+            "references_message_id": str(parent_id) if parent_id else None,
+            "metadata": inherited_metadata,
+        }
+        yield ("thinking", stream_identity)
 
         # Apply context truncation
-        context = assemble_context(messages, thread)
+        context = assemble_context(prompt_messages, thread)
         truncated_messages = context.messages
 
         logger.info(
@@ -1050,7 +1103,7 @@ class LLMOrchestrator:
             f"truncated={context.truncated}, tokens={context.total_tokens}"
         )
 
-        cross_ctx = await self._get_cross_session_context(messages, thread.room_id)
+        cross_ctx = await self._get_cross_session_context(prompt_messages, thread.room_id)
 
         # Fetch evolved identity and user models for prompt injection
         evolved_identity, user_models = await self._get_identity_context(
@@ -1098,11 +1151,12 @@ class LLMOrchestrator:
             message_images=message_images,
             home_activity_context=home_activity_context,
             room_record_context=room_record_context,
+            addressed_message=addressed_message,
         )
 
         # Create request for streaming
         model = room.provoker_model if use_provoker else room.primary_model
-        word_budget = response_word_budget(messages, addressed=not use_provoker)
+        word_budget = response_word_budget(prompt_messages, addressed=not use_provoker)
         prompt.system += response_budget_instruction(word_budget)
         request = LLMRequest(
             messages=prompt.messages,
@@ -1133,7 +1187,7 @@ class LLMOrchestrator:
                     if kind == "token":
                         token = payload["token"]
                         accumulated_content += token
-                        yield ("streaming", {"token": token, "index": token_index})
+                        yield ("streaming", {**stream_identity, "token": token, "index": token_index})
                         token_index += 1
                     elif kind == "tool_start":
                         yield ("tool_activity", {
@@ -1182,6 +1236,9 @@ class LLMOrchestrator:
                             trade = _hoisted_trade_proposal(trace)
                             if trade is not None:
                                 tool_metadata["trade_proposal"] = trade
+                            refs = _hoisted_refs(trace)
+                            if refs:
+                                tool_metadata["refs"] = refs
             else:
                 plain_parts: list[str] = []
                 async for event_type, data in router.stream(request):
@@ -1193,11 +1250,11 @@ class LLMOrchestrator:
                         plain_parts.append(token)
                         continue
                     accumulated_content += token
-                    yield ("streaming", {"token": token, "index": token_index})
+                    yield ("streaming", {**stream_identity, "token": token, "index": token_index})
                     token_index += 1
                 if word_budget is not None:
                     accumulated_content = limit_response_words("".join(plain_parts), word_budget)
-                    yield ("streaming", {"token": accumulated_content, "index": token_index})
+                    yield ("streaming", {**stream_identity, "token": accumulated_content, "index": token_index})
                     token_index += 1
 
             # Persist the complete message
@@ -1211,12 +1268,14 @@ class LLMOrchestrator:
                 model_used=model_used,
                 prompt_hash=prompt_hash,
                 token_count=0,  # Not available from streaming
-                metadata=_inherit_anchor(tool_metadata, messages),
+                metadata=_inherit_anchor(tool_metadata, prompt_messages),
+                references_message_id=parent_id,
+                message_id=response_id,
             )
             attachments = await self._bind_documents(thread.room_id, response_message.id, tool_metadata)
 
             # Fire-and-forget: extract LLM self-memories in background
-            self._schedule_self_memory_extraction(response_message, thread.room_id, messages)
+            self._schedule_self_memory_extraction(response_message, thread.room_id, prompt_messages)
 
             # The self-model has to see this turn too.
             #
@@ -1252,7 +1311,7 @@ class LLMOrchestrator:
                 considered_reasons=[reason],
             )
             fsm = await self._apply_fsm_turn(thread.room_id, messages, decision)
-            triggered_msg = next(
+            triggered_msg = addressed_message or next(
                 (m for m in reversed(messages) if m.speaker_type == SpeakerType.HUMAN),
                 None,
             )
@@ -1287,9 +1346,9 @@ class LLMOrchestrator:
                 "created_at": response_message.created_at.isoformat(),
                 "speaker_type": response_message.speaker_type.value,
                 "message_type": response_message.message_type.value,
-                # None when no tool ran — the client renders the footer off its
-                # presence, so an empty dict would mean "used 0 tools".
-                "metadata": tool_metadata,
+                "references_message_id": str(response_message.references_message_id) if response_message.references_message_id else None,
+                # Inherited source context is meaningful even when no tool ran.
+                "metadata": response_message.metadata,
                 # Documents this turn wrote, already bound to the message.
                 "attachments": attachments,
             })
@@ -1301,6 +1360,7 @@ class LLMOrchestrator:
             # the partial text still reaches the room.
             logger.exception("Streaming error")
             yield ("error", {
+                "message_id": str(response_id),
                 "error": str(e),
                 "partial_content": accumulated_content,
             })
@@ -1459,6 +1519,8 @@ class LLMOrchestrator:
         token_count: int,
         protocol: Optional[ProtocolState] = None,
         metadata: Optional[dict] = None,
+        references_message_id: Optional[UUID] = None,
+        message_id: Optional[UUID] = None,
     ) -> Message:
         """Create Message record and log event, with optional protocol attribution.
 
@@ -1472,7 +1534,7 @@ class LLMOrchestrator:
         """
 
         now = datetime.now(timezone.utc)
-        message_id = uuid4()
+        message_id = message_id or uuid4()
         message_type = self._detect_message_type(content)
 
         protocol_id = protocol.id if protocol else None
@@ -1490,11 +1552,11 @@ class LLMOrchestrator:
                     """INSERT INTO messages
                        (id, thread_id, sequence, created_at, speaker_type, user_id,
                         message_type, content, model_used, prompt_hash, token_count,
-                        protocol_id, protocol_phase, metadata)
+                        protocol_id, protocol_phase, metadata, references_message_id)
                        VALUES (
                            $1, $2,
                            (SELECT COALESCE(MAX(sequence), 0) + 1 FROM messages WHERE thread_id = $2),
-                           $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+                           $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
                        )
                        RETURNING sequence""",
                     message_id, thread.id, now,
@@ -1503,7 +1565,7 @@ class LLMOrchestrator:
                     protocol_id, protocol_phase,
                     # JSONB: the pool's codec serializes the dict — see
                     # CLAUDE.md "pass dict directly to asyncpg".
-                    metadata,
+                    metadata, references_message_id,
                 )
                 break
             except asyncpg.UniqueViolationError:
@@ -1525,6 +1587,7 @@ class LLMOrchestrator:
             prompt_hash=prompt_hash,
             token_count=token_count,
             metadata=metadata,
+            references_message_id=references_message_id,
         )
 
         event = Event(
@@ -1544,8 +1607,11 @@ class LLMOrchestrator:
                 model_used=model_used,
                 prompt_hash=prompt_hash,
                 token_count=token_count,
+                references_message_id=references_message_id,
             ).model_dump()
         )
+        if metadata:
+            event.payload["metadata"] = metadata
 
         await self.db.execute(
             """INSERT INTO events (id, timestamp, event_type, room_id, thread_id, user_id, payload)

@@ -195,8 +195,8 @@ async def deep_dive(
     NEVER raises: every failure ends in an llm_error broadcast, and the
     paired deep_dive_done fires from the finally either way.
     """
-    # Generated upfront for stream correlation, exactly like the summon
-    # path in transport/handlers.py — the persisted message gets its own id.
+    # Research keeps separate stream and persisted IDs; completion carries
+    # both so it cannot clear a different answer currently being streamed.
     stream_message_id = uuid4()
     accumulated = ""
 
@@ -221,6 +221,7 @@ async def deep_dive(
         if registry is None or not registry.schemas():
             await send(MessageTypes.LLM_ERROR, {
                 "thread_id": str(thread.id),
+                "message_id": str(stream_message_id),
                 "error": "Research needs the tool channel, which is unavailable right now.",
                 "partial_content": "",
             })
@@ -304,6 +305,7 @@ async def deep_dive(
         if not accumulated.strip():
             await send(MessageTypes.LLM_ERROR, {
                 "thread_id": str(thread.id),
+                "message_id": str(stream_message_id),
                 "error": "The research dive came back with nothing to say.",
                 "partial_content": "",
             })
@@ -348,6 +350,7 @@ async def deep_dive(
         await send(MessageTypes.LLM_DONE, {
             "thread_id": str(thread.id),
             "message_id": str(message.id),
+            "stream_message_id": str(stream_message_id),
             "content": accumulated,
             "model_used": room.primary_model,
             "truncated": False,
@@ -365,6 +368,7 @@ async def deep_dive(
         logger.exception("Deep dive failed for room %s", room.id)
         await send(MessageTypes.LLM_ERROR, {
             "thread_id": str(thread.id),
+            "message_id": str(stream_message_id),
             "error": str(e),
             "partial_content": accumulated,
         })

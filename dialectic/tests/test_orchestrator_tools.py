@@ -9,7 +9,7 @@ become upward events, and whether the trace survives to the database.
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -107,6 +107,15 @@ def persisted_message(thread_id):
         message_type=MessageType.TEXT,
         content="XOP is 41.2",
     )
+
+
+def persisting_mock(thread_id: UUID) -> AsyncMock:
+    async def persist(**kwargs: object) -> Message:
+        return persisted_message(thread_id).model_copy(update={
+            "id": kwargs["message_id"], "metadata": kwargs.get("metadata"),
+            "references_message_id": kwargs.get("references_message_id"),
+        })
+    return AsyncMock(side_effect=persist)
 
 
 def make_orchestrator(router, monkeypatch, registry=None, db=None):
@@ -362,6 +371,8 @@ class TestToolActivityEvents:
         assert kind == "error"
         assert "mid-flight" in data["error"]
         assert data["partial_content"] == "half an answ"
+        streaming = next(payload for kind, payload in events if kind == "streaming")
+        assert data["message_id"] == streaming["message_id"]
         orch._persist_response.assert_not_awaited()
 
 
@@ -375,7 +386,7 @@ class TestTracePersistence:
             text_script("XOP is 41.2"),
         ])
         orch = make_orchestrator(router, monkeypatch)
-        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        orch._persist_response = persisting_mock(thread.id)
 
         events = await run_stream(orch, thread)
 
@@ -578,7 +589,7 @@ class TestProposalHoisting:
             text_script("drafted it — Brent above 90 by Q3"),
         ])
         orch = make_orchestrator(router, monkeypatch, registry=draft_registry())
-        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        orch._persist_response = persisting_mock(thread.id)
 
         events = await run_stream(orch, thread)
 
@@ -625,7 +636,7 @@ class TestProposalHoisting:
             text_script("proposed the trade"),
         ])
         orch = make_orchestrator(router, monkeypatch, registry=registry)
-        orch._persist_response = AsyncMock(return_value=persisted_message(thread.id))
+        orch._persist_response = persisting_mock(thread.id)
 
         events = await run_stream(orch, thread)
 
@@ -701,21 +712,25 @@ class RecordingConnections:
         return True
 
 
-def scripted_llm(thread_id, metadata=None):
+def scripted_llm(thread_id, metadata=None, fail=False):
     """An orchestrator stand-in that emits one of every stream event."""
     async def stream_response(**_kwargs):
+        message_id = str(uuid4())
         yield ("thinking", {})
         yield ("tool_activity", {
             "tool": "get_live_quotes", "label": "checking live prices",
             "status": "started", "latency_ms": None,
         })
-        yield ("streaming", {"token": "XOP is 41.2", "index": 0})
+        yield ("streaming", {"message_id": message_id, "token": "XOP is 41.2", "index": 0})
         yield ("tool_activity", {
             "tool": "get_live_quotes", "label": "checking live prices",
             "status": "finished", "latency_ms": 812,
         })
+        if fail:
+            yield ("error", {"message_id": message_id, "error": "Provider failed", "partial_content": "XOP is 41.2"})
+            return
         yield ("done", {
-            "message_id": str(uuid4()),
+            "message_id": message_id,
             "content": "XOP is 41.2",
             "model_used": "claude-sonnet-5",
             "truncated": False,
@@ -840,6 +855,24 @@ class TestMentionCallSiteForwarding:
             MessageTypes.LLM_DONE,
         ]
         assert connections.broadcasts[-1].payload["metadata"] == TRACE
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("summon", [False, True])
+    async def test_error_keeps_the_stream_identity_on_both_call_sites(self, monkeypatch: pytest.MonkeyPatch, summon: bool) -> None:
+        thread, room = make_thread(), make_room()
+        connections = RecordingConnections()
+        db = SimpleNamespace(fetchrow=AsyncMock(side_effect=[room.model_dump(), thread.model_dump()]), fetch=AsyncMock(return_value=[]))
+        handler = MessageHandler(db, connections, SimpleNamespace(get_context_for_prompt=AsyncMock(return_value=[])), scripted_llm(thread.id, fail=True))
+        monkeypatch.setattr(operations_mod, "get_thread_messages", AsyncMock(return_value=[]))
+        if summon:
+            conn = Connection(websocket=SimpleNamespace(), user_id=uuid4(), room_id=room.id, thread_id=thread.id)
+            await handler._stream_llm_response(conn, thread.id, room, thread, [], [], [], False)
+        else:
+            await handler._trigger_llm(room.id, thread.id, mentioned=True, semantic_novelty=0.5)
+        streaming = next(message.payload for message in connections.broadcasts if message.type == MessageTypes.LLM_STREAMING)
+        error = connections.broadcasts[-1]
+        assert error.type == MessageTypes.LLM_ERROR
+        assert error.payload["message_id"] == streaming["message_id"]
 
 
 # ── force_response: self-aware + logged, narrow tools ─────────────────

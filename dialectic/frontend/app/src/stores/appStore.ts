@@ -63,6 +63,7 @@ interface AppState {
    */
   isDeepDiveActive: boolean;
   streamingContent: string;
+  streamingMessage: Pick<Message, 'id' | 'thread_id' | 'created_at' | 'speaker_type' | 'references_message_id' | 'metadata'> | null;
   /**
    * Tools the LLM is using right now, keyed by thread. Transient: it exists to
    * say "checking live prices" while the room waits, and is cleared the moment
@@ -138,6 +139,7 @@ interface AppState {
   /** Bulk fill, for a thread-wide read of attachments. */
   setAllAttachments: (byMessageId: Record<string, Attachment[]>) => void;
   setMemories: (memories: Memory[]) => void;
+  setStreamingMessage: (message: NonNullable<AppState['streamingMessage']>) => void;
   updateStreamingContent: (content: string) => void;
   appendStreamingToken: (token: string) => void;
   setLLMState: (thinking: boolean, streaming: boolean) => void;
@@ -176,6 +178,7 @@ const initialRoomState = {
   isLLMStreaming: false,
   isDeepDiveActive: false,
   streamingContent: '',
+  streamingMessage: null,
   llmToolActivity: {},
   activeProtocol: null,
   roomDNA: null,
@@ -240,6 +243,7 @@ export const useAppStore = create<AppState>()(
           isLLMThinking: false,
           isLLMStreaming: false,
           streamingContent: '',
+          streamingMessage: null,
           llmToolActivity: {},
           activeProtocol: null,
           roomDNA: null,
@@ -261,7 +265,12 @@ export const useAppStore = create<AppState>()(
         })
       },
 
-      setThread: (thread) => set({ currentThread: thread }),
+      setThread: (thread) => set((state) => ({
+        currentThread: thread,
+        ...(state.currentThread?.id !== thread.id ? {
+          isLLMThinking: false, isLLMStreaming: false, streamingContent: '', streamingMessage: null,
+        } : {}),
+      })),
 
       setThreads: (threads) => set({ threads }),
 
@@ -325,6 +334,11 @@ export const useAppStore = create<AppState>()(
 
       setMemories: (memories) => set({ memories }),
 
+      setStreamingMessage: (message) => set((state) => ({
+        streamingMessage: message,
+        ...(state.streamingMessage?.id !== message.id ? { streamingContent: '' } : {}),
+      })),
+
       updateStreamingContent: (content) => set({ streamingContent: content }),
 
       // WHY: The server streams one token per llm_streaming event
@@ -337,7 +351,7 @@ export const useAppStore = create<AppState>()(
         set({
           isLLMThinking: thinking,
           isLLMStreaming: streaming,
-          ...((!thinking && !streaming) ? { streamingContent: '' } : {}),
+          ...((!thinking && !streaming) ? { streamingContent: '', streamingMessage: null } : {}),
         }),
 
       setDeepDiveActive: (active) => set({ isDeepDiveActive: active }),

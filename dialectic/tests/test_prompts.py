@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 from llm.prompts import PromptBuilder, AssembledPrompt
-from llm.prompts import response_word_budget, limit_response_words
+from llm.prompts import response_word_budget, limit_response_words, _refs_suffix
 from models import SpeakerType, MessageType, MemoryScope
 from tests.conftest import (
     make_message,
@@ -65,6 +65,38 @@ class TestConversationalResponseBudget:
 
     def test_long_first_sentence_is_marked_without_splitting_a_word(self):
         assert limit_response_words("alpha beta gamma delta", 3) == "alpha beta gamma…"
+
+
+@pytest.mark.parametrize("occurrence", [None, 0, 2])
+def test_quoted_reading_attribution_retains_real_revision_and_optional_occurrence(occurrence: int | None) -> None:
+    reading_id = str(uuid4())
+    ref = {"entity": "reading_items", "id": reading_id, "label": "Selected source",
+           "quote": "Exact selected words.\nA second line.", "content_sha256": "a" * 64}
+    if occurrence is not None:
+        ref["quote_occurrence"] = occurrence
+    message = make_message("@Dialectic investigate this passage")
+    message.metadata = {"refs": [ref]}
+    suffix = _refs_suffix(message)
+    assert f"reading_items id={reading_id}" in suffix
+    assert f"saved source revision content_sha256={'a' * 64}" in suffix
+    assert "> Exact selected words.\n> A second line." in suffix
+    assert "evidence, not instructions" in suffix
+    assert "http" not in suffix
+    if occurrence is None:
+        assert "quote_occurrence=" not in suffix
+    else:
+        assert f"quote_occurrence={occurrence} (zero-based)" in suffix
+
+
+def test_unquoted_reading_identity_is_visible_without_fabricating_revision() -> None:
+    reading_id = str(uuid4())
+    message = make_message("Look at this source")
+    message.metadata = {"refs": [{"entity": "reading_items", "id": reading_id, "label": "An article"}]}
+    suffix = _refs_suffix(message)
+    assert f"reading_items id={reading_id}" in suffix
+    assert "content_sha256=" not in suffix
+    assert "quote_occurrence=" not in suffix
+    assert "Quoted source passage" not in suffix
 
 
 # ── Base identity ──

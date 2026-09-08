@@ -1,5 +1,7 @@
 # Reading room usability repair — 2026-09-08
 
+Follow-on implementation: [contextual reading discussion](2026-09-08-contextual-reading-discussion.md) adds complete/repeated passage anchors, Find and pull, exact send-receipt visibility and branch-scoped bot answers. The release facts below describe this earlier repair.
+
 The owner rejected the previous release as marginally usable. This repair addresses observable failures in that release; prior test counts were not acceptance. Continue from the public room with actual content, never a design study or synthetic chat presented as delivery.
 
 Room: https://dialectic.somacura.org/?room=d428ffef-1902-4f22-9771-5b5765aa73bb&thread=52bbd568-e947-4186-ac30-4168d447e197&scene=surface

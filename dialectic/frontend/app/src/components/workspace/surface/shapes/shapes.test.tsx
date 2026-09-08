@@ -211,7 +211,7 @@ describe('passage threads and map', () => {
   it('renders shared context once, collapses replies, and retains actions and map navigation', () => {
     const ref: MessageRef = { entity: 'reading_items', id: 'reading', label: 'Article', quote: 'An exact passage' }
     const parent = msg({ id: 'parent', author: human('u1', 'Amo'), text: 'A claim to test', refs: [ref] })
-    const child = msg({ id: 'child', author: human('u2', 'Dan'), text: 'The reply tests it', refs: [ref], parentId: parent.id })
+    const child = msg({ id: 'child', author: human('u2', 'Dan'), text: 'The reply tests it', refs: [{ ...ref, quote_occurrence: 0 }], parentId: parent.id })
     const threads = discussionThreads([parent, child])
     const reply = vi.fn(), select = vi.fn(), jump = vi.fn()
     const props = { threads, controls: { messages: [parent.message, child.message], currentUserId: 'u1', onFork: vi.fn() }, selected: ref, active: threads[0].id, jump: null,
@@ -219,6 +219,7 @@ describe('passage threads and map', () => {
     const { container, rerender } = render(<ShapeDiscussion {...props} map={false} />)
     expect(screen.getAllByText('An exact passage')).toHaveLength(1)
     expect(container.querySelector('.msg-quote')).toBeNull()
+    expect(container.querySelector('.msg-evidence-source')).toBeNull()
     fireEvent.click(screen.getAllByRole('button', { name: 'Reply' })[1])
     expect(reply).toHaveBeenCalledWith(child.id)
     fireEvent.click(screen.getByRole('button', { name: /1 reply to Amo/ }))
@@ -233,5 +234,43 @@ describe('passage threads and map', () => {
     expect(jump).toHaveBeenCalledWith(child.id)
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in map' }))
     expect(screen.getByRole('button', { name: 'Reset map zoom' })).toHaveTextContent('110%')
+  })
+})
+
+
+describe('accepted comments and branch continuity', () => {
+  it('waits for the accepted target, opens its collapsed parent, and reveals it only once', async () => {
+    const parent = msg({ id: 'receipt-parent', author: human('u1', 'Amo') })
+    const earlier = msg({ id: 'earlier-child', author: human('u2', 'Dan'), parentId: parent.id })
+    const accepted = msg({ id: 'accepted-child', author: human('u1', 'Amo'), parentId: parent.id })
+    const props = { controls: { messages: [], currentUserId: 'u1' }, selected: null, active: null, map: false, onSelect: vi.fn(), onOpenRef: vi.fn(), onReply: vi.fn(), onJump: vi.fn() }
+    const { container, rerender } = render(<ShapeDiscussion {...props} threads={discussionThreads([parent, earlier])} jump={null} />)
+    fireEvent.click(screen.getByRole('button', { name: /1 reply to Amo/ }))
+    const jump = { id: accepted.id, nonce: 17 }
+    rerender(<ShapeDiscussion {...props} threads={discussionThreads([parent, earlier])} jump={jump} />)
+    await act(async () => { await new Promise((resolve) => requestAnimationFrame(resolve)) })
+    expect(container.querySelector('[data-mid="earlier-child"]')).toBeNull()
+    rerender(<ShapeDiscussion {...props} threads={discussionThreads([parent, earlier, accepted])} jump={jump} />)
+    await waitFor(() => expect(container.querySelector('[data-mid="accepted-child"]')).not.toBeNull())
+    const pane = container.querySelector<HTMLElement>('.surf-discussion')!
+    await waitFor(() => expect(pane.scrollTop).toBe(-90))
+    pane.scrollTop = 123
+    const peer = msg({ author: human('u2', 'Dan'), parentId: parent.id })
+    rerender(<ShapeDiscussion {...props} threads={discussionThreads([parent, earlier, accepted, peer])} jump={jump} />)
+    await act(async () => { await new Promise((resolve) => requestAnimationFrame(resolve)) })
+    expect(pane.scrollTop).toBe(123)
+  })
+
+  it('keeps the same reply DOM node when streaming becomes persisted', () => {
+    const parent = msg({ id: 'question', author: human('u1', 'Amo') })
+    const stream = msg({ id: 'answer', author: machine(), parentId: parent.id, text: 'Checking', isStreaming: true })
+    const props = { controls: { messages: [parent.message], currentUserId: 'u1' }, selected: null, active: null, map: false, jump: null, onSelect: vi.fn(), onOpenRef: vi.fn(), onReply: vi.fn(), onJump: vi.fn() }
+    const { container, rerender } = render(<ShapeDiscussion {...props} threads={discussionThreads([parent, stream])} />)
+    const node = container.querySelector('[data-mid="answer"]')
+    expect(node?.closest('[data-depth]')).toHaveAttribute('data-depth', '1')
+    const complete = msg({ id: 'answer', author: machine(), parentId: parent.id, text: 'The source answers this.', isStreaming: false })
+    rerender(<ShapeDiscussion {...props} threads={discussionThreads([parent, complete])} />)
+    expect(container.querySelector('[data-mid="answer"]')).toBe(node)
+    expect(node).toHaveTextContent('The source answers this.')
   })
 })

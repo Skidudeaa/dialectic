@@ -118,12 +118,10 @@ def _llm_done_payload(thread_id: UUID, data: dict) -> dict:
         "created_at": data["created_at"],
         "speaker_type": data["speaker_type"],
         "message_type": data["message_type"],
+        "references_message_id": data.get("references_message_id"),
     }
-    # The tool trace rides the SAME event that creates the message client-side.
-    # WHY here and not on a later fetch: GET /threads/{id}/messages projects a
-    # fixed field set that has no metadata, so this is the only path by which
-    # the bubble learns which checks the answer rests on. Omitted entirely when
-    # no tool ran, so "key present" means "tools were used".
+    # Source context and tool results must arrive with the persisted answer;
+    # a room should not need a history reload to discover its evidence.
     metadata = data.get("metadata")
     if metadata:
         payload["metadata"] = metadata
@@ -625,6 +623,7 @@ class MessageHandler:
             await self._trigger_llm(
                 conn.room_id, thread_id, mentioned, novelty, content,
                 pre_computed_memories=pre_memories,
+                trigger_message_id=message.id,
             )
 
     async def _trigger_llm(
@@ -635,6 +634,7 @@ class MessageHandler:
         semantic_novelty: float,
         message_content: str = "",
         pre_computed_memories: list = None,
+        trigger_message_id: Optional[UUID] = None,
     ) -> None:
         """
         Invoke LLM orchestrator and broadcast response.
@@ -675,7 +675,6 @@ class MessageHandler:
 
         # Use streaming for explicit @Claude mentions
         if mentioned:
-            message_id = uuid4()
             async for event_type, data in self.llm.stream_response(
                 room=room,
                 thread=thread,
@@ -683,6 +682,7 @@ class MessageHandler:
                 messages=messages,
                 memories=memories,
                 use_provoker=False,
+                trigger_message_id=trigger_message_id,
             ):
                 if event_type == "thinking":
                     await self.connections.broadcast(room_id, OutboundMessage(
@@ -694,10 +694,12 @@ class MessageHandler:
                         type=MessageTypes.LLM_STREAMING,
                         payload={
                             "thread_id": str(thread_id),
-                            "message_id": str(message_id),
+                            "message_id": data["message_id"],
                             "token": data["token"],
                             "index": data["index"],
                             "speaker_type": SpeakerType.LLM_PRIMARY.value,
+                            "references_message_id": data.get("references_message_id"),
+                            "metadata": data.get("metadata"),
                         },
                     ))
                 elif event_type == "tool_activity":
@@ -720,6 +722,8 @@ class MessageHandler:
                         user_id=None,
                         message_type=MessageType(data["message_type"]),
                         content=data["content"],
+                        references_message_id=UUID(data["references_message_id"]) if data.get("references_message_id") else None,
+                        metadata=data.get("metadata"),
                     )
                     await self._trigger_push_notifications(
                         room_id=room_id,
@@ -735,6 +739,7 @@ class MessageHandler:
                             "thread_id": str(thread_id),
                             "error": data["error"],
                             "partial_content": data["partial_content"],
+                            **({"message_id": data["message_id"]} if data.get("message_id") else {}),
                         },
                     ))
             return
@@ -1560,9 +1565,6 @@ class MessageHandler:
         ARCHITECTURE: Extracted from _handle_summon_llm for task wrapping.
         WHY: asyncio.create_task requires a coroutine, not async for loop.
         """
-        # Generate message_id upfront for streaming correlation
-        message_id = uuid4()
-
         # Stream response and broadcast events
         async for event_type, data in self.llm.stream_response(
             room=room,
@@ -1586,10 +1588,12 @@ class MessageHandler:
                     type=MessageTypes.LLM_STREAMING,
                     payload={
                         "thread_id": str(thread_id),
-                        "message_id": str(message_id),
+                        "message_id": data["message_id"],
                         "token": data["token"],
                         "index": data["index"],
                         "speaker_type": SpeakerType.LLM_PROVOKER.value if use_provoker else SpeakerType.LLM_PRIMARY.value,
+                        "references_message_id": data.get("references_message_id"),
+                        "metadata": data.get("metadata"),
                     },
                 ))
             elif event_type == "tool_activity":
@@ -1609,6 +1613,7 @@ class MessageHandler:
                         "thread_id": str(thread_id),
                         "error": data["error"],
                         "partial_content": data["partial_content"],
+                        **({"message_id": data["message_id"]} if data.get("message_id") else {}),
                     },
                 ))
 

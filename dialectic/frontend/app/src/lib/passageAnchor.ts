@@ -21,6 +21,8 @@ import type { MessageRef } from '../types'
 
 /** Long enough to be unambiguous, short enough to survive light editing. */
 export const MAX_QUOTE_CHARS = 300
+/** Reading comments retain complete paragraphs independently of field marks. */
+export const MAX_READING_QUOTE_CHARS = 4000
 export const MIN_QUOTE_CHARS = 3
 
 export interface PassageAnchor {
@@ -130,36 +132,102 @@ export function locateAnchor(
   return null
 }
 
-/** Find an unambiguous quote in rendered text, preserving offsets through inline markup. */
-export function uniqueQuoteRange(container: HTMLElement, quote: string): Range | null {
-  const needle = normaliseQuote(quote)
-  if (!needle) return null
-  const positions: { node: Text; offset: number }[] = []
+interface DOMPoint { node: Node; offset: number }
+interface ReadingCharacter { start: DOMPoint; end: DOMPoint }
+
+// Keep this aligned with proposal_intake._ReadingText: inline markup does
+// not separate words, while rendered blocks and explicit breaks do.
+const READING_BLOCKS = new Set(['P', 'DIV', 'LI', 'BLOCKQUOTE', 'PRE', 'TD', 'TH', 'TR', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'])
+
+function canonicalReadingText(container: HTMLElement): { text: string; positions: ReadingCharacter[] } {
+  const positions: ReadingCharacter[] = []
   let text = ''
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
-  let node: Node | null
-  while ((node = walker.nextNode())) {
-    const value = node.textContent ?? ''
-    for (let offset = 0; offset < value.length; offset++) {
-      const char = /\s/.test(value[offset]) ? ' ' : value[offset]
-      if (char === ' ' && (!text || text.endsWith(' '))) continue
-      text += char
-      positions.push({ node: node as Text, offset })
+  function append(value: string, start: DOMPoint, end: DOMPoint) {
+    const char = /\s/.test(value) ? ' ' : value
+    if (char === ' ' && (!text || text.endsWith(' '))) return
+    text += char
+    positions.push({ start, end })
+  }
+  function visit(node: Node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const value = node.textContent ?? ''
+      for (let offset = 0; offset < value.length; offset++) {
+        append(value[offset], { node, offset }, { node, offset: offset + 1 })
+      }
+      return
+    }
+    for (const child of node.childNodes) visit(child)
+    if (node instanceof HTMLElement && (READING_BLOCKS.has(node.tagName) || node.tagName === 'BR')) {
+      const parent = node.parentNode
+      if (parent && node !== container) {
+        const offset = Array.prototype.indexOf.call(parent.childNodes, node) as number
+        const after = { node: parent, offset: offset + 1 }
+        append(' ', node.tagName === 'BR' ? { node: parent, offset } : after, after)
+      }
     }
   }
-  const start = text.indexOf(needle)
-  if (start < 0 || text.indexOf(needle, start + 1) >= 0) return null
-  const first = positions[start]
-  const last = positions[start + needle.length - 1]
+  visit(container)
+  return { text, positions }
+}
+
+/** Retain the whole selected reading passage and its actual repeated occurrence. */
+export function readingAnchorFromSelection(selection: Selection | null, container: HTMLElement): PassageAnchor | null {
+  if (!selection || selection.isCollapsed || !selection.rangeCount) return null
+  const range = selection.getRangeAt(0)
+  if (!container.contains(range.commonAncestorContainer)) return null
+  const { text, positions } = canonicalReadingText(container)
+  const startBoundary = range.cloneRange(), endBoundary = range.cloneRange()
+  startBoundary.collapse(true)
+  endBoundary.collapse(false)
+  function firstWhere(predicate: (position: ReadingCharacter) => boolean): number {
+    let low = 0, high = positions.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (predicate(positions[middle])) high = middle
+      else low = middle + 1
+    }
+    return low
+  }
+  let start = firstWhere(({ end }) => startBoundary.comparePoint(end.node, end.offset) > 0)
+  let end = firstWhere(({ start: point }) => endBoundary.comparePoint(point.node, point.offset) >= 0)
+  while (text[start] === ' ' && start < end) start++
+  while (text[end - 1] === ' ' && end > start) end--
+  const quote = text.slice(start, end)
+  if (quote.length < MIN_QUOTE_CHARS || quote.length > MAX_READING_QUOTE_CHARS) return null
+  let index = text.indexOf(quote), occurrence = 0
+  while (index !== -1 && index < start) {
+    index = text.indexOf(quote, index + quote.length)
+    occurrence++
+  }
+  return index === start ? { quote, occurrence } : null
+}
+
+/** Locate an explicit occurrence, or require uniqueness for an older unnumbered quote. */
+export function uniqueQuoteRange(container: HTMLElement, quote: string, occurrence?: number): Range | null {
+  const needle = normaliseQuote(quote)
+  if (!needle || (occurrence !== undefined && (!Number.isInteger(occurrence) || occurrence < 0))) return null
+  const { text, positions } = canonicalReadingText(container)
+  let start = text.indexOf(needle)
+  if (start < 0) return null
+  if (occurrence === undefined) {
+    if (text.indexOf(needle, start + 1) >= 0) return null
+  } else {
+    for (let seen = 0; seen < occurrence; seen++) {
+      start = text.indexOf(needle, start + needle.length)
+      if (start < 0) return null
+    }
+  }
+  const first = positions[start].start
+  const last = positions[start + needle.length - 1].end
   const range = document.createRange()
   range.setStart(first.node, first.offset)
-  range.setEnd(last.node, last.offset + 1)
+  range.setEnd(last.node, last.offset)
   return range
 }
 
 /** Mark text segments individually so selections crossing emphasis retain valid paragraph markup. */
-export function markQuote(container: HTMLElement, quote: string, key: string): HTMLElement[] {
-  const range = uniqueQuoteRange(container, quote)
+export function markQuote(container: HTMLElement, quote: string, key: string, occurrence?: number): HTMLElement[] {
+  const range = uniqueQuoteRange(container, quote, occurrence)
   if (!range) return []
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
   const segments: { node: Text; start: number; end: number }[] = []
@@ -186,5 +254,7 @@ export function markQuote(container: HTMLElement, quote: string, key: string): H
 
 /** A passage is scoped to both its source and the revision actually quoted. */
 export function passageKey(ref: MessageRef): string {
-  return JSON.stringify([ref.entity, ref.id, normaliseQuote(ref.quote ?? ''), ref.content_sha256 ?? ''])
+  const identity: (string | number)[] = [ref.entity, ref.id, normaliseQuote(ref.quote ?? ''), ref.content_sha256 ?? '']
+  if (ref.quote_occurrence && ref.quote_occurrence > 0) identity.push(ref.quote_occurrence)
+  return JSON.stringify(identity)
 }

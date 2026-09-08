@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   uniqueQuoteRange,
   markQuote,
+  readingAnchorFromSelection,
+  MAX_QUOTE_CHARS,
+  MAX_READING_QUOTE_CHARS,
+  passageKey,
   anchorField,
   anchorFromSelection,
   hashQuote,
@@ -175,5 +179,93 @@ describe('rendered source passage links', () => {
     expect(uniqueQuoteRange(root, 'repeated phrase')).toBeNull()
     expect(markQuote(root, 'missing words', 'missing')).toEqual([])
     expect(root.querySelector('mark')).toBeNull()
+  })
+})
+
+describe('complete reading anchors', () => {
+  function select(container: HTMLElement, range: Range) {
+    document.body.append(container)
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return selection
+  }
+
+  it('keeps a whole paragraph beyond the independent field-mark limit', () => {
+    const paragraph = 'The observed departure matters more than the market story. '.repeat(12).trim()
+    const container = document.createElement('div')
+    container.innerHTML = `<p>${paragraph}</p>`
+    const range = document.createRange()
+    range.selectNodeContents(container.querySelector('p')!)
+    const selection = select(container, range)
+    expect(paragraph.length).toBeGreaterThan(MAX_QUOTE_CHARS)
+    expect(readingAnchorFromSelection(selection, container)).toEqual({ quote: paragraph, occurrence: 0 })
+    expect(anchorFromSelection(selection, container)).toBeNull()
+    container.remove()
+  })
+
+  it('normalizes paragraph and br boundaries without damaging inline markup', () => {
+    const container = document.createElement('div')
+    container.innerHTML = '<p>First <strong>observed</strong> departure.</p><p>Second<br> independent signal.</p>'
+    const range = document.createRange()
+    range.setStart(container.querySelector('p')!.firstChild!, 0)
+    range.setEnd(container.querySelectorAll('p')[1].lastChild!, 20)
+    const selection = select(container, range)
+    const quote = 'First observed departure. Second independent signal.'
+    expect(readingAnchorFromSelection(selection, container)).toEqual({ quote, occurrence: 0 })
+    selection.removeAllRanges()
+    const marks = markQuote(container, quote, 'whole', 0)
+    expect(marks.length).toBeGreaterThan(3)
+    expect(container.querySelector('strong mark')).not.toBeNull()
+    expect(container.querySelector('br')).not.toBeNull()
+    container.remove()
+  })
+
+  it('records the selected repeat and highlights only that exact occurrence', () => {
+    const container = document.createElement('div')
+    container.innerHTML = '<p>The <em>same</em> words.</p><p>The <strong>same</strong> words.</p>'
+    const range = document.createRange()
+    range.selectNodeContents(container.querySelectorAll('p')[1])
+    const selection = select(container, range)
+    const anchor = readingAnchorFromSelection(selection, container)!
+    expect(anchor).toEqual({ quote: 'The same words.', occurrence: 1 })
+    selection.removeAllRanges()
+    expect(uniqueQuoteRange(container, anchor.quote)).toBeNull()
+    const marks = markQuote(container, anchor.quote, 'second', anchor.occurrence)
+    expect(marks).toHaveLength(3)
+    expect(container.querySelectorAll('p')[0].querySelector('mark')).toBeNull()
+    expect(container.querySelectorAll('p')[1].querySelector('mark')).not.toBeNull()
+    expect(uniqueQuoteRange(container, anchor.quote, 2)).toBeNull()
+    container.remove()
+  })
+
+  it('refuses an overlapping selection that has no canonical occurrence instead of guessing zero', () => {
+    const container = document.createElement('div')
+    container.textContent = 'go go go'
+    const range = document.createRange()
+    range.setStart(container.firstChild!, 3)
+    range.setEnd(container.firstChild!, 8)
+    expect(readingAnchorFromSelection(select(container, range), container)).toBeNull()
+    expect(uniqueQuoteRange(container, 'go go', 1)).toBeNull()
+    container.remove()
+  })
+
+  it('keeps the 4000-character boundary whole and refuses an oversized selection', () => {
+    for (const length of [MAX_READING_QUOTE_CHARS, MAX_READING_QUOTE_CHARS + 1]) {
+      const container = document.createElement('div')
+      container.textContent = 'a'.repeat(length)
+      const range = document.createRange()
+      range.selectNodeContents(container)
+      const anchor = readingAnchorFromSelection(select(container, range), container)
+      expect(anchor?.quote.length ?? null).toBe(length === MAX_READING_QUOTE_CHARS ? length : null)
+      container.remove()
+    }
+  })
+
+  it('keeps existing keys for first occurrences and distinguishes later repetitions', () => {
+    const ref = { entity: 'reading_items', id: 'reading', label: 'Source', quote: 'Same words', content_sha256: 'a'.repeat(64) }
+    expect(passageKey(ref)).toBe(passageKey({ ...ref, quote_occurrence: 0 }))
+    expect(passageKey(ref)).not.toBe(passageKey({ ...ref, quote_occurrence: 1 }))
+    expect(passageKey({ ...ref, quote_occurrence: 1 })).not.toBe(passageKey({ ...ref, quote_occurrence: 2 }))
   })
 })

@@ -46,10 +46,10 @@ describe('shared evidence', () => {
     fireEvent(document, new Event('selectionchange'))
     expect(screen.getByRole('region', { name: 'Comment on selected passage' })).toHaveTextContent('Tankers wait outside the strait.')
     fireEvent.click(screen.getByRole('button', { name: 'Discuss this passage' }))
-    expect(discuss).toHaveBeenCalledWith({ ...ref, quote: 'Tankers wait outside the strait.', content_sha256: reading.content_sha256 })
+    expect(discuss).toHaveBeenCalledWith({ ...ref, quote: 'Tankers wait outside the strait.', quote_occurrence: 0, content_sha256: reading.content_sha256 })
   })
 
-  it('offers an explicitly bounded excerpt when a selected paragraph exceeds the quote limit', async () => {
+  it('offers the complete selected paragraph beyond 300 characters', async () => {
     const paragraph = 'The opening of this paragraph uniquely locates its source. ' + 'Supporting detail follows. '.repeat(18)
     vi.mocked(api.getReadingDetail).mockResolvedValue({ ...reading, markdown: paragraph })
     render(<Table initial={ref} />)
@@ -59,9 +59,44 @@ describe('shared evidence', () => {
     const selection = window.getSelection()!
     selection.removeAllRanges(); selection.addRange(range)
     fireEvent(document, new Event('selectionchange'))
-    expect(screen.getByRole('status')).toHaveTextContent('Quoting the first 300 characters')
+    expect(screen.queryByText(/Quoting the first/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Discuss this passage' }))
-    expect(discuss).toHaveBeenCalledWith({ ...ref, quote: paragraph.slice(0, 300).trim(), content_sha256: reading.content_sha256 })
+    expect(discuss).toHaveBeenCalledWith({ ...ref, quote: paragraph.trim(), quote_occurrence: 0, content_sha256: reading.content_sha256 })
+  })
+
+  it('preserves the selected repeated paragraph and lets Find and pull use it', async () => {
+    const paragraph = 'These words occur in both accounts.'
+    vi.mocked(api.getReadingDetail).mockResolvedValue({ ...reading, markdown: `${paragraph}\n\n${paragraph}` })
+    const investigate = vi.fn()
+    render(<SurfaceEvidence roomId="room" messages={messages} selected={ref} onSelect={vi.fn()}
+      onDiscuss={discuss} onInvestigate={investigate} onReply={reply} onJump={jump} onOpenFull={vi.fn()} />)
+    const prose = await screen.findByTestId('reading-markdown')
+    const range = document.createRange()
+    range.selectNodeContents(prose.querySelectorAll('p')[1])
+    const selection = window.getSelection()!
+    selection.removeAllRanges(); selection.addRange(range)
+    fireEvent(document, new Event('selectionchange'))
+    fireEvent.click(screen.getByRole('button', { name: 'Find and pull' }))
+    expect(investigate).toHaveBeenCalledWith({ ...ref, quote: paragraph, quote_occurrence: 1, content_sha256: reading.content_sha256 })
+    expect(discuss).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Discuss this source' }))
+    expect(discuss).toHaveBeenCalledWith({ ...ref, content_sha256: reading.content_sha256 })
+  })
+
+  it('rejects selections over 4000 visibly without an excerpt or comment action', async () => {
+    vi.mocked(api.getReadingDetail).mockResolvedValue({ ...reading, markdown: 'x'.repeat(4001) })
+    render(<Table initial={ref} />)
+    const prose = await screen.findByTestId('reading-markdown')
+    const range = document.createRange()
+    range.selectNodeContents(prose.querySelector('p')!)
+    const selection = window.getSelection()!
+    selection.removeAllRanges(); selection.addRange(range)
+    fireEvent(document, new Event('selectionchange'))
+    expect(screen.getByRole('status')).toHaveTextContent('Your selection has not been shortened')
+    expect(screen.queryByRole('button', { name: 'Discuss this passage' })).not.toBeInTheDocument()
+    expect(discuss).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss passage selection' }))
+    expect(screen.queryByRole('region', { name: 'Comment on selected passage' })).not.toBeInTheDocument()
   })
 
   it('opens a sole reading once and lets the reader return to all sources', async () => {
@@ -93,7 +128,7 @@ describe('shared evidence', () => {
     selection.addRange(range)
     fireEvent.pointerUp(document)
     fireEvent.click(screen.getByRole('button', { name: 'Discuss this passage' }))
-    expect(discuss).toHaveBeenCalledWith({ ...ref, quote: 'Tankers wait outside the strait.', content_sha256: reading.content_sha256 })
+    expect(discuss).toHaveBeenCalledWith({ ...ref, quote: 'Tankers wait outside the strait.', quote_occurrence: 0, content_sha256: reading.content_sha256 })
     selection.removeAllRanges()
   })
 
@@ -135,6 +170,24 @@ describe('shared evidence', () => {
 })
 
 describe('physical passage navigation', () => {
+  it('physically links occurrence1 and refuses a missing occurrence without fallback', async () => {
+    const quote = 'These words occur in both accounts.'
+    vi.mocked(api.getReadingDetail).mockResolvedValue({ ...reading, markdown: `${quote}\n\n${quote}` })
+    const quoted = { ...ref, quote, quote_occurrence: 1, content_sha256: reading.content_sha256! }
+    const open = vi.fn()
+    const props = { roomId: 'room', messages, onSelect: vi.fn(), onDiscuss: discuss, onReply: reply, onJump: jump, onOpenFull: vi.fn(), onPassage: open }
+    const { container, rerender } = render(<SurfaceEvidence {...props} selected={quoted} passages={[quoted]} />)
+    await waitFor(() => expect(container.querySelectorAll('mark')).toHaveLength(1))
+    const prose = screen.getByTestId('reading-markdown')
+    expect(prose.querySelectorAll('p')[0].querySelector('mark')).toBeNull()
+    window.getSelection()?.removeAllRanges()
+    fireEvent.click(prose.querySelectorAll('p')[1].querySelector('mark')!)
+    expect(open).toHaveBeenCalledWith(quoted)
+    rerender(<SurfaceEvidence {...props} selected={{ ...quoted, quote_occurrence: 2 }} passages={[]} />)
+    await screen.findByText(/cannot be uniquely located/)
+    expect(container.querySelector('mark')).toBeNull()
+    expect(container.querySelector('.surf-evidence-quoted')).toHaveTextContent(quote)
+  })
   it('links the exact rendered quote and does not refetch the article when navigating within it', async () => {
     const quoted = { ...ref, quote: 'Tankers wait outside the strait.', content_sha256: reading.content_sha256! }
     const open = vi.fn()

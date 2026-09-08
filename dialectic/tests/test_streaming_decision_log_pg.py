@@ -26,7 +26,9 @@ Setup expected (skipped cleanly when absent):
 """
 
 import json
+import hashlib
 import os
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -37,7 +39,9 @@ import pytest
 import pytest_asyncio
 
 from llm.orchestrator import LLMOrchestrator
-from llm.prompts import AssembledPrompt
+from llm.prompts import AssembledPrompt, PromptBuilder
+from llm.providers import LLMRequest
+from llm.tools import Tool, ToolRegistry
 from models import Message, MessageType, Room, SpeakerType, Thread
 
 TEST_DATABASE_URL = os.environ.get(
@@ -256,6 +260,9 @@ async def test_summon_is_recorded_apart_from_a_mention(room):
         ROOM,
     )
     assert row["reason"] == "explicit_summon"
+    assert await db.fetchval(
+        "SELECT references_message_id FROM messages WHERE thread_id=$1 ORDER BY sequence DESC LIMIT 1", THREAD,
+    ) is None
 
 
 @pytest.mark.asyncio
@@ -280,3 +287,173 @@ async def test_provoker_streams_are_logged_as_provoker(room):
     )
     assert state["provoker_count"] == 1
     assert state["primary_count"] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("with_tools", [False, True])
+async def test_nested_mention_keeps_request_context_and_identity_through_later_messages(
+    room: asyncpg.Connection, monkeypatch: pytest.MonkeyPatch, with_tools: bool,
+) -> None:
+    from operations import get_thread_messages
+    from tests.test_orchestrator_tools import text_script, tool_script
+    from transport.handlers import MessageHandler
+    from transport.websocket import Connection, MessageTypes
+
+    db = room
+    amo, dan, parent_id, reading_id, tool_reading_id = (uuid4() for _ in range(5))
+    for user_id, name in ((amo, "Amo"), (dan, "Dan")):
+        await db.execute("INSERT INTO users(id,created_at,display_name) VALUES($1,$2,$3)", user_id, BASE, name)
+        await db.execute("INSERT INTO room_memberships(room_id,user_id,joined_at) VALUES($1,$2,$3)", ROOM, user_id, BASE)
+    quote = "The experiment changes one circuit while holding the prompt fixed."
+    source_ref = {"entity": "reading_items", "id": str(reading_id), "label": "Selected experiment", "quote": quote, "content_sha256": hashlib.sha256(quote.encode()).hexdigest()}
+    tool_ref = {"entity": "reading_items", "id": str(tool_reading_id), "label": "Additional evidence"}
+    for ref, body in ((source_ref, quote), (tool_ref, "Additional evidence about the same experiment.")):
+        await db.execute(
+            """INSERT INTO reading_items(id,room_id,url,title,content,summary,source)
+               VALUES($1,$2,$3,$4,$5,'Test source','test')""",
+            UUID(ref["id"]), ROOM, f"https://example.test/{ref['id']}", ref["label"], body,
+        )
+    await db.execute("UPDATE messages SET content=$1,user_id=$2,metadata=$3 WHERE id=$4",
+                     "Amo's original idea about the circuit.", amo, {"refs": [source_ref]}, HUMAN_MSG)
+    await db.execute(
+        """INSERT INTO messages(id,thread_id,sequence,created_at,speaker_type,user_id,message_type,content,references_message_id,metadata)
+           VALUES($1,$2,2,$3,'human',$4,'text',$5,$6,$7)""",
+        parent_id, THREAD, BASE, dan, "Dan's precise objection: intervention is not observation.", HUMAN_MSG, {"refs": [source_ref]},
+    )
+
+    async def insert_unrelated(text: str) -> None:
+        await db.execute(
+            """INSERT INTO messages(id,thread_id,sequence,created_at,speaker_type,user_id,message_type,content,metadata)
+               VALUES($1,$2,(SELECT MAX(sequence)+1 FROM messages WHERE thread_id=$2),$3,'human',$4,'text',$5,$6)""",
+            uuid4(), THREAD, BASE, dan, text, {"refs": [tool_ref]},
+        )
+
+    async def novelty(*args: object) -> float:
+        await insert_unrelated("UNRELATED_BEFORE_LOCK: give me a long detailed report about dinner.")
+        return 0.5
+
+    requests = []
+
+    class Router:
+        async def stream(self, request: LLMRequest) -> AsyncIterator[tuple[str, dict]]:
+            requests.append(request)
+            await insert_unrelated("UNRELATED_DURING_MODEL: switch to tomorrow's weather.")
+            yield "attempt", {"model": "test-model"}
+            yield "token", {"token": "The intervention distinguishes causal influence from mere correlation."}
+
+        async def stream_events(self, request: LLMRequest) -> AsyncIterator[tuple[str, dict]]:
+            requests.append(request)
+            if len(requests) == 1:
+                await insert_unrelated("UNRELATED_DURING_MODEL: switch to tomorrow's weather.")
+                for event in tool_script("lookup", {}):
+                    yield event
+            else:
+                for event in text_script("The intervention distinguishes causal influence from mere correlation."):
+                    yield event
+
+    async def lookup(args: dict) -> dict:
+        return {"content": "A result about this exact intervention.", "refs": [tool_ref]}
+
+    orch = _orchestrator(db)
+    orch.prompt_builder = PromptBuilder()
+    orch._get_room_record_context = AsyncMock(return_value=None)
+    orch._get_router = MagicMock(return_value=Router())
+    if with_tools:
+        registry = ToolRegistry([Tool(name="lookup", description="Read evidence", input_schema={"type": "object", "properties": {}}, execute=lookup, label="reading evidence")])
+        orch._tool_registry_for = MagicMock(return_value=registry)
+    connections = SimpleNamespace(broadcast=AsyncMock(), send_to_user=AsyncMock())
+    memory = SimpleNamespace(compute_message_novelty=novelty, get_context_for_prompt=AsyncMock(return_value=[]))
+    handler = MessageHandler(db, connections, memory, orch)
+    handler._trigger_push_notifications = AsyncMock()
+    monkeypatch.setattr("transport.handlers.annotator_enabled", lambda: False)
+    monkeypatch.setattr("transport.handlers.commitment_detection_enabled", lambda: False)
+    monkeypatch.setattr("transport.handlers.schedule_claim_check", lambda **kwargs: None)
+    conn = Connection(websocket=AsyncMock(), user_id=amo, room_id=ROOM, thread_id=THREAD)
+    await handler._handle_send_message(conn, {
+        "thread_id": str(THREAD), "content": "@Dialectic investigate Dan's objection here.",
+        "references_message_id": str(parent_id), "client_request_id": "branch-summon",
+    })
+
+    broadcasts = [call.args[1] for call in connections.broadcast.call_args_list]
+    human = next(message.payload for message in broadcasts if message.type == MessageTypes.MESSAGE_CREATED)
+    stream = next(message.payload for message in broadcasts if message.type == MessageTypes.LLM_STREAMING)
+    done = next(message.payload for message in broadcasts if message.type == MessageTypes.LLM_DONE)
+    assert stream["message_id"] == done["message_id"]
+    assert stream["references_message_id"] == done["references_message_id"] == human["id"]
+    assert stream["metadata"]["refs"] == [source_ref]
+    expected_refs = [source_ref, tool_ref] if with_tools else [source_ref]
+    assert done["metadata"]["refs"] == expected_refs
+    saved = await db.fetchrow("SELECT * FROM messages WHERE id=$1", UUID(done["message_id"]))
+    assert saved["references_message_id"] == UUID(human["id"])
+    assert saved["metadata"] == done["metadata"]
+    assert saved["content"] == done["content"] == stream["token"]
+    assert saved["sequence"] == done["sequence"] == 6
+    event = await db.fetchval("SELECT payload FROM events WHERE payload->>'message_id'=$1", done["message_id"])
+    assert event["references_message_id"] == human["id"]
+    assert event["metadata"] == done["metadata"]
+    decision = await db.fetchrow("SELECT * FROM llm_decisions WHERE response_message_id=$1", saved["id"])
+    assert decision["triggered_by_message_id"] == UUID(human["id"])
+    initial_prompt = json.dumps(requests[0].messages)
+    assert "Amo's original idea" in initial_prompt
+    assert "Dan's precise objection" in initial_prompt
+    assert quote in initial_prompt
+    assert "UNRELATED_" not in initial_prompt
+    assert str(parent_id) in requests[0].system
+    assert human["id"] in requests[0].system
+    assert "within 40 words" in requests[0].system
+    assert len(done["content"].split()) <= 40
+    if not with_tools:
+        assert requests[0].max_tokens <= 400
+    reloaded = await get_thread_messages(db, THREAD)
+    assert reloaded[-1].references_message_id == UUID(human["id"])
+    assert reloaded[-1].metadata["refs"] == expected_refs
+
+
+@pytest.mark.asyncio
+async def test_reply_context_loads_a_room_ancestor_but_never_another_room(room: asyncpg.Connection) -> None:
+    db = room
+    room_obj, thread = await _room_and_thread(db)
+    other_thread, other_room, other_room_thread = (uuid4() for _ in range(3))
+    await db.execute("INSERT INTO threads(id,room_id,created_at) VALUES($1,$2,$3)", other_thread, ROOM, BASE)
+    await db.execute("INSERT INTO rooms(id,created_at,token,name) VALUES($1,$2,$3,'Other room')", other_room, BASE, uuid4().hex)
+    await db.execute("INSERT INTO threads(id,room_id,created_at) VALUES($1,$2,$3)", other_room_thread, other_room, BASE)
+    orch = _orchestrator(db)
+    for ancestor_thread, expected in ((other_thread, "A visible room thought"), (other_room_thread, "PRIVATE_OTHER_ROOM")):
+        ancestor_id = uuid4()
+        await db.execute(
+            """INSERT INTO messages(id,thread_id,sequence,created_at,speaker_type,message_type,content)
+               VALUES($1,$2,1,$3,'human','text',$4)""", ancestor_id, ancestor_thread, BASE, expected,
+        )
+        trigger = _human_message().model_copy(update={"references_message_id": ancestor_id})
+        addressed, context = await orch._addressed_context([trigger], thread, trigger.id)
+        assert addressed.id == trigger.id
+        if ancestor_thread == other_thread:
+            assert [message.id for message in context] == [ancestor_id, trigger.id]
+            assert context[0].content == expected
+        else:
+            assert context == [trigger]
+            prompt = PromptBuilder().build(room_obj, [], context, [], addressed_message=trigger)
+            assert "immediate parent is unavailable" in prompt.system
+            assert expected not in json.dumps(prompt.messages)
+
+
+@pytest.mark.asyncio
+async def test_root_mention_stops_context_at_its_request_and_missing_trigger_cannot_retarget(room: asyncpg.Connection) -> None:
+    db = room
+    room_obj, thread = await _room_and_thread(db)
+    trigger = _human_message()
+    later = trigger.model_copy(update={"id": uuid4(), "sequence": 2, "content": "Unrelated later instruction."})
+    orch = _orchestrator(db)
+    events = [event async for event in orch.stream_response(
+        room_obj, thread, [], [trigger, later], [], trigger_message_id=trigger.id,
+    )]
+    assert orch.prompt_builder.build.call_args.kwargs["messages"] == [trigger]
+    done = next(data for kind, data in events if kind == "done")
+    assert done["references_message_id"] == str(trigger.id)
+    rows_before = await db.fetchval("SELECT count(*) FROM messages WHERE thread_id=$1", THREAD)
+    invalid_events = [event async for event in orch.stream_response(
+        room_obj, thread, [], [later], [], trigger_message_id=trigger.id,
+    )]
+    assert [kind for kind, data in invalid_events] == ["error"]
+    assert "human request is no longer available" in invalid_events[0][1]["error"]
+    assert await db.fetchval("SELECT count(*) FROM messages WHERE thread_id=$1", THREAD) == rows_before

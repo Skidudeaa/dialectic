@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { api } from '../../lib/api'
-import { anchorField, anchorFromSelection, type PassageAnchor } from '../../lib/passageAnchor'
+import { anchorField, anchorFromSelection, readingAnchorFromSelection, MAX_QUOTE_CHARS, type PassageAnchor } from '../../lib/passageAnchor'
 import './PassageMarker.css'
 
 /**
@@ -28,13 +29,14 @@ interface PassageMarkerProps {
   containerRef: React.RefObject<HTMLDivElement | null>
   /** Told when a mark lands, so the transcript can show it without a refetch. */
   onMarked?: () => void
+  onInvestigate?: (quote: string) => void
 }
 
 export function PassageMarker({
-  roomId, threadId, messageId, containerRef, onMarked,
+  roomId, threadId, messageId, containerRef, onMarked, onInvestigate,
 }: PassageMarkerProps) {
   const [anchor, setAnchor] = useState<PassageAnchor | null>(null)
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
+  const [position, setPosition] = useState<{ top: number; left: number; maxWidth: number } | null>(null)
   const [state, setState] = useState<'idle' | 'saving' | 'error'>('idle')
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -46,7 +48,7 @@ export function PassageMarker({
       const el = containerRef.current
       if (!el) return
       const selection = window.getSelection()
-      const next = anchorFromSelection(selection, el)
+      const next = onInvestigate ? readingAnchorFromSelection(selection, el) : anchorFromSelection(selection, el)
       if (!next) {
         setAnchor(null)
         setPosition(null)
@@ -54,26 +56,28 @@ export function PassageMarker({
       }
       const rect = selection!.getRangeAt(0).getBoundingClientRect()
       setAnchor(next)
-      // VIEWPORT coordinates with position:fixed, not offsets inside the
-      // message. Inside, the menu is trapped in `.msg`'s stacking context and
-      // a LATER message's byline paints over it — z-index 30 loses to a
-      // sibling at auto, because the contest is between the two `.msg`
-      // elements, not between the menu and the byline. Browser acceptance
-      // found it as an un-clickable button, which is what a reader would have
-      // found too. Scrolling dismisses (below), so nothing drifts.
-      setPosition({ top: rect.top - 38, left: rect.left })
+      const pane = el.closest('.surf-discussion')?.getBoundingClientRect()
+      const left = Math.max(8, pane?.left ?? 0)
+      const right = Math.min(window.innerWidth - 8, pane?.right ?? window.innerWidth)
+      const maxWidth = Math.min(440, right - left)
+      const top = Math.max(8, pane?.top ?? 0)
+      const bottom = Math.min(window.innerHeight - 8, pane?.bottom ?? window.innerHeight)
+      setPosition({ top: Math.max(top, Math.min(bottom - 76, rect.top - 74)), left: Math.max(left, Math.min(right - maxWidth, rect.left)), maxWidth })
       setState('idle')
     }
 
-    // pointerup rather than selectionchange: the latter fires on every
-    // character as a drag proceeds, which flickers the menu across the screen.
+    let frame = 0
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(readSelection) }
+    document.addEventListener('selectionchange', schedule)
     container.addEventListener('pointerup', readSelection)
     container.addEventListener('keyup', readSelection)
     return () => {
+      cancelAnimationFrame(frame)
+      document.removeEventListener('selectionchange', schedule)
       container.removeEventListener('pointerup', readSelection)
       container.removeEventListener('keyup', readSelection)
     }
-  }, [containerRef])
+  }, [containerRef, onInvestigate])
 
   // Any click elsewhere dismisses — including one that starts a new selection.
   useEffect(() => {
@@ -124,14 +128,21 @@ export function PassageMarker({
 
   if (!anchor || !position) return null
 
-  return (
+  return createPortal(
     <div
       ref={menuRef}
       className="passage-marker"
-      style={{ top: position.top, left: position.left }}
+      style={{ top: position.top, left: position.left, maxWidth: position.maxWidth }}
+      onPointerDown={(event) => event.preventDefault()}
       role="menu"
       aria-label="Mark this passage"
     >
+      {onInvestigate && <button type="button" role="menuitem" className="passage-marker-btn" onClick={() => {
+        onInvestigate(anchor.quote)
+        window.getSelection()?.removeAllRanges()
+        setAnchor(null)
+        setPosition(null)
+      }}>Find and pull</button>}
       {state === 'error' && (
         <span className="passage-marker-error" role="status">Could not mark — try again</span>
       )}
@@ -141,13 +152,13 @@ export function PassageMarker({
           type="button"
           role="menuitem"
           title={option.hint}
-          disabled={state === 'saving'}
+          disabled={state === 'saving' || anchor.quote.length > MAX_QUOTE_CHARS}
           className="passage-marker-btn"
           onClick={() => mark(option.relation)}
         >
           {option.label}
         </button>
       ))}
-    </div>
+    </div>, document.body,
   )
 }

@@ -65,7 +65,7 @@ async def scene(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[SimpleNamespac
         await db.close()
 
 
-def source_ref(scene: SimpleNamespace, **fields: str) -> dict:
+def source_ref(scene: SimpleNamespace, **fields: object) -> dict:
     return {"entity": "reading_items", "id": str(scene.reading), "label": "Strait report", **fields}
 
 
@@ -194,7 +194,86 @@ async def test_rejected_websocket_quote_returns_correlated_failure_without_stora
     assert await scene.db.fetchval("SELECT count(*) FROM messages WHERE thread_id = $1", scene.thread) == 0
 
 
-@pytest.mark.parametrize("fields", [{"quote": "a" * 301}, {"content_sha256": "nope"}, {"quote": " "}])
+@pytest.mark.parametrize("fields", [
+    {"quote": "a" * 4001}, {"content_sha256": "nope"}, {"quote": " "},
+    {"quote": QUOTE, "quote_occurrence": -1}, {"quote": QUOTE, "quote_occurrence": True},
+    {"quote": QUOTE, "quote_occurrence": 1.0}, {"quote": QUOTE, "quote_occurrence": "1"},
+    {"quote": QUOTE, "quote_occurrence": None}, {"quote_occurrence": 0},
+])
 def test_invalid_quote_metadata_is_rejected(fields: dict) -> None:
     with pytest.raises(ProposalMetadataError):
         validate_refs([{"entity": "reading_items", "id": str(uuid4()), "label": "Reading", **fields}])
+
+
+@pytest.mark.parametrize("length", [301, 4000])
+def test_complete_reading_passage_is_not_excerpted(length: int) -> None:
+    quote = "a" * length
+    ref = {"entity": "reading_items", "id": str(uuid4()), "label": "Reading",
+           "quote": f"\n  {quote}\t", "quote_occurrence": 0}
+    assert validate_refs([ref]) == [{**ref, "quote": quote}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("door", ["rest", "websocket"])
+async def test_full_repeated_paragraph_keeps_exact_occurrence_through_reply_and_reload(
+    scene: SimpleNamespace, door: str,
+) -> None:
+    quote = " ".join(["Tankers wait outside the strait while departures establish whether this is congestion or closure."] * 12)
+    assert 300 < len(quote) < 4000
+    paragraph = quote.replace("wait outside", "**wait outside**")
+    body = f"# The first report\n\n{paragraph}\n\n# A later report\n\n{paragraph}\n"
+    await scene.db.execute("UPDATE reading_items SET content = $1 WHERE id = $2", body, scene.reading)
+    digest = hashlib.sha256(body.encode()).hexdigest()
+    expected = source_ref(scene, quote=quote, quote_occurrence=1, content_sha256=digest)
+    original = await post(scene, door, scene.amo, "I mean the later full paragraph.", refs=[expected])
+    reply = await post(scene, door, scene.dan, "That occurrence preserves the distinction.", parent=original.id)
+    assert original.metadata["refs"] == reply.metadata["refs"] == [expected]
+    assert _inherit_anchor(None, [original, reply])["refs"] == [expected]
+    history = await get_messages(scene.thread, token=scene.token, include_ancestry=True, limit=200,
+                                 before_cursor=None, after_cursor=None, before_sequence=None, after_sequence=None, db=scene.db)
+    assert [m.metadata["refs"] for m in history.messages] == [[expected], [expected]]
+    assert history.messages[1].references_message_id == original.id
+
+
+@pytest.mark.asyncio
+async def test_missing_occurrence_rejects_without_guessing_the_first(scene: SimpleNamespace) -> None:
+    with pytest.raises(HTTPException) as error:
+        await post(scene, "rest", scene.amo, "Keep this draft", refs=[
+            source_ref(scene, quote=QUOTE, quote_occurrence=1),
+        ])
+    assert error.value.status_code == 422
+    assert "occurrence" in error.value.detail
+    assert await scene.db.fetchval("SELECT count(*) FROM messages WHERE thread_id = $1", scene.thread) == 0
+
+
+@pytest.mark.asyncio
+async def test_occurrence_uses_the_cited_revision_not_the_current_one(scene: SimpleNamespace) -> None:
+    body = BODY + "\n" + QUOTE
+    digest = hashlib.sha256(body.encode()).hexdigest()
+    await scene.db.execute(
+        """INSERT INTO reading_revisions (reading_id,room_id,capture_id,captured_by_user_id,source_url,
+              capture_mode,content,content_sha256,captured_at)
+           VALUES ($1,$2,$3,$4,'https://example.com/strait','article',$5,$6,now())""",
+        scene.reading, scene.room, uuid4(), scene.amo, body, digest,
+    )
+    ref = source_ref(scene, quote=QUOTE, quote_occurrence=1, content_sha256=digest)
+    original = await post(scene, "rest", scene.amo, "The second occurrence in the earlier version", refs=[ref])
+    assert original.metadata["refs"] == [ref]
+    with pytest.raises(ProposalMetadataError, match="occurrence"):
+        await validate_reading_quotes(scene.db, scene.room, [source_ref(scene, quote=QUOTE, quote_occurrence=1)])
+
+
+@pytest.mark.asyncio
+async def test_legacy_repeated_quote_stays_unspecified(scene: SimpleNamespace) -> None:
+    await scene.db.execute("UPDATE reading_items SET content = $1 WHERE id = $2", BODY + "\n" + QUOTE, scene.reading)
+    ref = source_ref(scene, quote=QUOTE)
+    await validate_reading_quotes(scene.db, scene.room, [ref])
+    assert "quote_occurrence" not in ref
+
+
+@pytest.mark.asyncio
+async def test_occurrence_count_is_nonoverlapping(scene: SimpleNamespace) -> None:
+    await scene.db.execute("UPDATE reading_items SET content = 'ababa' WHERE id = $1", scene.reading)
+    await validate_reading_quotes(scene.db, scene.room, [source_ref(scene, quote="aba", quote_occurrence=0)])
+    with pytest.raises(ProposalMetadataError, match="occurrence"):
+        await validate_reading_quotes(scene.db, scene.room, [source_ref(scene, quote="aba", quote_occurrence=1)])

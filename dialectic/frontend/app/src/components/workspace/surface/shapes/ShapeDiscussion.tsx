@@ -17,16 +17,18 @@ interface Props {
   onSelect: (thread: DiscussionThread) => void
   onOpenRef: (ref: MessageRef, messageId?: string) => void
   onReply: (id: string) => void
+  onInvestigate?: (id: string, quote?: string) => void
   onJump: (id: string) => void
 }
 
 /** Compact branches and the map navigate the same persisted quotations and replies. */
-export function ShapeDiscussion({ threads, controls, selected, active, jump, map, mapExpanded, onToggleMap, onSelect, onOpenRef, onReply, onJump }: Props) {
+export function ShapeDiscussion({ threads, controls, selected, active, jump, map, mapExpanded, onToggleMap, onSelect, onOpenRef, onReply, onInvestigate, onJump }: Props) {
   const onSeen = controls.onSeen
   const rootRef = useRef<HTMLDivElement>(null)
   const lastSeen = useRef(-1)
   const lastJump = useRef<number | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [expandedPassages, setExpandedPassages] = useState<Set<string>>(new Set())
   const [zoom, setZoom] = useState(1)
   const messages = useMemo(() => threads.flatMap((thread) => thread.messages), [threads])
   const children = useMemo(() => {
@@ -37,24 +39,29 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
     return result
   }, [messages])
   useEffect(() => {
-    if (!jump || map) return
-    const node = [...(rootRef.current?.querySelectorAll<HTMLElement>('[data-mid]') ?? [])].find((candidate) => candidate.dataset.mid === jump.id)
-    // Scroll only the discussion pane; scrollIntoView can move the entire composer offscreen.
-    if (node && rootRef.current) rootRef.current.scrollTop += node.getBoundingClientRect().top - rootRef.current.getBoundingClientRect().top - 90
-  }, [jump, map, collapsed])
-
-  useEffect(() => {
     if (!jump || map || lastJump.current === jump.nonce) return
-    lastJump.current = jump.nonce
-    const parents = new Set<string>()
     let target = messages.find((message) => message.id === jump.id)
+    // A receipt can arrive before React renders the accepted message.
+    if (!target) return
+    const parents = new Set<string>()
     while (target?.parentId && !parents.has(target.parentId)) {
       parents.add(target.parentId)
       target = messages.find((message) => message.id === target!.parentId)
     }
-    const frame = requestAnimationFrame(() => setCollapsed((current) => new Set([...current].filter((id) => !parents.has(id)))))
+    const frame = requestAnimationFrame(() => {
+      if ([...parents].some((id) => collapsed.has(id))) {
+        setCollapsed((current) => new Set([...current].filter((id) => !parents.has(id))))
+        return
+      }
+      const root = rootRef.current
+      const node = [...(root?.querySelectorAll<HTMLElement>('[data-mid]') ?? [])].find((candidate) => candidate.dataset.mid === jump.id)
+      if (!node || !root) return
+      // Only this pane moves. Consume the receipt once so peer arrivals leave reading position alone.
+      root.scrollTop += node.getBoundingClientRect().top - root.getBoundingClientRect().top - 90
+      lastJump.current = jump.nonce
+    })
     return () => cancelAnimationFrame(frame)
-  }, [jump, map, messages])
+  }, [jump, map, messages, collapsed])
 
   useEffect(() => {
     const root = rootRef.current
@@ -77,7 +84,7 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
     const descendants = children.get(message.id) ?? []
     const closed = collapsed.has(message.id)
     return <div className="surf-branch" key={message.id} data-depth={depth} style={{ marginLeft: depth > 0 && depth <= 5 ? 'var(--reply-indent)' : 0 }}>
-      <SurfaceMessage msg={message} compact controls={{ ...controls, contextRef: selected }} onReply={onReply} onOpenRef={(ref) => onOpenRef(ref, message.id)} threadSource={threads.find((thread) => thread.messages.some((item) => item.id === message.id))?.source ?? null} />
+      <SurfaceMessage msg={message} compact controls={{ ...controls, contextRef: selected }} onReply={onReply} onInvestigate={onInvestigate} onOpenRef={(ref) => onOpenRef(ref, message.id)} threadSource={threads.find((thread) => thread.messages.some((item) => item.id === message.id))?.source ?? null} />
       {descendants.length > 0 && <button type="button" className="surf-branch-toggle" aria-expanded={!closed}
         onClick={() => setCollapsed((current) => { const next = new Set(current); if (closed) next.delete(message.id); else next.add(message.id); return next })}>
         {closed ? '+' : '−'} {descendants.length} {descendants.length === 1 ? 'reply' : 'replies'} to {message.author.name}
@@ -93,7 +100,7 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
     if (selected?.entity === 'reading_items') sources.set(selected.id, selected)
     for (const message of messages) for (const ref of message.refs) if (ref.entity === 'reading_items') sources.set(ref.id, ref)
     let sourceRow = 0
-    for (const ref of sources.values()) nodes.push({ id: `source:${ref.id}`, x: 0, y: sourceRow++ * 112, label: 'Source', text: ref.label, open: () => onOpenRef({ ...ref, quote: undefined }), kind: 'source' })
+    for (const ref of sources.values()) nodes.push({ id: `source:${ref.id}`, x: 0, y: sourceRow++ * 112, label: 'Source', text: ref.label, open: () => onOpenRef({ ...ref, quote: undefined, quote_occurrence: undefined }), kind: 'source' })
     let row = 0
     for (const thread of threads) {
       if (thread.source?.quote && !nodes.some((node) => node.id === `passage:${thread.id}`)) {
@@ -157,8 +164,11 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
       <div className="surf-thread-context" data-thread-anchor={thread.source?.quote ? passageKey(thread.source) : undefined}>
         {thread.source ? <button type="button" onClick={() => onSelect(thread)}>
           <span>{thread.source.label} · {thread.messages.length} {thread.messages.length === 1 ? 'thought' : 'thoughts'} · Read in source ↗</span>
-          {thread.source.quote && <q>{thread.source.quote}</q>}
+          {thread.source.quote && <q data-expanded={expandedPassages.has(thread.id) || undefined}>{thread.source.quote}</q>}
         </button> : <span className="surf-thread-general">Room thought · {thread.messages.length} {thread.messages.length === 1 ? 'contribution' : 'contributions'}</span>}
+        {thread.source?.quote && thread.source.quote.length > 300 && <button type="button" className="surf-quote-toggle" aria-expanded={expandedPassages.has(thread.id)} onClick={() => setExpandedPassages((current) => {
+          const next = new Set(current); if (next.has(thread.id)) next.delete(thread.id); else next.add(thread.id); return next
+        })}>{expandedPassages.has(thread.id) ? 'Collapse passage' : 'Expand passage'}</button>}
       </div>
       {thread.roots.map((root) => branch(root, 0, new Set()))}
     </section>)}

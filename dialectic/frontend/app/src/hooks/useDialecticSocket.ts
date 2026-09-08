@@ -5,6 +5,7 @@ import { api } from '../lib/api.ts'
 import { groupAttachmentsByMessage, isUuid } from '../lib/attachments.ts'
 import type {
   Message,
+  MessageReceipt,
   ProtocolState,
   Commitment,
   TradingSnapshot,
@@ -49,7 +50,7 @@ export function useDialecticSocket(options?: {
   const heartbeatTimerRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const connectRef = useRef<() => void>(() => {});
   const [isConnected, setIsConnected] = useState(false);
-  const receipts = useRef(new Map<string, { resolve: (ok: boolean) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>());
+  const receipts = useRef(new Map<string, { resolve: (receipt: MessageReceipt | false) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>());
 
   const user = useAppStore((s) => s.user);
   const accessToken = useAppStore((s) => s.accessToken);
@@ -213,7 +214,11 @@ export function useDialecticSocket(options?: {
       if (receipt) {
         clearTimeout(receipt.timer);
         receipts.current.delete(payload.client_request_id);
-        if (type === 'message_created') receipt.resolve(true);
+        if (type === 'message_created') {
+          if (typeof payload.id === 'string' && typeof payload.thread_id === 'string') {
+            receipt.resolve({ id: payload.id, thread_id: payload.thread_id });
+          } else receipt.reject(new Error('The confirmation did not identify the saved message. Your draft is still here.'));
+        }
         else receipt.reject(new Error(String(payload.error || 'The message was not accepted.')));
       }
     }
@@ -233,7 +238,7 @@ export function useDialecticSocket(options?: {
           setMessageAttachments(payload.id, payload.attachments as Attachment[]);
         }
         void refreshThreads();
-        if (payload.speaker_type !== 'human') setLLMState(false, false);
+        if (payload.speaker_type !== 'human' && (!useAppStore.getState().streamingMessage || payload.id === useAppStore.getState().streamingMessage?.id)) setLLMState(false, false);
         break;
 
       case 'message_edited':
@@ -297,6 +302,18 @@ export function useDialecticSocket(options?: {
 
       case 'llm_streaming':
         if (!payloadMatchesActiveThread(payload)) break;
+        if (typeof payload.message_id === 'string') {
+          const state = useAppStore.getState();
+          state.setStreamingMessage({
+            id: payload.message_id,
+            thread_id: payload.thread_id as string,
+            created_at: state.streamingMessage?.id === payload.message_id
+              ? state.streamingMessage.created_at : new Date().toISOString(),
+            speaker_type: (payload.speaker_type as Message['speaker_type']) ?? 'llm_primary',
+            references_message_id: (payload.references_message_id as string | undefined) ?? null,
+            metadata: (payload.metadata as MessageMetadata | undefined) ?? null,
+          });
+        }
         // Server contract: one token per event ({token, index}), matching
         // the mobile client. The previous code read payload.content, which
         // the server never sends — streamed text silently never rendered.
@@ -325,8 +342,12 @@ export function useDialecticSocket(options?: {
         if (!payloadMatchesActiveThread(payload)) break;
         // There is no payload.message. Build the persisted message from the
         // authoritative fields carried by llm_done.
-        setLLMState(false, false);
-        if (typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
+        const activeStream = useAppStore.getState().streamingMessage;
+        const completedStreamId = payload.stream_message_id ?? payload.message_id;
+        if (!activeStream || activeStream.id === completedStreamId) {
+          setLLMState(false, false);
+          if (typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
+        }
         if (payload.message) {
           addMessage(payload.message as unknown as Message);
         } else if (typeof payload.message_id === 'string') {
@@ -347,6 +368,7 @@ export function useDialecticSocket(options?: {
               ? payload.message_type as Message['message_type']
               : 'text',
             content: (payload.content as string) ?? '',
+            references_message_id: (payload.references_message_id as string | undefined) ?? null,
             user_name: payload.speaker_type === 'llm_provoker' ? 'Provoker' : PARTICIPANT_NAME,
             // Only path the tool trace takes to the client — the REST message
             // list projects a fixed field set with no metadata in it.
@@ -364,6 +386,7 @@ export function useDialecticSocket(options?: {
 
       case 'llm_error':
         if (!payloadMatchesActiveThread(payload)) break;
+        if (useAppStore.getState().streamingMessage && payload.message_id !== useAppStore.getState().streamingMessage?.id) break;
         setLLMState(false, false);
         if (typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
         console.error('[LLM] stream error:', payload.error);
@@ -371,6 +394,7 @@ export function useDialecticSocket(options?: {
 
       case 'llm_cancelled':
         if (!payloadMatchesActiveThread(payload)) break;
+        if (payload.reason === 'no_interjection' && useAppStore.getState().streamingMessage) break;
         setLLMState(false, false);
         if (typeof payload.thread_id === 'string') clearToolActivity(payload.thread_id);
         break;
@@ -705,7 +729,7 @@ export function useDialecticSocket(options?: {
     [send],
   );
 
-  const sendMessageWithReceipt = useCallback((...args: Parameters<typeof sendMessage>): Promise<boolean> => {
+  const sendMessageWithReceipt = useCallback((...args: Parameters<typeof sendMessage>): Promise<MessageReceipt | false> => {
     const receiptId = crypto.randomUUID();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {

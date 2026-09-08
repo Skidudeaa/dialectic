@@ -100,3 +100,20 @@ describe('exact-restoration axes (§15.2, TG-E)', () => {
     expect(state.openProposal).toBeNull()
   })
 })
+
+
+describe('stream destination ownership', () => {
+  it('clears stream context in the same transaction as a thread change', () => {
+    const thread = { id: 'thread-1', room_id: room.id, parent_thread_id: null, title: null, message_count: 1 }
+    useAppStore.getState().setThread(thread)
+    useAppStore.getState().setStreamingMessage({ id: 'stream', thread_id: thread.id, created_at: '2026-09-08T10:00:00Z', speaker_type: 'llm_primary', references_message_id: 'old-parent' })
+    useAppStore.getState().appendStreamingToken('Old branch text')
+    useAppStore.getState().setLLMState(true, true)
+    useAppStore.getState().setThread({ ...thread, title: 'New title' })
+    expect(useAppStore.getState().streamingContent).toBe('Old branch text')
+    useAppStore.getState().setThread({ ...thread, id: 'thread-2' })
+    expect(useAppStore.getState().streamingMessage).toBeNull()
+    expect(useAppStore.getState().streamingContent).toBe('')
+    expect(useAppStore.getState().isLLMStreaming).toBe(false)
+  })
+})

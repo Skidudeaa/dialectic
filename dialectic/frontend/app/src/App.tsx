@@ -100,6 +100,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const workspaceScene = useAppStore((s) => s.workspaceScene)
   const llmToolActivity = useAppStore((s) => s.llmToolActivity)
   const streamingContent = useAppStore((s) => s.streamingContent)
+  const streamingMessage = useAppStore((s) => s.streamingMessage)
   const activeProtocol = useAppStore((s) => s.activeProtocol)
   const roomToken = useAppStore((s) => s.roomToken)
   const setMessages = useAppStore((s) => s.setMessages)
@@ -441,14 +442,16 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
 
   // In-flight LLM stream rendered as a synthetic message; llm_done replaces it
   // with the authoritative persisted message.
-  const STREAMING_ID = '__streaming__'
-  const displayMessages: Message[] = isLLMStreaming && streamingContent
+  const STREAMING_ID = streamingMessage?.id ?? '__streaming__'
+  const displayMessages: Message[] = isLLMStreaming && streamingContent && !messages.some((message) => message.id === STREAMING_ID)
     ? [...messages, {
         id: STREAMING_ID,
         thread_id: currentThread?.id ?? '',
         sequence: Number.MAX_SAFE_INTEGER,
-        created_at: new Date().toISOString(),
-        speaker_type: 'llm_primary',
+        created_at: streamingMessage?.created_at ?? new Date().toISOString(),
+        speaker_type: streamingMessage?.speaker_type ?? 'llm_primary',
+        references_message_id: streamingMessage?.references_message_id ?? null,
+        metadata: streamingMessage?.metadata ?? null,
         user_id: null,
         message_type: 'text',
         content: streamingContent,

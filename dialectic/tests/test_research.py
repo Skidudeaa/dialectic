@@ -316,6 +316,11 @@ class TestSuccessfulDive:
         assert reading["accepted"] is False
         # The event ledger saw the same birth.
         assert "INSERT INTO events" in db.execute.call_args.args[0]
+        streaming = next(message.payload for message in connections.broadcasts if message.type == MessageTypes.LLM_STREAMING)
+        done = next(message.payload for message in connections.broadcasts if message.type == MessageTypes.LLM_DONE)
+        assert done["stream_message_id"] == streaming["message_id"]
+        assert done["message_id"] == str(args[0])
+        assert done["message_id"] != done["stream_message_id"]
 
         # The room watched it happen on the ordinary stream vocabulary,
         # bracketed by the deep-dive pair.
@@ -409,5 +414,7 @@ class TestFailurePosture:
         error, done = connections.broadcasts[-2:]
         assert error.type == MessageTypes.LLM_ERROR
         assert error.payload["partial_content"] == "half an answ"
+        streaming = next(message.payload for message in connections.broadcasts if message.type == MessageTypes.LLM_STREAMING)
+        assert error.payload["message_id"] == streaming["message_id"]
         assert "mid-flight" in error.payload["error"]
         assert done.type == MessageTypes.DEEP_DIVE_DONE

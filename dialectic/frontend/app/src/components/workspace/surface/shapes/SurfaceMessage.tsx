@@ -8,6 +8,7 @@ export interface SurfaceMessageProps {
   controls?: MessageListProps
   onOpenRef?: (ref: MessageRef) => void
   onReply?: (id: string) => void
+  onInvestigate?: (id: string, quote?: string) => void
   onAnchor?: (anchor: MessageAnchor) => void
   threadSource?: MessageRef | null
   compact?: boolean
@@ -15,7 +16,7 @@ export interface SurfaceMessageProps {
 }
 
 /** Alternate arrangements retain the exact same media, decisions and actions as Record. */
-export function SurfaceMessage({ msg, controls, onOpenRef, onReply, onAnchor, compact, dimmed, threadSource }: SurfaceMessageProps) {
+export function SurfaceMessage({ msg, controls, onOpenRef, onReply, onInvestigate, onAnchor, compact, dimmed, threadSource }: SurfaceMessageProps) {
   const parent = controls?.messages.find((message) => message.id === msg.parentId)
   const names = controls?.userNames ?? {}
   return (
@@ -37,6 +38,7 @@ export function SurfaceMessage({ msg, controls, onOpenRef, onReply, onAnchor, co
         marks={controls?.marksByMessage?.[msg.id]}
         onFieldChanged={controls?.onFieldChanged}
         onReply={onReply}
+        onInvestigate={onInvestigate}
         onFork={controls?.onFork}
         onToggleReaction={controls?.onToggleReaction}
         onEdit={controls?.onEditMessage}

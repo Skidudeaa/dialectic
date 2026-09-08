@@ -745,7 +745,9 @@ button.surf-anchor-chip:focus-visible,
 .surf-passage-thread[data-active] > .surf-thread-context { border-left-color: var(--color-amber); }
 .surf-thread-context button { display: grid; gap: 3px; width: 100%; padding: 0; border: 0; background: transparent; color: var(--color-ink); text-align: left; cursor: pointer; }
 .surf-thread-context button > span, .surf-thread-general { font: 11px/1.4 var(--font-mono); color: var(--color-faint); }
-.surf-thread-context q { font: 15px/1.4 var(--font-serif); overflow-wrap: anywhere; }
+.surf-thread-context q { font: 15px/1.4 var(--font-serif); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.surf-thread-context q[data-expanded] { display: block; max-height: 32vh; overflow-y: auto; }
+.surf-thread-context .surf-quote-toggle { width: auto; margin-top: 4px; font: 11px/1.4 var(--font-mono); color: var(--color-amber); }
 .surf-branch { --reply-indent: 22px; border-left: 2px solid var(--color-crater); padding-left: 8px; }
 .surf-branch[data-depth="0"] { border-left-color: transparent; padding-left: 0; }
 .surf-branch .surf-branch { margin-block: 2px; }

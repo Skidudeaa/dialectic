@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Attachment, DailyActivity, Message, MessageAnchor, MessageRef } from '../../../types'
+import type { Attachment, DailyActivity, Message, MessageAnchor, MessageReceipt, MessageRef } from '../../../types'
 import { api } from '../../../lib/api.ts'
 import { MessageInput, type MessageInputHandle } from '../../chat/MessageInput'
 import { TypingIndicator } from '../../chat/TypingIndicator'
@@ -23,7 +23,7 @@ export interface SurfaceComposer {
     attachmentIds: string[],
     tags: string[],
     opts: { replyToId: string | null; anchor: MessageAnchor | null; refs: MessageRef[] },
-  ) => boolean | Promise<boolean>
+  ) => MessageReceipt | false | Promise<MessageReceipt | false>
   onTypingStart: () => void
   onTypingStop: () => void
   onTypingContent: (content: string) => void
@@ -107,6 +107,17 @@ export function SurfaceConversation({
     if (composerRef && 'current' in composerRef) composerRef.current?.focus()
   }
 
+  function investigate(id: string, quote?: string) {
+    const message = messages.find((candidate) => candidate.id === id)
+    if (!message || message.isStreaming) return
+    reply(id)
+    const request = quote
+      ? `@Dialectic find and pull sources about this part of ${message.author.name}’s thought:\n\n> ${quote}\n\nLink what you find and briefly explain how it bears on this.`
+      : '@Dialectic find and pull relevant sources for this thought. Link what you find and briefly explain what it adds.'
+    if (composerRef && 'current' in composerRef) composerRef.current?.insert(request)
+    onEvidenceOpen(false)
+  }
+
   function selectThread(thread: DiscussionThread) {
     if (shape === 'map') setMapExpanded(false)
     setActiveThread(thread.id)
@@ -132,6 +143,10 @@ export function SurfaceConversation({
       if (message) { onSelectEvidence(ref); jumpToThread(message.id) }
     }}
     onDiscuss={(ref) => { setReplyToId(null); onClearAnchor(); onStageRef(ref); onShape('discussion'); onEvidenceOpen(false) }}
+    onInvestigate={(ref) => {
+      setReplyToId(null); onClearAnchor(); onStageRef(ref); onShape('discussion'); onEvidenceOpen(false)
+      if (composerRef && 'current' in composerRef) composerRef.current?.insert('@Dialectic find and pull sources about this passage. Link what you find and briefly explain how it bears on these words.')
+    }}
     onAttach={replyToId ? (ref) => { onStageRef(ref); onEvidenceOpen(false) } : undefined}
     onReply={(id) => { reply(id); onEvidenceOpen(false) }}
     onJump={jumpToThread}
@@ -222,7 +237,7 @@ export function SurfaceConversation({
     if (linkedShape) return <ShapeDiscussion threads={onlyAnchored ? discussionThreads(shown) : threads} controls={controls} selected={selectedEvidence}
       active={activeThread} jump={jumpTarget} map={shape === 'map'} mapExpanded={mapExpanded} onToggleMap={() => { setMapExpanded((value) => !value); if (compactPane && mapExpanded) onEvidenceOpen(true) }} onSelect={selectThread}
       onOpenRef={(ref, messageId) => { if (messageId) setActiveThread(threads.find((thread) => thread.messages.some((message) => message.id === messageId))?.id ?? null); if (ref.entity === 'reading_items') { if (shape === 'map') setMapExpanded(false); onSelectEvidence(ref); setSourceScroll((n) => n + 1); if (compactPane) onEvidenceOpen(true) } else onOpenRef(ref) }}
-      onReply={reply} onJump={jumpToThread} />
+      onReply={reply} onInvestigate={investigate} onJump={jumpToThread} />
     if (shown.length === 0 && shape !== 'stream') {
       return (
         <p className="surf-conv-empty">
@@ -359,6 +374,7 @@ export function SurfaceConversation({
             if (!sent) return false
             setReplyToId((current) => current === replyToId ? null : current)
             onClearPendingRefs(pendingRefs)
+            if (rootRef.current) jumpToThread(sent.id)
             return true
           }}
         />

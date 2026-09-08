@@ -84,9 +84,13 @@ export interface MessageRef {
   label: string;
   /** The passage a person selected, retained with their contribution. */
   quote?: string;
+  /** Zero-based non-overlapping occurrence in the normalized captured reading. */
+  quote_occurrence?: number;
   /** Identifies the captured source; a later revision does not rewrite the quote. */
   content_sha256?: string;
 }
+
+export type MessageReceipt = Pick<Message, 'id' | 'thread_id'>;
 
 /** One row of GET /rooms/{id}/activity/daily — the surface's volume chart. */
 export interface DailyActivityRow {
