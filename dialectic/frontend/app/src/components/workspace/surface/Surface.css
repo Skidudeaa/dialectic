@@ -712,3 +712,33 @@
 
 .surf--conversation .surf-updates-pane .surf-upd-card { flex-basis: auto; min-width: 0; max-width: none; min-height: 0; }
 .surf--conversation .surf-upd-header-right { display: none; }
+
+/* Threads and the map share the reader's original allocation and mounted composer. */
+.surf-conv { position: relative; }
+.surf-conv-body--context { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(290px, 1fr); padding: 0; overflow: hidden; }
+.surf-conv-body--context > .surf-stream { display: contents; }
+.surf-conv--reading-layout .surf-discussion { grid-area: record; }
+.surf-conv--reading-layout .surf-conv-body--context { display: contents; }
+.surf-passage-link { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; overflow: hidden; }
+.surf-passage-link path { fill: none; stroke: var(--color-amber); stroke-width: 1.5; opacity: .8; }
+.surf-evidence mark[data-passage] { color: inherit; background: color-mix(in srgb, var(--color-amber) 20%, transparent); border-bottom: 1px solid var(--color-amber); cursor: pointer; }
+.surf-evidence mark[data-active="true"] { background: color-mix(in srgb, var(--color-amber) 40%, transparent); }
+.surf-evidence mark:focus-visible { outline: 2px solid var(--color-teal); }
+.surf-evidence-actions a { color: var(--color-amber); font: 12px var(--font-mono); align-self: center; }
+.surf-other-shapes { position: relative; font: 11px var(--font-mono); color: var(--color-faint); }
+.surf-other-shapes summary { padding: 6px; cursor: pointer; }
+.surf-other-shapes[open] { z-index: 6; }
+.surf-other-shapes[open] > button { display: block; width: 100%; background: var(--color-well); }
+@container conversation (max-width: 760px) {
+    .surf-conv-body--context { grid-template-columns: minmax(0, 1fr); }
+    .surf-conv--evidence-open .surf-discussion,
+    .surf-conv--evidence-open .surf-stream-record { display: none; }
+}
+.surf-conv--map-expanded .surf-conv-body--context { grid-template-columns: minmax(0, 1fr); }
+.surf-conv--map-expanded .surf-evidence { display: none; }
+.surf-conv--map-expanded .surf-evidence-toggle { display: inline-flex; }
+.surf-conv--linked .surf-evidence-exchanges { padding-block: 4px; margin-block: 4px; }
+/* When the keyboard is open, navigation must leave room for the quoted draft and discussion. */
+.app-layout.surface-short .surf--conversation .surf-conv-head { padding-block: 2px; gap: 3px 6px; }
+.app-layout.surface-short .surf--conversation .surf-conv-head button,
+.app-layout.surface-short .surf--conversation .surf-other-shapes summary { min-height: 32px; padding-block: 4px; }

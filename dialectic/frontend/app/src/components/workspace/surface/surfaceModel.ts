@@ -1,4 +1,6 @@
 import type { Message, MessageAnchor, MessageRef } from '../../../types'
+import { passageKey } from '../../../lib/passageAnchor'
+export { passageKey } from '../../../lib/passageAnchor'
 import { PARTICIPANT_NAME, markGlyph } from '../../../lib/productIdentity.ts'
 
 /**
@@ -230,15 +232,48 @@ export function refFocusId(ref: MessageRef): string | null {
 
 export type { DailyActivity, DailyActivityRow } from '../../../types'
 
-/** The four shapes over one conversation (SurfaceConversation). */
-export type ConversationShape = 'stream' | 'tree' | 'lanes' | 'signal'
+/** Alternate views over one conversation (SurfaceConversation). */
+export type ConversationShape = 'stream' | 'discussion' | 'map' | 'tree' | 'lanes' | 'signal'
 
 export const SHAPE_LABELS: Record<ConversationShape, string> = {
   stream: 'Stream',
+  discussion: 'Threads',
+  map: 'Map',
   tree: 'Tree',
   lanes: 'Lanes',
   signal: 'Signal',
 }
 
 /** Shapes that need the whole width of the surface. */
-export const WIDE_SHAPES: ReadonlySet<ConversationShape> = new Set(['tree', 'lanes', 'signal'])
+export const WIDE_SHAPES: ReadonlySet<ConversationShape> = new Set(['discussion', 'map', 'tree', 'lanes', 'signal'])
+
+export interface DiscussionThread {
+  id: string
+  source: MessageRef | null
+  roots: SurfaceMsg[]
+  messages: SurfaceMsg[]
+}
+
+/** Group independent thoughts on the same passage; keep replies under their actual ancestor. */
+export function discussionThreads(messages: SurfaceMsg[]): DiscussionThread[] {
+  const byId = new Map(messages.map((message) => [message.id, message]))
+  const groups = new Map<string, DiscussionThread>()
+  for (const message of messages) {
+    let root = message
+    const visited = new Set([root.id])
+    while (root.parentId && byId.has(root.parentId) && !visited.has(root.parentId)) {
+      root = byId.get(root.parentId)!
+      visited.add(root.id)
+    }
+    const source = root.refs.find((ref) => ref.entity === 'reading_items') ?? null
+    const id = source?.quote ? passageKey(source) : root.id
+    let group = groups.get(id)
+    if (!group) {
+      group = { id, source, roots: [], messages: [] }
+      groups.set(id, group)
+    }
+    if (!group.roots.some((candidate) => candidate.id === root.id)) group.roots.push(root)
+    group.messages.push(message)
+  }
+  return [...groups.values()]
+}

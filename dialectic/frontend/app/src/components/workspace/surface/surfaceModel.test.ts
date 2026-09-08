@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Message } from '../../../types'
-import { humanWordsByNode, refFocusId, toSurfaceMessages } from './surfaceModel'
+import { discussionThreads, humanWordsByNode, refFocusId, toSurfaceMessages } from './surfaceModel'
 
 const base = (over: Partial<Message>): Message => ({
   id: 'm', thread_id: 't', sequence: 1, created_at: '2026-09-02T12:00:00Z',
@@ -61,5 +61,25 @@ describe('refFocusId', () => {
     expect(refFocusId({ entity: 'geo_scopes', id: 'g', label: '' })).toBe('geo_scope:g')
     expect(refFocusId({ entity: 'world_observations', id: 'o', label: '' })).toBeNull()
     expect(refFocusId({ entity: 'thesis_node', id: 'n', label: '' })).toBeNull()
+  })
+})
+
+describe('passage discussion grouping', () => {
+  it('groups the same quotation and revision while keeping real replies, other sources, and orphans', () => {
+    const ref = { entity: 'reading_items' as const, id: 'article', label: 'Article', quote: 'A precise claim', content_sha256: 'a'.repeat(64) }
+    const rows = [
+      base({ id: 'one', metadata: { refs: [ref] } }),
+      base({ id: 'two', metadata: { refs: [{ ...ref, quote: 'A   precise claim' }] } }),
+      base({ id: 'reply', references_message_id: 'one', metadata: { refs: [{ ...ref, id: 'other' }] } }),
+      base({ id: 'different', metadata: { refs: [{ ...ref, quote: 'Another passage' }] } }),
+      base({ id: 'revised', metadata: { refs: [{ ...ref, content_sha256: 'b'.repeat(64) }] } }),
+      base({ id: 'other', metadata: { refs: [{ ...ref, id: 'other' }] } }),
+      base({ id: 'orphan', references_message_id: 'outside-window' }),
+    ]
+    const groups = discussionThreads(toSurfaceMessages(rows, { userNames: {}, currentUserId: null }))
+    expect(groups).toHaveLength(5)
+    expect(groups[0].roots.map((m) => m.id)).toEqual(['one', 'two'])
+    expect(groups[0].messages.map((m) => m.id)).toEqual(['one', 'two', 'reply'])
+    expect(groups[4].messages[0].message.references_message_id).toBe('outside-window')
   })
 })

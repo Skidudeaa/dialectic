@@ -6,21 +6,16 @@ import { TypingIndicator } from '../../chat/TypingIndicator'
 import type { MessageListProps } from '../../chat/MessageList'
 import { SurfaceEvidence } from './SurfaceEvidence'
 import { ShapeStream } from './shapes/ShapeStream'
+import { ShapeDiscussion } from './shapes/ShapeDiscussion'
 import { ShapeTree } from './shapes/ShapeTree'
 import { ShapeLanes } from './shapes/ShapeLanes'
 import { ShapeSignal } from './shapes/ShapeSignal'
 import {
-  SHAPE_LABELS, refGlyph, type ConversationShape, type SurfaceAuthor, type SurfaceMsg,
+  SHAPE_LABELS, discussionThreads, passageKey, refGlyph, type DiscussionThread, type ConversationShape, type SurfaceAuthor, type SurfaceMsg,
 } from './surfaceModel.ts'
 
 type MessageType = Message['message_type']
 
-/**
- * The four shapes over ONE conversation (the four-shapes prototype, ported):
- * the stream with its context rail, the tree of replies, lanes per person,
- * and the volume chart the enjoyment experiment is measured by. One
- * switcher, one message list, one composer.
- */
 export interface SurfaceComposer {
   send: (
     content: string,
@@ -81,6 +76,13 @@ export function SurfaceConversation({
   controls, selectedEvidence, onSelectEvidence, onStageRef, onOpenFull, banners, evidenceOpen, onEvidenceOpen, readingLayout = false, roomControls,
 }: SurfaceConversationProps) {
   const [onlyAnchored, setOnlyAnchored] = useState(false)
+  const [activeThread, setActiveThread] = useState<string | null>(null)
+  const [sourceScroll, setSourceScroll] = useState(0)
+  const [connector, setConnector] = useState('')
+  const [mapExpanded, setMapExpanded] = useState(true)
+  const linkedShape = shape === 'discussion' || shape === 'map'
+  const threads = useMemo(() => discussionThreads(messages), [messages])
+  const passages = useMemo(() => [...new Map(messages.flatMap((message) => message.refs.filter((ref) => ref.entity === 'reading_items' && ref.quote)).map((ref) => [passageKey(ref), ref])).values()], [messages])
   const [replyToId, setReplyToId] = useState<string | null>(null)
   const [localJump, setLocalJump] = useState<{ id: string; nonce: number } | null>(null)
   const rootRef = useRef<HTMLElement>(null)
@@ -98,17 +100,72 @@ export function SurfaceConversation({
     setReplyToId(id)
     if (message.anchor) onAnchor(message.anchor)
     else onClearAnchor()
-    if (message.refs[0]) onSelectEvidence(message.refs[0])
+    const thread = threads.find((candidate) => candidate.messages.some((item) => item.id === id))
+    setActiveThread(thread?.id ?? null)
+    const source = message.refs.find((ref) => ref.entity === 'reading_items') ?? thread?.source ?? message.refs[0]
+    if (source) { onSelectEvidence(source); setSourceScroll((n) => n + 1) }
     if (composerRef && 'current' in composerRef) composerRef.current?.focus()
+  }
+
+  function selectThread(thread: DiscussionThread) {
+    if (shape === 'map') setMapExpanded(false)
+    setActiveThread(thread.id)
+    if (thread.source) onSelectEvidence(thread.source)
+    setSourceScroll((n) => n + 1)
+    if (compactPane) onEvidenceOpen(true)
+  }
+
+  function jumpToThread(id: string) {
+    onShape('discussion')
+    setOnlyAnchored(false)
+    setActiveThread(threads.find((thread) => thread.messages.some((message) => message.id === id))?.id ?? null)
+    setLocalJump({ id, nonce: Date.now() })
+    onEvidenceOpen(false)
   }
 
   const evidence = <SurfaceEvidence
     roomId={roomId} messages={messages} selected={selectedEvidence}
     onSelect={onSelectEvidence} onOpenFull={onOpenFull}
-    onDiscuss={(ref) => { onStageRef(ref); onEvidenceOpen(false) }}
+    passages={passages} scrollRequest={sourceScroll}
+    onPassage={(ref) => {
+      const message = messages.find((candidate) => candidate.refs.some((source) => passageKey(source) === passageKey(ref)))
+      if (message) { onSelectEvidence(ref); jumpToThread(message.id) }
+    }}
+    onDiscuss={(ref) => { setReplyToId(null); onClearAnchor(); onStageRef(ref); onShape('discussion'); onEvidenceOpen(false) }}
+    onAttach={replyToId ? (ref) => { onStageRef(ref); onEvidenceOpen(false) } : undefined}
     onReply={(id) => { reply(id); onEvidenceOpen(false) }}
-    onJump={(id) => { onShape('stream'); setOnlyAnchored(false); setLocalJump({ id, nonce: Date.now() }); onEvidenceOpen(false) }}
+    onJump={jumpToThread}
   />
+
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root || shape !== 'discussion' || compactPane || !selectedEvidence?.quote) return
+    let frame = 0
+    const measure = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const key = passageKey(selectedEvidence)
+        const thread = [...root.querySelectorAll<HTMLElement>('[data-thread]')].find((node) => node.dataset.thread === activeThread)
+        const header = [...(thread ?? root).querySelectorAll<HTMLElement>('[data-thread-anchor]')].find((node) => node.dataset.threadAnchor === key)
+        const mark = [...root.querySelectorAll<HTMLElement>('mark[data-passage]')].find((node) => node.dataset.passage === key)
+        const pane = root.querySelector('.surf-discussion')?.getBoundingClientRect()
+        const article = root.querySelector('.surf-evidence')?.getBoundingClientRect()
+        const a = header?.getBoundingClientRect(), b = mark?.getBoundingClientRect(), box = root.getBoundingClientRect()
+        if (!a || !b || !pane || !article || a.bottom <= pane.top || a.top >= pane.bottom || b.bottom <= article.top + 60 || b.top >= article.bottom) { setConnector(''); return }
+        const x1 = a.right - box.left, y1 = Math.max(a.top, pane.top) + Math.min(a.height, 50) / 2 - box.top
+        const x2 = b.left - box.left, y2 = b.top + b.height / 2 - box.top
+        const gutter = pane.right - box.left
+        setConnector(`M${x1},${y1} H${gutter} V${y2} H${x2}`)
+      })
+    }
+    const resize = new ResizeObserver(measure)
+    resize.observe(root)
+    const mutation = new MutationObserver(measure)
+    mutation.observe(root, { childList: true, subtree: true })
+    root.addEventListener('scroll', measure, true)
+    measure()
+    return () => { cancelAnimationFrame(frame); resize.disconnect(); mutation.disconnect(); root.removeEventListener('scroll', measure, true) }
+  }, [shape, compactPane, selectedEvidence, activeThread, sourceScroll])
 
   const shown = useMemo(() => {
     if (!anchor || !onlyAnchored) return messages
@@ -160,6 +217,10 @@ export function SurfaceConversation({
         />
       )
     }
+    if (linkedShape) return <ShapeDiscussion threads={onlyAnchored ? discussionThreads(shown) : threads} controls={controls} selected={selectedEvidence}
+      active={activeThread} jump={localJump} map={shape === 'map'} mapExpanded={mapExpanded} onToggleMap={() => { setMapExpanded((value) => !value); if (compactPane && mapExpanded) onEvidenceOpen(true) }} onSelect={selectThread}
+      onOpenRef={(ref, messageId) => { if (messageId) setActiveThread(threads.find((thread) => thread.messages.some((message) => message.id === messageId))?.id ?? null); if (ref.entity === 'reading_items') { if (shape === 'map') setMapExpanded(false); onSelectEvidence(ref); setSourceScroll((n) => n + 1); if (compactPane) onEvidenceOpen(true) } else onOpenRef(ref) }}
+      onReply={reply} onJump={jumpToThread} />
     if (shown.length === 0 && shape !== 'stream') {
       return (
         <p className="surf-conv-empty">
@@ -178,7 +239,7 @@ export function SurfaceConversation({
     const jumpTarget = (localJump?.nonce ?? 0) > (controls.jumpTarget?.nonce ?? 0) ? localJump : controls.jumpTarget
     return <ShapeStream messages={shown} controls={{ ...controls, jumpTarget, contextRef: selectedEvidence,
       onSeen: evidenceOpen && compactPane ? undefined : controls.onSeen }}
-      context={evidence} onOpenRef={onOpenRef} onReply={reply} onAnchor={onAnchor} />
+      context={undefined} onOpenRef={onOpenRef} onReply={reply} onAnchor={onAnchor} />
   })()
 
   const placeholder = anchor
@@ -187,7 +248,7 @@ export function SurfaceConversation({
     : 'Think out loud, share a link, or bring a source to the table…'
 
   return (
-    <section ref={rootRef} className={`surf-conv${evidenceOpen ? ' surf-conv--evidence-open' : ''}${readingLayout && shape === 'stream' && !compactPane ? ' surf-conv--reading-layout' : ''}`} aria-label="Conversation">
+    <section ref={rootRef} className={`surf-conv${evidenceOpen ? ' surf-conv--evidence-open' : ''}${readingLayout && (shape === 'stream' || linkedShape) && !(shape === 'map' && mapExpanded) && !compactPane ? ' surf-conv--reading-layout' : ''}${linkedShape ? ' surf-conv--linked' : ''}${shape === 'map' && mapExpanded ? ' surf-conv--map-expanded' : ''}`} aria-label="Conversation">
       <div className="surf-conv-head">
         <span className="surf-pane-lamp" aria-hidden="true" />
         <span className="surf-conv-kicker">
@@ -207,7 +268,7 @@ export function SurfaceConversation({
         <div className="surf-shapes surf-wide-toggle" role="group" aria-label="Conversation width">
           <button type="button" className="surf-shape surf-evidence-toggle" aria-pressed={evidenceOpen}
             aria-label={evidenceOpen ? 'Back to conversation' : 'Bring a source'}
-            onClick={() => { onShape('stream'); onEvidenceOpen(!evidenceOpen) }}>
+            onClick={() => { setMapExpanded(false); if (!linkedShape && shape !== 'stream') onShape('stream'); onEvidenceOpen(!evidenceOpen) }}>
             {evidenceOpen ? 'Conversation' : 'Sources'}
           </button>
           {onToggleWide && <button
@@ -222,7 +283,7 @@ export function SurfaceConversation({
           </button>}
         </div>
         <div className="surf-shapes" role="group" aria-label="Conversation shape">
-          {(Object.keys(SHAPE_LABELS) as ConversationShape[]).map((candidate) => (
+          {(['discussion', 'map', 'stream'] as ConversationShape[]).map((candidate) => (
             <button
               key={candidate}
               type="button"
@@ -233,14 +294,20 @@ export function SurfaceConversation({
               {SHAPE_LABELS[candidate]}
             </button>
           ))}
+          <details className="surf-other-shapes"><summary>{['tree', 'lanes', 'signal'].includes(shape) ? SHAPE_LABELS[shape] : 'More'}</summary>
+            {(['tree', 'lanes', 'signal'] as ConversationShape[]).map((candidate) => <button type="button" className="surf-shape" key={candidate} aria-pressed={shape === candidate}
+              onClick={(event) => { onEvidenceOpen(false); onShape(candidate); event.currentTarget.closest('details')?.removeAttribute('open') }}>{SHAPE_LABELS[candidate]}</button>)}
+          </details>
         </div>
         {roomControls}
       </div>
 
       {banners && <div className="surf-conv-banners">{banners}</div>}
-      <div className={`surf-conv-body${shape === 'stream' ? '' : ' surf-conv-body--scroll'}`}>
+      <div className={`surf-conv-body${shape === 'stream' || linkedShape ? ' surf-conv-body--context' : ' surf-conv-body--scroll'}`}>
         {body}
+        {(shape === 'stream' || linkedShape) && evidence}
       </div>
+      {shape === 'discussion' && !compactPane && connector && <svg className="surf-passage-link" aria-hidden="true"><path d={connector} /></svg>}
 
       <div className="surf-compose">
         <TypingIndicator typingUsers={typingUsers} activityLabel={activityLabel} />

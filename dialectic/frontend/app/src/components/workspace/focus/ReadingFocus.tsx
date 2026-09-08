@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { memo, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import type { MessageRef, ReadingDetail, ReadingRevision } from '../../../types/index.ts'
@@ -108,7 +108,8 @@ function sanitizedMarkdown(markdown: string): string {
   return template.innerHTML
 }
 
-export function RenderedMarkdown({ markdown }: { markdown: string }) {
+// Keep live selections and source highlights intact when the surrounding conversation updates.
+export const RenderedMarkdown = memo(function RenderedMarkdown({ markdown }: { markdown: string }) {
   const isBoundedPreview = markdown.length > MARKDOWN_PREVIEW_CHARS
   const [showFull, setShowFull] = useState(!isBoundedPreview)
   const source = showFull ? markdown : markdown.slice(0, MARKDOWN_PREVIEW_CHARS)
@@ -170,7 +171,7 @@ export function RenderedMarkdown({ markdown }: { markdown: string }) {
       )}
     </>
   )
-}
+})
 
 function RevisionRow({ revision }: { revision: ReadingRevision }) {
   const extraction = revision.extraction

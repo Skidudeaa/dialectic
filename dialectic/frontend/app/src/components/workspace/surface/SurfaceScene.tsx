@@ -89,7 +89,8 @@ export function SurfaceScene({
   const [evidenceOpen, setEvidenceOpen] = useState(false)
   const [updatesOpen, setUpdatesOpen] = useState(false)
   const sceneRef = useRef<HTMLDivElement>(null)
-  const [shape, setShape] = useState<ConversationShape>('stream')
+  const [shapeChoice, setShape] = useState<ConversationShape | null>(null)
+  const shape: ConversationShape = shapeChoice ?? (desk.structure.status === 'empty' || (!desk.bound && desk.structure.status !== 'loading') ? 'discussion' : 'stream')
   // "Wide": the conversation takes the whole width and the graph and atlas
   // follow beneath — the owner's balance control, remembered per device.
   // Wide by default (owner, 2026-09-03): the conversation is the base unit

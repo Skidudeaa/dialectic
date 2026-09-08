@@ -1,3 +1,5 @@
+import type { MessageRef } from '../types'
+
 /**
  * Anchoring a highlight to a passage of a message.
  *
@@ -126,4 +128,63 @@ export function locateAnchor(
   const first = haystack.indexOf(anchor.quote)
   if (first !== -1) return { start: first, end: first + anchor.quote.length }
   return null
+}
+
+/** Find an unambiguous quote in rendered text, preserving offsets through inline markup. */
+export function uniqueQuoteRange(container: HTMLElement, quote: string): Range | null {
+  const needle = normaliseQuote(quote)
+  if (!needle) return null
+  const positions: { node: Text; offset: number }[] = []
+  let text = ''
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+  let node: Node | null
+  while ((node = walker.nextNode())) {
+    const value = node.textContent ?? ''
+    for (let offset = 0; offset < value.length; offset++) {
+      const char = /\s/.test(value[offset]) ? ' ' : value[offset]
+      if (char === ' ' && (!text || text.endsWith(' '))) continue
+      text += char
+      positions.push({ node: node as Text, offset })
+    }
+  }
+  const start = text.indexOf(needle)
+  if (start < 0 || text.indexOf(needle, start + 1) >= 0) return null
+  const first = positions[start]
+  const last = positions[start + needle.length - 1]
+  const range = document.createRange()
+  range.setStart(first.node, first.offset)
+  range.setEnd(last.node, last.offset + 1)
+  return range
+}
+
+/** Mark text segments individually so selections crossing emphasis retain valid paragraph markup. */
+export function markQuote(container: HTMLElement, quote: string, key: string): HTMLElement[] {
+  const range = uniqueQuoteRange(container, quote)
+  if (!range) return []
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+  const segments: { node: Text; start: number; end: number }[] = []
+  let node: Node | null
+  while ((node = walker.nextNode())) {
+    if (!range.intersectsNode(node)) continue
+    const start = node === range.startContainer ? range.startOffset : 0
+    const end = node === range.endContainer ? range.endOffset : (node.textContent?.length ?? 0)
+    if (end > start) segments.push({ node: node as Text, start, end })
+  }
+  return segments.map(({ node, start, end }, index) => {
+    if (end < node.length) node.splitText(end)
+    const text = start ? node.splitText(start) : node
+    const mark = document.createElement('mark')
+    mark.dataset.passage = key
+    mark.tabIndex = index === 0 ? 0 : -1
+    mark.setAttribute('role', 'button')
+    mark.setAttribute('aria-label', `Open discussion: ${quote}`)
+    text.replaceWith(mark)
+    mark.append(text)
+    return mark
+  })
+}
+
+/** A passage is scoped to both its source and the revision actually quoted. */
+export function passageKey(ref: MessageRef): string {
+  return JSON.stringify([ref.entity, ref.id, normaliseQuote(ref.quote ?? ''), ref.content_sha256 ?? ''])
 }

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ContextInspector, ReviewButton } from '@dark-roast/companion-ui'
 import type { MessageRef, ReadingDetail, ReadingLibraryResponse } from '../../../types'
 import { api } from '../../../lib/api'
-import { anchorFromSelection, MAX_QUOTE_CHARS, normaliseQuote } from '../../../lib/passageAnchor'
+import { anchorFromSelection, markQuote, uniqueQuoteRange, MAX_QUOTE_CHARS, normaliseQuote } from '../../../lib/passageAnchor'
 import { RenderedMarkdown } from '../focus/ReadingFocus'
-import type { SurfaceMsg } from './surfaceModel'
+import { passageKey, type SurfaceMsg } from './surfaceModel'
 
 interface SurfaceEvidenceProps {
   roomId: string
@@ -12,13 +12,17 @@ interface SurfaceEvidenceProps {
   selected: MessageRef | null
   onSelect: (ref: MessageRef | null) => void
   onDiscuss: (ref: MessageRef) => void
+  onAttach?: (ref: MessageRef) => void
   onReply: (messageId: string) => void
   onJump: (messageId: string) => void
   onOpenFull: (ref: MessageRef) => void
+  passages?: MessageRef[]
+  onPassage?: (ref: MessageRef) => void
+  scrollRequest?: number
 }
 
 /** Sources and the human exchanges they carry stay together while the room talks. */
-export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscuss, onReply, onJump, onOpenFull }: SurfaceEvidenceProps) {
+export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscuss, onAttach, onReply, onJump, onOpenFull, passages, onPassage, scrollRequest = 0 }: SurfaceEvidenceProps) {
   const [query, setQuery] = useState('')
   const [library, setLibrary] = useState<ReadingLibraryResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -27,6 +31,7 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
   const [detailError, setDetailError] = useState<string | null>(null)
   const [quote, setQuote] = useState('')
   const [selectionError, setSelectionError] = useState<string | null>(null)
+  const [passageNotice, setPassageNotice] = useState<string | null>(null)
   const sourceRef = useRef<HTMLDivElement>(null)
   const initialLibraryRoom = useRef<string | null>(null)
   const libraryRoom = useRef<string | null>(null)
@@ -76,7 +81,7 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
       }
     })
     return () => { cancelled = true }
-  }, [roomId, selectedId, selected?.quote, selected?.content_sha256, attempt])
+  }, [roomId, selectedId, attempt])
 
   const shared = useMemo(() => {
     const refs = new Map<string, MessageRef>()
@@ -106,6 +111,66 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
   const exchanges = selected ? messages.filter((message) => message.refs.some((ref) => ref.entity === selected.entity && ref.id === selected.id)) : []
   const current = detail?.id === selectedId ? detail : null
 
+  const selectedKey = selected?.quote ? passageKey(selected) : null
+  // Incoming tokens and replies must not rebuild the article's text selection.
+  const passageSignature = JSON.stringify(passages ?? [])
+  const anchoredPassages = useMemo(() => JSON.parse(passageSignature) as MessageRef[], [passageSignature])
+  useEffect(() => {
+    const container = sourceRef.current
+    if (!container || !current) return
+    let lastScroll: string | null = null
+    let pending = true
+    const observer = new MutationObserver(() => { pending = true; paint() })
+    function paint() {
+      if (!pending) return
+      const selection = window.getSelection()
+      if (selection && !selection.isCollapsed && selection.rangeCount && container!.contains(selection.getRangeAt(0).commonAncestorContainer)) return
+      pending = false
+      observer.disconnect()
+      for (const mark of container!.querySelectorAll('mark[data-passage]')) mark.replaceWith(...mark.childNodes)
+      const marks: HTMLElement[] = []
+      container!.normalize()
+      const refs = new Map(anchoredPassages.filter((ref) => ref.id === current!.id && ref.quote).map((ref) => [passageKey(ref), ref]))
+      if (selected?.quote) refs.set(passageKey(selected), selected)
+      for (const [key, ref] of refs) {
+        if (ref.content_sha256 && ref.content_sha256 !== current!.content_sha256) continue
+        const painted = markQuote(container!, ref.quote!, key)
+        for (const mark of painted) {
+          mark.dataset.active = String(key === selectedKey)
+          if (!anchoredPassages.some((passage) => passageKey(passage) === key)) { mark.removeAttribute('role'); mark.removeAttribute('tabindex'); mark.removeAttribute('aria-label') }
+        }
+        marks.push(...painted)
+      }
+      const selectedMark = marks.find((mark) => mark.dataset.passage === selectedKey)
+      setPassageNotice(selected?.quote && !selectedMark && container!.querySelector('.reading-focus-prose')
+        ? 'This quote cannot be uniquely located in the current text. The original words remain attached to the thread.' : null)
+      if (selectedMark && scrollRequest && lastScroll !== selectedKey) {
+        const pane = container!.closest<HTMLElement>('.surf-evidence')!
+        pane.scrollTop += selectedMark.getBoundingClientRect().top - pane.getBoundingClientRect().top - 110
+        lastScroll = selectedKey
+      }
+      observer.observe(container!, { childList: true, subtree: true })
+    }
+    observer.observe(container, { childList: true, subtree: true })
+    document.addEventListener('selectionchange', paint)
+    const timer = window.setTimeout(paint, 0)
+    return () => {
+      window.clearTimeout(timer)
+      observer.disconnect()
+      document.removeEventListener('selectionchange', paint)
+    }
+  }, [current, anchoredPassages, selected, selectedKey, scrollRequest])
+
+  function openPassage(event: React.MouseEvent | React.KeyboardEvent) {
+    if ('key' in event && event.key !== 'Enter' && event.key !== ' ') return
+    if (!('key' in event) && !window.getSelection()?.isCollapsed) return
+    const mark = (event.target as HTMLElement).closest<HTMLElement>('mark[data-passage]')
+    const ref = (passages ?? []).find((candidate) => passageKey(candidate) === mark?.dataset.passage)
+    if (!ref) return
+    event.preventDefault()
+    onPassage?.(ref)
+  }
+
   function readSelection() {
     const container = sourceRef.current
     if (!container) return
@@ -113,12 +178,17 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
     const passage = anchorFromSelection(selection, container)
     setSelectionError(selection && normaliseQuote(selection.toString()).length > MAX_QUOTE_CHARS
       ? `Choose a passage of up to ${MAX_QUOTE_CHARS} characters.` : null)
-    setQuote(passage?.quote ?? '')
+    const unique = passage && uniqueQuoteRange(container, passage.quote)
+    if (passage && !unique) setSelectionError('Those words occur more than once. Select a longer passage so the thread links to the right place.')
+    setQuote(unique ? passage!.quote : '')
   }
 
-  function discuss() {
+  function discuss(attach = false) {
     if (!current) return
-    onDiscuss({
+    setQuote('')
+    window.getSelection()?.removeAllRanges()
+    const submit = attach && onAttach ? onAttach : onDiscuss
+    submit({
       entity: 'reading_items', id: current.id, label: (current.title || current.url).slice(0, 200),
       ...(quote ? { quote } : {}),
       ...(current.content_sha256 ? { content_sha256: current.content_sha256 } : {}),
@@ -134,14 +204,17 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
       {selected ? (
         <div className="surf-evidence-selected">
           <h2>{current?.title || selected.label}</h2>
-          {selected.quote && <blockquote className="surf-evidence-quoted">{selected.quote}</blockquote>}
+          {selected.quote && (passageNotice || !current || (selected.content_sha256 && selected.content_sha256 !== current.content_sha256)) && <blockquote className="surf-evidence-quoted">{selected.quote}</blockquote>}
+          {passageNotice && <p className="surf-evidence-notice" role="status">{passageNotice}</p>}
           {selected.content_sha256 && current?.content_sha256 && selected.content_sha256 !== current.content_sha256 && (
             <p className="surf-evidence-notice">This source has changed since it was attached. {selected.quote
               ? 'The original quote stays with the contribution.' : 'You are viewing the current version.'}</p>
           )}
           <div className="surf-evidence-actions">
-            {current && <ReviewButton intent="inspect" onClick={discuss}>{quote ? 'Discuss this passage' : 'Discuss this source'}</ReviewButton>}
+            {current && <ReviewButton intent="inspect" onClick={() => discuss(Boolean(onAttach))}>{onAttach ? (quote ? 'Attach passage to reply' : 'Attach source to reply') : quote ? 'Discuss this passage' : 'Discuss this source'}</ReviewButton>}
+            {current && onAttach && <button type="button" onClick={() => discuss()}>Start a new thread</button>}
             <button type="button" onClick={() => onOpenFull(selected)}>Source details ↗</button>
+            {current && /^https?:\/\//i.test(current.url) && <a href={current.url} target="_blank" rel="noopener noreferrer">Original ↗</a>}
           </div>
           {quote && <blockquote className="surf-evidence-selection">{quote}</blockquote>}
           {selectionError && <p role="status" className="surf-evidence-notice">{selectionError}</p>}
@@ -160,7 +233,7 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
             : selectedId && !current ? <p role="status">Opening the source…</p>
             : current ? <>
               <p className="surf-evidence-hint">Select a short passage to discuss it. Your words and the quote travel together.</p>
-              <div ref={sourceRef} className="surf-evidence-document" onPointerUp={readSelection} onKeyUp={readSelection}>
+              <div ref={sourceRef} className="surf-evidence-document" onPointerUp={readSelection} onKeyUp={readSelection} onClick={openPassage} onKeyDown={openPassage}>
                 <RenderedMarkdown key={current.id + (current.content_sha256 ?? '')} markdown={current.markdown} />
               </div>
             </> : <p>Open the source details to inspect this evidence.</p>}

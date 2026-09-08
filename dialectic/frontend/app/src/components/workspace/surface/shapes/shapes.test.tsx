@@ -2,9 +2,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { useRef, useState } from 'react'
 import type { MessageAnchor, MessageRef } from '../../../../types'
-import { WHOLE_ROOM_TOPIC, type DailyActivity, type SurfaceAuthor, type SurfaceMsg } from '../surfaceModel'
+import { discussionThreads, WHOLE_ROOM_TOPIC, type DailyActivity, type SurfaceAuthor, type SurfaceMsg } from '../surfaceModel'
 import { SurfaceMessage } from './SurfaceMessage'
 import { ShapeStream } from './ShapeStream'
+import { ShapeDiscussion } from './ShapeDiscussion'
 import { ShapeTree } from './ShapeTree'
 import { ShapeLanes } from './ShapeLanes'
 import { ShapeSignal } from './ShapeSignal'
@@ -196,11 +197,41 @@ describe('conversation shape navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
     fireEvent.click(screen.getByRole('button', { name: 'Bring a source' }))
     expect(screen.getByRole('region', { name: 'Conversation' })).toHaveClass('surf-conv--evidence-open')
+    fireEvent.click(screen.getByText('More', { selector: 'summary' }))
     fireEvent.click(screen.getByRole('button', { name: shape }))
     expect(screen.getByRole('button', { name: 'Bring a source' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('region', { name: 'Conversation' })).not.toHaveClass('surf-conv--evidence-open')
     expect(container.querySelector('.surf-evidence')).toBeNull()
     expect(container.querySelector('textarea')).toHaveValue('An unfinished reply')
     expect(container.querySelector('.reply-preview-bar')).toHaveTextContent('A thought to reply to')
+  })
+})
+
+describe('passage threads and map', () => {
+  it('renders shared context once, collapses replies, and retains actions and map navigation', () => {
+    const ref: MessageRef = { entity: 'reading_items', id: 'reading', label: 'Article', quote: 'An exact passage' }
+    const parent = msg({ id: 'parent', author: human('u1', 'Amo'), text: 'A claim to test', refs: [ref] })
+    const child = msg({ id: 'child', author: human('u2', 'Dan'), text: 'The reply tests it', refs: [ref], parentId: parent.id })
+    const threads = discussionThreads([parent, child])
+    const reply = vi.fn(), select = vi.fn(), jump = vi.fn()
+    const props = { threads, controls: { messages: [parent.message, child.message], currentUserId: 'u1', onFork: vi.fn() }, selected: ref, active: threads[0].id, jump: null,
+      onSelect: select, onOpenRef: vi.fn(), onReply: reply, onJump: jump }
+    const { container, rerender } = render(<ShapeDiscussion {...props} map={false} />)
+    expect(screen.getAllByText('An exact passage')).toHaveLength(1)
+    expect(container.querySelector('.msg-quote')).toBeNull()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Reply' })[1])
+    expect(reply).toHaveBeenCalledWith(child.id)
+    fireEvent.click(screen.getByRole('button', { name: /1 reply to Amo/ }))
+    expect(screen.queryByText(child.text)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Read in source/ }))
+    expect(select).toHaveBeenCalledWith(threads[0])
+    fireEvent.click(screen.getByLabelText('More actions for Amo’s contribution'))
+    expect(screen.getByRole('button', { name: 'Fork' })).toBeVisible()
+    rerender(<ShapeDiscussion {...props} map />)
+    expect(container.querySelectorAll('svg path')).toHaveLength(3)
+    fireEvent.click(screen.getByRole('button', { name: /Dan.*The reply tests it/ }))
+    expect(jump).toHaveBeenCalledWith(child.id)
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in map' }))
+    expect(screen.getByRole('button', { name: 'Reset map zoom' })).toHaveTextContent('110%')
   })
 })

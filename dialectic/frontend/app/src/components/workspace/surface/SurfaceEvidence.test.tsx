@@ -105,3 +105,53 @@ describe('shared evidence', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
   })
 })
+
+describe('physical passage navigation', () => {
+  it('links the exact rendered quote and does not refetch the article when navigating within it', async () => {
+    const quoted = { ...ref, quote: 'Tankers wait outside the strait.', content_sha256: reading.content_sha256! }
+    const open = vi.fn()
+    const props = { roomId: 'room', messages, onSelect: vi.fn(), onDiscuss: discuss, onReply: reply, onJump: jump, onOpenFull: vi.fn(), passages: [quoted], onPassage: open }
+    const { container, rerender } = render(<SurfaceEvidence {...props} selected={ref} />)
+    await waitFor(() => expect(container.querySelectorAll('mark')).toHaveLength(3))
+    window.getSelection()?.removeAllRanges()
+    fireEvent.click(container.querySelector('mark')!)
+    expect(open).toHaveBeenCalledWith(quoted)
+    rerender(<SurfaceEvidence {...props} selected={quoted} />)
+    await waitFor(() => expect(container.querySelector('mark')).toHaveAttribute('data-active', 'true'))
+    expect(api.getReadingDetail).toHaveBeenCalledTimes(1)
+  })
+  it('preserves an active selection while another contribution adds a highlight', async () => {
+    const first = { ...ref, quote: 'wait outside', content_sha256: reading.content_sha256! }
+    const second = { ...ref, quote: 'the strait.', content_sha256: reading.content_sha256! }
+    const props = { roomId: 'room', messages, selected: ref, onSelect: vi.fn(), onDiscuss: discuss, onReply: reply, onJump: jump, onOpenFull: vi.fn() }
+    const { container, rerender } = render(<SurfaceEvidence {...props} passages={[first]} />)
+    await waitFor(() => expect(container.querySelector('mark')).not.toBeNull())
+    const selection = window.getSelection()!
+    const range = document.createRange()
+    range.selectNodeContents(container.querySelector('mark')!)
+    selection.removeAllRanges(); selection.addRange(range)
+    rerender(<SurfaceEvidence {...props} passages={[first, second]} />)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(selection.toString()).toBe('wait outside')
+    selection.removeAllRanges()
+    fireEvent(document, new Event('selectionchange'))
+    await waitFor(() => expect(container.querySelectorAll('mark')).toHaveLength(2))
+  })
+  it('distinguishes adding evidence to a reply from starting a new thread', async () => {
+    const attach = vi.fn()
+    render(<SurfaceEvidence roomId="room" messages={messages} selected={ref} onSelect={vi.fn()} onDiscuss={discuss} onAttach={attach} onReply={reply} onJump={jump} onOpenFull={vi.fn()} />)
+    await screen.findByTestId('reading-markdown')
+    fireEvent.click(screen.getByRole('button', { name: 'Attach source to reply' }))
+    expect(attach).toHaveBeenCalledWith({ ...ref, content_sha256: reading.content_sha256 })
+    expect(discuss).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Start a new thread' }))
+    expect(discuss).toHaveBeenCalledWith({ ...ref, content_sha256: reading.content_sha256 })
+  })
+  it('keeps a stale quote visible without painting the current article', async () => {
+    const quoted = { ...ref, quote: 'Tankers wait outside the strait.', content_sha256: 'b'.repeat(64) }
+    const { container } = render(<SurfaceEvidence roomId="room" messages={messages} selected={quoted} onSelect={vi.fn()} onDiscuss={discuss} onReply={reply} onJump={jump} onOpenFull={vi.fn()} passages={[quoted]} />)
+    await screen.findByText(/cannot be uniquely located/)
+    expect(container.querySelector('mark')).toBeNull()
+    expect(container.querySelector('.surf-evidence-quoted')).toHaveTextContent(quoted.quote)
+  })
+})

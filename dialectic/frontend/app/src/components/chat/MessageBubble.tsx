@@ -5,6 +5,7 @@ import DOMPurify from 'dompurify'
 import { addressBlock, decorateMentions, type MentionContext } from '../../lib/mentions'
 import type { Attachment, CommitmentProposal, Message, MessageAnchor, MessageRef, Reaction, ThesisSeed } from '../../types'
 import type { FieldMark } from '../../types/workspace.ts'
+import { passageKey } from '../../lib/passageAnchor'
 import { api, type MessageDecisionExplain } from '../../lib/api'
 import { localProposals, type LocalProposal } from '../../lib/proposalEnvelope'
 import { useAppStore } from '../../stores/appStore'
@@ -80,6 +81,8 @@ interface MessageBubbleProps {
   onOpenBench?: (seed: ThesisSeed) => void
   onOpenRef?: (ref: MessageRef) => void
   contextRef?: MessageRef | null
+  /** The visible thread header supplies this quotation and the nested parent supplies reply context. */
+  threadSource?: MessageRef | null
   onAnchor?: (anchor: MessageAnchor) => void
 }
 
@@ -440,6 +443,7 @@ export function MessageBubble({
   onOpenBench,
   onOpenRef,
   contextRef,
+  threadSource,
   onAnchor,
 }: MessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -533,6 +537,9 @@ export function MessageBubble({
     }
   }
 
+  const visibleRefs = (message.metadata?.refs ?? []).filter((ref) => !threadSource ||
+    ref.entity !== threadSource.entity || ref.id !== threadSource.id || ref.quote !== threadSource.quote || ref.content_sha256 !== threadSource.content_sha256)
+  const Actions = threadSource === undefined ? 'div' : 'details'
   const cls = speakerClass(message.speaker_type, isSelf)
   const streamCls = isStreaming ? (message.speaker_type === 'llm_provoker' ? ' streaming provoker-stream' : ' streaming') : ''
   // Only your own words, and only real persisted ones — the streaming
@@ -712,6 +719,7 @@ export function MessageBubble({
             <SignatureMark speakerType={message.speaker_type} authorName={authorName} />
             <span className="msg-author">{authorName}</span>
             <span className="msg-time">{formatTime(message.created_at)}</span>
+            {threadSource !== undefined && onReply && !isStreaming && <button type="button" className="msg-action-btn surf-inline-reply" onClick={() => onReply(message.id)}>Reply</button>}
             {message.message_type !== 'text' && (
               <span className="msg-type-badge">{message.message_type}</span>
             )}
@@ -732,10 +740,10 @@ export function MessageBubble({
             ON {message.metadata.anchor.label}
           </button>
         )}
-        {(message.metadata?.refs?.length ?? 0) > 0 && (
+        {visibleRefs.length > 0 && (
           <div className="msg-evidence" aria-label="Evidence in this contribution">
-            {message.metadata!.refs!.map((ref) => (
-              <div key={`${ref.entity}:${ref.id}`} className="msg-evidence-source" data-active={contextRef?.entity === ref.entity && contextRef.id === ref.id || undefined}>
+            {visibleRefs.map((ref) => (
+              <div key={`${ref.entity}:${ref.id}`} className="msg-evidence-source" data-thread-anchor={ref.quote ? passageKey(ref) : undefined} data-active={contextRef?.entity === ref.entity && contextRef.id === ref.id || undefined}>
                 <button type="button" onClick={() => onOpenRef?.(ref)} disabled={!onOpenRef} aria-pressed={contextRef?.entity === ref.entity && contextRef.id === ref.id}>
                   <span aria-hidden="true">↗</span> {ref.label}
                 </button>
@@ -745,7 +753,7 @@ export function MessageBubble({
           </div>
         )}
         <ResponseCard streaming={isStreaming} className={`msg-content-frame${isFolded ? ' msg-folded' : ''}`}>
-          {replyToContent !== undefined && (
+          {replyToContent !== undefined && threadSource === undefined && (
             <div className="msg-quote">
               <span className="msg-quote-author">{replyToAuthor}</span>
               <span className="msg-quote-text">{quoteExcerpt(replyToContent)}</span>
@@ -1096,7 +1104,8 @@ export function MessageBubble({
         )}
       </div>
 
-      <div className="msg-actions">
+      <Actions className="msg-actions">
+        {threadSource !== undefined && <summary aria-label={`More actions for ${authorName}’s contribution`}>···</summary>}
         {pastedUrl && !isStreaming && (
           <button
             className="msg-action-btn"
@@ -1139,7 +1148,7 @@ export function MessageBubble({
             )}
           </div>
         )}
-        {onReply && !isStreaming && <button className="msg-action-btn" onClick={() => onReply(message.id)}>Reply</button>}
+        {threadSource === undefined && onReply && !isStreaming && <button className="msg-action-btn" onClick={() => onReply(message.id)}>Reply</button>}
         {onFork && <button className="msg-action-btn" onClick={() => onFork(message.id)}>Fork</button>}
         {canRevise && onEdit && !isEditing && (
           <button className="msg-action-btn" onClick={beginEdit}>Edit</button>
@@ -1156,7 +1165,7 @@ export function MessageBubble({
             Delete
           </button>
         )}
-      </div>
+      </Actions>
     </div>
   )
 }

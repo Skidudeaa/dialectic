@@ -9,18 +9,20 @@ export interface SurfaceMessageProps {
   onOpenRef?: (ref: MessageRef) => void
   onReply?: (id: string) => void
   onAnchor?: (anchor: MessageAnchor) => void
+  threadSource?: MessageRef | null
   compact?: boolean
   dimmed?: boolean
 }
 
 /** Alternate arrangements retain the exact same media, decisions and actions as Record. */
-export function SurfaceMessage({ msg, controls, onOpenRef, onReply, onAnchor, compact, dimmed }: SurfaceMessageProps) {
+export function SurfaceMessage({ msg, controls, onOpenRef, onReply, onAnchor, compact, dimmed, threadSource }: SurfaceMessageProps) {
   const parent = controls?.messages.find((message) => message.id === msg.parentId)
   const names = controls?.userNames ?? {}
   return (
     <article className={`surf-msg${compact ? ' surf-msg-compact' : ''}${dimmed ? ' surf-msg-dimmed' : ''}`} data-mid={msg.id}>
       <MessageBubble
         message={msg.message}
+        threadSource={threadSource}
         authorName={msg.author.name}
         isSelf={msg.author.isSelf}
         isStreaming={msg.isStreaming}

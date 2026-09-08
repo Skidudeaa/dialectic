@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  uniqueQuoteRange,
+  markQuote,
   anchorField,
   anchorFromSelection,
   hashQuote,
@@ -149,5 +151,29 @@ describe('anchorFromSelection', () => {
     expect(anchorFromSelection(selection, elsewhere)).toBeNull()
     container.remove()
     elsewhere.remove()
+  })
+})
+
+describe('rendered source passage links', () => {
+  it('preserves inline markup and whitespace while painting an exact unique passage', () => {
+    const root = document.createElement('div')
+    root.innerHTML = '<p>Tankers <strong>wait outside</strong>  the strait.</p><p>Next observation.</p>'
+    const range = uniqueQuoteRange(root, 'Tankers wait outside the strait.')
+    expect(normaliseQuote(range!.toString())).toBe('Tankers wait outside the strait.')
+    const marks = markQuote(root, 'wait outside the strait.', 'passage')
+    expect(marks).toHaveLength(2)
+    expect(root.querySelector('strong mark')).not.toBeNull()
+    expect(root.textContent).toBe('Tankers wait outside  the strait.Next observation.')
+    expect(marks[0].tabIndex).toBe(0)
+    for (const mark of marks) mark.replaceWith(...mark.childNodes)
+    root.normalize()
+    expect(root.innerHTML).toBe('<p>Tankers <strong>wait outside</strong>  the strait.</p><p>Next observation.</p>')
+  })
+  it('refuses ambiguous or absent quotes rather than connecting the wrong text', () => {
+    const root = document.createElement('div')
+    root.textContent = 'A repeated phrase and a repeated phrase.'
+    expect(uniqueQuoteRange(root, 'repeated phrase')).toBeNull()
+    expect(markQuote(root, 'missing words', 'missing')).toEqual([])
+    expect(root.querySelector('mark')).toBeNull()
   })
 })

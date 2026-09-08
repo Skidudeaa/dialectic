@@ -737,3 +737,45 @@ button.surf-anchor-chip:focus-visible,
     .surf-rail-card,
     .surf-tree-controls button { transition: none; }
 }
+
+/* Passage headers carry shared context once; branches retain the full message actions. */
+.surf-discussion { min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; background: var(--color-sheet); padding: 0 10px 16px; }
+.surf-passage-thread { border-bottom: 1px solid var(--color-bean); padding-bottom: 6px; }
+.surf-thread-context { position: sticky; top: 0; z-index: 2; background: var(--color-sheet); border-left: 2px solid var(--color-bean); padding: 6px 8px; }
+.surf-passage-thread[data-active] > .surf-thread-context { border-left-color: var(--color-amber); }
+.surf-thread-context button { display: grid; gap: 3px; width: 100%; padding: 0; border: 0; background: transparent; color: var(--color-ink); text-align: left; cursor: pointer; }
+.surf-thread-context button > span, .surf-thread-general { font: 11px/1.4 var(--font-mono); color: var(--color-faint); }
+.surf-thread-context q { font: 15px/1.4 var(--font-serif); overflow-wrap: anywhere; }
+.surf-branch { border-left: 1px solid var(--color-bean); padding-left: 5px; }
+.surf-discussion .surf-msg { border: 0; padding: 4px 0 2px; }
+.surf-discussion .msg { position: relative; padding: 0 2px; margin: 0; }
+.surf-discussion .msg-meta { flex-wrap: wrap; gap: 4px 7px; margin: 0 28px 2px 0; font-size: 11px; min-height: 26px; }
+.surf-discussion .msg-content-frame { padding: 0; border: 0; box-shadow: none; background: transparent; }
+.surf-discussion .msg-content { font-size: 16px; line-height: 1.45; }
+.surf-discussion .msg-content p { margin-block: 0 4px; }
+.surf-discussion .msg-content > :last-child { margin-bottom: 0; }
+.surf-discussion .msg .msg-actions { display: block; position: absolute; right: 0; top: 0; bottom: auto; opacity: 1; transform: none; background: var(--color-sheet); padding: 0; border: 0; box-shadow: none; }
+.surf-discussion .msg-actions summary { list-style: none; padding: 2px 8px; min-height: 26px; color: var(--color-faint); cursor: pointer; font: bold 17px var(--font-mono); }
+.surf-discussion .msg-actions[open] { z-index: 5; border: 1px solid var(--color-bean); padding: 4px; max-width: 240px; }
+.surf-discussion .msg-actions[open] > :not(summary) { display: inline-flex; }
+.surf-discussion .surf-inline-reply { margin-left: auto; font-size: 11px; padding: 2px 5px; }
+.surf-branch-toggle { padding: 2px 6px; min-height: 26px; margin: 0 0 2px; border: 0; background: transparent; color: var(--color-faint); font: 11px var(--font-mono); cursor: pointer; }
+.surf-discussion button:focus-visible, .surf-discussion summary:focus-visible { outline: 2px solid var(--color-amber); outline-offset: 1px; }
+.surf-mindmap { display: flex; flex-direction: column; padding: 0; }
+.surf-map-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 6px; border-bottom: 1px solid var(--color-bean); font: 11px var(--font-mono); color: var(--color-faint); }
+.surf-map-tools span { flex: 1; min-width: 180px; }
+.surf-map-tools button { color: var(--color-ink); background: var(--color-well); border: 1px solid var(--color-bean); padding: 4px 8px; cursor: pointer; }
+.surf-map-scroll { flex: 1; min-height: 0; overflow: auto; padding: 12px; overscroll-behavior: contain; }
+.surf-map-canvas { position: relative; transform-origin: top left; }
+.surf-map-canvas svg { position: absolute; inset: 0; pointer-events: none; }
+.surf-map-canvas path { fill: none; stroke: var(--color-teal); stroke-width: 1.5; }
+.surf-map-canvas path[data-kind="cites"] { stroke-dasharray: 4 3; stroke: var(--color-amber); }
+.surf-map-node { position: absolute; display: grid; align-content: start; gap: 5px; width: 240px; height: 86px; padding: 9px; text-align: left; background: var(--color-well); border: 1px solid var(--color-bean); border-radius: 3px; color: var(--color-ink); cursor: pointer; }
+.surf-map-node b { font: 11px var(--font-mono); color: var(--color-faint); }
+.surf-map-node span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font: 16px/1.4 var(--font-serif); overflow-wrap: anywhere; }
+.surf-map-node--passage { border-left: 2px solid var(--color-amber); }
+.surf-map-node--source { border-left: 2px solid var(--color-teal); }
+@media (pointer: coarse) {
+    .surf-discussion .msg-meta, .surf-discussion .surf-inline-reply, .surf-branch-toggle, .surf-discussion .msg-actions summary { min-height: 32px; }
+}
+.surf-discussion .msg-meta { margin-right: 0; padding-right: 44px; }
