@@ -49,3 +49,7 @@ After the first live cards the owner rejected the branch layout ("no shading for
 ## Amendment — reading focus mode, 2026-09-08 (late)
 
 Item 5 of the prior handoff closed: `5078f63` adds `readingFocus` to the app store (persisted per device beside the session), `AppLayout` stamps `surface-focus` on the layout only while the Surface scene shows, and `SurfaceScene`'s head controls carry the toggle (`Focus` / `Exit focus`; a glyph under 680px) plus the room name while focused. Focus hides `.room-header`, `.participants-bar`, `.push-enable-chip`, `.scene-switcher-wrap`, `.scene-masthead`, the head kicker, the activity flags and the article hint; on desktop the rail leaves and the grid becomes one column. Nothing is tied to pointer presence or idle. Candidate measurements against production data: first thought at y=62 (was 289) on 1280×900 and y=84 (was 353) on 390×844, no clipped head control, zero page errors. Release `20260909T033647Z-reading-focus-5078f63`; previous `20260909T031428Z-byline-row-76c1f66` retained. Physical devices and owner acceptance remain unobserved.
+
+## Closeout pointer
+
+The evening's consolidated state, verification and next work are in [reading room: evidence, depth by shade, reading focus](2026-09-08-reading-room-focus-and-evidence.md).
