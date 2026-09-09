@@ -31,3 +31,13 @@ No migration. No dependency or production config change. This tranche adds no pr
 Previous source HEAD: `e538ac67` (`docs: close out cross-platform map and reply release`). Previous selected frontend: `/var/www/dialectic-releases/20260908T221959Z-map-streams-e6b7bbd`.
 
 Restart only Dialectic after a clean implementation commit; preserve Defuddle and trading processes. Frontend rollback restores the retained previous symlink, tests nginx and reloads it. Backend rollback reverts the implementation commit in a clean checkout and restarts Dialectic. Older messages carry no `evidence` and render as before; a message stamped by the new backend renders its card only on the new frontend and is otherwise inert.
+
+## Verified deployment
+
+Implementation commit: `5e74949777c5b356e159ef9d83e561a6f97126b9`. Selected frontend: `/var/www/dialectic-releases/20260909T020353Z-evidence-beside-5e74949` through `/var/www/dialectic-current`; the bundle `assets/index-4GDOSez6.js` is byte-identical to the qualified build. Tracked source was clean before the Dialectic restart and the immutable frontend flip. No migration or production dependency/config change.
+
+Dialectic PID `3932798` replaced `3692256` at 21:03:56 CDT, serving `/root/DwoodAmo/dialectic`, scheduler banner intact (17 jobs). Defuddle retained `3543860`; trading retained `1970559`. Public `index.html`, JavaScript, CSS, manifest and service-worker hashes match the release manifest; `/health` reports db, redis and scheduler fresh.
+
+Live read-only probe of the deployed route: as Amo, against the newest message in the An Alien Mind room (an `llm_primary` answer carrying no stamped evidence), filing an unfetched url returned 422 "That URL does not appear in this message" and `reading_items` stayed at 1. No evidence card exists in production yet: the stamp is written only by turns that run after this restart, so the first real card appears the next time a human summons `Find and pull` or `Challenge`. No production contribution was created and no model generation was triggered by this release.
+
+Qualification scripts, the isolated fixture server, browser screenshots for all four passes, backend/frontend/build logs, release hashes and rollback coordinates are archived at `/var/backups/dialectic/20260909T020353Z-evidence-beside-5e74949`. The previous frontend remains retained at `/var/www/dialectic-releases/20260908T221959Z-map-streams-e6b7bbd`. Physical-device and Amo/Dan acceptance remain unobserved.
