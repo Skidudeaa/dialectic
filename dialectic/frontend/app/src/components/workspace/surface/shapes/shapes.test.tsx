@@ -238,6 +238,37 @@ describe('passage threads and map', () => {
 })
 
 
+describe('depth shading without tabbing', () => {
+  it('keeps a single-reply chain at full width and opens a shaded rail only at a fork', () => {
+    const root = msg({ id: 'chain-root', author: human('u1', 'Amo'), text: 'A question' })
+    const answer = msg({ id: 'chain-answer', author: machine(), text: 'An answer', parentId: root.id })
+    const follow = msg({ id: 'chain-follow', author: human('u1', 'Amo'), text: 'A follow-up', parentId: answer.id })
+    const forkA = msg({ id: 'fork-a', author: human('u2', 'Dan'), text: 'Disagreement', parentId: follow.id })
+    const forkB = msg({ id: 'fork-b', author: machine(), text: 'Evidence', parentId: follow.id })
+    const deeper = msg({ id: 'fork-a-1', author: human('u1', 'Amo'), text: 'Reply to the disagreement', parentId: forkA.id })
+    const props = { threads: discussionThreads([root, answer, follow, forkA, forkB, deeper]), controls: { messages: [], currentUserId: 'u1' }, selected: null, active: null, map: false, jump: null, onSelect: vi.fn(), onOpenRef: vi.fn(), onReply: vi.fn(), onJump: vi.fn() }
+    const { container } = render(<ShapeDiscussion {...props} />)
+    const wrapper = (id: string) => container.querySelector(`[data-mid="${id}"]`)!.closest<HTMLElement>('.surf-branch')!
+    // Reply depth is still the DOM truth the jump and identity logic read.
+    expect(wrapper('chain-follow')).toHaveAttribute('data-depth', '2')
+    // The chain never indents: no fork attribute, fork depth 0 all the way down.
+    for (const id of ['chain-root', 'chain-answer', 'chain-follow']) {
+      expect(wrapper(id)).not.toHaveAttribute('data-fork')
+      expect(wrapper(id).style.getPropertyValue('--fork-depth')).toBe('0')
+    }
+    // Both sides of the fork open a rail at fork depth 1; the single reply under one side inherits that depth without a new rail.
+    for (const id of ['fork-a', 'fork-b']) {
+      expect(wrapper(id)).toHaveAttribute('data-fork', 'true')
+      expect(wrapper(id).style.getPropertyValue('--fork-depth')).toBe('1')
+    }
+    expect(wrapper('fork-a-1')).not.toHaveAttribute('data-fork')
+    expect(wrapper('fork-a-1').style.getPropertyValue('--fork-depth')).toBe('1')
+    // Collapse still works anywhere in the chain.
+    fireEvent.click(screen.getByRole('button', { name: /1 reply to Dialectic/ }))
+    expect(screen.queryByText('A follow-up')).toBeNull()
+  })
+})
+
 describe('accepted comments and branch continuity', () => {
   it('waits for the accepted target, opens its collapsed parent, and reveals it only once', async () => {
     const parent = msg({ id: 'receipt-parent', author: human('u1', 'Amo') })

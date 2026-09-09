@@ -221,17 +221,21 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
     return () => observer.disconnect()
   }, [map, messages, collapsed, onSeen])
 
-  function branch(message: SurfaceMsg, depth: number, ancestors: Set<string>): React.ReactNode {
+  /** Reply depth is the DOM nesting (`data-depth`); the visible indent and shade
+   *  follow FORK depth only. A one-reply chain (a summons and its answer, and
+   *  the next) reads at full width; a real disagreement opens a shaded rail. */
+  function branch(message: SurfaceMsg, depth: number, ancestors: Set<string>, forkDepth = 0, fork = false): React.ReactNode {
     if (ancestors.has(message.id)) return null
     const descendants = children.get(message.id) ?? []
     const closed = collapsed.has(message.id)
-    return <div className="surf-branch" key={message.id} data-depth={depth} style={{ marginLeft: depth > 0 && depth <= 5 ? 'var(--reply-indent)' : 0 }}>
+    const forks = descendants.length > 1
+    return <div className="surf-branch" key={message.id} data-depth={depth} data-fork={fork || undefined} style={{ '--fork-depth': forkDepth } as React.CSSProperties}>
       <SurfaceMessage msg={message} compact controls={{ ...controls, contextRef: selected }} onReply={onReply} onInvestigate={onInvestigate} onOpenRef={(ref) => onOpenRef(ref, message.id)} threadSource={threads.find((thread) => thread.messages.some((item) => item.id === message.id))?.source ?? null} />
       {descendants.length > 0 && <button type="button" className="surf-branch-toggle" aria-expanded={!closed}
         onClick={() => setCollapsed((current) => { const next = new Set(current); if (closed) next.delete(message.id); else next.add(message.id); return next })}>
         {closed ? '+' : '−'} {descendants.length} {descendants.length === 1 ? 'reply' : 'replies'} to {message.author.name}
       </button>}
-      {!closed && descendants.map((child) => branch(child, depth + 1, new Set([...ancestors, message.id])))}
+      {!closed && descendants.map((child) => branch(child, depth + 1, new Set([...ancestors, message.id]), forkDepth + (forks ? 1 : 0), forks))}
     </div>
   }
 

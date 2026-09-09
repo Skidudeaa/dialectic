@@ -739,7 +739,7 @@ button.surf-anchor-chip:focus-visible,
 }
 
 /* Passage headers carry shared context once; branches retain the full message actions. */
-.surf-discussion { min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; background: var(--color-sheet); padding: 0 10px 16px; }
+.surf-discussion { min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; background: var(--color-sheet); padding: 0 6px 10px; }
 .surf-passage-thread { border-bottom: 1px solid var(--color-bean); padding-bottom: 6px; }
 .surf-thread-context { position: sticky; top: 0; z-index: 2; background: var(--color-sheet); border-left: 2px solid var(--color-bean); padding: 6px 8px; }
 .surf-passage-thread[data-active] > .surf-thread-context { border-left-color: var(--color-amber); }
@@ -748,10 +748,14 @@ button.surf-anchor-chip:focus-visible,
 .surf-thread-context q { font: 15px/1.4 var(--font-serif); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .surf-thread-context q[data-expanded] { display: block; max-height: 32vh; overflow-y: auto; }
 .surf-thread-context .surf-quote-toggle { width: auto; margin-top: 4px; font: 11px/1.4 var(--font-mono); color: var(--color-amber); }
-.surf-branch { --reply-indent: 22px; border-left: 2px solid var(--color-crater); padding-left: 8px; }
-.surf-branch[data-depth="0"] { border-left-color: transparent; padding-left: 0; }
-.surf-branch .surf-branch { margin-block: 2px; }
-@media (max-width: 680px) { .surf-branch { --reply-indent: 14px; padding-left: 6px; } }
+/* Depth is shown by shade, not by tabbing. A chain of single replies stays at
+   full width; only a fork (two or more replies) opens a rail, indents 8px and
+   deepens the sheet one step. The shade is absolute per fork depth so nested
+   wrappers do not compound. */
+.surf-branch { --fork-depth: 0; }
+.surf-branch[data-fork] { margin-block: 2px; border-left: 2px solid color-mix(in srgb, var(--color-crater), var(--color-amber) calc(var(--fork-depth) * 12%)); padding-left: 8px; background: color-mix(in srgb, var(--color-sheet), var(--color-ink) calc(min(var(--fork-depth), 6) * 3.5%)); }
+.surf-branch[data-fork] > .surf-branch-toggle, .surf-branch[data-fork] .msg .msg-actions { background: transparent; }
+@media (max-width: 680px) { .surf-branch[data-fork] { padding-left: 6px; } }
 .surf-discussion .surf-msg { border: 0; padding: 4px 0 2px; }
 .surf-discussion .msg { position: relative; padding: 0 2px; margin: 0; }
 .surf-discussion .msg-meta { flex-wrap: wrap; gap: 4px 7px; margin: 0 28px 2px 0; font-size: 11px; min-height: 26px; }
