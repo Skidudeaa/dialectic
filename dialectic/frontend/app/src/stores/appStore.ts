@@ -87,6 +87,10 @@ interface AppState {
   rightPanelTab: string;
   /** Whether desktop reserves space for the contextual rail. */
   rightPanelOpen: boolean;
+  /** Reading focus: the room header, rail and scene tabs step aside for the
+   *  reading and its discussion. Explicit and per device, never tied to
+   *  pointer presence or inactivity. */
+  readingFocus: boolean;
   /** Which rail is slid over the stream on small screens, if any. */
   mobileDrawer: 'rooms' | 'panel' | null;
   /** A propose_thesis card's payload, consumed by the Create Thesis form. */
@@ -156,6 +160,7 @@ interface AppState {
   setActiveCommitments: (commitments: Commitment[]) => void;
   setTradingConfig: (config: TradingSnapshot | null) => void;
   setRightPanelOpen: (open: boolean) => void;
+  setReadingFocus: (open: boolean) => void;
   setRightPanelTab: (tab: string) => void;
   setMobileDrawer: (drawer: 'rooms' | 'panel' | null) => void;
   setThesisSeed: (seed: { title: string; claim: string; monthlyBudget: number } | null) => void;
@@ -186,6 +191,7 @@ const initialRoomState = {
   tradingConfig: null,
   rightPanelTab: 'memory',
   rightPanelOpen: false,
+  readingFocus: false,
   mobileDrawer: null,
   thesisSeed: null,
   wsSend: null,
@@ -440,6 +446,7 @@ export const useAppStore = create<AppState>()(
       setTradingConfig: (config) => set({ tradingConfig: config }),
 
       setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
+      setReadingFocus: (open) => set({ readingFocus: open }),
 
       setRightPanelTab: (tab) => set({ rightPanelTab: tab, rightPanelOpen: true }),
 
@@ -486,6 +493,7 @@ export const useAppStore = create<AppState>()(
         isAuthenticated: state.isAuthenticated,
         currentRoom: state.currentRoom,
         roomToken: state.roomToken,
+        readingFocus: state.readingFocus,
       }),
     },
   ),

@@ -34,6 +34,18 @@ describe('AppLayout', () => {
     expect(layout.style.height).toBe('')
   })
 
+  it('applies reading focus only while the Surface scene is showing', () => {
+    useAppStore.setState({ readingFocus: true })
+    const props = { sidebar: <div />, main: <div />, rightPanel: <div /> }
+    const { container, rerender } = render(<AppLayout {...props} workspaceScene="surface" />)
+    expect(container.firstChild).toHaveClass('surface-focus')
+    rerender(<AppLayout {...props} workspaceScene="record" />)
+    expect(container.firstChild).not.toHaveClass('surface-focus')
+    useAppStore.setState({ readingFocus: false })
+    rerender(<AppLayout {...props} workspaceScene="surface" />)
+    expect(container.firstChild).not.toHaveClass('surface-focus')
+  })
+
   it('does not reserve a desktop context column while the panel is closed', () => {
     useAppStore.setState({ rightPanelOpen: false })
     const { container } = render(

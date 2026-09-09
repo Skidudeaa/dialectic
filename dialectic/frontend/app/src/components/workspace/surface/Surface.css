@@ -768,3 +768,32 @@
 /* Allocate the remaining window height even when a map has little intrinsic
    content; its nested panes decide what scrolls inside that space. */
 .app-main-scene-surface > .workspace-with-focus { flex: 1 1 0; }
+
+/* Reading focus (explicit, per device, never tied to pointer or idle): the
+   room header, presence, notification chip, rail and scene tabs step aside;
+   the conversation head is the one strip left and carries the room name and
+   the way back (Exit focus). */
+.app-layout.surface-focus .app-main-scene-surface .room-header,
+.app-layout.surface-focus .app-main-scene-surface .participants-bar,
+.app-layout.surface-focus .app-main-scene-surface .push-enable-chip,
+.app-layout.surface-focus .workspace-scene-surface .scene-switcher-wrap,
+.app-layout.surface-focus .workspace-scene-surface .scene-masthead,
+.app-layout.surface-focus .surf--conversation .surf-conv-kicker,
+.app-layout.surface-focus .surf--conversation .surf-head-flags,
+.app-layout.surface-focus .surf--conversation .surf-evidence-hint { display: none; }
+@media (min-width: 1280px) {
+    .app-layout.surface-focus:has(.app-main-scene-surface) { grid-template-columns: minmax(0, 1fr); }
+    .app-layout.surface-focus .app-sidebar { display: none; }
+}
+.surf-focus-room { order: -1; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 15px/1.2 var(--font-serif); color: var(--color-bone); }
+.surf-focus-toggle[aria-pressed="true"] { color: var(--color-amber); border-color: var(--color-amber); }
+/* Same fence as the Updates toggle: a head control never takes the 25% flex share the shape tabs share. */
+.surf-conv-head .surf-focus-toggle { flex: 0 0 auto; font-size: 11px; letter-spacing: 0; padding-inline: 6px; }
+.surf-focus-glyph { display: none; }
+@media (max-width: 680px) {
+    /* The phone head has exactly one row of room: the toggle becomes a glyph and the room name takes its own thin line. */
+    .surf-conv .surf-focus-toggle { padding-inline: 5px; min-width: 32px; }
+    .surf-focus-label { display: none; }
+    .surf-focus-glyph { display: inline; font-size: 15px; line-height: 1; }
+    .surf-focus-room { flex: 1 1 100%; font-size: 13px; line-height: 1.3; }
+}

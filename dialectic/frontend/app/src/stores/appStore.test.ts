@@ -29,6 +29,17 @@ describe('workspace scene state', () => {
   })
 })
 
+describe('reading focus', () => {
+  it('starts off, toggles explicitly, and persists per device with the session', () => {
+    expect(useAppStore.getState().readingFocus).toBe(false)
+    useAppStore.getState().setReadingFocus(true)
+    expect(useAppStore.getState().readingFocus).toBe(true)
+    expect(JSON.parse(localStorage.getItem('dialectic-auth') ?? '{}').state.readingFocus).toBe(true)
+    useAppStore.getState().setReadingFocus(false)
+    expect(JSON.parse(localStorage.getItem('dialectic-auth') ?? '{}').state.readingFocus).toBe(false)
+  })
+})
+
 describe('context rail state', () => {
   it('starts closed and opens when a contextual tab is requested', () => {
     expect(useAppStore.getState().rightPanelOpen).toBe(false)

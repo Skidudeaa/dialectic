@@ -6,6 +6,7 @@ import type { GeoScopesState } from '../../../hooks/useGeoScopes.ts'
 import type { FieldMarksState } from '../../../hooks/useFieldMarks.ts'
 import { useWorldObservations } from '../../../hooks/useWorldObservations.ts'
 import { api } from '../../../lib/api.ts'
+import { useAppStore } from '../../../stores/appStore.ts'
 import { PARTICIPANT_NAME } from '../../../lib/productIdentity.ts'
 import type { WorldObservation } from '../../../types/geo.ts'
 import { ThesisDag, type DagVerb } from '../../trading/ThesisDag'
@@ -250,7 +251,16 @@ export function SurfaceScene({
   const unbound = desk.structure.status === 'empty' || (!desk.bound && desk.structure.status !== 'loading')
   const conversationOnly = unbound && scopes.length === 0
 
+  const readingFocus = useAppStore((s) => s.readingFocus)
+  const setReadingFocus = useAppStore((s) => s.setReadingFocus)
   const roomControls = <>
+    {readingFocus && <span className="surf-focus-room" title={roomName}>{roomName}</span>}
+    <button type="button" className="surf-shape surf-focus-toggle" aria-pressed={readingFocus} aria-label={readingFocus ? 'Exit focus' : 'Focus'}
+      title={readingFocus ? 'Bring back the room header, rail and views' : 'Give the reading and discussion the screen'}
+      onClick={() => setReadingFocus(!readingFocus)}>
+      <span className="surf-focus-label">{readingFocus ? 'Exit focus' : 'Focus'}</span>
+      <span className="surf-focus-glyph" aria-hidden="true">{readingFocus ? '⤡' : '⤢'}</span>
+    </button>
     {(flags.annotator !== null || flags.addressed !== null) && (
       <details className="surf-head-flags">
         <summary>Room activity</summary>

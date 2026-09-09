@@ -353,15 +353,16 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
   return <div ref={rootRef} className="surf-discussion" aria-label="Passage discussion threads">
     {threads.length === 0 && <p className="surf-conv-empty">Select words in the article to start a thread, or write a thought below.</p>}
     {threads.map((thread) => <section key={thread.id} className="surf-passage-thread" data-thread={thread.id} data-active={active === thread.id || undefined}>
-      <div className="surf-thread-context" data-thread-anchor={thread.source?.quote ? passageKey(thread.source) : undefined}>
-        {thread.source ? <button type="button" onClick={() => onSelect(thread)}>
+      {/* A thread with no source gets no label row: the section rule separates it, the thought speaks for itself. */}
+      {thread.source && <div className="surf-thread-context" data-thread-anchor={thread.source.quote ? passageKey(thread.source) : undefined}>
+        <button type="button" onClick={() => onSelect(thread)}>
           <span>{thread.source.label} · {thread.messages.length} {thread.messages.length === 1 ? 'thought' : 'thoughts'} · Read in source ↗</span>
           {thread.source.quote && <q data-expanded={expandedPassages.has(thread.id) || undefined}>{thread.source.quote}</q>}
-        </button> : <span className="surf-thread-general">Room thought · {thread.messages.length} {thread.messages.length === 1 ? 'contribution' : 'contributions'}</span>}
-        {thread.source?.quote && thread.source.quote.length > 300 && <button type="button" className="surf-quote-toggle" aria-expanded={expandedPassages.has(thread.id)} onClick={() => setExpandedPassages((current) => {
+        </button>
+        {thread.source.quote && thread.source.quote.length > 300 && <button type="button" className="surf-quote-toggle" aria-expanded={expandedPassages.has(thread.id)} onClick={() => setExpandedPassages((current) => {
           const next = new Set(current); if (next.has(thread.id)) next.delete(thread.id); else next.add(thread.id); return next
         })}>{expandedPassages.has(thread.id) ? 'Collapse passage' : 'Expand passage'}</button>}
-      </div>
+      </div>}
       {thread.roots.map((root) => branch(root, 0, new Set()))}
     </section>)}
   </div>

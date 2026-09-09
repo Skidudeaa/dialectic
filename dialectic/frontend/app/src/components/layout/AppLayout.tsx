@@ -24,6 +24,7 @@ export function AppLayout({ sidebar, main, rightPanel, isHome = false, homeTalki
   const mobileDrawer = useAppStore((s) => s.mobileDrawer)
   const setMobileDrawer = useAppStore((s) => s.setMobileDrawer)
   const rightPanelOpen = useAppStore((s) => s.rightPanelOpen)
+  const readingFocus = useAppStore((s) => s.readingFocus)
   const layoutRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -61,7 +62,7 @@ export function AppLayout({ sidebar, main, rightPanel, isHome = false, homeTalki
   }, [mobileDrawer, setMobileDrawer])
 
   return (
-    <div ref={layoutRef} className={`app-layout right-panel-${rightPanelOpen ? 'open' : 'closed'}${mobileDrawer ? ` drawer-open drawer-${mobileDrawer}` : ''}`}>
+    <div ref={layoutRef} className={`app-layout right-panel-${rightPanelOpen ? 'open' : 'closed'}${mobileDrawer ? ` drawer-open drawer-${mobileDrawer}` : ''}${workspaceScene === 'surface' && readingFocus ? ' surface-focus' : ''}`}>
       <div className="app-sidebar" id="room-list-panel">{sidebar}</div>
       <div className={`app-main${isHome ? ' app-main-home' : ''}${workspaceScene ? ` app-main-scene-${workspaceScene}` : ''}${homeTalking ? ' app-main-home-talking' : ''}`}>{main}</div>
       <div className="app-right-panel" id="context-panel">{rightPanel}</div>
