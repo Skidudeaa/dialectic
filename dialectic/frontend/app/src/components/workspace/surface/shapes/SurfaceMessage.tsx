@@ -1,6 +1,7 @@
 import type { MessageAnchor, MessageRef } from '../../../../types'
 import { MessageBubble } from '../../../chat/MessageBubble'
 import type { MessageListProps } from '../../../chat/MessageList'
+import type { InvestigateMode } from '../../../chat/MessageBubble'
 import { surfaceAuthor, type SurfaceMsg } from '../surfaceModel'
 
 export interface SurfaceMessageProps {
@@ -8,7 +9,7 @@ export interface SurfaceMessageProps {
   controls?: MessageListProps
   onOpenRef?: (ref: MessageRef) => void
   onReply?: (id: string) => void
-  onInvestigate?: (id: string, quote?: string) => void
+  onInvestigate?: (id: string, quote?: string, mode?: InvestigateMode) => void
   onAnchor?: (anchor: MessageAnchor) => void
   threadSource?: MessageRef | null
   compact?: boolean

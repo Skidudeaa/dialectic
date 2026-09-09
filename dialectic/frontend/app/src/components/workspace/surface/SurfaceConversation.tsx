@@ -4,6 +4,7 @@ import { api } from '../../../lib/api.ts'
 import { MessageInput, type MessageInputHandle } from '../../chat/MessageInput'
 import { TypingIndicator } from '../../chat/TypingIndicator'
 import type { MessageListProps } from '../../chat/MessageList'
+import type { InvestigateMode } from '../../chat/MessageBubble'
 import { SurfaceEvidence } from './SurfaceEvidence'
 import { ShapeStream } from './shapes/ShapeStream'
 import { ShapeDiscussion } from './shapes/ShapeDiscussion'
@@ -107,13 +108,19 @@ export function SurfaceConversation({
     if (composerRef && 'current' in composerRef) composerRef.current?.focus()
   }
 
-  function investigate(id: string, quote?: string) {
+  /** The participant is a branch tool here: a person summons one compact
+   *  evidence or challenge answer under the exact thought. The request stays
+   *  editable; only Send runs anything. */
+  function investigate(id: string, quote?: string, mode: InvestigateMode = 'evidence') {
     const message = messages.find((candidate) => candidate.id === id)
     if (!message || message.isStreaming) return
     reply(id)
-    const request = quote
-      ? `@Dialectic find and pull sources about this part of ${message.author.name}’s thought:\n\n> ${quote}\n\nLink what you find and briefly explain how it bears on this.`
-      : '@Dialectic find and pull relevant sources for this thought. Link what you find and briefly explain what it adds.'
+    const part = quote ? `this part of ${message.author.name}’s thought:\n\n> ${quote}\n\n` : 'this thought. '
+    const request = mode === 'challenge'
+      ? `@Dialectic challenge ${part}Give the strongest specific counter-evidence or the weakest step in the reasoning, with a source where you can find one. Two or three sentences.`
+      : quote
+        ? `@Dialectic find and pull sources about ${part}Link what you find and briefly explain how it bears on this.`
+        : '@Dialectic find and pull relevant sources for this thought. Link what you find and briefly explain what it adds.'
     if (composerRef && 'current' in composerRef) composerRef.current?.insert(request)
     onEvidenceOpen(false)
   }

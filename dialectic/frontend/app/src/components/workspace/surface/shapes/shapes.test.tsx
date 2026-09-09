@@ -366,6 +366,40 @@ describe('searchable discussion map', () => {
     unmount()
   })
 
+  it('folds a large branch into a counted cluster at overview scale and expands it explicitly', async () => {
+    const source: MessageRef = { entity: 'reading_items', id: 'reading', label: 'An Alien Mind', quote: 'The passage under discussion' }
+    const root = msg({ id: 'big-root', author: human('u1', 'Amo'), text: 'The opening thought', refs: [source] })
+    const replies = ['a', 'b', 'c', 'd'].map((suffix, index) => msg({ id: `big-${suffix}`, author: index % 2 ? human('u2', 'Dan') : machine(), text: `Reply ${suffix}`, parentId: index === 0 ? root.id : `big-${['a', 'b', 'c'][index - 1]}` }))
+    const lone = msg({ id: 'lone', author: human('u2', 'Dan'), text: 'A separate thought' })
+    const props = { threads: discussionThreads([root, ...replies, lone]), controls: { messages: [], currentUserId: 'u1' }, selected: null, active: null, jump: null, onSelect: vi.fn(), onOpenRef: vi.fn(), onReply: vi.fn(), onJump: vi.fn() }
+    const { container } = render(<ShapeDiscussion {...props} map />)
+    expect(container.querySelectorAll('.surf-map-node--thought')).toHaveLength(6)
+    expect(container.querySelector('.surf-map-node--cluster')).toBeNull()
+    for (let step = 0; step < 5; step += 1) fireEvent.click(screen.getByRole('button', { name: 'Zoom out map' }))
+    expect(screen.getByRole('button', { name: 'Reset map zoom' })).toHaveTextContent('50%')
+    const cluster = container.querySelector('[data-map-id="cluster:big-root"]')!
+    expect(cluster).not.toBeNull()
+    expect(cluster.textContent).toContain('4 replies to Amo')
+    expect(cluster.textContent).toContain('Dialectic, Dan · 0 sources')
+    expect(container.querySelectorAll('.surf-map-node--thought')).toHaveLength(2)
+    expect(container.querySelector('[data-map-id="big-a"]')).toBeNull()
+    expect(screen.getByText(/1 folded branch/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Expand 4 replies to Amo' }))
+    expect(container.querySelector('.surf-map-node--cluster')).toBeNull()
+    expect(container.querySelectorAll('.surf-map-node--thought')).toHaveLength(6)
+    // Whole map forgets the expansion so the next overview folds again.
+    fireEvent.click(screen.getByRole('button', { name: 'Show whole map' }))
+    await act(async () => { await new Promise((resolve) => requestAnimationFrame(resolve)) })
+    // jsdom's pane has no size, so the fit frame leaves zoom alone; reset explicitly.
+    fireEvent.click(screen.getByRole('button', { name: 'Reset map zoom' }))
+    for (let step = 0; step < 5; step += 1) fireEvent.click(screen.getByRole('button', { name: 'Zoom out map' }))
+    expect(screen.getByRole('button', { name: 'Reset map zoom' })).toHaveTextContent('50%')
+    expect(container.querySelector('.surf-map-node--cluster')).not.toBeNull()
+    // Zooming back in unfolds without any click.
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in map' }))
+    expect(container.querySelector('.surf-map-node--cluster')).toBeNull()
+  })
+
   it('returns compact panel focus on Escape and sends search selection focus to the map without losing its query', async () => {
     const thought = msg({ id: 'compact-focus', author: human('u2', 'Dan'), text: 'A precise searchable thought' })
     const { container } = render(<ShapeDiscussion threads={discussionThreads([thought])} controls={{ messages: [], currentUserId: null }} selected={null} active={null} jump={null} map onSelect={vi.fn()} onOpenRef={vi.fn()} onReply={vi.fn()} onJump={vi.fn()} />)

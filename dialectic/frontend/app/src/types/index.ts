@@ -41,6 +41,28 @@ export interface User {
 }
 
 /** One tool the participant called while writing a message. */
+/** What a source tool actually fetched — stamped by llm.tools.evidence_of so
+ *  the room reads the evidence beside the answer instead of prose about it. */
+export interface EvidenceItem {
+  kind: 'article' | 'reddit' | 'reading';
+  url: string;
+  /** The first EVIDENCE_EXCERPT_CHARS of what the model saw. */
+  excerpt: string;
+  excerpt_truncated?: boolean;
+  title?: string | null;
+  author?: string | null;
+  site?: string | null;
+  published?: string | null;
+  /** Revision of the fetched text; compare with a quoted passage's hash. */
+  content_sha256?: string;
+  /** Present when the excerpt is a continuation window, not the article's start. */
+  content_start?: number;
+  /** A library row (search_reading) — already kept, nothing to save. */
+  reading_id?: string;
+  subreddit?: string;
+  score?: number;
+}
+
 export interface ToolCallTrace {
   name: string;
   /** Human-facing phrase, stamped server-side from the tool registry. */
@@ -52,6 +74,8 @@ export interface ToolCallTrace {
   provenance?: Record<string, unknown>;
   /** Present only when the call failed. */
   error?: string;
+  /** Present when the call fetched a source. */
+  evidence?: EvidenceItem[];
 }
 
 /**

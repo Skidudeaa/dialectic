@@ -9,7 +9,7 @@ from typing import AsyncIterator, Optional
 from .providers import LLMRequest, ToolCall
 from .prompts import limit_response_words
 from .router import RoutingResult
-from .tools import ToolRegistry, serialize_tool_result
+from .tools import ToolRegistry, evidence_of, serialize_tool_result
 
 logger = logging.getLogger(__name__)
 
@@ -362,6 +362,11 @@ class ToolLoop:
             entry["refs"] = [r for r in raw["refs"] if isinstance(r, dict)][:12]
         if isinstance(raw, dict) and isinstance(raw.get("provenance"), dict):
             entry["provenance"] = raw["provenance"]
+        # What a source tool actually fetched, readable beside the answer
+        # (MessageBubble's evidence cards) and filable from it (reading/file).
+        evidence = evidence_of(call.name, raw)
+        if evidence:
+            entry["evidence"] = evidence
         return (
             {"type": "tool_result", "tool_use_id": call.id, "content": content},
             entry,

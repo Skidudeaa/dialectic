@@ -270,6 +270,58 @@ def _shrink(payload: Any, limit: int, core: frozenset = frozenset()) -> Any:
     return trimmed
 
 
+# The attributed excerpt a person reads beside the answer. Bounded so a
+# fifteen-call research turn stamps a few kilobytes onto the message row, not
+# the model's whole context.
+EVIDENCE_EXCERPT_CHARS = 400
+EVIDENCE_ITEMS_CAP = 6
+
+_EVIDENCE_META_KEYS = ("title", "author", "site", "published", "content_sha256", "subreddit", "score")
+
+
+def _evidence_item(source: dict, excerpt_key: str, kind: str) -> dict:
+    excerpt = str(source.get(excerpt_key) or "").strip()
+    item: dict[str, Any] = {
+        "kind": kind,
+        "url": str(source.get("url") or ""),
+        "excerpt": excerpt[:EVIDENCE_EXCERPT_CHARS],
+        "excerpt_truncated": len(excerpt) > EVIDENCE_EXCERPT_CHARS,
+    }
+    for key in _EVIDENCE_META_KEYS:
+        if source.get(key) not in (None, ""):
+            item[key] = source[key]
+    if kind == "reading" and source.get("id"):
+        item["reading_id"] = str(source["id"])
+    return item
+
+
+def evidence_of(name: str, raw: Any) -> list[dict]:
+    """Attributed excerpts of what a source tool actually returned — url, byline,
+    revision hash and the first EVIDENCE_EXCERPT_CHARS of text — so the room
+    can read the evidence beside the answer instead of trusting the prose
+    about it. Empty for tools that fetch nothing (quotes, proposals, memory).
+    WHY here and not per Tool: four result shapes, one reader; the trace entry
+    is stamped in ToolLoop._execute, the single place every result passes."""
+    if not isinstance(raw, dict):
+        return []
+    if name in ("read_article", "read_reddit"):
+        if not raw.get("url"):
+            return []
+        kind = "reddit" if name == "read_reddit" or raw.get("source") == "reddit_api" else "article"
+        item = _evidence_item(raw, "content", kind)
+        # A continuation window starts mid-article; say where the excerpt begins.
+        if raw.get("content_start"):
+            item["content_start"] = raw["content_start"]
+        return [item]
+    if name == "search_reddit":
+        hits = [r for r in (raw.get("results") or []) if isinstance(r, dict) and r.get("url")]
+        return [_evidence_item(r, "excerpt", "reddit") for r in hits[:EVIDENCE_ITEMS_CAP]]
+    if name == "search_reading":
+        hits = [r for r in (raw.get("readings") or []) if isinstance(r, dict) and r.get("url")]
+        return [_evidence_item(r, "snippet", "reading") for r in hits[:EVIDENCE_ITEMS_CAP]]
+    return []
+
+
 def serialize_tool_result(value: Any, limit: int = TOOL_RESULT_CHAR_CAP) -> str:
     """JSON for a tool_result block, hard-capped with a visible marker."""
     try:

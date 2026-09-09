@@ -49,3 +49,7 @@ Dialectic PID `3692256` replaced `3591527`, serving `/root/DwoodAmo/dialectic`. 
 The **deployed public origin**, with no candidate asset substitution, passed the same **108 layout states and 24 selection/draft workflows** across Chromium, Firefox and WebKit. Complete quoted draft context, 1671-character compact context, map search/focus/navigation/restoration and composer bounds passed, with zero page errors. All production mutations remained blocked. These are Linux engine/input/viewport simulations; physical Mac/Windows/iPad/Android/iPhone, installed-PWA lifecycle and Amo/Dan acceptance remain unobserved.
 
 Qualification scripts, logs, screenshots, public proofs, release hashes and rollback coordinates are archived at `/var/backups/dialectic/20260908T221959Z-map-streams-e6b7bbd`. The previous frontend remains retained at `/var/www/dialectic-releases/20260908T212716Z-contextual-discussion-216165f`. A documentation-only closeout commit follows this implementation release and needs no restart.
+
+## Amendment — evidence beside thoughts, 2026-09-08 (late)
+
+Next-work items 1 (evidence beside the addressed thought), the aggregation half of 2 (overview clusters) and the summons half of 6 (Challenge beside Find and pull) continue in [evidence beside thoughts](2026-09-08-evidence-beside-thoughts.md); prefer its behavior and evidence over the corresponding items above. Server search of older history, generation-scoped Stop, physical-platform acceptance and reading focus mode remain open.

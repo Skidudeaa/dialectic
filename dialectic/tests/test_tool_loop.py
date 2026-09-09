@@ -495,3 +495,76 @@ class TestBriefToolAnswer:
         assert 0 < len(shown.split()) <= 24
         assert events[-1][1]["text"] == shown
         assert events[-1][1]["degraded"] is True
+
+
+# ── evidence stamps: what a source tool fetched, readable beside the answer ──
+
+
+class TestEvidenceStamp:
+    """ToolLoop._execute stamps entry["evidence"] for source tools via
+    llm.tools.evidence_of; MessageBubble renders the cards and reading/file
+    accepts their URLs. A quote tool stamps nothing."""
+
+    def _registry(self):
+        async def read_article(args):
+            return {
+                "title": "Tanker rates lead crude", "author": "A Reporter",
+                "site": "example.test", "published": "2026-08-15", "word_count": 900,
+                "url": args["url"], "content_sha256": "f" * 64, "content_start": 0,
+                "content_total_chars": 3000, "content": "Freight moved first. " * 40,
+                "next_start_char": 840,
+            }
+
+        async def quotes(args):
+            return {"symbol": "XOP", "price": 41.2}
+
+        return ToolRegistry([
+            Tool(name="read_article", description="", input_schema={"type": "object", "properties": {}}, execute=read_article, label="reading the article"),
+            Tool(name="get_live_quotes", description="", input_schema={"type": "object", "properties": {}}, execute=quotes, label="checking prices"),
+        ])
+
+    @pytest.mark.asyncio
+    async def test_read_article_stamps_bounded_attributed_excerpt_and_quotes_do_not(self):
+        from llm.tools import EVIDENCE_EXCERPT_CHARS
+
+        router = FakeRouter(results=[
+            ok(tool_use_response([
+                ("read_article", {"url": "https://example.test/a"}),
+                ("get_live_quotes", {}),
+            ])),
+            ok(text_response("done")),
+        ])
+        result = await ToolLoop(router, self._registry()).run(make_request())
+        article, quotes = result.tool_trace
+        assert quotes["name"] == "get_live_quotes" and "evidence" not in quotes
+        (item,) = article["evidence"]
+        assert item["kind"] == "article"
+        assert item["url"] == "https://example.test/a"
+        assert item["title"] == "Tanker rates lead crude"
+        assert item["author"] == "A Reporter"
+        assert item["content_sha256"] == "f" * 64
+        assert item["excerpt"] == ("Freight moved first. " * 40).strip()[:EVIDENCE_EXCERPT_CHARS]
+        assert item["excerpt_truncated"] is True
+        assert "content_start" not in item, "a window from 0 needs no offset note"
+
+    def test_evidence_of_reads_search_shapes_and_ignores_the_rest(self):
+        from llm.tools import EVIDENCE_ITEMS_CAP, evidence_of
+
+        reddit = evidence_of("search_reddit", {"results": [
+            {"url": f"https://www.reddit.com/r/t/comments/{i}/", "title": f"Post {i}", "author": "u", "subreddit": "t",
+             "score": i, "excerpt": "body text"} for i in range(8)
+        ] + [{"no_url": True}]})
+        assert len(reddit) == EVIDENCE_ITEMS_CAP
+        assert reddit[0] == {"kind": "reddit", "url": "https://www.reddit.com/r/t/comments/0/", "excerpt": "body text",
+                             "excerpt_truncated": False, "title": "Post 0", "author": "u", "subreddit": "t", "score": 0}
+
+        (reading,) = evidence_of("search_reading", {"readings": [
+            {"id": "r-1", "url": "https://example.test/kept", "title": "Kept piece", "snippet": "the ranked <b>extract</b>", "summary": "s"},
+        ]})
+        assert reading["kind"] == "reading" and reading["reading_id"] == "r-1"
+        assert reading["excerpt"] == "the ranked <b>extract</b>"
+
+        assert evidence_of("read_reddit", {"url": "https://www.reddit.com/r/t/comments/1/", "content": "post", "source": "reddit_api"})[0]["kind"] == "reddit"
+        assert evidence_of("read_article", {"content": "no url"}) == []
+        assert evidence_of("search_memories", {"memories": [{"content": "x"}]}) == []
+        assert evidence_of("read_article", "not a dict") == []

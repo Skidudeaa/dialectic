@@ -202,6 +202,31 @@ async def test_reddit_source_routes_through_api_and_keeps_room_and_quote_context
 
 
 @pytest.mark.asyncio
+async def test_a_source_the_participant_fetched_can_be_filed_from_its_answer(room):
+    """The Save-to-room tap on an evidence card: the URL is not in the prose,
+    it is in metadata.tools.calls[].evidence[].url stamped by ToolLoop."""
+    answer = _uid(0xB07)
+    metadata = {"tools": {"iterations": 2, "degraded": False, "calls": [
+        {"name": "read_article", "ok": True, "input": {"url": URL},
+         "evidence": [{"kind": "article", "url": URL, "excerpt": "Freight moved first."}]},
+    ]}}
+    await room.execute(
+        """INSERT INTO messages (id, thread_id, sequence, created_at,
+               speaker_type, user_id, message_type, content, metadata)
+           VALUES ($1,$2,3,$3,'llm_primary',NULL,'text',$4,$5)""",
+        answer, THREAD, BASE, "The freight lead shows up first in the tanker data.", metadata,
+    )
+    result = await _file(room, message_id=answer)
+    assert result["reading"]["url"] == URL
+    stored = await room.fetchrow("SELECT source, source_message_id FROM reading_items WHERE url = $1", URL)
+    assert stored["source"] == "human" and stored["source_message_id"] == answer
+    # Another URL the answer never fetched is still refused.
+    with pytest.raises(HTTPException) as exc:
+        await _file(room, message_id=answer, url="https://example.test/never-fetched")
+    assert exc.value.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_a_url_not_in_the_message_is_refused(room):
     """Provenance that lies is worse than no provenance: source_message_id is
     what the Field's evidence marks point at."""

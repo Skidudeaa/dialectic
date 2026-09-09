@@ -16,7 +16,7 @@ import logging
 import re
 import unicodedata
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Literal, Optional
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -514,6 +514,19 @@ async def accept_reading(
     return saved
 
 
+def _evidence_urls(metadata_text: Optional[str]) -> set[str]:
+    """URLs the message's own tool calls fetched (see llm.tools.evidence_of)."""
+    if not metadata_text:
+        return set()
+    metadata = json.loads(metadata_text)
+    calls = (metadata.get("tools") or {}).get("calls") or [] if isinstance(metadata, dict) else []
+    return {
+        str(item["url"])
+        for call in calls if isinstance(call, dict)
+        for item in call.get("evidence") or [] if isinstance(item, dict) and item.get("url")
+    }
+
+
 @router.post("/rooms/{room_id}/reading/file")
 async def file_reading(
     room_id: UUID,
@@ -541,12 +554,17 @@ async def file_reading(
     is already a member and could paste it themselves — but because a reading
     filed from a message it does not appear in has a provenance link that
     lies, and `source_message_id` is what the Field's evidence marks point at.
+
+    2026-09-08: "appear in" also means a source the participant's own tool
+    calls fetched and showed (metadata.tools.calls[].evidence[].url) — the
+    Save-to-room tap on an evidence card. The answer that fetched a page is
+    honest provenance for filing it.
     """
     async with pool.acquire() as db:
         await _verify_room_token(room_id, token, db)
         await _verify_room_member(room_id, current_user.user_id, db)
         row = await db.fetchrow(
-            """SELECT m.id, m.content
+            """SELECT m.id, m.content, m.metadata::text AS metadata_text
                FROM messages m
                JOIN threads t ON t.id = m.thread_id
                WHERE m.id = $1 AND t.room_id = $2 AND NOT m.is_deleted""",
@@ -558,7 +576,7 @@ async def file_reading(
     url = request.url.strip()
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=422, detail="Not a fetchable URL")
-    if url not in (row["content"] or ""):
+    if url not in (row["content"] or "") and url not in _evidence_urls(row["metadata_text"]):
         raise HTTPException(
             status_code=422, detail="That URL does not appear in this message",
         )

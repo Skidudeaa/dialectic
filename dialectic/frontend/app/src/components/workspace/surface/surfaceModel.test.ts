@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Message } from '../../../types'
-import { discussionMap, focusDiscussionMap, searchDiscussionMap, passageKey, discussionThreads, humanWordsByNode, refFocusId, toSurfaceMessages } from './surfaceModel'
+import { clusterDiscussionMap, discussionMap, focusDiscussionMap, searchDiscussionMap, passageKey, discussionThreads, humanWordsByNode, refFocusId, toSurfaceMessages } from './surfaceModel'
 
 const base = (over: Partial<Message>): Message => ({
   id: 'm', thread_id: 't', sequence: 1, created_at: '2026-09-02T12:00:00Z',
@@ -131,5 +131,25 @@ describe('discussion map topology and search', () => {
     expect(collapsed.nodes.filter((node) => node.kind === 'thought').map((node) => node.id)).toEqual(['root', 'other', 'machine'])
     expect(collapsed.nodes.find((node) => node.id === `passage:${passageKey(study)}`)).toBeUndefined()
     expect(focusDiscussionMap(graph, null, new Set())).toEqual(graph)
+  })
+
+  it('folds only large actual reply subtrees into counted clusters and reopens them one branch at a time', () => {
+    const graph = fixture()
+    // Three descendants under root is below the default fold size: nothing changes.
+    expect(clusterDiscussionMap(graph, new Set())).toEqual(graph)
+    const folded = clusterDiscussionMap(graph, new Set(), 3)
+    const cluster = folded.nodes.find((node) => node.kind === 'cluster')!
+    expect(cluster.id).toBe('cluster:root')
+    expect(cluster.label).toBe('3 replies to Amo')
+    expect(cluster.cluster).toEqual({ parentId: 'root', thoughts: 3, people: ['Dan', 'Amo'], sources: 1 })
+    expect(cluster.text).toBe('Dan, Amo · 1 source')
+    expect(folded.nodes.filter((node) => node.kind === 'thought').map((node) => node.id)).toEqual(['root', 'other', 'machine'])
+    // The study passage was cited only inside the folded branch, so it leaves with it; the article stays.
+    expect(folded.nodes.find((node) => node.id === `passage:${passageKey(study)}`)).toBeUndefined()
+    expect(folded.nodes.find((node) => node.id === `passage:${passageKey(article)}`)).toBeDefined()
+    expect(folded.edges).toContainEqual({ from: 'root', to: 'cluster:root', kind: 'reply' })
+    expect(folded.edges.some((edge) => edge.to === 'child' || edge.from === 'child')).toBe(false)
+    // Expanding the branch restores exactly its real replies; a small subtree below it never folds.
+    expect(clusterDiscussionMap(graph, new Set(['root']), 3)).toEqual(graph)
   })
 })

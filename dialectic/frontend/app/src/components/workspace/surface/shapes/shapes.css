@@ -801,6 +801,8 @@ button.surf-anchor-chip:focus-visible,
 .surf-map-node-actions button[aria-pressed="true"] { color: var(--color-amber); border-color: var(--color-amber); }
 .surf-map-node--passage { border-left: 2px solid var(--color-amber); }
 .surf-map-node--source { border-left: 2px solid var(--color-teal); }
+.surf-map-node--cluster { border-style: dashed; background: var(--color-sheet); }
+.surf-map-node--cluster .surf-map-node-open b { color: var(--color-ink); }
 @media (pointer: coarse) {
     .surf-map-search input { font-size: 16px; }
     .surf-map-tools button, .surf-map-search button, .surf-map-node-actions button, .surf-map-results button { min-height: 32px; }

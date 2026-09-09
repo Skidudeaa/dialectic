@@ -280,12 +280,14 @@ export function discussionThreads(messages: SurfaceMsg[]): DiscussionThread[] {
 
 export interface DiscussionMapNode {
   id: string
-  kind: 'source' | 'passage' | 'thought'
+  kind: 'source' | 'passage' | 'thought' | 'cluster'
   label: string
   text: string
   message?: SurfaceMsg
   ref?: MessageRef
   threadId?: string
+  /** A folded reply subtree: what it holds and which thought it hangs from. */
+  cluster?: { parentId: string; thoughts: number; people: string[]; sources: number }
 }
 
 export interface DiscussionMap {
@@ -371,4 +373,57 @@ export function focusDiscussionMap(graph: DiscussionMap, focusId: string | null,
     for (const node of graph.nodes) if (node.kind === 'passage' && !graph.edges.some((edge) => edge.from === node.id && visible.has(edge.to))) visible.delete(node.id)
   }
   return { nodes: graph.nodes.filter((node) => visible.has(node.id)), edges: graph.edges.filter((edge) => visible.has(edge.from) && visible.has(edge.to)) }
+}
+
+/** Reply subtrees this large fold into one cluster at overview scale. */
+export const CLUSTER_MIN_REPLIES = 4
+
+/**
+ * Overview scale: fold every large reply subtree into one inspectable cluster
+ * carrying its thought, people and source counts. `expanded` thoughts keep
+ * their real replies (whose own large subtrees fold in turn). Passages cited
+ * only inside a folded subtree leave with it. Only actual reply ancestry folds;
+ * nothing is inferred about what the folded thoughts say.
+ */
+export function clusterDiscussionMap(graph: DiscussionMap, expanded: ReadonlySet<string>, minReplies: number = CLUSTER_MIN_REPLIES): DiscussionMap {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+  const children = new Map<string, string[]>()
+  for (const edge of graph.edges) if (edge.kind === 'reply') children.set(edge.from, [...(children.get(edge.from) ?? []), edge.to])
+  const subtree = (id: string, out: Set<string> = new Set()): Set<string> => {
+    for (const child of children.get(id) ?? []) if (!out.has(child) && child !== id) { out.add(child); subtree(child, out) }
+    return out
+  }
+  const hidden = new Set<string>()
+  const clusters: DiscussionMapNode[] = []
+  const clusterEdges: DiscussionMap['edges'] = []
+  const seen = new Set<string>()
+  const visit = (id: string): void => {
+    if (seen.has(id) || hidden.has(id)) return
+    seen.add(id)
+    const descendants = subtree(id)
+    if (descendants.size >= minReplies && !expanded.has(id)) {
+      for (const descendant of descendants) hidden.add(descendant)
+      const messages = [...descendants].map((descendant) => byId.get(descendant)?.message).filter((message): message is SurfaceMsg => Boolean(message))
+      const people = [...new Set(messages.map((message) => message.author.name))]
+      const sources = new Set(messages.flatMap((message) => message.refs.filter((ref) => ref.entity === 'reading_items').map(passageKey)))
+      const parent = byId.get(id)!
+      clusters.push({
+        id: `cluster:${id}`, kind: 'cluster',
+        label: `${descendants.size} replies to ${parent.label}`,
+        text: `${people.join(', ')} · ${sources.size} ${sources.size === 1 ? 'source' : 'sources'}`,
+        cluster: { parentId: id, thoughts: descendants.size, people, sources: sources.size },
+      })
+      clusterEdges.push({ from: id, to: `cluster:${id}`, kind: 'reply' })
+      return
+    }
+    for (const child of children.get(id) ?? []) visit(child)
+  }
+  for (const node of graph.nodes) if (node.kind === 'thought' && !graph.edges.some((edge) => edge.to === node.id && edge.kind === 'reply')) visit(node.id)
+  if (clusters.length === 0) return graph
+  const kept = new Set(graph.nodes.filter((node) => !hidden.has(node.id)).map((node) => node.id))
+  for (const node of graph.nodes) if (node.kind === 'passage' && !graph.edges.some((edge) => edge.from === node.id && kept.has(edge.to))) kept.delete(node.id)
+  return {
+    nodes: [...graph.nodes.filter((node) => kept.has(node.id)), ...clusters],
+    edges: [...graph.edges.filter((edge) => kept.has(edge.from) && kept.has(edge.to)), ...clusterEdges],
+  }
 }

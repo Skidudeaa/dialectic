@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { MessageRef } from '../../../../types'
 import type { MessageListProps } from '../../../chat/MessageList'
+import type { InvestigateMode } from '../../../chat/MessageBubble'
 import { SurfaceMessage } from './SurfaceMessage'
-import { discussionMap, focusDiscussionMap, searchDiscussionMap, passageKey, type DiscussionMapNode, type DiscussionThread, type SurfaceMsg } from '../surfaceModel'
+import { clusterDiscussionMap, discussionMap, focusDiscussionMap, searchDiscussionMap, passageKey, type DiscussionMapNode, type DiscussionThread, type SurfaceMsg } from '../surfaceModel'
 import './shapes.css'
 
 interface Props {
@@ -17,7 +18,7 @@ interface Props {
   onSelect: (thread: DiscussionThread) => void
   onOpenRef: (ref: MessageRef, messageId?: string) => void
   onReply: (id: string) => void
-  onInvestigate?: (id: string, quote?: string) => void
+  onInvestigate?: (id: string, quote?: string, mode?: InvestigateMode) => void
   onJump: (id: string) => void
 }
 
@@ -35,12 +36,19 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
   const [compactPanel, setCompactPanel] = useState<'search' | 'context' | 'controls' | null>(null)
   const [focusId, setFocusId] = useState<string | null>(null)
   const [mapCollapsed, setMapCollapsed] = useState<Set<string>>(new Set())
+  const [expandedClusters, setExpandedClusters] = useState<Set<string>>(new Set())
   const mapRef = useRef<HTMLDivElement>(null)
   const mapPosition = useRef({ left: 0, top: 0 })
   const pendingFit = useRef(false)
   const drag = useRef<{ id: number; x: number; y: number; left: number; top: number } | null>(null)
   const graph = useMemo(() => discussionMap(threads, selected), [threads, selected])
-  const visibleGraph = useMemo(() => focusDiscussionMap(graph, focusId, mapCollapsed), [graph, focusId, mapCollapsed])
+  // Overview scale (50% and below) folds large branches; a focused path never folds.
+  const overview = !focusId && Math.round(zoom * 100) <= 50
+  const visibleGraph = useMemo(() => {
+    const focused = focusDiscussionMap(graph, focusId, mapCollapsed)
+    return overview ? clusterDiscussionMap(focused, expandedClusters) : focused
+  }, [graph, focusId, mapCollapsed, overview, expandedClusters])
+  const clusterCount = visibleGraph.nodes.filter((node) => node.kind === 'cluster').length
   const matches = useMemo(() => searchDiscussionMap(graph, mapQuery), [graph, mapQuery])
   const focusedNode = graph.nodes.find((node) => node.id === focusId)
   const layout = useMemo(() => {
@@ -106,8 +114,13 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
     pendingFit.current = true
     setFocusId(null)
     setMapCollapsed(new Set())
+    setExpandedClusters(new Set())
     setSearchOpen(false)
     setCompactPanel(null)
+  }
+
+  function expandCluster(node: DiscussionMapNode): void {
+    if (node.cluster) setExpandedClusters((current) => new Set([...current, node.cluster!.parentId]))
   }
 
   function toggleCompactPanel(panel: 'search' | 'context' | 'controls'): void {
@@ -118,7 +131,8 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
   }
 
   function openMapNode(node: DiscussionMapNode): void {
-    if (node.kind === 'thought') onJump(node.id)
+    if (node.kind === 'cluster') expandCluster(node)
+    else if (node.kind === 'thought') onJump(node.id)
     else if (node.kind === 'passage' && node.threadId) {
       const thread = threads.find((candidate) => candidate.id === node.threadId)
       if (thread) onSelect(thread)
@@ -244,7 +258,7 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
         <button type="button" aria-label="Search map" aria-expanded={compactPanel === 'search'} onClick={() => toggleCompactPanel('search')}>Search</button>
         <button type="button" aria-label="Show selected map context" disabled={!focusedNode} aria-expanded={compactPanel === 'context'} onClick={() => toggleCompactPanel('context')}>Context</button>
         <button type="button" aria-label="Map controls" aria-expanded={compactPanel === 'controls'} onClick={() => toggleCompactPanel('controls')}>Controls</button>
-        <button type="button" aria-label="Show complete map" disabled={!focusId && mapCollapsed.size === 0} onClick={showWholeMap}>Whole map</button>
+        <button type="button" aria-label="Show complete map" disabled={!focusId && mapCollapsed.size === 0 && expandedClusters.size === 0} onClick={showWholeMap}>Whole map</button>
         <button type="button" aria-label="Fit compact map" onClick={() => { setCompactPanel(null); fitMap() }}>Fit</button>
       </div>
       <div className="surf-map-controls">
@@ -253,7 +267,7 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
           onFocus={() => setSearchOpen(true)} onChange={(event) => { setMapQuery(event.target.value); setSearchOpen(true) }}
           onKeyDown={(event) => { if (event.key === 'Escape') setSearchOpen(false); if (event.key === 'Enter' && matches[0]) selectSearchResult(matches[0].id) }} />
         {mapQuery && <button type="button" aria-label="Clear search" onClick={() => { setMapQuery(''); setSearchOpen(false) }}>×</button>}
-        <button type="button" disabled={!focusId && mapCollapsed.size === 0} onClick={showWholeMap}>Show whole map</button>
+        <button type="button" disabled={!focusId && mapCollapsed.size === 0 && expandedClusters.size === 0} onClick={showWholeMap}>Show whole map</button>
       </div>
       {mapQuery.trim() && searchOpen && <div className="surf-map-results" aria-label="Map search results">
         <p role="status">{matches.length} {matches.length === 1 ? 'match' : 'matches'} in loaded discussion</p>
@@ -261,7 +275,7 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
       </div>}
       <div className="surf-map-tools">
         {onToggleMap && <button type="button" onClick={onToggleMap}>{mapExpanded ? 'Open article' : 'Expand map'}</button>}
-        <span>{focusedNode ? 'Focused path' : `${layout.nodes.filter((node) => node.kind === 'thought').length} thoughts`} · {graph.edges.filter((edge) => edge.kind === 'reply').length} replies</span>
+        <span>{focusedNode ? 'Focused path' : `${layout.nodes.filter((node) => node.kind === 'thought').length} thoughts`} · {graph.edges.filter((edge) => edge.kind === 'reply').length} replies{clusterCount > 0 && ` · ${clusterCount} folded ${clusterCount === 1 ? 'branch' : 'branches'}`}</span>
         <button type="button" onClick={fitMap}>Fit view</button>
         <button type="button" aria-label="Zoom out map" disabled={zoom <= .15} onClick={() => changeZoom(zoom - .1)}>−</button>
         <button type="button" aria-label="Reset map zoom" onClick={() => changeZoom(1)}>{Math.round(zoom * 100)}%</button>
@@ -309,6 +323,13 @@ export function ShapeDiscussion({ threads, controls, selected, active, jump, map
             })}</svg>
             {layout.nodes.map((node) => {
               const replies = node.kind === 'thought' ? descendantCount(node.id) : 0
+              if (node.kind === 'cluster') return <div key={node.id} data-map-id={node.id} className="surf-map-node surf-map-node--cluster" style={{ left: node.x, top: node.y }}>
+                <button type="button" className="surf-map-node-open" aria-label={`Expand ${node.label}`} onClick={() => expandCluster(node)}><b>{node.label}</b>{' '}<span>{node.text}</span></button>
+                <div className="surf-map-node-actions">
+                  <button type="button" onClick={() => expandCluster(node)}>Expand</button>
+                  <button type="button" aria-label={`Focus path for ${node.label}`} onClick={() => focusNode(node.cluster!.parentId)}>Focus path</button>
+                </div>
+              </div>
               return <div key={node.id} data-map-id={node.id} data-focused={node.id === focusId || undefined} className={`surf-map-node surf-map-node--${node.kind}`} style={{ left: node.x, top: node.y }}>
                 <button type="button" className="surf-map-node-open" onClick={() => openMapNode(node)}><b>{node.kind === 'passage' ? 'Passage · ' : ''}{node.label}</b>{' '}<span>{node.text || 'Open contribution'}</span></button>
                 <div className="surf-map-node-actions">

@@ -3,7 +3,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 're
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { addressBlock, decorateMentions, type MentionContext } from '../../lib/mentions'
-import type { Attachment, CommitmentProposal, Message, MessageAnchor, MessageRef, Reaction, ThesisSeed } from '../../types'
+import type { Attachment, CommitmentProposal, EvidenceItem, Message, MessageAnchor, MessageRef, Reaction, ThesisSeed, ToolCallTrace } from '../../types'
 import type { FieldMark } from '../../types/workspace.ts'
 import { passageKey } from '../../lib/passageAnchor'
 import { api, type MessageDecisionExplain } from '../../lib/api'
@@ -37,13 +37,97 @@ const FOLD_THRESHOLD_CHARS = 700
  */
 const ALWAYS_FOLDED: ReadonlySet<string> = new Set(['llm_annotator'])
 
+export type InvestigateMode = 'evidence' | 'challenge'
+
+/** Short revision handle for a content hash. */
+const shortHash = (hash?: string | null): string => (hash ? hash.slice(0, 8) : '')
+
+interface MessageEvidenceProps {
+  roomId: string
+  messageId: string
+  calls: ToolCallTrace[]
+  /** Refs whose quoted passage may have been captured from another revision. */
+  refs: MessageRef[]
+}
+
+/**
+ * The evidence the answer rests on, beside the thought it answers: attributed
+ * excerpts of what the tools fetched, Open original, an explicit Save to room,
+ * and the raw stamp in a disclosure. The exact fetched revision stays visible,
+ * and a library reading whose revision differs from the quoted passage says so
+ * rather than quietly standing in for it.
+ */
+function MessageEvidence({ roomId, messageId, calls, refs }: MessageEvidenceProps) {
+  const [saved, setSaved] = useState<Record<string, 'filing' | 'filed' | 'error'>>({})
+  const items = useMemo(() => {
+    const seen = new Set<string>()
+    const out: { call: ToolCallTrace; item: EvidenceItem }[] = []
+    for (const call of calls) for (const item of call.evidence ?? []) {
+      if (!item.url || seen.has(item.url)) continue
+      seen.add(item.url)
+      out.push({ call, item })
+    }
+    return out
+  }, [calls])
+  if (items.length === 0) return null
+
+  const save = async (url: string) => {
+    setSaved((current) => ({ ...current, [url]: 'filing' }))
+    try {
+      await api.fileReading(roomId, { message_id: messageId, url })
+      setSaved((current) => ({ ...current, [url]: 'filed' }))
+    } catch {
+      setSaved((current) => ({ ...current, [url]: 'error' }))
+    }
+  }
+
+  return (
+    <section className="msg-evidence" aria-label={`Evidence · ${items.length} ${items.length === 1 ? 'source' : 'sources'}`}>
+      <div className="msg-evidence-title">Evidence · {items.length} {items.length === 1 ? 'source' : 'sources'}</div>
+      {items.map(({ call, item }) => {
+        const quoted = item.reading_id ? refs.find((ref) => ref.entity === 'reading_items' && ref.id === item.reading_id && ref.content_sha256) : undefined
+        const mismatch = quoted && item.content_sha256 && quoted.content_sha256 !== item.content_sha256
+        const byline = [item.author, item.site ?? item.subreddit, item.published?.slice(0, 10)].filter(Boolean).join(' · ')
+        const state = saved[item.url]
+        let host = item.url
+        try { host = new URL(item.url).host } catch { /* keep the raw url */ }
+        return (
+          <article key={item.url} className="msg-evidence-item" data-kind={item.kind}>
+            <div className="msg-evidence-head">
+              <b>{item.title || host}</b>
+              <a href={item.url} target="_blank" rel="noopener noreferrer">Open original ↗</a>
+            </div>
+            {byline && <div className="msg-evidence-byline">{byline}</div>}
+            {item.excerpt && <blockquote className="msg-evidence-excerpt">{item.content_start ? '… ' : ''}{item.excerpt}{item.excerpt_truncated ? ' …' : ''}</blockquote>}
+            <div className="msg-evidence-foot">
+              {item.content_sha256 && <span title={item.content_sha256}>revision {shortHash(item.content_sha256)}</span>}
+              {mismatch && <span className="msg-evidence-mismatch">Source revision differs from the quoted passage ({shortHash(quoted.content_sha256)})</span>}
+              {item.reading_id ? <span className="msg-proposal-logged">in the library</span>
+                : state === 'filed' ? <span className="msg-proposal-logged">saved to room</span>
+                : <ReviewButton intent="accept" className="msg-proposal-accept" disabled={state === 'filing'} onClick={() => save(item.url)}>
+                    {state === 'filing' ? 'Saving…' : state === 'error' ? 'Retry save' : 'Save to room'}
+                  </ReviewButton>}
+              {state === 'error' && <span className="msg-proposal-error">could not save — try again</span>}
+            </div>
+            <details className="msg-evidence-raw">
+              <summary>Raw tool payload · {call.name}</summary>
+              <pre>{JSON.stringify({ input: call.input ?? {}, evidence: item }, null, 2)}</pre>
+            </details>
+          </article>
+        )
+      })}
+    </section>
+  )
+}
+
 interface MessageBubbleProps {
   message: Message
   isSelf: boolean
   authorName: string
   onFork?: (messageId: string) => void
   onReply?: (messageId: string) => void
-  onInvestigate?: (messageId: string, quote?: string) => void
+  /** Summon one branch-scoped answer: evidence for, or a challenge to, this thought. */
+  onInvestigate?: (messageId: string, quote?: string, mode?: InvestigateMode) => void
   isStreaming?: boolean
   replyToAuthor?: string
   replyToContent?: string
@@ -722,6 +806,7 @@ export function MessageBubble({
             <span className="msg-time">{formatTime(message.created_at)}</span>
             {threadSource !== undefined && onReply && !isStreaming && <button type="button" className="msg-action-btn surf-inline-reply" onClick={() => onReply(message.id)}>Reply</button>}
             {onInvestigate && !isStreaming && <button type="button" className="msg-action-btn" onClick={() => onInvestigate(message.id)}>Find and pull</button>}
+            {onInvestigate && !isStreaming && <button type="button" className="msg-action-btn" title="Summon the strongest counter-evidence into this branch" onClick={() => onInvestigate(message.id, undefined, 'challenge')}>Challenge</button>}
             {message.message_type !== 'text' && (
               <span className="msg-type-badge">{message.message_type}</span>
             )}
@@ -838,6 +923,11 @@ export function MessageBubble({
         {/* Outside the bubble, so a folded message still shows what it carried —
             the picture is usually the point of the message, not its tail. */}
         {attachments.length > 0 && <MessageAttachments attachments={attachments} />}
+
+        {/* What the answer rests on, beside the thought it answers. */}
+        {currentRoomId && isMachine && !isStreaming && toolCalls.some((call) => call.evidence?.length) && (
+          <MessageEvidence roomId={currentRoomId} messageId={message.id} calls={toolCalls} refs={[...(message.metadata?.refs ?? []), ...(threadSource ? [threadSource] : [])]} />
+        )}
 
         {/* Quiet, opt-in — never on a human message. provenance is non-null
             exactly when isMachine is true. */}
