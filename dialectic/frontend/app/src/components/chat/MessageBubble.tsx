@@ -806,7 +806,7 @@ export function MessageBubble({
             <span className="msg-time">{formatTime(message.created_at)}</span>
             {threadSource !== undefined && onReply && !isStreaming && <button type="button" className="msg-action-btn surf-inline-reply" onClick={() => onReply(message.id)}>Reply</button>}
             {onInvestigate && !isStreaming && <button type="button" className="msg-action-btn" onClick={() => onInvestigate(message.id)}>Find and pull</button>}
-            {onInvestigate && !isStreaming && <button type="button" className="msg-action-btn" title="Summon the strongest counter-evidence into this branch" onClick={() => onInvestigate(message.id, undefined, 'challenge')}>Challenge</button>}
+            {onInvestigate && !isStreaming && threadSource === undefined && <button type="button" className="msg-action-btn" title="Summon the strongest counter-evidence into this branch" onClick={() => onInvestigate(message.id, undefined, 'challenge')}>Challenge</button>}
             {message.message_type !== 'text' && (
               <span className="msg-type-badge">{message.message_type}</span>
             )}
@@ -1204,6 +1204,8 @@ export function MessageBubble({
 
       <Actions className="msg-actions">
         {threadSource !== undefined && <summary aria-label={`More actions for ${authorName}’s contribution`}>···</summary>}
+        {/* Compact branches keep the byline to one row: Challenge lives under ··· there. */}
+        {onInvestigate && !isStreaming && threadSource !== undefined && <button type="button" className="msg-action-btn" title="Summon the strongest counter-evidence into this branch" onClick={() => onInvestigate(message.id, undefined, 'challenge')}>Challenge</button>}
         {pastedUrl && !isStreaming && (
           <button
             className="msg-action-btn"
