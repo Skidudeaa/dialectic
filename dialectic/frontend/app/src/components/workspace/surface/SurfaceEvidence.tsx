@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ContextInspector, ReviewButton } from '@dark-roast/companion-ui'
 import type { MessageRef, ReadingDetail, ReadingLibraryResponse } from '../../../types'
 import { api } from '../../../lib/api'
+import { useAppStore } from '../../../stores/appStore'
 import { markQuote, readingAnchorFromSelection, MAX_READING_QUOTE_CHARS, MIN_QUOTE_CHARS, normaliseQuote } from '../../../lib/passageAnchor'
 import { RenderedMarkdown } from '../focus/ReadingFocus'
 import { passageKey, type SurfaceMsg } from './surfaceModel'
@@ -31,6 +32,9 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
   const [detail, setDetail] = useState<ReadingDetail | null>(null)
   const [detailError, setDetailError] = useState<string | null>(null)
   const [quote, setQuote] = useState('')
+  const focus = useAppStore((state) => state.readingFocus)
+  // Outside focus the visible words already are the name; leave them alone.
+  const named = (full: string) => (focus ? { 'aria-label': full, title: full } : {})
   const [quoteOccurrence, setQuoteOccurrence] = useState<number | undefined>()
   const [selectionPosition, setSelectionPosition] = useState<{ left: number; top: number; width: number; maxHeight: number } | null>(null)
   const [selectionError, setSelectionError] = useState<string | null>(null)
@@ -246,10 +250,12 @@ export function SurfaceEvidence({ roomId, messages, selected, onSelect, onDiscus
             <p className="surf-evidence-notice">This source has changed since it was attached. {selected.quote
               ? 'The original quote stays with the contribution.' : 'You are viewing the current version.'}</p>
           )}
+          {/* Reading focus gives the sticky row one line: short words on screen,
+              the full wording kept as each control's name and tooltip. */}
           <div className="surf-evidence-actions">
-            {current && !quote && <ReviewButton intent="inspect" onClick={() => discuss(Boolean(onAttach))}>{onAttach ? 'Attach source to reply' : 'Discuss this source'}</ReviewButton>}
-            {current && onAttach && <button type="button" onClick={() => discuss()}>Start a new thread</button>}
-            <button type="button" onClick={() => onOpenFull(selected)}>Source details ↗</button>
+            {current && !quote && <ReviewButton intent="inspect" {...named(onAttach ? 'Attach source to reply' : 'Discuss this source')} onClick={() => discuss(Boolean(onAttach))}>{focus ? (onAttach ? 'Attach' : 'Discuss') : (onAttach ? 'Attach source to reply' : 'Discuss this source')}</ReviewButton>}
+            {current && onAttach && <button type="button" {...named('Start a new thread')} onClick={() => discuss()}>{focus ? 'New thread' : 'Start a new thread'}</button>}
+            <button type="button" {...named('Source details')} onClick={() => onOpenFull(selected)}>{focus ? 'Details ↗' : 'Source details ↗'}</button>
             {current && /^https?:\/\//i.test(current.url) && <a href={current.url} target="_blank" rel="noopener noreferrer">Original ↗</a>}
           </div>
           {selectionPosition && <div className="surf-selection-action" style={selectionPosition} role="region" aria-label="Comment on selected passage"

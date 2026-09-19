@@ -404,7 +404,7 @@ const WHY_MARGIN = 8
  * `position: fixed` with viewport coordinates read from
  * getBoundingClientRect() is the one fix that actually holds here.
  */
-function MessageProvenance({ info }: { info: ProvenanceInfo }) {
+function MessageProvenance({ info, inMenu = false }: { info: ProvenanceInfo; inMenu?: boolean }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -475,13 +475,13 @@ function MessageProvenance({ info }: { info: ProvenanceInfo }) {
       <button
         ref={triggerRef}
         type="button"
-        className="msg-why-trigger"
+        className={inMenu ? 'msg-action-btn' : 'msg-why-trigger'}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         aria-label="Why this message appeared"
         onClick={toggle}
       >
-        · why
+        {inMenu ? 'Why' : '· why'}
       </button>
       {open && pos && (
         <div
@@ -931,7 +931,11 @@ export function MessageBubble({
 
         {/* Quiet, opt-in — never on a human message. provenance is non-null
             exactly when isMachine is true. */}
-        {provenance && (
+        {/* In a reading-room thread the trigger lives under ··· (below): its own
+            row cost a line under every machine thought. The flat stream keeps
+            the row — its action bar is hover-hidden, and why a machine spoke
+            must never be. */}
+        {provenance && threadSource === undefined && (
           <div className="msg-why-wrap">
             <MessageProvenance info={provenance} />
           </div>
@@ -1204,6 +1208,7 @@ export function MessageBubble({
 
       <Actions className="msg-actions">
         {threadSource !== undefined && <summary aria-label={`More actions for ${authorName}’s contribution`}>···</summary>}
+        {provenance && threadSource !== undefined && <MessageProvenance info={provenance} inMenu />}
         {/* Compact branches keep the byline to one row: Challenge lives under ··· there. */}
         {onInvestigate && !isStreaming && threadSource !== undefined && <button type="button" className="msg-action-btn" title="Summon the strongest counter-evidence into this branch" onClick={() => onInvestigate(message.id, undefined, 'challenge')}>Challenge</button>}
         {pastedUrl && !isStreaming && (

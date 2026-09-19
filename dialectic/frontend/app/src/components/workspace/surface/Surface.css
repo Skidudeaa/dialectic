@@ -672,6 +672,7 @@
 .surf--conversation .surf-evidence h2 { margin: 8px 0; }
 .surf--conversation .surf-evidence-heading { padding-bottom: 4px; }
 .surf--conversation .surf-evidence-actions { top: -10px; margin-block: 4px; padding-block: 4px; }
+.app-layout.surface-focus .surf-evidence-actions { flex-wrap: nowrap; white-space: nowrap; gap: 8px; }
 .surf--conversation .surf-evidence-hint { margin-block: 4px; }
 .surf-head-flags { display: block; }
 
@@ -761,6 +762,12 @@
     .surf--conversation .input-row .attach-btn { grid-column: 1; grid-row: 1; width: 36px; padding-inline: 7px; }
     .surf--conversation .input-row .msg-textarea { grid-column: 2; grid-row: 1; min-width: 0; order: 0; }
     .surf--conversation .input-row .send-btn { grid-column: 3; grid-row: 1; width: 36px; padding-inline: 7px; }
+    /* The options toggle shares .attach-btn's look, so it needs a column of its own
+       or it lands on top of Attach (seen on a 390px phone before this rule). */
+    .surf--conversation .dr-companion .input-row:has(.composer-options-toggle) { grid-template-columns: 36px 36px minmax(0, 1fr) 36px; }
+    .surf--conversation .input-row .composer-options-toggle { grid-column: 2; }
+    .surf--conversation .input-row:has(.composer-options-toggle) .msg-textarea { grid-column: 3; }
+    .surf--conversation .input-row:has(.composer-options-toggle) .send-btn { grid-column: 4; }
 }
 .surf-selection-action { overflow-y: auto; }
 .surf-selection-action button { order: -1; }

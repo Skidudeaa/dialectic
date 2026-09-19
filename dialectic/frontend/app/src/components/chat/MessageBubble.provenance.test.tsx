@@ -253,4 +253,24 @@ describe('provenance disclosure', () => {
       expect(trigger).toHaveAttribute('aria-expanded', 'true')
     })
   })
+
+  describe('in a reading-room thread', () => {
+    it('lives under the ··· menu instead of taking a row of its own', async () => {
+      mockDecisions({ status: 'ready', decisions: {} } as never)
+      useAppStore.setState({ currentRoom: { id: 'room-1', name: 'R', token: 't', is_home: false } } as never)
+      const { container } = render(<MessageBubble message={message()} isSelf={false} authorName="Dialectic" threadSource={null} />)
+      const trigger = screen.getByRole('button', { name: 'Why this message appeared' })
+      expect(trigger.closest('details.msg-actions')).not.toBeNull()
+      expect(container.querySelector('.msg-why-wrap')).toBeNull()
+      fireEvent.click(trigger)
+      expect(await screen.findByRole('note')).toBeInTheDocument()
+    })
+
+    it('keeps its own row in the flat stream, where the action bar is hover-hidden', () => {
+      mockDecisions({ status: 'ready', decisions: {} } as never)
+      const { container } = renderBubble(message())
+      expect(container.querySelector('.msg-why-wrap button')).not.toBeNull()
+      expect(container.querySelector('.msg-actions button[aria-label="Why this message appeared"]')).toBeNull()
+    })
+  })
 })

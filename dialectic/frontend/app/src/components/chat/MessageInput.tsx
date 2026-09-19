@@ -104,6 +104,7 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
   const [notice, setNotice] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [tags, setTags] = useState<string[]>([])
+  const [optionsOpen, setOptionsOpen] = useState(false)
   const [mentionOpen, setMentionOpen] = useState(false)
   const [mentionIndex, setMentionIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -425,6 +426,11 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
   const hasSendable = content.trim().length > 0 || ready.length > 0
 
   const Options = compactOptions ? 'details' : 'div'
+  // A compact composer spends no row on options nobody is using: the row
+  // appears when ··· opens it, and stays as a status line while a tag, a
+  // non-default type or an attachment would otherwise be sent unseen.
+  const optionsInPlay = tags.length > 0 || messageType !== 'text' || uploads.length > 0
+  const showOptions = !quiet && (!compactOptions || optionsOpen || optionsInPlay)
   return (
     <div className="input-area">
       <ComposerFrame tone={researchActive ? 'planning' : 'conversation'} busy={researchActive || sending} inert={sending || undefined}
@@ -483,7 +489,10 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
             ))}
           </div>
         )}
-        {!quiet && <Options className={`composer-options${compactOptions ? ' composer-options--compact' : ''}`}>
+        {showOptions && <Options
+          className={`composer-options${compactOptions ? ' composer-options--compact' : ''}`}
+          {...(compactOptions ? { id: 'composer-options', open: optionsOpen, onToggle: (e: { currentTarget: EventTarget }) => setOptionsOpen((e.currentTarget as HTMLDetailsElement).open) } : {})}
+        >
           {compactOptions && <summary>Message options · {messageType}{tags.length > 0 ? ` · ${tags.map((tag) => `#${tag}`).join(' ')}` : ''}</summary>}
           <div className="msg-tag-selector">
             {MESSAGE_TAG_OPTIONS.map(t => (
@@ -540,6 +549,20 @@ export function MessageInput({ onSend, roomId, initialValue, onTypingStart, onTy
               <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
             </svg>
           </button>
+          {compactOptions && !quiet && (
+            <button
+              type="button"
+              className="attach-btn composer-options-toggle"
+              onClick={() => setOptionsOpen((open) => !open)}
+              disabled={disabled}
+              aria-expanded={optionsOpen}
+              aria-controls={showOptions ? 'composer-options' : undefined}
+              aria-label="Message options"
+              title="Tags, message type, propose"
+            >
+              ···
+            </button>
+          )}
           {mentionActive && (
             <ul className="mention-picker" role="listbox" aria-label="Mention someone">
               {mentionCandidates.map((candidate, i) => (
