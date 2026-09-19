@@ -77,7 +77,9 @@ class TestPromptRendering:
                      {"entity": "thesis_node", "id": "n1", "label": "Hormuz Closure"}],
         })
         assert _anchor_prefix(m) == "[on Hormuz Closure] "
-        assert _refs_suffix(m) == "\n(attached: FT: tankers idle; Hormuz Closure)"
+        # A saved reading also names its row so the model can cite it (216165f).
+        assert _refs_suffix(m) == ("\n(attached: FT: tankers idle; Hormuz Closure)"
+                                   "\nReading source FT: tankers idle (reading_items id=x).")
 
     def test_no_metadata_renders_nothing(self):
         m = _msg(SpeakerType.HUMAN, None)

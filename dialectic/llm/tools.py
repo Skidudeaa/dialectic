@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Awaitable, Callable, Optional, cast
@@ -279,8 +280,39 @@ EVIDENCE_ITEMS_CAP = 6
 _EVIDENCE_META_KEYS = ("title", "author", "site", "published", "content_sha256", "subreddit", "score")
 
 
+_REDDIT_HEADER = re.compile(r"\A# [^\n]*\n\n[^\n]*\n\[Original discussion\]\([^\n]*\n\n")
+_REDDIT_COMMENT_HEAD = re.compile(r"^### u/(\S+) ·[^\n]*\n\[Comment [^\n]*\n\n", re.MULTILINE)
+_REDDIT_NOTE = "## Comments\n\n"
+
+
+def _reddit_words(content: str) -> str:
+    """The words people wrote in a reddit_client.extract_article document: the
+    post body, then each comment as `u/name: body`. The title/byline header and
+    the sampling note are dropped — the evidence item already carries title,
+    author and url, and a 400-char excerpt spent on them shows no evidence.
+    A link post's placeholder body gives way to its comments when there are any.
+    WHY the `u/name:` prefix: the card's byline is the OP, so a bare comment
+    body would read as the OP's words. Content in any other shape is returned
+    unchanged; this reads a layout, it does not guess at one."""
+    header = _REDDIT_HEADER.match(content)
+    if not header:
+        return content
+    post, _, tail = content[header.end():].partition(_REDDIT_NOTE)
+    post = post.strip()
+    heads = list(_REDDIT_COMMENT_HEAD.finditer(tail))
+    comments = "\n\n".join(
+        f"u/{head.group(1)}: {tail[head.end():(heads[i + 1].start() if i + 1 < len(heads) else len(tail))].strip()}"
+        for i, head in enumerate(heads)
+    )
+    if comments and post.startswith("Linked source:"):
+        return comments
+    return f"{post}\n\n{comments}" if comments else post
+
+
 def _evidence_item(source: dict, excerpt_key: str, kind: str) -> dict:
     excerpt = str(source.get(excerpt_key) or "").strip()
+    if kind == "reddit" and excerpt_key == "content":
+        excerpt = _reddit_words(excerpt)
     item: dict[str, Any] = {
         "kind": kind,
         "url": str(source.get("url") or ""),

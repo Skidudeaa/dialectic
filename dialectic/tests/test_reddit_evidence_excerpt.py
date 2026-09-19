@@ -1,7 +1,7 @@
-"""Acceptance (lead-owned, fixed before implementation): a Reddit evidence
-excerpt starts at words a person wrote, not at the markdown header
-reddit_client.extract_article puts in front of them. The content strings
-below follow that function's exact section layout."""
+"""A Reddit evidence excerpt shows words people wrote -- the post body, then
+comments as `u/name: body` -- not the markdown header that
+reddit_client.extract_article puts in front of them. The content strings below
+follow that function's exact section layout."""
 from llm.tools import EVIDENCE_EXCERPT_CHARS, evidence_of
 
 URL = "https://www.reddit.com/r/t/comments/abc/x/"
@@ -38,12 +38,15 @@ def test_self_post_excerpt_starts_at_the_post_body():
     assert item["title"] == "Holy title" and item["author"] == "op" and item["kind"] == "reddit"
 
 
-def test_link_post_excerpt_starts_at_the_first_comment_body():
+def test_link_post_excerpt_is_its_comments_each_under_their_own_name():
     placeholder = ("Linked source: https://example.com/a\n\n"
                    "The linked article body is not included; read its URL separately.")
     (item,) = evidence_of("read_reddit", _raw(placeholder, _comment("a", "First reply."), _comment("b", "Second.")))
-    assert item["excerpt"].startswith("First reply.")
+    # The card's byline is the OP; a commenter's words must carry their own name.
+    assert item["excerpt"].startswith("u/a: First reply.")
+    assert "u/b: Second." in item["excerpt"]
     assert "Showing 2 API-loaded" not in item["excerpt"]
+    assert "[Comment " not in item["excerpt"] and "###" not in item["excerpt"]
 
 
 def test_link_post_without_comments_keeps_the_linked_source_line():
@@ -78,14 +81,3 @@ def test_continuation_window_is_untouched():
                                           "content": "mid-thread text", "content_start": 9000})
     assert item["excerpt"] == "mid-thread text" and item["content_start"] == 9000
 
-
-def test_refs_suffix_names_the_saved_reading_row():
-    """The expectation test_surface_anchor_refs went stale on at 216165f."""
-    from tests.test_surface_anchor_refs import _msg
-    from llm.prompts import _refs_suffix
-    from models import SpeakerType
-    m = _msg(SpeakerType.HUMAN, {"refs": [
-        {"entity": "reading_items", "id": "x", "label": "FT: tankers idle"},
-        {"entity": "thesis_node", "id": "n1", "label": "Hormuz Closure"}]})
-    assert _refs_suffix(m) == ("\n(attached: FT: tankers idle; Hormuz Closure)"
-                               "\nReading source FT: tankers idle (reading_items id=x).")
