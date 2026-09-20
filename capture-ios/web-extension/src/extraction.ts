@@ -17,6 +17,7 @@ import {
   fallbackToMarkdown,
   normalizeElementURLs,
   normalizeMarkdown,
+  removeEmbeddedFrames,
 } from "./markdown";
 
 const ARTICLE_MIN_VISIBLE_CHARACTERS = 40;
@@ -50,6 +51,10 @@ function cloneRenderedDocument(source: Document): Document {
 
 export function extractArticleWithDefuddle(document: Document, url: string): ArticleExtraction {
   normalizeElementURLs(document, url);
+  // WHY: Defuddle emits its own Markdown, which never passes through this
+  // project's sanitiser, and it keeps <iframe> as an "embed" — so an ad frame
+  // inside the article reached the stored capture as raw HTML.
+  removeEmbeddedFrames(document);
   const result = new Defuddle(document, {
     url,
     separateMarkdown: true,

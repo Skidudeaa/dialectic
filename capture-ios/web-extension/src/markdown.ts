@@ -1,7 +1,20 @@
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
 
+// WHY: embedded frames are ads, trackers or players, never article prose, and
+// Markdown cannot represent them: a converter either drops them or, worse,
+// passes the raw HTML through into the stored capture.
+const EMBEDDED_FRAMES = "iframe, object, embed";
+
+/** Removes embedded frames from `root` in place. Call only on a cloned tree. */
+export function removeEmbeddedFrames(root: ParentNode): void {
+  for (const element of root.querySelectorAll(EMBEDDED_FRAMES)) {
+    element.remove();
+  }
+}
+
 const UNSAFE_REMOVALS = [
+  EMBEDDED_FRAMES,
   "script",
   "style",
   "noscript",

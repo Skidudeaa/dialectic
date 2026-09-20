@@ -15183,7 +15183,13 @@ ${t3.join("")}
   }
 
   // src/markdown.ts
+  var EMBEDDED_FRAMES = "iframe, object, embed";
+  function removeEmbeddedFrames(root2) {
+    for (let element of root2.querySelectorAll(EMBEDDED_FRAMES))
+      element.remove();
+  }
   var UNSAFE_REMOVALS = [
+    EMBEDDED_FRAMES,
     "script",
     "style",
     "noscript",
@@ -15298,7 +15304,7 @@ ${fence}
     return clone.getElementById(TOAST_HOST_ID)?.remove(), clone;
   }
   function extractArticleWithDefuddle(document2, url) {
-    normalizeElementURLs(document2, url);
+    normalizeElementURLs(document2, url), removeEmbeddedFrames(document2);
     let result = new import_full.default(document2, {
       url,
       separateMarkdown: !0,
