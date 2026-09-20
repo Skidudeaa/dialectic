@@ -2,3 +2,21 @@
 // registers the app IDs and App Group; the checked-in value is simulator-only.
 SOMACURA_BUNDLE_PREFIX = com.example.unconfigured
 SOMACURA_APP_GROUP_IDENTIFIER = group.$(SOMACURA_BUNDLE_PREFIX).SomacuraCapture
+// Destinations: iPhone and iPad plus Mac Catalyst (Catalyst requires the
+// iPad device family). "Designed for iPad" stays off — extensions from
+// those apps never register with Safari on the Mac, and it excludes
+// Intel MacBook Pros.
+TARGETED_DEVICE_FAMILY = 1,2
+SUPPORTS_MACCATALYST = YES
+SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO
+
+// Keep one bundle ID on the Mac. The default ".maccatalyst" suffix would
+// make the Mac app's identifier differ from src/config.ts's
+// NATIVE_APPLICATION_IDENTIFIER, so native messaging would find no app.
+DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO
+
+// Mac Catalyst shares the iOS deployment target for its macOS floor:
+// iOS 17.0 == macOS 14.0, the minimum for @Observable and
+// ContentUnavailableView.
+IPHONEOS_DEPLOYMENT_TARGET = 17.0
+
