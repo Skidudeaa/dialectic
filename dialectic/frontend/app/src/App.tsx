@@ -744,7 +744,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
 
   // WHY these are built AFTER the null guard above: each reads user.id,
   // currentRoom.id and roomToken, which are only non-null past that return.
-  const recordSurface = (
+  const recordReading = (
     <>
           <RoomBriefing key={currentRoom.id} roomId={currentRoom.id} />
           {activeProtocol && (
@@ -783,6 +783,10 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
             emptyKind={isHome ? 'hearth' : 'dialogue'}
             onOpenBench={(seed) => { void openThesisSeed(seed) }}
           />
+    </>
+  )
+  const recordComposer = (
+    <>
           <TypingIndicator typingUsers={typingDisplay} activityLabel={toolActivityLabel} />
           <MessageInput
             key={`${currentRoom.id}:${currentThread?.id ?? ''}`}
@@ -827,6 +831,8 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     </>
   )
 
+  const recordSurface = <>{recordReading}{recordComposer}</>
+
   // The House is the shipped pulse ABOVE the same table — the Record is not
   // duplicated into a second component, it is composed.
   //
@@ -837,15 +843,18 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // over it. Everything demoted is one <details> away, not gone.
   const houseSurface = (
     <>
-      <YourMove onNavigate={(destination) => navigate(destination, 'push')} refreshVersion={homeRefreshVersion} />
-      <HomeActivityPulse
+      <div className="house-reading-region">
+        <YourMove onNavigate={(destination) => navigate(destination, 'push')} refreshVersion={homeRefreshVersion} />
+        <HomeActivityPulse
         onNavigate={(destination) => navigate(destination, 'push')}
         refreshVersion={homeRefreshVersion}
         residents={participants}
         compact
       />
-      <ProposalInbox onNavigate={(destination) => navigate(destination, 'push')} />
-      {recordSurface}
+        <ProposalInbox onNavigate={(destination) => navigate(destination, 'push')} />
+        {recordReading}
+      </div>
+      {recordComposer}
     </>
   )
 
@@ -1170,7 +1179,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
             {!isHome && <ParticipantsBar participants={participants} />}
             {pushState === 'prompt' && typeof Notification !== 'undefined' && Notification.permission === 'default' && (
               <button className="push-enable-chip" onClick={enablePush}>
-                🔔 Enable notifications — get buzzed when {participants.length > 2 ? 'the others' : 'the other person'} writes
+                🔔 Enable notifications — get buzzed when {participants.length > 2 ? 'the others write' : 'the other person writes'}
               </button>
             )}
             {nav.accessError && (

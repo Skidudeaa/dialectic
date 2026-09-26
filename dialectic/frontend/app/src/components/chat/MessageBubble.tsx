@@ -1,3 +1,4 @@
+import { displayParticipantText } from '../../lib/productIdentity'
 import { ResponseCard, ProposalCard, ReviewButton } from '@dark-roast/companion-ui'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { marked } from 'marked'
@@ -562,7 +563,7 @@ export function MessageBubble({
     : null
 
   const html = useMemo(() => {
-    const raw = marked.parse(message.content, { async: false }) as string
+    const raw = marked.parse(displayParticipantText(message.content), { async: false }) as string
     const clean = DOMPurify.sanitize(raw)
     // AFTER sanitize, never before: decorateMentions walks text nodes and adds
     // spans of its own making, so it cannot reintroduce anything DOMPurify

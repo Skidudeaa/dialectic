@@ -63,9 +63,9 @@
 .day-group > .msg:nth-child(5) { animation-delay: 145ms; }
 .day-group > .msg:nth-child(6) { animation-delay: 170ms; }
 
-/* P3-7: Sticky day divider — obsidian gradient so content doesn't ghost behind it */
+/* Dates stay in the document flow so scrolling never covers a contribution. */
 .day-divider {
-    position: sticky;
+    position: relative;
     top: 0;
     background: linear-gradient(var(--color-sheet) 70%, transparent);
     z-index: 5;

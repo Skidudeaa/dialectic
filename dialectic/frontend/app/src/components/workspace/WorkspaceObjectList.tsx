@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { WorkspaceObject, WorkspaceObjectKind } from '../../types/workspace.ts'
-import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
+import { PARTICIPANT_NAME, displayParticipantText } from '../../lib/productIdentity.ts'
 import './WorkspaceObjectList.css'
 
 /**
@@ -171,7 +171,7 @@ export function ObjectCard({ object, onOpen }: ObjectCardProps) {
             {KIND_GLYPHS[object.kind]}
           </svg>
         </span>
-        <span className="object-card-title">{object.title}</span>
+        <span className="object-card-title">{displayParticipantText(object.title)}</span>
         {review && (
           <span
             className={`object-card-review is-${object.review_state}`}
@@ -194,7 +194,7 @@ export function ObjectCard({ object, onOpen }: ObjectCardProps) {
           </span>
         )}
       </div>
-      {object.summary && <p className="object-card-summary">{object.summary}</p>}
+      {object.summary && <p className="object-card-summary">{displayParticipantText(object.summary)}</p>}
       <div className="object-card-foot">
         <span className="object-card-origin">
           {origin}
@@ -234,7 +234,7 @@ export function ObjectCard({ object, onOpen }: ObjectCardProps) {
         type="button"
         className="object-card-open"
         onClick={() => onOpen?.(object)}
-        aria-label={`Open ${object.title}`}
+        aria-label={`Open ${displayParticipantText(object.title)}`}
       >
         {body}
       </button>

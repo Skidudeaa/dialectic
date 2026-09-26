@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { HouseMovement } from './HouseMovement'
-import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
+import { PARTICIPANT_NAME, displayParticipantText } from '../../lib/productIdentity.ts'
 import { agoLabel } from '../../lib/relativeTime.ts'
 import { api } from '../../lib/api.ts'
 import type { HomeActivityProjection, HomeActivityRoom, RoomDestination } from '../../types/index.ts'
@@ -367,9 +367,8 @@ function doorBody(room: HomeActivityRoom): string {
 
 function displaySpeaker(raw: string | null | undefined): string {
   if (!raw) return ''
-  if (raw === 'llm_primary' || raw === 'llm_provoker' || raw === 'llm_annotator') return PARTICIPANT_NAME
   if (raw === 'system') return 'System'
-  return raw
+  return displayParticipantText(raw)
 }
 
 function oneLinePreview(raw: string | null | undefined): string {

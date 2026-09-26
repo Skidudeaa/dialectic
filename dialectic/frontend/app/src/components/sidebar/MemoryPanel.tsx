@@ -1,3 +1,4 @@
+import { displayParticipantText } from '../../lib/productIdentity'
 import { useMemo, useState } from 'react'
 import type { Memory } from '../../types'
 import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
@@ -167,7 +168,7 @@ export function MemoryPanel({
                 <span className="memory-paper-title">{memoryTitle(memory.key)}</span>
                 <span className="memory-paper-meta">v{memory.version}</span>
                 {expandedId === memory.id && kind !== 'identity' && (
-                  <span className="memory-paper-preview">{oneLine(memory.content, 220)}</span>
+                  <span className="memory-paper-preview">{oneLine(displayParticipantText(memory.content), 220)}</span>
                 )}
               </button>
             )
@@ -201,7 +202,7 @@ export function MemoryPanel({
               >
                 <div className="memory-key">{memoryTitle(memory.key)}</div>
                 <div className={`memory-value${expandedId === memory.id ? '' : ' is-clamped'}`}>
-                  {memory.content}
+                  {displayParticipantText(memory.content)}
                 </div>
               </button>
               <div className="memory-meta">
@@ -231,7 +232,7 @@ function FactCard({ memory, expanded, pending, onToggle, onPromote }: {
       <button type="button" className="memory-card-main" onClick={onToggle}>
         <div className="memory-key">{memoryTitle(memory.key)}</div>
         <div className={`memory-value${expanded || !long ? '' : ' is-clamped'}`}>
-          {memory.content}
+          {displayParticipantText(memory.content)}
         </div>
       </button>
       <div className="memory-meta">

@@ -19,6 +19,7 @@
     position: relative;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
     min-height: 44px;
     padding: 0 18px;
@@ -31,6 +32,8 @@
    running-light slot — so the tray reads as a row of rooms, pre-lit. The
    label text is always present; the hue is never the only signal. */
 .scene-switcher-action {
+    flex: 0 0 auto;
+    white-space: nowrap;
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -223,3 +226,5 @@
     .scene-switcher-secondary { display: none; }
     .scene-switcher-more { display: block; }
 }
+
+.scene-switcher-more { flex: 0 0 auto; }

@@ -1,3 +1,4 @@
+import { displayParticipantText } from '../../lib/productIdentity';
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import './BriefingPanel.css';
@@ -48,7 +49,7 @@ export function BriefingPanel({ roomId, onDismiss }: BriefingPanelProps) {
         <button className="dismiss-btn" onClick={onDismiss}>&times;</button>
       </div>
 
-      <div className="briefing-summary">{briefing.summary}</div>
+      <div className="briefing-summary">{displayParticipantText(briefing.summary)}</div>
 
       <div className="briefing-stats">
         <div className="briefing-stat">
@@ -70,7 +71,7 @@ export function BriefingPanel({ roomId, onDismiss }: BriefingPanelProps) {
           <h4>Key moments</h4>
           {briefing.highlights.map((h, i) => (
             <div className="highlight-card" key={i}>
-              <strong>{h.speaker}</strong> {h.content_preview}
+              <strong>{displayParticipantText(h.speaker)}</strong> {displayParticipantText(h.content_preview)}
             </div>
           ))}
         </div>

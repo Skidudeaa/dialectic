@@ -241,3 +241,18 @@
     .home-pin:hover { transform: none; }
     .room-item-present-dot { box-shadow: none; animation: none; }
 }
+
+/* Reserve a real column for unread counts, including multi-digit counts. */
+.room-list .room-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 3px 8px;
+}
+.room-list .room-item-name { white-space: normal; overflow-wrap: anywhere; }
+.room-list .room-item-preview { grid-column: 1 / -1; }
+.room-list .room-item > .unread-badge {
+    position: static;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+}

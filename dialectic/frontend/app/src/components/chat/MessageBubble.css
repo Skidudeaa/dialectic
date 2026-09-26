@@ -280,6 +280,11 @@
    covered and a narrow desktop window is not. */
 @media (hover: none) {
     .msg-actions {
+        position: static;
+        width: fit-content;
+        max-width: 100%;
+        flex-wrap: wrap;
+        margin-top: 8px;
         opacity: 0.55;
         pointer-events: auto;
         transform: none;

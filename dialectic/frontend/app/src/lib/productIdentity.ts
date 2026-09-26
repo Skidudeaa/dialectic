@@ -55,3 +55,10 @@ export function markGlyph(speakerType: Message['speaker_type'], authorName: stri
   if (speakerType === 'system') return '·'
   return PARTICIPANT_SIGNATURE
 }
+
+/** Render participant identifiers in prose without changing the stored text. */
+export function displayParticipantText(text: string): string {
+  return text.replace(/\bllm_(?:primary|provoker|annotator)\b/g, (id) =>
+    participantDisplayName(id as Message['speaker_type']),
+  )
+}

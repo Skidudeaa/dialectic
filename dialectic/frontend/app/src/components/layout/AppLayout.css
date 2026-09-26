@@ -78,8 +78,8 @@
     flex: 0 0 auto;
 }
 .app-main-home-talking .workspace-scene-house .home-house {
-    flex: 0 1 auto;
-    max-height: min(36vh, 20rem);
+    flex: 0 0 auto;
+    max-height: none;
 }
 .app-main-home-talking .workspace-scene-house .messages-viewport,
 .app-main-home-talking .workspace-scene-house .messages-wrapper {

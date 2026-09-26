@@ -520,3 +520,17 @@
     .home-door-go,
     .home-fold > summary { transition: none; }
 }
+
+/* The house and conversation share a reading region; the composer remains
+   outside it so long activity lists cannot squeeze either out of reach. */
+.house-reading-region {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+.house-reading-region > .messages-viewport {
+    height: max(320px, 45vh);
+}
+.house-reading-region .home-house.compact {
+    flex: none;
+}
