@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ThesisDag } from './ThesisDag'
 import type { ThesisStructure } from '../../types/trading'
@@ -36,6 +36,35 @@ describe('ThesisDag', () => {
     expect(screen.getAllByText(/inventory shock/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/price forces policy/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/risk repricing/).length).toBeGreaterThan(0)
+  })
+
+  it('shows full incoming and outgoing mechanisms after keyboard or touch selection', () => {
+    render(<ThesisDag structure={structure} />)
+    fireEvent.keyDown(screen.getByRole('button', { name: /^Crude/ }), { key: 'Enter' })
+    const card = screen.getByRole('region', { name: /Crude.*detail/ })
+    expect(within(card).getByText('inventory shock · 2d')).toBeInTheDocument()
+    expect(within(card).getByText('price forces policy · 1w')).toBeInTheDocument()
+    expect(within(card).queryByText(/risk repricing/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /^Oil spikes/ }))
+    expect(within(screen.getByRole('region', { name: /Oil spikes detail/ })).getByText('risk repricing · 3d')).toBeInTheDocument()
+  })
+
+  it('offers an edge action from the selected endpoint without requiring a precise wire tap', () => {
+    const onEdgeSelect = vi.fn()
+    render(<ThesisDag structure={structure} onEdgeSelect={onEdgeSelect} />)
+    fireEvent.click(screen.getByRole('button', { name: /^Fed pauses/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect connection' }))
+    expect(onEdgeSelect).toHaveBeenCalledWith(structure.edges[1])
+  })
+
+  it('keeps zoom and reset available on the content-sized drawing', () => {
+    const { container } = render(<ThesisDag structure={structure} />)
+    const svg = container.querySelector('.thesis-dag-svg')!
+    const initial = svg.getAttribute('viewBox')
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    expect(svg.getAttribute('viewBox')).not.toBe(initial)
+    fireEvent.click(screen.getByRole('button', { name: 'Reset view' }))
+    expect(svg.getAttribute('viewBox')).toBe(initial)
   })
 
   it('overrides authored state with a live reading; a node missing from nodeStates is dimmed', () => {

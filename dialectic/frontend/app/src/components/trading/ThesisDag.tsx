@@ -16,6 +16,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
   WheelEvent as ReactWheelEvent,
+  CSSProperties,
 } from 'react'
 import type { ThesisStructure, ThesisStructureEdge, ThesisStructureNode } from '../../types/trading'
 import type { MessageRef } from '../../types'
@@ -197,12 +198,18 @@ function NodeDetailCard({
   onClose,
   verbs,
   humanWord,
+  connections,
+  nodesById,
+  onEdgeSelect,
 }: {
   node: ThesisStructureNode
   stateDisplay: string
   onClose: () => void
   verbs?: DagVerb[]
   humanWord?: DagHumanWord
+  connections: ThesisStructureEdge[]
+  nodesById: Map<string, ThesisStructureNode>
+  onEdgeSelect?: (edge: ThesisStructureEdge) => void
 }) {
   return (
     <div className="thesis-dag-detail" role="region" aria-label={`${node.label} detail`}>
@@ -228,6 +235,20 @@ function NodeDetailCard({
           </span>
           {ellipsize(humanWord.quote, 280)}
         </blockquote>
+      )}
+      {connections.length > 0 && (
+        <div className="thesis-dag-connections">
+          <h4>Connections</h4>
+          <ul>
+            {connections.map((edge, i) => (
+              <li key={i}>
+                <strong>{nodesById.get(edge.source)?.label ?? edge.source} → {nodesById.get(edge.target)?.label ?? edge.target}</strong>
+                <span>{edge.mechanism}{edge.lag ? ` · ${edge.lag}` : ''}</span>
+                {onEdgeSelect && <button type="button" className="thesis-dag-verb" onClick={() => onEdgeSelect(edge)}>Inspect connection</button>}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <dl className="thesis-dag-detail-fields">
         <div className="thesis-dag-detail-row">
@@ -492,7 +513,7 @@ export function ThesisDag({
           const dx = Math.abs(x2 - x1) * 0.5
           const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`
           const strength = typeof edge.strength === 'number' ? edge.strength : 0.5
-          return { key: `${edge.source}->${edge.target}-${i}`, d, mx: (x1 + x2) / 2, my: (y1 + y2) / 2, strength, edge }
+          return { key: `${edge.source}->${edge.target}-${i}`, d, strength, edge }
         })
         .filter((e): e is NonNullable<typeof e> => e !== null),
     [edges, nodesById],
@@ -547,7 +568,14 @@ export function ThesisDag({
         {stale && <div className="thesis-dag-stale-badge">live colors from a stale snapshot</div>}
         <svg
           ref={svgRef}
-          style={height ? { height } : undefined}
+          // Intrinsic aspect ratio uses the available width; minimum dimensions
+          // keep type readable when a narrow or height-limited pane must scroll.
+          style={{
+            '--dag-ratio': `${baseViewBox.w} / ${baseViewBox.h}`,
+            minWidth: baseViewBox.w * 0.8,
+            minHeight: baseViewBox.h * 0.8,
+            ...(height ? { height } : {}),
+          } as CSSProperties}
           className="thesis-dag-svg"
           viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
           preserveAspectRatio="xMidYMid meet"
@@ -586,7 +614,7 @@ export function ThesisDag({
           ))}
 
           <g className="thesis-dag-edges">
-            {edgePaths.map(({ key, d, mx, my, strength, edge }) => (
+            {edgePaths.map(({ key, d, strength, edge }) => (
               <g
                 key={key}
                 className={onEdgeSelect ? 'thesis-dag-edge thesis-dag-edge--clickable' : 'thesis-dag-edge'}
@@ -605,12 +633,6 @@ export function ThesisDag({
                   {edge.mechanism}
                   {edge.lag ? ` (${edge.lag})` : ''}
                 </title>
-                {edge.mechanism && (
-                  <text x={mx} y={my - 6} textAnchor="middle" className="thesis-dag-edge-label">
-                    {ellipsize(edge.mechanism, 30)}
-                    {edge.lag ? ` · ${edge.lag}` : ''}
-                  </text>
-                )}
               </g>
             ))}
           </g>
@@ -726,6 +748,9 @@ export function ThesisDag({
           onClose={() => setSelectedId(null)}
           verbs={verbs}
           humanWord={humanWords?.[selectedNode.id]}
+          connections={edges.filter((edge) => edge.source === selectedNode.id || edge.target === selectedNode.id)}
+          nodesById={nodesById}
+          onEdgeSelect={onEdgeSelect}
         />
       )}
     </div>

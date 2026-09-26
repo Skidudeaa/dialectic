@@ -1,6 +1,7 @@
 /* ThesisDag — read-only causal-DAG viewer (Bench). Dark Roast tokens only. */
 
 .thesis-dag {
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -107,7 +108,7 @@
 .thesis-dag-canvas {
     position: relative;
     width: 100%;
-    max-height: 540px;
+    max-height: 1400px;
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-control);
     /* The glass panel: a recessed dark screen the live graph glows behind —
@@ -116,13 +117,15 @@
         radial-gradient(110% 70% at 50% 0%, rgba(242,162,74,.05), transparent 60%),
         var(--color-well);
     box-shadow: var(--bezel-well);
-    overflow: hidden;
+    overflow: auto;
+    overscroll-behavior: contain;
 }
 
 .thesis-dag-svg {
     display: block;
     width: 100%;
-    height: 540px;
+    height: auto;
+    aspect-ratio: var(--dag-ratio);
     touch-action: none;
     cursor: grab;
 }
@@ -179,16 +182,6 @@
     stroke: var(--color-crater);
     transition: stroke var(--dur-fast, 140ms) var(--ease-out),
                 opacity var(--dur-fast, 140ms) var(--ease-out);
-}
-
-.thesis-dag-edge-label {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    fill: var(--color-secondary);
-    /* Halo: the label stays legible over the wires it annotates. */
-    paint-order: stroke;
-    stroke: var(--color-well);
-    stroke-width: 3px;
 }
 
 .thesis-dag-arrow-head {
@@ -250,7 +243,7 @@
 
 .thesis-dag-node-label {
     font-family: var(--font-serif);
-    font-size: 12px;
+    font-size: 15px;
     fill: var(--color-bone);
 }
 
@@ -596,3 +589,13 @@
     background: var(--color-well);
     box-shadow: var(--bezel-well);
 }
+
+
+/* Mechanisms belong beside the selected node: midpoint text crosses wires
+   and unrelated nodes in dense books. This list also works on touch. */
+.thesis-dag-connections { overflow-wrap: anywhere; font-size: 13px; }
+.thesis-dag-connections h4 { margin: 0 0 8px; color: var(--color-secondary); }
+.thesis-dag-connections ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.thesis-dag-connections li { display: grid; gap: 4px; }
+.thesis-dag-connections strong { color: var(--color-bone); font-weight: 500; }
+.thesis-dag-connections span { color: var(--color-secondary); }
