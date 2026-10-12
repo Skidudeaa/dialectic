@@ -48,8 +48,9 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    background: var(--color-cacao);
+    background: var(--sheen), var(--color-cacao);
     border-bottom: 1px solid var(--color-bean);
+    box-shadow: var(--depth-2);
 }
 
 .home-lintel {
@@ -262,8 +263,8 @@
 .home-door {
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
-    background: var(--color-cacao);
-    box-shadow: var(--shadow-sm);
+    background: var(--sheen), var(--color-cacao);
+    box-shadow: var(--shadow-sm), var(--depth-2);
     padding: 12px 14px 13px;
     min-height: 7.5rem;
     display: flex;
@@ -276,19 +277,22 @@
 .home-door:hover {
     transform: translateY(-2px);
     border-color: var(--color-crater);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), var(--depth-3);
+    background: var(--sheen-strong), var(--color-espresso);
 }
 
 /* Unread doors carry the scene accent as a physical edge — you can tell
    which house you're in from the door frames alone. */
 .home-door.unread {
     border-color: var(--scene-accent, var(--amber-30));
-    box-shadow: inset 3px 0 0 var(--scene-accent, var(--color-amber)), var(--shadow-sm);
+    box-shadow: inset 3px 0 0 var(--scene-accent, var(--color-amber)), var(--shadow-sm), var(--depth-2);
+    background: var(--sheen), var(--color-cacao);
 }
 
 .home-door.unread:hover {
     border-color: var(--scene-accent, var(--color-amber));
-    box-shadow: inset 3px 0 0 var(--scene-accent, var(--color-amber)), var(--shadow-md);
+    box-shadow: inset 3px 0 0 var(--scene-accent, var(--color-amber)), var(--shadow-md), var(--depth-3);
+    background: var(--sheen-strong), var(--color-espresso);
 }
 
 .home-door-open {

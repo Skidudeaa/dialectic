@@ -16,14 +16,12 @@
 }
 .surfaced-card {
     position: relative;
-    background:
-        linear-gradient(180deg, rgba(255,249,240,.03), rgba(255,249,240,0) 45%),
-        var(--color-espresso);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-left: 2px solid var(--scene-accent, var(--color-amber));
     border-radius: var(--radius-sm);
     padding: 10px 12px;
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), var(--depth-2);
     animation: surface-in var(--dur-slow, 360ms) var(--ease-spring) backwards;
     display: flex;
     flex-direction: column;
@@ -41,7 +39,8 @@
     transform: translateY(-2px);
     border-color: var(--color-crater);
     border-left-color: var(--scene-accent, var(--color-amber));
-    box-shadow: var(--shadow-md), var(--shadow-glow-amber);
+    box-shadow: var(--shadow-md), var(--shadow-glow-amber), var(--depth-3);
+    background: var(--sheen-strong), var(--color-espresso);
 }
 
 .surfaced-top {

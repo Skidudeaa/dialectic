@@ -1,6 +1,7 @@
 import type { ThreadNode, UserRoom } from '../../types'
 import { markGlyph } from '../../lib/productIdentity.ts'
 import { BranchTree } from './BranchTree'
+import { HOME_SCHEME, roomSchemeFor } from '../../lib/roomScheme.ts'
 import './RoomList.css'
 
 interface RoomListProps {
@@ -42,6 +43,8 @@ export function RoomList({
     <div key={room.id}>
       <div
         className={`room-item ${room.id === activeRoomId ? 'active' : ''}`}
+        // Each card wears its own room's palette (tokens re-derive on it).
+        data-room-scheme={roomSchemeFor(room.id, false)}
         onClick={() => onRoomSelect(room.id)}
       >
         <div className="room-item-name">
@@ -95,6 +98,7 @@ export function RoomList({
           <button
             type="button"
             className={`home-pin${homeActive ? ' active' : ''}`}
+            data-room-scheme={HOME_SCHEME}
             onClick={() => onRoomSelect(home.id)}
             aria-current={homeActive ? 'page' : undefined}
             aria-label="Home"

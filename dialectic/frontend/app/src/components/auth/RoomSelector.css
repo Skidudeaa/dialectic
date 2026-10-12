@@ -26,11 +26,11 @@
     position: relative;
     width: 100%;
     max-width: 500px;
-    background: var(--color-cacao);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     padding: 2rem;
-    box-shadow: var(--shadow-md), 0 26px 52px rgba(0,0,0,.5);
+    box-shadow: var(--shadow-md), var(--depth-2);
     animation: fadeInScale var(--dur-slow, 360ms) var(--ease-out);
 }
 /* NOTE: .room-header in RoomSelector is a local name — different from the main app header */
@@ -123,12 +123,13 @@
     display: flex;
     flex-direction: column;
     gap: 0.8rem;
-    background: var(--color-espresso);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     padding: 1rem;
     margin-bottom: 1.5rem;
     animation: fadeIn var(--dur-med, 220ms) var(--ease-out);
+    box-shadow: var(--depth-2);
 }
 .room-form-actions {
     display: flex;
@@ -167,7 +168,7 @@
     gap: 0.3rem;
     width: 100%;
     padding: 9px 11px;
-    background: var(--color-espresso);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -175,7 +176,7 @@
     text-align: left;
     font-family: inherit;
     color: inherit;
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), var(--depth-2);
 }
 .room-item:hover {
     border-color: var(--color-crater);
@@ -207,7 +208,8 @@
 .room-card .room-item:hover {
     transform: translateY(-2px) rotate(-.35deg);
     border-color: var(--color-crater);
-    box-shadow: var(--shadow-lg), 0 10px 22px rgba(0,0,0,.4);
+    box-shadow: var(--shadow-lg), var(--depth-3);
+    background: var(--sheen-strong), var(--color-espresso);
 }
 .room-card .room-item:hover::before { border-color: var(--color-crater); }
 .room-card .room-item:active {
@@ -227,7 +229,8 @@
 .room-card .room-item[data-entering="true"] {
     transform: translateY(-2px);
     border-color: var(--teal-30);
-    box-shadow: 0 0 0 1px var(--teal-10), 0 0 18px var(--teal-10);
+    box-shadow: 0 0 0 1px var(--teal-10), var(--depth-3);
+    background: var(--sheen-strong), var(--color-espresso);
 }
 .room-card .room-item[data-entering="true"]::before { border-color: var(--teal-30); }
 .room-card .room-item[data-entering="true"] .room-item-name {

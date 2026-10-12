@@ -187,8 +187,8 @@
     padding: 4px;
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-chassis);
-    background: var(--color-cacao);
-    box-shadow: var(--bezel-raised), 0 14px 28px rgba(0, 0, 0, .45);
+    background: var(--sheen-strong), var(--color-espresso);
+    box-shadow: var(--bezel-raised), var(--depth-4);
 }
 .scene-switcher-menu [role="menuitem"] {
     display: flex;

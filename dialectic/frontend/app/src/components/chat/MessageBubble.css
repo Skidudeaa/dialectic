@@ -127,10 +127,8 @@
     background: transparent;
 }
 
-/* Message body prose — 72ch reading measure. No background, no border, no
-   shadow: the "card" is gone (design v2 §16.7 — "most objects should not be
-   rounded cards"). Every speaker type renders through the same rule; the
-   row's hairline top-border (above) is the only separator now. */
+/* The message face sits one tier above its stream column. Every speaker
+   shares the room palette and the existing 72ch reading measure. */
 .msg-content-frame {
     padding: 0 0 0.15rem;
     /* 16/1.6: Newsreader runs light on dark ground — this is the size at
@@ -142,6 +140,8 @@
     position: relative;
     overflow: hidden;
     max-width: 72ch;  /* reading measure */
+    background: var(--sheen), var(--color-cacao);
+    box-shadow: var(--depth-2);
 }
 .msg-system .msg-content-frame {
     color: var(--color-faint);
@@ -201,14 +201,14 @@
 
 /* Code exhibit — max 580px cap */
 .msg-content pre {
-    background: #0D0805;
+    background: var(--color-well);
     padding: 9px 11px;
     border-radius: var(--radius-sm);
     overflow-x: auto;
     margin: 0.5rem 0;
     border: 1px solid var(--color-bean);
     max-width: 580px;   /* attachment card cap */
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), var(--depth-0);
 }
 .msg-content pre code { background: none; border: none; padding: 0; font-size: 12px; line-height: 1.6; }
 
@@ -241,11 +241,11 @@
     right: 0;
     display: flex;
     gap: 0.15rem;
-    background: var(--color-espresso);
+    background: var(--sheen-strong), var(--color-espresso);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     padding: 0.15rem;
-    box-shadow: var(--bezel-raised), var(--shadow-md);
+    box-shadow: var(--bezel-raised), var(--shadow-md), var(--depth-4);
     z-index: 5;
     opacity: 0;
     pointer-events: none;
@@ -367,7 +367,7 @@
 .msg-edit-input {
     width: 100%;
     resize: vertical;
-    background: var(--color-obsidian);
+    background: var(--color-well);
     border: 1px solid var(--color-crater);
     border-radius: var(--radius-sm);
     padding: 0.45rem 0.55rem;
@@ -376,6 +376,7 @@
     font-size: inherit;
     line-height: 1.55;
     outline: none;
+    box-shadow: var(--depth-0);
 }
 .msg-edit-input:focus { border-color: var(--color-amber); }
 .msg-edit-actions { display: flex; align-items: center; gap: 0.4rem; }
@@ -437,9 +438,9 @@
     display: flex;
     gap: 2px;
     padding: 3px;
-    background: var(--color-espresso);
+    background: var(--sheen-strong), var(--color-espresso);
     border: 1px solid var(--color-bean);
-    box-shadow: var(--bezel-raised), var(--shadow-md);
+    box-shadow: var(--bezel-raised), var(--shadow-md), var(--depth-4);
     animation: fadeInScale var(--dur-fast, 140ms) var(--ease-out);
 }
 .reaction-choice {
@@ -479,7 +480,7 @@
     bottom: 0;
     height: 24px;
     pointer-events: none;
-    background: linear-gradient(to bottom, transparent, var(--color-sheet));
+    background: linear-gradient(to bottom, transparent, var(--color-cacao));
 }
 
 /* A real affordance now — the 9px ghost text read as debris, not a control. */
@@ -609,10 +610,10 @@
     z-index: 1300;
     width: min(320px, calc(100vw - 16px));
     padding: 10px 12px 11px;
-    background: var(--color-cacao);
+    background: var(--sheen-strong), var(--color-espresso);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
-    box-shadow: var(--bezel-raised), 0 8px 24px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--bezel-raised), var(--depth-4);
     text-align: left;
 }
 .msg-why-headline {

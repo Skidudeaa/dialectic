@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PARTICIPANT_NAME } from './lib/productIdentity.ts'
+import { applyRoomScheme, roomSchemeFor } from './lib/roomScheme.ts'
 import './styles/global.css'
 import { useAppStore } from './stores/appStore.ts'
 import { api } from './lib/api.ts'
@@ -537,6 +538,9 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const unreadSince = roomMeta?.last_read_at ?? roomMeta?.joined_at ?? null
   // Home derives from the saved-room descriptor, never from name or URL.
   const isHome = roomMeta?.is_home ?? currentRoom?.is_home === true
+  // Each room paints the whole app in its own scheme (styles/tokens.css).
+  const roomScheme = currentRoom ? roomSchemeFor(currentRoom.id, isHome) : null
+  useEffect(() => { applyRoomScheme(roomScheme) }, [roomScheme])
   // Only Home's ROOT carries the household; a Home branch is an ordinary
   // conversation. That rule now lives in scenesForDestination, which the frame
   // and the router share, rather than in a local flag read by one of them.

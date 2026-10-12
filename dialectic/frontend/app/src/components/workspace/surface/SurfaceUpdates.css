@@ -10,7 +10,7 @@
   gap: 0.65rem;
   min-width: 0;
   position: relative;
-  background: var(--chassis-brush), var(--color-chassis);
+  background: var(--sheen), var(--chassis-brush), var(--color-chassis);
   border: 1px solid var(--color-bean);
   border-radius: var(--radius-sm);
   padding: 12px 14px 14px;
@@ -97,8 +97,8 @@
   padding: 10px 12px 11px 14px;
   border: 1px solid var(--color-bean);
   border-radius: var(--radius-sm);
-  background: var(--color-well);
-  box-shadow: var(--bezel-well);
+  background: var(--sheen), var(--color-cacao);
+  box-shadow: var(--bezel-well), var(--depth-2);
   cursor: grab;
   transition: border-color var(--dur-fast, 140ms) var(--ease-out),
     background var(--dur-fast, 140ms) var(--ease-out),
@@ -147,8 +147,8 @@
 
 .surf-upd-card:hover {
   border-color: var(--color-crater);
-  background: var(--color-cacao);
-  box-shadow: var(--bezel-raised), var(--shadow-md);
+  background: var(--sheen-strong), var(--color-espresso);
+  box-shadow: var(--bezel-raised), var(--shadow-md), var(--depth-3);
   transform: translateY(-2px);
 }
 
@@ -159,8 +159,8 @@
 .surf-upd-card.is-dragging {
   cursor: grabbing;
   border-color: var(--scene-accent, var(--color-copper));
-  background: var(--color-cacao);
-  box-shadow: var(--shadow-lg), 0 14px 28px rgba(0,0,0,.42);
+  background: var(--sheen-strong), var(--color-espresso);
+  box-shadow: var(--shadow-lg), var(--depth-3);
   transform: translateY(-3px) scale(1.02);
 }
 
@@ -171,8 +171,8 @@
 
 .surf-upd-card.is-selected {
   border-color: var(--color-amber);
-  background: var(--color-cacao);
-  box-shadow: var(--bezel-raised), inset 0 0 0 1px var(--color-amber);
+  background: var(--sheen-strong), var(--color-espresso);
+  box-shadow: var(--bezel-raised), inset 0 0 0 1px var(--color-amber), var(--depth-3);
 }
 
 .surf-upd-card-kicker {

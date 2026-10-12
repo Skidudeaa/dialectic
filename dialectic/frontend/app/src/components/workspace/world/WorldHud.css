@@ -23,7 +23,7 @@
 .world-hud > * { pointer-events: auto; }
 
 .hud-panel {
-  background: var(--chassis-brush), color-mix(in srgb, var(--color-chassis) 90%, transparent);
+  background: var(--sheen), var(--chassis-brush), color-mix(in srgb, var(--color-chassis) 90%, transparent);
   border: 1px solid var(--color-bean);
   border-radius: var(--radius-chassis);
   box-shadow: var(--bezel-raised);

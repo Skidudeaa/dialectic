@@ -1,12 +1,12 @@
 /* Briefing panel — field intelligence card: a lit header strip, stat wells,
    and highlight slips pinned to the page. */
 .briefing-panel {
-    background: var(--color-cacao);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-left: 3px solid var(--scene-accent, var(--amber-30));
     border-radius: var(--radius-sm);
     padding: 16px;
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), var(--depth-2);
     display: flex;
     flex-direction: column;
     gap: 14px;
@@ -112,7 +112,7 @@
 }
 /* Key moments as paper slips — sheet fill, amber pin stripe, paper shadow. */
 .highlight-card {
-    background: var(--color-sheet);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     border-left: 2px solid var(--scene-accent, var(--amber-30));
@@ -121,7 +121,7 @@
     font-size: 12.5px;
     color: var(--color-secondary);
     line-height: 1.45;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-sm), var(--depth-2);
 }
 .highlight-card strong { color: var(--color-bone); }
 .briefing-loading {

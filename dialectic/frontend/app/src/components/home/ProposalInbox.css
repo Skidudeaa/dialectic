@@ -8,8 +8,9 @@
     flex-direction: column;
     gap: 6px;
     padding: 10px 18px;
-    background: var(--color-obsidian);
+    background: var(--sheen), var(--color-obsidian);
     border-bottom: 1px solid var(--color-bean);
+    box-shadow: var(--depth-1);
 }
 
 .proposal-inbox-head {
@@ -69,7 +70,7 @@
     gap: 2px;
     width: 100%;
     text-align: left;
-    background: var(--color-sheet);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-left: 2px solid var(--color-bean);
     border-radius: var(--radius-sm);
@@ -80,13 +81,14 @@
                 background var(--dur-fast, 140ms) var(--ease-out),
                 border-color var(--dur-fast, 140ms) var(--ease-out),
                 box-shadow var(--dur-fast, 140ms) var(--ease-out);
+    box-shadow: var(--depth-2);
 }
 
 .proposal-item:hover {
-    background: var(--color-cacao);
+    background: var(--sheen-strong), var(--color-espresso);
     border-color: var(--color-crater);
     transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--shadow-sm), var(--depth-3);
 }
 
 .proposal-item:active {

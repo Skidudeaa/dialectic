@@ -9,7 +9,7 @@
 }
 .object-card {
     position: relative;
-    background: var(--color-cacao);
+    background: var(--sheen), var(--color-cacao);
     padding: 0.7rem 1rem;
     display: flex;
     flex-direction: column;
@@ -18,6 +18,7 @@
                 box-shadow var(--dur-fast, 140ms) var(--ease-out),
                 background-color var(--dur-fast, 140ms) var(--ease-out),
                 border-color var(--dur-fast, 140ms) var(--ease-out);
+    box-shadow: var(--depth-2);
 }
 /* The whole card is the target when there is somewhere to go — a small link
    inside a large row is a tap-target failure on a phone (§17.4). */
@@ -25,8 +26,9 @@
 /* Hover raise: the row lifts off the stack toward the reader. */
 .object-card.is-navigable:hover {
     transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), var(--depth-3);
     z-index: 1;
+    background: var(--sheen-strong), var(--color-espresso);
 }
 .object-card-open {
     width: 100%;
@@ -44,7 +46,7 @@
                 background-color var(--dur-fast, 140ms) var(--ease-out),
                 box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
-.object-card-open:hover { background: var(--color-espresso); }
+.object-card-open:hover { background: var(--sheen-strong), var(--color-espresso); }
 /* Press = real travel: the raised row settles back and takes the well shadow. */
 .object-card-open:active {
     transform: translateY(1px);
@@ -152,7 +154,7 @@
 /* The dormant empty row: callers normally guard this case with a scene-level
    empty state; if one ever does not, the shelf still reads as intentional. */
 .object-list-empty {
-    background: var(--color-cacao);
+    background: var(--sheen), var(--color-cacao);
     padding: 1.6rem 1rem;
     display: flex;
     flex-direction: column;
@@ -162,6 +164,7 @@
     font-family: var(--font-serif);
     font-size: 13px;
     text-align: center;
+    box-shadow: var(--depth-2);
 }
 .object-list-empty svg { width: 18px; height: 18px; color: var(--color-ghost); }
 

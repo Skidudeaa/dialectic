@@ -1,14 +1,14 @@
 /* Analytics panel — instrument card: big number over engraved micro-label,
    charts framed as recessed wells, sections divided by drawn rules. */
 .analytics-panel {
-    background: var(--color-espresso);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 16px;
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), var(--depth-2);
 }
 .analytics-panel h3 {
     margin: 0;

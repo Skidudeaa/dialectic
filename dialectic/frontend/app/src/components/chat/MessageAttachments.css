@@ -57,11 +57,12 @@
     min-width: 120px;
     min-height: 60px;
     max-width: 100%;
-    background: var(--color-cacao);
+    background: var(--sheen), var(--color-cacao);
     border: 1px dashed var(--color-bean);
     border-radius: var(--radius-sm);
     /* The frame breathes while the print develops. */
     animation: pulse 1.8s ease-in-out infinite;
+    box-shadow: var(--depth-2);
 }
 .attachment-placeholder-label {
     font-size: 12px;
@@ -94,10 +95,10 @@
     align-items: center;
     gap: 7px;
     padding: 6px 10px;
-    background: var(--color-cacao);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-control);
-    box-shadow: var(--bezel-key);
+    box-shadow: var(--bezel-key), var(--depth-2);
     color: var(--color-ink);
     font-size: 12px;
     text-align: left;
@@ -110,9 +111,9 @@
 .attachment-video-poster:hover:not(:disabled),
 .attachment-file:hover:not(:disabled) {
     border-color: var(--amber-30);
-    background: var(--color-espresso);
+    background: var(--sheen-strong), var(--color-espresso);
     transform: translateY(-1px);
-    box-shadow: var(--bezel-key), var(--shadow-sm);
+    box-shadow: var(--bezel-key), var(--shadow-sm), var(--depth-3);
 }
 .attachment-video-poster:active:not(:disabled),
 .attachment-file:active:not(:disabled) {
@@ -136,7 +137,7 @@
 .attachment-error {
     display: inline-flex;
     padding: 6px 10px;
-    background: var(--color-cacao);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--error);
     border-radius: var(--radius-sm);
     color: var(--error);
@@ -144,8 +145,9 @@
     cursor: pointer;
     transition: transform var(--dur-fast, 140ms) var(--ease-out),
                 background-color var(--dur-fast, 140ms) var(--ease-out);
+    box-shadow: var(--depth-2);
 }
-.attachment-error:hover { background: var(--color-espresso); }
+.attachment-error:hover { background: var(--sheen-strong), var(--color-espresso); box-shadow: var(--depth-3); }
 .attachment-error:active { transform: translateY(1px); }
 
 @media (prefers-reduced-motion: reduce) {

@@ -23,7 +23,7 @@
        brushed grain. The paper shadow idiom stays with the dossier sheet;
        the Bench is hardware. The 2px top rail carries the scene accent
        (amber on the Bench) so the module reads as bolted into THIS desk. */
-    background: var(--chassis-brush), var(--color-chassis);
+    background: var(--sheen), var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-top: 2px solid var(--scene-accent, var(--color-amber));
     border-radius: var(--radius-chassis);
@@ -51,7 +51,7 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #5A4330, #241710 72%);
+    background: radial-gradient(circle at 35% 30%, var(--color-crater), var(--color-cacao) 72%);
     box-shadow: inset 0 1px 1px rgba(0,0,0,.65), 0 1px 0 rgba(255,249,240,.05);
 }
 .cockpit-module::before { left: 7px; }
@@ -310,7 +310,7 @@
 }
 .cockpit-table td {
     padding: 6px;
-    border-bottom: 1px solid rgba(60, 42, 30, .4);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-bean) 40%, transparent);
     color: var(--color-ink);
     vertical-align: top;
 }
@@ -534,7 +534,7 @@ th.cockpit-num { text-align: right; }
 }
 .cockpit-news-item {
     padding-bottom: 0.4rem;
-    border-bottom: 1px solid rgba(60, 42, 30, .4);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-bean) 40%, transparent);
 }
 .cockpit-news-item:last-child {
     border-bottom: none;
@@ -568,7 +568,7 @@ th.cockpit-num { text-align: right; }
     flex-wrap: wrap;
     gap: 0.4rem;
     padding: 4px 2px;
-    border-bottom: 1px solid rgba(60, 42, 30, .4);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-bean) 40%, transparent);
     font-family: var(--font-mono);
     font-size: 12px;
     transition: background-color var(--dur-fast, 140ms) var(--ease-out);
@@ -634,7 +634,7 @@ th.cockpit-num { text-align: right; }
 }
 .cockpit-scenario-row {
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid rgba(60, 42, 30, .4);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-bean) 40%, transparent);
 }
 .cockpit-scenario-row:last-child {
     border-bottom: none;
@@ -751,7 +751,7 @@ th.cockpit-num { text-align: right; }
 }
 .cockpit-mini-table td {
     padding: 4px 5px;
-    border-bottom: 1px solid rgba(60, 42, 30, .4);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-bean) 40%, transparent);
     color: var(--color-ink);
     white-space: nowrap;
 }
@@ -777,7 +777,7 @@ th.cockpit-num { text-align: right; }
    since the World Lens consumer added a strip worth putting it beside). */
 .cockpit-world-link {
   margin-left: 0.6rem;
-  background: var(--color-cacao);
+  background: var(--sheen), var(--color-cacao);
   border: 1px solid var(--color-bean);
   border-radius: 2px;
   color: var(--color-amber);
@@ -788,8 +788,9 @@ th.cockpit-num { text-align: right; }
   padding: 0.25rem 0.6rem;
   min-height: 32px;
   cursor: pointer;
+  box-shadow: var(--depth-2);
 }
-.cockpit-world-link:hover { background: var(--color-espresso); }
+.cockpit-world-link:hover { background: var(--sheen-strong), var(--color-espresso); box-shadow: var(--depth-3); }
 .cockpit-world-link:focus-visible { outline: 2px solid var(--color-amber); outline-offset: -2px; }
 .cockpit-world-link-count { color: var(--color-faint); margin-left: 0.35rem; }
 
@@ -829,7 +830,7 @@ th.cockpit-num { text-align: right; }
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #5A4330, #241710 72%);
+    background: radial-gradient(circle at 35% 30%, var(--color-crater), var(--color-cacao) 72%);
     box-shadow: inset 0 1px 1px rgba(0,0,0,.65), 0 1px 0 rgba(255,249,240,.05);
 }
 

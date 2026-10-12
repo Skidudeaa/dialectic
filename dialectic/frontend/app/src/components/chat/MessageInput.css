@@ -1,7 +1,5 @@
-/* P3-8: The composer is the desk's keybed — a recessed well (--color-well,
-   --bezel-well) that the textarea, keys and selectors are set INTO. Focusing
-   anywhere inside lifts the bed and lights an amber edge, so the room can
-   see where the operator's hands are. */
+/* The raised composer frame holds the recessed writing well and the
+   existing machined keys. Focus keeps the frame's elevation and accent. */
 .input-area {
     padding: 8px 16px 11px;
     border-top: 1px solid var(--color-bean);
@@ -17,10 +15,10 @@
        to hang off without shifting anything when it appears. */
     position: relative;
     padding: 9px 10px 7px;
-    background: var(--color-well);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-control);
-    box-shadow: var(--bezel-well);
+    box-shadow: var(--bezel-well), var(--depth-2);
     outline: 1px dashed transparent;
     outline-offset: 6px;
     transition:
@@ -37,7 +35,7 @@
 .input-area-inner:focus-within {
     transform: translateY(-1px);
     border-color: var(--amber-30);
-    box-shadow: var(--bezel-well), var(--shadow-glow-amber);
+    box-shadow: var(--bezel-well), var(--shadow-glow-amber), var(--depth-2);
 }
 
 /* Attachment chips — one per file the composer is holding */
@@ -134,11 +132,12 @@
     gap: 0.6rem;
     padding: 5px 9px;
     margin-bottom: 0.5rem;
-    background: var(--color-espresso);
+    background: var(--color-well);
     border-left: 2px solid var(--amber-30);
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     font-family: var(--font-mono);
     font-size: 12px;
+    box-shadow: var(--depth-0);
 }
 .reply-preview-bar.active { display: flex; animation: fadeIn 0.15s var(--ease-out); }
 .reply-preview-text {
@@ -205,7 +204,7 @@
 .msg-textarea {
     flex: 1;
     padding: 8px 10px;
-    background: var(--color-cacao);
+    background: var(--color-well);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     color: var(--color-bone);
@@ -217,14 +216,15 @@
     min-height: 44px;
     max-height: 120px;
     outline: none;
-    box-shadow: var(--shadow-inset);
+    box-shadow: var(--depth-0);
     transition:
         border-color var(--dur-fast, 140ms) var(--ease-out),
         box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 .msg-textarea:focus {
     border-color: var(--amber-30);
-    box-shadow: var(--shadow-inset), 0 0 0 1px var(--amber-08);
+    box-shadow: 0 0 0 1px var(--amber-08), var(--depth-0);
+    background: var(--color-well);
 }
 .msg-textarea::placeholder { color: var(--color-faint); font-style: italic; }
 
@@ -394,10 +394,10 @@
     margin: 0;
     padding: 4px;
     list-style: none;
-    background: var(--color-cacao);
+    background: var(--sheen-strong), var(--color-espresso);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    box-shadow: var(--depth-4);
     animation: fadeIn var(--dur-fast, 140ms) var(--ease-out);
 }
 

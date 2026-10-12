@@ -37,11 +37,11 @@
     z-index: 1;
     width: 100%;
     max-width: 420px;
-    background: var(--color-cacao);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     padding: 1.4rem 2rem 2rem;
-    box-shadow: var(--shadow-md), 0 26px 52px rgba(0,0,0,.5);
+    box-shadow: var(--shadow-md), var(--depth-2);
     animation: fadeInScale var(--dur-slow, 360ms) var(--ease-out);
 }
 /* Classification strip across the cover — pure chrome, aria-hidden in the TSX. */
@@ -181,7 +181,7 @@
     height: 7px;
     border-radius: 50%;
     background: var(--color-void);
-    box-shadow: 0 0 0 1px rgba(10,6,3,.45);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-well) 45%, transparent);
     animation: led-blink 0.9s var(--ease-out) infinite;
 }
 .auth-form .btn-primary[aria-busy="true"] {

@@ -41,6 +41,7 @@
 .library-scene-body .library-card {
     position: relative;
     background:
+        var(--sheen),
         linear-gradient(
             to right,
             transparent 0 27px,
@@ -74,9 +75,14 @@
 }
 .library-scene-body .library-card:hover {
     transform: perspective(900px) rotateX(1deg) rotateZ(-.5deg) translateY(-3px);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), var(--depth-3);
     border-color: var(--color-crater);
     border-left-color: var(--scene-accent, var(--color-sage));
+    background:
+        var(--sheen-strong),
+        linear-gradient(to right, transparent 0 27px, var(--scene-accent-soft, var(--sage-12)) 27px 28px, transparent 28px),
+        repeating-linear-gradient(to bottom, transparent 0 25px, var(--scene-accent-soft, var(--sage-12)) 25px 26px),
+        var(--color-espresso);
 }
 /* Press = real travel: the lifted card settles back onto the drawer. */
 .library-scene-body .library-card:has(> .library-card-open:active) {

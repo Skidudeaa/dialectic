@@ -86,7 +86,7 @@
 .memory-card {
     position: relative;
     padding: 8px 10px 7px;
-    background: var(--color-obsidian);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-left-width: 2px;
     border-radius: var(--radius-sm);
@@ -95,6 +95,7 @@
                 box-shadow var(--dur-fast, 140ms) var(--ease-out),
                 border-color var(--dur-fast, 140ms) var(--ease-out),
                 background-color var(--dur-fast, 140ms) var(--ease-out);
+    box-shadow: var(--depth-2);
 }
 
 /* Filed cards raise off the desk under the hand. */
@@ -102,7 +103,8 @@
     transform: translateY(-1px);
     border-color: var(--color-crater);
     border-left-color: var(--scene-accent, var(--color-amber));
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), var(--depth-3);
+    background: var(--sheen-strong), var(--color-espresso);
 }
 
 .memory-card-main {

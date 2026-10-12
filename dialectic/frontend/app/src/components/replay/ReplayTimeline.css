@@ -1,7 +1,7 @@
 /* Replay timeline — a transport deck: bezel keys, a recessed scrubber well
    with a lit playhead, and a tick ruler under the track. */
 .replay-timeline {
-    background: var(--chassis-brush), var(--color-espresso);
+    background: var(--sheen), var(--chassis-brush), var(--color-espresso);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-chassis);
     padding: 12px 14px;
@@ -151,10 +151,10 @@
     bottom: calc(100% + 5px);
     transform: translateX(-50%);
     padding: 2px 7px;
-    background: var(--color-cacao);
+    background: var(--sheen-strong), var(--color-espresso);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), var(--depth-4);
     font-family: var(--font-mono);
     font-size: 10px;
     letter-spacing: .04em;
@@ -171,7 +171,7 @@
     width: 6px;
     height: 6px;
     transform: translate(-50%, -3px) rotate(45deg);
-    background: var(--color-cacao);
+    background: var(--color-espresso);
     border: 1px solid var(--color-bean);
     border-top: none;
     border-left: none;

@@ -9,10 +9,10 @@
 
 /* The bound book — one sheet that carries the header rule and the entries. */
 .ledger-book {
-    background: var(--color-sheet);
+    background: var(--sheen), var(--color-sheet);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-control);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), var(--depth-1);
     overflow: hidden;
 }
 
@@ -62,7 +62,8 @@
    with a tint wash instead. */
 .scene-body.ledger-scene-body .object-card.is-navigable:hover {
     transform: none;
-    box-shadow: none;
+    box-shadow: var(--depth-3);
+    background: var(--sheen-strong), var(--color-espresso);
 }
 .scene-body.ledger-scene-body .object-card-open:hover {
     background: var(--scene-accent-soft, var(--gold-12));

@@ -97,7 +97,7 @@
     text-transform: uppercase;
     color: var(--color-secondary);
     text-shadow: var(--engrave);
-    background: var(--chassis-brush), var(--color-chassis);
+    background: var(--sheen), var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-bottom: 0;
     border-radius: var(--radius-sm) var(--radius-sm) 0 0;
@@ -182,7 +182,7 @@
     align-items: center;
     gap: 6px 20px;
     padding: 8px 12px 9px;
-    background: var(--chassis-brush), var(--color-chassis);
+    background: var(--sheen), var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     box-shadow: var(--bezel-raised);
@@ -266,7 +266,7 @@
     display: flex;
     container: conversation / inline-size;
     flex-direction: column;
-    background: var(--chassis-brush), var(--color-chassis);
+    background: var(--sheen), var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     box-shadow: var(--bezel-raised);
@@ -354,7 +354,8 @@
     flex-direction: column;
     overflow: hidden;
     padding: 0;
-    background: var(--color-obsidian);
+    background: var(--sheen), var(--color-obsidian);
+    box-shadow: var(--depth-1);
 }
 /* Shapes that are not the stream scroll themselves. */
 .surf-conv-body--scroll { overflow-y: auto; }
@@ -369,8 +370,8 @@
 /* ── Composer block ──────────────────────────────────────────────────── */
 .surf-compose {
     border-top: 1px solid var(--color-bean);
-    background: var(--chassis-brush), var(--color-chassis);
-    box-shadow: var(--bezel-raised);
+    background: var(--sheen), var(--chassis-brush), var(--color-chassis);
+    box-shadow: var(--bezel-raised), var(--depth-2);
 }
 .surf-compose-line {
     display: flex;
@@ -516,7 +517,7 @@
     }
     .surf-shape { flex: 1 1 25%; padding-inline: 5px; justify-content: center; }
     .surf-conv-filter { margin-left: 0; }
-    .surf-conv-body { padding: 8px; }
+    .surf-conv-body { padding: 8px; background: var(--sheen), var(--color-obsidian); box-shadow: var(--depth-1); }
     .surf-compose-line--foot { justify-content: flex-start; }
 }
 
@@ -534,7 +535,7 @@
    turn with it on smaller panes. Container size also covers the Split view. */
 .surf-conv .surf-stream { grid-template-columns: minmax(0, 1.45fr) minmax(290px, 1fr); border: 0; }
 .surf-conv .messages-viewport { min-width: 0; }
-.surf-conv .messages-container { padding: 14px 20px; background: var(--color-sheet); border: 0; }
+.surf-conv .messages-container { padding: 14px 20px; background: var(--sheen), var(--color-obsidian); border: 0; box-shadow: var(--depth-1); }
 .surf-conv .surf-evidence-toggle { display: none; }
 .surf-evidence {
     min-width: 0;
@@ -554,11 +555,11 @@
 .surf-evidence button:focus-visible { outline: 2px solid var(--color-amber); outline-offset: 2px; }
 .surf-evidence-intro { margin: 14px 0; }
 .surf-evidence-search { display: grid; gap: 8px; margin-bottom: 14px; color: var(--color-faint); font: 12px var(--font-mono); }
-.surf-evidence-search input { width: 100%; padding: 10px; background: var(--color-cacao); color: var(--color-ink); border: 1px solid var(--color-bean); border-radius: var(--radius-sm); font: 14px var(--font-serif); }
+.surf-evidence-search input { width: 100%; padding: 10px; background: var(--color-well); color: var(--color-ink); border: 1px solid var(--color-bean); border-radius: var(--radius-sm); font: 14px var(--font-serif); box-shadow: var(--depth-0); }
 .surf-evidence h2 { font: 500 23px/1.25 var(--font-serif); color: var(--color-bone); margin: 16px 0 10px; overflow-wrap: anywhere; }
 .surf-evidence h4 { font: 12px var(--font-mono); color: var(--color-faint); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 10px; }
 .surf-evidence-actions { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-block: 12px; }
-.surf-evidence-quoted, .surf-evidence-selection { margin: 12px 0; padding: 8px 12px; border-left: 2px solid var(--color-amber); background: var(--color-cacao); overflow-wrap: anywhere; }
+.surf-evidence-quoted, .surf-evidence-selection { margin: 12px 0; padding: 8px 12px; border-left: 2px solid var(--color-amber); background: var(--sheen), var(--color-cacao); overflow-wrap: anywhere; box-shadow: var(--depth-2); }
 .surf-evidence-selection { border-left-color: var(--color-teal); }
 .surf-evidence-exchanges { border-block: 1px solid var(--color-bean); padding-block: 14px; margin-block: 14px; }
 .surf-evidence-exchange + .surf-evidence-exchange { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--color-bean); }
@@ -584,7 +585,7 @@
     .surf-conv .surf-evidence-toggle { display: inline-flex; }
     .surf-conv--evidence-open .surf-evidence { display: block; }
     .surf-conv--evidence-open .surf-stream > .messages-viewport { display: none; }
-    .surf-conv .messages-container { padding: 12px; }
+    .surf-conv .messages-container { padding: 12px; background: var(--sheen), var(--color-obsidian); box-shadow: var(--depth-1); }
 }
 @media (max-width: 680px) {
     .surf-conv .surf-conv-kicker { font-size: 10px; letter-spacing: .05em; }
@@ -745,7 +746,7 @@
 .app-layout.surface-short .surf--conversation .surf-other-shapes summary { min-height: 32px; padding-block: 4px; }
 
 /* The passage action follows the selection, including native touch handles. */
-.surf-selection-action { position: fixed; z-index: 30; display: flex; flex-wrap: wrap; gap: 6px; box-sizing: border-box; padding: 9px; background: var(--color-obsidian); border: 1px solid var(--color-amber); border-radius: 5px; box-shadow: var(--shadow-lg); }
+.surf-selection-action { position: fixed; z-index: 30; display: flex; flex-wrap: wrap; gap: 6px; box-sizing: border-box; padding: 9px; background: var(--sheen-strong), var(--color-espresso); border: 1px solid var(--color-amber); border-radius: 5px; box-shadow: var(--shadow-lg), var(--depth-4); }
 .surf-selection-action blockquote { flex-basis: 100%; margin: 0; color: var(--color-ink); font: 14px/1.4 var(--font-serif); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .surf-selection-action p { flex-basis: 100%; margin: 0; color: var(--color-secondary); font: 11px/1.4 var(--font-mono); }
 .surf-selection-action button { border: 1px solid var(--color-amber); background: var(--color-well); color: var(--color-amber); padding: 6px 10px; min-height: 36px; cursor: pointer; font: 12px var(--font-mono); }

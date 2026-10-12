@@ -6,7 +6,7 @@
   place-items: center;
   padding: 1rem;
   /* The room dims behind the sheet: void-dark scrim + a little defocus. */
-  background: rgba(7, 4, 2, 0.72);
+  background: color-mix(in oklab, var(--color-well) 72%, transparent);
   backdrop-filter: blur(5px);
   animation: settingsScrimIn var(--dur-med, 220ms) var(--ease-out);
 }
@@ -22,11 +22,8 @@
   border-radius: var(--radius-chassis);
   /* The sheet is dossier paper lifted off the desk, with a machined outer
      edge so it reads as an instrument face, not a floating div. */
-  background: var(--color-cacao);
-  box-shadow:
-    var(--bezel-raised),
-    inset 0 1px 0 rgba(255,249,240,.06),
-    0 24px 80px rgba(0, 0, 0, 0.55);
+  background: var(--sheen-strong), var(--color-espresso);
+  box-shadow: var(--bezel-raised), var(--depth-4);
   animation: settingsRiseIn var(--dur-slow, 360ms) var(--ease-spring);
 }
 

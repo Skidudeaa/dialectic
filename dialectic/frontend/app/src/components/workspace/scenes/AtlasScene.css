@@ -51,10 +51,10 @@
   position: relative;
   width: 100%;
   text-align: left;
-  background: var(--color-cacao);
+  background: var(--sheen), var(--color-cacao);
   border: 1px solid var(--color-bean);
   border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-sm), var(--depth-2);
   padding: 0.55rem 0.8rem;
   display: flex;
   align-items: baseline;
@@ -69,10 +69,10 @@
     border-color var(--dur-fast, 140ms) var(--ease-out);
 }
 .atlas-row-open:hover {
-  background: var(--color-espresso);
+  background: var(--sheen-strong), var(--color-espresso);
   border-color: var(--color-crater);
   transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), var(--depth-3);
 }
 .atlas-row-open:active {
   transform: translateY(1px);
@@ -223,13 +223,12 @@
    "Selected" chip (styled in World.css) names the state in words. */
 .atlas-row-open[aria-current="true"] {
   border-color: color-mix(in srgb, var(--scene-accent, var(--color-steel)) 45%, var(--color-bean));
-  box-shadow:
-    inset 3px 0 0 var(--scene-accent, var(--color-steel)),
-    var(--shadow-sm);
-  background: color-mix(in srgb, var(--scene-accent, var(--color-steel)) 10%, var(--color-cacao));
+  box-shadow: inset 3px 0 0 var(--scene-accent, var(--color-steel)), var(--shadow-sm), var(--depth-3);
+  background: var(--sheen-strong), color-mix(in srgb, var(--scene-accent, var(--color-steel)) 10%, var(--color-cacao));
 }
 .atlas-row-open[aria-current="true"]:hover {
-  background: color-mix(in srgb, var(--scene-accent, var(--color-steel)) 15%, var(--color-espresso));
+  background: var(--sheen-strong), color-mix(in srgb, var(--scene-accent, var(--color-steel)) 15%, var(--color-espresso));
+  box-shadow: inset 3px 0 0 var(--scene-accent, var(--color-steel)), var(--depth-3);
 }
 
 /* Echoes — citations that crossed a room boundary. Crossing edges drawn with

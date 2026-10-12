@@ -2,7 +2,7 @@
 .protocol-picker-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(10,7,4,.78);
+    background: color-mix(in oklab, var(--color-well) 78%, transparent);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -10,14 +10,14 @@
     animation: fadeIn var(--dur-fast, 140ms) ease-out;
 }
 .protocol-picker {
-    background: var(--color-cacao);
+    background: var(--sheen-strong), var(--color-espresso);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     padding: 24px;
     width: 560px;
     max-height: 80vh;
     overflow-y: auto;
-    box-shadow: 0 28px 70px rgba(0,0,0,.7);
+    box-shadow: var(--depth-4);
     animation: fadeInScale var(--dur-med, 220ms) var(--ease-out);
 }
 .protocol-picker h2 {
@@ -46,7 +46,7 @@
     margin-bottom: 16px;
 }
 .protocol-card {
-    background: var(--color-espresso);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     padding: 12px;
@@ -55,20 +55,21 @@
                 border-color var(--dur-fast, 140ms) var(--ease-out),
                 box-shadow var(--dur-fast, 140ms) var(--ease-out),
                 background-color var(--dur-fast, 140ms) var(--ease-out);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-md), var(--depth-2);
 }
 .protocol-card:hover {
     transform: translateY(-2px);
     border-color: var(--color-crater);
-    box-shadow: var(--shadow-lg), 0 6px 18px rgba(0,0,0,.4);
+    box-shadow: var(--shadow-lg), var(--depth-3);
+    background: var(--sheen-strong), var(--color-espresso);
 }
 .protocol-card:active { transform: translateY(0); }
 .protocol-card.selected {
     border-color: var(--color-amber);
-    background: linear-gradient(var(--color-espresso), var(--color-cacao));
+    background: var(--sheen-strong), var(--color-espresso);
     /* Selected ring — a drawn outline plus the lift shadow, so selection
        reads as a ring and not only as a hue swap. */
-    box-shadow: 0 0 0 1px var(--amber-30), 0 0 14px rgba(242,162,74,.14), var(--shadow-md);
+    box-shadow: 0 0 0 1px var(--amber-30), var(--shadow-md), var(--depth-3);
 }
 .protocol-card.selected:hover { transform: none; }
 .protocol-card h3 {
@@ -117,7 +118,7 @@
 .protocol-config textarea {
     width: 100%;
     min-height: 72px;
-    background: var(--color-void);
+    background: var(--color-well);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     color: var(--color-bone);
@@ -127,13 +128,14 @@
     resize: vertical;
     box-sizing: border-box;
     outline: none;
-    box-shadow: var(--shadow-inset);
+    box-shadow: var(--depth-0);
     transition: border-color var(--dur-fast, 140ms) var(--ease-out),
                 box-shadow var(--dur-fast, 140ms) var(--ease-out);
 }
 .protocol-config textarea:focus {
     border-color: var(--amber-30);
-    box-shadow: var(--shadow-inset), 0 0 0 1px var(--amber-30);
+    box-shadow: 0 0 0 1px var(--amber-30), var(--depth-0);
+    background: var(--color-well);
 }
 .protocol-actions {
     display: flex;

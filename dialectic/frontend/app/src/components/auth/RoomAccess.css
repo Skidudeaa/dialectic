@@ -17,7 +17,7 @@
 .room-access-scrim {
   position: absolute;
   inset: 0;
-  background: rgba(10, 6, 3, 0.68);
+  background: color-mix(in oklab, var(--color-well) 68%, transparent);
   backdrop-filter: blur(2px);
 }
 
@@ -29,8 +29,9 @@
   max-height: min(80vh, 640px);
   overflow-y: auto;
   border-color: var(--color-crater);
-  box-shadow: var(--bezel-raised), 0 32px 64px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--bezel-raised), var(--depth-4);
   animation: fadeInScale var(--dur-med, 220ms) var(--ease-out);
+  background: var(--sheen-strong), var(--color-espresso);
 }
 
 .room-access-dialog-head {

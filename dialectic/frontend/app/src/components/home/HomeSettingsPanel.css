@@ -5,7 +5,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.9rem;
-    background: var(--color-cacao);
+    background: var(--sheen), var(--color-cacao);
     border: 1px solid var(--color-bean);
     border-radius: var(--radius-sm);
     box-shadow: var(--bezel-raised);
@@ -149,7 +149,7 @@
     border: 1px solid var(--color-bean);
     border-left: 3px solid var(--scene-accent, var(--color-amber));
     border-radius: var(--radius-sm);
-    background: var(--color-espresso);
+    background: var(--sheen), var(--color-espresso);
     box-shadow: var(--bezel-raised);
     padding: 10px 12px;
     font-size: 0.78rem;

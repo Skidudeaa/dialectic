@@ -19,9 +19,16 @@
   --drc-mono: var(--font-mono);
   border-radius: var(--radius-sm);
 }
-.dr-companion.input-area-inner { border-radius: var(--radius-sm); }
+.dr-companion.input-area-inner {
+  border-radius: var(--radius-sm);
+  background: var(--sheen), var(--color-cacao);
+  box-shadow: var(--depth-2);
+}
+.dr-companion.input-area-inner:focus-within {
+  box-shadow: var(--depth-2), 0 0 0 2px color-mix(in oklab, var(--drc-tone) 12%, transparent);
+}
 .dr-companion.input-area-inner .input-row { background: transparent; border: 0; box-shadow: none; padding: 0; gap: 8px; }
-.dr-companion.input-area-inner .msg-textarea { color: var(--drc-ink); background: transparent; font-family: var(--drc-font); font-size: 15px; line-height: 1.6; }
+.dr-companion.input-area-inner .msg-textarea { color: var(--drc-ink); background: var(--color-well); font-family: var(--drc-font); font-size: 15px; line-height: 1.6; }
 .dr-companion.input-area-inner :is(.input-hints,.msg-tag-selector,.msg-type-selector) { color: var(--drc-muted); font-family: var(--drc-font); }
 .dr-companion.input-area-inner :is(.tag-btn,.type-btn) { border-radius: 5px; color: var(--drc-muted); font-family: var(--drc-font); }
 .dr-companion.input-area-inner :is(.tag-btn.active,.type-btn.active) { background: var(--drc-interactive); border-color: var(--drc-strong-border); color: var(--drc-ink); }
@@ -30,12 +37,16 @@
 .dr-companion.input-area-inner .attach-chip { background: var(--drc-base); border-color: var(--drc-border); color: var(--drc-ink); }
 .dr-companion.input-area-inner :is(.attach-chip-size,.attach-chip-remove) { color: var(--drc-muted); }
 .dr-companion.input-area-inner .attach-chip-failed { color: var(--drc-negative); border-color: var(--drc-negative); }
-.dr-companion.msg-content-frame { position: relative; }
+.dr-companion.msg-content-frame {
+  position: relative;
+  background: var(--sheen), var(--color-cacao);
+  box-shadow: var(--depth-2);
+}
 .dr-companion.msg-content-frame .msg-content { color: var(--drc-body); font-family: var(--drc-font); }
 .dr-companion.msg-content-frame .msg-content :is(h1,h2,h3,strong) { color: var(--drc-ink); }
 .dr-companion.msg-content-frame .msg-content :is(pre,code) { font-family: var(--drc-mono); }
 .dr-companion.msg-content-frame .msg-content pre { color: var(--drc-body); background: var(--drc-canvas); border-color: var(--drc-border); }
-.dr-companion.msg-content-frame .msg-fold-veil { background: linear-gradient(transparent, var(--drc-base)); }
+.dr-companion.msg-content-frame .msg-fold-veil { background: linear-gradient(transparent, var(--color-cacao)); }
 .dr-companion.msg-proposal :is(.msg-proposal-title,.msg-proposal-statement) { color: var(--drc-ink); }
 .dr-companion.msg-proposal .msg-proposal-title { color: var(--drc-amber); font-family: var(--drc-font); }
 .dr-companion.msg-proposal .msg-proposal-meta { color: var(--drc-muted); }

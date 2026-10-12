@@ -2,7 +2,7 @@
    memo. Machined band, a live LED, the mode glyph, the engraved name, and a
    recessed phase readout. Hue (amber) is always paired with icon + word. */
 .protocol-banner {
-    background: var(--chassis-brush), var(--color-chassis);
+    background: var(--sheen), var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-left: 3px solid var(--color-amber);
     border-radius: var(--radius-chassis);
@@ -141,7 +141,7 @@
 
 /* Concluded — the mode releases; the strip cools to teal. */
 .protocol-concluded {
-    background: var(--chassis-brush), var(--color-chassis);
+    background: var(--sheen), var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-left: 3px solid var(--color-teal);
     border-radius: var(--radius-chassis);

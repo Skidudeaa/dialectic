@@ -6,7 +6,7 @@
     gap: 0.6rem;
     /* Same instrument-card surface as the cockpit modules around it —
        v3: the machined chassis face, matching .cockpit-module. */
-    background: var(--chassis-brush), var(--color-chassis);
+    background: var(--sheen), var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-top: 2px solid var(--scene-accent, var(--color-amber));
     border-radius: var(--radius-chassis);
@@ -25,7 +25,7 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: radial-gradient(circle at 35% 30%, #5A4330, #241710 72%);
+    background: radial-gradient(circle at 35% 30%, var(--color-crater), var(--color-cacao) 72%);
     box-shadow: inset 0 1px 1px rgba(0,0,0,.65), 0 1px 0 rgba(255,249,240,.05);
 }
 .trading-panel::before { left: 7px; }
@@ -171,10 +171,12 @@
     align-items: center;
     gap: 7px;
     padding: 4px 5px;
-    border-bottom: 1px solid rgba(60,42,30,.4);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-bean) 40%, transparent);
     cursor: pointer;
+    background: var(--sheen), var(--color-cacao);
+    box-shadow: var(--depth-2);
 }
-.trading-node-row:hover { background: var(--color-cacao); }
+.trading-node-row:hover { background: var(--sheen-strong), var(--color-espresso); box-shadow: var(--depth-3); }
 /* fired row wash: scarlet 10% */
 .trading-node-row--fired { background: var(--scar-10); }
 /* approaching row wash: amber 8% */
@@ -211,7 +213,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 3px 5px;
-    border-bottom: 1px solid rgba(60,42,30,.4);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-bean) 40%, transparent);
     font-family: var(--font-mono);
     font-size: 12px;
     transition: background-color var(--dur-fast, 140ms) var(--ease-out);
@@ -256,7 +258,7 @@
     padding: 2px 5px;
     font-family: var(--font-mono);
     font-size: 12px;
-    border-bottom: 1px solid rgba(60,42,30,.4);
+    border-bottom: 1px solid color-mix(in oklab, var(--color-bean) 40%, transparent);
     transition: background-color var(--dur-fast, 140ms) var(--ease-out);
 }
 .trading-confluence-row:hover { background: var(--amber-08); }
@@ -452,7 +454,7 @@
     flex-direction: column;
     gap: 0.6rem;
     font-family: var(--font-mono);
-    background: var(--chassis-brush), var(--color-chassis);
+    background: var(--sheen), var(--chassis-brush), var(--color-chassis);
     border: 1px solid var(--color-bean);
     border-top: 2px solid var(--scene-accent, var(--color-amber));
     border-radius: var(--radius-chassis);
@@ -498,7 +500,7 @@
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--color-bone);
-    background: var(--color-void);
+    background: var(--color-well);
     border: 1px solid var(--color-bean);
     border-radius: 2px;
     padding: 0.4rem 0.5rem;
@@ -506,12 +508,14 @@
     resize: vertical;
     transition: border-color var(--dur-fast, 140ms) var(--ease-out),
                 box-shadow var(--dur-fast, 140ms) var(--ease-out);
+    box-shadow: var(--depth-0);
 }
 
 .thesis-create-label input:focus-visible,
 .thesis-create-label textarea:focus-visible {
     border-color: var(--color-amber-mute);
-    box-shadow: 0 0 0 3px rgba(242,162,74,.22);
+    box-shadow: 0 0 0 3px rgba(242,162,74,.22), var(--depth-0);
+    background: var(--color-well);
 }
 
 .thesis-create-error {

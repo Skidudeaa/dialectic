@@ -1,4 +1,4 @@
-:root {
+:root, [data-room-scheme] {
     /* ══════════════════════════════════════════════════════
        DARK ROAST SYSTEM v2 — canonical token set
        Aesthetic: classified dossier, seen by candlelight.
@@ -13,33 +13,48 @@
        re-skins from here alone.
        ══════════════════════════════════════════════════════ */
 
-    /* Surfaces — luminance ladder (deeper floor, brighter lifts) */
-    --color-void:     #0A0603;   /* page background, side rails — v3 deepened
-                                    so the chassis surfaces below read as
-                                    machined metal against a darker room */
-    --color-obsidian: #150D07;   /* stream / content background */
-    --color-sheet:    #1B120B;   /* the dossier PAGE — the bounded sheet the
-                                    transcript sits on. Sits between obsidian
-                                    and cacao; v2.1 exists because obsidian on
-                                    void was a 2% step nobody could see, so
-                                    text read as floating in darkness. */
-    --color-cacao:    #221510;   /* memo cards, exhibits, composer box, panels */
-    --color-espresso: #332217;   /* elevated cards */
-    --color-bean:     #4E3826;   /* all structural borders — visibly drawn now */
-    --color-crater:   #6B5140;   /* hover borders, scrollbar thumb */
+    /* ── ROOM SCHEME INPUTS (2026-10-12) ─────────────────────────────
+       Owner: "the whole app is one brown shade". Every surface, border,
+       ink tier, primary accent and depth shadow below now DERIVES from
+       these three, so each room paints the whole UI in its own palette
+       and each depth tier is a step of that one palette. Rooms set them
+       via [data-room-scheme] (bottom of this file; picked by
+       lib/roomScheme.ts). The defaults here equal Home ("slate") and paint
+       the sign-in screen. The old single brown (hue 55, chroma .032, accent
+       65) was retired as a scheme on the owner's complaint.
+       ───────────────────────────────────────────────────────────────── */
+    --room-hue: 268;          /* surface hue (oklch degrees) */
+    --room-chroma: 0.042;     /* surface saturation */
+    --room-accent-hue: 68;    /* primary accent / CTA hue */
+    --room-accent-chroma: 0.14;
 
-    /* Ink tiers (pre-mixed — never add opacity on top of these) */
-    --color-display:  #FFF9F0;   /* case title + brand chrome ONLY */
-    --color-bone:     #F3E9DC;   /* section headlines, emphasized text */
-    --color-ink:      #E3D2B4;   /* ALL body/dispatch text (workhorse) */
-    --color-secondary:#AC8F66;   /* labels, metadata */
-    --color-faint:    #B09670;   /* timestamps, gutter numbers; >= 4.5:1 */
-    --color-ghost:    #A38865;   /* lowest readable ink tier; >= 4.5:1 */
+    /* Surfaces — luminance ladder, one hue. Lightness steps are wide on
+       purpose: page < column < sheet < card < raised must each be visible. */
+    /* v2 hex values (ember), kept for the record: void #0A0603, obsidian
+       #150D07, sheet #1B120B, cacao #221510, espresso #332217, bean #4E3826,
+       crater #6B5140. */
+    --color-void:     oklch(0.125 calc(var(--room-chroma) * 0.80) var(--room-hue)); /* page, side rails */
+    --color-obsidian: oklch(0.160 calc(var(--room-chroma) * 0.95) var(--room-hue)); /* stream / content column */
+    --color-sheet:    oklch(0.188 calc(var(--room-chroma) * 1.00) var(--room-hue)); /* the dossier PAGE */
+    --color-cacao:    oklch(0.222 calc(var(--room-chroma) * 1.10) var(--room-hue)); /* cards, composer, panels */
+    --color-espresso: oklch(0.272 calc(var(--room-chroma) * 1.20) var(--room-hue)); /* elevated cards */
+    --color-bean:     oklch(0.375 calc(var(--room-chroma) * 1.50) var(--room-hue)); /* structural borders */
+    --color-crater:   oklch(0.480 calc(var(--room-chroma) * 1.50) var(--room-hue)); /* hover borders, thumb */
 
-    /* Accents — hotter than v1 across the board */
-    --color-amber:      #F2A24A;  /* primary accent, CTAs, cursor */
-    --color-amber-hot:  #E77E1F;  /* hover on amber */
-    --color-amber-mute: #CE8450;  /* reader contexts */
+    /* Ink tiers, tinted toward the room so text belongs to its palette.
+       Contrast floors hold on every surface up to espresso. */
+    --color-display:  oklch(0.985 0.010 var(--room-hue));   /* case title + brand chrome ONLY */
+    --color-bone:     oklch(0.940 0.022 var(--room-hue));   /* section headlines */
+    --color-ink:      oklch(0.880 0.034 var(--room-hue));   /* ALL body text (workhorse) */
+    --color-secondary:oklch(0.720 0.055 var(--room-hue));   /* labels, metadata */
+    --color-faint:    oklch(0.740 0.050 var(--room-hue));   /* timestamps; >= 4.5:1 */
+    --color-ghost:    oklch(0.700 0.048 var(--room-hue));   /* lowest readable tier; >= 4.5:1 */
+
+    /* Primary accent: the room's own light. The name "amber" is the slot,
+       not the hue (the old fixed value was #F2A24A). */
+    --color-amber:      oklch(0.790 var(--room-accent-chroma) var(--room-accent-hue));  /* CTAs, cursor */
+    --color-amber-hot:  oklch(0.710 calc(var(--room-accent-chroma) * 1.15) var(--room-accent-hue)); /* hover */
+    --color-amber-mute: oklch(0.700 calc(var(--room-accent-chroma) * 0.80) var(--room-accent-hue)); /* reader contexts */
     --color-teal:       #54D8C6;  /* live/kinetic, success, CONFIRM */
     --color-warning:    #D8B668;  /* warning notes */
     --color-error:      #DD6B3F;  /* errors (non-structural) */
@@ -64,10 +79,10 @@
     --sev-resolve: #54D8C6;
 
     /* Opacity fills — raised so tinted surfaces actually register */
-    --amber-08:  rgba(242,162,74,.10);
-    --amber-12:  rgba(242,162,74,.15);
-    --amber-18:  rgba(242,162,74,.22);
-    --amber-30:  rgba(242,162,74,.34);
+    --amber-08:  color-mix(in oklab, var(--color-amber) 10%, transparent);
+    --amber-12:  color-mix(in oklab, var(--color-amber) 15%, transparent);
+    --amber-18:  color-mix(in oklab, var(--color-amber) 22%, transparent);
+    --amber-30:  color-mix(in oklab, var(--color-amber) 34%, transparent);
     --teal-10:   rgba(84,216,198,.13);
     --teal-18:   rgba(84,216,198,.22);
     --teal-30:   rgba(84,216,198,.34);
@@ -120,8 +135,9 @@
     /* claude-primary: amber */
     --claude-primary:         #F2A24A;
     --claude-primary-dim:     #CE8450;
-    --claude-primary-bg:      var(--amber-08);
-    --claude-primary-border:  var(--amber-30);
+    /* Fixed, not room-tinted: the participant keeps one voice in every room. */
+    --claude-primary-bg:      rgba(242,162,74,.10);
+    --claude-primary-border:  rgba(242,162,74,.34);
     --claude-primary-glow:    rgba(242,162,74,.22);
     /* claude-provoker: warning gold */
     --claude-provoker:        #D8B668;
@@ -154,12 +170,42 @@
     --radius-full: 9999px;  /* pills only */
 
     /* Shadows — paper-like offset, slightly deeper for separation */
-    --shadow-sm:          1px 1px 0 rgba(0,0,0,.22);
-    --shadow-md:          3px 3px 0 rgba(0,0,0,.26);
-    --shadow-lg:          3px 3px 0 rgba(0,0,0,.34);
-    --shadow-glow-indigo: 0 0 12px rgba(242,162,74,.14);  /* repurposed: amber glow */
-    --shadow-glow-amber:  0 0 12px rgba(242,162,74,.18);
-    --shadow-inset:       inset 0 1px 3px rgba(0,0,0,.45);  /* v3: a real well */
+    /* 2026-10-12: the flat 1-3px paper offsets became the depth tiers
+       below (light from above: tinted top edge + soft hue-dark drop). */
+    --shadow-sm:          var(--depth-1);
+    --shadow-md:          var(--depth-2);
+    --shadow-lg:          var(--depth-3);
+    --shadow-glow-indigo: 0 0 12px var(--amber-18);  /* repurposed: accent glow */
+    --shadow-glow-amber:  0 0 14px var(--amber-18);
+    --shadow-inset:       var(--depth-0);
+
+    /* ── DEPTH LADDER (2026-10-12) ──────────────────────────────────
+       One light source, above. Each tier lifts the surface further:
+       a brighter room-tinted top edge, a darker bottom edge, and a
+       longer, softer shadow cast in the room's own darkest shade (not
+       neutral black, so shadows belong to the palette).
+         depth-0  recessed well (inputs, readouts)
+         depth-1  resting panel / column
+         depth-2  card, bubble, composer
+         depth-3  raised / hovered card
+         depth-4  popover, menu, modal
+       Pair a tier with its surface step (cacao for 2, espresso for 3)
+       and layer --sheen over the fill: background: var(--sheen), var(--color-cacao). */
+    --hl-soft:   oklch(0.95 calc(var(--room-chroma) * 2) var(--room-hue) / 0.06);
+    --hl:        oklch(0.95 calc(var(--room-chroma) * 2) var(--room-hue) / 0.11);
+    --hl-strong: oklch(0.97 calc(var(--room-chroma) * 2) var(--room-hue) / 0.17);
+    --shade-soft: oklch(0.04 calc(var(--room-chroma) * 1.2) var(--room-hue) / 0.40);
+    --shade:      oklch(0.04 calc(var(--room-chroma) * 1.2) var(--room-hue) / 0.58);
+    --shade-deep: oklch(0.03 calc(var(--room-chroma) * 1.2) var(--room-hue) / 0.72);
+
+    --depth-0: inset 0 2px 6px var(--shade), inset 0 1px 1px var(--shade-soft), inset 0 -1px 0 var(--hl-soft);
+    --depth-1: inset 0 1px 0 var(--hl-soft), 0 1px 0 var(--shade-soft), 0 3px 8px -4px var(--shade-soft);
+    --depth-2: inset 0 1px 0 var(--hl), inset 0 -1px 0 var(--shade-soft), 0 2px 3px -1px var(--shade), 0 8px 18px -8px var(--shade);
+    --depth-3: inset 0 1px 0 var(--hl-strong), inset 0 -1px 0 var(--shade-soft), 0 4px 8px -2px var(--shade), 0 16px 32px -12px var(--shade-deep);
+    --depth-4: inset 0 1px 0 var(--hl-strong), 0 0 0 1px var(--shade-soft), 0 10px 22px -6px var(--shade), 0 28px 60px -14px var(--shade-deep);
+
+    --sheen:        linear-gradient(180deg, oklch(1 0.02 var(--room-hue) / 0.045), transparent 55%);
+    --sheen-strong: linear-gradient(180deg, oklch(1 0.03 var(--room-hue) / 0.085), transparent 62%);
 
     /* Transitions */
     --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
@@ -179,22 +225,22 @@
        ══════════════════════════════════════════════════════ */
 
     /* Chassis surfaces */
-    --color-chassis: #100A06;   /* raised hardware band: Console, module faces */
-    --color-well:    #070402;   /* recessed display glass behind readouts */
+    --color-chassis: oklch(0.150 calc(var(--room-chroma) * 0.90) var(--room-hue)); /* hardware band (was #100A06) */
+    --color-well:    oklch(0.090 calc(var(--room-chroma) * 0.70) var(--room-hue)); /* recessed glass (was #070402) */
 
     /* Machined-edge bezels — dual light: top highlight, bottom shade */
-    --bezel-raised:   inset 0 1px 0 rgba(255,249,240,.07), inset 0 -1px 0 rgba(0,0,0,.5), 0 2px 5px rgba(0,0,0,.38);
-    --bezel-well:     inset 0 2px 6px rgba(0,0,0,.55), inset 0 -1px 0 rgba(255,249,240,.04);
-    --bezel-key:      inset 0 1px 0 rgba(255,249,240,.10), inset 0 -2px 0 rgba(0,0,0,.45), 0 1px 2px rgba(0,0,0,.4);
-    --bezel-key-down: inset 0 2px 4px rgba(0,0,0,.55);
+    --bezel-raised:   inset 0 1px 0 var(--hl), inset 0 -1px 0 var(--shade), 0 2px 4px -1px var(--shade), 0 8px 16px -8px var(--shade);
+    --bezel-well:     var(--depth-0);
+    --bezel-key:      inset 0 1px 0 var(--hl-strong), inset 0 -2px 0 var(--shade), 0 1px 2px var(--shade), 0 4px 8px -4px var(--shade);
+    --bezel-key-down: inset 0 2px 5px var(--shade-deep), inset 0 -1px 0 var(--hl-soft);
 
     /* LED lamps — hue is ALWAYS paired with shape or text at use sites
        (design v2: no color-only signals) */
     --led-green: var(--sev-stable);
-    --led-amber: var(--color-amber);
+    --led-amber: #F2A24A;   /* a caution lamp is caution in every room */
     --led-red:   var(--color-scarlet);
     --led-teal:  var(--color-teal);
-    --led-off:   #3A2A1C;
+    --led-off:   oklch(0.270 calc(var(--room-chroma) * 1.3) var(--room-hue));
     --led-glow-green: 0 0 6px 1px rgba(163,188,66,.55);
     --led-glow-amber: 0 0 6px 1px rgba(242,162,74,.55);
     --led-glow-red:   0 0 6px 1px rgba(222,81,81,.55);
@@ -241,7 +287,7 @@
        --dur-ambient and scale with --energy-level
    Easings live above: --ease-out, --ease-spring.
    ══════════════════════════════════════════════════════ */
-:root {
+:root, [data-room-scheme] {
     /* Durations */
     --dur-fast:    140ms;   /* hovers, presses, focus rings */
     --dur-med:     220ms;   /* panels, menus, card entrances */
@@ -252,9 +298,9 @@
        raised sheet reads as physically lifted off the desk, not just
        nudged. Compose over the --shadow-* set; values substitute
        textually into box-shadow. */
-    --lift-1: var(--shadow-sm), 0 6px 16px rgba(0,0,0,.26);    /* hover raise */
-    --lift-2: var(--shadow-md), 0 12px 28px rgba(0,0,0,.30);   /* cards, popovers */
-    --lift-3: var(--shadow-lg), 0 20px 44px rgba(0,0,0,.36);   /* modals, drawers */
+    --lift-1: var(--depth-3);   /* hover raise */
+    --lift-2: var(--depth-4);   /* cards, popovers */
+    --lift-3: var(--depth-4), 0 40px 80px -20px var(--shade-deep);   /* modals, drawers */
 
     /* Focus ring — amber outline + offset, with a soft halo companion.
        The global :focus-visible rule in global.css consumes the whole
@@ -263,5 +309,24 @@
     --focus-ring-color:  var(--color-amber);
     --focus-ring-width:  2px;
     --focus-ring-offset: 2px;
-    --focus-ring:        0 0 0 3px rgba(242,162,74,.22);
+    --focus-ring:        0 0 0 3px var(--amber-18);
 }
+
+/* ══════════════════════════════════════════════════════
+   ROOM SCHEMES (2026-10-12) — one hue per room.
+   lib/roomScheme.ts sets data-room-scheme on <html> (the
+   current room) and on each sidebar room card; these inputs
+   repaint every surface, border, ink tier, primary accent
+   and depth shadow above, because the token blocks match
+   `:root, [data-room-scheme]` and re-derive on that element. Surfaces stay
+   dark and low-chroma (a room is a lit space, not a neon
+   sign); the accent carries the identity. Add a scheme here
+   AND in ROOM_SCHEMES, or it never gets picked.
+   ══════════════════════════════════════════════════════ */
+[data-room-scheme="tide"]            { --room-hue: 248; --room-chroma: 0.048; --room-accent-hue: 205; --room-accent-chroma: 0.120; } /* deep navy, cyan light */
+[data-room-scheme="moss"]            { --room-hue: 152; --room-chroma: 0.040; --room-accent-hue: 110; --room-accent-chroma: 0.150; } /* forest floor, lime lamp */
+[data-room-scheme="plum"]            { --room-hue: 318; --room-chroma: 0.046; --room-accent-hue: 355; --room-accent-chroma: 0.130; } /* aubergine, rose */
+[data-room-scheme="slate"]           { --room-hue: 268; --room-chroma: 0.042; --room-accent-hue: 68;  --room-accent-chroma: 0.140; } /* Home: indigo room, amber hearth */
+[data-room-scheme="oxblood"]         { --room-hue: 8;   --room-chroma: 0.062; --room-accent-hue: 75;  --room-accent-chroma: 0.140; } /* wine-dark, brass */
+[data-room-scheme="lagoon"]          { --room-hue: 195; --room-chroma: 0.044; --room-accent-hue: 165; --room-accent-chroma: 0.125; } /* deep teal, mint */
+[data-room-scheme="graphite"]        { --room-hue: 240; --room-chroma: 0.014; --room-accent-hue: 28;  --room-accent-chroma: 0.150; } /* neutral steel, coral */

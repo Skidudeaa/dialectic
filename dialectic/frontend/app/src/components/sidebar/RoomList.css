@@ -35,23 +35,25 @@
     border-radius: var(--radius-sm);
     cursor: pointer;
     position: relative;
-    background: linear-gradient(var(--color-cacao), var(--color-obsidian));
+    background: var(--sheen), var(--color-cacao);
     transition: transform var(--dur-fast, 140ms) var(--ease-out),
                 background var(--dur-fast, 140ms) var(--ease-out),
                 border-color var(--dur-fast, 140ms) var(--ease-out),
                 box-shadow var(--dur-fast, 140ms) var(--ease-out);
+    box-shadow: var(--depth-2);
 }
 .room-item:hover {
     border-color: var(--color-crater);
-    background: linear-gradient(var(--color-espresso), var(--color-cacao));
+    background: var(--sheen-strong), var(--color-espresso);
     transform: translateX(3px);
+    box-shadow: var(--depth-3);
 }
 /* Active case: accent BAR down the left + elevated fill + a real lift off
    the rail — shape and depth, never hue alone. */
 .room-item.active {
     border-color: var(--amber-30);
-    background: linear-gradient(var(--color-espresso), var(--color-cacao));
-    box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255,249,240,.05);
+    background: var(--sheen-strong), var(--color-espresso);
+    box-shadow: var(--shadow-sm), var(--depth-3);
     transform: translateX(3px);
 }
 .room-item.active::before {
