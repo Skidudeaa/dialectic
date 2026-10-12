@@ -38,7 +38,7 @@
     --color-sheet:    oklch(0.188 calc(var(--room-chroma) * 1.00) var(--room-hue)); /* the dossier PAGE */
     --color-cacao:    oklch(0.222 calc(var(--room-chroma) * 1.10) var(--room-hue)); /* cards, composer, panels */
     --color-espresso: oklch(0.272 calc(var(--room-chroma) * 1.20) var(--room-hue)); /* elevated cards */
-    --color-bean:     oklch(0.375 calc(var(--room-chroma) * 1.50) var(--room-hue)); /* structural borders */
+    --color-bean:     oklch(0.320 calc(var(--room-chroma) * 1.40) var(--room-hue)); /* structural borders: quiet, so fill + depth carry layering (was L .375) */
     --color-crater:   oklch(0.480 calc(var(--room-chroma) * 1.50) var(--room-hue)); /* hover borders, thumb */
 
     /* Ink tiers, tinted toward the room so text belongs to its palette.
@@ -159,14 +159,18 @@
     /* Typography */
     --font-serif:   'Newsreader', Georgia, serif;
     --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+    /* 2026-10-12: chrome labels, tabs, buttons. Mono stays for data
+       (numbers, times, ids); serif stays for what people wrote and read. */
+    --font-ui:      'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
     --font-stencil: 'Saira Stencil One', var(--font-mono);
     --font-hand:    'Caveat', cursive;
 
-    /* Radii — dossier aesthetic: near-flat */
-    --radius-sm:   2px;
-    --radius-md:   2px;
-    --radius-lg:   2px;
-    --radius-xl:   2px;
+    /* Radii: 2026-10-12, rounded so layers read as objects you can pick
+       up (owner: "more inviting, more layered"). Was 2px throughout. */
+    --radius-sm:   5px;
+    --radius-md:   8px;
+    --radius-lg:   12px;
+    --radius-xl:   16px;
     --radius-full: 9999px;  /* pills only */
 
     /* Shadows — paper-like offset, slightly deeper for separation */
@@ -255,8 +259,8 @@
     --chassis-brush: repeating-linear-gradient(90deg, rgba(255,249,240,.014) 0 1px, transparent 1px 3px);
 
     /* Radii — chassis vs controls; paper stays at the 2px radii above */
-    --radius-chassis: 5px;
-    --radius-control: 3px;
+    --radius-chassis: 10px;
+    --radius-control: 7px;
 }
 
 /* Seven-segment display face for live numeric readouts ONLY (quote prices,

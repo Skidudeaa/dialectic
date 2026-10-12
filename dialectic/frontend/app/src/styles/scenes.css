@@ -37,7 +37,7 @@
 [data-scene="house"] {
     --scene-accent: var(--color-amber);
     --scene-accent-soft: var(--amber-12);
-    --scene-ambient: radial-gradient(120% 55% at 50% 0%, rgba(242,162,74,.09), transparent 60%);
+    --scene-ambient: radial-gradient(120% 55% at 50% 0%, var(--amber-08), transparent 60%);
 }
 
 /* SURFACE — the workbench: copper lamplight rising off the desktop. */

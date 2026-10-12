@@ -15,7 +15,7 @@ body {
     color: var(--color-ink);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-image: radial-gradient(120% 80% at 50% -10%, rgba(242,162,74,.04), transparent 55%);
+    background-image: radial-gradient(120% 80% at 50% -10%, var(--amber-08), transparent 55%);
 }
 
 /* Monospace shorthand */
@@ -71,7 +71,7 @@ a[href]:not(.prose-body a):not(.msg-content a) {
     border-radius: var(--radius-sm);
     font-size: 0.82rem;
     font-weight: 500;
-    font-family: inherit;
+    font-family: var(--font-ui);
     cursor: pointer;
     transition: transform var(--dur-fast, 140ms) var(--ease-out),
                 background-color var(--dur-fast, 140ms) var(--ease-out),
@@ -87,9 +87,10 @@ a[href]:not(.prose-body a):not(.msg-content a) {
     background: var(--color-amber);
     color: var(--color-void);
     border-color: var(--color-amber-hot);
-    font-family: var(--font-stencil);
-    font-size: 12px;
-    letter-spacing: .06em;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .01em;
     border-radius: var(--radius-control);
     box-shadow: var(--bezel-key);
 }
@@ -136,7 +137,7 @@ a[href]:not(.prose-body a):not(.msg-content a) {
 }
 .form-input:focus {
     border-color: var(--amber-30);
-    box-shadow: 0 0 0 2px rgba(242,162,74,.1);
+    box-shadow: 0 0 0 2px var(--amber-08);
 }
 .form-input::placeholder { color: var(--color-faint); font-style: italic; }
 
