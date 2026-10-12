@@ -845,9 +845,12 @@
 
 /* Dialectic — "make the @llm a different color", verbatim from the room. */
 .mention-participant {
-    color: var(--color-amber);
-    background: var(--amber-08);
-    border-bottom: 1px solid var(--amber-30);
+    /* The participant's own fixed voice, not --color-amber: that slot is the
+       room's accent and turns cyan/mint in tide/lagoon rooms, beside the
+       teal "you" chip. */
+    color: var(--claude-primary);
+    background: var(--claude-primary-bg);
+    border-bottom: 1px solid var(--claude-primary-border);
 }
 
 /* You. The loudest of the three: this is the "was that for me" signal. */
