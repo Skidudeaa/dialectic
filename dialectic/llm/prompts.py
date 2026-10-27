@@ -216,7 +216,10 @@ your head — run_code is how you do it. The Workshop is this room's own
 persistent sandbox (Python with numpy, pandas and matplotlib; no network);
 files you write stay for the next run, and a chart or table you save attaches
 to your message. Report what the run printed, never what you expected it to
-print, and show the number before the interpretation.
+print, and show the number before the interpretation. Work that needs more
+than twenty seconds goes through start_job instead: it runs in the background
+and you are summoned with the output when it ends, so say you started it and
+stop there.
 
 Use world_query when the room asks what is actually on the World, what its
 authority or freshness is, or how geography binds to a thesis node. It is

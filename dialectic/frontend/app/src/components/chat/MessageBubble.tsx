@@ -4,7 +4,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 're
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { addressBlock, decorateMentions, type MentionContext } from '../../lib/mentions'
-import type { Attachment, CommitmentProposal, EvidenceItem, Message, MessageAnchor, MessageRef, Reaction, ThesisSeed, ToolCallTrace } from '../../types'
+import type { Attachment, CommitmentProposal, EvidenceItem, Message, MessageAnchor, MessageRef, Reaction, ThesisSeed, ToolCallTrace, WorkshopJob } from '../../types'
 import type { FieldMark } from '../../types/workspace.ts'
 import { passageKey } from '../../lib/passageAnchor'
 import { api, type MessageDecisionExplain } from '../../lib/api'
@@ -58,6 +58,59 @@ function RunCodeTrace({ call }: { call: ToolCallTrace }) {
       {code && <pre data-run="code">{code}</pre>}
       {stdout && <pre data-run="stdout">{stdout}</pre>}
       {stderr && <pre data-run="stderr">{stderr}</pre>}
+    </details>
+  )
+}
+
+function elapsedLabel(s: number): string {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60)
+  return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m` : `${s}s`
+}
+
+/**
+ * A background run the participant started (start_job), visible on the
+ * message that started it: label, state, elapsed, the live stdout tail, and
+ * the one human verb — Stop. Polls while running; the result arrives as the
+ * participant's own later message, so this line never claims a result.
+ */
+function JobTrace({ call, roomId }: { call: ToolCallTrace; roomId: string }) {
+  const prov = (call.provenance ?? {}) as Record<string, unknown>
+  const jobId = typeof prov.job_id === 'string' ? prov.job_id : ''
+  const label = typeof prov.label === 'string' ? prov.label : 'job'
+  const [job, setJob] = useState<WorkshopJob | null>(null)
+  const [stopping, setStopping] = useState(false)
+  useEffect(() => {
+    if (!jobId) return
+    let alive = true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const tick = async () => {
+      try {
+        const next = await api.getWorkshopJob(roomId, jobId)
+        if (!alive) return
+        setJob(next)
+        if (next.status === 'running') timer = setTimeout(tick, 10_000)
+      } catch {
+        /* a job the room cannot read stays a plain line */
+      }
+    }
+    void tick()
+    return () => { alive = false; if (timer) clearTimeout(timer) }
+  }, [roomId, jobId])
+  const status = job?.status ?? 'running'
+  const state = status === 'running' ? `running ${elapsedLabel(job?.elapsed_s ?? 0)}` : status === 'done' ? 'finished' : status
+  const stop = async () => {
+    setStopping(true)
+    try { await api.killWorkshopJob(roomId, jobId) } catch { setStopping(false) }
+  }
+  return (
+    <details className="msg-evidence-raw msg-job" data-status={status} open={status === 'running'}>
+      <summary>— job “{label}” · {state}{job?.exit_code != null && status !== 'done' ? ` · exit ${job.exit_code}` : ''}</summary>
+      {job?.stdout_tail && <pre data-run="stdout">{job.stdout_tail}</pre>}
+      {status === 'running' && (
+        <button type="button" className="msg-action-btn" onClick={stop} disabled={stopping}>
+          {stopping ? 'Stopping…' : 'Stop'}
+        </button>
+      )}
     </details>
   )
 }
@@ -948,6 +1001,11 @@ export function MessageBubble({
         {/* Outside the bubble, so a folded message still shows what it carried —
             the picture is usually the point of the message, not its tail. */}
         {attachments.length > 0 && <MessageAttachments attachments={attachments} />}
+
+        {/* A background run this message started: visible without opening the tool list. */}
+        {currentRoomId && isMachine && !isStreaming && toolCalls.filter((call) => call.name === 'start_job' && call.ok).map((call, index) => (
+          <JobTrace key={`job-${index}`} call={call} roomId={currentRoomId} />
+        ))}
 
         {/* What the answer rests on, beside the thought it answers. */}
         {currentRoomId && isMachine && !isStreaming && toolCalls.some((call) => call.evidence?.length) && (

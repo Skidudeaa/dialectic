@@ -114,3 +114,39 @@ that makes a room worth opening over a private chat.
   `dialectic.service` runs and what the tests must run under.
 - The sandbox shares the production kernel and CPU (prlimit plus a user
   namespace, not a VM). A second box before credentials.
+
+## Addendum, same day — `start_job`: the long runs (built, not deployed)
+
+- **What it is**: tool 27, `start_job(code, label, language, timeout_s ≤ 21600)`.
+  `llm/workshop_jobs.py` launches the same sandbox detached (stdout/stderr to
+  files in the run dir, own session), inserts a `workshop_jobs` row
+  (**migration `028_workshop_jobs.sql`**, applied to `dialectic_test`, NOT yet
+  to production), and an in-process watcher finalises the row when the
+  process ends. The `workshop_job_watch` scheduler job (60 s, flag
+  `DIALECTIC_WORKSHOP_ENABLED`) marks jobs the restart killed as `lost` and
+  reports each finished job as a forced participant turn
+  (`reason=workshop_job_done`) with the files bound to that message and
+  broadcast live. `api/workshop.py`: list / get (live stdout tail) / kill
+  (human-only, stamps `killed_by`). Frontend: `JobTrace` on the message that
+  started the job, polling 10 s while running, with Stop; release entry
+  `the-workshop-jobs`; `JOB_COPY.workshop_job_watch`.
+- **Laws**: one running job per room, three per host; JSON values go to
+  asyncpg raw (the pool codec serialises); `clock_timestamp()` for job
+  timestamps; the scheduler tick never runs the job, only spawns the report.
+- **Proof**: `tests/test_workshop_jobs.py` (13: launch/finalise, timeout
+  kill, human kill, cap, lost pass, report sweep with real bind + broadcast,
+  owed-on-silence, tool, routes). Real-model probe
+  (`scratchpad/probe/start_job_probe.py`, rolled-back test DB): Sonnet chose
+  `start_job` unprompted for a "don't make me wait" Monte Carlo, 1800 s
+  budget, replied it would report back without estimating; the job ran 7.2 M
+  paths in 5.4 s, two files, one commit. The REPORT turn through the real
+  orchestrator is proven only with a fake orchestrator; production is the
+  first real one.
+- **Deploy order**: `psql dialectic < dialectic/migrations/028_workshop_jobs.sql`
+  → `systemctl restart dialectic` (the banner must list
+  `workshop_job_watch@60s`) → frontend release. Rollback: the flag to 0 and a
+  restart removes both tools and the sweep; the table can stay.
+- **Known gaps**: no push notification when a job finishes (the report rides
+  the ordinary message broadcast); no `list_jobs` tool for the participant
+  (it learns a job is running from the one-per-room refusal); a job and a
+  `run_code` can touch the same workspace files concurrently.

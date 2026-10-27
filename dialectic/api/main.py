@@ -50,6 +50,7 @@ from api.workspace import router as workspace_router, set_workspace_db_pool
 from api.field import router as field_router, set_field_db_pool
 from api.atlas import router as atlas_router, set_atlas_db_pool
 from api.geo import router as geo_router, set_geo_db_pool
+from api.workshop import router as workshop_router, set_workshop_db_pool
 from api.decisions import router as decisions_router, set_decisions_db_pool
 from api.rate_limit import check_rate_limit
 from field_marks import resolve_subjects_in_room
@@ -182,6 +183,9 @@ async def lifespan(app: FastAPI):
         set_atlas_db_pool(db_pool)
         # Set db_pool for the World Lens write door (api/geo.py)
         set_geo_db_pool(db_pool)
+        set_workshop_db_pool(db_pool)
+        from llm import workshop_jobs as _workshop_jobs
+        _workshop_jobs.set_db_pool(db_pool)
         # Set db_pool for the decision-provenance read (api/decisions.py)
         set_decisions_db_pool(db_pool)
         set_capabilities_db_pool(db_pool)
@@ -236,6 +240,7 @@ async def lifespan(app: FastAPI):
         from llm.field_inference import register_field_inference_jobs
         from world_adapters import register_world_signal_jobs
         from llm.world_watch import register_world_watch_jobs
+        from llm.workshop_jobs import register_workshop_jobs
 
         async def _scheduler_broadcast(room_id, message):
             await connection_manager.broadcast(room_id, message)
@@ -259,6 +264,7 @@ async def lifespan(app: FastAPI):
         register_field_inference_jobs(scheduler_instance)
         register_world_signal_jobs(scheduler_instance)
         register_world_watch_jobs(scheduler_instance)
+        register_workshop_jobs(scheduler_instance)
         scheduler_instance.start()
 
     # The capability map reads these exact Job objects, so what it reports and
@@ -369,6 +375,7 @@ app.include_router(mirror_router)
 app.include_router(atlas_router)
 # World Lens (migration 021): a room's geometry -- human-only write door.
 app.include_router(geo_router)
+app.include_router(workshop_router)
 
 # Decision provenance -- why a machine message happened, batched per thread.
 # Fenced the same way as every other room route: room token + membership.

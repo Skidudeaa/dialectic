@@ -1474,3 +1474,8 @@ scikit-learn statsmodels pyarrow`). Live in production since 2026-10-27
 (backend PID 1970471, release `20261027T080824Z-workshop-3a24bbb`). Tests: `tests/test_workshop.py` (real
 runs skip without bwrap/prlimit/venv). Full account in root `CLAUDE.md`'s
 same-day amendment; the plan it opens is `docs/MOONSHOT_2026-10-27.md`.
+Later the same day: `start_job` (tool 27) + `llm/workshop_jobs.py` + migration
+`028_workshop_jobs.sql` + the `workshop_job_watch` sweep (60 s) + `api/workshop.py`
+(list/get/kill). A finished job returns as a forced participant turn
+(`reason=workshop_job_done`) carrying the files; a job lost to a restart is
+reported as lost. Apply 028 before restarting.

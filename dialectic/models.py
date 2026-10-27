@@ -76,6 +76,8 @@ class EventType(str, Enum):
     FIELD_MARK_CREATED = "field_mark_created"
     # World Lens (migration 021) — geography attached to existing rows.
     GEO_SCOPE_CREATED = "geo_scope_created"
+    WORKSHOP_JOB_STARTED = "workshop_job_started"
+    WORKSHOP_JOB_FINISHED = "workshop_job_finished"
     GEO_SCOPE_REVIEWED = "geo_scope_reviewed"
 
 

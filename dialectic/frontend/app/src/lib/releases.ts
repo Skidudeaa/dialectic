@@ -51,6 +51,18 @@ export interface Release {
 /** Newest first. `releases.test.ts` pins that order at the data level. */
 export const RELEASES: Release[] = [
   {
+    id: 'the-workshop-jobs',
+    date: '2026-10-27',
+    title: 'Long runs in the Workshop',
+    body:
+      'A run that needs longer than a turn can be started in the background: Dialectic says it started ' +
+      'the job, the message that started it shows the job running with its latest output and a Stop ' +
+      'button, and when it ends Dialectic comes back on its own with the numbers and the files as ' +
+      '[[attachment|attachments]]. A job that was running when the server restarted is reported as lost, ' +
+      'never silently dropped.',
+    jobs: ['workshop_job_watch'],
+  },
+  {
     id: 'the-workshop',
     date: '2026-10-27',
     title: 'The Workshop',

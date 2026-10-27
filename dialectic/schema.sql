@@ -1042,3 +1042,31 @@ CREATE TABLE IF NOT EXISTS world_observations (
 CREATE INDEX IF NOT EXISTS idx_world_observations_room ON world_observations (room_id, last_seen_at DESC);
 COMMENT ON TABLE world_observations IS
     'World Lens consumer: provider contacts observed inside a human-confirmed scope. Evidence, never authority. See llm/world_watch.py.';
+
+-- 028: the Workshop's long runs (start_job); see migrations/028_workshop_jobs.sql
+CREATE TABLE IF NOT EXISTS workshop_jobs (
+    id UUID PRIMARY KEY,
+    room_id UUID NOT NULL REFERENCES rooms(id),
+    thread_id UUID NOT NULL REFERENCES threads(id),
+    label TEXT NOT NULL,
+    language TEXT NOT NULL CHECK (language IN ('python', 'bash')),
+    code TEXT NOT NULL,
+    timeout_s INT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('running', 'done', 'failed', 'killed', 'lost')),
+    pid INT,
+    run_dir TEXT NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    finished_at TIMESTAMPTZ,
+    exit_code INT,
+    commit_sha TEXT,
+    stdout_tail TEXT,
+    stderr_tail TEXT,
+    changed_files JSONB NOT NULL DEFAULT '[]'::jsonb,
+    killed_by UUID REFERENCES users(id),
+    result_message_id UUID REFERENCES messages(id),
+    reported_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_workshop_jobs_room ON workshop_jobs(room_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_workshop_jobs_unreported ON workshop_jobs(finished_at)
+    WHERE reported_at IS NULL;

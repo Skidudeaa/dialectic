@@ -22,6 +22,7 @@ NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
 EXPECTED_TOOLS = {
     "run_code",
+    "start_job",
     "get_live_quotes",
     "get_polymarket_odds",
     "get_thesis_state",
@@ -103,9 +104,9 @@ def registry(room, db):
 
 
 class TestRegistryContract:
-    def test_registers_all_twenty_six_tools(self, registry):
+    def test_registers_all_twenty_seven_tools(self, registry):
         assert set(registry.names()) == EXPECTED_TOOLS
-        assert len(registry.tools) == 26
+        assert len(registry.tools) == 27
 
     def test_every_tool_guard_outlives_its_http_client(self, registry):
         """The seam's timeout law, enforced for the whole registry.

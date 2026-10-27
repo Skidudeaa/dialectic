@@ -115,6 +115,10 @@ const JOB_COPY: Record<string, JobCopy> = {
     what: 'polls public feeds — aircraft, earthquakes, fires, satellites, launches — for the areas your rooms have actually placed on the map, and shows what is there right now; each observation expires on its own, and placing one is yours alone',
     off: 'it stays dark only when no room has placed geography.',
   },
+  workshop_job_watch: {
+    label: 'Workshop jobs',
+    what: 'watches the long runs Dialectic starts in this room’s sandbox: reports each finished one back with its output and files, and marks a run the server lost as lost',
+  },
   world_watch: {
     label: 'World watch',
     term: 'world-signal',

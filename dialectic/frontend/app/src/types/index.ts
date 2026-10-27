@@ -63,6 +63,25 @@ export interface EvidenceItem {
   score?: number;
 }
 
+/** One Workshop background run (start_job), as GET /rooms/{id}/workshop/jobs/{job} projects it. */
+export interface WorkshopJob {
+  id: string;
+  room_id: string;
+  label: string;
+  language: 'python' | 'bash';
+  status: 'running' | 'done' | 'failed' | 'killed' | 'lost';
+  timeout_s: number;
+  started_at: string;
+  finished_at: string | null;
+  elapsed_s: number;
+  exit_code: number | null;
+  commit_sha: string | null;
+  changed_files: string[];
+  result_message_id: string | null;
+  stdout_tail: string | null;
+  stderr_tail: string | null;
+}
+
 export interface ToolCallTrace {
   name: string;
   /** Human-facing phrase, stamped server-side from the tool registry. */

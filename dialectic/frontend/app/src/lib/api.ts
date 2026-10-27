@@ -15,6 +15,7 @@ import type {
   Thread,
   ThreadNode,
   UserRoom,
+  WorkshopJob,
 } from '../types/index.ts';
 import type { AtlasProjection } from '../types/atlas.ts';
 import type { GeoScope, GeoScopeReview, WorldObservationsProjection } from '../types/geo.ts';
@@ -406,6 +407,14 @@ class DialecticAPI {
   /** Durable `world_observations` for this room's confirmed scopes over the
    *  last `hours` — the recorded layer WorldView draws beside live signals,
    *  and what WorldStrip counts. Room token + JWT, like getGeo. */
+  /** One Workshop job; polled by the bubble that started it while it runs. */
+  async getWorkshopJob(roomId: string, jobId: string): Promise<WorkshopJob> {
+    return this.fetch(`/rooms/${roomId}/workshop/jobs/${jobId}`);
+  }
+  /** The one human write on a job: stop it. The watcher records `killed`. */
+  async killWorkshopJob(roomId: string, jobId: string): Promise<{ killed: boolean; job_id: string }> {
+    return this.fetch(`/rooms/${roomId}/workshop/jobs/${jobId}/kill`, { method: 'POST' });
+  }
   async getWorldObservations(roomId: string, hours = 24): Promise<WorldObservationsProjection> {
     return this.fetch(`/rooms/${roomId}/world/observations?hours=${hours}`);
   }

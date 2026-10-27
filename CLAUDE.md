@@ -431,3 +431,36 @@ at `/var/lib/dialectic/workshop/rooms/e78ebe5c…`.
   production kernel (prlimit + user namespace, not a VM — a second machine
   before credentials); one backend worker per workspace (per-process
   asyncio lock, no file lock).
+
+**Same day, later — `start_job`, the long runs (tool 27, migration `028`).**
+`llm/workshop_jobs.py`: `start()` launches the same sandbox DETACHED
+(stdout/stderr to files in the run dir, own session, in-process watcher task
+up to `JOB_TIMEOUT_MAX_S` = 6 h, default 1 h) and inserts a `workshop_jobs`
+row; the watcher finalises it (`done`/`failed`/`killed`, tails, changed
+files, commit). **Eighteen scheduled jobs**: `workshop_job_watch` (60 s,
+`DIALECTIC_WORKSHOP_ENABLED`) marks `running` rows whose process is gone as
+`lost` (a restart kills jobs — bwrap dies with its parent; the row is honest
+about it) and reports every finished row with `reported_at IS NULL` as a
+**forced participant turn** (`reason=workshop_job_done`, the world_watch
+shape: a SYSTEM context message built by `report_content`, then
+`force_response`), binding the filed artifacts to that message through
+`documents.bind_documents` and broadcasting `message_created` WITH
+`attachments` + `metadata.workshop_job`. A turn that does not fire leaves
+the row owed; the next tick retries (REPORT_PER_TICK = 3). Caps: one
+running job per room, three per host; a human stops one via
+`POST /rooms/{id}/workshop/jobs/{job}/kill` (`api/workshop.py`, room token +
+JWT + membership; stamps `killed_by` then SIGKILLs the group). Reads:
+`GET …/workshop/jobs[/{job}]` with a live stdout tail. Frontend: `JobTrace`
+on the message that started the job (polls 10 s while running, Stop button),
+release entry `the-workshop-jobs` verified against the live job name,
+`JOB_COPY.workshop_job_watch`. **JSONB law re-learned**: hand asyncpg the
+list/dict — the pool codec serialises; a `json.dumps` is encoded twice.
+`clock_timestamp()` for started/finished/reported, because `now()` is frozen
+for a whole transaction and a test's elapsed read 0 s. Proof (real Sonnet,
+real sandbox, rolled-back `dialectic_test`): asked for a 36-level Monte
+Carlo "don't make me wait", the model chose `start_job` unprompted with an
+1800 s budget and replied "I'll report back with actual numbers when it
+finishes — not estimating anything now"; 7.2 M paths finished in 5.4 s,
+two files, one commit. Suites: `tests/test_workshop_jobs.py` 13 (real pg +
+bwrap, fake orchestrator for the report), frontend
+`MessageBubble.workshop.test.tsx`.

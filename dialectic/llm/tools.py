@@ -13,6 +13,7 @@ from . import cairn_client as cn
 from . import defuddle_client as dc
 from . import documents as documents_mod
 from . import workshop as workshop_mod
+from . import workshop_jobs as workshop_jobs_mod
 from . import reddit_client as rc
 from . import tradingdesk_client as td
 from .world import WORLD_QUERY_INNER_TIMEOUT_S
@@ -2181,7 +2182,68 @@ def _build_workshop_tools(room, db) -> list[Tool]:
             },
         }
 
+    async def start_job(args: dict) -> dict:
+        code = str(args.get("code") or "")
+        language = str(args.get("language") or "python").strip().lower()
+        job = await workshop_jobs_mod.start(
+            db, room.id, code, label=str(args.get("label") or ""), language=language,
+            timeout_s=args.get("timeout_s"),
+        )
+        return {
+            "job": job,
+            "status": (
+                f"Started \"{job['label']}\" in the background (budget {job['timeout_s']}s). "
+                "You will be summoned with its output and files when it finishes. Tell the room "
+                "you started it and what it will produce; do not wait for it and do not claim "
+                "results now."
+            ),
+            "provenance": {"kind": "workshop_job", "job_id": job["job_id"], "label": job["label"],
+                           "timeout_s": job["timeout_s"], "language": language},
+        }
+
     return [
+        Tool(
+            name="start_job",
+            description=(
+                "Start a long Workshop run in the background and return at once. Use it "
+                "when the work needs more than about twenty seconds — a parameter sweep, a "
+                "large simulation, a long backtest — because run_code is killed at "
+                f"{workshop_mod.RUN_TIMEOUT_MAX_S}s. Same sandbox, same workspace, same "
+                "rules as run_code (no network, files you save attach to the report). When "
+                "the job ends you are summoned with its stdout/stderr tail and its files; "
+                "until then say you started it and stop. One job per room at a time; "
+                f"budget up to {workshop_jobs_mod.JOB_TIMEOUT_MAX_S // 3600} hours. Print "
+                "progress lines — humans can watch the tail while it runs and stop it."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "The whole program."},
+                    "label": {
+                        "type": "string",
+                        "description": "One line naming what the job computes; shown to the room while it runs.",
+                    },
+                    "language": {
+                        "type": "string",
+                        "enum": list(workshop_mod.LANGUAGES),
+                        "description": "python (default) or bash.",
+                    },
+                    "timeout_s": {
+                        "type": "integer",
+                        "description": (
+                            f"Wall-clock budget in seconds, 1-{workshop_jobs_mod.JOB_TIMEOUT_MAX_S}. "
+                            f"Default {workshop_jobs_mod.JOB_TIMEOUT_DEFAULT_S}."
+                        ),
+                    },
+                },
+                "required": ["code", "label"],
+            },
+            execute=start_job,
+            label="starting a workshop job",
+            # Spawn + two INSERTs + a workspace snapshot; the guard only has to
+            # outlive the default client floor, never the job.
+            timeout_s=20.0,
+        ),
         Tool(
             name="run_code",
             description=(
