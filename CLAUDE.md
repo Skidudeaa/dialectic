@@ -432,7 +432,7 @@ at `/var/lib/dialectic/workshop/rooms/e78ebe5c…`.
   before credentials); one backend worker per workspace (per-process
   asyncio lock, no file lock).
 
-**Same day, later — `start_job`, the long runs (tool 27, migration `028`).**
+**Same day, later — `start_job`, the long runs (tool 27, migration `028`). LIVE since 2026-10-27 14:21 CDT:** 028 applied to prod, backend PID `2683147` on `5aa8816` (banner lists `workshop_job_watch@60s`), PWA release `20261027T192154Z-workshop-jobs-5aa8816` (served hashes match; previous `20261027T080824Z-workshop-3a24bbb`). Production proof over the real socket (E2E Test Room): the participant started an 8-round job and replied "not waiting on it now"; 40 s later the sweep posted the report turn with `rounds.csv` bound and `metadata.workshop_job` on the live `message_created` frame — sums 1,5,14,30,55,91,140,204, correct.
 `llm/workshop_jobs.py`: `start()` launches the same sandbox DETACHED
 (stdout/stderr to files in the run dir, own session, in-process watcher task
 up to `JOB_TIMEOUT_MAX_S` = 6 h, default 1 h) and inserts a `workshop_jobs`

@@ -1478,4 +1478,5 @@ Later the same day: `start_job` (tool 27) + `llm/workshop_jobs.py` + migration
 `028_workshop_jobs.sql` + the `workshop_job_watch` sweep (60 s) + `api/workshop.py`
 (list/get/kill). A finished job returns as a forced participant turn
 (`reason=workshop_job_done`) carrying the files; a job lost to a restart is
-reported as lost. Apply 028 before restarting.
+reported as lost. 028 is applied in production (live since 2026-10-27, PID 2683147,
+release `20261027T192154Z-workshop-jobs-5aa8816`); a fresh DB needs it beside the baseline.

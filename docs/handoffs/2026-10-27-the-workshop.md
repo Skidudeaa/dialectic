@@ -115,13 +115,22 @@ that makes a room worth opening over a private chat.
 - The sandbox shares the production kernel and CPU (prlimit plus a user
   namespace, not a VM). A second box before credentials.
 
-## Addendum, same day — `start_job`: the long runs (built, not deployed)
+## Addendum, same day — `start_job`: the long runs (LIVE)
+
+**Deployed 14:21 CDT at the owner's call:** migration 028 on prod (20 columns,
+3 indexes), backend PID `2683147` on `5aa8816` with `workshop_job_watch@60s`
+in the banner, release `20261027T192154Z-workshop-jobs-5aa8816` (previous
+`20261027T080824Z-workshop-3a24bbb`). Production proof: a real socket turn in
+the E2E Test Room started an 8-round job ("not waiting on it now"); 40 s
+later the sweep's forced turn arrived on the live socket with `rounds.csv`
+bound and `metadata.workshop_job`, correct sums. Rows, events and the bound
+attachment verified in the DB; no tracebacks in the journal.
 
 - **What it is**: tool 27, `start_job(code, label, language, timeout_s ≤ 21600)`.
   `llm/workshop_jobs.py` launches the same sandbox detached (stdout/stderr to
   files in the run dir, own session), inserts a `workshop_jobs` row
-  (**migration `028_workshop_jobs.sql`**, applied to `dialectic_test`, NOT yet
-  to production), and an in-process watcher finalises the row when the
+  (**migration `028_workshop_jobs.sql`**, applied to `dialectic_test` and
+  production), and an in-process watcher finalises the row when the
   process ends. The `workshop_job_watch` scheduler job (60 s, flag
   `DIALECTIC_WORKSHOP_ENABLED`) marks jobs the restart killed as `lost` and
   reports each finished job as a forced participant turn
@@ -140,8 +149,7 @@ that makes a room worth opening over a private chat.
   `start_job` unprompted for a "don't make me wait" Monte Carlo, 1800 s
   budget, replied it would report back without estimating; the job ran 7.2 M
   paths in 5.4 s, two files, one commit. The REPORT turn through the real
-  orchestrator is proven only with a fake orchestrator; production is the
-  first real one.
+  orchestrator is proven in production (above).
 - **Deploy order**: `psql dialectic < dialectic/migrations/028_workshop_jobs.sql`
   → `systemctl restart dialectic` (the banner must list
   `workshop_job_watch@60s`) → frontend release. Rollback: the flag to 0 and a
