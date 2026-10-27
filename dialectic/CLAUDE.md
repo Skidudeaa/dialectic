@@ -1470,6 +1470,7 @@ the same `_bind_documents` pass write_document uses). Flag
 `DIALECTIC_WORKSHOP_ENABLED`; venv at `/var/lib/dialectic/workshop/venv`
 (rebuild: `uv venv --python /usr/bin/python3.12 venv && uv pip install
 --python venv/bin/python numpy pandas matplotlib scipy sympy polars
-scikit-learn statsmodels pyarrow`). Tests: `tests/test_workshop.py` (real
+scikit-learn statsmodels pyarrow`). Live in production since 2026-10-27
+(backend PID 1970471, release `20261027T080824Z-workshop-3a24bbb`). Tests: `tests/test_workshop.py` (real
 runs skip without bwrap/prlimit/venv). Full account in root `CLAUDE.md`'s
 same-day amendment; the plan it opens is `docs/MOONSHOT_2026-10-27.md`.

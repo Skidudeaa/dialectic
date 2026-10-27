@@ -372,8 +372,17 @@ keep unobserved physical-platform and owner acceptance explicit.
 Raw telemetry first: human messages per week went 110 (w/o 2026-08-10) →
 24 → 11 → 13 → 1 → **0 every week since 2026-09-21**. The house was empty for
 five weeks. `docs/MOONSHOT_2026-10-27.md` names pull as the limiter and
-funds hands first; this is its first organ, built and proven, **not
-deployed** (both units run their working trees; the restart is the owner's).
+funds hands first; this is its first organ, built, proven and **LIVE since
+2026-10-27 03:07 CDT**: backend PID `1970471` on commit `3a24bbb` (`/health`
+ok, 17 jobs in the scheduler banner), PWA release
+`20261027T080824Z-workshop-3a24bbb` (built from a clean worktree of the
+commit, served `index.html`/`sw.js` hashes match, previous release
+`20261012T052046Z-room-palette-1041fb4` kept for rollback). `pypdf` 6.21.2
+was installed for `/usr/bin/python3` the same hour (19/19 newsletter tests).
+Production proof over the real WebSocket (E2E Test Room, Test User, the
+`write_document` probe recipe): `run_code` ran in 42 ms, `fib.csv` arrived on
+`llm_done` already bound to message `ed12b05e…`, workspace commit `ee34d01`
+at `/var/lib/dialectic/workshop/rooms/e78ebe5c…`.
 
 - **Twenty-six tools.** `run_code(code, language=python|bash, timeout_s≤25)`
   in `llm/workshop.py`, registered by `_build_workshop_tools` under
