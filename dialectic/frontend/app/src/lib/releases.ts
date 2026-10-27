@@ -51,6 +51,18 @@ export interface Release {
 /** Newest first. `releases.test.ts` pins that order at the data level. */
 export const RELEASES: Release[] = [
   {
+    id: 'the-workshop',
+    date: '2026-10-27',
+    title: 'The Workshop',
+    body:
+      'Dialectic can run code now. Ask for a backtest, a simulation, a chart, or a table from a file ' +
+      'you dropped, and it runs Python in a sandbox that belongs to the room: no network, nothing ' +
+      'outside the room\u2019s own workspace, killed at a time limit. Whatever it saves ' +
+      '[[attachment|attaches]] to its message, a chart shows inline, and every run is a commit in ' +
+      'the room\u2019s workspace so the next run can build on the last. Under \u201cused N tools\u201d ' +
+      'the code and what it printed are there to read.',
+  },
+  {
     id: 'working-surface',
     date: '2026-09-03',
     title: 'The working surface',

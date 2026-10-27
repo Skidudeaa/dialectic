@@ -21,6 +21,7 @@ from tests.conftest import make_room
 NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
 EXPECTED_TOOLS = {
+    "run_code",
     "get_live_quotes",
     "get_polymarket_odds",
     "get_thesis_state",
@@ -102,9 +103,9 @@ def registry(room, db):
 
 
 class TestRegistryContract:
-    def test_registers_all_twenty_five_tools(self, registry):
+    def test_registers_all_twenty_six_tools(self, registry):
         assert set(registry.names()) == EXPECTED_TOOLS
-        assert len(registry.tools) == 25
+        assert len(registry.tools) == 26
 
     def test_every_tool_guard_outlives_its_http_client(self, registry):
         """The seam's timeout law, enforced for the whole registry.
@@ -139,6 +140,7 @@ class TestRegistryContract:
         from llm import tools as tools_mod
         from llm import tradingdesk_client as td
         from llm import defuddle_client as dc
+        from llm import workshop as workshop_mod
 
         by_name = {tool.name: tool for tool in registry.tools}
         pairs = [
@@ -148,6 +150,7 @@ class TestRegistryContract:
             ("read_article", dc.DEFAULT_TIMEOUT_S),
             ("save_reading", dc.DEFAULT_TIMEOUT_S),
             ("world_query", tools_mod.WORLD_QUERY_INNER_TIMEOUT_S),
+            ("run_code", workshop_mod.RUN_TIMEOUT_MAX_S),
         ]
         for name, inner in pairs:
             tool = by_name[name]

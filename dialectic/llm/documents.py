@@ -159,14 +159,26 @@ async def store_document(db, room_id: UUID, title: str, markdown: str) -> dict:
     return attachment_payload(row)
 
 
+# The provenance kinds whose attachments the orchestrator binds to the turn's
+# message: write_document files one (`attachment_id`), run_code files up to
+# ARTIFACT_CAP (`attachment_ids`). Same rows, same NULL-uploader convention,
+# same bind predicate below.
+BOUND_PROVENANCE_KINDS = frozenset({"document", "workshop"})
+
+
 def document_ids_from_calls(calls: Optional[list]) -> list[UUID]:
-    """Attachment ids of every write_document in a tool trace."""
+    """Attachment ids of every LLM-filed artifact in a tool trace."""
     out: list[UUID] = []
     for entry in calls or []:
         prov = entry.get("provenance") if isinstance(entry, dict) else None
-        if isinstance(prov, dict) and prov.get("kind") == "document":
+        if not isinstance(prov, dict) or prov.get("kind") not in BOUND_PROVENANCE_KINDS:
+            continue
+        raw_ids = prov.get("attachment_ids")
+        if not isinstance(raw_ids, list):
+            raw_ids = [prov.get("attachment_id")]
+        for raw in raw_ids:
             try:
-                out.append(UUID(str(prov.get("attachment_id"))))
+                out.append(UUID(str(raw)))
             except (ValueError, TypeError):
                 continue
     return out

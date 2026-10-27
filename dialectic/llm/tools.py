@@ -12,6 +12,7 @@ from uuid import UUID
 from . import cairn_client as cn
 from . import defuddle_client as dc
 from . import documents as documents_mod
+from . import workshop as workshop_mod
 from . import reddit_client as rc
 from . import tradingdesk_client as td
 from .world import WORLD_QUERY_INNER_TIMEOUT_S
@@ -2139,6 +2140,95 @@ def _build_cairn_tools() -> list[Tool]:
     ]
 
 
+def _workshop_enabled() -> bool:
+    return workshop_mod.workshop_enabled()
+
+
+def _build_workshop_tools(room, db) -> list[Tool]:
+    """The participant's hands: run_code in this room's persistent sandbox.
+    Closes over the room so a run can never land in another room's
+    workspace, and over db so artifacts file as this room's attachments."""
+
+    async def run_code(args: dict) -> dict:
+        code = str(args.get("code") or "")
+        language = str(args.get("language") or "python").strip().lower()
+        result = await workshop_mod.run(room.id, code, language=language, timeout_s=args.get("timeout_s"))
+        workspace = workshop_mod.workspace_dir(room.id)
+        artifacts = await workshop_mod.file_artifacts(db, room.id, workspace, result["changed_files"])
+        names = ", ".join(a["original_name"] for a in artifacts)
+        if result["timed_out"]:
+            status = f"Killed at {result['timeout_s']}s. Output below is what it printed before the kill."
+        elif artifacts:
+            status = (f"Attached to your message: {names}. Do not paste their contents into the chat; "
+                      "say what they show.")
+        else:
+            status = "No files changed. Only what was printed came back."
+        return {
+            "run": {k: result[k] for k in ("exit_code", "timed_out", "duration_ms", "stdout", "stderr", "run_dir", "commit")},
+            "artifacts": [{"filename": a["original_name"], "kind": a["kind"], "bytes": a["bytes"]} for a in artifacts],
+            "changed_files": result["changed_files"],
+            "status": status,
+            "provenance": {
+                "kind": "workshop",
+                "attachment_ids": [a["id"] for a in artifacts],
+                "language": language,
+                "exit_code": result["exit_code"],
+                "timed_out": result["timed_out"],
+                "duration_ms": result["duration_ms"],
+                "commit": result["commit"],
+                "stdout_tail": result["stdout"][-600:],
+                "stderr_tail": result["stderr"][-300:],
+            },
+        }
+
+    return [
+        Tool(
+            name="run_code",
+            description=(
+                "Run code in this room's Workshop: a persistent Linux sandbox with "
+                "Python 3.12, numpy, pandas, polars, scipy, statsmodels, scikit-learn, "
+                "sympy and matplotlib (Agg). Use it when computing beats recalling — a "
+                "backtest or simulation, a chart, a table from a file someone dropped, "
+                "a statistic, arithmetic you would otherwise do in your head. The "
+                "workspace persists across runs and turns: files you write stay, so "
+                "keep helpers in modules and import them next time. Every file the run "
+                "creates or changes attaches to your message — save charts as PNG and "
+                "tables as CSV. stdout and stderr come back truncated; print what you "
+                "want to see, a silent run returns nothing. No network inside; nothing "
+                "outside /work is writable; the run is killed at timeout_s. Never "
+                "describe an output you did not get back."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "The whole program. Python by default; bash for shell work.",
+                    },
+                    "language": {
+                        "type": "string",
+                        "enum": list(workshop_mod.LANGUAGES),
+                        "description": "python (default) or bash.",
+                    },
+                    "timeout_s": {
+                        "type": "integer",
+                        "description": (
+                            f"Wall-clock kill, 1-{workshop_mod.RUN_TIMEOUT_MAX_S}. "
+                            f"Default {workshop_mod.RUN_TIMEOUT_DEFAULT_S}."
+                        ),
+                    },
+                },
+                "required": ["code"],
+            },
+            execute=run_code,
+            label="running code in the workshop",
+            # The guard must outlive the longest run the schema allows plus the
+            # git commit and artifact filing that follow it.
+            timeout_s=workshop_mod.RUN_TIMEOUT_MAX_S + 4.0,
+        ),
+    ]
+
+
 def build_registry(room, db) -> ToolRegistry:
     """
     ARCHITECTURE: Build the per-room tool set — the tradingDesk reads, memory
@@ -2155,4 +2245,6 @@ def build_registry(room, db) -> ToolRegistry:
         tools += _build_world_tools(room, db)
     if _cairn_tools_enabled():
         tools += _build_cairn_tools()
+    if _workshop_enabled():
+        tools += _build_workshop_tools(room, db)
     return ToolRegistry(tools=tools)

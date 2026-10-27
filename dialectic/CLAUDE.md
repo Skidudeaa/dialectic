@@ -1458,3 +1458,18 @@ default scene of an ordinary room.
   `test_world_watch_pg` failures (reproduced on a clean HEAD worktree; not
   this work), frontend 690+ (`tsc -b`, eslint and the lazy-Cesium build
   contract clean).
+
+## Amendment 2026-10-27 — run_code: the Workshop (amend-beside)
+
+`llm/workshop.py` + `_build_workshop_tools` in `llm/tools.py` add the
+twenty-sixth tool, `run_code`: a per-room persistent bubblewrap sandbox
+(no network, uid nobody, only `/work` writable, 25 s cap, every run a git
+commit at `/var/lib/dialectic/workshop/rooms/<room_id>`), whose new or changed
+files file as LLM-authored `attachments` (`provenance.attachment_ids`, bound by
+the same `_bind_documents` pass write_document uses). Flag
+`DIALECTIC_WORKSHOP_ENABLED`; venv at `/var/lib/dialectic/workshop/venv`
+(rebuild: `uv venv --python /usr/bin/python3.12 venv && uv pip install
+--python venv/bin/python numpy pandas matplotlib scipy sympy polars
+scikit-learn statsmodels pyarrow`). Tests: `tests/test_workshop.py` (real
+runs skip without bwrap/prlimit/venv). Full account in root `CLAUDE.md`'s
+same-day amendment; the plan it opens is `docs/MOONSHOT_2026-10-27.md`.

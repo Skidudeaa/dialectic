@@ -366,3 +366,59 @@ those historical observations. Browser-engine runs and viewport/input
 simulations are engineering evidence, not acceptance on the corresponding
 physical OS/device. Name the actual platform, browser, and input tested and
 keep unobserved physical-platform and owner acceptance explicit.
+
+## Amendment 2026-10-27 — the Workshop: the participant has hands (amend-beside)
+
+Raw telemetry first: human messages per week went 110 (w/o 2026-08-10) →
+24 → 11 → 13 → 1 → **0 every week since 2026-09-21**. The house was empty for
+five weeks. `docs/MOONSHOT_2026-10-27.md` names pull as the limiter and
+funds hands first; this is its first organ, built and proven, **not
+deployed** (both units run their working trees; the restart is the owner's).
+
+- **Twenty-six tools.** `run_code(code, language=python|bash, timeout_s≤25)`
+  in `llm/workshop.py`, registered by `_build_workshop_tools` under
+  `DIALECTIC_WORKSHOP_ENABLED` (default on). One persistent workspace per
+  room at `DIALECTIC_WORKSHOP_ROOT/rooms/<room_id>` (default
+  `/var/lib/dialectic/workshop`), a git repo in which **every run is a
+  commit**. The sandbox is **bubblewrap** (never Docker): `--unshare-all`,
+  uid 65534 in a fresh user namespace, `/usr` and the Workshop's own uv venv
+  (`…/workshop/venv`, 743 MB: numpy pandas polars scipy statsmodels sklearn
+  sympy matplotlib pyarrow) read-only, only `/work` writable, tmpfs `/tmp`,
+  `prlimit` AS 8 GB / nproc 128 / fsize 200 MB, wall-clock SIGKILL on the
+  process group. Measured on this host: connect(1.1.1.1:53) → errno 101,
+  `/etc/shadow` and `dialectic/.env` absent, a `sleep(30)` under a 2 s kill
+  leaves no orphan and keeps what it printed (readers are separate tasks —
+  cancelling `communicate()` under `wait_for` drops the bytes already read).
+  `PYTHONPATH=/work` so run two can `import helper` from run one.
+- **Artifacts are `attachments` rows**, the write_document convention
+  (uploader NULL, message NULL; `kind` by mime, PNG dims parsed), capped at 8
+  per run and the per-kind byte cap. `documents.document_ids_from_calls`
+  now reads `provenance.attachment_ids` beside `attachment_id` for kinds in
+  `BOUND_PROVENANCE_KINDS = {document, workshop}`, so the orchestrator's
+  existing `_bind_documents` homes them on both tool paths unchanged.
+- **The guard law held the cap**: every tool guard must stay under half the
+  60 s loop budget, so runs cap at 25 s (guard 29 s). Hours-long work is
+  `start_job`, the moonshot's next piece, not a longer cap.
+- **Frontend**: `RunCodeTrace` in `MessageBubble.tsx` renders the code and
+  stdout/stderr tails under "used N tools"; `releases.ts` carries
+  `the-workshop` (and its `[[attachment|…]]` gloss clears the long-red
+  `WhatsNewPanel > explains a hard word`). No CSS touched (the owner's
+  palette pass is dirty across 90 CSS files — preserved, not staged).
+- **Proven through the real loop** (`dialectic/deploy/probe_run_code.py`,
+  real Sonnet, real bwrap, fake DB): asked for 20,000 GBM paths, the model
+  chose `run_code` unprompted, ran 2.6 s, printed p5/p95 = 86.85/114.61
+  (theory 86.7/114.5), filed a 1040×650 PNG, one workspace commit.
+- Suites at this gate: backend **2423 passed, 5 failed — all five red on a
+  clean HEAD worktree too** (four in `test_newsletter_ingest`, one
+  `test_workspace_objects_pg::test_proposals_carry_stable_source_coordinates`);
+  frontend 783/784 (the one red, `ShapeTree > merge candidate`, passes at
+  HEAD and lives in the owner's uncommitted `ShapeTree.tsx`), lint and the
+  Cesium build contract clean. The newsletter four are one fact:
+  **`pypdf` is not installed for `/usr/bin/python3`**, verified the
+  interpreter `dialectic.service` runs (`systemctl show -p ExecStart`), so
+  newsletter ingest is broken in production until `pip install pypdf`.
+- **Known limits, on purpose**: no network inside (search/browse are the
+  next organ, behind the two-key permission ledger); the sandbox shares the
+  production kernel (prlimit + user namespace, not a VM — a second machine
+  before credentials); one backend worker per workspace (per-process
+  asyncio lock, no file lock).

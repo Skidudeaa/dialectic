@@ -38,6 +38,30 @@ const FOLD_THRESHOLD_CHARS = 700
  */
 const ALWAYS_FOLDED: ReadonlySet<string> = new Set(['llm_annotator'])
 
+/**
+ * What the Workshop ran and what came back, readable under "used N tools".
+ * The code is the call's own input; the output tail rides provenance, which
+ * the tool loop lifts onto the trace entry. Nothing here is fetched: a run
+ * that is not in the metadata did not happen.
+ */
+function RunCodeTrace({ call }: { call: ToolCallTrace }) {
+  const prov = (call.provenance ?? {}) as Record<string, unknown>
+  const code = typeof call.input?.code === 'string' ? call.input.code : ''
+  const stdout = typeof prov.stdout_tail === 'string' ? prov.stdout_tail : ''
+  const stderr = typeof prov.stderr_tail === 'string' ? prov.stderr_tail : ''
+  const exit = typeof prov.exit_code === 'number' ? prov.exit_code : null
+  const commit = typeof prov.commit === 'string' ? prov.commit.slice(0, 7) : ''
+  const verdict = prov.timed_out === true ? 'killed at the time limit' : exit === 0 ? 'ran clean' : exit === null ? 'did not run' : `exit ${exit}`
+  return (
+    <details className="msg-evidence-raw msg-run">
+      <summary>— {verdict}{commit && ` · ${commit}`}</summary>
+      {code && <pre data-run="code">{code}</pre>}
+      {stdout && <pre data-run="stdout">{stdout}</pre>}
+      {stderr && <pre data-run="stderr">{stderr}</pre>}
+    </details>
+  )
+}
+
 export type InvestigateMode = 'evidence' | 'challenge'
 
 /** Short revision handle for a content hash. */
@@ -963,7 +987,9 @@ export function MessageBubble({
                     {typeof call.latency_ms === 'number' && (
                       <span className="msg-tool-latency">— {call.latency_ms}ms</span>
                     )}
-                    {call.provenance && Object.keys(call.provenance).length > 0 && (
+                    {call.name === 'run_code' ? (
+                      <RunCodeTrace call={call} />
+                    ) : call.provenance && Object.keys(call.provenance).length > 0 && (
                       <span className="msg-tool-provenance">
                         — {Object.entries(call.provenance)
                           .map(([key, value]) => `${key}: ${String(value)}`)
