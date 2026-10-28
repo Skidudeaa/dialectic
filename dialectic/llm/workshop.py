@@ -265,14 +265,15 @@ async def run(room_id: UUID, code: str, language: str = "python", timeout_s: Opt
     }
 
 
-async def file_artifacts(db, room_id: UUID, workspace: str, rel_paths: list[str]) -> list[dict]:
-    """File the run's new/changed files as LLM-authored attachments (uploader
-    NULL, message NULL) — the orchestrator binds them to the turn's message.
-    Oversize files and anything past ARTIFACT_CAP are skipped, not failed:
-    the run already happened and its output is real either way."""
-    payloads: list[dict] = []
+def select_artifacts(workspace: str, rel_paths: list[str]) -> list[tuple[str, str, str]]:
+    """The (rel_path, mime, kind) a run's new/changed files would file as —
+    the one filter file_artifacts and the job report share, so a report can
+    name exactly the files that will attach without filing them first.
+    Oversize and empty files and anything past ARTIFACT_CAP are skipped, not
+    failed: the run already happened and its output is real either way."""
+    chosen: list[tuple[str, str, str]] = []
     for rel in rel_paths:
-        if len(payloads) >= ARTIFACT_CAP:
+        if len(chosen) >= ARTIFACT_CAP:
             break
         full = os.path.join(workspace, rel)
         if not os.path.isfile(full):
@@ -283,6 +284,16 @@ async def file_artifacts(db, room_id: UUID, workspace: str, rel_paths: list[str]
         if size == 0 or size > max_bytes_for_kind(kind):
             logger.info("Workshop skipped artifact %s (%d bytes, %s)", rel, size, kind)
             continue
+        chosen.append((rel, mime, kind))
+    return chosen
+
+
+async def file_artifacts(db, room_id: UUID, workspace: str, rel_paths: list[str]) -> list[dict]:
+    """File the run's new/changed files as LLM-authored attachments (uploader
+    NULL, message NULL) — the orchestrator binds them to the turn's message."""
+    payloads: list[dict] = []
+    for rel, mime, kind in select_artifacts(workspace, rel_paths):
+        full = os.path.join(workspace, rel)
         with open(full, "rb") as fh:
             data = fh.read()
         sha = hashlib.sha256(data).hexdigest()

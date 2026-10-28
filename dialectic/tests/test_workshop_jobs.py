@@ -371,3 +371,63 @@ def test_get_and_kill_route_shapes(monkeypatch):
     assert killed == [(ROOM, UUID(job["id"]), CALLER)]  # the caller, never a body-supplied user
     monkeypatch.setattr(workshop_jobs, "kill", AsyncMock(return_value=False))
     assert client.post(f"/rooms/{ROOM}/workshop/jobs/{job['id']}/kill", headers=HEADERS).status_code == 404
+
+
+# ── soak: the report must not file artifacts for a turn that never fired ──
+
+@pytest.mark.asyncio
+async def test_a_turn_that_does_not_fire_files_no_orphan_attachments(pg, ws_env, monkeypatch):
+    """Filing happens only once the report turn has fired. Before this, a
+    silent model left one unbound LLM-authored attachment row (and one media
+    file) per retry tick, forever — the retry queue became an orphan mill."""
+    import llm.orchestrator as orch_mod
+
+    class _Silent(_FakeOrchestrator):
+        async def force_response(self, **kwargs):
+            return SimpleNamespace(triggered=False, response=None)
+
+    monkeypatch.setattr(orch_mod, "LLMOrchestrator", _Silent)
+    ws = workshop.workspace_dir(ROOM)
+    with open(os.path.join(ws, "late.csv"), "w") as fh:
+        fh.write("a\n1\n")
+    job_id = await _insert_finished(pg, changed=["late.csv"])
+    ctx = SchedulerContext(pool=_Pool(pg), broadcast=None)
+    for _ in range(2):
+        assert (await workshop_jobs.sweep(ctx))["reported"] == 0
+    assert await pg.fetchval("SELECT count(*) FROM attachments WHERE room_id = $1", ROOM) == 0
+    assert await pg.fetchval("SELECT reported_at FROM workshop_jobs WHERE id = $1", job_id) is None
+
+
+# ── soak: ownership is the watcher, never the pid ────────────────────
+
+async def _insert_running(pg, *, pid: int, age_minutes: int = 10) -> UUID:
+    job_id = uuid4()
+    await pg.execute(
+        """INSERT INTO workshop_jobs (id, room_id, thread_id, label, language, code, timeout_s, status, run_dir, pid, started_at)
+           VALUES ($1, $2, $3, 'orphan', 'python', 'x', 60, 'running', 'runs/orphan', $4, now() - make_interval(mins => $5))""",
+        job_id, ROOM, THREAD, pid, age_minutes)
+    return job_id
+
+
+@pytest.mark.asyncio
+async def test_a_running_row_nobody_watches_is_lost_even_if_its_pid_is_alive(pg, ws_env):
+    """After a restart the watcher is gone and the pid is free to be recycled
+    by any long-lived process. A liveness check on the pid pinned such a row
+    `running` forever and held the room's one-job cap with it."""
+    job_id = await _insert_running(pg, pid=os.getpid())  # alive, and not ours
+    assert str(job_id) not in workshop_jobs._watchers
+    assert await workshop_jobs.mark_lost(pg) == 1
+    assert await pg.fetchval("SELECT status FROM workshop_jobs WHERE id = $1", job_id) == "lost"
+
+
+@pytest.mark.asyncio
+async def test_kill_never_signals_a_pid_this_process_does_not_own(pg, ws_env, monkeypatch):
+    """A Stop on a row this process has no watcher for must not SIGKILL the
+    pid — the service runs as root and that pid may now be someone else's."""
+    job_id = await _insert_running(pg, pid=os.getpid())
+    signalled: list = []
+    monkeypatch.setattr(workshop_jobs.os, "killpg", lambda pid, sig: signalled.append(pid))
+    assert await workshop_jobs.kill(pg, ROOM, job_id, USER) is True
+    assert signalled == []
+    row = await pg.fetchrow("SELECT status, killed_by FROM workshop_jobs WHERE id = $1", job_id)
+    assert row["status"] == "lost" and row["killed_by"] == USER

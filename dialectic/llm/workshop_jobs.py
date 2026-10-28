@@ -83,18 +83,6 @@ def _tail_file(path: str, limit: int) -> str:
     return ("…" + text) if size > limit else text
 
 
-def _pid_alive(pid: Optional[int]) -> bool:
-    if not pid:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
 async def _root_thread_id(db, room_id: UUID) -> UUID:
     row = await db.fetchrow(
         "SELECT id FROM threads WHERE room_id = $1 ORDER BY created_at ASC LIMIT 1", room_id,
@@ -240,6 +228,17 @@ async def kill(db, room_id: UUID, job_id: UUID, user_id: UUID) -> bool:
     )
     if row is None:
         return False
+    if str(job_id) not in _watchers:
+        # No watcher here means the process died with the backend that
+        # started it, and its pid may already belong to someone else — this
+        # service runs as root, so it is never signalled. Retire the row.
+        await db.execute(
+            """UPDATE workshop_jobs SET status = 'lost', finished_at = clock_timestamp(),
+                   stderr_tail = COALESCE(stderr_tail, '') || E'\\n[lost: no process to stop — the backend restarted while this job ran]'
+               WHERE id = $1""",
+            job_id,
+        )
+        return True
     if row["pid"]:
         try:
             os.killpg(int(row["pid"]), signal.SIGKILL)
@@ -289,7 +288,11 @@ async def mark_lost(conn) -> int:
            WHERE status = 'running' AND started_at < now() - make_interval(secs => $1)""",
         LOST_GRACE_S,
     )
-    lost = [r["id"] for r in rows if str(r["id"]) not in _watchers and not _pid_alive(r["pid"])]
+    # Ownership is the watcher, never the pid: a running row with no watcher
+    # in this process can never be finalised (bwrap died with its parent),
+    # and a liveness check on a recycled pid pinned such rows `running` for
+    # good — with the room's one-job cap held by a ghost.
+    lost = [r["id"] for r in rows if str(r["id"]) not in _watchers]
     if lost:
         await conn.execute(
             """UPDATE workshop_jobs SET status = 'lost', finished_at = clock_timestamp(),
@@ -332,7 +335,10 @@ async def _report_one(ctx: SchedulerContext, conn, row) -> bool:
     workspace = workshop.workspace_dir(room_id)
     job = _project(row, None)
     changed = job["changed_files"]
-    artifacts = await workshop.file_artifacts(conn, room_id, workspace, changed) if changed else []
+    # Name what WILL attach, file nothing yet: a turn that does not fire
+    # leaves the row owed and the next tick retries — filing here minted one
+    # orphan attachment row (and media file) per retry, forever.
+    to_file = workshop.select_artifacts(workspace, changed) if changed else []
     loaded = await _load_room_context(conn, room_id)
     if loaded is None:
         logger.warning("Workshop job %s: room %s has no context to report into", row["id"], room_id)
@@ -343,7 +349,7 @@ async def _report_one(ctx: SchedulerContext, conn, row) -> bool:
         sequence=(messages[-1].sequence + 1) if messages else 1,
         created_at=datetime.now(timezone.utc),
         speaker_type=SpeakerType.SYSTEM, user_id=None, message_type=MessageType.TEXT,
-        content=report_content(job, [a["original_name"] for a in artifacts]),
+        content=report_content(job, [os.path.basename(rel) for rel, _, _ in to_file]),
     )
     orchestrator = LLMOrchestrator(conn, db_pool=ctx.pool)
     result = await orchestrator.force_response(
@@ -353,6 +359,13 @@ async def _report_one(ctx: SchedulerContext, conn, row) -> bool:
     if not (result.triggered and result.response):
         return False
     response = result.response
+    # The turn fired: claim the row FIRST, so a failure while filing can
+    # never summon a second turn for the same job.
+    await conn.execute(
+        "UPDATE workshop_jobs SET result_message_id = $2, reported_at = clock_timestamp() WHERE id = $1",
+        row["id"], response.id,
+    )
+    artifacts = await workshop.file_artifacts(conn, room_id, workspace, [rel for rel, _, _ in to_file]) if to_file else []
     bound = await bind_documents(conn, room_id, response.id, [
         {"provenance": {"kind": "workshop", "attachment_ids": [a["id"] for a in artifacts]}},
     ]) if artifacts else []
@@ -361,10 +374,6 @@ async def _report_one(ctx: SchedulerContext, conn, row) -> bool:
                || jsonb_build_object('workshop_job', $1::jsonb)
            WHERE id = $2""",
         {"id": job["id"], "label": job["label"], "status": job["status"]}, response.id,
-    )
-    await conn.execute(
-        "UPDATE workshop_jobs SET result_message_id = $2, reported_at = clock_timestamp() WHERE id = $1",
-        row["id"], response.id,
     )
     if ctx.broadcast is not None:
         await ctx.broadcast(room_id, OutboundMessage(
