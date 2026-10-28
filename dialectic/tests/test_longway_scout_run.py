@@ -344,7 +344,7 @@ class RefusingProvider(ScriptedProvider):
         research=not (len(request.messages)>1 and isinstance(request.messages[1]['content'],str))
         if research and self.turns['research']==2:
             self.turns['research']+=1
-            return response('propose',{'url':URL,'claim':'A ferry sails every Tuesday at dawn','scope':'schedule','load_bearing':True})
+            return response('propose',{'url':URL,'claim':'Pelni ships are the slowest and cheapest but most reliable choice','scope':'schedule','load_bearing':True})
         return await super().complete(request)
 
 
@@ -353,7 +353,8 @@ async def test_refused_proposals_are_logged_and_counted_in_the_receipt(db,house,
     receipt=await scout.run(house.pool,house.room,'banda-islands',provider=RefusingProvider(),fetcher=captured_page)
     assert receipt['status']=='done' and receipt['proposals']==0,receipt
     refused=[e for e in receipt['log'] if e['tool']=='propose_refused']
-    assert len(refused)==1 and refused[0]['claim']=='A ferry sails every Tuesday at dawn' and refused[0]['reason']
+    assert len(refused)==1 and refused[0]['claim']=='Pelni ships are the slowest and cheapest but most reliable choice'
+    assert 'the closest line on the page: "Pelnis are the slowest, cheapest and most reliable option' in refused[0]['reason']
     content=await db.fetchval("SELECT content FROM messages WHERE thread_id=$1 AND metadata ? 'longway_scout_run'",house.thread)
     assert 'filed 0 proposals (1 refused by the passage gate)' in content
 
@@ -409,3 +410,54 @@ async def test_thin_pages_are_rendered_when_firecrawl_is_configured(db,house,ban
     readers=[e.get('reader') for e in log if e['tool']=='read_page']
     assert readers==['defuddle','firecrawl','defuddle'] and any(e['tool']=='render' and e['error']=='RuntimeError' for e in log)
     assert not any('fc-test' in json.dumps(e) for e in log)
+
+
+@pytest.mark.asyncio
+async def test_failed_fetches_render_or_refund(db,house,banda,monkeypatch):
+    """A page that blocks the extractor is rendered when Firecrawl is configured; a page never got costs no budget."""
+    row=await scout.reserve(house.pool,house.room,'banda-islands')
+    async def blocked(url):
+        raise RuntimeError('HTTP 429')
+    rendered=AsyncMock(return_value={'content':'Jadwal: Express Cantika Tulehu - Banda Kamis 09:00. '*30,'site':'bandaneiratour.com','published':None,'reader':'firecrawl'})
+    monkeypatch.setenv('LONGWAY_FIRECRAWL_KEY','fc-test')
+    page=await scout.Research(house.pool,row,fetcher=blocked,renderer=rendered).read_page({'url':'https://bandaneiratour.com/x'})
+    assert 'Cantika' in page['text'] and not page['thin']
+    assert await db.fetchval('SELECT pages_read FROM longway_scout_runs WHERE id=$1',row['id'])==1
+    with pytest.raises(RuntimeError):
+        await scout.Research(house.pool,row,fetcher=blocked,renderer=AsyncMock(side_effect=RuntimeError('down'))).read_page({'url':'https://bandaneiratour.com/y'})
+    assert await db.fetchval('SELECT pages_read FROM longway_scout_runs WHERE id=$1',row['id'])==1
+    monkeypatch.delenv('LONGWAY_FIRECRAWL_KEY')
+    with pytest.raises(RuntimeError):
+        await scout.Research(house.pool,row,fetcher=blocked,renderer=rendered).read_page({'url':'https://bandaneiratour.com/z'})
+    assert await db.fetchval('SELECT pages_read FROM longway_scout_runs WHERE id=$1',row['id'])==1
+    log=await db.fetchval('SELECT log FROM longway_scout_runs WHERE id=$1',row['id'])
+    assert [e.get('reader') or e.get('error') for e in log if e['tool']=='read_page']==['firecrawl','RuntimeError','RuntimeError']
+
+
+def test_refusal_names_the_closest_line():
+    from organs.longway.proposals import closest_unit
+    content=("# Schedule\n\n| Express Cantika | Ambon-Banda | Thursday 9:00 |\n| KM Pangrango | Ambon-Banda | 2 Oct |\n\n"
+             "The office opens at nine.")
+    assert closest_unit('Express Cantika sails Ambon to Banda on Thursday at 9:00',content)=='Express Cantika Ambon-Banda Thursday 9:00'
+    assert closest_unit('Visa on arrival costs one million rupiah',content) is None
+
+
+@pytest.mark.asyncio
+async def test_brave_calls_are_spaced_a_second_apart():
+    import time
+    from organs.longway import search
+    class Client:
+        def __init__(self):
+            self.times=[]
+        async def get(self,*args,**kwargs):
+            self.times.append(time.monotonic())
+            class Response:
+                def raise_for_status(self):
+                    pass
+                def json(self):
+                    return {'web':{'results':[{'url':'https://x','title':'t','description':'d'}]}}
+            return Response()
+    client=Client()
+    rows=await asyncio.gather(search.brave(client,'k','ambon banda',3),search.brave(client,'k','banda ambon',3))
+    assert [r[0]['url'] for r in rows]==['https://x','https://x']
+    assert client.times[1]-client.times[0]>=1.0

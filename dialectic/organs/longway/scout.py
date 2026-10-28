@@ -211,27 +211,38 @@ class Research:
         if count is None:
             self.reason = 'pages budget exhausted'
             raise BudgetStop(self.reason)
+        key = os.environ.get('LONGWAY_FIRECRAWL_KEY', '').strip()
+        reader = 'defuddle'
         try:
             article = await asyncio.wait_for(self.fetcher(url), timeout=22)
             if not isinstance(article, dict):
                 raise ValueError('Extractor returned no article')
         except Exception as exc:
-            await self.log('read_page', url=url, error=type(exc).__name__)
-            raise
+            # A page that blocks or rate-limits the extractor (403, 429: nine of the fifth run's reads) is what
+            # the renderer is for. A page the Scout never got costs no budget.
+            rendered = await self.render(url, key) if key else None
+            if rendered is None:
+                async with self.pool.acquire() as db:
+                    await db.execute('UPDATE longway_scout_runs SET pages_read=pages_read-1 WHERE id=$1', self.row['id'])
+                await self.log('read_page', url=url, error=type(exc).__name__)
+                raise
+            article, reader = rendered, 'firecrawl'
         text = str(article.get('content') or '')
-        reader = 'defuddle'
-        key = os.environ.get('LONGWAY_FIRECRAWL_KEY', '').strip()
-        if len(text) < 1000 and key:
+        if len(text) < 1000 and key and reader == 'defuddle':
             # Thin through defuddle means a page rendered by JavaScript, usually: render it and keep the longer text.
-            try:
-                rendered = await asyncio.wait_for(self.renderer(url, key), timeout=25)
-                if len(str(rendered.get('content') or '')) > len(text):
-                    article, text, reader = rendered, str(rendered['content']), 'firecrawl'
-            except Exception as exc:
-                await self.log('render', url=url, error=type(exc).__name__)
+            rendered = await self.render(url, key)
+            if rendered is not None and len(str(rendered.get('content') or '')) > len(text):
+                article, text, reader = rendered, str(rendered['content']), 'firecrawl'
         await self.log('read_page', url=url, characters=len(text), thin=len(text)<1000, truncated=len(text)>12000, reader=reader)
         self.pages[url] = dict(article, content=text[:12000], truncated=len(text)>12000, thin=len(text)<1000)
         return self.pages[url]
+
+    async def render(self, url, key):
+        try:
+            return await asyncio.wait_for(self.renderer(url, key), timeout=25)
+        except Exception as exc:
+            await self.log('render', url=url, error=type(exc).__name__)
+            return None
 
     async def read_page(self, args):
         article = await self.fetch(args['url'])

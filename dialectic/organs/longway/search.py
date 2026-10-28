@@ -4,10 +4,15 @@ Protocol references verified 2026-10-28:
 https://api-dashboard.search.brave.com/app/documentation/web-search
 https://exa.ai/docs/reference/search
 """
+import asyncio
 import os
+import time
 from uuid import uuid4
 
 import httpx
+
+_brave_gate = asyncio.Lock()
+_brave_last = 0.0
 
 
 def configuration():
@@ -21,8 +26,15 @@ def configuration():
 
 
 async def brave(client, key, query, count):
-    response = await client.get('https://api.search.brave.com/res/v1/web/search',
-        params={'q': query, 'count': count}, headers={'X-Subscription-Token': key})
+    global _brave_last
+    async with _brave_gate:
+        # Brave's plans allow one query per second; the Scout issues several in one turn.
+        wait = _brave_last + 1.05 - time.monotonic()
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _brave_last = time.monotonic()
+        response = await client.get('https://api.search.brave.com/res/v1/web/search',
+            params={'q': query, 'count': count}, headers={'X-Subscription-Token': key})
     response.raise_for_status()
     return [{'url': r['url'], 'title': r.get('title'), 'snippet': r.get('description')}
             for r in response.json().get('web', {}).get('results', [])[:count]]

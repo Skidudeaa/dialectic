@@ -30,15 +30,13 @@ def supported_passage(claim, content):
     return None
 
 
-def whole_sentence_passage(claim, content):
-    """Preserve the sentence around a lexical match, including its negation.
+def units_of(content):
+    """The quotable units of extracted text, in page order.
 
-    WHY: the old gate could extract a positive phrase from a suspended-service
-    sentence. Do not trim a long sentence to fit; refuse it. Extractor paragraphs
-    without punctuation are allowed; headings and link-only menus are not. A list
-    item or a table row is its own unit: a timetable line ("Tulehu-Banda: Thursdays,
-    9:00 am", "cancelled until further notice") carries its own negation, and the
-    schedules the route depends on are written that way, not as prose.
+    Sentences of prose paragraphs; list items and table rows as their own units
+    (a timetable line "Tulehu-Banda: Thursdays, 9:00 am" or "cancelled until further
+    notice" carries its own negation, and schedules are written that way, not as
+    prose); never headings or link-only menus.
     """
     for paragraph in re.split(r"\n\s*\n", content):
         paragraph = paragraph.strip()
@@ -56,9 +54,39 @@ def whole_sentence_passage(claim, content):
                 plain = unit
             for sentence in re.split(r'(?<=[.!?])\s+(?=[A-Z0-9"“])', plain):
                 sentence = ' '.join(sentence.split())
-                if len(sentence.split()) < 40 and supported_passage(claim, sentence):
-                    return sentence
+                if sentence:
+                    yield sentence
+
+
+def whole_sentence_passage(claim, content):
+    """Preserve the sentence around a lexical match, including its negation.
+
+    WHY: the old gate could extract a positive phrase from a suspended-service
+    sentence. Do not trim a long sentence to fit; refuse it.
+    """
+    for sentence in units_of(content):
+        if len(sentence.split()) < 40 and supported_passage(claim, sentence):
+            return sentence
     return None
+
+
+def closest_unit(claim, content):
+    """The page's own line nearest to a refused claim, so the Scout can quote it.
+
+    WHY: the fifth live run refused six paraphrases of a schedule sheet, the most
+    useful claims of the run, and the refusal said only "quote the page". Returning
+    the nearest line turns a paraphrase into a quotation on the next attempt.
+    """
+    wanted = set(re.findall(r"\w+", claim.casefold(), re.UNICODE)) - {'the', 'a', 'an', 'of', 'to', 'in', 'on', 'and', 'is', 'are'}
+    best, score = None, 0
+    for sentence in units_of(content):
+        words = sentence.split()
+        if not 3 <= len(words) < 40:
+            continue
+        overlap = len(wanted & set(re.findall(r"\w+", sentence.casefold(), re.UNICODE)))
+        if overlap > score:
+            best, score = sentence, overlap
+    return best if score >= 2 else None
 
 
 PROPOSAL_FIELDS = ('question_id', 'run_id', 'search_result_id', 'contradicts',
@@ -113,7 +141,9 @@ async def propose(db, room_id, candidate, url, claim, scope, *, proposed_by="llm
     article = await asyncio.wait_for((fetcher or defuddle_client.extract_article)(url), timeout=22)
     passage = supported_passage(claim, str(article.get("content") or "")) if isinstance(article, dict) else None
     if not passage:
-        return {"filed": False, "why": "the page does not contain the claim's key phrase; use a bounded phrase from the extracted text"}
+        hint = closest_unit(claim, str(article.get("content") or "")) if isinstance(article, dict) else None
+        return {"filed": False, "why": "the page does not contain the claim's key phrase; quote the page's own words"
+                + (f'; the closest line on the page: "{hint}"' if hint else '')}
     passage = whole_sentence_passage(claim, str(article.get('content') or ''))
     if not passage:
         return {"filed": False, "why": "support must be a whole sentence or paragraph of main text under 40 words"}
