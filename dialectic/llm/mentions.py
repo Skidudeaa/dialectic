@@ -4,8 +4,18 @@ import re
 # Product identity first; provider-era aliases remain accepted compatibility.
 # The left boundary prevents an email/domain fragment such as
 # `email@dialectic.example` from summoning the participant.
+def _aliases() -> tuple[str, ...]:
+    """The participant's handles: the product-era names plus the active organ's participant (The Long Way's Scout).
+    WHY read the organ here: the people in a Long Way room address "@Scout", the name the shell shows them."""
+    from organ import identity
+    base = ("dialectic", "claude", "llm")
+    participant = str(identity().get("participant") or "").strip().lower()
+    return base + ((participant,) if participant and participant not in base else ())
+
+
+_LLM_ALIAS_PREFIXES = _aliases()
 LLM_MENTION_RE = re.compile(
-    r"(?<![\w.+-])@(dialectic|claude|llm)\b",
+    r"(?<![\w.+-])@(" + "|".join(re.escape(a) for a in _LLM_ALIAS_PREFIXES) + r")\b",
     re.IGNORECASE,
 )
 
@@ -23,7 +33,7 @@ _ADDRESS_HANDLE_RE = re.compile(r"@([A-Za-z][\w-]*)")
 # just split..." (the space lost to a fast thumb); the block plainly names
 # both of us, and reading it as Amo-only would silence a direct summons.
 # Erring toward speech is the safe direction for an address we misparse.
-_LLM_ALIAS_PREFIXES = ("dialectic", "claude", "llm")
+# (_LLM_ALIAS_PREFIXES is built above, beside the regex, from the same list.)
 
 
 def contains_explicit_llm_mention(text: str) -> bool:
