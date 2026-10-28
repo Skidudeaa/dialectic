@@ -4,6 +4,23 @@ Owner request, in order: a moonshot for the app ("assume unlimited dev
 resources and 12 months"), then "now" under the three-pillar charter, then
 "deploy both". This handoff is the zero-context record of what shipped.
 
+## State at close — CURRENT (stamped 2026-10-27 late; the block below it is the first deploy, kept as written)
+
+- **Live:** backend PID `3380480` on commit `1669b12` (started 22:41:58 CDT),
+  `/health` ok, 18 jobs in the banner including `workshop_job_watch@60s`.
+  PWA release `20261027T192154Z-workshop-jobs-5aa8816` (unchanged by the soak;
+  previous `20261027T080824Z-workshop-3a24bbb` kept for rollback). Migrations
+  run to `028`, applied to prod and `dialectic_test`.
+- **Master:** `3a24bbb` run_code → `5aa8816` start_job + 028 → `1669b12` the
+  soak fixes → `9c8cca4` docs → this handoff stamp. Pushed with this commit.
+- **Owed to a fresh session:** a Fracture Review of the tree as it stands
+  (the soak changed code, so the earlier target is stale). Then the moonshot's
+  next pieces, in order: push notification when a job finishes; the two-key
+  `capabilities` permission ledger BEFORE any network reaches the sandbox;
+  search/browse on a second machine.
+- **Read in this order:** the two addenda at the bottom (`start_job`, then the
+  soak fixes), then "The mechanism" and "Traps".
+
 ## State at close
 
 - **Live:** backend PID `1970471` on commit `3a24bbb`, started 03:07:31 CDT,
