@@ -1,3 +1,5 @@
+import { ORGAN } from '../../../organ'
+import { LongwayField } from '../../../organs/longway/LongwayField'
 import { useMemo, useState } from 'react'
 import type { FieldMark } from '../../../types/workspace.ts'
 import type { WorkspaceObjectsState } from '../../../hooks/useWorkspaceObjects.ts'
@@ -185,7 +187,7 @@ function OrphanRow({ orphan, titles }: { orphan: OrphanSupersededRow; titles: Ma
   )
 }
 
-export function FieldScene({
+function SharedFieldScene({
   state, objects, onOpen, worldBindings, onOpenWorld,
 }: FieldSceneProps) {
   const accessToken = useAppStore((store) => store.accessToken)
@@ -282,4 +284,10 @@ export function FieldScene({
       })}
     </div>
   )
+}
+
+export function FieldScene(props: FieldSceneProps) {
+  const roomId = useAppStore(s => s.currentRoom?.id)
+  if (ORGAN === 'longway') return <div className="longway-scene-stack">{roomId && <LongwayField key={roomId} roomId={roomId} />}<SharedFieldScene {...props} /></div>
+  return <SharedFieldScene {...props} />
 }

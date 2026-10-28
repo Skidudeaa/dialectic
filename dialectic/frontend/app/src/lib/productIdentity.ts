@@ -1,12 +1,13 @@
+import { IDENTITY } from '../organ'
 import type { Message } from '../types'
 
 // The product IS the participant. Provider and model identifiers remain in
 // technical provenance (message metadata, decision logs) but never in a primary
 // product label — the visible name is Dialectic in every participant mode.
-export const PRODUCT_NAME = 'Dialectic'
-export const PARTICIPANT_NAME = 'Dialectic'
-export const PARTICIPANT_SIGNATURE = ')'
-export const ORIGIN_IMPRINT = 'DwoodAmo'
+export const PRODUCT_NAME = IDENTITY.name
+export const PARTICIPANT_NAME = IDENTITY.participantName
+export const PARTICIPANT_SIGNATURE = IDENTITY.signature
+export const ORIGIN_IMPRINT = IDENTITY.originImprint
 
 export function participantDisplayName(
   speakerType: Message['speaker_type'],

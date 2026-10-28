@@ -1,3 +1,6 @@
+import { ORGAN } from '../../../organ'
+import { LongwayBench } from '../../../organs/longway/LongwayBench'
+import type { ComponentProps } from 'react'
 import type { ReactNode } from 'react'
 import type { WorkspaceObject } from '../../../types/workspace.ts'
 import type { WorkspaceObjectsState } from '../../../hooks/useWorkspaceObjects.ts'
@@ -56,7 +59,7 @@ function snapshotIsStale(timestamp?: string): boolean {
   return !Number.isFinite(ageMs) || ageMs >= 60 * 60 * 1000
 }
 
-export function BenchScene({
+function TradingBenchScene({
   state,
   onOpen,
   tradingPanel,
@@ -171,4 +174,9 @@ export function BenchScene({
       )}
     </div>
   )
+}
+
+export function BenchScene(props: ComponentProps<typeof TradingBenchScene> & { record?: ReactNode }) {
+  if (ORGAN === 'longway') return props.roomId ? <LongwayBench key={props.roomId} roomId={props.roomId} record={props.record} /> : <p>Open a room to see its chart.</p>
+  return <TradingBenchScene {...props} />
 }

@@ -1,3 +1,4 @@
+import { ORGAN } from '../organ'
 // lib/releases.ts — what changed, and when. The authored half of the surface.
 //
 // ARCHITECTURE: this file carries HISTORY and nothing else. Per the split
@@ -50,6 +51,10 @@ export interface Release {
 
 /** Newest first. `releases.test.ts` pins that order at the data level. */
 export const RELEASES: Release[] = [
+  ...(ORGAN === 'longway' ? [{
+    id: 'the-long-way-house', date: '2026-10-28', title: 'The Long Way house',
+    body: 'A chart for every journey, the record beside it, and a [[field-mark|Field mark]] for evidence a friend has checked. The consent ledger records explicit agreement; a reaction never commits anyone.',
+  }] : []),
   {
     id: 'the-workshop-jobs',
     date: '2026-10-27',
@@ -283,7 +288,7 @@ export const RELEASES: Release[] = [
       'every scheme room. Home coordinates and the scheme rooms own the scheme work — and ' +
       'Home can now make one and carry everybody into it.',
   },
-]
+].filter(release => ORGAN !== 'longway' || release.id === 'the-long-way-house')
 
 /** Where the last-seen date lives. Matches `dialectic-scene-*` naming. */
 export const RELEASES_SEEN_KEY = 'dialectic-releases-seen'

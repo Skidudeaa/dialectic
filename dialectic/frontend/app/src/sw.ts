@@ -1,4 +1,5 @@
 /// <reference lib="webworker" />
+import { IDENTITY } from './organ'
 /**
  * Dialectic service worker.
  *
@@ -68,7 +69,7 @@ self.addEventListener('push', (event) => {
   } catch {
     return
   }
-  event.waitUntil(self.registration.showNotification(payload.title ?? 'Dialectic', {
+  event.waitUntil(self.registration.showNotification(payload.title ?? IDENTITY.name, {
     body: payload.body ?? '',
     // One notification per room, replaced in place, rather than a stack.
     tag: payload.tag ?? 'dialectic',

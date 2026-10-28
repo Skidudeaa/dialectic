@@ -1,3 +1,6 @@
+import { ORGAN } from '../../organ'
+import { DispatchCard } from '../../organs/longway/DispatchCard'
+import type { DispatchMetadata, AnchorMetadata } from '../../organs/longway/types'
 import { displayParticipantText } from '../../lib/productIdentity'
 import { ResponseCard, ProposalCard, ReviewButton } from '@dark-roast/companion-ui'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -610,6 +613,8 @@ export function MessageBubble({
   threadSource,
   onAnchor,
 }: MessageBubbleProps) {
+  const longway = message.metadata as { longway_dispatch?: DispatchMetadata; longway_anchor?: AnchorMetadata } | null
+  const dispatch = ORGAN === 'longway' && message.speaker_type.startsWith('llm_') ? longway?.longway_dispatch : undefined
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState(message.content)
   const [showPicker, setShowPicker] = useState(false)
@@ -711,7 +716,7 @@ export function MessageBubble({
 
   // A message still arriving is never folded — watching it write itself is the
   // point, and a fold appearing mid-stream would be jarring.
-  const foldable = !isStreaming && !isEditing && (
+  const foldable = !dispatch && !isStreaming && !isEditing && (
     ALWAYS_FOLDED.has(message.speaker_type) || message.content.length > FOLD_THRESHOLD_CHARS
   )
   const isFolded = foldable && !isExpanded
@@ -917,6 +922,7 @@ export function MessageBubble({
             ))}
           </div>
         )}
+        {ORGAN === 'longway' && longway?.longway_anchor && <p className="msg-anchor">About {longway.longway_anchor.journey} · leg {longway.longway_anchor.leg + 1}</p>}
         <ResponseCard streaming={isStreaming} className={`msg-content-frame${isFolded ? ' msg-folded' : ''}`}>
           {replyToContent !== undefined && threadSource === undefined && (
             <div className="msg-quote">
@@ -951,6 +957,8 @@ export function MessageBubble({
                 <span className="msg-edit-hint">Enter saves &middot; Esc cancels</span>
               </div>
             </div>
+          ) : dispatch ? (
+            <DispatchCard messageId={message.id} content={message.content} dispatch={dispatch} reactions={reactions} currentUserId={currentUserId} onToggleReaction={onToggleReaction} />
           ) : (
             <div
               ref={contentRef}
@@ -1271,7 +1279,7 @@ export function MessageBubble({
           <span className="msg-edited msg-edited-standalone">edited</span>
         )}
 
-        {reactions.length > 0 && (
+        {!dispatch && reactions.length > 0 && (
           <div className="msg-reactions">
             {reactions.map((reaction) => {
               const mine = Boolean(currentUserId && reaction.user_ids.includes(currentUserId))
@@ -1279,11 +1287,11 @@ export function MessageBubble({
                 <button
                   key={reaction.emoji}
                   className={`reaction-pill ${mine ? 'mine' : ''}`}
-                  title={reaction.user_names.join(', ')}
+                  title={ORGAN === 'longway' ? undefined : reaction.user_names.join(', ')}
                   onClick={() => onToggleReaction?.(message.id, reaction.emoji, mine)}
                 >
                   <span className="reaction-emoji">{reaction.emoji}</span>
-                  <span className="reaction-count">{reaction.user_ids.length}</span>
+                  {ORGAN !== 'longway' && <span className="reaction-count">{reaction.user_ids.length}</span>}
                 </button>
               )
             })}
@@ -1307,7 +1315,7 @@ export function MessageBubble({
               : fileState === 'error' ? 'RETRY FILE' : 'FILE'}
           </button>
         )}
-        {onToggleReaction && !isStreaming && (
+        {!dispatch && onToggleReaction && !isStreaming && (
           <div className="msg-react-wrap">
             <button
               className="msg-action-btn"

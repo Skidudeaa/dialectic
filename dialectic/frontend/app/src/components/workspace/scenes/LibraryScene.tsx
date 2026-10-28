@@ -1,3 +1,6 @@
+import { ORGAN } from '../../../organ'
+import { LongwayLibrary } from '../../../organs/longway/LongwayLibrary'
+import type { ComponentProps } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { ReadingLibraryItem } from '../../../types/index.ts'
@@ -148,7 +151,7 @@ function ReadingCard({
  * goes through App's one navigation writer as `reading:<id>`; this component
  * owns no URL or detail route of its own.
  */
-export function LibraryScene({
+function ReadingsScene({
   roomId,
   onOpen,
   enabled = true,
@@ -435,4 +438,9 @@ export function LibraryScene({
       {resultSurface}
     </div>
   )
+}
+
+export function LibraryScene(props: ComponentProps<typeof ReadingsScene>) {
+  if (ORGAN === 'longway') return <div className="longway-scene-stack"><LongwayLibrary roomId={props.roomId} /><ReadingsScene {...props} /></div>
+  return <ReadingsScene {...props} />
 }

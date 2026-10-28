@@ -1,6 +1,6 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vitest/config'
-import type { ProxyOptions } from 'vite'
+import { loadEnv, type ProxyOptions } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { cpSync, existsSync } from 'node:fs'
@@ -55,6 +55,7 @@ function proxyMap(): Record<string, ProxyOptions> {
     '/rooms': { target: backend, changeOrigin: true },
     '/threads': { target: backend, changeOrigin: true },
     '/users': { target: backend, changeOrigin: true },
+    '/organ': { target: backend, changeOrigin: true },
     '/health': { target: backend, changeOrigin: true },
     '/analytics': { target: backend, changeOrigin: true },
     '/graph': { target: backend, changeOrigin: true },
@@ -67,10 +68,28 @@ function proxyMap(): Record<string, ProxyOptions> {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const longway = (process.env.VITE_ORGAN ?? loadEnv(mode, process.cwd(), '').VITE_ORGAN) === 'longway'
+  return ({
   define: { CESIUM_BASE_URL: JSON.stringify('/cesium/') },
   plugins: [
     react(),
+    {
+      name: 'longway-shell',
+      transformIndexHtml(html) {
+        if (!longway) return html
+        return html.replaceAll('Dialectic', 'The Long Way')
+          .replace('Two humans and an LLM co-reasoning in real time.', 'Go far enough to be surprised. Stay long enough to understand. Leave room to be changed.')
+          .replaceAll('#120C06', '#ecf1f0')
+          .replace('family=Newsreader:', 'family=Libre+Caslon+Display&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=Newsreader:')
+      },
+      resolveId(source, importer) {
+        if (source === './chart/Chart' && importer?.includes('/organs/longway/') && !existsSync(join(dirname(importer), 'chart/Chart.tsx'))) return '\0longway-chart-pending'
+      },
+      load(id) {
+        if (id === '\0longway-chart-pending') return 'throw new Error("Chart unavailable"); export default undefined; export const LegCard = undefined; export const SeasonStrip = undefined;'
+      },
+    },
     cesiumAssets(),
     VitePWA({
       // Hand-written worker (src/sw.ts): precaching + SPA fallback + fonts,
@@ -87,17 +106,17 @@ export default defineConfig({
         // React.lazy owns the complete WorldView/Cesium dependency graph.
         // Neither that JS/CSS nor Cesium's static tree belongs in the base
         // install; all are fetched only when a person opens World.
-        globIgnores: ['**/WorldView-*.js', '**/WorldView-*.css', 'cesium/**', '**/node_modules/**'],
+        globIgnores: ['**/WorldView-*.js', '**/WorldView-*.css', '**/Chart-*.js', '**/Chart-*.css', 'cesium/**', '**/node_modules/**'],
       },
       includeAssets: ['icons/apple-touch-icon.png', 'icons/favicon.svg', 'fonts/*.woff2', 'fonts/DSEG-LICENSE.txt'],
       manifest: {
-        name: 'Dialectic',
-        short_name: 'Dialectic',
-        description: 'Two humans and an LLM co-reasoning in real time.',
+        name: longway ? 'The Long Way' : 'Dialectic',
+        short_name: longway ? 'Long Way' : 'Dialectic',
+        description: longway ? 'Go far enough to be surprised. Stay long enough to understand. Leave room to be changed.' : 'Two humans and an LLM co-reasoning in real time.',
         start_url: '/',
         display: 'standalone',
-        background_color: '#120C06',
-        theme_color: '#120C06',
+        background_color: longway ? '#ecf1f0' : '#120C06',
+        theme_color: longway ? '#ecf1f0' : '#120C06',
         icons: [
           { src: '/icons/pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icons/pwa-512.png', sizes: '512x512', type: 'image/png' },
@@ -125,4 +144,5 @@ export default defineConfig({
     setupFiles: './src/test/setup.ts',
     restoreMocks: true,
   },
+})
 })

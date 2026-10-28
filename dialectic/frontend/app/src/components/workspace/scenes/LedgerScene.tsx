@@ -1,3 +1,6 @@
+import { ORGAN } from '../../../organ'
+import { LongwayLedger } from '../../../organs/longway/LongwayLedger'
+import type { ComponentProps } from 'react'
 import type { ReactNode } from 'react'
 import type { WorkspaceObject } from '../../../types/workspace.ts'
 import type { WorkspaceObjectsState } from '../../../hooks/useWorkspaceObjects.ts'
@@ -19,7 +22,7 @@ import './LedgerScene.css'
  * `dossier` carries the largest population in production (425 active memories
  * across 8 rooms), which is why this scene was built before the emptier ones.
  */
-export function LedgerScene({
+function SharedLedgerScene({
   state,
   onOpen,
   memoryPanel,
@@ -80,4 +83,9 @@ export function LedgerScene({
       {memoryPanel}
     </div>
   )
+}
+
+export function LedgerScene(props: ComponentProps<typeof SharedLedgerScene> & { roomId?: string; canManageHome?: boolean }) {
+  if (ORGAN === 'longway') return props.roomId ? <LongwayLedger key={props.roomId} roomId={props.roomId} canManageHome={props.canManageHome ?? false} /> : null
+  return <SharedLedgerScene {...props} />
 }

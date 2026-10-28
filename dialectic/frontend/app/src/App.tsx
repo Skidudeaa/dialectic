@@ -1,3 +1,9 @@
+import { LongwayRoomAccess } from './organs/longway/LongwayRoomAccess'
+import { LongwayRoomContext } from './organs/longway/LongwayRoomContext'
+import { dispatchesFirst } from './organs/longway/record'
+import { ORGAN, IDENTITY } from './organ'
+import { LongwayHouse } from './organs/longway/LongwayHouse'
+import { LongwayShell, LongwayRoomSelector } from './organs/longway/LongwayShell'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PARTICIPANT_NAME } from './lib/productIdentity.ts'
 import { applyRoomScheme, roomSchemeFor } from './lib/roomScheme.ts'
@@ -80,6 +86,8 @@ function accessTokenExpiry(token: string | null): number {
     return 0
   }
 }
+
+const RoomAccessSurface = ORGAN === 'longway' ? LongwayRoomAccess : RoomAccess
 
 export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   const user = useAppStore((s) => s.user)
@@ -444,7 +452,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     message.thread_id === currentThread?.id && !messages.some((saved) => saved.id === message.id),
   ), [streamingMessages, currentThread?.id, messages])
   const streamingMessageIds = useMemo(() => pendingMessages.map((message) => message.id), [pendingMessages])
-  const displayMessages = useMemo(() => [...messages, ...pendingMessages], [messages, pendingMessages])
+  const displayMessages = useMemo(() => ORGAN === 'longway' ? dispatchesFirst([...messages, ...pendingMessages]) : [...messages, ...pendingMessages], [messages, pendingMessages])
 
   const userNames = useMemo(() => {
     const names: Record<string, string> = {}
@@ -599,7 +607,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   }, [atlas, rooms])
   // The room's own geography (World Lens) — read only to decide whether the
   // Bench offers its World door; the globe itself lives at Home root.
-  const roomGeo = useGeoScopes(!isHome && accessToken ? currentRoom?.id ?? null : null)
+  const roomGeo = useGeoScopes(ORGAN === 'trading' && !isHome && accessToken ? currentRoom?.id ?? null : null)
 
   // The ONE trading-desk instance, lifted from BenchScene so the Console's
   // instrument tiles stay live in every scene. An unbound room short-circuits
@@ -607,7 +615,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // ponytail: entering a bound room now runs the full fan-out + 300s quote
   // poll outside the Bench too — that IS the Console's job; a slice-keys
   // filter on the hook is the upgrade path if it ever matters.
-  const desk = useTradingDesk(!isHome && currentRoom ? currentRoom.id : null)
+  const desk = useTradingDesk(ORGAN === 'trading' && !isHome && currentRoom ? currentRoom.id : null)
 
   // Docky running-dot signals for the scene tiles. Record's baseline is
   // "messages seen when the Record was last showing" — MessageList's own
@@ -663,7 +671,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   useAwayAlerts({
     messages,
     currentUserId: user?.id ?? null,
-    roomName: currentRoom?.name ?? 'Dialectic',
+    roomName: currentRoom?.name ?? IDENTITY.name,
     isAway: !isVisible,
     // With a live push subscription the service worker owns OS notifications.
     suppressNotifications: pushState === 'subscribed',
@@ -758,7 +766,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
               onAbort={abortProtocol}
             />
           )}
-          <CommitmentSurface />
+          {ORGAN === 'trading' && <CommitmentSurface />}
           <MessageList
             // Remount per branch so follow-the-tail and the unread pill start
             // fresh instead of inheriting the previous branch's scroll state.
@@ -845,7 +853,9 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // which made the room the two of them share read as a directory pointing at
   // the other rooms. The conversation is the place; the pulse is the lintel
   // over it. Everything demoted is one <details> away, not gone.
-  const houseSurface = (
+  const houseSurface = ORGAN === 'longway' ? (
+    <LongwayHouse key={currentRoom.id} roomId={currentRoom.id} canManageHome={rooms.some(room => room.is_home && room.can_manage_home)} onNavigate={async roomId => { await nav.refreshRooms(); return navigate({ roomId, scene: 'record' }, 'push') }} />
+  ) : (
     <>
       <div className="house-reading-region">
         <YourMove onNavigate={(destination) => navigate(destination, 'push')} refreshVersion={homeRefreshVersion} />
@@ -942,7 +952,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
       readingRequest={readingRequest?.roomId === currentRoom.id ? readingRequest.ref : null}
       onReadingReceived={readingReceived}
       roomId={currentRoom.id}
-      roomName={currentRoom.name ?? 'Dialectic'}
+      roomName={currentRoom.name ?? IDENTITY.name}
       currentUserId={user.id}
       messages={displayMessages}
       streamingIds={streamingMessageIds}
@@ -1066,6 +1076,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     record: recordSurface,
     bench: (
       <BenchScene
+        record={ORGAN === 'longway' ? recordSurface : undefined}
         state={workspaceObjects}
         onOpen={openWorkspaceObject}
         tradingPanel={<TradingPanel />}
@@ -1115,6 +1126,8 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     ),
     ledger: (
       <LedgerScene
+        roomId={currentRoom.id}
+        canManageHome={rooms.some(room => room.is_home && room.can_manage_home)}
         state={workspaceObjects}
         onOpen={openWorkspaceObject}
         // The panel travels WITH the scene. The Ledger shows what the room
@@ -1166,7 +1179,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
         main={
           <>
             <RoomHeader
-              roomName={currentRoom.name ?? 'Dialectic'}
+              roomName={currentRoom.name ?? IDENTITY.name}
               threads={threads}
               activeThreadId={currentThread?.id ?? ''}
               onThreadChange={(id) => {
@@ -1214,7 +1227,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
                 }}
                 content={sceneContent}
                 signals={sceneSignals}
-                instruments={<Console desk={desk} />}
+                instruments={ORGAN === 'trading' ? <Console desk={desk} /> : undefined}
               />
               {/* Home holds no Field and offers no object-tap surface today
                   (§5.2) — Focus never opens there in practice, but the guard
@@ -1254,7 +1267,13 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
             </div>
           </>
         }
-        rightPanel={
+        rightPanel={ORGAN === 'longway' ? <LongwayRoomContext threads={threads} onSelect={id => { void navigate({ roomId: currentRoom.id, threadId: id }, 'push') }} home={isHome ? {
+          canManageHome: roomMeta?.can_manage_home ?? false,
+          onMembershipChanged: () => setHomeRefreshVersion(version => version + 1),
+          residents: onlineUsers.map(member => ({ id: member.user_id, name: member.display_name, status: member.status })),
+          facts: memories.filter(memory => memory.status === 'active'),
+          onOpenMemory: () => { void navigate({ roomId: currentRoom.id, scene: 'record' }, 'push') },
+        } : undefined} /> :
           <RightPanel
             memories={memories}
             genealogy={genealogy}
@@ -1323,7 +1342,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
         />
       )}
       {showRoomAccess && (
-        <RoomAccess
+        <RoomAccessSurface
           mode="dialog"
           rooms={rooms}
           onRoomSelect={async (destination) => {
@@ -1365,7 +1384,7 @@ function AuthenticatedWorkspace() {
       </div>
     )
   }
-  if (!currentRoom || !roomToken) return <RoomSelector nav={nav} />
+  if (!currentRoom || !roomToken) return ORGAN === 'longway' ? <LongwayRoomSelector nav={nav} /> : <RoomSelector nav={nav} />
   return <ChatLayout nav={nav} />
 }
 
@@ -1410,6 +1429,7 @@ function App() {
     return () => window.clearTimeout(timer)
   }, [isAuthenticated, accessToken, refreshToken, user, setUser, logout])
 
+  if (ORGAN === 'longway') return <LongwayShell>{!isAuthenticated ? <><p className="longway-entry-lede">{IDENTITY.lede}</p><AuthScreen /></> : <AuthenticatedWorkspace />}</LongwayShell>
   if (!isAuthenticated) return <AuthScreen />
   return <AuthenticatedWorkspace />
 }

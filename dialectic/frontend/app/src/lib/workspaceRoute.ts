@@ -1,3 +1,4 @@
+import { ORGAN, SCENES } from '../organ'
 // The room-and-scene route grammar, extracted from useRoomNavigation so scenes
 // have a pure, testable seam.
 //
@@ -53,7 +54,7 @@ export function defaultWorkspaceScene(
   // conversation is still the base unit there, drawn beside the graph it is
   // about instead of in a scene of its own. The Record stays one tap away.
   if (room.is_home) return thread.parent_thread_id === null ? 'house' : 'record'
-  return thread.parent_thread_id === null ? 'surface' : 'record'
+  return ORGAN === 'longway' ? 'record' : thread.parent_thread_id === null ? 'surface' : 'record'
 }
 
 /**
@@ -85,6 +86,9 @@ export function scenesForDestination(
   room: Pick<UserRoom, 'is_home'>,
   thread: Pick<Thread, 'parent_thread_id'>,
 ): readonly ImplementedWorkspaceScene[] {
+  if (ORGAN === 'longway') return room.is_home
+    ? thread.parent_thread_id === null ? ['house', 'record'] : ['record']
+    : SCENES
   if (room.is_home) {
     return thread.parent_thread_id === null
       ? (['house', 'atlas', 'mirror', 'record'] as const)

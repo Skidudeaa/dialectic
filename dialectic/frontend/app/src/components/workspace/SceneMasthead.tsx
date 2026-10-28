@@ -1,3 +1,4 @@
+import { ORGAN, IDENTITY, benchLabel } from '../../organ'
 import type { ImplementedWorkspaceScene } from '../../types'
 import { SCENE_LABELS, SCENE_HINTS, SCENE_MOTIFS, SCENE_PRIMER } from './sceneIdentity'
 import './SceneMasthead.css'
@@ -49,6 +50,7 @@ import './SceneMasthead.css'
 const COMPACT_SCENES = new Set<ImplementedWorkspaceScene>(['record', 'house', 'surface'])
 
 export function SceneMasthead({ scene }: { scene: ImplementedWorkspaceScene }) {
+  if (ORGAN === 'longway') return <header className="scene-masthead scene-masthead-compact"><h2>{scene === 'bench' ? benchLabel : SCENE_LABELS[scene]}</h2>{scene === 'house' && <p>{IDENTITY.lede}</p>}</header>
   const compact = COMPACT_SCENES.has(scene)
   return (
     <header className={`scene-masthead${compact ? ' scene-masthead-compact' : ''}`}>

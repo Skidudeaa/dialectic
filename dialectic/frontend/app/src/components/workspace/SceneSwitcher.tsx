@@ -1,3 +1,4 @@
+import { ORGAN, benchLabel } from '../../organ'
 import type { ReactNode } from 'react'
 import type {
   ImplementedWorkspaceScene,
@@ -35,7 +36,7 @@ export function SceneSwitcher({ scene, scenes, onSelect, signals, instruments }:
   // all rather than a lone disabled-looking tab. An instrument cluster keeps
   // the tray alive even then: a record-only Home branch still gets the lamp.
   if (scenes.length < 2 && !instruments) return null
-  const overflow = scenes.filter((candidate) => !PRIMARY_SCENES.has(candidate))
+  const overflow = scenes.filter((candidate) => ORGAN !== 'longway' && !PRIMARY_SCENES.has(candidate))
   const overflowActive = overflow.includes(scene)
 
   return (
@@ -45,14 +46,14 @@ export function SceneSwitcher({ scene, scenes, onSelect, signals, instruments }:
           <button
             key={candidate}
             type="button"
-            className={`scene-switcher-action scene-switcher-${PRIMARY_SCENES.has(candidate) ? 'primary' : 'secondary'}${candidate === scene ? ' is-active' : ''}`}
+            className={`scene-switcher-action scene-switcher-${(ORGAN === 'longway' || PRIMARY_SCENES.has(candidate)) ? 'primary' : 'secondary'}${candidate === scene ? ' is-active' : ''}`}
             /* Each key carries its OWN scene's identity — the [data-scene]
                rules in styles/scenes.css give the tile its own accent, so the
                tray reads as a row of instruments, each pre-lit in the color
                of the room it opens (label + glyph always accompany the hue). */
             data-scene={candidate}
             aria-current={candidate === scene ? 'page' : undefined}
-            title={SCENE_HINTS[candidate]}
+            title={ORGAN === 'longway' ? undefined : SCENE_HINTS[candidate]}
             onClick={() => {
               // Selecting the active scene must not push a duplicate history
               // entry; Back would then need two presses to leave the scene.
@@ -60,7 +61,7 @@ export function SceneSwitcher({ scene, scenes, onSelect, signals, instruments }:
             }}
           >
             <span className="scene-switcher-glyph" aria-hidden="true">{SCENE_GLYPHS[candidate]}</span>
-            {SCENE_LABELS[candidate]}
+            {candidate === 'bench' ? benchLabel : SCENE_LABELS[candidate]}
             {(signals?.[candidate]?.count ?? 0) > 0 && (
               <span className={`scene-signal scene-signal-${signals![candidate]!.tone}`}>
                 <span className="scene-signal-led" aria-hidden="true" />
@@ -87,7 +88,7 @@ export function SceneSwitcher({ scene, scenes, onSelect, signals, instruments }:
                   }}
                 >
                   <span className="scene-switcher-glyph" aria-hidden="true">{SCENE_GLYPHS[candidate]}</span>
-                  {SCENE_LABELS[candidate]}
+                  {candidate === 'bench' ? benchLabel : SCENE_LABELS[candidate]}
                 </button>
               ))}
             </div>
