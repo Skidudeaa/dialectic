@@ -1,0 +1,10 @@
+#!/bin/bash
+# The Long Way: invite a member of the house. Usage:
+#   longway-invite EMAIL "Display Name"            an ordinary member
+#   longway-invite EMAIL "Display Name" --manager  the planner (can open journey rooms, record consent)
+# Prints a one-time 6-digit code; the person uses it under "I have a code" on the sign-in screen.
+set -euo pipefail
+if [ $# -lt 2 ]; then echo "usage: longway-invite EMAIL \"Display Name\" [--manager]" >&2; exit 64; fi
+set -a; . /etc/longway/longway.env; set +a
+cd /root/DwoodAmo/.worktrees/longway/dialectic
+exec /usr/bin/python3 deploy/longway_seed.py invite --email "$1" --name "$2" "${@:3}"
