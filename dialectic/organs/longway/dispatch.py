@@ -78,7 +78,7 @@ async def render(movement):
             messages=[{"role": "user", "content": json.dumps(movement, ensure_ascii=False)}],
             max_tokens=6000,  # adaptive thinking shares this budget with the text on the 5.5 models
             effort="high",
-        )), timeout=24)
+        )), timeout=110)  # Opus 5.5 at high effort takes about 40 s on a busy week; nginx's REST window is 120 s
     finally:
         await provider.client.aclose()
     content = response.content.strip()
