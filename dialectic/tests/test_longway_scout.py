@@ -77,7 +77,8 @@ async def test_nightly_disabled_and_serial_bound_rooms(db,house,longway_repo,mon
     fake.assert_not_called()
     monkeypatch.setenv('LONGWAY_SCOUT_ENABLED','1')
     assert await jobs.scout_nightly(ctx)=={str(house.room):{'status':'done'}}
-    fake.assert_awaited_once_with(house.pool,house.room,'ogasawara',trigger='nightly',ctx=ctx)
+    args,kwargs=fake.await_args   # the run gets the room's researchable question ids
+    assert args[:3]==(house.pool,house.room,'ogasawara') and len(args[3])==1 and kwargs=={'trigger':'nightly','ctx':ctx}
 
 
 @pytest.mark.asyncio

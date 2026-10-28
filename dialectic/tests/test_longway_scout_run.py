@@ -1,7 +1,7 @@
 """Deterministic full tool-loop run over captured real pages and real Postgres."""
 import asyncio
 import json
-from datetime import timedelta
+from datetime import datetime,timedelta,timezone
 from pathlib import Path
 import shutil
 from types import SimpleNamespace
@@ -498,7 +498,9 @@ async def test_nightly_seeds_dossier_questions_for_a_quiet_room(db,house,banda,m
     result=await jobs.scout_nightly(ctx)
     seeded=[q for q in await questions.list_questions(db,house.room) if q['source']=='dossier']
     assert len(seeded)==3 and result['seeded']=={str(house.room):3} and result[str(house.room)]=={'status':'done'}
-    fake.assert_awaited_once_with(house.pool,house.room,'banda-islands',trigger='nightly',ctx=ctx)
+    args,kwargs=fake.await_args
+    assert args[:3]==(house.pool,house.room,'banda-islands') and sorted(args[3])==sorted(q['id'] for q in seeded)
+    assert kwargs=={'trigger':'nightly','ctx':ctx}
     assert (await jobs.scout_nightly(ctx)).get('seeded') is None   # seeding happens once
 
 
@@ -518,3 +520,29 @@ async def test_nightly_runs_one_batch_per_chicago_day(db,house,banda,monkeypatch
     tomorrow=datetime.now(timezone.utc)+timedelta(days=1)
     assert (await jobs.scout_nightly(ctx,now=tomorrow))[str(house.room)]=={'status':'done'}
     assert fake.await_count==2
+
+
+@pytest.mark.asyncio
+async def test_nightly_leaves_a_question_whose_answer_waits_on_the_desk(db,house,client,banda,monkeypatch):
+    """No human review, no second answer: the nightly run skips a question with an unreviewed proposal."""
+    from organs.longway import jobs
+    fake=AsyncMock(return_value={'status':'done'})
+    monkeypatch.setattr(scout,'run',fake)
+    monkeypatch.setenv('LONGWAY_SCOUT_ENABLED','1')
+    ctx=SimpleNamespace(pool=house.pool)
+    answer=await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='schedule',
+        question_id=banda['id'],fetcher=captured_page)
+    assert await jobs.scout_nightly(ctx)=={str(house.room):{'skipped':'answers waiting in the Field'}}
+    fake.assert_not_called()
+    assert (await client.post(f"/rooms/{house.room}/field/marks/{answer['field_mark_id']}/review",json={'action':'contest','note':'Not October'})).status_code==200
+    assert (await jobs.scout_nightly(ctx,now=datetime.now(timezone.utc)+timedelta(days=1)))[str(house.room)]=={'status':'done'}
+    fake.assert_awaited_once_with(house.pool,house.room,'banda-islands',[banda['id']],trigger='nightly',ctx=ctx)
+
+
+def test_table_rows_inside_a_captioned_paragraph_are_units():
+    from organs.longway.proposals import whole_sentence_passage, units_of
+    content=("Jadwal kapal:\n| Tanggal | Kapal | Rute |\n| --- | --- | --- |\n| 6 Okt 2026 01:00 | KM.LABOBAR | AMBON → KAB. TUAL |\n"
+             "| 24 Okt 2026 | KM.LABOBAR | AMBON → BANDA |\n\nThe office opens at nine. Tickets are sold at the harbour.")
+    assert whole_sentence_passage('6 Okt 2026 01:00 KM.LABOBAR AMBON → KAB. TUAL',content)=='6 Okt 2026 01:00 KM.LABOBAR AMBON → KAB. TUAL'
+    assert whole_sentence_passage('Tickets are sold at the harbour',content)=='Tickets are sold at the harbour.'
+    assert '--- --- ---' not in list(units_of(content))

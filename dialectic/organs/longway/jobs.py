@@ -208,7 +208,7 @@ async def scout_nightly(ctx, *, now=None):
     if os.environ.get('LONGWAY_SCOUT_ENABLED') != '1':
         return {'skipped': 'disabled'}
     from .scout import run, AlreadyRunning
-    from .questions import seed
+    from .questions import seed, researchable
     now = now or datetime.now(timezone.utc)
     today = now.astimezone(ZoneInfo('America/Chicago')).date()
     async with ctx.pool.acquire() as db:
@@ -227,15 +227,22 @@ async def scout_nightly(ctx, *, now=None):
         for room in rooms:
             if not await db.fetchval("SELECT 1 FROM longway_questions WHERE journey=$1 AND closed_at IS NULL LIMIT 1", room['linked_journey']):
                 seeded[str(room['id'])] = len(await seed(db, room['id']))
-        rooms = [room for room in rooms if await db.fetchval(
-            "SELECT 1 FROM longway_questions WHERE journey=$1 AND closed_at IS NULL LIMIT 1", room['linked_journey'])]
+        work = {room['id']: [q['id'] for q in await researchable(db, room['linked_journey'])] for room in rooms}
     result = {'seeded': seeded} if seeded else {}
     for room in rooms:
+        if not work[room['id']]:
+            result[str(room['id'])] = {'skipped': 'answers waiting in the Field' if await _open_questions(ctx.pool, room['linked_journey']) else 'no open questions'}
+            continue
         try:
-            result[str(room['id'])] = await run(ctx.pool, room['id'], room['linked_journey'], trigger='nightly', ctx=ctx)
+            result[str(room['id'])] = await run(ctx.pool, room['id'], room['linked_journey'], work[room['id']], trigger='nightly', ctx=ctx)
         except AlreadyRunning:
             result[str(room['id'])] = {'skipped': 'running'}
         except Exception as exc:
             logger.exception("Nightly Scout run failed for %s", room['id'])
             result[str(room['id'])] = {'error': type(exc).__name__}
     return result
+
+
+async def _open_questions(pool, journey):
+    async with pool.acquire() as db:
+        return await db.fetchval("SELECT 1 FROM longway_questions WHERE journey=$1 AND closed_at IS NULL LIMIT 1", journey)

@@ -62,6 +62,24 @@ async def seed(db, room_id, user_id=None):
             for text in item.get('questions', [])]
 
 
+async def researchable(db, journey, limit=5):
+    """The oldest open questions that have no answer waiting on the Field's desk.
+
+    WHY: a nightly run on a question whose proposal nobody has reviewed yet spends two
+    million tokens to pile a second answer on the first. A question is waiting when an
+    unwritten proposal cites it and carries no review mark; a contest or correction
+    frees it for research again. Human action, not the clock, drives the spend.
+    """
+    return await db.fetch('''SELECT q.id FROM longway_questions q WHERE q.journey=$1 AND q.closed_at IS NULL
+        AND NOT EXISTS (
+            SELECT 1 FROM longway_evidence_proposals p WHERE p.question_id=q.id AND p.written_at IS NULL
+            AND NOT EXISTS (
+                SELECT 1 FROM field_marks parent JOIN field_marks m ON m.target_mark_id=parent.id AND m.mark_kind='review'
+                WHERE parent.room_id=p.room_id AND parent.mark_kind='relation' AND parent.relation='evidence_attachment'
+                AND parent.subjects @> jsonb_build_array(jsonb_build_object('entity','longway_evidence_proposals','id',p.id::text))))
+        ORDER BY q.created_at,q.id LIMIT $2''', journey, limit)
+
+
 async def select_open(db, journey, ids=None):
     rows = await db.fetch('''SELECT * FROM longway_questions WHERE journey=$1 AND closed_at IS NULL
         AND ($2::uuid[] IS NULL OR id=ANY($2))

@@ -73,7 +73,7 @@ async def firecrawl_article(url, key, client=None):
 
 
 # How many of each tool's results stay in the model's context; older ones shrink to a one-line stub.
-CONTEXT_KEEP = {'read_page': 4, 'known_sources': 1, 'read_register': 1}
+CONTEXT_KEEP = {'read_page': 4, 'known_sources': 1, 'read_register': 1, 'search': 2}
 
 
 class AlreadyRunning(ValueError):

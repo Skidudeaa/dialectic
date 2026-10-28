@@ -42,17 +42,22 @@ def units_of(content):
         paragraph = paragraph.strip()
         if not paragraph or re.match(r"^#{1,6}\s", paragraph):
             continue
-        units = ([re.sub(r"^\s*(?:[-*+]\s+|\|)", "", line).replace("|", " ") for line in paragraph.splitlines()]
-                 if re.match(r"^(?:[-*+]\s|\|)", paragraph) else [paragraph])
-        for unit in units:
-            if re.search(r"\[[^]]+\]\([^)]*\)", unit):
+        # Every line that is a table row or a list item is one unit, never split at a full stop, wherever
+        # it sits: run 6 quoted "6 Okt 2026 01:00 | KM.LABOBAR | AMBON → KAB. TUAL" from a table whose first
+        # line was a caption, and the whole table was refused as one paragraph. Prose splits into sentences.
+        lines = paragraph.splitlines()
+        pieces = lines if any(re.match(r"^\s*(?:[-*+]\s|\|)", line) for line in lines) else [paragraph]
+        for piece in pieces:
+            if re.match(r"^\s*\|?\s*:?-{2,}", piece):
+                continue   # a markdown table's rule line is not text
+            is_row = bool(re.match(r"^\s*(?:[-*+]\s|\|)", piece))
+            plain = re.sub(r"^\s*(?:[-*+]\s+|\|)", "", piece).replace("|", " ") if is_row else piece
+            if re.search(r"\[[^]]+\]\([^)]*\)", plain):
                 # Link-only menus are not prose; inline editorial links are prose.
-                plain = re.sub(r"\[([^]]+)\]\([^)]*\)", r"\1", unit)
-                if len(re.findall(r"\w+", re.sub(r"\[[^]]+\]\([^)]*\)", "", unit))) < 3:
+                if len(re.findall(r"\w+", re.sub(r"\[[^]]+\]\([^)]*\)", "", plain))) < 3:
                     continue
-            else:
-                plain = unit
-            for sentence in re.split(r'(?<=[.!?])\s+(?=[A-Z0-9"“])', plain):
+                plain = re.sub(r"\[([^]]+)\]\([^)]*\)", r"\1", plain)
+            for sentence in ([plain] if is_row else re.split(r'(?<=[.!?])\s+(?=[A-Z0-9"“])', plain)):
                 sentence = ' '.join(sentence.split())
                 if sentence:
                     yield sentence
