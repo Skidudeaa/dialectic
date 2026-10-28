@@ -1077,6 +1077,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
     bench: (
       <BenchScene
         record={ORGAN === 'longway' ? recordSurface : undefined}
+        canManageHome={rooms.some(room => room.is_home && room.can_manage_home)}
         state={workspaceObjects}
         onOpen={openWorkspaceObject}
         tradingPanel={<TradingPanel />}

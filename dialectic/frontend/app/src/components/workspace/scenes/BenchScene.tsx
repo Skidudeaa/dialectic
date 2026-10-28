@@ -176,7 +176,7 @@ function TradingBenchScene({
   )
 }
 
-export function BenchScene(props: ComponentProps<typeof TradingBenchScene> & { record?: ReactNode }) {
-  if (ORGAN === 'longway') return props.roomId ? <LongwayBench key={props.roomId} roomId={props.roomId} record={props.record} /> : <p>Open a room to see its chart.</p>
+export function BenchScene(props: ComponentProps<typeof TradingBenchScene> & { record?: ReactNode; canManageHome?: boolean }) {
+  if (ORGAN === 'longway') return props.roomId ? <LongwayBench key={props.roomId} roomId={props.roomId} record={props.record} canManageHome={props.canManageHome ?? false} /> : <p>Open a room to see its chart.</p>
   return <TradingBenchScene {...props} />
 }

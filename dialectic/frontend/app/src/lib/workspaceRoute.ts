@@ -54,7 +54,9 @@ export function defaultWorkspaceScene(
   // conversation is still the base unit there, drawn beside the graph it is
   // about instead of in a scene of its own. The Record stays one tap away.
   if (room.is_home) return thread.parent_thread_id === null ? 'house' : 'record'
-  return ORGAN === 'longway' ? 'record' : thread.parent_thread_id === null ? 'surface' : 'record'
+  // The Long Way: a journey room opens on its Chart; a branch is a conversation.
+  if (ORGAN === 'longway') return thread.parent_thread_id === null ? 'bench' : 'record'
+  return thread.parent_thread_id === null ? 'surface' : 'record'
 }
 
 /**

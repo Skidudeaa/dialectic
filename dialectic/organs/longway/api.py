@@ -122,6 +122,26 @@ async def post_confirmation(room_id: UUID, body: Confirmation, user=Depends(auth
     return dict(row, member_name=member["display_name"])
 
 
+@router.post("/dispatch/now")
+async def dispatch_now_route(room_id: UUID, user=Depends(authorized), db=Depends(get_db)):
+    """Send this week's dispatch to this room now (house managers). Posts, broadcasts and pushes like Sunday's job."""
+    await manager(user, db)
+    from types import SimpleNamespace
+    from api import main as app_main  # fully imported by request time; jobs never import it themselves
+    from .jobs import dispatch_now
+    manager_obj = app_main.connection_manager
+
+    async def broadcast(target_room_id, message):
+        if manager_obj is not None:
+            await manager_obj.broadcast(target_room_id, message)
+
+    ctx = SimpleNamespace(pool=_pool, broadcast=broadcast, connection_manager=manager_obj)
+    try:
+        return await dispatch_now(ctx, room_id)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 @router.get("/dispatch/latest")
 async def latest_dispatch(room_id: UUID, user=Depends(authorized), db=Depends(get_db)):
     row = await db.fetchrow("""SELECT m.* FROM messages m JOIN threads t ON t.id=m.thread_id

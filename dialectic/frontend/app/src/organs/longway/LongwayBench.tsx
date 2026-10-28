@@ -3,15 +3,30 @@ import type { ReactNode } from 'react'
 import { useLongwayChart } from '../../hooks/useLongwayChart'
 import { useAppStore } from '../../stores/appStore'
 import Chart, { LegCard, SeasonStrip } from './chartSlot'
+import { longwayPath, longwayRequest } from './api'
 import type { AnchorMetadata } from './types'
 
-export function LongwayBench({ roomId, record }: { roomId: string; record?: ReactNode }) {
+export function LongwayBench({ roomId, record, canManageHome = false }: { roomId: string; record?: ReactNode; canManageHome?: boolean }) {
   const { data, error, refresh } = useLongwayChart(roomId)
   const [selected, setSelected] = useState<string | null>(null)
   const [leg, setLeg] = useState<AnchorMetadata | null>(null)
   const [myth, setMyth] = useState(false)
   const [draft, setDraft] = useState<string | null>(null)
   const [sendError, setSendError] = useState('')
+  // The Sunday ritual's manual door (house managers): same draft, post and push as the job, once per day.
+  const [dispatchNote, setDispatchNote] = useState('')
+  const [dispatching, setDispatching] = useState(false)
+  const sendDispatch = async () => {
+    setDispatching(true); setDispatchNote('')
+    try {
+      const result = await longwayRequest<{ message_id: string | null; pushed: number; already: boolean }>(longwayPath(roomId, 'dispatch/now'), { method: 'POST' })
+      setDispatchNote(result.already ? 'This week’s dispatch was already sent today; it is in the Record.' : 'Sent to the Record and pushed.')
+    } catch (err) {
+      setDispatchNote(err instanceof Error ? err.message : 'The dispatch could not be sent.')
+    } finally {
+      setDispatching(false)
+    }
+  }
   const journey = data?.journeys.find(j => j.slug === (leg?.journey ?? selected ?? data.room.linked_journey))
   const discuss = (slug: string, index: number) => {
     const segment = data?.journeys.find(j => j.slug === slug)?.segments[index]
@@ -43,6 +58,10 @@ export function LongwayBench({ roomId, record }: { roomId: string; record?: Reac
       }}><label>About this leg<textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} /></label>
         <button disabled={!draft.trim()}>Send to Record</button><button type="button" onClick={() => setDraft(null)}>Cancel</button>{sendError && <p role="alert">{sendError}</p>}
       </form>}
+      {canManageHome && (data.room.linked_journey || data.room.is_home) && <p className="longway-dispatch-now">
+        <button type="button" disabled={dispatching} onClick={() => void sendDispatch()}>{dispatching ? 'Sending…' : 'Send this week’s dispatch now'}</button>
+        {dispatchNote && <span role="status"> {dispatchNote}</span>}
+      </p>}
       {data.fixes_state.stale && <p>{data.fixes_state.why ?? 'Vehicle listener is stale'}</p>}
       {data.vehicles.filter(v => !v.heard && (!data.room.linked_journey || v.journey === data.room.linked_journey)).map(v => <p key={`${v.journey}:${v.name}`}>{v.name} · never heard</p>)}
     </div>

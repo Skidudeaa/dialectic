@@ -9,7 +9,9 @@ export const IDENTITY = ORGAN === 'longway' ? {
   name: 'Dialectic', shortName: 'Dialectic', participantName: 'Dialectic', signature: ')',
   lede: null, originImprint: 'DwoodAmo',
 }
+// The Long Way opens a journey room on its Chart: the first thing a friend sees is the thing they cannot get
+// anywhere else (moonshot-house, The Hard Part). The Record is one tap away.
 export const SCENES: readonly ImplementedWorkspaceScene[] = ORGAN === 'longway'
-  ? ['record', 'bench', 'library', 'field', 'ledger']
+  ? ['bench', 'record', 'library', 'field', 'ledger']
   : ['surface', 'record', 'bench', 'field', 'atlas', 'library', 'ledger']
 export const benchLabel = ORGAN === 'longway' ? 'Chart' : 'Bench'

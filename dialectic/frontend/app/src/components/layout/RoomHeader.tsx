@@ -1,4 +1,5 @@
 import type { Thread } from '../../types'
+import { IDENTITY, ORGAN } from '../../organ'
 import { useAppStore } from '../../stores/appStore.ts'
 import { useUnreadReleases } from '../../lib/releases.ts'
 import type { HelpTab } from './HelpDialog'
@@ -64,7 +65,7 @@ export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, 
         {/* Room / Branch breadcrumb: the select IS the branch crumb, kept
             as the keyboard-friendly control. Both labels truncate
             independently instead of pushing the drawer toggles offscreen. */}
-        <span className="room-title">{isHome ? 'Home' : roomName}</span>
+        <span className="room-title">{isHome ? (ORGAN === 'longway' ? IDENTITY.name : 'Home') : roomName}</span>
         {showBranchCrumb && (
           <>
             <span className="crumb-sep" aria-hidden="true">/</span>

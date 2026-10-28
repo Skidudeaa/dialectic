@@ -127,6 +127,34 @@ async def _push_dispatch(db, ctx, room, content, message_id, thread_id):
     return len(recipients)
 
 
+async def dispatch_now(ctx, room_id, *, now=None):
+    """A manager's "send this week's dispatch now": the Sunday post for one room, today, pushed.
+
+    WHY a door beside the clock: the ritual is the pull mechanism, and a ritual that cannot be seen before its
+    first Sunday cannot be judged. Same draft, same post, same push, same per-day deduplication (a second press
+    the same day returns the existing message instead of a duplicate). No weekday check.
+    """
+    now = now or datetime.now(timezone.utc)
+    week_of = now.astimezone(ZoneInfo("America/Chicago")).date().isoformat()
+    async with ctx.pool.acquire() as db:
+        room = await db.fetchrow("SELECT id,name,linked_journey,is_home FROM rooms WHERE id=$1", room_id)
+        if not room or not (room["is_home"] or room["linked_journey"]):
+            raise ValueError("The dispatch goes to the house or to a room bound to a journey")
+        existing = await db.fetchval("""SELECT m.id FROM messages m JOIN threads t ON t.id=m.thread_id
+            WHERE t.room_id=$1 AND m.metadata->'longway_dispatch'->>'week_of'=$2 ORDER BY m.created_at DESC LIMIT 1""", room["id"], week_of)
+        if existing:
+            return {"message_id": str(existing), "pushed": 0, "already": True}
+        content = await draft(room["linked_journey"], now)
+        posted = await _post_dispatch(db, ctx, room, content, week_of)
+        if not posted:
+            existing = await db.fetchval("""SELECT m.id FROM messages m JOIN threads t ON t.id=m.thread_id
+                WHERE t.room_id=$1 AND m.metadata->'longway_dispatch'->>'week_of'=$2 ORDER BY m.created_at DESC LIMIT 1""", room["id"], week_of)
+            return {"message_id": str(existing) if existing else None, "pushed": 0, "already": True}
+        mid, thread = posted
+        pushed = await _push_dispatch(db, ctx, room, content, mid, thread)
+        return {"message_id": mid, "pushed": pushed, "already": False}
+
+
 async def sunday_dispatch(ctx, *, now=None):
     now = now or datetime.now(timezone.utc)
     local = now.astimezone(ZoneInfo("America/Chicago"))
