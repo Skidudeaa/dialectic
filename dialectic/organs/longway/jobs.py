@@ -230,11 +230,20 @@ async def scout_nightly(ctx, *, now=None):
         work = {room['id']: [q['id'] for q in await researchable(db, room['linked_journey'])] for room in rooms}
     result = {'seeded': seeded} if seeded else {}
     for room in rooms:
+        counter_only = False
         if not work[room['id']]:
-            result[str(room['id'])] = {'skipped': 'answers waiting in the Field' if await _open_questions(ctx.pool, room['linked_journey']) else 'no open questions'}
-            continue
+            # Nothing to research, but a load-bearing proposal an earlier run left without its contrary
+            # search cannot be confirmed by anyone; the run does only those searches.
+            async with ctx.pool.acquire() as db:
+                stranded = await db.fetchval('''SELECT 1 FROM longway_evidence_proposals WHERE room_id=$1 AND candidate=$2
+                    AND load_bearing AND contradicts IS NULL AND counter_searched_at IS NULL LIMIT 1''', room['id'], room['linked_journey'])
+            if not stranded:
+                result[str(room['id'])] = {'skipped': 'answers waiting in the Field' if await _open_questions(ctx.pool, room['linked_journey']) else 'no open questions'}
+                continue
+            counter_only = True
         try:
-            result[str(room['id'])] = await run(ctx.pool, room['id'], room['linked_journey'], work[room['id']], trigger='nightly', ctx=ctx)
+            result[str(room['id'])] = await run(ctx.pool, room['id'], room['linked_journey'], work[room['id']], trigger='nightly', ctx=ctx,
+                                                **({'counter_only': True} if counter_only else {}))
         except AlreadyRunning:
             result[str(room['id'])] = {'skipped': 'running'}
         except Exception as exc:

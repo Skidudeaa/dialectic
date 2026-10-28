@@ -383,13 +383,17 @@ async def finish(pool, run_id, status, error=None, ctx=None):
         content = (f"Scout run on {row['journey']}: read {row['pages_read']} pages, filed {row['proposals']} proposals "
                    + (f"({refused} refused by the passage gate) " if refused else '')
                    + f"and {row['counter_proposals']} contrary findings for the Field. Questions: "
-                   + '; '.join(q['text'] for q in texts) + f". Status: {row['status']}."
+                   + ('; '.join(q['text'] for q in texts) or 'none, contrary searches only') + f". Status: {row['status']}."
                    + (f" {row['error']}" if row['error'] else ''))
         await post_participant(db, ctx, room, content, metadata, 'longway_scout_run', 'run_id', str(run_id))
     return dict(row)
 
 
-async def execute(pool, row, *, provider=None, fetcher=None, renderer=None, ctx=None):
+async def execute(pool, row, *, provider=None, fetcher=None, renderer=None, ctx=None, counter_only=False):
+    """One Scout run: the research turn over the run's questions, then one contrary-search turn per
+    load-bearing proposal still without one. counter_only skips the research turn: the nightly job
+    uses it when every question's answer is waiting on the desk but earlier runs left load-bearing
+    proposals that the Field cannot confirm until their contrary search has happened."""
     owned_provider = provider is None
     status, error = 'done', None
     try:
@@ -415,7 +419,8 @@ async def execute(pool, row, *, provider=None, fetcher=None, renderer=None, ctx=
                 raise BudgetStop('tool iteration budget exhausted')
 
         async def work():
-            await turn(request)
+            if not counter_only:
+                await turn(request)
             while True:
                 async with pool.acquire() as db:
                     # This run's own proposals first, then any load-bearing proposal in this room for this

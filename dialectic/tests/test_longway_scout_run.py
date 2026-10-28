@@ -530,8 +530,8 @@ async def test_nightly_leaves_a_question_whose_answer_waits_on_the_desk(db,house
     monkeypatch.setattr(scout,'run',fake)
     monkeypatch.setenv('LONGWAY_SCOUT_ENABLED','1')
     ctx=SimpleNamespace(pool=house.pool)
-    answer=await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='schedule',
-        question_id=banda['id'],fetcher=captured_page)
+    answer=await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='a reading, not load-bearing',
+        question_id=banda['id'],fetcher=captured_page)   # not load-bearing: nothing stranded, so nothing to run
     assert await jobs.scout_nightly(ctx)=={str(house.room):{'skipped':'answers waiting in the Field'}}
     fake.assert_not_called()
     assert (await client.post(f"/rooms/{house.room}/field/marks/{answer['field_mark_id']}/review",json={'action':'contest','note':'Not October'})).status_code==200
@@ -546,3 +546,32 @@ def test_table_rows_inside_a_captioned_paragraph_are_units():
     assert whole_sentence_passage('6 Okt 2026 01:00 KM.LABOBAR AMBON → KAB. TUAL',content)=='6 Okt 2026 01:00 KM.LABOBAR AMBON → KAB. TUAL'
     assert whole_sentence_passage('Tickets are sold at the harbour',content)=='Tickets are sold at the harbour.'
     assert '--- --- ---' not in list(units_of(content))
+
+
+@pytest.mark.asyncio
+async def test_nightly_still_runs_the_contrary_searches_a_waiting_desk_needs(db,house,banda,monkeypatch):
+    """Answers waiting on the desk stop research, not the contrary searches without which nothing can be confirmed."""
+    from organs.longway import jobs
+    fake=AsyncMock(return_value={'status':'done'})
+    monkeypatch.setattr(scout,'run',fake)
+    monkeypatch.setenv('LONGWAY_SCOUT_ENABLED','1')
+    ctx=SimpleNamespace(pool=house.pool)
+    await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='schedule',load_bearing=True,
+        question_id=banda['id'],fetcher=captured_page)
+    assert await jobs.scout_nightly(ctx)=={str(house.room):{'status':'done'}}
+    args,kwargs=fake.await_args
+    assert args[3]==[] and kwargs=={'trigger':'nightly','ctx':ctx,'counter_only':True}
+    await db.execute('UPDATE longway_evidence_proposals SET counter_searched_at=clock_timestamp() WHERE room_id=$1',house.room)
+    assert await jobs.scout_nightly(ctx,now=datetime.now(timezone.utc)+timedelta(days=1))=={str(house.room):{'skipped':'answers waiting in the Field'}}
+
+
+@pytest.mark.asyncio
+async def test_counter_only_run_skips_research_and_stamps_the_stranded_proposal(db,house,banda):
+    await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='schedule',load_bearing=True,fetcher=captured_page)
+    provider=ScriptedProvider()
+    receipt=await scout.run(house.pool,house.room,'banda-islands',[],provider=provider,fetcher=captured_page,counter_only=True)
+    assert receipt['status']=='done' and receipt['error'] is None and receipt['questions']==[],receipt
+    assert provider.turns['research']==0 and provider.turns['counter']==3
+    assert await db.fetchval('SELECT counter_searched_at FROM longway_evidence_proposals WHERE room_id=$1',house.room) is not None
+    content=await db.fetchval("SELECT content FROM messages WHERE thread_id=$1 AND metadata ? 'longway_scout_run'",house.thread)
+    assert 'Questions: none, contrary searches only.' in content
