@@ -184,6 +184,8 @@
 
 [2026-09-05] inspected companion UI 0.1.0 in an isolated temporary checkout and shifted the response to qualitative build potential at the owner's request — integrity checks and baseline patch applicability pass; response/composer/proposal framing and expandable source inspection are useful building blocks, but the supplied integration mainly skins Record/Focus and leaves the default Surface disconnect intact. The cooler DM Sans/blue-gray components need a deliberate fit with the warm shell. Bundled lint evidence contradicts the manifest's pass claim; independent compatibility review is pending. No production/source integration, stage, activation, or rollout occurred.
 
+[2026-10-28] Chart silence notes overlay the globe (released 20261028T220838Z from the uncommitted tree, re-released from the commit once it landed): Amo's iPad screenshot showed the 'never heard' list printed over the house sections because theme.css forced every chart child to height 100% inside a fixed 55svh box. The list is now a one-line details summary floating in the chart's lower left, the globe's error line floats at its top, only the chart root and the map take the fixed height, and the house no longer repeats the masthead's lede. Proven in WebKit at 1600x1200, 1366x1024 and 390x844 (house) and on the sticky phone Bench.
+
 ## GRAVEYARD
 - Protocol-as-CLAUDE.md or as a system message (2026-09-02): every custom subagent loads the full CLAUDE.md hierarchy, and a system message dies on restart. Split by lifetime instead.
 - Blind judging with three same-model judges (2026-09-02): correlated errors, and no acquirable REFERENCE_CLASS for Dialectic/somaNotes/tradingDesk. Reinstate only with mixed judge models and a named reference asset path.

@@ -55,7 +55,10 @@ export default function Chart(props: ChartProps) {
     {error && <p role="status">The globe could not load. {error}</p>}
     {(props.data.fixes_state.stale || unheard.length > 0) && <div className="vehicle-list">
       {props.data.fixes_state.stale && <p>Listener silent since {props.data.fixes_state.written ?? 'an unknown time'}</p>}
-      {unheard.length > 0 && <ul aria-label="Vehicles never heard">{unheard.map((v, i) => <li key={`${v.journey}-${v.name}-${i}`} style={{ opacity: props.focus && props.focus !== v.journey ? 0.25 : 1 }}>{v.name}, never heard</li>)}</ul>}
+      {unheard.length > 0 && <details>
+        <summary>{unheard.length === 1 ? '1 vehicle' : `${unheard.length} vehicles`} never heard</summary>
+        <ul aria-label="Vehicles never heard">{unheard.map((v, i) => <li key={`${v.journey}-${v.name}-${i}`} style={{ opacity: props.focus && props.focus !== v.journey ? 0.25 : 1 }}>{v.name}, never heard</li>)}</ul>
+      </details>}
     </div>}
   </div>
 }

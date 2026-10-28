@@ -31,7 +31,7 @@
 [data-organ="longway"] .scene-masthead { gap: 1rem; color: var(--ink); }
 [data-organ="longway"] .scene-masthead h2 { font-size: 1.25rem; }
 .longway-chart { height: 55svh; min-height: 240px; background: var(--sea); position: relative; }
-.longway-chart > * { height: 100%; }
+.longway-chart > .longway-chart-ui, .longway-chart-ui > .longway-map { height: 100%; }
 .longway-chart-notes { padding: 1rem; }
 .longway-card, .longway-dispatch { border: 1px solid var(--rule); background: var(--panel); padding: 1rem; margin: .8rem 0; }
 .longway-card[data-selected] { border-color: var(--good); }

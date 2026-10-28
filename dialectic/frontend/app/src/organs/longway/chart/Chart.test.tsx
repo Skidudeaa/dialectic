@@ -191,6 +191,7 @@ describe('Chart: the real register through MapLibre', () => {
     expect(label('Tanger Express, heard 98 min ago').at).toEqual([-5, 36])
     expect(label('Hours, heard 2 h ago')).toBeDefined(); expect(label('Days, heard 2 days ago')).toBeDefined()
     expect(screen.getByText('Silent, never heard')).toBeInTheDocument()
+    expect(screen.getByText('1 vehicle never heard').tagName).toBe('SUMMARY')
     expect(screen.getByText('Listener silent since 2026-10-28T08:00:00Z')).toBeInTheDocument()
     expect(live().some(m => m.element.textContent === 'Silent')).toBe(false)
     rerender(<Chart {...p} data={{ ...p.data, vehicles: [] }} />)

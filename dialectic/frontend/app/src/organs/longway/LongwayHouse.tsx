@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react'
-import { IDENTITY } from '../../organ'
 import { api } from '../../lib/api'
 import { useLongwayChart } from '../../hooks/useLongwayChart'
 import { longwayPath, longwayRequest } from './api'
@@ -33,7 +32,6 @@ export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
   if (error) return <div role="alert">{error} <button onClick={refresh}>Retry house</button></div>
   if (!data) return <p role="status">Chart loading</p>
   return <div className="longway-house scene-body">
-    <p className="longway-lede">{IDENTITY.lede}</p>
     <div className="longway-chart"><Chart data={data} focus={null} selected={selected} myth={myth} onSelectJourney={setSelected} onSelectLeg={slug => setSelected(slug)} /></div>
     <label><input type="checkbox" checked={myth} onChange={e => setMyth(e.target.checked)} /> Without the mythology</label>
     <section aria-label="Your rooms"><h2>Your rooms</h2>{data.rooms.map(room => <p key={room.id}>
