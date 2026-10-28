@@ -15,12 +15,14 @@ export function useLongwayResource<T>(path: string | null, refreshKey = '', inte
         const data = await longwayRequest<T>(path, { signal: controller.signal })
         if (!controller.signal.aborted && ticket === serial) setResult({ path, data })
       } catch (error) {
-        if (!controller.signal.aborted && ticket === serial) setResult({ path, error: error instanceof Error ? error.message : 'Could not load' })
+        if (!controller.signal.aborted && ticket === serial) setResult(previous => ({ path, data: previous?.path === path ? previous.data : undefined, error: error instanceof Error ? error.message : 'Could not load' }))
       }
     }
+    const changed = (event: Event) => { if (path.startsWith((event as CustomEvent<string>).detail)) void read() }
+    window.addEventListener('longway:changed', changed)
     void read()
     const timer = interval ? window.setInterval(() => void read(), interval) : undefined
-    return () => { controller.abort(); window.clearInterval(timer) }
+    return () => { controller.abort(); window.clearInterval(timer); window.removeEventListener('longway:changed', changed) }
   }, [path, refreshKey, interval, version])
   const current = result?.path === path ? result : null
   return { data: current?.data, error: current?.error, loading: Boolean(path && !current), refresh }

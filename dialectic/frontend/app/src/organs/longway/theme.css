@@ -61,3 +61,25 @@
 .longway-house .longway-chart { flex-shrink: 0; }
 .longway-room-context, .longway-room-access { padding: 1rem; }
 .longway-room-access[role="dialog"] { position: fixed; z-index: 100; inset: 10% max(1rem, calc((100vw - 640px) / 2)); overflow-y: auto; background: var(--panel); border: 1px solid var(--rule); box-shadow: 0 0 0 100vmax #0008; }
+
+.longway-scout { border-bottom: 1px solid var(--rule); padding-bottom: 1rem; margin-bottom: 1.5rem; }
+.longway-scout > button { margin-top: 1rem; }
+[data-organ="longway"] .longway-scout button { min-height: 44px; padding: .45rem .7rem; background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; }
+.longway-proposal, .longway-scout { min-width: 0; overflow-wrap: anywhere; }
+.longway-proposal blockquote { margin: 0 0 1rem; padding: .5rem .8rem; border-left: 3px solid var(--good); font-size: 1.1em; line-height: 1.6; white-space: pre-wrap; }
+.longway-proposal h3 { margin-top: 0; }
+.longway-proposal.paled { border-style: dashed; background: transparent; }
+.longway-proposal.paled :is(blockquote, h3) { color: var(--ink-3); }
+.longway-proposal-scope { font-family: var(--font-ui); }
+.longway-proposal-scope > div { display: flex; flex-wrap: wrap; gap: .5rem; }
+.longway-proposal-scope dt { font-weight: 600; min-width: 5rem; }
+.longway-proposal-scope dd { margin: 0; }
+.longway-review-reason { color: var(--ink-2); font-size: .9em; }
+.longway-questions { padding-left: 1.2rem; }
+.longway-questions li { margin-bottom: .65rem; }
+.longway-questions small, .longway-proposed-tag { font-family: var(--font-ui); color: var(--ink-2); }
+.longway-proposed-tag { display: inline-block; font-size: .85rem; margin-left: .5rem; border: 1px dotted var(--pencil); padding: .1rem .35rem; }
+.longway-journey-strip { display: inline-flex; flex-wrap: wrap; align-items: center; }
+.longway-scout-run { font-family: var(--font-ui); overflow-wrap: anywhere; }
+.longway-scout input, .longway-proposal input { display: block; width: 100%; box-sizing: border-box; }
+.longway-chart-ui .lg > .longway-proposed-tag { grid-column: 2; justify-self: start; margin-left: 0; }

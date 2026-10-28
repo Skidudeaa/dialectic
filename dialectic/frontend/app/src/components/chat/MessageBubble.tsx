@@ -1,6 +1,7 @@
 import { ORGAN } from '../../organ'
+import { ScoutRunCard } from '../../organs/longway/ScoutRunCard'
 import { DispatchCard } from '../../organs/longway/DispatchCard'
-import type { DispatchMetadata, AnchorMetadata } from '../../organs/longway/types'
+import type { DispatchMetadata, AnchorMetadata, ScoutRunMetadata } from '../../organs/longway/types'
 import { displayParticipantText } from '../../lib/productIdentity'
 import { ResponseCard, ProposalCard, ReviewButton } from '@dark-roast/companion-ui'
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -613,8 +614,9 @@ export function MessageBubble({
   threadSource,
   onAnchor,
 }: MessageBubbleProps) {
-  const longway = message.metadata as { longway_dispatch?: DispatchMetadata; longway_anchor?: AnchorMetadata } | null
+  const longway = message.metadata as { longway_dispatch?: DispatchMetadata; longway_anchor?: AnchorMetadata; longway_scout_run?: ScoutRunMetadata } | null
   const dispatch = ORGAN === 'longway' && message.speaker_type.startsWith('llm_') ? longway?.longway_dispatch : undefined
+  const scoutRun = ORGAN === 'longway' && message.speaker_type.startsWith('llm_') ? longway?.longway_scout_run : undefined
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState(message.content)
   const [showPicker, setShowPicker] = useState(false)
@@ -957,8 +959,10 @@ export function MessageBubble({
                 <span className="msg-edit-hint">Enter saves &middot; Esc cancels</span>
               </div>
             </div>
+          ) : scoutRun && currentRoomId ? (
+            <ScoutRunCard run={scoutRun} roomId={currentRoomId} />
           ) : dispatch ? (
-            <DispatchCard messageId={message.id} content={message.content} dispatch={dispatch} reactions={reactions} currentUserId={currentUserId} onToggleReaction={onToggleReaction} />
+            <DispatchCard roomId={currentRoomId ?? ''} messageId={message.id} content={message.content} dispatch={dispatch} reactions={reactions} currentUserId={currentUserId} onToggleReaction={onToggleReaction} />
           ) : (
             <div
               ref={contentRef}

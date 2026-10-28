@@ -1,4 +1,5 @@
-import type { EvidenceRow, Ink, Journey, Season } from '../types'
+import { ProposalCard } from '../ProposalCard'
+import type { ChartProposal, EvidenceRow, Ink, Journey, Season } from '../types'
 import './chart.css'
 
 const INK: Record<Ink, string> = {
@@ -20,9 +21,9 @@ function Line({ ink, x1, x2 }: { ink: Ink; x1: number; x2: number }) {
 /** The page's list strip, available to the shell without importing MapLibre. */
 export function JourneyStrip({ journey }: { journey: Journey }) {
   const n = journey.segments.length, gap = 4, len = n ? (96 - gap * (n - 1)) / n : 0
-  return <svg className="longway-chart-ui strip" viewBox="0 0 96 10" width="96" height="10" aria-label={journey.segments.map(s => `${s.from} to ${s.to}: ${INK[s.ink]}`).join(' ')} role="img">
-    {journey.segments.map((s, i) => <Line key={i} ink={s.ink} x1={i * (len + gap)} x2={i * (len + gap) + len} />)}
-  </svg>
+  return <span className="longway-journey-strip"><svg className="longway-chart-ui strip" viewBox="0 0 96 10" width="96" height="10" aria-label={journey.segments.map(s => `${s.from} to ${s.to}: ${s.proposed ? 'proposed. ' : ''}${INK[s.ink]}`).join(' ')} role="img">
+    {journey.segments.map((s, i) => <Line key={i} ink={s.proposed ? 'dotted' : s.ink} x1={i * (len + gap)} x2={i * (len + gap) + len} />)}
+  </svg>{journey.segments.some(s => s.proposed) && <span className="longway-proposed-tag">proposed</span>}</span>
 }
 
 function Evidence({ ids, sources }: { ids: string[]; sources: Sources }) {
@@ -37,15 +38,17 @@ function Evidence({ ids, sources }: { ids: string[]; sources: Sources }) {
   })}</ul>
 }
 
-export function LegCard({ journey, index, sources, onDiscuss }: {
+export function LegCard({ journey, index, sources, onDiscuss, proposals = [], roomId, refresh }: {
   journey: Journey; index: number; sources: Sources; onDiscuss?: (slug: string, index: number) => void
+  proposals?: ChartProposal[]; roomId?: string; refresh?: () => void
 }) {
   const leg = journey.segments[index]
   if (!leg) return null
   return <article className="longway-chart-ui leg-card" aria-label={`${leg.from} to ${leg.to}`} tabIndex={0}>
-    <div className="lg"><svg viewBox="0 0 44 10" width="44" height="10" aria-hidden="true"><Line ink={leg.ink} x1={2} x2={42} /></svg><b>{leg.from} to {leg.to}</b></div>
+    <div className="lg"><svg viewBox="0 0 44 10" width="44" height="10" aria-hidden="true"><Line ink={leg.proposed ? 'dotted' : leg.ink} x1={2} x2={42} /></svg><b>{leg.from} to {leg.to}</b>{leg.proposed && <span className="longway-proposed-tag">proposed</span>}</div>
     <p className="small">{INK[leg.ink]}</p>
     {leg.basis.length > 0 && <details open><summary>Evidence {leg.basis.join(', ')}</summary><Evidence ids={leg.basis} sources={sources} /></details>}
+    {roomId && proposals.filter(p => (p.review === 'proposed' || p.review === 'confirmed') && ((p.leg_from === leg.from && p.leg_to === leg.to) || (p.leg_from === leg.to && p.leg_to === leg.from))).map(p => <ProposalCard key={`${roomId}:${p.id}`} proposal={p} roomId={roomId} refresh={refresh} compact />)}
     {onDiscuss && <button type="button" className="discuss" onClick={() => onDiscuss(journey.slug, index)}>Discuss this leg</button>}
   </article>
 }

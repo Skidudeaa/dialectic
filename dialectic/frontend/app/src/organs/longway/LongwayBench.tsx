@@ -2,7 +2,8 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLongwayChart } from '../../hooks/useLongwayChart'
 import { useAppStore } from '../../stores/appStore'
-import Chart, { LegCard, SeasonStrip } from './chartSlot'
+import Chart from './chartSlot'
+import { LegCard, SeasonStrip } from './chart/Cards'
 import { longwayPath, longwayRequest } from './api'
 import type { AnchorMetadata } from './types'
 
@@ -44,9 +45,9 @@ export function LongwayBench({ roomId, record, canManageHome = false }: { roomId
     <div className="longway-chart-notes">
       <label><input type="checkbox" checked={myth} onChange={e => setMyth(e.target.checked)} /> Without the mythology</label>
       {journey && <><h3>{journey.title}</h3><p>{journey.pull}</p><SeasonStrip season={journey.season} sources={data.sources[journey.slug] ?? {}} />
-        <ul className="longway-legs">{journey.segments.map((segment, index) => <li key={index}><button aria-pressed={leg?.journey === journey.slug && leg.leg === index} onClick={() => { setLeg({ journey: journey.slug, leg: index }); setDraft(null) }}>{segment.from} to {segment.to}</button></li>)}</ul>
+        <ul className="longway-legs">{journey.segments.map((segment, index) => <li key={index}><button aria-pressed={leg?.journey === journey.slug && leg.leg === index} onClick={() => { setLeg({ journey: journey.slug, leg: index }); setDraft(null) }}>{segment.from} to {segment.to}</button>{segment.proposed && <span className="longway-proposed-tag">proposed</span>}</li>)}</ul>
       </>}
-      {journey && leg && <><LegCard journey={journey} index={leg.leg} sources={data.sources[journey.slug] ?? {}} />
+      {journey && leg && <><LegCard roomId={roomId} proposals={data.proposals?.[journey.slug]} journey={journey} index={leg.leg} sources={data.sources[journey.slug] ?? {}} />
         <button onClick={() => discuss(journey.slug, leg.leg)}>Discuss this leg</button></>}
       {draft !== null && <form onSubmit={e => {
         e.preventDefault()

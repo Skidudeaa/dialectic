@@ -32,7 +32,7 @@ function serve(extra: (path: string, init?: RequestInit) => unknown = () => unde
     calls.push({ path, init, body: init?.body ? JSON.parse(String(init.body)) : undefined })
     const custom = extra(path, init)
     if (custom instanceof Response) return custom
-    const result = custom ?? (path.endsWith('/chart') ? projection(home) : path.endsWith('/proposals') ? [proposed] : path.endsWith('/field/marks') ? { id: 'mark1' } : {})
+    const result = custom ?? (path.endsWith('/chart') ? projection(home) : path.endsWith('/proposals') ? [proposed] : path.endsWith('/field/marks') ? (init?.method === 'POST' ? { id: 'mark1' } : { marks: [] }) : path.endsWith('/questions') || path.endsWith('/scout/runs') || path === '/users/me/rooms' ? [] : {})
     return new Response(JSON.stringify(result), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }))
 }
@@ -71,8 +71,8 @@ describe('Long Way connected scenes', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Without the mythology' }))
     expect(chart).toHaveAttribute('data-myth', 'true')
     fireEvent.click(screen.getByText('Select Tokyo leg'))
-    expect(await screen.findByRole('region', { name: 'Leg card' })).toHaveTextContent(raw.sources.ogasawara.S1.claim)
-    expect(screen.getByRole('link', { name: 'Ogasawara Kaiun' })).toHaveAttribute('href', raw.sources.ogasawara.S1.url)
+    expect(await screen.findByRole('article', { name: 'Tokyo (Takeshiba) to Chichijima' })).toHaveTextContent(raw.sources.ogasawara.S1.claim)
+    expect(screen.getAllByRole('link', { name: 'Source' })[0]).toHaveAttribute('href', raw.sources.ogasawara.S1.url)
     fireEvent.click(screen.getByText('Discuss this leg'))
     const draft = screen.getByRole('textbox', { name: 'About this leg' })
     expect(draft).toHaveValue('About Tokyo (Takeshiba) to Chichijima:')
@@ -113,13 +113,14 @@ describe('Long Way connected scenes', () => {
   it.each(['confirm', 'contest', 'correct'] as const)('reviews a proposal through the shared Field path: %s', async action => {
     serve()
     render(<LongwayField roomId="room" />)
+    if (action === 'confirm') fireEvent.click(await screen.findByRole('link', { name: 'Open page' }))
     fireEvent.click(await screen.findByRole('button', { name: action[0].toUpperCase() + action.slice(1) }))
     if (action !== 'confirm') {
-      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'The corrected page claim' } })
+      fireEvent.change(screen.getByRole('textbox', { name: action === 'contest' ? 'Contest note' : 'Better claim' }), { target: { value: 'The corrected page claim' } })
       fireEvent.click(screen.getByRole('button', { name: `Save ${action}` }))
     }
     await waitFor(() => expect(calls.some(c => c.path.endsWith('/mark1/review'))).toBe(true))
-    expect(calls.find(c => c.path.endsWith('/field/marks'))?.body?.subjects).toEqual([{ entity: 'longway_evidence_proposals', id: 'p1' }])
+    expect(calls.find(c => c.path.endsWith('/field/marks') && c.init?.method === 'POST')?.body?.subjects).toEqual([{ entity: 'longway_evidence_proposals', id: 'p1' }])
     expect(calls.find(c => c.path.endsWith('/mark1/review'))?.body).toMatchObject({ action, ...(action === 'correct' ? { replacement: { title: 'The corrected page claim' } } : {}) })
   })
   it('shows written evidence provenance', async () => {
@@ -159,13 +160,15 @@ describe('dispatch privacy', () => {
     const message = (id: string, day: string, dispatch = false) => ({ id, created_at: day, speaker_type: dispatch ? 'llm_primary' : 'human', metadata: dispatch ? { longway_dispatch: { week_of: '2026-10-25', journey: null } } : {} }) as unknown as Message
     expect(dispatchesFirst([message('first', '2026-10-24T12:00:00Z'), message('banter', '2026-10-25T12:00:00Z'), message('dispatch', '2026-10-25T13:00:00Z', true), message('reply', '2026-10-25T14:00:00Z')]).map(m => m.id)).toEqual(['first', 'dispatch', 'banter', 'reply'])
   })
-  it('offers three reactions, toggles only the viewer state, and exposes no counts or names', () => {
+  it('offers three reactions, toggles only the viewer state, and exposes no counts or names', async () => {
+    serve()
     const toggle = vi.fn()
-    render(<DispatchCard messageId="dispatch" content="Nothing moved this week" dispatch={{ journey: 'ogasawara', week_of: '2026-10-25' }} currentUserId="me" reactions={[{ emoji: '👍', user_ids: ['me', 'other'], user_names: ['Private viewer', 'Other member'] }]} onToggleReaction={toggle} />)
+    render(<DispatchCard roomId="room" messageId="dispatch" content="Nothing moved this week" dispatch={{ journey: 'ogasawara', week_of: '2026-10-25' }} currentUserId="me" reactions={[{ emoji: '👍', user_ids: ['me', 'other'], user_names: ['Private viewer', 'Other member'] }]} onToggleReaction={toggle} />)
     const buttons = screen.getAllByRole('button')
     expect(buttons).toHaveLength(3)
     expect(buttons[0]).toHaveAttribute('aria-pressed', 'true')
     buttons.forEach(button => fireEvent.click(button))
+    await waitFor(() => expect(calls.some(c => c.path.endsWith('/questions'))).toBe(true))
     expect(toggle.mock.calls).toEqual([['dispatch', '👍', true], ['dispatch', '🚫', false], ['dispatch', '❓', false]])
     expect(document.body.textContent).not.toMatch(/Private viewer|Other member/)
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()

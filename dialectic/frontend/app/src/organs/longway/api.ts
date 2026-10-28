@@ -22,3 +22,8 @@ export async function longwayRequest<T>(path: string, options: RequestInit = {},
 export function longwayPath(roomId: string, resource: string) {
   return `/rooms/${encodeURIComponent(roomId)}/longway/${resource}`
 }
+
+/** Re-read projections after a Field write or a completed Scout run. */
+export function notifyLongwayChanged(roomId: string) {
+  window.dispatchEvent(new CustomEvent('longway:changed', { detail: longwayPath(roomId, '') }))
+}
