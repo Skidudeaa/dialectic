@@ -59,6 +59,9 @@ class LLMRequest:
     # None preserves the pre-5-series behaviour: no thinking. Callers opt in
     # with {"type": "adaptive"} where the extra reasoning is worth the budget.
     thinking: Optional[dict] = None
+    # The 5.5-series reasons adaptively and takes an effort (low, medium, high) through
+    # output_config; None means medium. Ignored by models that accept thinking "disabled".
+    effort: Optional[str] = None
 
 
 def _parse_anthropic_message(data: dict, provider: ProviderName) -> LLMResponse:
@@ -126,6 +129,12 @@ class AnthropicStreamFold:
                     "name": block.get("name", ""),
                     "json_buf": "",
                 }
+            elif block.get("type") == "thinking":
+                # Adaptive thinking (the 5.5 models): kept whole, with its signature, so a
+                # tool loop can echo the assistant turn back exactly; never shown as text.
+                self._blocks[idx] = {"type": "thinking", "thinking": block.get("thinking", ""), "signature": block.get("signature", "")}
+            elif block.get("type") == "redacted_thinking":
+                self._blocks[idx] = {"type": "redacted_thinking", "data": block.get("data", "")}
             else:
                 self._blocks[idx] = {"type": "text", "text": ""}
             self._order.append(idx)
@@ -136,7 +145,11 @@ class AnthropicStreamFold:
             blk = self._blocks.setdefault(idx, {"type": "text", "text": ""})
             if delta.get("type") == "input_json_delta":
                 blk["json_buf"] = blk.get("json_buf", "") + delta.get("partial_json", "")
-            elif "text" in delta:
+            elif delta.get("type") == "thinking_delta":
+                blk["thinking"] = blk.get("thinking", "") + delta.get("thinking", "")
+            elif delta.get("type") == "signature_delta":
+                blk["signature"] = delta.get("signature", "")
+            elif "text" in delta and blk.get("type") == "text":
                 blk["text"] = blk.get("text", "") + delta["text"]
                 out.append(("text", {"text": delta["text"]}))
 
@@ -174,6 +187,12 @@ class AnthropicStreamFold:
             if blk["type"] == "text":
                 if blk.get("text"):
                     blocks.append({"type": "text", "text": blk["text"]})
+            elif blk["type"] == "thinking":
+                # Only a signed thinking block can be echoed; an unsigned one is dropped, never faked.
+                if blk.get("signature"):
+                    blocks.append({"type": "thinking", "thinking": blk.get("thinking", ""), "signature": blk["signature"]})
+            elif blk["type"] == "redacted_thinking":
+                blocks.append({"type": "redacted_thinking", "data": blk.get("data", "")})
             else:
                 blocks.append({
                     "type": "tool_use",
@@ -256,9 +275,19 @@ class AnthropicProvider(LLMProvider):
         self.base_url = "https://api.anthropic.com/v1"
         self.client = httpx.AsyncClient(timeout=120.0)
 
+    # The 5.5 generation (and Fable) refuses thinking.type "disabled" with a 400 that
+    # says to use adaptive thinking plus output_config.effort instead (verified against
+    # the live API, 2026-10-28). Prefix match, because the ids are dated or suffixed.
+    ADAPTIVE_ONLY_PREFIXES = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-")
+
+    @classmethod
+    def adaptive_only(cls, model: str) -> bool:
+        return model.startswith(cls.ADAPTIVE_ONLY_PREFIXES)
+
     def _request_body(self, request: LLMRequest, stream: bool = False) -> dict:
+        model = self.MODELS.get(request.model, request.model)
         body = {
-            "model": self.MODELS.get(request.model, request.model),
+            "model": model,
             "max_tokens": request.max_tokens,
             "system": request.system,
             "messages": request.messages,
@@ -274,8 +303,20 @@ class AnthropicProvider(LLMProvider):
             # 256-1024 tokens for a JSON verdict; left adaptive, the model would
             # spend the whole budget reasoning and return nothing parseable.
             # Off is exactly what every caller got before the swap.
-            "thinking": request.thinking or {"type": "disabled"},
         }
+        if request.thinking:
+            body["thinking"] = request.thinking
+            if request.effort and request.thinking.get("type") == "adaptive":
+                body["output_config"] = {"effort": request.effort}
+        elif self.adaptive_only(model):
+            # No "disabled" on these models. Adaptive thinking shares max_tokens with
+            # the answer, so a word-budgeted turn (192 tokens and up in the orchestrator)
+            # gets a floor that leaves room for both; effort bounds how much is spent.
+            body["thinking"] = {"type": "adaptive"}
+            body["output_config"] = {"effort": request.effort or "medium"}
+            body["max_tokens"] = max(request.max_tokens, 2048)
+        else:
+            body["thinking"] = {"type": "disabled"}
         if request.tools:
             body["tools"] = request.tools
             if request.tool_choice:

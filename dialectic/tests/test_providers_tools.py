@@ -225,3 +225,85 @@ class TestModelResolution:
     def test_callers_can_opt_into_adaptive_thinking(self):
         body = self._body(thinking={"type": "adaptive"})
         assert body["thinking"] == {"type": "adaptive"}
+
+
+class TestAdaptiveOnlyModels:
+    """The 5.5 generation refuses thinking.type "disabled" (live API, 2026-10-28:
+    'Use "thinking.type.adaptive" and "output_config.effort"'). The body must
+    change shape for those ids and for no other."""
+
+    def _body(self, **kw):
+        from llm.providers import AnthropicProvider
+        provider = AnthropicProvider.__new__(AnthropicProvider)
+        req = LLMRequest(messages=[{"role": "user", "content": "x"}],
+                         system="s", model=kw.pop("model", "claude-opus-5-5"), **kw)
+        return provider._request_body(req)
+
+    def test_opus_5_5_gets_adaptive_thinking_with_medium_effort(self):
+        body = self._body(max_tokens=256)
+        assert body["model"] == "claude-opus-5-5"
+        assert body["thinking"] == {"type": "adaptive"}
+        assert body["output_config"] == {"effort": "medium"}
+        assert body["max_tokens"] == 2048, "thinking shares the budget; a word-budgeted turn needs a floor"
+
+    def test_effort_is_honoured_and_a_large_budget_kept(self):
+        body = self._body(effort="high", max_tokens=6000)
+        assert body["output_config"] == {"effort": "high"}
+        assert body["max_tokens"] == 6000
+
+    def test_sonnet_5_5_and_fable_are_adaptive_only_too(self):
+        from llm.providers import AnthropicProvider
+        for model in ("claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"):
+            assert AnthropicProvider.adaptive_only(model), model
+            assert self._body(model=model)["thinking"] == {"type": "adaptive"}
+
+    def test_mapped_legacy_ids_keep_thinking_disabled(self):
+        """claude-opus-4-6 rolls forward to the pinned tier, which accepts disabled; nothing else changes."""
+        body = self._body(model="claude-opus-4-6", max_tokens=256)
+        assert body["thinking"] == {"type": "disabled"}
+        assert "output_config" not in body
+        assert body["max_tokens"] == 256
+
+    def test_explicit_thinking_wins(self):
+        body = self._body(thinking={"type": "adaptive"}, effort="low")
+        assert body["thinking"] == {"type": "adaptive"}
+        assert body["output_config"] == {"effort": "low"}
+
+
+class TestStreamFoldThinkingBlocks:
+    def test_signed_thinking_is_echoed_whole_and_never_shown(self):
+        fold = AnthropicStreamFold()
+        out = []
+        for event in [
+            {"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": ""}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "weigh the "}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "evidence"}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "signature_delta", "signature": "sig123"}},
+            {"type": "content_block_stop", "index": 0},
+            {"type": "content_block_start", "index": 1, "content_block": {"type": "text", "text": ""}},
+            {"type": "content_block_delta", "index": 1, "delta": {"type": "text_delta", "text": "S1 says weekly."}},
+            {"type": "content_block_stop", "index": 1},
+            {"type": "message_delta", "delta": {"stop_reason": "end_turn"}},
+            {"type": "message_stop"},
+        ]:
+            out.extend(fold.fold(event))
+        texts = [p["text"] for kind, p in out if kind == "text"]
+        assert texts == ["S1 says weekly."], "thinking never reaches the visible stream"
+        stop = next(p for kind, p in out if kind == "message_stop")
+        assert stop["raw_content"] == [
+            {"type": "thinking", "thinking": "weigh the evidence", "signature": "sig123"},
+            {"type": "text", "text": "S1 says weekly."},
+        ]
+
+    def test_unsigned_thinking_is_dropped_not_faked(self):
+        fold = AnthropicStreamFold()
+        for event in [
+            {"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": ""}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "hm"}},
+            {"type": "content_block_stop", "index": 0},
+            {"type": "content_block_start", "index": 1, "content_block": {"type": "redacted_thinking", "data": "opaque"}},
+            {"type": "content_block_stop", "index": 1},
+            {"type": "message_stop"},
+        ]:
+            fold.fold(event)
+        assert fold.raw_content() == [{"type": "redacted_thinking", "data": "opaque"}]
