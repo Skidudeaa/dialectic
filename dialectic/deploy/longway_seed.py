@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import secrets
 import sys
@@ -45,6 +46,8 @@ async def connect() -> asyncpg.Connection:
     if not url:
         sys.exit("DATABASE_URL is not set")
     conn = await asyncpg.connect(url)
+    # A bare connection has no jsonb codec; the app's pool sets this one (the deploy-script law in CLAUDE.md).
+    await conn.set_type_codec("jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog")
     bound = await conn.fetchval("SELECT count(*) FROM rooms WHERE linked_book_id IS NOT NULL")
     if bound:
         await conn.close()
