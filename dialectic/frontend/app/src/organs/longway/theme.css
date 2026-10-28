@@ -83,3 +83,6 @@
 .longway-scout-run { font-family: var(--font-ui); overflow-wrap: anywhere; }
 .longway-scout input, .longway-proposal input { display: block; width: 100%; box-sizing: border-box; }
 .longway-chart-ui .lg > .longway-proposed-tag { grid-column: 2; justify-self: start; margin-left: 0; }
+
+/* The claim is a bounded part of its passage: show the passage once, the claim bold inside it. */
+.longway-proposal blockquote mark { background: none; color: inherit; font-weight: 700; }

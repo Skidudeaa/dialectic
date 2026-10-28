@@ -94,6 +94,7 @@ class Research:
             raise ValueError('Scout budgets must be positive')
         self.deadline = time.monotonic() + self.budgets['seconds']
         self.tool_results = {}
+        self.pages = {}
         self.reason = None
         self.phase = 'research'
         self.counter_activity = 0
@@ -138,6 +139,12 @@ class Research:
 
     async def fetch(self, url):
         await self.check()
+        if url in self.pages:
+            # WHY a per-run cache: propose and the counter phase re-read pages the research phase already
+            # fetched. Counting those re-reads against the pages budget starved the counter phase on Banda
+            # (35 known sources, 14 proposals, budget 40), which left load-bearing proposals unconfirmable.
+            # A page costs once per run; pages_read counts distinct pages.
+            return self.pages[url]
         async with self.pool.acquire() as db:
             count = await db.fetchval('''UPDATE longway_scout_runs SET pages_read=pages_read+1
                 WHERE id=$1 AND status='running' AND pages_read<$2 RETURNING pages_read''',
@@ -154,7 +161,8 @@ class Research:
             raise
         text = str(article.get('content') or '')
         await self.log('read_page', url=url, characters=len(text), thin=len(text)<1000, truncated=len(text)>12000)
-        return dict(article, content=text[:12000], truncated=len(text)>12000, thin=len(text)<1000)
+        self.pages[url] = dict(article, content=text[:12000], truncated=len(text)>12000, thin=len(text)<1000)
+        return self.pages[url]
 
     async def read_page(self, args):
         article = await self.fetch(args['url'])
@@ -171,8 +179,9 @@ class Research:
             raise ValueError('Propose only for this run\'s journey')
         if args.get('question_id') and UUID(args['question_id']) not in self.row['questions']:
             raise ValueError('Proposal question must belong to this run')
-        # Network reads are outside the connection lease; propose calls this
-        # supplied fetcher once again to verify the load-bearing source.
+        # Network reads are outside the connection lease. Propose re-reads the page (from this run's
+        # cache when the research phase fetched it) so the gate runs on the page's text, never on the
+        # model's memory of it.
         article = await self.fetch(args['url'])
         async def fetched(url):
             return article
@@ -315,9 +324,14 @@ async def execute(pool, row, *, provider=None, fetcher=None, ctx=None):
             await turn(request)
             while True:
                 async with pool.acquire() as db:
+                    # This run's own proposals first, then any load-bearing proposal in this room for this
+                    # journey that still has no contrary search: one a budget-starved run left behind, or one
+                    # a member filed by hand. WHY: requires_counter blocks Confirm until the search happens,
+                    # and nothing else ever performs it.
                     proposal = await db.fetchrow('''SELECT id,claim,url FROM longway_evidence_proposals
-                        WHERE run_id=$1 AND load_bearing AND contradicts IS NULL AND counter_searched_at IS NULL
-                        ORDER BY created_at,id LIMIT 1''', row['id'])
+                        WHERE room_id=$2 AND candidate=$3 AND load_bearing AND contradicts IS NULL AND counter_searched_at IS NULL
+                        ORDER BY (run_id IS NOT DISTINCT FROM $1) DESC,created_at,id LIMIT 1''',
+                        row['id'], row['room_id'], row['journey'])
                 if proposal is None:
                     break
                 research.phase = f"counter:{proposal['id']}"

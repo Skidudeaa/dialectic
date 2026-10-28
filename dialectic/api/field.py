@@ -577,6 +577,11 @@ async def review_field_mark(
                                 UUID(subject['id']), room_id)
                             if needs_counter:
                                 raise HTTPException(409, 'load-bearing claim has no contrary search yet')
+                            # A confirmed answer closes the question it answers; the nightly Scout would
+                            # otherwise research it again every night. Rolls back with a refused confirm.
+                            await db.execute("""UPDATE longway_questions SET closed_at=clock_timestamp(),closed_by=$2
+                                WHERE closed_at IS NULL AND id=(SELECT question_id FROM longway_evidence_proposals WHERE id=$1)""",
+                                UUID(subject['id']), current_user.user_id)
                 for other_id in merge_ids:
                     other = locked_by_id.get(other_id)
                     if other is None or other["mark_kind"] != "relation":

@@ -49,9 +49,12 @@ export function ProposalCard({ proposal, roomId, refresh, compact = false }: {
     ['Direction', proposal.direction], ['Passport', proposal.passport], ['Vehicle', proposal.vehicle],
     ['Leg', [proposal.leg_from, proposal.leg_to].filter(Boolean).join(' to ')],
   ].filter(([, value]) => value)
+  // The claim is a bounded run of words inside its passage: show the passage once with the claim marked,
+  // and repeat the claim as a heading only when the gate's normalisation hid it from a plain substring match.
+  const at = proposal.support ? proposal.support.indexOf(proposal.claim) : -1
   return <article className={`longway-card longway-proposal${paled ? ' paled' : ''}`} aria-label={proposal.claim}>
-    {proposal.support && <blockquote>{proposal.support}</blockquote>}
-    <h3>{proposal.claim}</h3>
+    {proposal.support && <blockquote>{at >= 0 ? <>{proposal.support.slice(0, at)}<mark>{proposal.claim}</mark>{proposal.support.slice(at + proposal.claim.length)}</> : proposal.support}</blockquote>}
+    {at < 0 && <h3>{proposal.claim}</h3>}
     {proposal.scope && <p>{proposal.scope}</p>}
     {fields.length > 0 && <dl className="longway-proposal-scope">{fields.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>}
     {proposal.question_text && <p>answers: {proposal.question_text}</p>}

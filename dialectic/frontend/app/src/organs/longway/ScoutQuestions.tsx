@@ -44,7 +44,7 @@ export function ScoutQuestions({ roomId, canManageHome }: { roomId: string; canM
     <h2>What the Scout is working on</h2>
     {questions.error && <p role="alert">{questions.error} <button onClick={questions.refresh}>Retry questions</button></p>}
     {!questions.data && !questions.error && <p role="status">Loading questions…</p>}
-    {questions.data && (questions.data.filter(q => !q.closed_at).length ? <ul className="longway-questions">{questions.data.filter(q => !q.closed_at).map(q => <li key={q.id}><span>{q.text}</span> <small>{q.source}</small></li>)}</ul> : <p>No open questions yet.</p>)}
+    {questions.data && (questions.data.filter(q => !q.closed_at).length ? <ul className="longway-questions">{questions.data.filter(q => !q.closed_at).map(q => <li key={q.id}><span>{q.text}</span> <small>{q.source}</small>{q.answer_review && <small> · {q.answer_review === 'proposed' ? 'answered below, awaiting confirmation' : `answer ${q.answer_review}`}</small>}</li>)}</ul> : <p>No open questions yet.</p>)}
     <form onSubmit={e => { e.preventDefault(); void ask() }}><label>Ask the Scout to find out<input required value={text} onChange={e => { setText(e.target.value); setAsked(false) }} /></label><button disabled={asking || !text.trim()}>{asking ? 'Asking…' : 'Ask the Scout'}</button></form>
     {questionError && <p role="alert">{questionError}</p>}{asked && <p role="status">Question sent to the Scout.</p>}
     {canManageHome && <button type="button" disabled={starting || running || !runs.data || Boolean(runs.error)} onClick={() => void scout()}>Scout this</button>}

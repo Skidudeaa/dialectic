@@ -60,6 +60,7 @@ class ScriptedProvider:
         self.requests=[]
         self.turns={'research':0,'counter':0}
         self.counter=counter
+        self.counter_prompt=None
         self.client=SimpleNamespace(aclose=AsyncMock())
 
     async def complete(self, request):
@@ -69,6 +70,10 @@ class ScriptedProvider:
         assert {t['name'] for t in request.tools}=={'known_sources','read_page','propose','read_register'}
         counter=len(request.messages)>1 and isinstance(request.messages[1]['content'],str)
         phase='counter' if counter else 'research'
+        if counter and request.messages[1]['content']!=self.counter_prompt:
+            # Each load-bearing proposal gets its own counter phase; the script restarts per prompt.
+            self.counter_prompt=request.messages[1]['content']
+            self.turns['counter']=0
         step=self.turns[phase]
         self.turns[phase]+=1
         if step:
@@ -103,9 +108,10 @@ async def test_banda_full_run_receipt_question_and_chart(db,house,client,banda,m
     receipt=await scout.run(house.pool,house.room,'banda-islands',provider=provider,fetcher=fetcher,
                             ctx=SimpleNamespace(broadcast=broadcast))
     assert receipt['status']=='done' and receipt['error'] is None,receipt
-    assert receipt['pages_read']==3 and receipt['proposals']==1 and receipt['searches']==0
+    # pages_read counts distinct pages: propose and the counter phase re-read from the run's cache.
+    assert receipt['pages_read']==2 and receipt['proposals']==1 and receipt['searches']==0
     assert receipt['input_tokens']==17*7 and receipt['output_tokens']==11*7
-    assert [call.args[0] for call in fetcher.await_args_list].count(URL)==2
+    assert [call.args[0] for call in fetcher.await_args_list].count(URL)==1
     base=f'/rooms/{house.room}/longway'
     rows=(await client.get(base+'/proposals')).json()
     assert len(rows)==1
@@ -122,7 +128,7 @@ async def test_banda_full_run_receipt_question_and_chart(db,house,client,banda,m
     assert next(l for l in legs if l['from']=='Ambon' and l['to']=='Banda Neira')['proposed']
     message=await db.fetchrow("SELECT * FROM messages WHERE thread_id=$1 AND metadata ? 'longway_scout_run'",house.thread)
     assert message['speaker_type']=='llm_primary'
-    assert message['metadata']['longway_scout_run']==dict(run_id=str(receipt['id']),journey='banda-islands',pages_read=3,proposals=1,counter_proposals=0)
+    assert message['metadata']['longway_scout_run']==dict(run_id=str(receipt['id']),journey='banda-islands',pages_read=2,proposals=1,counter_proposals=0)
     assert QUESTION in message['content'] and 'Status: done' in message['content']
     assert broadcast.await_count==1
     assert (await client.get(base+'/scout/runs')).json()[0]['id']==str(receipt['id'])
@@ -145,12 +151,13 @@ async def test_counter_phase_without_tool_activity_cannot_unlock(db,house,banda)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('budget,value,reason',[('PAGES','1','pages'),('OUTPUT_TOKENS','11','output_tokens')])
-async def test_budgets_end_with_receipts(budget,value,reason,db,house,banda,monkeypatch):
+@pytest.mark.parametrize('budget,value,reason,filed',[('PAGES','1','pages',1),('OUTPUT_TOKENS','11','output_tokens',0)])
+async def test_budgets_end_with_receipts(budget,value,reason,filed,db,house,banda,monkeypatch):
     monkeypatch.setenv('LONGWAY_SCOUT_BUDGET_'+budget,value)
     receipt=await scout.run(house.pool,house.room,'banda-islands',provider=ScriptedProvider(),fetcher=captured_page)
     assert receipt['status']=='done' and receipt['error']==reason+' budget exhausted',receipt
-    assert receipt['proposals']==0
+    # One page's budget still files the proposal from that page: proposing re-reads the cache, not the budget.
+    assert receipt['proposals']==filed
     assert await db.fetchval("SELECT count(*) FROM messages WHERE thread_id=$1 AND metadata ? 'longway_scout_run'",house.thread)==1
 
 
@@ -300,3 +307,30 @@ async def test_nightly_run_can_be_killed_while_provider_is_pending(db,house,band
     receipt=await scout.kill(house.pool,house.room,run_id)
     assert receipt['status']=='killed'
     assert (await asyncio.wait_for(task,2))['status']=='killed'
+
+
+@pytest.mark.asyncio
+async def test_run_counter_searches_a_stranded_load_bearing_proposal(db,house,banda):
+    """A load-bearing proposal filed by hand (or left by a budget-starved run) has no contrary search and
+    cannot be confirmed; the next run performs it. Without the pickup its counter_searched_at stays null."""
+    await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='schedule, by hand',
+        load_bearing=True,proposed_by='human',user_id=house.user.user_id,fetcher=captured_page)
+    stranded=await db.fetchrow('SELECT * FROM longway_evidence_proposals WHERE room_id=$1 AND run_id IS NULL',house.room)
+    assert stranded['load_bearing'] and stranded['counter_searched_at'] is None
+    receipt=await scout.run(house.pool,house.room,'banda-islands',provider=ScriptedProvider(),fetcher=captured_page)
+    assert receipt['status']=='done' and receipt['error'] is None,receipt
+    stamped=await db.fetch('SELECT id,run_id,counter_searched_at FROM longway_evidence_proposals WHERE room_id=$1 ORDER BY created_at',house.room)
+    assert len(stamped)==2 and all(r['counter_searched_at'] for r in stamped)
+    assert receipt['pages_read']==2  # the counter phases re-read from the run's cache
+
+
+@pytest.mark.asyncio
+async def test_confirming_the_answer_closes_the_question(db,house,client,banda):
+    await scout.run(house.pool,house.room,'banda-islands',provider=ScriptedProvider(),fetcher=captured_page)
+    base=f'/rooms/{house.room}/longway'
+    row=(await client.get(base+'/proposals')).json()[0]
+    assert row['question_id']==str(banda['id']) and not row['requires_counter']
+    assert (await client.post(f"/rooms/{house.room}/field/marks/{row['field_mark_id']}/review",json={'action':'confirm'})).status_code==200
+    assert await db.fetchval('SELECT closed_at FROM longway_questions WHERE id=$1',banda['id']) is not None
+    assert (await client.get(base+'/questions')).json()==[]
+    assert await questions.select_open(db,'banda-islands')==[]
