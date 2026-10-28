@@ -36,7 +36,7 @@ print(json.dumps(dict(tools=build_registry(make_room(),None).names(),jobs=[j.nam
     assert result.returncode == 0, result.stderr
     data=json.loads(result.stdout)
     assert data["identity"] == {"organ":"longway","name":"The Long Way","participant":"Scout","lede":"Go far enough to be surprised. Stay long enough to understand. Leave room to be changed."}
-    assert set(data["jobs"]) == {"scheduler_heartbeat","sunday_dispatch","evidence_writer","workshop_job_watch"}
+    assert set(data["jobs"]) == {"scheduler_heartbeat","sunday_dispatch","evidence_writer","scout_nightly","workshop_job_watch"}
     assert data["tools"][:5] == ["read_register","fit_window","where_is","propose_evidence","draft_dispatch"]
     assert {"run_code","start_job","write_document","search_memories"} <= set(data["tools"])
     assert not {"get_live_quotes","world_query","propose_geo_scope","search_dev_sessions"} & set(data["tools"])
@@ -98,7 +98,7 @@ from api.main import app
 from fastapi.testclient import TestClient
 with TestClient(app) as client:
     assert client.get("/organ").json()["organ"] == "longway"
-    assert {j.name for j in app.state.scheduler.jobs} == {"sunday_dispatch","evidence_writer","workshop_job_watch","scheduler_heartbeat"}
+    assert {j.name for j in app.state.scheduler.jobs} == {"sunday_dispatch","evidence_writer","scout_nightly","workshop_job_watch","scheduler_heartbeat"}
 ''', DATABASE_URL=fresh, LONGWAY_REPO=os.environ.get("LONGWAY_TEST_SOURCE","/root/theLongWay"),
             ANTHROPIC_API_KEY="unused-test-key", SCHEDULER_ENABLED="0", REDIS_URL="")
         assert result.returncode == 0,result.stderr
