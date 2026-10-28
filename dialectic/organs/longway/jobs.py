@@ -41,7 +41,7 @@ async def evidence_writer(ctx):
                         continue
                     state = await review(db, row, lock=True)
                     mark = state["confirmation"]
-                    if not mark or (row["load_bearing"] and not row["counter_searched_at"]):
+                    if not mark or (row["load_bearing"] and not row["counter_searched_at"] and not row["contradicts"]):
                         continue
                     actor = await db.fetchrow("""SELECT u.id,u.display_name,c.email FROM users u
                         JOIN user_credentials c ON c.user_id=u.id WHERE u.id=$1""", mark["actor_user_id"])
@@ -204,19 +204,38 @@ async def sunday_dispatch(ctx, *, now=None):
     return result
 
 
-async def scout_nightly(ctx):
+async def scout_nightly(ctx, *, now=None):
     if os.environ.get('LONGWAY_SCOUT_ENABLED') != '1':
         return {'skipped': 'disabled'}
     from .scout import run, AlreadyRunning
+    from .questions import seed
+    now = now or datetime.now(timezone.utc)
+    today = now.astimezone(ZoneInfo('America/Chicago')).date()
     async with ctx.pool.acquire() as db:
+        # One batch per Chicago day. WHY: the scheduler fires a daily job at startup when it has not run
+        # yet that day, and the first restart after the switch went on started a two-million-token run at
+        # 10:21 in the morning; a redeploy must never be a Scout run.
+        last = await db.fetchval("SELECT max(started_at) FROM longway_scout_runs WHERE trigger='nightly'")
+        if last and last.astimezone(ZoneInfo('America/Chicago')).date() == today:
+            return {'skipped': 'already ran today'}
         rooms = await db.fetch("""SELECT id,linked_journey FROM rooms r WHERE NOT is_home
-            AND linked_journey IS NOT NULL AND EXISTS (SELECT 1 FROM longway_questions q
-                WHERE q.journey=r.linked_journey AND q.closed_at IS NULL)
-            ORDER BY r.id""")
-    result = {}
+            AND linked_journey IS NOT NULL ORDER BY r.id""")
+        # A bound room nobody has asked anything in gets the dossier's own decisive questions, once
+        # (seeding deduplicates by text, closed ones included). WHY: Amo switched the nightly Scout on
+        # for the house as it stands, and a job that waits for questions nobody knows to ask does nothing.
+        seeded = {}
+        for room in rooms:
+            if not await db.fetchval("SELECT 1 FROM longway_questions WHERE journey=$1 AND closed_at IS NULL LIMIT 1", room['linked_journey']):
+                seeded[str(room['id'])] = len(await seed(db, room['id']))
+        rooms = [room for room in rooms if await db.fetchval(
+            "SELECT 1 FROM longway_questions WHERE journey=$1 AND closed_at IS NULL LIMIT 1", room['linked_journey'])]
+    result = {'seeded': seeded} if seeded else {}
     for room in rooms:
         try:
             result[str(room['id'])] = await run(ctx.pool, room['id'], room['linked_journey'], trigger='nightly', ctx=ctx)
         except AlreadyRunning:
             result[str(room['id'])] = {'skipped': 'running'}
+        except Exception as exc:
+            logger.exception("Nightly Scout run failed for %s", room['id'])
+            result[str(room['id'])] = {'error': type(exc).__name__}
     return result

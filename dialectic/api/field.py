@@ -572,7 +572,7 @@ async def review_field_mark(
                 if request.action == 'confirm':
                     for subject in target['subjects']:
                         if subject.get('entity') == 'longway_evidence_proposals':
-                            needs_counter = await db.fetchval("""SELECT load_bearing AND counter_searched_at IS NULL
+                            needs_counter = await db.fetchval("""SELECT load_bearing AND counter_searched_at IS NULL AND contradicts IS NULL
                                 FROM longway_evidence_proposals WHERE id=$1 AND room_id=$2""",
                                 UUID(subject['id']), room_id)
                             if needs_counter:

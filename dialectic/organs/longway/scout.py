@@ -464,6 +464,22 @@ async def execute(pool, row, *, provider=None, fetcher=None, renderer=None, ctx=
     return await finish(pool, row['id'], status, error, ctx)
 
 
+async def recover(pool, ctx=None):
+    """Close the runs a restart left 'running'.
+
+    WHY: the task died with the process, and a row still 'running' holds the journey's
+    one-running-run slot forever; the nightly job and "Scout this" would both answer 409
+    until a manager noticed. The receipt says what happened. Idempotent.
+    """
+    async with pool.acquire() as db:
+        rows = await db.fetch('''UPDATE longway_scout_runs SET status='killed',
+            error='the service restarted during the run', finished_at=clock_timestamp()
+            WHERE status='running' RETURNING id''')
+    for row in rows:
+        await finish(pool, row['id'], 'killed', 'the service restarted during the run', ctx)
+    return [str(row['id']) for row in rows]
+
+
 async def kill(pool, room_id, run_id, ctx=None):
     async with pool.acquire() as db:
         row = await db.fetchrow('''UPDATE longway_scout_runs SET status='killed',

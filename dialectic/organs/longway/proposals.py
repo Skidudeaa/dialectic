@@ -94,7 +94,8 @@ PROPOSAL_FIELDS = ('question_id', 'run_id', 'search_result_id', 'contradicts',
 
 
 def requires_counter(proposal):
-    return bool(proposal['load_bearing'] and not proposal['counter_searched_at'])
+    # A contradiction is the result of a contrary search; it needs none of its own (run 6 left ten unconfirmable).
+    return bool(proposal['load_bearing'] and not proposal['counter_searched_at'] and not proposal['contradicts'])
 
 
 async def propose(db, room_id, candidate, url, claim, scope, *, proposed_by="llm", user_id=None, source_message_id=None, fetcher=None, **fields):

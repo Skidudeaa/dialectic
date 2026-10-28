@@ -1,6 +1,7 @@
 """Deterministic full tool-loop run over captured real pages and real Postgres."""
 import asyncio
 import json
+from datetime import timedelta
 from pathlib import Path
 import shutil
 from types import SimpleNamespace
@@ -461,3 +462,59 @@ async def test_brave_calls_are_spaced_a_second_apart():
     rows=await asyncio.gather(search.brave(client,'k','ambon banda',3),search.brave(client,'k','banda ambon',3))
     assert [r[0]['url'] for r in rows]==['https://x','https://x']
     assert client.times[1]-client.times[0]>=1.0
+
+
+@pytest.mark.asyncio
+async def test_a_contradiction_needs_no_contrary_search_of_its_own(db,house,client,banda):
+    first=await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='schedule',load_bearing=True,fetcher=captured_page)
+    contrary=await proposals.propose(db,house.room,candidate='banda-islands',url=URL,scope='schedule, contrary',load_bearing=True,
+        claim='Around Christmas, New Year and Idul Fitri, schedules may change spontaneously',contradicts=first['id'],fetcher=captured_page)
+    rows={r['id']:r for r in (await client.get(f'/rooms/{house.room}/longway/proposals')).json()}
+    assert rows[first['id']]['requires_counter'] and not rows[contrary['id']]['requires_counter']
+    assert (await client.post(f"/rooms/{house.room}/field/marks/{contrary['field_mark_id']}/review",json={'action':'confirm'})).status_code==200
+    assert (await client.post(f"/rooms/{house.room}/field/marks/{first['field_mark_id']}/review",json={'action':'confirm'})).status_code==409
+
+
+@pytest.mark.asyncio
+async def test_restart_recovery_closes_running_rows(db,house,banda):
+    row=await scout.reserve(house.pool,house.room,'banda-islands')
+    assert await scout.recover(house.pool)==[str(row['id'])]
+    rec=await db.fetchrow('SELECT status,error,finished_at FROM longway_scout_runs WHERE id=$1',row['id'])
+    assert rec['status']=='killed' and 'restarted' in rec['error'] and rec['finished_at']
+    assert await db.fetchval("SELECT count(*) FROM messages WHERE thread_id=$1 AND metadata->'longway_scout_run'->>'run_id'=$2",house.thread,str(row['id']))==1
+    assert await scout.recover(house.pool)==[]
+    await scout.reserve(house.pool,house.room,'banda-islands')   # the journey's slot is free again
+
+
+@pytest.mark.asyncio
+async def test_nightly_seeds_dossier_questions_for_a_quiet_room(db,house,banda,monkeypatch):
+    from organs.longway import jobs
+    await questions.close(db,house.room,banda['id'],house.user.user_id)
+    assert await questions.select_open(db,'banda-islands')==[]
+    fake=AsyncMock(return_value={'status':'done'})
+    monkeypatch.setattr(scout,'run',fake)
+    monkeypatch.setenv('LONGWAY_SCOUT_ENABLED','1')
+    ctx=SimpleNamespace(pool=house.pool)
+    result=await jobs.scout_nightly(ctx)
+    seeded=[q for q in await questions.list_questions(db,house.room) if q['source']=='dossier']
+    assert len(seeded)==3 and result['seeded']=={str(house.room):3} and result[str(house.room)]=={'status':'done'}
+    fake.assert_awaited_once_with(house.pool,house.room,'banda-islands',trigger='nightly',ctx=ctx)
+    assert (await jobs.scout_nightly(ctx)).get('seeded') is None   # seeding happens once
+
+
+@pytest.mark.asyncio
+async def test_nightly_runs_one_batch_per_chicago_day(db,house,banda,monkeypatch):
+    """A restart fires the daily job again; the second firing of a day must not start another run."""
+    from organs.longway import jobs
+    from datetime import datetime,timezone
+    fake=AsyncMock(return_value={'status':'done'})
+    monkeypatch.setattr(scout,'run',fake)
+    monkeypatch.setenv('LONGWAY_SCOUT_ENABLED','1')
+    ctx=SimpleNamespace(pool=house.pool)
+    assert (await jobs.scout_nightly(ctx))[str(house.room)]=={'status':'done'}
+    row=await scout.reserve(house.pool,house.room,'banda-islands',trigger='nightly')   # what a real run leaves behind
+    await scout.finish(house.pool,row['id'],'done')
+    assert await jobs.scout_nightly(ctx)=={'skipped':'already ran today'}
+    tomorrow=datetime.now(timezone.utc)+timedelta(days=1)
+    assert (await jobs.scout_nightly(ctx,now=tomorrow))[str(house.room)]=={'status':'done'}
+    assert fake.await_count==2

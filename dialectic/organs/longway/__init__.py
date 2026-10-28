@@ -26,10 +26,14 @@ def routers():
 
 
 def startup(pool):
+    import asyncio
     from .register import get_register
     from .api import set_db_pool
     from .search import configuration
+    from .scout import recover
     configuration()
     get_register()
     base_identity()
     set_db_pool(pool)
+    # Runs the previous process left 'running' are closed with a receipt, in the background.
+    asyncio.get_running_loop().create_task(recover(pool), name="longway-scout-recover")
