@@ -158,3 +158,28 @@ attachment verified in the DB; no tracebacks in the journal.
   the ordinary message broadcast); no `list_jobs` tool for the participant
   (it learns a job is running from the one-per-room refusal); a job and a
   `run_code` can touch the same workspace files concurrently.
+
+## Addendum 2026-10-27 (late) — Code Soak fixes, LIVE in `1669b12`
+
+Backend PID `3380480` since 22:41:58 CDT. No migration, no frontend change;
+the PWA release stays `20261027T192154Z-workshop-jobs-5aa8816`.
+
+- **Report once.** `_report_one` used to call `file_artifacts` before
+  `force_response`; a turn that did not fire left the row owed, and every
+  60 s retry filed another orphan `attachments` row and media file.
+  `workshop.select_artifacts(workspace, rel_paths)` now returns the
+  `(rel, mime, kind)` list the report names in its context message; after
+  the turn fires the row is claimed (`reported_at`, `result_message_id`)
+  FIRST, then files are filed, bound and broadcast. A filing failure after
+  the claim loses that job's attachments, never summons a second turn.
+- **Ownership is the watcher.** `mark_lost` no longer consults pid
+  liveness (`_pid_alive` is gone): a `running` row older than
+  `LOST_GRACE_S` with no watcher in this process is `lost`, full stop.
+- **Never signal a stranger.** `kill()` with no watcher for the job retires
+  the row as `lost` (stderr tail notes why) and does not `killpg`. The
+  service runs as root; a recycled pid after a restart could have been
+  anything.
+- Proof: three new tests in `tests/test_workshop_jobs.py` (each shown
+  failing before its patch), 202 passed across the cone; live socket probe
+  on the new PID: job `851ed554…`, report turn `a6d16a62…`, `rounds.csv`
+  bound, orphans 0, unreported 0.

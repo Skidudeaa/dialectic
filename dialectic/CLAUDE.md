@@ -1480,3 +1480,10 @@ Later the same day: `start_job` (tool 27) + `llm/workshop_jobs.py` + migration
 (`reason=workshop_job_done`) carrying the files; a job lost to a restart is
 reported as lost. 028 is applied in production (live since 2026-10-27, PID 2683147,
 release `20261027T192154Z-workshop-jobs-5aa8816`); a fresh DB needs it beside the baseline.
+Late the same day, `1669b12` (live, PID 3380480, no migration): the report
+sweep claims the `workshop_jobs` row BEFORE filing artifacts (a silent turn
+used to leave an orphan `attachments` row per retry); a `running` row is
+owned by its in-process watcher, never by pid liveness; `kill()` with no
+watcher retires the row as `lost` instead of signalling a pid this process
+does not own. `workshop.select_artifacts` is the one filter the run path
+and the report share.

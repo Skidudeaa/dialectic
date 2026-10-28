@@ -464,3 +464,19 @@ finishes — not estimating anything now"; 7.2 M paths finished in 5.4 s,
 two files, one commit. Suites: `tests/test_workshop_jobs.py` 13 (real pg +
 bwrap, fake orchestrator for the report), frontend
 `MessageBubble.workshop.test.tsx`.
+
+**Same day, late — the Code Soak fixes are LIVE (commit `1669b12`, backend
+PID `3380480` since 2026-10-27 22:41:58 CDT; no migration, no frontend
+change, release unchanged).** Three defects on the `start_job` path, each
+proven failing before its patch: the report sweep filed artifacts before the
+participant turn fired, so a silent turn minted an orphan `attachments` row
+(and media file) per 60 s retry; `mark_lost` trusted pid liveness, so a
+watcherless `running` row with a recycled pid held the room's one-job cap
+for good; `kill()` SIGKILLed the row's pid as root with no watcher in this
+process. Now `workshop.select_artifacts` names what will attach, the turn
+fires, the row is claimed (`reported_at`, `result_message_id`), THEN files
+are filed and bound; ownership of a running row is the in-process watcher,
+never the pid; a Stop with no watcher retires the row as `lost` and signals
+nothing. Live proof on the new PID: job `851ed554…` in the E2E room, report
+turn `a6d16a62…` with `rounds.csv` bound, orphans 0. Suites:
+`tests/test_workshop_jobs.py` 16, 202 across the Workshop cone.
