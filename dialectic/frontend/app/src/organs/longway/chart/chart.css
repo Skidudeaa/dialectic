@@ -1,0 +1,42 @@
+/* Scoped to the chart: the trading shell's typography and controls are untouched. */
+.longway-chart-ui { color: var(--ink, #13283a); font-family: var(--font-text, Georgia, serif); }
+.longway-chart { min-width: 0; width: 100%; }
+.longway-map { position: relative; width: 100%; height: 48vh; height: 48svh; min-height: 260px; background: var(--sea, #dce7e8); }
+@media (min-width: 761px) { .longway-map { height: 68vh; min-height: 420px; } }
+.longway-chart-ui .ink-pencil line { stroke: var(--pencil, #7a8790); stroke-width: 1.3; stroke-linecap: round; }
+.longway-chart-ui .ink-pencil line + line { stroke-width: 1; opacity: .6; }
+.longway-chart-ui .ink-dotted { stroke: var(--ink-2, #44586a); stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: .1 5.2; }
+.longway-chart-ui .ink-dashed { stroke: var(--ink, #13283a); stroke-width: 2.6; stroke-dasharray: 6.5 3.8; }
+.longway-chart-ui .ink-heavy { stroke: var(--ink, #13283a); stroke-width: 4.5; }
+.longway-chart-ui .ink-contradicted { stroke: var(--contra, #c0392b); stroke-width: 2.4; stroke-dasharray: 2 2; }
+.longway-chart-ui .stop { fill: var(--panel, #f7faf9); stroke: var(--ink-2, #44586a); stroke-width: 1.2; }
+.longway-chart-ui .small { font: .88rem/1.45 var(--font-ui, sans-serif); }
+.longway-chart-ui .muted { color: var(--ink-3, #586a78); }
+.longway-chart-ui p { margin: 6px 0 10px; }
+.longway-chart-ui .lg { display: grid; grid-template-columns: 50px 1fr; gap: 8px; align-items: center; }
+.longway-chart-ui.leg-card { padding: 12px 0; overflow-wrap: anywhere; }
+.longway-chart-ui.leg-card > .small, .longway-chart-ui.leg-card details { margin-left: 58px; }
+.longway-chart-ui summary { cursor: pointer; font: 500 .86rem var(--font-ui, sans-serif); color: var(--ink-2, #44586a); }
+.longway-chart-ui .ev { list-style: none; margin: 0; padding: 0; }
+.longway-chart-ui .ev li { font-size: .9rem; padding: 6px 0; }
+.longway-chart-ui .ev li + li { border-top: 1px dotted var(--rule, #c6d3d4); }
+.longway-chart-ui .ev .faded { opacity: .55; }
+.longway-chart-ui a { color: inherit; text-decoration-color: var(--good, #a51f66); text-underline-offset: 3px; }
+.longway-chart-ui .months { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; max-width: 340px; margin-bottom: 8px; }
+.longway-chart-ui .m { display: inline-block; text-align: center; font: 600 .72rem/22px var(--font-ui, sans-serif); color: var(--ink-3, #586a78); background: var(--bg, #ecf1f0); border-radius: 2px; min-width: 14px; }
+.longway-chart-ui .m.good { background-color: var(--good, #a51f66); color: #fff; }
+.longway-chart-ui .m.possible { background-color: var(--possible, #da88b2); color: var(--ink, #13283a); }
+.longway-chart-ui .m.avoid { color: var(--off, #9aabb3); text-decoration: line-through; }
+.longway-chart-ui .months.est .m.good, .longway-chart-ui .months.est .m.possible { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.4) 0 2px, transparent 2px 6px); }
+.longway-chart-ui .key .m { width: 14px; line-height: 14px; vertical-align: -2px; margin-right: 3px; }
+.longway-chart-ui .jl, .longway-chart-ui .vl { display: block; max-width: 150px; padding: 2px 6px; border: 0; border-radius: 2px; text-align: center; font: 600 .72rem/1.25 var(--font-ui, sans-serif); color: var(--ink, #13283a); background: color-mix(in srgb, var(--panel, #f7faf9) 82%, transparent); }
+.longway-chart-ui .jl { cursor: pointer; }
+.longway-chart-ui .vl { pointer-events: none; }
+.longway-chart-ui .sl { font: 600 .76rem/1.2 var(--font-ui, sans-serif); color: var(--ink, #13283a); white-space: nowrap; pointer-events: none; text-shadow: 0 0 3px var(--panel, #f7faf9), 0 0 3px var(--panel, #f7faf9), 0 0 2px var(--panel, #f7faf9); }
+.longway-chart-ui [hidden] { display: none !important; }
+.longway-chart-ui .discuss { min-height: 44px; padding: 7px 12px; background: var(--panel, #f7faf9); color: inherit; border: 1px solid var(--rule, #c6d3d4); border-radius: 3px; font: 500 .92rem var(--font-ui, sans-serif); cursor: pointer; }
+.longway-chart-ui .vehicle-list { padding: 10px 12px; font: .88rem/1.45 var(--font-ui, sans-serif); }
+.longway-chart-ui .vehicle-list ul { list-style: none; padding: 0; margin: 0; }
+.longway-chart-ui :focus-visible, .longway-chart-ui:focus-visible { outline: 2px solid var(--good, #a51f66); outline-offset: 2px; }
+.longway-chart-ui .maplibregl-ctrl-attrib { font: .72rem var(--font-ui, sans-serif); }
+@media (prefers-reduced-motion: reduce) { .longway-chart-ui, .longway-chart-ui * { scroll-behavior: auto !important; } }

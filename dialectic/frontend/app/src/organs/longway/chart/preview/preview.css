@@ -1,0 +1,8 @@
+:root { background: #ecf1f0; color: #13283a; font-family: Georgia, serif; }
+body { margin: 0; }
+main { max-width: 1200px; margin: auto; padding: 12px; }
+h1 { margin-bottom: 0; font-weight: 400; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px 0; }
+label { display: flex; align-items: center; gap: 6px; max-width: 100%; }
+select { max-width: 220px; min-height: 36px; }
+section { padding: 12px 0; max-width: 700px; }
