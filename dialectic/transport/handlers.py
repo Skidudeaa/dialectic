@@ -363,6 +363,22 @@ class MessageHandler:
                 await self._send_error(conn, str(exc), request_id=payload.get("client_request_id"))
                 return
 
+        # The Long Way's anchor rides inside `metadata` (the shape the organ's Bench sends): the journey leg a
+        # message speaks to. Validated by the organ against its register, never trusted for its shape alone,
+        # and refused outside the longway organ so a trading room cannot carry it.
+        client_meta = payload.get("metadata")
+        if isinstance(client_meta, dict) and client_meta.get("longway_anchor") is not None:
+            from organ import active as active_organ
+            if active_organ.name != "longway":
+                await self._send_error(conn, "Invalid metadata: longway_anchor needs the longway organ", request_id=payload.get("client_request_id"))
+                return
+            from organs.longway.register import validate_anchor as validate_longway_anchor
+            try:
+                message_meta["longway_anchor"] = validate_longway_anchor(client_meta["longway_anchor"])
+            except ValueError as exc:
+                await self._send_error(conn, f"Invalid longway_anchor: {exc}", request_id=payload.get("client_request_id"))
+                return
+
         references_message_id = payload.get("references_message_id")
 
         requested_thread_id = payload.get("thread_id") or conn.thread_id

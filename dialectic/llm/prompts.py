@@ -91,7 +91,12 @@ def _anchor_prefix(msg: Message) -> str:
     """`[on Hormuz Closure] ` when the human wrote ON a node of the causal
     graph (the working surface's anchor). Participant DATA, never an
     instruction: the label is what the desk calls that node, quoted."""
-    anchor = (msg.metadata or {}).get("anchor") if isinstance(msg.metadata, dict) else None
+    meta = msg.metadata if isinstance(msg.metadata, dict) else {}
+    # The Long Way's anchor names a journey leg (organs/longway/register.py validate_anchor); same rule, data not instruction.
+    leg = meta.get("longway_anchor")
+    if isinstance(leg, dict) and leg.get("from") and leg.get("to"):
+        return f"[on the leg {leg['from']} to {leg['to']}, {leg.get('journey', '')}] "
+    anchor = meta.get("anchor")
     if not isinstance(anchor, dict):
         return ""
     label = str(anchor.get("label") or "").strip()

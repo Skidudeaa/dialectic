@@ -149,6 +149,27 @@ class Register:
             return {"sid": sid, "commit": self.git("rev-parse", "HEAD")}
 
 
+def validate_anchor(value):
+    """The leg a message speaks to, as {"journey": slug, "leg": index}, checked against the register.
+
+    WHY here and not in proposal_intake: the vocabulary is the Long Way's (a journey and one of its route legs),
+    so the organ that knows the register owns the check. Shape and existence only; which room may anchor which
+    journey is the room's business and is not enforced (ponytail: a house room anchors any journey).
+    """
+    if not isinstance(value, dict) or set(value) != {"journey", "leg"}:
+        raise ValueError('longway_anchor must be {"journey": slug, "leg": index}')
+    journey, leg = value["journey"], value["leg"]
+    if not isinstance(journey, str) or type(leg) is not int or leg < 0:
+        raise ValueError("longway_anchor needs a journey slug and a non-negative leg index")
+    try:
+        item = get_register().journey(journey)
+    except (KeyError, ValueError):
+        raise ValueError(f"unknown journey: {journey}")
+    if leg >= len(item["segments"]):
+        raise ValueError(f"{journey} has {len(item['segments'])} legs; leg {leg} does not exist")
+    return {"journey": journey, "leg": leg, "from": item["segments"][leg]["from"], "to": item["segments"][leg]["to"]}
+
+
 @lru_cache(maxsize=1)
 def get_register():
     root = os.environ.get("LONGWAY_REPO")

@@ -1,7 +1,7 @@
 import { ComposerFrame } from '@dark-roast/companion-ui'
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type Ref } from 'react'
 import type { Attachment, Message } from '../../types'
-import { PARTICIPANT_NAME } from '../../lib/productIdentity.ts'
+import { PARTICIPANT_NAME, PRODUCT_NAME } from '../../lib/productIdentity.ts'
 import { api } from '../../lib/api'
 import { ACCEPTED_MIME_ATTRIBUTE, formatBytes, rejectionReason } from '../../lib/attachments'
 import { ProposeMenu } from './ProposeMenu'
@@ -83,7 +83,7 @@ export interface MessageInputHandle {
  * and refuses anything outside it; this list only decides what to OFFER.
  */
 const MESSAGE_TAG_OPTIONS: { value: string; label: string; hint: string }[] = [
-  { value: 'meta', label: 'Meta', hint: 'About Dialectic itself — architecture, direction' },
+  { value: 'meta', label: 'Meta', hint: `About ${PRODUCT_NAME} itself — architecture, direction` },
   { value: 'bug', label: 'Bug', hint: 'Something is broken' },
   { value: 'idea', label: 'Idea', hint: 'A hope, a dream, a thing to try' },
 ]
