@@ -2,6 +2,10 @@
 
 For a Dialectic-side session with no context. The Long Way (Amo's travel group) now runs on this codebase as a second deployment, selected by `DIALECTIC_ORGAN=longway`. The product-side record is `/root/theLongWay/docs/handoffs/2026-10-28-the-house.md`; the contract is `docs/LONGWAY_ORGAN.md`; the proposal is `/root/theLongWay/docs/moonshot-house.md`.
 
+## Where things stand at 10:57 CDT, 28 Oct
+
+`longway` at `4c02b28`, 38 commits over master `25ee122`, pushed; `longway.service` runs this worktree with every switch on (Brave search, Firecrawl rendering, the nightly Scout at 02:00 America/Chicago, the evidence writer's commits). The Scout slice and its six live corrections are contract section 11 and 11.8. The Long Way side of the story, with the state of the house and what is unverified, is `/root/theLongWay/docs/handoffs/2026-10-28-the-house.md`, top section.
+
 ## What the branch is
 
 - 21 commits on master `25ee122`, built in three OMC Codex (gpt-6-astra) jobs plus lead commits, in the worktree `/root/DwoodAmo/.worktrees/longway`. Pushed to `origin/longway`.
