@@ -140,6 +140,8 @@ async def dispatch_now_route(room_id: UUID, user=Depends(authorized), db=Depends
         return await dispatch_now(ctx, room_id)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:  # the model or the repo refused: say so, do not 500
+        raise HTTPException(502, f"The dispatch could not be drafted: {type(exc).__name__}: {str(exc)[:200]}") from exc
 
 
 @router.get("/dispatch/latest")
