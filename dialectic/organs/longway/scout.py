@@ -15,6 +15,8 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import asyncpg
+import httpx
+from urllib.parse import urlsplit
 
 from llm import defuddle_client
 from llm.providers import AnthropicProvider, LLMRequest
@@ -42,6 +44,36 @@ passport and vehicle only when the source establishes them; otherwise leave them
 Record contradictions as separate proposals with contradicts pointing to the original.
 Never state an unfiled fact in prose. Stop when the questions are answered or budget is spent.
 You only propose: human Field confirmation owns truth and only the evidence writer inks it.'''
+
+
+async def firecrawl_article(url, key, client=None):
+    """Render a page through Firecrawl (v2 scrape, markdown, main content only).
+
+    WHY: Pelni's booking page and the operators' schedule sheets are JavaScript; the
+    defuddle sidecar sees a few hundred characters of them. Firecrawl renders the page.
+    The key goes only into the Authorization header, never into logs or receipts.
+    Protocol: https://docs.firecrawl.dev/api-reference/endpoint/scrape (read 28 Oct 2026).
+    """
+    owned = client is None
+    client = client or httpx.AsyncClient(timeout=25)
+    try:
+        response = await client.post('https://api.firecrawl.dev/v2/scrape', headers={'Authorization': f'Bearer {key}'},
+                                     json={'url': url, 'formats': ['markdown'], 'onlyMainContent': True})
+        response.raise_for_status()
+        data = response.json().get('data') or {}
+    finally:
+        if owned:
+            await client.aclose()
+    meta = data.get('metadata') or {}
+    # Image markup is weight without words for the passage gate and the 12,000-character cap.
+    text = re.sub(r'!\[[^\]]*\]\([^)]*\)', '', str(data.get('markdown') or ''))
+    text = re.sub(r'\n[ \t]*\n(?:[ \t]*\n)+', '\n\n', text).strip()
+    return {'content': text, 'site': meta.get('ogSiteName') or urlsplit(url).hostname,
+            'published': meta.get('publishedTime') or meta.get('article:published_time'), 'reader': 'firecrawl'}
+
+
+# How many of each tool's results stay in the model's context; older ones shrink to a one-line stub.
+CONTEXT_KEEP = {'read_page': 4, 'known_sources': 1, 'read_register': 1}
 
 
 class AlreadyRunning(ValueError):
@@ -85,9 +117,13 @@ async def run(pool, room_id, journey, question_ids=None, trigger='manual', start
 
 
 class Research:
-    def __init__(self, pool, row, fetcher=None):
+    def __init__(self, pool, row, fetcher=None, renderer=None):
         self.pool, self.row = pool, row
         self.fetcher = fetcher or defuddle_client.extract_article
+        self.renderer = renderer or firecrawl_article
+        self.context = []      # (tool name, url, tool_result block) in the order the model received them
+        self.fresh = set()     # ids of blocks the model has not seen yet
+        self.trimmed = set()
         self.budgets = {key: int(os.environ.get('LONGWAY_SCOUT_BUDGET_' + key.upper(), default))
                         for key, default in dict(pages=40, proposals=20, output_tokens=60000, seconds=1200).items()}
         if any(value <= 0 for value in self.budgets.values()):
@@ -117,6 +153,29 @@ class Research:
         async with self.pool.acquire() as db:
             await db.execute('UPDATE longway_scout_runs SET log=log || $2::jsonb WHERE id=$1',
                 self.row['id'], [dict(tool=name, phase=self.phase, **data)])
+
+    def remember(self, name, url, block):
+        if name in CONTEXT_KEEP:
+            self.context.append((name, url, block))
+            self.fresh.add(id(block))
+
+    def trim(self):
+        """Shrink old page bodies and source lists before the next model call.
+
+        WHY: run 4 on Banda cost 1.51 million input tokens for 16 pages because every page
+        read stayed in the conversation and was resent on every call. The loop's messages
+        hold these very dicts, so shrinking them in place shrinks the next request. A result
+        the model has not seen yet is never touched; a page it needs again is one read_page
+        away, served from this run's cache without spending the pages budget.
+        """
+        for name, limit in CONTEXT_KEEP.items():
+            seen = [(url, block) for n, url, block in self.context if n == name and id(block) not in self.fresh]
+            for url, block in seen[:-limit]:
+                if id(block) not in self.trimmed:
+                    block['content'] = json.dumps({'trimmed': f"{len(block['content'])} characters from {name}"
+                        + (f" {url}" if url else '') + ' left this context; call it again to see them (a page already read costs no budget)'})
+                    self.trimmed.add(id(block))
+        self.fresh.clear()
 
     async def known_sources(self, args):
         await self.check()
@@ -160,7 +219,17 @@ class Research:
             await self.log('read_page', url=url, error=type(exc).__name__)
             raise
         text = str(article.get('content') or '')
-        await self.log('read_page', url=url, characters=len(text), thin=len(text)<1000, truncated=len(text)>12000)
+        reader = 'defuddle'
+        key = os.environ.get('LONGWAY_FIRECRAWL_KEY', '').strip()
+        if len(text) < 1000 and key:
+            # Thin through defuddle means a page rendered by JavaScript, usually: render it and keep the longer text.
+            try:
+                rendered = await asyncio.wait_for(self.renderer(url, key), timeout=25)
+                if len(str(rendered.get('content') or '')) > len(text):
+                    article, text, reader = rendered, str(rendered['content']), 'firecrawl'
+            except Exception as exc:
+                await self.log('render', url=url, error=type(exc).__name__)
+        await self.log('read_page', url=url, characters=len(text), thin=len(text)<1000, truncated=len(text)>12000, reader=reader)
         self.pages[url] = dict(article, content=text[:12000], truncated=len(text)>12000, thin=len(text)<1000)
         return self.pages[url]
 
@@ -262,6 +331,7 @@ class ScoutLoop(ToolLoop):
         if entry['ok']:
             content = json.dumps(self.research.tool_results.pop(call.name), ensure_ascii=False, default=str)
             block['content'] = content
+            self.research.remember(call.name, (call.input or {}).get('url'), block)
         return block, entry, content
 
 
@@ -272,6 +342,7 @@ class BudgetRouter:
 
     async def route(self, request):
         state = await self.research.check()
+        self.research.trim()
         remaining = self.research.budgets['output_tokens'] - state['output_tokens']
         response = await self.provider.complete(replace(request, max_tokens=min(request.max_tokens, remaining)))
         async with self.research.pool.acquire() as db:
@@ -307,11 +378,11 @@ async def finish(pool, run_id, status, error=None, ctx=None):
     return dict(row)
 
 
-async def execute(pool, row, *, provider=None, fetcher=None, ctx=None):
+async def execute(pool, row, *, provider=None, fetcher=None, renderer=None, ctx=None):
     owned_provider = provider is None
     status, error = 'done', None
     try:
-        research = Research(pool, row, fetcher)
+        research = Research(pool, row, fetcher, renderer)
         provider = provider or AnthropicProvider()
         async with pool.acquire() as db:
             chosen = await db.fetch('SELECT id,text FROM longway_questions WHERE id=ANY($1::uuid[])', row['questions'])

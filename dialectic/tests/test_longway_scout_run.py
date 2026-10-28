@@ -371,3 +371,41 @@ async def test_propose_accepts_periods_names_bad_ids_and_refuses_duplicates(db,h
     assert await db.fetchval('SELECT count(*) FROM longway_evidence_proposals WHERE room_id=$1',house.room)==1
     with pytest.raises(ValueError,match='contradicts must be the id'):
         await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='x',contradicts='S14',fetcher=captured_page)
+
+
+def test_context_trim_keeps_fresh_and_recent_pages(monkeypatch):
+    """Old page bodies shrink in place before the next model call; unseen and recent ones stay whole."""
+    monkeypatch.setenv('LONGWAY_SEARCH_PROVIDER','none')
+    research=scout.Research(None,{'id':None,'journey':'banda-islands','room_id':None})
+    blocks=[{'type':'tool_result','tool_use_id':str(i),'content':json.dumps({'text':'x'*100})} for i in range(7)]
+    for i,block in enumerate(blocks[:6]):
+        research.remember('read_page',f'https://p/{i}',block)
+    research.trim()                      # all six unseen: untouched
+    assert all('trimmed' not in b['content'] for b in blocks[:6])
+    research.remember('read_page','https://p/6',blocks[6])
+    research.trim()                      # six seen pages: the oldest two shrink, the fresh seventh stays
+    assert ['trimmed' in b['content'] for b in blocks]==[True,True,False,False,False,False,False]
+    assert 'https://p/0' in json.loads(blocks[0]['content'])['trimmed']
+    research.remember('propose',None,{'content':'kept'})
+    assert len(research.context)==7      # only the tools in CONTEXT_KEEP are remembered
+
+
+@pytest.mark.asyncio
+async def test_thin_pages_are_rendered_when_firecrawl_is_configured(db,house,banda,monkeypatch):
+    PELNI='https://www.pelni.co.id/reservasi-tiket'
+    row=await scout.reserve(house.pool,house.room,'banda-islands')
+    rendered=AsyncMock(return_value={'content':'Jadwal kapal: KM Pangrango Ambon - Banda Neira. '*40,'site':'www.pelni.co.id','published':None,'reader':'firecrawl'})
+    monkeypatch.delenv('LONGWAY_FIRECRAWL_KEY',raising=False)
+    page=await scout.Research(house.pool,row,fetcher=captured_page,renderer=rendered).read_page({'url':PELNI})
+    assert page['thin'] and rendered.await_count==0
+    monkeypatch.setenv('LONGWAY_FIRECRAWL_KEY','fc-test')
+    page=await scout.Research(house.pool,row,fetcher=captured_page,renderer=rendered).read_page({'url':PELNI})
+    assert not page['thin'] and 'Pangrango' in page['text'] and page['site']=='www.pelni.co.id'
+    assert rendered.await_args.args==(PELNI,'fc-test')
+    failing=AsyncMock(side_effect=RuntimeError('boom'))
+    page=await scout.Research(house.pool,row,fetcher=captured_page,renderer=failing).read_page({'url':PELNI})
+    assert page['thin'] and 'booking application' in page['text']
+    log=await db.fetchval('SELECT log FROM longway_scout_runs WHERE id=$1',row['id'])
+    readers=[e.get('reader') for e in log if e['tool']=='read_page']
+    assert readers==['defuddle','firecrawl','defuddle'] and any(e['tool']=='render' and e['error']=='RuntimeError' for e in log)
+    assert not any('fc-test' in json.dumps(e) for e in log)

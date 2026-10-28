@@ -33,7 +33,7 @@ Suites at the branch tip: backend organ and Long Way suites 269 passed, provider
 - Probe: `python3 dialectic/deploy/longway_observe.py` (16 checks against the real database and repo; also the `omc build observe` recipe).
 - Jobs: `sunday_dispatch` (08:00 America/Chicago, Sundays), `evidence_writer` (60 s; writes to the Long Way repo only when `LONGWAY_COMMIT_ENABLED=1`), `scout_nightly` (02:00 America/Chicago; `LONGWAY_SCOUT_ENABLED=1`, off by default), plus the shared heartbeat and workshop watch. Manual doors: `POST /rooms/{id}/longway/dispatch/now` and `POST /rooms/{id}/longway/scout` (house managers), `POST .../scout/runs/{id}/kill`.
 - Models: rooms default to `claude-opus-5-5` in the `longway` database; `LONGWAY_DISPATCH_MODEL=claude-opus-5-5` at high effort with a 110 s wait; `LONGWAY_SCOUT_MODEL=claude-opus-5-5`.
-- Search: `LONGWAY_SEARCH_PROVIDER=none` until Amo creates a Brave or Exa account and sets `LONGWAY_SEARCH_KEY`; with `none` the Scout reads only the journey's known sources and the `search` tool is absent.
+- Search and rendering: `LONGWAY_SEARCH_PROVIDER=brave` with Amo's key in `LONGWAY_SEARCH_KEY` since 28 Oct (evening), so the Scout's `search` tool exists; `LONGWAY_FIRECRAWL_KEY` holds Amo's Firecrawl key, which `read_page` uses only for pages defuddle sees thin. Both keys live in `/etc/longway/longway.env` (mode 600) and nowhere else; the secret scan before every commit knows their shapes.
 
 ## The Scout slice (28 Oct, evening)
 
