@@ -314,7 +314,8 @@ async def test_nightly_run_can_be_killed_while_provider_is_pending(db,house,band
 async def test_run_counter_searches_a_stranded_load_bearing_proposal(db,house,banda):
     """A load-bearing proposal filed by hand (or left by a budget-starved run) has no contrary search and
     cannot be confirmed; the next run performs it. Without the pickup its counter_searched_at stays null."""
-    await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='schedule, by hand',
+    await proposals.propose(db,house.room,candidate='banda-islands',url=URL,scope='schedule, by hand',
+        claim='Pelnis are the slowest, cheapest and most reliable option',
         load_bearing=True,proposed_by='human',user_id=house.user.user_id,fetcher=captured_page)
     stranded=await db.fetchrow('SELECT * FROM longway_evidence_proposals WHERE room_id=$1 AND run_id IS NULL',house.room)
     assert stranded['load_bearing'] and stranded['counter_searched_at'] is None
@@ -355,3 +356,18 @@ async def test_refused_proposals_are_logged_and_counted_in_the_receipt(db,house,
     assert len(refused)==1 and refused[0]['claim']=='A ferry sails every Tuesday at dawn' and refused[0]['reason']
     content=await db.fetchval("SELECT content FROM messages WHERE thread_id=$1 AND metadata ? 'longway_scout_run'",house.thread)
     assert 'filed 0 proposals (1 refused by the passage gate)' in content
+
+
+@pytest.mark.asyncio
+async def test_propose_accepts_periods_names_bad_ids_and_refuses_duplicates(db,house,banda):
+    """What the fourth live run sent: month and year dates, S-numbers as ids, and the same line six times."""
+    first=await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='schedule',
+        applies_from='2024-02',applies_to='2024',fetcher=captured_page)
+    assert first['filed']
+    row=await db.fetchrow('SELECT applies_from,applies_to FROM longway_evidence_proposals WHERE id=$1',UUID(first['id']))
+    assert row['applies_from'].isoformat()=='2024-02-01' and row['applies_to'].isoformat()=='2024-12-31'
+    again=await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM.upper()+'.',scope='schedule',fetcher=captured_page)
+    assert not again['filed'] and again['id']==first['id'] and 'contradicts='+first['id'] in again['why']
+    assert await db.fetchval('SELECT count(*) FROM longway_evidence_proposals WHERE room_id=$1',house.room)==1
+    with pytest.raises(ValueError,match='contradicts must be the id'):
+        await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='x',contradicts='S14',fetcher=captured_page)

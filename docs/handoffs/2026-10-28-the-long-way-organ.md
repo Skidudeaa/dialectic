@@ -31,10 +31,18 @@ Suites at the branch tip: backend organ and Long Way suites 269 passed, provider
 
 - Invitations: `longway-invite EMAIL "Name" [--manager]` prints a one-time reset code; signups stay closed. `longway-members` lists the house.
 - Probe: `python3 dialectic/deploy/longway_observe.py` (16 checks against the real database and repo; also the `omc build observe` recipe).
-- Jobs: `sunday_dispatch` (08:00 America/Chicago, Sundays), `evidence_writer` (60 s; writes to the Long Way repo only when `LONGWAY_COMMIT_ENABLED=1`), plus the shared heartbeat and workshop watch. Manual door: `POST /rooms/{id}/longway/dispatch/now` (house managers).
-- Models: rooms default to `claude-opus-5-5` in the `longway` database; `LONGWAY_DISPATCH_MODEL=claude-opus-5-5` at high effort with a 110 s wait.
+- Jobs: `sunday_dispatch` (08:00 America/Chicago, Sundays), `evidence_writer` (60 s; writes to the Long Way repo only when `LONGWAY_COMMIT_ENABLED=1`), `scout_nightly` (02:00 America/Chicago; `LONGWAY_SCOUT_ENABLED=1`, off by default), plus the shared heartbeat and workshop watch. Manual doors: `POST /rooms/{id}/longway/dispatch/now` and `POST /rooms/{id}/longway/scout` (house managers), `POST .../scout/runs/{id}/kill`.
+- Models: rooms default to `claude-opus-5-5` in the `longway` database; `LONGWAY_DISPATCH_MODEL=claude-opus-5-5` at high effort with a 110 s wait; `LONGWAY_SCOUT_MODEL=claude-opus-5-5`.
+- Search: `LONGWAY_SEARCH_PROVIDER=none` until Amo creates a Brave or Exa account and sets `LONGWAY_SEARCH_KEY`; with `none` the Scout reads only the journey's known sources and the `search` tool is absent.
+
+## The Scout slice (28 Oct, evening)
+
+Contract section 11, built by two Codex jobs from seed `a61efdf` and integrated as `2a1d7da` (frontend) and `ef538a7` (backend), then corrected from live runs (`83eb3c0`, `68e0c59`; section 11.8 records each correction and the run that forced it). Migration `030_longway_scout.sql` is applied to the `longway` database. The walk that proves it is `/root/scratch/20261028-longway/walk3.py` (API as a probe manager through Cloudflare with a browser agent string, then headless Chromium at phone width; `cleanup-probes.sql` removes what it leaves, including the Scout's tables).
 
 ## Known gaps
+- A Scout run's yield depends on the model's discipline: with the same question and sources, run 1 filed 14 proposals and runs 2 and 3 filed none for reasons that are now fixed, but the gates still refuse any paraphrase, and whether Opus quotes verbatim is up to the model each time. The receipt now says how many proposals the gate refused, so a thin run is visible for what it is.
+- A full run is expensive: run 4 (16 pages, 20 proposals, 10 contrary searches, 10 min 50 s) cost 1.51 million input tokens and 58 thousand output tokens at Opus 5.5; runs that read 6 or 7 pages and filed nothing cost 158 to 178 thousand input tokens. The context grows with every page read and is resent on every call. The nightly job would spend that per bound room with open questions, every night; it stays off. Trimming old tool results from the loop's context is the next cost lever and is not built.
+- Duplicate claims, period dates and non-UUID ids are now tolerated or refused with a usable reason (section 11.8 item 7), by unit tests only; no live run has exercised them.
 
 - Amtraker's feed carries no fix timestamp, so a train vehicle shows no fix until `api/trains` exposes one (only a private trip has a train).
 - Push delivery to a real device and a real Sunday firing are unverified; the paths are unit-tested with real Postgres.

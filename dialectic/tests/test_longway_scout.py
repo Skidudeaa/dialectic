@@ -125,9 +125,12 @@ async def test_independence_counts_publishers_for_same_claim_words(db,house,long
     row=await scout.reserve(house.pool,house.room,'ogasawara')
     extract=AsyncMock()
     monkeypatch.setattr(proposals.defuddle_client,'extract_article',extract)
-    for publisher,claim in [('Operator','The ferry sails weekly'),('Local account','THE FERRY SAILS WEEKLY.'),('Operator','The ferry sails weekly.')]:
+    # Three pages, two publishers: the same words from one page would be a single proposal.
+    for url,publisher,claim in [('https://example.org/ferry','Operator','The ferry sails weekly'),
+                                ('https://local.example/ferry','Local account','THE FERRY SAILS WEEKLY.'),
+                                ('https://example.org/ferry-faq','Operator','The ferry sails weekly.')]:
         extract.return_value={'content':'The ferry sails weekly.','site':publisher}
-        assert (await proposals.propose(db,house.room,'ogasawara','https://example.org/ferry',claim,'Tokyo',run_id=row['id']))['filed']
+        assert (await proposals.propose(db,house.room,'ogasawara',url,claim,'Tokyo',run_id=row['id']))['filed']
     await scout.finish(house.pool,row['id'],'done','proposals budget exhausted')
     counts=await db.fetch('SELECT publisher_count FROM longway_evidence_proposals WHERE run_id=$1',row['id'])
     assert [r['publisher_count'] for r in counts]==[2,2,2]

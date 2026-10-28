@@ -69,11 +69,12 @@ async def test_history_model_and_quiet_week(longway_repo,monkeypatch):
 async def test_dispatch_includes_confirmation_contest_and_receipt(db,house,client,longway_repo,monkeypatch):
     from organs.longway import proposals,scout
     from uuid import UUID
-    monkeypatch.setattr(proposals.defuddle_client,'extract_article',AsyncMock(return_value={'content':'The ferry sails weekly.','site':'Kaiun'}))
+    monkeypatch.setattr(proposals.defuddle_client,'extract_article',AsyncMock(return_value={'content':'The ferry sails weekly. The crossing takes a day.','site':'Kaiun'}))
     ids=[]
-    for action in ('confirm','contest'):
+    # Two claims: the same words from the same page are one proposal and would be refused as a duplicate.
+    for action,claim in (('confirm','The ferry sails weekly'),('contest','The crossing takes a day')):
         result=await proposals.propose(db,house.room,'ogasawara','https://www.ogasawarakaiun.co.jp/',
-            'The ferry sails weekly','Tokyo')
+            claim,'Tokyo')
         ids.append(result['id'])
         assert (await client.post(f"/rooms/{house.room}/field/marks/{result['field_mark_id']}/review",
             json={'action':action,'note':'Read the page'})).status_code==200

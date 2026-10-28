@@ -1,5 +1,6 @@
 """Source-backed proposals and their existing Field adjudication trail."""
 import asyncio
+import calendar
 import re
 from datetime import date
 from uuid import UUID, uuid4
@@ -75,10 +76,22 @@ async def propose(db, room_id, candidate, url, claim, scope, *, proposed_by="llm
     values = {key: fields.get(key) for key in PROPOSAL_FIELDS}
     for key in ('question_id', 'run_id', 'search_result_id', 'contradicts'):
         if values[key] is not None:
-            values[key] = UUID(str(values[key]))
+            try:
+                values[key] = UUID(str(values[key]))
+            except ValueError:
+                # The fourth live run sent S-numbers and claim text here; the parser's own message taught nothing.
+                raise ValueError(f'{key} must be the id of a proposal or question (a UUID), never an S-number or a claim') from None
     for key in ('applies_from', 'applies_to'):
         if isinstance(values[key], str):
-            values[key] = date.fromisoformat(values[key])
+            text = values[key].strip()
+            # A year or a month is a period: applies_from takes its first day, applies_to its last.
+            if re.fullmatch(r'\d{4}', text):
+                text += '-01' if key == 'applies_from' else '-12'
+            if re.fullmatch(r'\d{4}-\d{2}', text):
+                year, month = map(int, text.split('-'))
+                day = 1 if key == 'applies_from' else calendar.monthrange(year, month)[1]
+                text = f'{year:04d}-{month:02d}-{day:02d}'
+            values[key] = date.fromisoformat(text)
     if values['applies_from'] and values['applies_to'] and values['applies_from'] > values['applies_to']:
         raise ValueError('applies_to precedes applies_from')
     values['load_bearing'] = bool(values['load_bearing'] or re.search(
@@ -132,6 +145,15 @@ async def propose(db, room_id, candidate, url, claim, scope, *, proposed_by="llm
                 'SELECT 1 FROM longway_evidence_proposals WHERE id=$1 AND room_id=$2 AND candidate=$3',
                 values['contradicts'], room_id, candidate):
             raise ValueError('Contrary proposal must name evidence in this room and journey')
+        # The same words from the same page are one proposal. WHY: the fourth live run's counter phases filed
+        # the car ferry's "has not operated yet" line six times and spent half the proposals budget on copies
+        # the Field would have had to read six times. The existing id lets the Scout file a contradiction instead.
+        same = await db.fetchval('''SELECT id FROM longway_evidence_proposals WHERE room_id=$1 AND candidate=$2 AND url=$3
+            AND btrim(regexp_replace(lower(claim),'[^[:alnum:]]+',' ','g'))=btrim(regexp_replace(lower($4),'[^[:alnum:]]+',' ','g'))
+            ORDER BY created_at,id LIMIT 1''', room_id, candidate, url, claim)
+        if same:
+            return {"filed": False, "id": str(same),
+                    "why": f"already filed as proposal {same}; file a different claim, or a contradiction with contradicts={same}"}
         await db.execute("""INSERT INTO longway_evidence_proposals
             (id,room_id,created_at,candidate,url,claim,scope,support,publisher,published_at,
              proposed_by,proposer_user_id,source_message_id)
