@@ -2,7 +2,7 @@
 import asyncio
 import re
 from datetime import date
-from uuid import uuid4
+from uuid import UUID, uuid4
 from urllib.parse import urlsplit
 
 from field_marks import compute_dedup_key, current_review_state
@@ -29,8 +29,60 @@ def supported_passage(claim, content):
     return None
 
 
-async def propose(db, room_id, candidate, url, claim, scope, *, proposed_by="llm", user_id=None, source_message_id=None):
+def whole_sentence_passage(claim, content):
+    """Preserve the sentence around a lexical match, including its negation.
+
+    WHY: the old gate could extract a positive phrase from a suspended-service
+    sentence. Do not trim a long sentence to fit; refuse it. Extractor paragraphs
+    without punctuation are allowed, but markdown headings/navigation are not.
+    """
+    for paragraph in re.split(r"\n\s*\n", content):
+        paragraph = paragraph.strip()
+        if not paragraph or re.match(r"^(?:#{1,6}\s|[-*+]\s|\|)", paragraph):
+            continue
+        if re.search(r"\[[^]]+\]\([^)]*\)", paragraph):
+            # Link-only menus are not prose; inline editorial links are prose.
+            plain = re.sub(r"\[([^]]+)\]\([^)]*\)", r"\1", paragraph)
+            if len(re.findall(r"\w+", re.sub(r"\[[^]]+\]\([^)]*\)", "", paragraph))) < 3:
+                continue
+        else:
+            plain = paragraph
+        for sentence in re.split(r'(?<=[.!?])\s+(?=[A-Z0-9"“])', plain):
+            sentence = ' '.join(sentence.split())
+            if len(sentence.split()) < 40 and supported_passage(claim, sentence):
+                return sentence
+    return None
+
+
+PROPOSAL_FIELDS = ('question_id', 'run_id', 'search_result_id', 'contradicts',
+    'applies_from', 'applies_to', 'direction', 'passport', 'vehicle', 'leg_from', 'leg_to', 'load_bearing')
+
+
+def requires_counter(proposal):
+    return bool(proposal['load_bearing'] and not proposal['counter_searched_at'])
+
+
+async def propose(db, room_id, candidate, url, claim, scope, *, proposed_by="llm", user_id=None, source_message_id=None, fetcher=None, **fields):
     get_register().candidate(candidate)
+    if set(fields) - set(PROPOSAL_FIELDS):
+        raise ValueError("Unknown proposal fields")
+    values = {key: fields.get(key) for key in PROPOSAL_FIELDS}
+    for key in ('question_id', 'run_id', 'search_result_id', 'contradicts'):
+        if values[key] is not None:
+            values[key] = UUID(str(values[key]))
+    for key in ('applies_from', 'applies_to'):
+        if isinstance(values[key], str):
+            values[key] = date.fromisoformat(values[key])
+    if values['applies_from'] and values['applies_to'] and values['applies_from'] > values['applies_to']:
+        raise ValueError('applies_to precedes applies_from')
+    values['load_bearing'] = bool(values['load_bearing'] or re.search(
+        r'\b(schedules?|timetables?|operating status|entry rules?|entry requirements?|prices?|fares?)\b', scope, re.I))
+    if values['leg_from'] is not None or values['leg_to'] is not None:
+        route = get_register().journey(candidate)['route']
+        pairs = [(a[2], b[2]) for a,b in zip(route, route[1:])]
+        pair = (values['leg_from'], values['leg_to'])
+        if pair not in pairs and pair[::-1] not in pairs:
+            raise ValueError('leg_from and leg_to must name neighbouring route stops')
     parts = urlsplit(url)
     if parts.scheme not in ("http", "https") or not parts.hostname or parts.username or parts.password:
         raise ValueError("Evidence needs an original http(s) URL without credentials")
@@ -39,10 +91,13 @@ async def propose(db, room_id, candidate, url, claim, scope, *, proposed_by="llm
     room = await db.fetchrow("SELECT linked_journey, is_home FROM rooms WHERE id=$1", room_id)
     if not room or (not room["is_home"] and room["linked_journey"] != candidate):
         raise ValueError("Propose evidence in the candidate's bound room or the house")
-    article = await asyncio.wait_for(defuddle_client.extract_article(url), timeout=22)
+    article = await asyncio.wait_for((fetcher or defuddle_client.extract_article)(url), timeout=22)
     passage = supported_passage(claim, str(article.get("content") or "")) if isinstance(article, dict) else None
     if not passage:
         return {"filed": False, "why": "the page does not contain the claim's key phrase; use a bounded phrase from the extracted text"}
+    passage = whole_sentence_passage(claim, str(article.get('content') or ''))
+    if not passage:
+        return {"filed": False, "why": "support must be a whole sentence or paragraph of main text under 40 words"}
     publisher = article.get("site") or parts.hostname
     published = None
     try:
@@ -56,12 +111,36 @@ async def propose(db, room_id, candidate, url, claim, scope, *, proposed_by="llm
         current = await db.fetchrow("SELECT linked_journey, is_home FROM rooms WHERE id=$1 FOR NO KEY UPDATE", room_id)
         if not current or (not current["is_home"] and current["linked_journey"] != candidate):
             raise ValueError("Room binding changed while reading the source")
+        if values['run_id']:
+            run = await db.fetchrow('SELECT * FROM longway_scout_runs WHERE id=$1 FOR UPDATE', values['run_id'])
+            if not run or run['status'] != 'running' or run['room_id'] != room_id or run['journey'] != candidate:
+                raise ValueError('Proposal must belong to its running journey')
+        if values['question_id'] and not await db.fetchval(
+                'SELECT 1 FROM longway_questions WHERE id=$1 AND journey=$2 AND closed_at IS NULL', values['question_id'], candidate):
+            raise ValueError('Question must be open in this journey')
+        if values['search_result_id'] and not await db.fetchval(
+                'SELECT 1 FROM longway_search_results WHERE id=$1 AND run_id=$2 AND url=$3',
+                values['search_result_id'], values['run_id'], url):
+            raise ValueError('Search result must belong to this run and URL')
+        if values['contradicts'] and not await db.fetchval(
+                'SELECT 1 FROM longway_evidence_proposals WHERE id=$1 AND room_id=$2 AND candidate=$3',
+                values['contradicts'], room_id, candidate):
+            raise ValueError('Contrary proposal must name evidence in this room and journey')
         await db.execute("""INSERT INTO longway_evidence_proposals
             (id,room_id,created_at,candidate,url,claim,scope,support,publisher,published_at,
              proposed_by,proposer_user_id,source_message_id)
             VALUES ($1,$2,clock_timestamp(),$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)""",
             proposal_id, room_id, candidate, url, claim, scope, passage, publisher,
             published, proposed_by, user_id, source_message_id)
+        columns = ','.join(f'{key}=${i+2}' for i,key in enumerate(PROPOSAL_FIELDS))
+        await db.execute(f'UPDATE longway_evidence_proposals SET {columns} WHERE id=$1',
+                         proposal_id, *(values[key] for key in PROPOSAL_FIELDS))
+        if values['question_id']:
+            await db.execute('UPDATE longway_questions SET answered_by_proposal=COALESCE(answered_by_proposal,$2) WHERE id=$1',
+                             values['question_id'], proposal_id)
+        if values['run_id']:
+            await db.execute('''UPDATE longway_scout_runs SET proposals=proposals+1,
+                counter_proposals=counter_proposals+$2 WHERE id=$1''', values['run_id'], int(bool(values['contradicts'])))
         await db.execute("""INSERT INTO field_marks
             (id,room_id,mark_kind,relation,origin,subjects,title,payload,actor_user_id,provenance,dedup_key,created_at)
             VALUES ($1,$2,'relation','evidence_attachment',$3,$4,$5,$6,$7,$8,$9,clock_timestamp())""",
@@ -104,7 +183,8 @@ async def review(db, proposal, *, lock=False):
 
 
 async def list_proposals(db, room_id):
-    rows = await db.fetch("""SELECT p.* FROM longway_evidence_proposals p JOIN rooms r ON r.id=p.room_id
+    rows = await db.fetch("""SELECT p.*,q.text AS question_text FROM longway_evidence_proposals p JOIN rooms r ON r.id=p.room_id
+        LEFT JOIN longway_questions q ON q.id=p.question_id
         WHERE p.room_id=$1 AND (r.is_home OR p.candidate=r.linked_journey)
         ORDER BY p.created_at DESC""", room_id)
     result = []
@@ -112,6 +192,22 @@ async def list_proposals(db, room_id):
         state = await review(db, row)
         confirmation = state.pop("confirmation")
         label = {"provisional": "proposed", "superseded": "corrected"}.get(state["review_state"], state["review_state"])
-        result.append(dict(row, **state, review=label,
+        result.append(dict(row, **state, review=label, requires_counter=requires_counter(row),
                            queued=confirmation is not None and row["written_at"] is None))
     return result
+
+
+async def chart_overlay(db, chart, room_id):
+    """Only this authorized room's proposals become provisional chart ink."""
+    overlay = {}
+    for row in await list_proposals(db, room_id):
+        if row['written_at'] or row['review'] in ('contested', 'corrected'):
+            continue
+        overlay.setdefault(row['candidate'], []).append({key: row[key] for key in (
+            'id','claim','support','review','url','publisher','leg_from','leg_to','load_bearing','requires_counter')})
+    for journey in chart['journeys']:
+        for segment in journey['segments']:
+            segment['proposed'] = any(
+                (p['leg_from'], p['leg_to']) in ((segment['from'], segment['to']), (segment['to'], segment['from']))
+                for p in overlay.get(journey['slug'], []))
+    return dict(chart, proposals=overlay)

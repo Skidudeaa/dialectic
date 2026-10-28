@@ -95,13 +95,13 @@ async def _authorize(room_id: UUID, token: str, user_id: UUID, db) -> None:
 _TERMINAL_GUARDED_ACTIONS = ("correct", "split", "merge", "supersede")
 
 _TARGET_SQL = """
-SELECT id, room_id, thread_id, mark_kind, relation, title
+SELECT id, room_id, thread_id, mark_kind, relation, title, subjects
 FROM field_marks
 WHERE id = $1 AND room_id = $2
 """
 
 _TARGETS_FOR_UPDATE_SQL = """
-SELECT id, room_id, thread_id, mark_kind, relation, title
+SELECT id, room_id, thread_id, mark_kind, relation, title, subjects
 FROM field_marks
 WHERE room_id = $1 AND id = ANY($2::uuid[])
 ORDER BY id
@@ -569,6 +569,14 @@ async def review_field_mark(
                 target = locked_by_id.get(mark_id)
                 if target is None or target["mark_kind"] != "relation":
                     raise HTTPException(status_code=404, detail="Mark not found")
+                if request.action == 'confirm':
+                    for subject in target['subjects']:
+                        if subject.get('entity') == 'longway_evidence_proposals':
+                            needs_counter = await db.fetchval("""SELECT load_bearing AND counter_searched_at IS NULL
+                                FROM longway_evidence_proposals WHERE id=$1 AND room_id=$2""",
+                                UUID(subject['id']), room_id)
+                            if needs_counter:
+                                raise HTTPException(409, 'load-bearing claim has no contrary search yet')
                 for other_id in merge_ids:
                     other = locked_by_id.get(other_id)
                     if other is None or other["mark_kind"] != "relation":

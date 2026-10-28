@@ -1,7 +1,7 @@
 """Five participant tools; repository mutation belongs exclusively to the writer."""
 from .register import get_register
 from .fixes import overlay
-from .proposals import propose
+from .proposals import propose, PROPOSAL_FIELDS
 
 
 def build_tools(room, db):
@@ -21,14 +21,15 @@ def build_tools(room, db):
                 "fixes_state": chart["fixes_state"], "note": "A position is not a timetable or availability."}
 
     async def propose_evidence(args):
-        return await propose(db, room.id, **{key: args[key] for key in ("candidate", "url", "claim", "scope")})
+        allowed = ('candidate', 'url', 'claim', 'scope') + tuple(k for k in PROPOSAL_FIELDS if k != 'run_id')
+        return await propose(db, room.id, **{key: args[key] for key in allowed if key in args})
 
     async def draft_dispatch(args):
         from .dispatch import draft
         binding = await db.fetchrow("SELECT linked_journey, is_home FROM rooms WHERE id=$1", room.id)
         if not binding or not (binding["is_home"] or binding["linked_journey"]):
             raise ValueError("Bind this room to a journey before drafting its dispatch")
-        return {"draft": await draft(binding["linked_journey"]), "posted": False}
+        return {"draft": await draft(binding["linked_journey"], db=db, room_id=room.id), "posted": False}
 
     def tool(name, description, fn, properties, required=(), timeout=14):
         return Tool(name, description, {"type": "object", "properties": properties,
@@ -36,10 +37,13 @@ def build_tools(room, db):
                     name.replace("_", " "), timeout_s=timeout)
 
     string = {"type": "string"}
+    proposal_properties = {key: string for key in ('candidate', 'url', 'claim', 'scope')}
+    proposal_properties.update({key: {'type': ['string', 'null']} for key in PROPOSAL_FIELDS if key not in ('run_id', 'load_bearing')})
+    proposal_properties['load_bearing'] = {'type': 'boolean'}
     return [
         tool("read_register", "Read the public journey register, or a candidate dossier and its S-number evidence. Shared trips expose only Established and Undecided.", read_register, {"slug": string}),
         tool("fit_window", "Compare recorded candidate seasons with a shared trip's window; hypotheses remain hypotheses.", fit_window, {"trip": string}, ("trip",)),
         tool("where_is", "Read last observed ship/train positions by vehicle name or journey slug, with unknown fixes explicit.", where_is, {"name": string}, ("name",)),
-        tool("propose_evidence", "Fetch a page and file a bounded claim for human Field confirmation. Use a 3–35 word phrase occurring in the extracted page. Never writes the repo.", propose_evidence, {k: string for k in ("candidate", "url", "claim", "scope")}, ("candidate", "url", "claim", "scope"), 26),
+        tool("propose_evidence", "Fetch a page and file a bounded claim for human Field confirmation. Use a 3–35 word phrase occurring in the extracted page. Never writes the repo.", propose_evidence, proposal_properties, ("candidate", "url", "claim", "scope"), 26),
         tool("draft_dispatch", "Draft this room's weekly dispatch from git evidence. Does not post or push.", draft_dispatch, {}, timeout=28),
     ]

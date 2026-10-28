@@ -28,6 +28,8 @@ def routers():
 def startup(pool):
     from .register import get_register
     from .api import set_db_pool
+    from .search import configuration
+    configuration()
     get_register()
     base_identity()
     set_db_pool(pool)

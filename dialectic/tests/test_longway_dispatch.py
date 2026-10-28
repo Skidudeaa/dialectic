@@ -45,10 +45,10 @@ async def test_sunday_posts_once_and_pushes_monday_does_nothing(db,house,client,
 
 @pytest.mark.asyncio
 async def test_history_model_and_quiet_week(longway_repo,monkeypatch):
-    movement=dispatch.history("ogasawara")
+    movement=await dispatch.history("ogasawara")
     assert movement[0]["evidence_changes"][0]["id"] == "S1"
     assert "Which month" in movement[0]["next_decision"]
-    assert "BOOKING-PRIVATE" not in str(dispatch.history())
+    assert "BOOKING-PRIVATE" not in str(await dispatch.history())
     request=[]
     class Provider:
         client=SimpleNamespace(aclose=AsyncMock())
@@ -63,3 +63,37 @@ async def test_history_model_and_quiet_week(longway_repo,monkeypatch):
     later=datetime.now(timezone.utc)+timedelta(days=9)
     assert await dispatch.draft("ogasawara",later) == "Nothing moved this week\n\n"+dispatch.REACTION_LINE
     assert len(request) == 1
+
+
+@pytest.mark.asyncio
+async def test_dispatch_includes_confirmation_contest_and_receipt(db,house,client,longway_repo,monkeypatch):
+    from organs.longway import proposals,scout
+    from uuid import UUID
+    monkeypatch.setattr(proposals.defuddle_client,'extract_article',AsyncMock(return_value={'content':'The ferry sails weekly.','site':'Kaiun'}))
+    ids=[]
+    for action in ('confirm','contest'):
+        result=await proposals.propose(db,house.room,'ogasawara','https://www.ogasawarakaiun.co.jp/',
+            'The ferry sails weekly','Tokyo')
+        ids.append(result['id'])
+        assert (await client.post(f"/rooms/{house.room}/field/marks/{result['field_mark_id']}/review",
+            json={'action':action,'note':'Read the page'})).status_code==200
+    await db.execute("UPDATE longway_evidence_proposals SET written_sid='S42' WHERE id=$1",UUID(ids[0]))
+    monkeypatch.setenv('LONGWAY_SEARCH_PROVIDER','none')
+    run=await scout.reserve(house.pool,house.room,'ogasawara')
+    await scout.finish(house.pool,run['id'],'done')
+    movement=await dispatch.history('ogasawara',db=db,room_id=house.room)
+    activity=movement[-1]
+    assert [r['action'] for r in activity['proposal_reviews']]==['confirm','contest']
+    assert [str(r['id']) for r in activity['proposal_reviews']]==ids
+    assert activity['proposal_reviews'][0]['written_sid']=='S42'
+    assert activity['scout_runs'][0]['id']==run['id']
+    class Model:
+        client=SimpleNamespace(aclose=AsyncMock())
+        async def complete(self,request):
+            assert all(i in request.messages[0]['content'] for i in ids)
+            assert str(run['id']) in request.messages[0]['content']
+            return SimpleNamespace(content=f"Proposal {ids[0]} became S42; {ids[1]} was contested. Scout filed its receipt.\n\nWhich month should we investigate?")
+    monkeypatch.setattr(dispatch,'AnthropicProvider',Model)
+    text=await dispatch.draft('ogasawara',db=db,room_id=house.room)
+    assert text.split('\n\n')[-2]=='Which month should we investigate?'
+    assert text.endswith(dispatch.REACTION_LINE)

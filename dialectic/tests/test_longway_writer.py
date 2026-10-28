@@ -74,3 +74,28 @@ async def test_confirmed_context_cannot_authorize_evidence(db,house,client,longw
     monkeypatch.setenv("LONGWAY_COMMIT_ENABLED","1")
     await jobs.evidence_writer(SchedulerContext(house.pool))
     assert len(longway_repo.evidence("ogasawara")) == 1
+
+
+@pytest.mark.asyncio
+async def test_scouted_writer_dates_scope_and_confirmer(db,house,client,longway_repo,monkeypatch):
+    monkeypatch.setattr(proposals.defuddle_client,'extract_article',AsyncMock(return_value={
+        'content':'The ferry sails weekly.','site':'Kaiun'}))
+    from organs.longway import scout,questions
+    monkeypatch.setenv('LONGWAY_SEARCH_PROVIDER','none')
+    question=await questions.add(db,house.room,'Which ferry?')
+    run=await scout.reserve(house.pool,house.room,'ogasawara')
+    result=await proposals.propose(db,house.room,'ogasawara','https://www.ogasawarakaiun.co.jp/',
+        'The ferry sails weekly','schedule',question_id=question['id'],run_id=run['id'],
+        applies_from='2027-08-24',applies_to='2027-09-30',direction='outbound',passport='US',vehicle='Ogasawara Maru',
+        leg_from='Tokyo',leg_to='Chichijima',load_bearing=True)
+    await db.execute('UPDATE longway_evidence_proposals SET counter_searched_at=clock_timestamp() WHERE id=$1',UUID(result['id']))
+    response=await client.post(f"/rooms/{house.room}/field/marks/{result['field_mark_id']}/review",json={'action':'confirm'})
+    assert response.status_code==200,response.text
+    monkeypatch.setenv('LONGWAY_COMMIT_ENABLED','1')
+    written=await jobs.evidence_writer(SchedulerContext(house.pool))
+    assert written[result['id']]['sid']=='S2',written
+    entry=longway_repo.evidence('ogasawara')[-1]
+    assert entry['checked_by']=='Alice' and entry['applies']=='2027-08-24 to 2027-09-30'
+    assert entry['scope']=='schedule; direction: outbound; passport: US; vehicle: Ogasawara Maru'
+    errors,_=longway_repo.candidates.check(longway_repo.root)
+    assert not errors,errors

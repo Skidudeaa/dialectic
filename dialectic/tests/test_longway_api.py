@@ -42,6 +42,7 @@ async def db():
     await tx.start()
     try:
         await conn.execute((Path(__file__).resolve().parents[1] / "migrations/029_longway.sql").read_text())
+        await conn.execute((Path(__file__).resolve().parents[1] / "migrations/030_longway_scout.sql").read_text())
         yield conn
     finally:
         await tx.rollback()

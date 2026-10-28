@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from typing import Literal
 
 from api.auth.dependencies import get_current_user
 from api.token_utils import extract_room_token
@@ -11,7 +12,8 @@ from api.field import _authorize
 from api.home import _require_home_manager
 from .register import get_register
 from .fixes import overlay
-from .proposals import propose, list_proposals
+from .proposals import propose, list_proposals, chart_overlay
+from . import questions as question_queue, scout as scout_runner
 
 router = APIRouter(prefix="/rooms/{room_id}/longway", tags=["longway"])
 _pool = None
@@ -50,7 +52,7 @@ def journey(slug):
 
 @router.get("/chart")
 async def chart(room_id: UUID, user=Depends(authorized), db=Depends(get_db)):
-    result = await overlay(get_register().chart())
+    result = await chart_overlay(db, await overlay(get_register().chart()), room_id)
     room = await db.fetchrow("SELECT id,linked_journey,is_home FROM rooms WHERE id=$1", room_id)
     rooms = await db.fetch("""SELECT r.id,r.name,r.linked_journey FROM rooms r
         JOIN room_memberships m ON m.room_id=r.id WHERE m.user_id=$1 ORDER BY r.created_at,r.id""", user.user_id)
@@ -81,6 +83,17 @@ class Proposal(BaseModel):
     url: str = Field(min_length=1, max_length=4000)
     claim: str = Field(min_length=1, max_length=2000)
     scope: str = Field(min_length=1, max_length=4000)
+    question_id: UUID | None = None
+    search_result_id: UUID | None = None
+    contradicts: UUID | None = None
+    applies_from: date | None = None
+    applies_to: date | None = None
+    direction: str | None = Field(default=None, max_length=500)
+    passport: str | None = Field(default=None, max_length=500)
+    vehicle: str | None = Field(default=None, max_length=500)
+    leg_from: str | None = Field(default=None, max_length=300)
+    leg_to: str | None = Field(default=None, max_length=300)
+    load_bearing: bool = False
 
 
 @router.get("/proposals")
@@ -151,4 +164,91 @@ async def latest_dispatch(room_id: UUID, user=Depends(authorized), db=Depends(ge
         ORDER BY m.created_at DESC,m.id DESC LIMIT 1""", room_id)
     if not row:
         raise HTTPException(404, "No dispatch yet")
+    return dict(row)
+
+
+class Question(BaseModel):
+    journey: str | None = None
+    text: str = Field(min_length=1, max_length=4000)
+    source: Literal['human','reaction','message'] = 'human'
+    source_message_id: UUID | None = None
+
+
+@router.get('/questions')
+async def get_questions(room_id: UUID, user=Depends(authorized), db=Depends(get_db)):
+    return await question_queue.list_questions(db, room_id)
+
+
+@router.post('/questions')
+async def post_question(room_id: UUID, body: Question, user=Depends(authorized), db=Depends(get_db)):
+    try:
+        return await question_queue.add(db, room_id, **body.model_dump(), asked_by=user.user_id)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post('/questions/seed')
+async def seed_questions(room_id: UUID, user=Depends(authorized), db=Depends(get_db)):
+    await manager(user, db)
+    try:
+        return await question_queue.seed(db, room_id, user.user_id)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post('/questions/{question_id}/close')
+async def close_question(room_id: UUID, question_id: UUID, user=Depends(authorized), db=Depends(get_db)):
+    row = await question_queue.close(db, room_id, question_id, user.user_id)
+    if row is None:
+        raise HTTPException(404, 'Question not found')
+    return dict(row)
+
+
+class ScoutRequest(BaseModel):
+    question_ids: list[UUID] | None = Field(default=None, max_length=5)
+
+
+def scout_context():
+    from types import SimpleNamespace
+    from api import main as app_main
+    async def broadcast(room_id, message):
+        if app_main.connection_manager is not None:
+            await app_main.connection_manager.broadcast(room_id, message)
+    return SimpleNamespace(pool=_pool, broadcast=broadcast)
+
+
+@router.post('/scout')
+async def post_scout(room_id: UUID, body: ScoutRequest = ScoutRequest(), user=Depends(authorized), db=Depends(get_db)):
+    await manager(user, db)
+    try:
+        slug = await question_queue.binding(db, room_id)
+        run_id = await scout_runner.start(_pool, room_id, slug, body.question_ids,
+            started_by=user.user_id, ctx=scout_context())
+    except scout_runner.AlreadyRunning as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {'run_id': str(run_id)}
+
+
+@router.get('/scout/runs')
+async def scout_runs(room_id: UUID, user=Depends(authorized), db=Depends(get_db)):
+    return [{k: v for k, v in r.items() if k != 'log'} for r in await db.fetch('''SELECT * FROM longway_scout_runs
+        WHERE room_id=$1 ORDER BY started_at DESC,id DESC LIMIT 20''', room_id)]
+
+
+@router.get('/scout/runs/{run_id}')
+async def scout_run(room_id: UUID, run_id: UUID, user=Depends(authorized), db=Depends(get_db)):
+    row = await db.fetchrow('SELECT * FROM longway_scout_runs WHERE id=$1 AND room_id=$2', run_id, room_id)
+    if row is None:
+        raise HTTPException(404, 'Scout run not found')
+    return dict(row)
+
+
+@router.post('/scout/runs/{run_id}/kill')
+async def kill_scout(room_id: UUID, run_id: UUID, user=Depends(authorized), db=Depends(get_db)):
+    await manager(user, db)
+    row = await scout_runner.kill(_pool, room_id, run_id, ctx=scout_context())
+    if row is None:
+        raise HTTPException(404, 'Scout run not found')
     return dict(row)
