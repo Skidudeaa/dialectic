@@ -124,7 +124,7 @@ async def members(conn: asyncpg.Connection) -> None:
            JOIN users u ON u.id = m.user_id LEFT JOIN user_credentials c ON c.user_id = u.id
            ORDER BY m.joined_at""")
     if not rows:
-        print("no house yet")
+        print("the house has no members yet" if await conn.fetchval("SELECT 1 FROM rooms WHERE is_home") else "no house yet")
     for r in rows:
         print(f"{r['display_name']:24} {r['email'] or '-':32} {'manager' if r['can_manage_home'] else 'member':8} since {r['joined_at']:%Y-%m-%d}")
 
