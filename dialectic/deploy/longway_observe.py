@@ -104,7 +104,9 @@ def main() -> int:
     python = "/usr/bin/python3" if Path("/usr/bin/python3").exists() else sys.executable
     server = subprocess.Popen([python, "run.py"], cwd=DIALECTIC, env=env,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
-    email = f"longway-probe-{secrets.token_hex(4)}@example.invalid"
+    # pydantic's EmailStr refuses reserved names (.invalid, .test, example.com); the owner's own domain is accepted
+    # and nothing is ever sent to it: this instance has no email delivery.
+    email = f"longway-probe-{secrets.token_hex(4)}@probe.somacura.org"
     room_id = None
     try:
         deadline = time.time() + 90
