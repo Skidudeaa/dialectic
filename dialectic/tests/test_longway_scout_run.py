@@ -94,7 +94,8 @@ class ScriptedProvider:
             assert len(page['text'])==8148 and 'CANTIKA' in page['text'] and not page['truncated']
             q=json.loads(request.messages[0]['content'])['questions'][0]
             assert q['text']==QUESTION
-            return response('propose',{'candidate':'banda-islands','url':URL,'claim':CLAIM,
+            # The live model named the candidate by its title; the run files under its own journey regardless.
+            return response('propose',{'candidate':'Banda Islands','url':URL,'claim':CLAIM,
                 'scope':'schedule, Ambon to Banda', 'load_bearing':True, 'question_id':q['id'],
                 'leg_from':'Ambon','leg_to':'Banda Neira','vehicle':'Pelni'})
         return response()
@@ -334,3 +335,23 @@ async def test_confirming_the_answer_closes_the_question(db,house,client,banda):
     assert await db.fetchval('SELECT closed_at FROM longway_questions WHERE id=$1',banda['id']) is not None
     assert (await client.get(base+'/questions')).json()==[]
     assert await questions.select_open(db,'banda-islands')==[]
+
+
+class RefusingProvider(ScriptedProvider):
+    """Proposes a claim the page does not contain before giving up."""
+    async def complete(self, request):
+        research=not (len(request.messages)>1 and isinstance(request.messages[1]['content'],str))
+        if research and self.turns['research']==2:
+            self.turns['research']+=1
+            return response('propose',{'url':URL,'claim':'A ferry sails every Tuesday at dawn','scope':'schedule','load_bearing':True})
+        return await super().complete(request)
+
+
+@pytest.mark.asyncio
+async def test_refused_proposals_are_logged_and_counted_in_the_receipt(db,house,banda):
+    receipt=await scout.run(house.pool,house.room,'banda-islands',provider=RefusingProvider(),fetcher=captured_page)
+    assert receipt['status']=='done' and receipt['proposals']==0,receipt
+    refused=[e for e in receipt['log'] if e['tool']=='propose_refused']
+    assert len(refused)==1 and refused[0]['claim']=='A ferry sails every Tuesday at dawn' and refused[0]['reason']
+    content=await db.fetchval("SELECT content FROM messages WHERE thread_id=$1 AND metadata ? 'longway_scout_run'",house.thread)
+    assert 'filed 0 proposals (1 refused by the passage gate)' in content

@@ -174,19 +174,28 @@ class Research:
         if row['proposals'] >= self.budgets['proposals']:
             self.reason = 'proposals budget exhausted'
             raise BudgetStop(self.reason)
-        args = dict(args)
-        if args.get('candidate') != self.row['journey']:
-            raise ValueError('Propose only for this run\'s journey')
-        if args.get('question_id') and UUID(args['question_id']) not in self.row['questions']:
-            raise ValueError('Proposal question must belong to this run')
+        # The run owns its journey. The second live run on Banda named the candidate "Banda Islands",
+        # the tool refused all six proposals and the Scout gave up; a slug the model must guess is a gate
+        # against the Scout, not against bad evidence.
+        args = dict(args, candidate=self.row['journey'])
         # Network reads are outside the connection lease. Propose re-reads the page (from this run's
         # cache when the research phase fetched it) so the gate runs on the page's text, never on the
         # model's memory of it.
         article = await self.fetch(args['url'])
         async def fetched(url):
             return article
-        async with self.pool.acquire() as db:
-            result = await proposals.propose(db, self.row['room_id'], **args, run_id=self.row['id'], fetcher=fetched)
+        try:
+            if args.get('question_id') and UUID(args['question_id']) not in self.row['questions']:
+                raise ValueError('Proposal question must belong to this run')
+            async with self.pool.acquire() as db:
+                result = await proposals.propose(db, self.row['room_id'], **args, run_id=self.row['id'], fetcher=fetched)
+        except ValueError as exc:
+            # A refusal is evidence too: the Scout claimed something the page does not say in one sentence.
+            await self.log('propose_refused', url=args['url'], claim=args.get('claim'), reason=str(exc))
+            raise
+        if not result.get('filed'):
+            await self.log('propose_refused', url=args['url'], claim=args.get('claim'), reason=result.get('why'))
+            return result
         await self.log('propose', result=result)
         return result
 
@@ -227,7 +236,7 @@ class Research:
         tools = [
             tool('known_sources','Read evidence URLs with S-numbers, vehicle timetables and recent human message links.',self.known_sources,{}),
             tool('read_page','Fetch main text, capped at 12000 characters. Thin pages prove no timetable.',self.read_page,{'url':string},('url',)),
-            tool('propose','Re-read and file an exact bounded claim with a whole sentence for the Field; never writes the repo.',self.propose,props,('candidate','url','claim','scope','load_bearing')),
+            tool('propose','Re-read and file an exact bounded claim with a whole sentence for the Field, for this run\'s journey; never writes the repo.',self.propose,props,('url','claim','scope','load_bearing')),
             tool('read_register','Read a public journey and its route, evidence and dossier.',self.read_register,{'slug':string}),
         ]
         if self.provider_name != 'none':
@@ -285,10 +294,13 @@ async def finish(pool, run_id, status, error=None, ctx=None):
             finished_at=COALESCE(finished_at,clock_timestamp()) WHERE id=$1 RETURNING *''', run_id, status, error)
         texts = await db.fetch('SELECT text FROM longway_questions WHERE id=ANY($1::uuid[]) ORDER BY created_at,id', row['questions'])
         room = await db.fetchrow('SELECT * FROM rooms WHERE id=$1', row['room_id'])
+        refused = await db.fetchval('''SELECT count(*) FROM longway_scout_runs r, jsonb_array_elements(r.log) e
+            WHERE r.id=$1 AND e->>'tool'='propose_refused' ''', run_id)
         metadata = {'longway_scout_run': {key: (str(row['id']) if key=='run_id' else row[key])
                     for key in ('run_id','journey','pages_read','proposals','counter_proposals')}}
         content = (f"Scout run on {row['journey']}: read {row['pages_read']} pages, filed {row['proposals']} proposals "
-                   f"and {row['counter_proposals']} contrary findings for the Field. Questions: "
+                   + (f"({refused} refused by the passage gate) " if refused else '')
+                   + f"and {row['counter_proposals']} contrary findings for the Field. Questions: "
                    + '; '.join(q['text'] for q in texts) + f". Status: {row['status']}."
                    + (f" {row['error']}" if row['error'] else ''))
         await post_participant(db, ctx, room, content, metadata, 'longway_scout_run', 'run_id', str(run_id))

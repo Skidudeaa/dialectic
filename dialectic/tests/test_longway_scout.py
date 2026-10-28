@@ -131,3 +131,17 @@ async def test_independence_counts_publishers_for_same_claim_words(db,house,long
     await scout.finish(house.pool,row['id'],'done','proposals budget exhausted')
     counts=await db.fetch('SELECT publisher_count FROM longway_evidence_proposals WHERE run_id=$1',row['id'])
     assert [r['publisher_count'] for r in counts]==[2,2,2]
+
+
+def test_timetable_lines_are_their_own_passages():
+    """A list item or table row is a unit; a heading is not. The Bluemotion schedule is a nested list."""
+    from organs.longway.proposals import whole_sentence_passage
+    content = ("# Getting here\n\n- Prices (incl. booking fee):\n\t- VIP IDR 800,000\n- Schedule:\n"
+               "\t- Tulehu-Banda: Thursdays, 9:00 am\n\t\t- Banda-Tulehu: Sundays, 1:00 pm\n\n"
+               "| Ship | Ambon-Banda |\n| KM Pangrango | cancelled until further notice |\n\n"
+               "## Tulehu-Banda: Thursdays\n")
+    assert whole_sentence_passage('Tulehu-Banda: Thursdays, 9:00 am', content) == 'Tulehu-Banda: Thursdays, 9:00 am'
+    assert whole_sentence_passage('Banda-Tulehu: Sundays, 1:00 pm', content) == 'Banda-Tulehu: Sundays, 1:00 pm'
+    assert whole_sentence_passage('KM Pangrango cancelled until further notice', content) == 'KM Pangrango cancelled until further notice'
+    assert whole_sentence_passage('Getting here', 'x') is None
+    assert whole_sentence_passage('Tulehu-Banda: Thursdays', '## Tulehu-Banda: Thursdays\n') is None

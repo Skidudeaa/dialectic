@@ -34,23 +34,29 @@ def whole_sentence_passage(claim, content):
 
     WHY: the old gate could extract a positive phrase from a suspended-service
     sentence. Do not trim a long sentence to fit; refuse it. Extractor paragraphs
-    without punctuation are allowed, but markdown headings/navigation are not.
+    without punctuation are allowed; headings and link-only menus are not. A list
+    item or a table row is its own unit: a timetable line ("Tulehu-Banda: Thursdays,
+    9:00 am", "cancelled until further notice") carries its own negation, and the
+    schedules the route depends on are written that way, not as prose.
     """
     for paragraph in re.split(r"\n\s*\n", content):
         paragraph = paragraph.strip()
-        if not paragraph or re.match(r"^(?:#{1,6}\s|[-*+]\s|\|)", paragraph):
+        if not paragraph or re.match(r"^#{1,6}\s", paragraph):
             continue
-        if re.search(r"\[[^]]+\]\([^)]*\)", paragraph):
-            # Link-only menus are not prose; inline editorial links are prose.
-            plain = re.sub(r"\[([^]]+)\]\([^)]*\)", r"\1", paragraph)
-            if len(re.findall(r"\w+", re.sub(r"\[[^]]+\]\([^)]*\)", "", paragraph))) < 3:
-                continue
-        else:
-            plain = paragraph
-        for sentence in re.split(r'(?<=[.!?])\s+(?=[A-Z0-9"“])', plain):
-            sentence = ' '.join(sentence.split())
-            if len(sentence.split()) < 40 and supported_passage(claim, sentence):
-                return sentence
+        units = ([re.sub(r"^\s*(?:[-*+]\s+|\|)", "", line).replace("|", " ") for line in paragraph.splitlines()]
+                 if re.match(r"^(?:[-*+]\s|\|)", paragraph) else [paragraph])
+        for unit in units:
+            if re.search(r"\[[^]]+\]\([^)]*\)", unit):
+                # Link-only menus are not prose; inline editorial links are prose.
+                plain = re.sub(r"\[([^]]+)\]\([^)]*\)", r"\1", unit)
+                if len(re.findall(r"\w+", re.sub(r"\[[^]]+\]\([^)]*\)", "", unit))) < 3:
+                    continue
+            else:
+                plain = unit
+            for sentence in re.split(r'(?<=[.!?])\s+(?=[A-Z0-9"“])', plain):
+                sentence = ' '.join(sentence.split())
+                if len(sentence.split()) < 40 and supported_passage(claim, sentence):
+                    return sentence
     return None
 
 
