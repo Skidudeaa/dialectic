@@ -187,3 +187,102 @@ Tests (`Chart.test.tsx`, vitest + jsdom with `maplibre-gl` mocked): the features
 | chart | `frontend/app/src/organs/longway/chart/**`, `frontend/app/public/longway/**`, `frontend/app/package.json` and lockfile (adding `maplibre-gl`, `topojson-client`, `@types/topojson-client`) | everything else |
 
 `frontend/app/src/organs/longway/types.ts` is committed before any build starts and is read-only for all three.
+
+## 11. The Scout goes scouting (added 2026-10-28, 04:10 CDT; proposal `/root/theLongWay/docs/moonshot-scout.md`)
+
+The house fills its own register. Questions from the rooms and the dossiers feed Scout runs; a run searches (when a provider is configured), reads, files proposals that are passages, searches for the contrary, and reports. Ink moves only through a person's confirm in the Field. Nothing here changes the trading organ.
+
+### 11.1 Migration `030_longway_scout.sql`
+
+```sql
+CREATE TABLE longway_questions (
+  id UUID PRIMARY KEY, room_id UUID NOT NULL REFERENCES rooms(id), journey TEXT NOT NULL, text TEXT NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('human','reaction','message','dossier','scout')),
+  source_message_id UUID REFERENCES messages(id), asked_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+  answered_by_proposal UUID REFERENCES longway_evidence_proposals(id), closed_at TIMESTAMPTZ, closed_by UUID REFERENCES users(id)
+);
+CREATE TABLE longway_scout_runs (
+  id UUID PRIMARY KEY, room_id UUID NOT NULL REFERENCES rooms(id), journey TEXT NOT NULL,
+  trigger TEXT NOT NULL CHECK (trigger IN ('manual','nightly')), started_by UUID REFERENCES users(id),
+  started_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(), finished_at TIMESTAMPTZ,
+  status TEXT NOT NULL CHECK (status IN ('running','done','failed','killed')),
+  questions UUID[] NOT NULL DEFAULT '{}', pages_read INT NOT NULL DEFAULT 0, searches INT NOT NULL DEFAULT 0,
+  proposals INT NOT NULL DEFAULT 0, counter_proposals INT NOT NULL DEFAULT 0,
+  input_tokens INT NOT NULL DEFAULT 0, output_tokens INT NOT NULL DEFAULT 0, error TEXT, log JSONB NOT NULL DEFAULT '[]'::jsonb
+);
+CREATE TABLE longway_search_results (
+  id UUID PRIMARY KEY, run_id UUID NOT NULL REFERENCES longway_scout_runs(id), provider TEXT NOT NULL, query TEXT NOT NULL,
+  rank INT NOT NULL, url TEXT NOT NULL, title TEXT, snippet TEXT, retrieved_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+ALTER TABLE longway_evidence_proposals
+  ADD COLUMN question_id UUID REFERENCES longway_questions(id),
+  ADD COLUMN run_id UUID REFERENCES longway_scout_runs(id),
+  ADD COLUMN search_result_id UUID REFERENCES longway_search_results(id),
+  ADD COLUMN contradicts UUID REFERENCES longway_evidence_proposals(id),
+  ADD COLUMN applies_from DATE, ADD COLUMN applies_to DATE, ADD COLUMN direction TEXT, ADD COLUMN passport TEXT, ADD COLUMN vehicle TEXT,
+  ADD COLUMN leg_from TEXT, ADD COLUMN leg_to TEXT,
+  ADD COLUMN load_bearing BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN counter_searched_at TIMESTAMPTZ,
+  ADD COLUMN publisher_count INT;
+```
+
+`load_bearing` is true when the scope is a schedule, an operating status, an entry rule or a price (the five checks of §15 apply). `counter_searched_at` is stamped when the run has searched for the contrary of that claim, whether or not it found anything. A load-bearing proposal with no `counter_searched_at` cannot be confirmed; the route refuses with 409 and the reason.
+
+### 11.2 Environment
+
+```
+LONGWAY_SEARCH_PROVIDER=none | brave | exa      # none: the search tool is absent and runs read known sources only
+LONGWAY_SEARCH_KEY=<key>                         # Amo's account; never logged
+LONGWAY_SCOUT_ENABLED=0                          # the nightly job; off until Amo
+LONGWAY_SCOUT_MODEL=claude-opus-5-5
+LONGWAY_SCOUT_BUDGET_PAGES=40  LONGWAY_SCOUT_BUDGET_PROPOSALS=20  LONGWAY_SCOUT_BUDGET_OUTPUT_TOKENS=60000  LONGWAY_SCOUT_BUDGET_SECONDS=1200
+```
+
+### 11.3 The run (`organs/longway/scout.py`)
+
+A plain asyncio task in the backend process (the Workshop sandbox has no network; the run executes no code and holds no credential beyond the search key). `run(pool, room_id, journey, question_ids, trigger, started_by)`:
+
+1. Insert the `longway_scout_runs` row (`running`); one running run per journey (409 otherwise).
+2. Build a registry for the tool loop (`llm/tool_loop.py` over `llm/tools.py` `Tool` objects, with `llm/providers.py`, model `LONGWAY_SCOUT_MODEL`, effort high):
+   - `known_sources()`: the journey's evidence URLs with their S-numbers and claims, every `vehicles[].timetable`, and http(s) links in the room's human messages of the last 30 days, each with its origin.
+   - `search(query, count<=8)`: present only when a provider is configured. Brave: `GET https://api.search.brave.com/res/v1/web/search?q=…&count=…` with header `X-Subscription-Token`; Exa: `POST https://api.exa.ai/search` with header `x-api-key` and `{"query", "numResults", "type": "auto"}`. Verify both against the provider's documentation before trusting these shapes; keep each adapter a single function with a test over a canned response. Every result is inserted into `longway_search_results` before it is returned; the tool returns `{id, url, title, snippet}` rows. The query is the Scout's own phrasing of a place question; the run never searches a person's name.
+   - `read_page(url)`: `llm/defuddle_client.extract_article` (defuddle on `:8010`, Jina fallback), capped at 40 pages per run; returns `{site, published, text}` where text is capped at 12,000 characters with the cut noted; logs the read. (Pelni's booking page yields 721 characters this way; a browser fetcher is not part of this slice.)
+   - `propose(candidate, url, claim, scope, question_id?, search_result_id?, contradicts?, applies_from?, applies_to?, direction?, passport?, vehicle?, leg_from?, leg_to?, load_bearing)`: `proposals.propose` extended with those columns and `run_id`; the `supported_passage` gate stays (the claim's words contiguous in the extracted text, 3 to 35 words); a second gate: the passage must be a whole sentence of the main text, not a navigation fragment (a sentence boundary on each side, or the whole paragraph when the extractor gives none). `leg_from`/`leg_to` must name neighbouring stops of the candidate's `route` or be null.
+   - `read_register(...)` as today.
+3. System prompt: the Scout identity (`identity.py`) plus the research instruction: answer the given questions (ids and text), read known sources first, then search if available; file every claim as a proposal with its exact passage; mark load-bearing claims; use the charter's source order (§14: operators and official pages for transport and entry, independent reporting and local accounts for context, Wikipedia last); never state a fact in prose that is not a proposal; stop when the questions are answered or the budget is spent.
+4. Counter-search phase: for every proposal filed in this run with `load_bearing` and no `contradicts`, one more loop turn asking the Scout to look for the contrary (suspended, cancelled, closed, a later year, a different operator) using `search` when present and `known_sources` otherwise, filing anything found with `contradicts = <id>`; stamp `counter_searched_at` on each such proposal whether or not something was found; also stamp `publisher_count` from the distinct publishers in this run's proposals with the same claim words (independence).
+5. Finish the row (`done` or `failed` with `error`), post one participant message in the room (`metadata.longway_scout_run = {run_id, journey, pages_read, proposals, counter_proposals}`, content: "Scout run on <journey>: read N pages, filed M proposals and K contrary findings for the Field. Questions: …") through the same posting path the dispatch uses, broadcast; questions with a proposal get `answered_by_proposal`.
+
+Budgets from the environment; the run stops cleanly at any of them and says which in the receipt.
+
+### 11.4 Routes (all under `/rooms/{room_id}/longway/`, same auth as section 5)
+
+- `GET questions`: open questions for the room's journey (or every journey in the house room), newest first, each with `answered_by_proposal` and the proposal's review state; `POST questions {journey?, text, source?: 'human'|'reaction'|'message', source_message_id?}` (any member; journey defaults to the room's); `POST questions/{id}/close` (any member); `POST questions/seed` (managers): seeds the journey's dossier questions (`atlas_data` `questions`) as `source='dossier'`, deduplicated by text.
+- `POST scout {question_ids?: [..]}` (managers): starts a manual run for the room's journey with those questions or, when omitted, the five oldest open ones; 409 while one runs; returns `{run_id}`. `GET scout/runs` (last 20 receipts), `GET scout/runs/{id}` (receipt with log), `POST scout/runs/{id}/kill` (managers).
+- `GET proposals` gains every new column plus `question_text`, `requires_counter` (load_bearing and not counter-searched) and `run_id`.
+- The Field's review route (`api/field.py`) refuses `confirm` on a proposal mark whose proposal has `requires_counter` with 409 "load-bearing claim has no contrary search yet"; the shell shows that reason.
+- `GET chart` gains `proposals`: `{ <slug>: [ {id, claim, support, review, url, publisher, leg_from, leg_to, load_bearing, requires_counter} ] }` for proposals not written and not contested/corrected; a segment whose stops match a proposal's `leg_from`/`leg_to` (either direction) gets `proposed: true` so the chart draws it dotted with a "proposed" label (section 11.6).
+- Dispatch: `dispatch.history()` adds this week's confirmed and contested proposals (from `field_marks`) and the run receipts; the prose names them by proposal id and by the S-number once written. The one question keeps its place as the last paragraph before the reaction line, so the card can read it.
+
+### 11.5 Jobs
+
+- `scout_nightly` (02:00 America/Chicago, `LONGWAY_SCOUT_ENABLED`, default off): for each room bound to a journey with at least one open question, one run with up to five questions, serially; the house room is skipped. Receipts are the only output; the dispatch summarises them.
+- `evidence_writer` writes a confirmed proposal's new fields into the evidence row: `scope` gains the direction, passport and vehicle when present; `applies_from`/`applies_to` are written as `applies` ("2027-08-24 to 2027-09-30"); `checked_by` is the confirmer's display name (`tools/longway.py check` accepts it as optional text).
+
+### 11.6 Frontend
+
+- **Field**: a "What the Scout is working on" section (open questions with their source; an "Ask the Scout to find out" form; "Scout this" for managers with the latest receipt and a running indicator) above "Proposed evidence". Each proposal renders passage first (blockquote), then the claim, the scope, the structured fields that are set, the question it answers, the publisher and the link; Confirm is disabled until the link has been opened from this device (component state), and disabled with its reason when `requires_counter`; Contest asks for one line; Correct asks for the better claim; a row with `written_sid` shows it. A proposal older than 14 days with no review is paled.
+- **Chart**: segments with `proposed: true` draw dotted with a "proposed" tag in the strip and the LegCard; the LegCard lists the pending proposals for that leg (passage, claim, publisher) with Confirm/Contest through the same Field path.
+- **Dispatch card**: the ❓ reaction also `POST`s a question (`source: 'reaction'`, text = the dispatch's last paragraph before the reaction line, `source_message_id` the dispatch message).
+- **Record**: a participant message with `metadata.longway_scout_run` renders as a one-line card ("Scout read 12 pages, filed 5 proposals") linking to the Field.
+- Types: `types.ts` carries `Question`, `ScoutRun`, `ProposalScope`, `ScoutedProposal`, `ChartProposal`, `ScoutRunMetadata`, `Segment.proposed`, `ChartProjection.proposals`.
+
+### 11.7 Ownership for this slice
+
+| Build | Owns | Does not touch |
+|---|---|---|
+| backend scout | `dialectic/organs/longway/scout.py`, `search.py`, `questions.py`, `migrations/030_longway_scout.sql`, the `030` block in `schema.sql`, `tests/test_longway_scout*.py`, `tests/test_longway_questions*.py`, `tests/test_longway_search*.py`, and edits in `organs/longway/{api,proposals,jobs,dispatch,register,tools,__init__}.py`, `api/field.py` (the 409 on confirm), `.env.example` | `frontend/**` |
+| frontend scout | `src/organs/longway/**` except `chart/mapRuntime.ts`, `chart/mapStyle.ts`, `chart/Chart.tsx` (edit `chart/Cards.tsx` for the LegCard), `src/hooks/useLongway*.ts`, `components/workspace/scenes/FieldScene.tsx`, `components/chat/MessageBubble.tsx`, `src/lib/releases.ts` | `dialectic/*.py` |
+
+`types.ts` carries the new shapes before either build starts; it is read-only for both.

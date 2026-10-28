@@ -24,6 +24,8 @@ export interface Segment {
   to: string
   ink: Ink
   basis: string[]
+  /** A pending Scout proposal names this leg: drawn dotted with a "proposed" tag (section 11). */
+  proposed?: boolean
 }
 
 export interface EvidenceRow {
@@ -115,6 +117,8 @@ export interface ChartProjection {
   sources: Record<string, Record<string, EvidenceRow>>
   vehicles: Vehicle[]
   fixes_state: FixesState
+  /** Pending proposals per journey slug (section 11.4); absent before the Scout slice. */
+  proposals?: Record<string, ChartProposal[]>
 }
 
 export interface ChartProps {
@@ -179,4 +183,90 @@ export interface DispatchMetadata {
 export interface AnchorMetadata {
   journey: string
   leg: number
+}
+
+// ---- The Scout goes scouting (docs/LONGWAY_ORGAN.md section 11) -------------
+
+export type QuestionSource = 'human' | 'reaction' | 'message' | 'dossier' | 'scout'
+
+export interface Question {
+  id: string
+  room_id: string
+  journey: string
+  text: string
+  source: QuestionSource
+  source_message_id: string | null
+  asked_by: string | null
+  asked_by_name?: string | null
+  created_at: string
+  answered_by_proposal: string | null
+  /** Derived from the answering proposal's field marks, when one exists. */
+  answer_review?: 'proposed' | 'confirmed' | 'contested' | 'corrected' | null
+  closed_at: string | null
+}
+
+export interface ScoutRun {
+  id: string
+  room_id: string
+  journey: string
+  trigger: 'manual' | 'nightly'
+  started_by: string | null
+  started_at: string
+  finished_at: string | null
+  status: 'running' | 'done' | 'failed' | 'killed'
+  questions: string[]
+  pages_read: number
+  searches: number
+  proposals: number
+  counter_proposals: number
+  input_tokens: number
+  output_tokens: number
+  error: string | null
+  /** Present on GET scout/runs/{id} only. */
+  log?: Array<Record<string, unknown>>
+}
+
+/** The Scout's structured fields on a proposal (section 11.1); null when the passage did not say. */
+export interface ProposalScope {
+  question_id: string | null
+  question_text?: string | null
+  run_id: string | null
+  search_result_id: string | null
+  contradicts: string | null
+  applies_from: string | null
+  applies_to: string | null
+  direction: string | null
+  passport: string | null
+  vehicle: string | null
+  leg_from: string | null
+  leg_to: string | null
+  load_bearing: boolean
+  counter_searched_at: string | null
+  /** load_bearing and not yet counter-searched: Confirm is refused with this reason. */
+  requires_counter: boolean
+  publisher_count: number | null
+}
+
+export type ScoutedProposal = EvidenceProposal & ProposalScope
+
+/** What the chart shows of pending proposals: enough for a dotted "proposed" leg and its card. */
+export interface ChartProposal {
+  id: string
+  claim: string
+  support: string | null
+  review: EvidenceProposal['review']
+  url: string
+  publisher: string | null
+  leg_from: string | null
+  leg_to: string | null
+  load_bearing: boolean
+  requires_counter: boolean
+}
+
+export interface ScoutRunMetadata {
+  run_id: string
+  journey: string
+  pages_read: number
+  proposals: number
+  counter_proposals: number
 }
