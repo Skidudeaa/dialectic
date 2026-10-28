@@ -293,7 +293,8 @@ would have gone."""
         elif is_provoker:
             identity = self.PROVOKER_IDENTITY
         else:
-            identity = self.BASE_IDENTITY
+            from organ import active
+            identity = active.base_identity()
 
         room_context = self._build_room_context(room)
         user_context = self._blend_user_modifiers(users)

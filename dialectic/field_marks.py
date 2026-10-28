@@ -303,6 +303,7 @@ ORDER BY candidates.created_at DESC, candidates.id DESC
 # human-write validation (422) and the inference job's hard validation
 # (§5.1: "the model cannot mint provenance") — one definition, not two.
 _SUBJECT_ENTITY_TABLES = {
+    "longway_evidence_proposals": ("longway_evidence_proposals", "room_id", "id"),
     "messages": ("messages m JOIN threads t ON t.id = m.thread_id", "t.room_id", "m.id"),
     "reading_items": ("reading_items", "room_id", "id"),
     "memories": ("memories", "room_id", "id"),

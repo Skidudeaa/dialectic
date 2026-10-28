@@ -2302,10 +2302,11 @@ def build_registry(room, db) -> ToolRegistry:
     TRADEOFF: rebuilt per turn (cheap — closures, no I/O) rather than cached,
     because a room's linked book can change between messages.
     """
-    tools = _build_trading_tools(room) + _build_dialectic_tools(room, db)
-    if _world_tools_enabled():
+    from organ import active
+    tools = active.tools(room, db) + _build_dialectic_tools(room, db)
+    if active.name == "trading" and _world_tools_enabled():
         tools += _build_world_tools(room, db)
-    if _cairn_tools_enabled():
+    if active.name == "trading" and _cairn_tools_enabled():
         tools += _build_cairn_tools()
     if _workshop_enabled():
         tools += _build_workshop_tools(room, db)

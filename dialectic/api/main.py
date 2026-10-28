@@ -15,6 +15,9 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depe
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from organ import active as active_organ, identity as organ_identity
+from organs.trading import room_router as trading_room_router
+
 from models import (
     Room, User, Thread, Message, Memory, Event, EventType,
     SpeakerType, MessageType, MemoryScope, TradingSnapshotRequest,
@@ -116,6 +119,8 @@ async def lifespan(app: FastAPI):
     global db_pool, connection_manager
 
     _validate_environment()
+    if active_organ.name == "longway":
+        active_organ.base_identity()  # Missing repo/charter is a startup error.
 
     logger.info("Connecting to database...")
     try:
@@ -146,6 +151,8 @@ async def lifespan(app: FastAPI):
 
         # Set db_pool for auth module
         set_auth_db_pool(db_pool)
+        if active_organ.name == "longway":
+            active_organ.startup(db_pool)
 
         # Set db_pool for notifications module
         set_notifications_db_pool(db_pool)
@@ -225,21 +232,7 @@ async def lifespan(app: FastAPI):
     scheduler_instance = None
     if db_pool:
         from scheduler import Scheduler, SchedulerContext
-        from trading_watch import register_bloodstream_jobs
-        from llm.night_shift import register_brief_jobs
-        from llm.news_night import register_news_jobs
-        from llm.question_round import register_question_round_jobs
-        from llm.round_close_watch import register_round_close_jobs
-        from llm.house_forecast import register_house_forecast_jobs
-        from llm.silence_sweep import register_sweep_jobs
-        from llm.wire import register_wire_jobs
-        from llm.rss_wire import register_rss_wire_jobs
-        from llm.congress_watch import register_congress_watch_jobs
-        from llm.prediction_watch import register_prediction_watch_jobs
-        from llm.reading_echo import register_reading_echo_jobs
-        from llm.field_inference import register_field_inference_jobs
-        from world_adapters import register_world_signal_jobs
-        from llm.world_watch import register_world_watch_jobs
+        from organ import register_organ_jobs
         from llm.workshop_jobs import register_workshop_jobs
 
         async def _scheduler_broadcast(room_id, message):
@@ -249,21 +242,7 @@ async def lifespan(app: FastAPI):
             pool=db_pool, broadcast=_scheduler_broadcast,
             connection_manager=connection_manager,
         ))
-        register_bloodstream_jobs(scheduler_instance)
-        register_brief_jobs(scheduler_instance)
-        register_news_jobs(scheduler_instance)
-        register_question_round_jobs(scheduler_instance)
-        register_round_close_jobs(scheduler_instance)
-        register_house_forecast_jobs(scheduler_instance)
-        register_sweep_jobs(scheduler_instance)
-        register_wire_jobs(scheduler_instance)
-        register_rss_wire_jobs(scheduler_instance)
-        register_congress_watch_jobs(scheduler_instance)
-        register_prediction_watch_jobs(scheduler_instance)
-        register_reading_echo_jobs(scheduler_instance)
-        register_field_inference_jobs(scheduler_instance)
-        register_world_signal_jobs(scheduler_instance)
-        register_world_watch_jobs(scheduler_instance)
+        register_organ_jobs(scheduler_instance)
         register_workshop_jobs(scheduler_instance)
         scheduler_instance.start()
 
@@ -343,12 +322,6 @@ app.include_router(attachments_router)
 app.include_router(prediction_relay_router)
 app.include_router(rounds_router)
 app.include_router(reading_relay_router)
-
-# Include thesis relay router (Create Thesis → book born bound to its room)
-app.include_router(thesis_relay_router)
-
-# Trading relay (the Bench's read window: structure, quotes, trades, what-ifs)
-app.include_router(trading_relay_router)
 
 # Home membership administration — the only door into Home (the generic
 # join path below refuses it).
@@ -1694,7 +1667,7 @@ async def search_memories(
 # ============================================================
 
 
-@app.post("/rooms/{room_id}/trading/snapshot", response_model=TradingSnapshotResponse)
+@trading_room_router.post("/rooms/{room_id}/trading/snapshot", response_model=TradingSnapshotResponse)
 async def receive_trading_snapshot(
     room_id: UUID,
     raw_request: Request,
@@ -1752,7 +1725,7 @@ async def receive_trading_snapshot(
     )
 
 
-@app.get("/rooms/{room_id}/trading/alerts", response_model=List[Message])
+@trading_room_router.get("/rooms/{room_id}/trading/alerts", response_model=List[Message])
 async def get_trading_alerts(
     room_id: UUID,
     since: Optional[str] = Query(
@@ -1800,6 +1773,16 @@ async def get_trading_alerts(
         room_id, cutoff, limit,
     )
     return [Message(**dict(row)) for row in rows]
+
+
+# Include after the inline trading routes have been declared.
+for organ_router, organ_kwargs in active_organ.routers():
+    app.include_router(organ_router, **organ_kwargs)
+
+
+@app.get("/organ")
+async def get_organ():
+    return organ_identity()
 
 
 # ============================================================
