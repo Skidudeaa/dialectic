@@ -100,7 +100,9 @@ def main() -> int:
         checks.append((name, bool(ok), detail))
         print(f"{'ok ' if ok else 'BAD'} {name}{': ' + detail if detail else ''}")
 
-    server = subprocess.Popen([sys.executable, "run.py"], cwd=DIALECTIC, env=env,
+    # The unit runs /usr/bin/python3; the probe must boot the same interpreter, not a shell's venv.
+    python = "/usr/bin/python3" if Path("/usr/bin/python3").exists() else sys.executable
+    server = subprocess.Popen([python, "run.py"], cwd=DIALECTIC, env=env,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
     email = f"longway-probe-{secrets.token_hex(4)}@example.invalid"
     room_id = None
