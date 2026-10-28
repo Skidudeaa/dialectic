@@ -116,6 +116,36 @@ export function AuthScreen() {
     }
   };
 
+  // The invitation door. An invite is an account plus a one-time 6-digit code (the server's password_reset
+  // purpose); the person sets a password of their own here and is signed in by the same response login gives.
+  // No email delivery is needed, and no password ever passes through whoever issued the code.
+  const [codeMode, setCodeMode] = useState(false);
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await api.resetPassword(signInEmail, resetCode, newPassword) as {
+        access_token: string;
+        refresh_token: string;
+        user_id: string;
+        display_name?: string;
+      };
+      api.setAccessToken(res.access_token);
+      setUser(
+        { id: res.user_id, display_name: res.display_name ?? signInEmail.split('@')[0] },
+        res.access_token,
+        res.refresh_token,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That code did not work');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -232,7 +262,58 @@ export function AuthScreen() {
           </div>
         )}
 
-        {activeTab === 'signin' && (
+        {activeTab === 'signin' && codeMode && (
+          <form className="auth-form" id="auth-panel-signin" role="tabpanel" aria-labelledby="auth-tab-signin" onSubmit={handleReset} data-testid="code-form">
+            <label className="auth-label">
+              Email
+              <input
+                className="form-input"
+                type="email"
+                value={signInEmail}
+                onChange={(e) => setSignInEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                autoComplete="email"
+              />
+            </label>
+            <label className="auth-label">
+              Your code
+              <input
+                className="form-input"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                value={resetCode}
+                onChange={(e) => setResetCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="6 digits"
+                required
+                autoComplete="one-time-code"
+              />
+            </label>
+            <label className="auth-label">
+              Choose a password
+              <input
+                className="form-input"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                minLength={8}
+                required
+                autoComplete="new-password"
+              />
+            </label>
+            <button className="btn btn-primary btn-full" type="submit" disabled={loading} aria-busy={loading}>
+              {loading && <span className="auth-key-lamp" aria-hidden="true" />}
+              {loading ? 'Setting it...' : 'Set my password and sign in'}
+            </button>
+            <button className="btn btn-ghost btn-full" type="button" disabled={loading} onClick={() => setCodeMode(false)}>
+              I already have a password
+            </button>
+          </form>
+        )}
+
+        {activeTab === 'signin' && !codeMode && (
           <form className="auth-form" id="auth-panel-signin" role="tabpanel" aria-labelledby="auth-tab-signin" onSubmit={handleSignIn}>
             <label className="auth-label">
               Email
@@ -262,6 +343,9 @@ export function AuthScreen() {
               {loading && <span className="auth-key-lamp" aria-hidden="true" />}
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
+            <button className="btn btn-ghost btn-full" type="button" disabled={loading} onClick={() => setCodeMode(true)}>
+              I have a code
+            </button>
             <button
               className="btn btn-ghost btn-full"
               type="button"
@@ -284,8 +368,8 @@ export function AuthScreen() {
             <p className="auth-closed-headline">{PRODUCT_NAME} is invite-only.</p>
             <p>
               New accounts are closed on this deployment, so there is no form
-              here to fill in. Ask Amo for an invite — you will get a link that
-              opens one room, and you can sign in properly from there.
+              here to fill in. Ask Amo for an invite. With a one-time code, use
+              “I have a code” under Sign In to choose your password.
             </p>
           </div>
         )}

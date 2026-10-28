@@ -911,6 +911,10 @@ class DialecticAPI {
   async forgotPassword(email: string): Promise<{ message: string; detail?: string }> {
     return this.authFetch('/auth/forgot-password', { email });
   }
+  /** The invitation door: a one-time 6-digit code (deploy/longway_seed.py invite) plus a password of the person's own. */
+  async resetPassword(email: string, code: string, newPassword: string) {
+    return this.authFetch('/auth/reset-password', { email, code, new_password: newPassword });
+  }
   async refreshSession(refreshToken: string) {
     return this.authFetch('/auth/refresh', { refresh_token: refreshToken });
   }
