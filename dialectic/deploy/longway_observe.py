@@ -104,9 +104,9 @@ def main() -> int:
     python = "/usr/bin/python3" if Path("/usr/bin/python3").exists() else sys.executable
     server = subprocess.Popen([python, "run.py"], cwd=DIALECTIC, env=env,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
-    # pydantic's EmailStr refuses reserved names (.invalid, .test, example.com); the owner's own domain is accepted
+    # pydantic's EmailStr refuses reserved names (.invalid, .test, example.com); a domain the owner already holds (the globe's Vercel name) is accepted
     # and nothing is ever sent to it: this instance has no email delivery.
-    email = f"longway-probe-{secrets.token_hex(4)}@probe.somacura.org"
+    email = f"longway-probe-{secrets.token_hex(4)}@probe.the-long-way-globe.vercel.app"
     room_id = None
     try:
         deadline = time.time() + 90
