@@ -1,23 +1,33 @@
 import re
+from functools import lru_cache
 
 
 # Product identity first; provider-era aliases remain accepted compatibility.
 # The left boundary prevents an email/domain fragment such as
 # `email@dialectic.example` from summoning the participant.
-def _aliases() -> tuple[str, ...]:
-    """The participant's handles: the product-era names plus the active organ's participant (The Long Way's Scout).
-    WHY read the organ here: the people in a Long Way room address "@Scout", the name the shell shows them."""
-    from organ import identity
-    base = ("dialectic", "claude", "llm")
-    participant = str(identity().get("participant") or "").strip().lower()
-    return base + ((participant,) if participant and participant not in base else ())
-
-
-_LLM_ALIAS_PREFIXES = _aliases()
+_BASE_ALIASES = ("dialectic", "claude", "llm")
 LLM_MENTION_RE = re.compile(
-    r"(?<![\w.+-])@(" + "|".join(re.escape(a) for a in _LLM_ALIAS_PREFIXES) + r")\b",
+    r"(?<![\w.+-])@(dialectic|claude|llm)\b",
     re.IGNORECASE,
 )
+
+
+@lru_cache(maxsize=1)
+def participant_aliases() -> tuple[str, ...]:
+    """The handles that summon the participant: the product-era names plus the active organ's participant
+    (The Long Way's Scout). WHY read the organ at first use and never at import: organs.longway imports the
+    llm package, which imports this module, so an import-time read of `organ` is a circular import."""
+    from organ import identity
+    participant = str(identity().get("participant") or "").strip().lower()
+    return _BASE_ALIASES + ((participant,) if participant and participant not in _BASE_ALIASES else ())
+
+
+@lru_cache(maxsize=1)
+def _mention_re() -> re.Pattern:
+    return re.compile(
+        r"(?<![\w.+-])@(" + "|".join(re.escape(a) for a in participant_aliases()) + r")\b",
+        re.IGNORECASE,
+    )
 
 
 # The ADDRESS BLOCK: the run of @handles a message opens with. People write
@@ -33,12 +43,12 @@ _ADDRESS_HANDLE_RE = re.compile(r"@([A-Za-z][\w-]*)")
 # just split..." (the space lost to a fast thumb); the block plainly names
 # both of us, and reading it as Amo-only would silence a direct summons.
 # Erring toward speech is the safe direction for an address we misparse.
-# (_LLM_ALIAS_PREFIXES is built above, beside the regex, from the same list.)
+_LLM_ALIAS_PREFIXES = _BASE_ALIASES
 
 
 def contains_explicit_llm_mention(text: str) -> bool:
-    """Return whether text explicitly summons the Dialectic participant."""
-    return bool(LLM_MENTION_RE.search(text))
+    """Return whether text explicitly summons the participant (by any of its handles)."""
+    return bool(_mention_re().search(text))
 
 
 def addresses_someone_else(text: str) -> bool:
@@ -62,6 +72,7 @@ def addresses_someone_else(text: str) -> bool:
     if not match:
         return False
     handles = _ADDRESS_HANDLE_RE.findall(match.group(1))
+    prefixes = participant_aliases()
     return not any(
-        handle.lower().startswith(_LLM_ALIAS_PREFIXES) for handle in handles
+        handle.lower().startswith(prefixes) for handle in handles
     )
