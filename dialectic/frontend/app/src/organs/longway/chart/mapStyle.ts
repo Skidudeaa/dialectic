@@ -10,9 +10,13 @@ export const fadeIn = (to: number | ExpressionSpecification): ExpressionSpecific
 export const opacity = (focus: string | null, full = 1): number | ExpressionSpecification => focus
   ? ['case', ['==', ['get', 'slug'], focus], full, full * 0.25] : full
 
+/** A pending Scout proposal on a pencil leg draws it dotted: "a source describes this leg, nobody has checked it"
+ *  is exactly what a proposal is. A leg already in ink keeps its ink; a person's confirm is what moves it. */
+export const inkWithProposal = (s: { ink: Ink; proposed?: boolean }): Ink => (s.proposed && s.ink === 'pencil' ? 'dotted' : s.ink)
+
 export function segments(journeys: Journey[]): FeatureCollection<LineString> {
   return { type: 'FeatureCollection', features: journeys.flatMap(j => j.segments.map((s, i) => ({
-    type: 'Feature' as const, properties: { slug: j.slug, i, ink: s.ink },
+    type: 'Feature' as const, properties: { slug: j.slug, i, ink: inkWithProposal(s) },
     geometry: { type: 'LineString' as const, coordinates: [point(j.route[i]), point(j.route[i + 1])] },
   }))) }
 }
