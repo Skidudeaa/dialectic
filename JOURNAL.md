@@ -186,6 +186,8 @@
 
 [2026-10-28] Chart silence notes overlay the globe (released 20261028T220838Z from the uncommitted tree, re-released from the commit once it landed): Amo's iPad screenshot showed the 'never heard' list printed over the house sections because theme.css forced every chart child to height 100% inside a fixed 55svh box. The list is now a one-line details summary floating in the chart's lower left, the globe's error line floats at its top, only the chart root and the map take the fixed height, and the house no longer repeats the masthead's lede. Proven in WebKit at 1600x1200, 1366x1024 and 390x844 (house) and on the sticky phone Bench.
 
+[2026-10-28] Asking for a seat: a public request door on the sign-in screen (`POST /organ/longway/invite-requests`, rate-limited), a `longway_invite_requests` table (migration 031), web push to house managers plus an email to the planner through a stdlib SMTP door (Gmail app password in `/etc/longway/longway.env`; off until Amo supplies it, the notifier job sends what waited), and Invite/Decline in the house for managers; Invite issues the seed script's rows through the new `organs/longway/membership.py` and emails the requester the code when mail is on. Signups stay closed; Amo decides. Frontend by a Codex worker (gpt-6-astra) against the contract, backend by the lead.
+
 ## GRAVEYARD
 - Protocol-as-CLAUDE.md or as a system message (2026-09-02): every custom subagent loads the full CLAUDE.md hierarchy, and a system message dies on restart. Split by lifetime instead.
 - Blind judging with three same-model judges (2026-09-02): correlated errors, and no acquirable REFERENCE_CLASS for Dialectic/somaNotes/tradingDesk. Reinstate only with mixed judge models and a named reference asset path.

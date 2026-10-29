@@ -21,8 +21,8 @@ def register_jobs(scheduler):
 
 
 def routers():
-    from .api import router
-    return [(router, {})]
+    from .api import router, public
+    return [(router, {}), (public, {})]
 
 
 def startup(pool):

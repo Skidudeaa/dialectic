@@ -1,19 +1,21 @@
-"""Room-fenced Long Way projections, evidence proposals and consent ledger."""
+"""Room-fenced Long Way projections, evidence proposals, consent ledger, and the public door for asking for a seat."""
+import hashlib
 from datetime import date
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, EmailStr, Field
 from typing import Literal
 
 from api.auth.dependencies import get_current_user
 from api.token_utils import extract_room_token
 from api.field import _authorize
 from api.home import _require_home_manager
+from api.rate_limit import _reject_if_limited
 from .register import get_register
 from .fixes import overlay
 from .proposals import propose, list_proposals, chart_overlay
-from . import questions as question_queue, scout as scout_runner
+from . import invites, questions as question_queue, scout as scout_runner
 
 router = APIRouter(prefix="/rooms/{room_id}/longway", tags=["longway"])
 _pool = None
@@ -252,3 +254,62 @@ async def kill_scout(room_id: UUID, run_id: UUID, user=Depends(authorized), db=D
     if row is None:
         raise HTTPException(404, 'Scout run not found')
     return dict(row)
+
+
+@router.get('/invite-requests')
+async def invite_requests(room_id: UUID, user=Depends(authorized), db=Depends(get_db)):
+    """Who is asking for a seat (house managers), open requests first, and whether mail is on."""
+    await manager(user, db)
+    return await invites.listing(db)
+
+
+@router.post('/invite-requests/{request_id}/invite')
+async def invite_requester(room_id: UUID, request_id: UUID, user=Depends(authorized), db=Depends(get_db)):
+    """Seat the requester (house managers): account, membership, a 7-day code, and the email when mail is on."""
+    await manager(user, db)
+    try:
+        return await invites.decide_invite(db, request_id, user.user_id)
+    except KeyError:
+        raise HTTPException(404, 'Unknown request')
+
+
+@router.post('/invite-requests/{request_id}/decline')
+async def decline_requester(room_id: UUID, request_id: UUID, user=Depends(authorized), db=Depends(get_db)):
+    await manager(user, db)
+    try:
+        return await invites.decline(db, request_id, user.user_id)
+    except KeyError:
+        raise HTTPException(404, 'Unknown request')
+
+
+# The one door a stranger may knock on. /organ is already proxied by nginx, so no server change opens it.
+public = APIRouter(prefix='/organ/longway', tags=['longway'])
+
+
+class Ask(BaseModel):
+    email: EmailStr
+    name: str = Field(min_length=1, max_length=80)
+    note: str = Field(default='', max_length=1000)
+
+
+def _asker_ip(request: Request) -> str:
+    # Behind Cloudflare and nginx the peer is 127.0.0.1; the visitor's address rides in these headers.
+    return (request.headers.get('cf-connecting-ip') or request.headers.get('x-real-ip')
+            or (request.client.host if request.client else 'unknown'))
+
+
+@public.post('/invite-requests')
+async def ask_for_seat(request: Request, body: Ask, db=Depends(get_db)):
+    """A stranger asks for a seat: the request is recorded, the house managers pushed, the planner emailed.
+
+    The answer is the same whether or not the address is known. Ten asks a day per visitor address and three per
+    email address: more than friends need, less than a nuisance wants.
+    """
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(422, 'A name is required')
+    _reject_if_limited(f'ip:{_asker_ip(request)}:longway-ask', 10, 86400)
+    _reject_if_limited(f'account:{hashlib.sha256(body.email.lower().encode()).hexdigest()}:longway-ask', 3, 86400)
+    row = await invites.ask(db, body.email.lower(), name, body.note.strip(), _asker_ip(request))
+    await invites.announce(db, row)
+    return {'ok': True}

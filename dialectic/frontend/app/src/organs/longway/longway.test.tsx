@@ -32,6 +32,7 @@ function serve(extra: (path: string, init?: RequestInit) => unknown = () => unde
     calls.push({ path, init, body: init?.body ? JSON.parse(String(init.body)) : undefined })
     const custom = extra(path, init)
     if (custom instanceof Response) return custom
+    if (custom === undefined && path.endsWith('/invite-requests')) return new Response(JSON.stringify({ mail_configured: true, requests: [] }))
     const result = custom ?? (path.endsWith('/chart') ? projection(home) : path.endsWith('/proposals') ? [proposed] : path.endsWith('/field/marks') ? (init?.method === 'POST' ? { id: 'mark1' } : { marks: [] }) : path.endsWith('/questions') || path.endsWith('/scout/runs') || path === '/users/me/rooms' ? [] : {})
     return new Response(JSON.stringify(result), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }))
@@ -152,6 +153,98 @@ describe('Long Way connected scenes', () => {
     expect(await screen.findByText('Nothing confirmed yet.')).toBeVisible()
     expect(await screen.findByText('Who can travel?')).toBeVisible()
     expect(screen.queryByText('Record a confirmation')).not.toBeInTheDocument()
+  })
+})
+
+describe('House seat requests', () => {
+  const request = { id: 'ask-1', name: 'Ada', email: 'ada@example.com', note: 'I know Jo.', created_at: '2026-10-28T12:00:00Z', decision: null, decided_at: null, notified_at: null, invited_email_at: null }
+  const invite = { id: request.id, name: request.name, email: request.email, code: '483921', emailed: false, mail_error: null, expires_at: '2026-11-04T12:00:00Z' }
+
+  it('loads manager requests with credentials, invites, and retains a fresh code on Invite again', async () => {
+    let code = '483921'
+    serve(path => path.endsWith('/invite-requests') ? { mail_configured: false, requests: [request] }
+      : path.endsWith('/invite') ? { ...invite, code } : undefined, true)
+    render(<LongwayHouse roomId="home" canManageHome onNavigate={vi.fn()} />)
+    const section = await screen.findByRole('region', { name: 'Asking for a seat' })
+    expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('Asking for a seat')
+    expect(await within(section).findByText('ada@example.com')).toBeVisible()
+    expect(within(section).getByText('I know Jo.')).toBeVisible()
+    expect(within(section).getByText('asked 28 Oct')).toBeVisible()
+    expect(within(section).getByText('Email to you is not set up yet; requests wait here.')).toBeVisible()
+    expect(calls.find(call => call.path === '/rooms/home/longway/invite-requests')?.init?.headers).toMatchObject({ Authorization: 'Bearer jwt', 'X-Room-Token': 'room-token' })
+    fireEvent.click(within(section).getByRole('button', { name: 'Invite' }))
+    expect(await within(section).findByRole('status')).toHaveTextContent('Invited. Email is off; give ada@example.com this code: 483921 (works 7 days)')
+    expect(section.querySelector('code')?.textContent).toBe('483921')
+    expect(within(section).getByRole('article')).toHaveClass('is-decided')
+    code = '123456'
+    fireEvent.click(within(section).getByRole('button', { name: 'Invite again' }))
+    await waitFor(() => expect(within(section).getByRole('status')).toHaveTextContent('this code: 123456'))
+    expect(screen.queryByText('483921')).not.toBeInTheDocument()
+    const writes = calls.filter(call => call.init?.method === 'POST')
+    expect(writes.map(call => call.path)).toEqual(['/rooms/home/longway/invite-requests/ask-1/invite', '/rooms/home/longway/invite-requests/ask-1/invite'])
+    expect(writes[0].init?.headers).toMatchObject({ Authorization: 'Bearer jwt', 'X-Room-Token': 'room-token' })
+  })
+
+  it.each([
+    [true, null, 'Invited. The code went to ada@example.com.'],
+    [false, 'Mail provider unavailable', 'Invited, but the email failed: Mail provider unavailable. Give ada@example.com this code: 483921'],
+  ])('reports email delivery: emailed=%s, error=%s', async (emailed, mail_error, message) => {
+    serve(path => path.endsWith('/invite-requests') ? { mail_configured: true, requests: [request] }
+      : path.endsWith('/invite') ? { ...invite, emailed, mail_error } : undefined, true)
+    render(<LongwayHouse roomId="home" canManageHome onNavigate={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Invite' }))
+    expect(await screen.findByRole('status')).toHaveTextContent(message!)
+    expect(screen.queryByText('Email to you is not set up yet; requests wait here.')).not.toBeInTheDocument()
+  })
+
+  it('keeps open requests above decisions and moves a declined request into the decided list', async () => {
+    serve(path => path.endsWith('/invite-requests') ? { mail_configured: true, requests: [
+      request,
+      { ...request, id: 'ask-2', name: 'Jo', created_at: '2026-10-27T12:00:00Z' },
+      { ...request, id: 'ask-3', name: 'Sam', decision: 'invited', decided_at: '2026-10-28T12:00:00Z' },
+      { ...request, id: 'ask-4', name: 'Lee', decision: 'declined', decided_at: '2026-10-28T12:00:00Z' },
+    ] } : path.endsWith('/decline') ? { id: request.id, decision: 'declined' } : undefined, true)
+    render(<LongwayHouse roomId="home" canManageHome onNavigate={vi.fn()} />)
+    const ada = await screen.findByRole('article', { name: 'Request from Ada' })
+    expect(screen.getByText('Sam · invited 28 Oct')).toBeVisible()
+    expect(screen.getByText('Lee · declined 28 Oct')).toBeVisible()
+    fireEvent.click(within(ada).getByRole('button', { name: 'Decline' }))
+    await waitFor(() => expect(ada).toHaveClass('is-decided'))
+    expect(ada).toHaveTextContent('Ada · declined')
+    expect(within(ada).queryByRole('button')).not.toBeInTheDocument()
+    const section = screen.getByRole('region', { name: 'Asking for a seat' })
+    expect(within(section).getAllByRole('article')[0]).toHaveAccessibleName('Request from Jo')
+    expect(calls.find(call => call.path.endsWith('/ask-1/decline'))?.init?.method).toBe('POST')
+  })
+
+  it('shows the empty state', async () => {
+    serve(undefined, true)
+    render(<LongwayHouse roomId="home" canManageHome onNavigate={vi.fn()} />)
+    expect(await screen.findByText('Nobody is asking right now.')).toBeVisible()
+  })
+
+  it('does not render or fetch requests for a non-manager', async () => {
+    serve(undefined, true)
+    render(<LongwayHouse roomId="home" canManageHome={false} onNavigate={vi.fn()} />)
+    await screen.findByRole('region', { name: 'Your rooms' })
+    expect(screen.queryByRole('region', { name: 'Asking for a seat' })).not.toBeInTheDocument()
+    expect(calls.some(call => call.path.includes('/invite-requests'))).toBe(false)
+  })
+
+  it('offers retry after a load failure and leaves failed decisions open', async () => {
+    let failing = true
+    serve(path => path.endsWith('/invite-requests') ? failing
+      ? new Response(JSON.stringify({ detail: 'Could not load requests' }), { status: 503 })
+      : { mail_configured: true, requests: [request] }
+      : path.endsWith('/invite') ? new Response(JSON.stringify({ detail: 'Could not invite' }), { status: 503 }) : undefined, true)
+    render(<LongwayHouse roomId="home" canManageHome onNavigate={vi.fn()} />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not load requests')
+    failing = false
+    fireEvent.click(screen.getByRole('button', { name: 'Retry requests' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Invite' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not invite')
+    expect(screen.getByRole('article', { name: 'Request from Ada' })).not.toHaveClass('is-decided')
+    expect(screen.getByRole('button', { name: 'Invite' })).toBeEnabled()
   })
 })
 

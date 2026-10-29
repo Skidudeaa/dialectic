@@ -59,6 +59,10 @@
 .longway-scene-stack { min-height: 0; overflow-y: auto; flex: 1; }
 .longway-scene-stack > .scene-body { overflow: visible; flex: none; }
 .longway-house .longway-chart { flex-shrink: 0; }
+[data-organ="longway"] .longway-seat-requests { min-width: 0; overflow-wrap: anywhere; }
+[data-organ="longway"] .longway-seat-requests .is-decided { color: var(--ink-3); border-style: dashed; }
+[data-organ="longway"] .longway-invite-result { color: var(--ink); }
+[data-organ="longway"] .longway-invite-result code { user-select: all; -webkit-user-select: all; letter-spacing: .18em; font-size: 1.15em; white-space: nowrap; }
 .longway-room-context, .longway-room-access { padding: 1rem; }
 .longway-room-access[role="dialog"] { position: fixed; z-index: 100; inset: 10% max(1rem, calc((100vw - 640px) / 2)); overflow-y: auto; background: var(--panel); border: 1px solid var(--rule); box-shadow: 0 0 0 100vmax #0008; }
 

@@ -1,8 +1,76 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../../lib/api'
 import { useLongwayChart } from '../../hooks/useLongwayChart'
-import { longwayPath, longwayRequest } from './api'
+import { declineRequester, inviteRequester, listInviteRequests, longwayPath, longwayRequest } from './api'
+import type { InviteRequests, RequesterInvite } from './api'
 import Chart from './chartSlot'
+
+function requestDate(value: string) {
+  return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+function SeatRequests({ roomId }: { roomId: string }) {
+  const [data, setData] = useState<InviteRequests | null>(null)
+  const [error, setError] = useState('')
+  const [retry, setRetry] = useState(0)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [invites, setInvites] = useState<Record<string, RequesterInvite>>({})
+  const writing = useRef(false)
+  useEffect(() => {
+    let live = true
+    setError('')
+    void listInviteRequests(roomId).then(result => { if (live) setData(result) })
+      .catch(error => { if (live) setError(error instanceof Error ? error.message : 'Could not load requests') })
+    return () => { live = false }
+  }, [roomId, retry])
+
+  async function decide(id: string, decision: 'invited' | 'declined') {
+    if (writing.current) return
+    writing.current = true; setBusy(id); setError('')
+    try {
+      if (decision === 'invited') {
+        const result = await inviteRequester(roomId, id)
+        setInvites(current => ({ ...current, [id]: result }))
+      } else {
+        await declineRequester(roomId, id)
+      }
+      setData(current => current && ({ ...current, requests: current.requests.map(request => request.id === id
+        ? { ...request, decision, decided_at: new Date().toISOString() } : request) }))
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not save the decision')
+    } finally { writing.current = false; setBusy(null) }
+  }
+
+  const requests = [...(data?.requests ?? [])].sort((a, b) =>
+    Number(a.decision !== null) - Number(b.decision !== null) || b.created_at.localeCompare(a.created_at))
+  return <section aria-label="Asking for a seat" className="longway-seat-requests">
+    <h2>Asking for a seat</h2>
+    {data?.mail_configured === false && <p>Email to you is not set up yet; requests wait here.</p>}
+    {error && <p role="alert">{error} {!data && <button onClick={() => setRetry(value => value + 1)}>Retry requests</button>}</p>}
+    {!data && !error && <p role="status">Loading requests</p>}
+    {data && requests.length === 0 && <p>Nobody is asking right now.</p>}
+    {requests.map(request => {
+      const invite = invites[request.id]
+      return <article key={request.id} className={`longway-card${request.decision ? ' is-decided' : ''}`} aria-label={`Request from ${request.name}`} aria-busy={busy === request.id}>
+        {request.decision ? <p>{request.name} · {request.decision}{request.decided_at && ` ${requestDate(request.decided_at)}`}</p> : <>
+          <h3>{request.name}</h3>
+          <p>{request.email}</p>
+          {request.note && <p className="longway-plan">{request.note}</p>}
+          <p>asked {requestDate(request.created_at)}</p>
+        </>}
+        <div className="longway-actions">
+          {request.decision !== 'declined' && <button disabled={busy !== null} onClick={() => void decide(request.id, 'invited')}>{request.decision === 'invited' ? 'Invite again' : 'Invite'}</button>}
+          {!request.decision && <button disabled={busy !== null} onClick={() => void decide(request.id, 'declined')}>Decline</button>}
+        </div>
+        {invite && <p role="status" className="longway-invite-result">
+          {invite.mail_error ? <>Invited, but the email failed: {invite.mail_error}. Give {invite.email} this code: <code>{invite.code}</code></>
+            : invite.emailed ? <>Invited. The code went to {invite.email}.</>
+              : <>Invited. Email is off; give {invite.email} this code: <code>{invite.code}</code> (works 7 days)</>}
+        </p>}
+      </article>
+    })}
+  </section>
+}
 
 export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
   roomId: string; canManageHome: boolean; onNavigate: (roomId: string) => Promise<unknown> | void
@@ -37,6 +105,7 @@ export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
     <section aria-label="Your rooms"><h2>Your rooms</h2>{data.rooms.map(room => <p key={room.id}>
       <button onClick={() => void onNavigate(room.id)}>{room.name}</button>{room.linked_journey && ` · ${data.journeys.find(j => j.slug === room.linked_journey)?.title ?? room.linked_journey}`}
     </p>)}</section>
+    {canManageHome && <SeatRequests key={roomId} roomId={roomId} />}
     {writeError && <p role="alert">{writeError}</p>}
     <section aria-label="Journeys"><h2>Journeys</h2>{data.journeys.map(journey => {
       const room = data.rooms.find(r => r.linked_journey === journey.slug)

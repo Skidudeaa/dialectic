@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '../../stores/appStore.ts';
 import { api } from '../../lib/api.ts';
 import { PARTICIPANT_NAME, PRODUCT_NAME } from '../../lib/productIdentity.ts';
+import { ORGAN } from '../../organ';
+import { askForSeat } from '../../organs/longway/api';
 import './AuthScreen.css';
 
 type AuthTab = 'signin' | 'create' | 'guest';
@@ -52,6 +54,8 @@ export function AuthScreen() {
   const [createName, setCreateName] = useState('');
   const [createEmail, setCreateEmail] = useState('');
   const [createPassword, setCreatePassword] = useState('');
+  const [askNote, setAskNote] = useState('');
+  const [asked, setAsked] = useState(false);
 
   // Guest identity (invite link)
   const [guestName, setGuestName] = useState('');
@@ -74,6 +78,7 @@ export function AuthScreen() {
   }, []);
 
   const signupsOpen = capabilities?.signups_enabled === true
+  const seatDoor = ORGAN === 'longway' && !signupsOpen;
   // Owner ruling 2026-08-13: guests are closed. Read rather than hardcoded, so
   // re-opening is a flag flip; unknown counts as closed, so the tab never
   // appears while the answer is still in flight.
@@ -141,6 +146,20 @@ export function AuthScreen() {
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'That code did not work');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAsk = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await askForSeat({ email: createEmail, name: createName, note: askNote });
+      setAsked(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send your request');
     } finally {
       setLoading(false);
     }
@@ -234,7 +253,7 @@ export function AuthScreen() {
 
         <div className="auth-tabs" role="tablist" aria-label="How to get in">
           {tab('signin', 'Sign In')}
-          {tab('create', 'Create Account')}
+          {tab('create', seatDoor ? 'Ask for a seat' : 'Create Account')}
           {guestsOpen && tab('guest', 'Invite link')}
         </div>
 
@@ -357,7 +376,36 @@ export function AuthScreen() {
           </form>
         )}
 
-        {activeTab === 'create' && !signupsOpen && (
+        {activeTab === 'create' && seatDoor && (
+          <div id="auth-panel-create" role="tabpanel" aria-labelledby="auth-tab-create">
+            {asked ? <div className="auth-closed" role="status">
+              <p>Asked. Amo decides who gets a seat; you will hear by email.</p>
+              <p>With a one-time code, use “I have a code” under Sign In to choose your password.</p>
+            </div> : <form className="auth-form" onSubmit={handleAsk}>
+              <div className="auth-closed">
+                <p className="auth-closed-headline">The Long Way is invite-only.</p>
+                <p>Amo decides who gets a seat.</p>
+              </div>
+              <label className="auth-label">
+                Name
+                <input className="form-input" value={createName} onChange={e => setCreateName(e.target.value)} required autoComplete="name" />
+              </label>
+              <label className="auth-label">
+                Email
+                <input className="form-input" type="email" value={createEmail} onChange={e => setCreateEmail(e.target.value)} required autoComplete="email" />
+              </label>
+              <label className="auth-label">
+                Who are you, and who do you know here?
+                <textarea className="form-input" value={askNote} onChange={e => setAskNote(e.target.value)} maxLength={1000} rows={4} />
+              </label>
+              <button className="btn btn-primary btn-full" type="submit" disabled={loading} aria-busy={loading}>
+                {loading ? 'Asking...' : 'Ask for a seat'}
+              </button>
+            </form>}
+          </div>
+        )}
+
+        {activeTab === 'create' && !signupsOpen && !seatDoor && (
           <div
             className="auth-closed"
             id="auth-panel-create"

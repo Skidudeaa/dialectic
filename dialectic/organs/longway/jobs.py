@@ -24,6 +24,22 @@ def register_jobs(scheduler):
                            daily_at="02:00", daily_tz="America/Chicago"))
     scheduler.register(Job("evidence_writer", 60, evidence_writer,
                            enabled_env="LONGWAY_COMMIT_ENABLED", enabled_default=False))
+    scheduler.register(Job("invite_notifier", 60, invite_notifier))
+
+
+async def invite_notifier(ctx):
+    """Emails the planner about seat requests that arrived while mail was off or failing; the ask already stands."""
+    from . import invites, mail
+    if not mail.configured():
+        return {"skipped": "mail unconfigured"}
+    sent = 0
+    async with ctx.pool.acquire() as db:
+        for row in await invites.pending_emails(db):
+            try:
+                sent += await invites.email_planner(db, row)
+            except Exception:
+                logger.exception("Invite request %s still waits for its email", row["id"])
+    return {"sent": sent}
 
 
 async def evidence_writer(ctx):
