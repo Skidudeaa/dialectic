@@ -303,6 +303,6 @@ export interface RideLeg {
   sights: { built: string; classes: { label: string; color: string }[]; km: KmRow[]; left: { c: number; pts: [number, number][] }[]; right: { c: number; pts: [number, number][] }[]; sights: SightWindow[]; stations: { code: string; name: string; km: number; lat: number; lon: number; time: string }[]; peaks: { name: string; lat: number; lon: number; ele: number }[] }
   coverage: { classes: { label: string; color: string }[]; segments: { c: number; pts: [number, number][] }[]; measured?: [number, number][][]; gaps: SignalGap[] } | null
   guide: Record<string, GuideEntry> | null
-  check: { score?: { agree: number; total: number } } | null
+  check: { score?: { agree: number; total: number; misses?: { name: string; why: string }[] } } | null
 }
 export interface RidingData { rides: { room_id: string; room_name: string; trip: string | { slug: string; title: string }; ride: { id: string; state: RideState; vehicle: RideVehicle }; fix: RideFix | null; next_stop: { code: string; name: string; est: string | null } | null; late_min: number | null }[] }

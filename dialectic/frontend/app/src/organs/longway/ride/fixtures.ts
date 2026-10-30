@@ -2,7 +2,8 @@
 import rawLeg from '../__fixtures__/ride-leg.json'
 import book from '../__fixtures__/ride-logbook.json'
 import type { RideData, RideLeg } from '../types'
-export const fixtureLeg = rawLeg as unknown as RideLeg
+// The Coast Starlight's own route-guide score (legs/amtrak-313-14/check.json, 30 Oct): its views pass the line.
+export const fixtureLeg: RideLeg = { ...(rawLeg as unknown as RideLeg), check: { score: { agree: 6, total: 7, misses: [{ name: 'Mount Scott', why: 'missing' }] } } }
 export const fixtureRide: RideData = {
   trip: { slug: book.trip, title: 'Coast Starlight 2026' },
   rides: [{ id: book.ride, date: book.date, state: 'arrived' }],

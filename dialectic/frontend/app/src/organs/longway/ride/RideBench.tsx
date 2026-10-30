@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useRide } from './useRide'
-import { estimatedKm, firstLitSight, headingDegrees, positionAt, replayEvents, replayKm, trackHeading } from './rideCard'
+import { estimatedKm, firstLitSight, headingDegrees, positionAt, replayEvents, replayKm, trackHeading, viewsTrusted, withheldViews } from './rideCard'
 import { RideCard } from './RideCard'
 import RideMap from './RideMap'
 import type { RideLeg } from '../types'
@@ -13,7 +13,8 @@ const BARE: RideLeg = { id: '', leg: null, sights: { built: '', classes: [], km:
 export default function RideBench({ roomId, record }: { roomId: string; record?: ReactNode }) {
   const [selected, setSelected] = useState<string>()
   const [scrub, setScrub] = useState<number | null>(null)
-  const { data, leg, error, legError, now, offline, lastSuccess, refresh } = useRide(roomId, selected)
+  const { data, leg: model, error, legError, now, offline, lastSuccess, refresh } = useRide(roomId, selected)
+  const leg = model && !viewsTrusted(model.check) ? withheldViews(model) : model
   if (!data) return <div className="longway-bench longway-ride"><p role={error ? 'alert' : 'status'}>{error || 'Loading ride…'} {error && <button onClick={refresh}>Retry ride</button>}</p>{record && <div className="longway-bench-record">{record}</div>}</div>
   const replay = data.ride.state === 'arrived', events = replayEvents(data.stops)
   const start = events[0]?.t, end = events.at(-1)?.t

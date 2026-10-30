@@ -27,9 +27,14 @@ it('puts a riding train on the map at its fix when its route has no view model y
   expect(screen.getByText('No view model for this route yet: the train, its stops and its lateness.')).toBeInTheDocument()
   expect(screen.getByText(/50 mph/)).toBeInTheDocument()
 })
-it('says a route-guide check is unscored instead of crashing on it', () => {
-  render(<RideCard data={ride} leg={{ ...leg, check: {} }} km={635} now={at} replay offline={false} lastSuccess={null} />)
-  expect(screen.getByText('Route-guide check written, not yet scored.')).toBeInTheDocument()
+it('withholds views on a route whose check is unscored or under the line, and keeps the stops', () => {
+  const view = render(<RideCard data={ride} leg={{ ...leg, check: {} }} km={635} now={at} replay offline={false} lastSuccess={null} />)
+  expect(screen.getByText(/Views withheld until this route is checked/)).toBeInTheDocument()
+  view.rerender(<RideCard data={ride} leg={{ ...leg, check: { score: { agree: 7, total: 13, misses: [] } } }} km={635} now={at} replay offline={false} lastSuccess={null} />)
+  expect(screen.getByText(/agrees with the operator's route guide on 7 of 13 landmarks, under the 80% line/)).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: /Views now/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: /Sights ahead/ })).not.toBeInTheDocument()
+  expect(screen.getByRole('table')).toHaveTextContent('Chemult')
 })
 it('scrubs an arrived ride through the connected API and moves the map and card together', async () => {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(url.includes('/ride/leg') ? leg : ride))))

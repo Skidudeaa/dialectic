@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { estimatedKm, firstLitSight, gapsAhead, historyLine, lightAt, mergeSights, positionAt, replayKm, sightEntities, sightsAhead, stopTimeline, sunEl, viewsNow } from './rideCard'
+import { estimatedKm, firstLitSight, viewsTrusted, withheldViews, gapsAhead, historyLine, lightAt, mergeSights, positionAt, replayKm, sightEntities, sightsAhead, stopTimeline, sunEl, viewsNow } from './rideCard'
 import { fixtureLeg as leg, fixtureRide as ride } from './fixtures'
 import { rideStyle } from './rideLayers'
 const at = Date.parse('2026-10-23T09:53:00-07:00')
@@ -75,5 +75,12 @@ describe('ride instrument against the original leg and logbook', () => {
     expect(lightAt(at[1], at[0], t)).toBe('daylight')
     expect(viewsNow(leg, ride.stops, km).some(v => v.c === 3)).toBe(true)
     expect(firstLitSight({ ...leg, sights: { ...leg.sights, sights: [] } }, ride.stops)).toBeNull()
+  })
+  it('trusts views at 80% with at most one side miss, and strips them otherwise', () => {
+    const score = (agree: number, total: number, sides = 0) => ({ score: { agree, total, misses: Array.from({ length: sides }, () => ({ name: 'x', why: 'side miss' })) } })
+    expect([viewsTrusted(score(8, 10)), viewsTrusted(score(6, 7)), viewsTrusted(score(7, 13)), viewsTrusted(score(9, 10, 2)), viewsTrusted(null), viewsTrusted({})]).toEqual([true, true, false, false, false, false])
+    const bare = withheldViews(leg)
+    expect([bare.sights.sights.length, bare.sights.left.length, bare.sights.peaks.length, bare.sights.km.length]).toEqual([0, 0, 0, leg.sights.km.length])
+    expect(bare.sights.km.every(r => r[1] === 0 && r[2] === 0 && r[5] === '')).toBe(true)
   })
 })

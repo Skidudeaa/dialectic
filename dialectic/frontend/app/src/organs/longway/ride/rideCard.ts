@@ -114,6 +114,17 @@ export function viewsNow(leg: RideLeg, stops: RideStop[], km: number) {
     return { side, c, label: c === 3 ? "Don't miss" : c === 2 ? 'Worth a look' : 'Nothing', name: w?.name ?? row[i + 5] as string ?? '', remaining, minutes: remaining !== null && pace !== null ? remaining * pace : null }
   })
 }
+/** The kill line of 30 Oct (docs/moonshot-ride.md): a leg's views show only when its operator route-guide check agrees on
+ *  at least 80% of landmarks with at most one on the wrong side. The Zephyr scored 7 of 13 and keeps only its track, stops
+ *  and signal; a leg with no scored check keeps the same until it is checked. */
+export function viewsTrusted(check: RideLeg['check']) {
+  const s = check?.score
+  return !!s && s.total > 0 && s.agree / s.total >= 0.8 && (s.misses ?? []).filter(m => m.why === 'side miss').length <= 1
+}
+/** The leg as the map may draw it when its views are withheld: the track stays, the views, names and summits go. */
+export function withheldViews(leg: RideLeg): RideLeg {
+  return { ...leg, guide: {}, sights: { ...leg.sights, left: [], right: [], sights: [], peaks: [], km: leg.sights.km.map(r => [r[0], 0, 0, r[3], r[4], '', ''] as KmRow) } }
+}
 /** Where an arrived ride's replay opens: mid-way through its first major sight seen in daylight, not at a dark boarding. */
 export function firstLitSight(leg: RideLeg, stops: RideStop[]): number | null {
   for (const w of majorWindows(leg)) {

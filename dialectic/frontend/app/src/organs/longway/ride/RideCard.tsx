@@ -1,5 +1,5 @@
 import type { RideData, RideLeg } from '../types'
-import { clockTime, gapsAhead, historyLine, lateness, lightAt, nextStops, positionAt, sightEntities, sightsAhead, viewsNow } from './rideCard'
+import { clockTime, gapsAhead, historyLine, lateness, lightAt, nextStops, positionAt, sightEntities, sightsAhead, viewsNow, viewsTrusted } from './rideCard'
 
 function Sight({ name, meta, leg, current = false }: { name: string; meta: string; leg: RideLeg; current?: boolean }) {
   const entries = sightEntities(name, leg.guide), first = entries[0]
@@ -20,8 +20,9 @@ export function RideCard({ data, leg, km, now, replay, offline, lastSuccess }: {
 }) {
   const position = leg && km !== null ? positionAt(leg.sights.km, km) : data.fix ? [data.fix.lon, data.fix.lat] : null
   const light = position ? lightAt(position[1], position[0], now) : null
-  const views = leg && km !== null ? viewsNow(leg, data.stops, km) : []
-  const ahead = leg ? sightsAhead(leg, data.stops, km, now) : []
+  const trusted = !!leg && viewsTrusted(leg.check)
+  const views = trusted && km !== null ? viewsNow(leg!, data.stops, km) : []
+  const ahead = trusted ? sightsAhead(leg!, data.stops, km, now) : []
   const gaps = leg ? gapsAhead(leg, data.stops, km, now) : [], longGaps = gaps.filter(g => g.minutes >= 5)
   const next = nextStops(data, km, now)
   const previous = data.stops.filter(s => s.dep && Date.parse(s.dep) <= now).at(-1)
@@ -29,7 +30,7 @@ export function RideCard({ data, leg, km, now, replay, offline, lastSuccess }: {
   return <article className="ride-card" aria-label="Ride instrument">
     {offline && <p role="status" className="ride-offline">No signal since {clockTime(lastSuccess)}, position estimated</p>}
     {replay && <p className="ride-meta">Replay · position interpolated between recorded stops. Historical GPS and forecasts were not recorded.</p>}
-    <section><h2>Views now <small>{km === null ? '' : `(model, km ${Math.round(km)})`}</small></h2>
+    {(trusted || !leg) && <section><h2>Views now <small>{km === null ? '' : `(model, km ${Math.round(km)})`}</small></h2>
       {light === 'dark' ? <p>Too dark to see the views on either side.</p> : <>
         {light === 'twilight' && <p>Twilight</p>}
         {views.length ? views.map(v => <div key={v.side} className="ride-window">
@@ -37,8 +38,8 @@ export function RideCard({ data, leg, km, now, replay, offline, lastSuccess }: {
           {v.name && leg && <Sight name={v.name} leg={leg} current meta={v.remaining !== null ? `${v.remaining < 1 ? 'Under 1' : Math.round(v.remaining)} km left · ${v.minutes !== null ? `about ${Math.round(v.minutes)} min` : 'duration unknown'}` : v.c < 2 ? 'Small, on the horizon · no mark on the map' : 'Here'} />}
         </div>) : <p>{leg ? 'Waiting for a position on the modelled leg.' : 'View model unavailable for this leg.'}</p>}
       </>}
-    </section>
-    {leg && <section><h2>Sights ahead <small>(model)</small></h2>
+    </section>}
+    {trusted && leg && <section><h2>Sights ahead <small>(model)</small></h2>
       {ahead.length ? ahead.map(w => <Sight key={`${w.side}:${w.km0}`} name={w.name} leg={leg} meta={`${clockTime(w.at0)}–${clockTime(w.at1)} · ${w.side} · ${w.length_km.toFixed(1)} km${w.size !== undefined ? ` · up to ${w.size}°` : ''}${w.at0 !== null && w.at1 !== null ? ` · ${lightAt(w.lat, w.lon, (w.at0 + w.at1) / 2)}` : ''}${w.sky != null ? ` · ${w.sky}% cloud (model snapshot)` : ''}`} />) : <p>No further timed sights.</p>}
     </section>}
     {leg?.coverage && <section><h2>No usable data ahead <small>(model)</small></h2>
@@ -56,6 +57,6 @@ export function RideCard({ data, leg, km, now, replay, offline, lastSuccess }: {
       {next.length > 0 && <p>{historyLine(data, next[0].stop.code)}</p>}
       {next.some(e => !e.stop.arr && !e.stop.dep) && <p className="ride-meta">* Schedule plus last known lateness.</p>}
     </section>
-    {leg && <p className="ride-meta">{leg.check?.score ? `Model agrees with route guide on ${leg.check.score.agree} of ${leg.check.score.total} landmarks.` : leg.check ? 'Route-guide check written, not yet scored.' : 'Unchecked view model.'}</p>}
+    {leg && <p className="ride-meta">{trusted ? `Views model agrees with the operator's route guide on ${leg.check!.score!.agree} of ${leg.check!.score!.total} landmarks.` : leg.check?.score ? `Views withheld: the model agrees with the operator's route guide on ${leg.check.score.agree} of ${leg.check.score.total} landmarks, under the 80% line. Track, stops and signal stay.` : 'Views withheld until this route is checked against its operator\'s route guide. Track, stops and signal stay.'}</p>}
   </article>
 }
