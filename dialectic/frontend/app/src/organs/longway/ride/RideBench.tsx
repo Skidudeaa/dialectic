@@ -4,7 +4,11 @@ import { useRide } from './useRide'
 import { estimatedKm, firstLitSight, headingDegrees, positionAt, replayEvents, replayKm, trackHeading } from './rideCard'
 import { RideCard } from './RideCard'
 import RideMap from './RideMap'
+import type { RideLeg } from '../types'
 import './ride.css'
+
+// A route nobody has modelled yet still gets the map: imagery, the vehicle at its fix and the stored track.
+const BARE: RideLeg = { id: '', leg: null, sights: { built: '', classes: [], km: [], left: [], right: [], sights: [], stations: [], peaks: [] }, coverage: null, guide: {}, check: null }
 
 export default function RideBench({ roomId, record }: { roomId: string; record?: ReactNode }) {
   const [selected, setSelected] = useState<string>()
@@ -16,11 +20,14 @@ export default function RideBench({ roomId, record }: { roomId: string; record?:
   const opening = replay && leg ? firstLitSight(leg, data.stops) : null
   const time = replay && start !== undefined && end !== undefined ? Math.max(start, Math.min(end, scrub ?? opening ?? start)) : now
   const km = replay ? replayKm(data.stops, time) : offline ? estimatedKm(data, now) : data.km
-  const position: [number, number] | null = !replay && !offline && data.fix ? [data.fix.lon, data.fix.lat] : leg && km !== null ? positionAt(leg.sights.km, km) : null
+  const fixAt: [number, number] | null = data.fix ? [data.fix.lon, data.fix.lat] : null
+  const modelled = leg && km !== null ? positionAt(leg.sights.km, km) : null
+  const position: [number, number] | null = !replay && !offline && fixAt ? fixAt : modelled ?? (replay ? null : fixAt)
   const heading = headingDegrees(replay || offline ? null : data.fix?.heading, leg && km !== null ? trackHeading(leg.sights.km, km) : 0)
   return <div className="longway-bench longway-ride">
     {data.rides.length > 1 && <label className="ride-selector">Ride <select value={data.ride.id} onChange={e => { setSelected(e.target.value); setScrub(null) }}>{data.rides.map(r => <option value={r.id} key={r.id}>{r.date} · {r.id} · {r.state}</option>)}</select></label>}
-    {leg ? <RideMap leg={leg} position={position} heading={heading} data={data} time={time} /> : <p role="status">{legError || (data.ride.leg_ready ? 'Loading the leg map…' : 'This leg’s view model is not ready.')}{legError && <button onClick={refresh}>Retry leg</button>}</p>}
+    {(leg || position) && <RideMap leg={leg ?? BARE} position={position} heading={heading} data={data} time={time} />}
+    {!leg && <p role="status" className="ride-meta">{legError || (data.ride.leg_ready ? 'Loading the views along this route…' : 'No view model for this route yet: the train, its stops and its lateness.')}{legError && <button onClick={refresh}>Retry leg</button>}</p>}
     <div className="longway-chart-notes ride-notes">
       {replay && start !== undefined && end !== undefined && <section className="ride-replay" aria-label="Ride replay">
         <label htmlFor="ride-time">Replay time</label><output htmlFor="ride-time">{new Date(time).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · {Intl.DateTimeFormat().resolvedOptions().timeZone}</output>

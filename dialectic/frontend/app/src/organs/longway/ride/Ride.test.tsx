@@ -19,6 +19,14 @@ it('renders the named current view, upcoming sight, stop table and darkness in t
   expect(screen.getByText('Too dark to see the views on either side.')).toBeInTheDocument()
   expect(screen.queryByText(/Upper Klamath Lake alongside/)).not.toBeInTheDocument()
 })
+it('puts a riding train on the map at its fix when its route has no view model yet', async () => {
+  const live = { ...ride, ride: { ...ride.ride, state: 'riding' as const, leg_ready: false }, fix: { lat: 47.2314, lon: -120.0016, at: new Date().toISOString(), age_min: 3, speed_mph: 49.6475448608398, heading: 'NE', source: 'amtrak' as const } }
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(live))))
+  render(<RideBench roomId="room" />)
+  expect(await screen.findByTestId('ride-map')).toHaveTextContent('[-120.0016,47.2314]')
+  expect(screen.getByText('No view model for this route yet: the train, its stops and its lateness.')).toBeInTheDocument()
+  expect(screen.getByText(/50 mph/)).toBeInTheDocument()
+})
 it('says a route-guide check is unscored instead of crashing on it', () => {
   render(<RideCard data={ride} leg={{ ...leg, check: {} }} km={635} now={at} replay offline={false} lastSuccess={null} />)
   expect(screen.getByText('Route-guide check written, not yet scored.')).toBeInTheDocument()
