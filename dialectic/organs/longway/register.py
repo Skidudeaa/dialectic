@@ -50,6 +50,57 @@ class Register:
             item["route"] = item.get("route") or []
         return chart
 
+    def ride(self, slug):
+        return self.module.ride_data(self.root, slug)
+
+    def leg(self, name):
+        return self.module.leg_data(self.root, name)
+
+    def logbook(self, slug, ride_id):
+        self.module.valid_slug(ride_id)
+        trip = self.ride(slug)
+        if not any(r["id"] == ride_id for r in trip["rides"]):
+            raise KeyError(ride_id)
+        path = self.local(f"trips/{slug}/rides/{ride_id}.json")
+        return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+
+    def write_logbook(self, slug, ride_id, book, author_name, author_email):
+        """Single-file write door. Existing books and unrelated index entries survive."""
+        if os.environ.get("LONGWAY_COMMIT_ENABLED") != "1":
+            raise CommitsDisabled("ride logbook waiting to be written")
+        self.module.valid_slug(ride_id)
+        if not any(r["id"] == ride_id for r in self.ride(slug)["rides"]):
+            raise KeyError(ride_id)
+        if book.get("trip") != slug or book.get("ride") != ride_id:
+            raise ValueError("Logbook identity does not match ride")
+        for value in (author_name, author_email):
+            if not value or any(c in value for c in "\r\n<>"):
+                raise ValueError("Rider needs a valid git identity")
+        relative = f"trips/{slug}/rides/{ride_id}.json"
+        path = self.local(relative)
+        git_dir = Path(self.git("rev-parse", "--absolute-git-dir"))
+        with (git_dir / "longway-evidence.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            if self.git("status", "--porcelain", "--", relative):
+                raise RuntimeError(f"Refusing dirty logbook: {relative}")
+            if path.exists():
+                return {"existing": True}
+            path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                with path.open("x", encoding="utf-8") as file:
+                    file.write(json.dumps(book, ensure_ascii=False, indent=2) + "\n")
+                    file.flush()
+                    os.fsync(file.fileno())
+                self.git("add", "--", relative)
+                self.git("-c", "user.name=The Long Way", "-c", "user.email=longway@localhost",
+                         "commit", "--only", f"--author={author_name} <{author_email}>", "-m",
+                         f"Ride {slug} {ride_id}\n\nLongway-Ride: {slug}/{ride_id}", "--", relative)
+            except Exception:
+                path.unlink(missing_ok=True)
+                self.git("reset", "-q", "HEAD", "--", relative)
+                raise
+            return {"commit": self.git("rev-parse", "HEAD")}
+
     def journey(self, slug):
         self.module.valid_slug(slug)
         chart = self.chart()

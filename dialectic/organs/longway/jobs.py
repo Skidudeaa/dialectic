@@ -12,6 +12,7 @@ from transport.websocket import OutboundMessage, MessageTypes
 from .register import append_evidence, CommitsDisabled
 from .proposals import review
 from .dispatch import draft
+from .ride_watch import watch as ride_watch
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ def register_jobs(scheduler):
     scheduler.register(Job("evidence_writer", 60, evidence_writer,
                            enabled_env="LONGWAY_COMMIT_ENABLED", enabled_default=False))
     scheduler.register(Job("invite_notifier", 60, invite_notifier))
+    scheduler.register(Job("ride_watch", 60, ride_watch))
 
 
 async def invite_notifier(ctx):
@@ -74,7 +76,8 @@ async def evidence_writer(ctx):
                         key = 'applies_from' if row['applies_from'] else 'applies_to'
                         entry['applies'] = ('from ' if key == 'applies_from' else 'until ') + row[key].isoformat()
                     entry['checked_by'] = actor['display_name']
-                    entry.update(status="verified", checked_at=mark["created_at"].date().isoformat(),
+                    # The repo's check dates by Chicago's clock; a UTC date reads as tomorrow after 19:00 CDT.
+                    entry.update(status="verified", checked_at=mark["created_at"].astimezone(ZoneInfo("America/Chicago")).date().isoformat(),
                                  published_at=row["published_at"].isoformat() if row["published_at"] else None,
                                  recheck_before="set by the researcher")
                     task = asyncio.create_task(asyncio.to_thread(append_evidence, row["candidate"], entry,

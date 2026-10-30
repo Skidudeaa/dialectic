@@ -52,16 +52,20 @@ async def test_read_fit_and_location_tools(longway_repo,monkeypatch):
 @pytest.mark.asyncio
 async def test_undated_train_is_heard_but_not_a_fabricated_fix(monkeypatch):
     from datetime import datetime, timezone
-    feature={"geometry":{"coordinates":[-122.5,45.5]},"properties":{"num":"14"}}
+    from organs.longway import observe
+    run={"trainID":"14-28", "lat":45.5, "lon":-122.5}
+    async def trains(num):
+        return [run]
     async def feed(url):
-        return {"features":[feature]} if "trains" in url else {"fixes":{},"written":"2026-10-28T00:00:00Z"}
+        return {"fixes":{},"written":"2026-10-28T00:00:00Z"}
+    monkeypatch.setattr(observe,"trains",trains)
     monkeypatch.setattr(fixes,"fetch_feed",feed)
     chart={"vehicles":[{"name":"Coast Starlight","amtrak":"14"}]}
     now=datetime(2026,10,28,1,tzinfo=timezone.utc)
     result=await fixes.overlay(chart,now)
     assert result["vehicles"][0]["heard"] is True
     assert result["vehicles"][0]["fix"] is None
-    feature["properties"]["at"]="2026-10-28T00:45:00Z"
+    run["lastValTS"]="2026-10-28T00:45:00Z"
     result=await fixes.overlay(chart,now)
     assert result["vehicles"][0]["fix"]["age_min"] == 15
     assert result["vehicles"][0]["fix"]["source"] == "amtrak"

@@ -3,7 +3,7 @@ import hashlib
 from datetime import date
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 from typing import Literal
 
@@ -36,6 +36,15 @@ async def authorized(room_id: UUID, token=Depends(extract_room_token), user=Depe
     return user
 
 
+async def ride_authorized(room_id: UUID, token=Depends(extract_room_token), user=Depends(get_current_user), db=Depends(get_db)):
+    try:
+        return await authorized(room_id, token, user, db)
+    except HTTPException as exc:
+        if exc.status_code == 403:
+            raise HTTPException(404, "No such ride in this room") from exc
+        raise
+
+
 async def manager(user, db):
     # The credential on this request is the journey's room token; the reused
     # Home capability check needs Home's token after that room was authorized.
@@ -66,6 +75,37 @@ async def get_journey(room_id: UUID, slug: str, user=Depends(authorized)):
     result = journey(slug)
     live = await overlay({"vehicles": result["vehicles"]})
     return dict(result, vehicles=live["vehicles"])
+
+
+@router.get("/ride")
+async def get_ride(room_id: UUID, ride: str | None = None, user=Depends(ride_authorized), db=Depends(get_db)):
+    from .rides import payload
+    try:
+        return await payload(db, room_id, ride)
+    except (KeyError, ValueError):
+        raise HTTPException(404, "No such ride in this room")
+
+
+@router.get("/ride/leg")
+async def get_ride_leg(room_id: UUID, leg: str, response: Response, user=Depends(ride_authorized), db=Depends(get_db)):
+    from .rides import bound_trip
+    try:
+        trip = await bound_trip(db, room_id)
+        if not any(r["leg"] == leg for r in trip["rides"]):
+            raise KeyError(leg)
+        model = get_register().leg(leg)
+    except (KeyError, ValueError):
+        raise HTTPException(404, "No such leg in this room")
+    built = (model.get("leg") or {}).get("built") or model["sights"].get("built")
+    response.headers["Cache-Control"] = "private, max-age=86400"
+    response.headers["ETag"] = '"' + hashlib.sha256(str(built).encode()).hexdigest() + '"'
+    return model
+
+
+@router.get("/riding")
+async def get_riding(room_id: UUID, user=Depends(authorized), db=Depends(get_db)):
+    from .rides import riding
+    return await riding(db, user.user_id)
 
 
 class Bind(BaseModel):

@@ -118,8 +118,11 @@ async def test_real_repo_contract(monkeypatch):
     if not SOURCE.exists():
         pytest.skip("Long Way source unavailable")
     chart=Register(SOURCE).chart()
-    assert len(chart["journeys"]) == 19
-    assert len(chart["vehicles"]) == 25
+    from organs.longway import observe
+    from unittest.mock import AsyncMock
+    monkeypatch.setattr(observe, "trains", AsyncMock(return_value=[]))
+    assert len(chart["journeys"]) == 20
+    assert len(chart["vehicles"]) == 26
     assert next(j for j in chart["journeys"] if j["slug"]=="friends-2027")["kind"] == "trip"
     async def feed(url):
         return {"written":"2026-10-28T00:00:00Z","fixes":{}}

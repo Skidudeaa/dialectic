@@ -1,5 +1,7 @@
+from datetime import datetime
 from unittest.mock import AsyncMock
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import pytest
 from scheduler import SchedulerContext
@@ -34,7 +36,8 @@ async def test_writer_confirmation_toggle_author_and_retry(db,house,client,longw
     assert row["written_by"] == house.user.user_id
     entries=longway_repo.evidence("ogasawara")
     assert entries[-1]["status"] == "verified"
-    assert entries[-1]["checked_at"] == response.json()["review"]["created_at"][:10]
+    reviewed = datetime.fromisoformat(response.json()["review"]["created_at"].replace("Z", "+00:00"))
+    assert entries[-1]["checked_at"] == reviewed.astimezone(ZoneInfo("America/Chicago")).date().isoformat()
     assert git(longway_repo.root,"log","-1","--format=%an <%ae>") == f"Alice <{house.user.email}>"
     assert git(longway_repo.root,"rev-list","--count","HEAD") == "2"
     await jobs.evidence_writer(ctx)

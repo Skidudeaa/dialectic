@@ -1,0 +1,16 @@
+{
+  "checked_at": "2026-10-30T04:18:02.972810Z",
+  "url": "https://api-v3.amtraker.com/v3/trains/14",
+  "run_count": 2,
+  "selected_run": "14-29",
+  "fix": {
+    "lat": 36.9089862495169,
+    "lon": -121.63082659836047,
+    "at": "2026-10-30T04:15:39Z",
+    "age_min": 2,
+    "speed_mph": 23.4132595062256,
+    "heading": "NE",
+    "source": "amtrak"
+  },
+  "error": null
+}

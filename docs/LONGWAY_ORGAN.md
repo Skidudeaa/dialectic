@@ -328,3 +328,137 @@ membership the planner's act). What opened is a door to ask.
   Long Way" with the code when mail is on (`invited_email_at`). The invitee uses "I have a code" under Sign In.
 - **Tests.** `tests/test_longway_invites.py`: the ask and its refresh, both limits, the manager's invite and decline, the
   mail with a recorder and with a refusing server, and the notifier.
+
+
+## 13. Ride rooms (29 Oct 2026)
+
+The following interface is the shared repository/backend/frontend contract.
+
+### Ride rooms: the contract between the repository, the house backend and the house frontend
+
+Source of the bet: /root/theLongWay/docs/moonshot-ride.md. Owner: Amo. Written 2026-10-29 by the lead.
+
+#### Repository (/root/theLongWay, read by the house through dialectic/organs/longway/register.py -> tools/longway.py)
+
+Already built and committed (theLongWay 90ad30c):
+
+- `ride_data(root, slug)` -> `{"slug", "title", "route": [[lat, lon, label]], "rides": [{"id", "vehicle": {"name", "kind", "operator"?, "amtrak"?, "mmsi"?, "imo"?}, "date", "board", "alight", "riders": [names], "leg": str|null, "leg_ready": bool, "logbook": bool}]}`. Raises KeyError when the slug is not a trip with `"shared": true`. Allowlisted: never plan prose, evidence or bookings.
+- `leg_data(root, leg)` -> `{"id", "leg": leg.json|null, "sights": sights.json, "coverage": coverage.json without "strips" | null, "guide": guide.json|null, "check": check.json|null}`. ValueError for a bad name, KeyError when legs/<leg>/sights.json is missing.
+- `chart_data` journeys of kind "trip" now carry `"rides": <count>`. Rides themselves never enter the chart (charter §18: live movement is narrow-access).
+- Real data: trip `coast-starlight-2026` is shared, ride `14-22` (vehicle "Coast Starlight 14", amtrak "14", date 2026-10-22, board MTZ, alight SEA, riders ["Amo"], leg "amtrak-313-14"). Leg folder `legs/amtrak-313-14/` has leg.json, sights.json, coverage.json, guide.json (no check.json yet). Logbook `trips/coast-starlight-2026/rides/14-22.json`.
+- Run id convention: Amtrak numbers a run `<train>-<origin day of month>`; ride `date` is the run's origin date (14-22 left Los Angeles on 22 Oct; Amo boarded at Martinez that night and reached Seattle on the 23rd).
+
+##### Leg files (formats are exactly today's live-chart files; see /root/theLongWay/tools/live/index.html for how they are drawn)
+
+- `sights.json`: `built`, `times`, `classes` [{label, color}] (index = class number c), `eye_h`, `tree_h`, `left`/`right` [{c, pts: [[lat, lon], ...]}] (side polylines per class, side relative to the direction of travel), `km` rows `[km, left_class, right_class, lat, lon, left_name, right_name]` (one per km from the boarding end; this is also the leg's geometry), `sights` [{kind: view|peak, name, side, km0, km1, length_km, minutes, t0, t1, from_code, to_code, f0, f1, start, end, lat, lon, best, light, note, cloud?...}] (t0/t1 are minutes after 00:00 local on the first day of the timetable the file was built for; start/end are those local clock strings; the live card re-times them from live stop estimates), `stations` [{code, name, km, time, lat, lon}], `peaks` [{name, lat, lon, ele, src}].
+- `coverage.json`: `classes` [{label, min, color}], `segments` [{c, pts}], `measured` [[...pts]], `gaps` [{km0, km1, length_km, minutes, start, end, near, from_code, none_pct, t0, t1, mid, tests}], `stations`, `sites`.
+- `guide.json`: {sight name: {title, what, history, img, links: [...], ...}}.
+- `leg.json`: {id, kind, operator, train?, route?, shape?, from, to, km, eye_h, built, basis}.
+- `check.json` (new, written by tools/sights.py --score): {"source": {"title", "url", "publisher", "checked_at", "direction_note"}, "landmarks": [{"name", "side": "left"|"right", "km": float, "kind": "peak"|"water"|"canyon"|"town"|"structure"|"other", "note"?}], "score": {"agree", "total", "misses": [{"name", "side", "km", "why"}], "scored_at", "tolerance_km"}}.
+
+##### Logbook `trips/<slug>/rides/<ride>.json` (see the 14-22 file)
+
+`{"ride", "trip", "vehicle", "train"?, "mmsi"?, "date", "board", "alight", "leg", "written_at": "YYYY-MM-DD", "written_by": "house"|"backfill", "sources": [{"publisher", "url", "checked_at", "note"?}], "stops": [{"code", "km": float|null, "sched_arr", "arr", "late_arr", "sched_dep", "dep", "late_dep"}], "track": [[iso_utc, lat, lon, km|null]], "track_basis": str, "notes": [{"at", "km": float|null, "member", "text"}]}`. Times are ISO 8601 UTC with Z, or null; late is whole minutes, positive = late; arr/dep are actual times only.
+
+#### House API (dialectic/organs/longway/api.py, prefix /rooms/{room_id}/longway, membership-fenced by `authorized`)
+
+A ride room is any room whose `linked_journey` is a shared trip with rides (the existing `/bind` binds it).
+
+`GET /ride[?ride=<id>]` -> 404 when the room's journey is not a shared trip with rides. Picks `?ride` or else the current ride: riding, then the soonest waiting, then the latest arrived.
+
+```
+{
+  "trip": {"slug", "title"},
+  "rides": [{"id", "date", "state"}],
+  "ride": {"id", "date", "board", "alight", "riders", "leg", "leg_ready", "logbook", "vehicle": {...}, "state": "waiting"|"riding"|"arrived"},
+  "run": "14-22" | null,
+  "fix": {"lat", "lon", "at", "age_min", "speed_mph": number|null, "heading": str|null, "source": "amtrak"|"ais"} | null,
+  "fix_unavailable_reason": str | null,
+  "km": number | null,
+  "stops": [{"code", "name", "km": number|null, "sched_arr", "sched_dep", "arr", "dep", "estimated": bool, "status": str|null, "late_min": int|null}],
+  "history": {"days": int, "at": {"CODE": {"median": int, "worst": int, "n": int}}} | null,
+  "track": [[iso, lat, lon, km|null]],
+  "fetched_at": iso
+}
+```
+
+Live rides take stops from Amtraker (`https://api-v3.amtraker.com/v3/trains/<num>`, run `trainID == "<num>-<day>"`; station fields schArr, schDep, arr, dep, status; `lastValTS` is the fix time). Arrived rides take stops from the logbook (estimated false, status null). Times in the API are ISO 8601 UTC with Z.
+
+`GET /ride/leg?leg=<id>` -> `leg_data` JSON for a leg named by one of this room's rides; `Cache-Control: private, max-age=86400`; ETag from leg.built or sights.built.
+
+`GET /riding` -> `{"rides": [{"room_id", "room_name", "trip", "ride": {"id", "state", "vehicle": {"name"}}, "fix": {...}|null, "next_stop": {"code", "name", "est"}|null, "late_min": int|null}]}`: rides in state waiting or riding, only in rooms the caller is a member of. Called from the house room.
+
+Scout tools (dialectic/organs/longway/tools.py): `ride_status(ride?)` and `out_the_window(side="both", km=None)`; with km omitted, the ride's current km.
+
+#### Frontend (dialectic/frontend/app/src/organs/longway/)
+
+`LongwayBench` renders `RideBench` when the bound journey is a trip with `rides > 0`, otherwise the globe as today. `LongwayHouse` shows "Riding now" from `GET /riding`.
+
+### Backend implementation and operation
+
+`observe.py` reads Amtraker v3 per train number, cached for 60 seconds through
+`fixes.fetch_feed`, with a plain `Mozilla/5.0` User-Agent. `lastValTS`, normalized
+to UTC, is the broadcast timestamp. The house chart draws the most recently
+heard run's vehicle without exposing run IDs, ride records or riders. AIS keeps
+`LONGWAY_FIXES_URL` / `ships.json`; speed is converted from knots to mph for rides.
+The old GeoJSON train endpoint and `LONGWAY_TRAINS_URL` are superseded.
+
+`rides.py` is the common room projection for HTTP and Scout. Membership and room
+token checks precede reads; `/ride` and `/ride/leg` conceal non-members with 404.
+`/riding` enumerates only the caller's memberships. Leg reads additionally check
+that the requested leg belongs to a ride in the bound shared trip. The chart
+contains only a ride count, never the ride projection. Arrival logbooks win over
+live observations; the existing 14-22 backfill supplies its 18 stops and no track.
+
+Migration `032_longway_rides.sql` adds trip/ride keyed state and broadcast keyed
+fixes. It also retains the last station snapshot and observation time: actual
+stop times must remain recoverable after Amtraker removes a run. The operator
+must apply this migration before enabling the new backend; this change does not
+apply it to the live database.
+
+`jobs.ride_watch` runs every 60 seconds. It observes origin dates from yesterday
+through three days after today (Chicago), and continues for persisted riding
+states. Arrived rows remain eligible for delayed writes after that window.
+A train absent from the feed stays waiting. Boarding `Departed` starts the ride;
+an actual alighting arrival in the past ends it. Ships use the origin date: waiting
+before it, riding that day and the next, arrived afterward. GPS is projected onto
+the nearest segment of the leg's km geometry; unknown geometry stays null.
+
+Transition pushes go through the existing Web Push service to bound-room members;
+signal warnings go only to members whose display names match riders without case.
+Warnings require a fresh fix, positive speed, and a model gap starting within ten
+minutes. Database row locks serialize watchers; pushed flags and gap keys suppress
+repeat sends. A stable notification tag identifies each event. Web Push is an
+external effect: a process failure after delivery but before transaction commit
+can repeat a delivery attempt. Device receipt is not proven by a successful job.
+
+TransitDocs history reads the preceding 45 Chicago origin days, five at a time,
+using actual arrival variances only. It reports median, worst and sample count per
+stop, cached per train per Chicago day. Cold history warms asynchronously; the
+first response can have `history: null` while positions remain available.
+
+Six hours after arrival, `ride_watch.write_book` writes through
+`Register.write_logbook` only with `LONGWAY_COMMIT_ENABLED=1`. It uses actual-only
+persisted stations, at most one recorded position per km bin, and human rider
+messages in bound rooms from 30 minutes before departure through arrival.
+Notes interpolate km only between observed track points; they never extrapolate.
+Followers, model messages, deleted messages and messages outside the interval do
+not enter the repository. The first rider with a house account supplies the git
+author. Existing books survive retries; dirty targets are refused. Commits use
+`--only`, carry `Longway-Ride: <slug>/<ride>`, and never push.
+
+Scout's `ride_status(ride?)` uses the same room projection. `out_the_window(side,
+km)` returns named sights within 2 km, class, distance, guide title/text/history/
+links, `provenance: model`, and the leg check when present. Compound names resolve
+to their individual guide entries. Without explicit km it requires a riding state
+and an observed position.
+
+`tests/test_longway_rides.py` uses a synthetic saved Amtraker-shaped sample, the
+real Coast Starlight leg/backfill copied into a temporary repository, and real
+Postgres for HTTP/state/write paths. No test writes `/root/theLongWay`.
+
+A read-only Amtraker probe through the new observation code on 29 Oct (Chicago)
+returned two train-14 runs and a drawable `14-29` fix broadcast at
+`2026-10-30T04:15:39Z`. Raw response and receipt are saved in
+`tests/fixtures/longway_amtraker_live_20261029*.json`. This verifies the feed
+parser, not deployment, the live house database, or device push receipt.
