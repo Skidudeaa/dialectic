@@ -114,12 +114,16 @@ export function viewsNow(leg: RideLeg, stops: RideStop[], km: number) {
     return { side, c, label: c === 3 ? "Don't miss" : c === 2 ? 'Worth a look' : 'Nothing', name: w?.name ?? row[i + 5] as string ?? '', remaining, minutes: remaining !== null && pace !== null ? remaining * pace : null }
   })
 }
-/** The kill line of 30 Oct (docs/moonshot-ride.md): a leg's views show only when its operator route-guide check agrees on
- *  at least 80% of landmarks with at most one on the wrong side. The Zephyr scored 7 of 13 and keeps only its track, stops
- *  and signal; a leg with no scored check keeps the same until it is checked. */
+/** Amo's choice of 30 Oct (docs/moonshot-ride.md, Amendments): a leg's views show once its operator route-guide check is
+ *  scored, labelled with how many guide landmarks the model names, and are withheld only if it puts more than one on the
+ *  wrong side. Across five routes and about 45 landmarks its misses were all omissions, never the wrong side. A leg with no
+ *  scored check keeps track, stops, lateness and signal until it is checked. */
+export function sideMisses(check: RideLeg['check']) {
+  return (check?.score?.misses ?? []).filter(m => m.why === 'side miss').length
+}
 export function viewsTrusted(check: RideLeg['check']) {
   const s = check?.score
-  return !!s && s.total > 0 && s.agree / s.total >= 0.8 && (s.misses ?? []).filter(m => m.why === 'side miss').length <= 1
+  return !!s && s.total > 0 && sideMisses(check) <= 1
 }
 /** The leg as the map may draw it when its views are withheld: the track stays, the views, names and summits go. */
 export function withheldViews(leg: RideLeg): RideLeg {

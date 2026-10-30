@@ -1,5 +1,5 @@
 import type { RideData, RideLeg } from '../types'
-import { clockTime, gapsAhead, historyLine, lateness, lightAt, nextStops, positionAt, sightEntities, sightsAhead, viewsNow, viewsTrusted } from './rideCard'
+import { clockTime, gapsAhead, historyLine, lateness, lightAt, nextStops, positionAt, sideMisses, sightEntities, sightsAhead, viewsNow, viewsTrusted } from './rideCard'
 
 function Sight({ name, meta, leg, current = false }: { name: string; meta: string; leg: RideLeg; current?: boolean }) {
   const entries = sightEntities(name, leg.guide), first = entries[0]
@@ -57,6 +57,6 @@ export function RideCard({ data, leg, km, now, replay, offline, lastSuccess }: {
       {next.length > 0 && <p>{historyLine(data, next[0].stop.code)}</p>}
       {next.some(e => !e.stop.arr && !e.stop.dep) && <p className="ride-meta">* Schedule plus last known lateness.</p>}
     </section>
-    {leg && <p className="ride-meta">{trusted ? `Views model agrees with the operator's route guide on ${leg.check!.score!.agree} of ${leg.check!.score!.total} landmarks.` : leg.check?.score ? `Views withheld: the model agrees with the operator's route guide on ${leg.check.score.agree} of ${leg.check.score.total} landmarks, under the 80% line. Track, stops and signal stay.` : 'Views withheld until this route is checked against its operator\'s route guide. Track, stops and signal stay.'}</p>}
+    {leg && <p className="ride-meta">{trusted ? `Views model: names ${leg.check!.score!.agree} of ${leg.check!.score!.total} landmarks from the operator's route guide; a sight it misses shows as Ordinary or Nothing.` : leg.check?.score ? `Views withheld: the model put ${sideMisses(leg.check)} of the route guide's landmarks on the wrong side. Track, stops and signal stay.` : 'Views withheld until this route is checked against its operator\'s route guide. Track, stops and signal stay.'}</p>}
   </article>
 }

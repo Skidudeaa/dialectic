@@ -27,11 +27,11 @@ it('puts a riding train on the map at its fix when its route has no view model y
   expect(screen.getByText('No view model for this route yet: the train, its stops and its lateness.')).toBeInTheDocument()
   expect(screen.getByText(/50 mph/)).toBeInTheDocument()
 })
-it('withholds views on a route whose check is unscored or under the line, and keeps the stops', () => {
+it('withholds views on a route whose check is unscored or names two landmarks on the wrong side, and keeps the stops', () => {
   const view = render(<RideCard data={ride} leg={{ ...leg, check: {} }} km={635} now={at} replay offline={false} lastSuccess={null} />)
   expect(screen.getByText(/Views withheld until this route is checked/)).toBeInTheDocument()
-  view.rerender(<RideCard data={ride} leg={{ ...leg, check: { score: { agree: 7, total: 13, misses: [] } } }} km={635} now={at} replay offline={false} lastSuccess={null} />)
-  expect(screen.getByText(/agrees with the operator's route guide on 7 of 13 landmarks, under the 80% line/)).toBeInTheDocument()
+  view.rerender(<RideCard data={ride} leg={{ ...leg, check: { score: { agree: 7, total: 13, misses: [{ name: 'a', why: 'side miss' }, { name: 'b', why: 'side miss' }] } } }} km={635} now={at} replay offline={false} lastSuccess={null} />)
+  expect(screen.getByText(/the model put 2 of the route guide's landmarks on the wrong side/)).toBeInTheDocument()
   expect(screen.queryByRole('heading', { name: /Views now/ })).not.toBeInTheDocument()
   expect(screen.queryByRole('heading', { name: /Sights ahead/ })).not.toBeInTheDocument()
   expect(screen.getByRole('table')).toHaveTextContent('Chemult')

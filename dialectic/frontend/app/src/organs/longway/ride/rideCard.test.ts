@@ -76,9 +76,9 @@ describe('ride instrument against the original leg and logbook', () => {
     expect(viewsNow(leg, ride.stops, km).some(v => v.c === 3)).toBe(true)
     expect(firstLitSight({ ...leg, sights: { ...leg.sights, sights: [] } }, ride.stops)).toBeNull()
   })
-  it('trusts views at 80% with at most one side miss, and strips them otherwise', () => {
+  it('trusts any scored check with at most one side miss, and strips the views otherwise', () => {
     const score = (agree: number, total: number, sides = 0) => ({ score: { agree, total, misses: Array.from({ length: sides }, () => ({ name: 'x', why: 'side miss' })) } })
-    expect([viewsTrusted(score(8, 10)), viewsTrusted(score(6, 7)), viewsTrusted(score(7, 13)), viewsTrusted(score(9, 10, 2)), viewsTrusted(null), viewsTrusted({})]).toEqual([true, true, false, false, false, false])
+    expect([viewsTrusted(score(8, 10)), viewsTrusted(score(6, 7)), viewsTrusted(score(7, 13)), viewsTrusted(score(7, 13, 1)), viewsTrusted(score(9, 10, 2)), viewsTrusted(null), viewsTrusted({})]).toEqual([true, true, true, true, false, false, false])
     const bare = withheldViews(leg)
     expect([bare.sights.sights.length, bare.sights.left.length, bare.sights.peaks.length, bare.sights.km.length]).toEqual([0, 0, 0, leg.sights.km.length])
     expect(bare.sights.km.every(r => r[1] === 0 && r[2] === 0 && r[5] === '')).toBe(true)
