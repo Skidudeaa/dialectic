@@ -28,6 +28,15 @@ SLUG = 'coast-starlight-2026'
 REAL_HISTORY, REAL_TRAINS, REAL_FETCH = observe.history, observe.trains, fixes.fetch_feed
 
 
+async def own_home(db):
+    """This test's own Home room. A shared dialectic_test may already hold one and the schema allows a single Home, so
+    any other is demoted inside the test's transaction, which the db fixture rolls back."""
+    await db.execute("UPDATE rooms SET is_home=false WHERE is_home")
+    home = uuid4()
+    await db.execute("INSERT INTO rooms(id,created_at,token,name,is_home) VALUES ($1,now(),$2,'Home',true)", home, str(home))
+    return home
+
+
 @pytest.fixture
 def sample():
     return json.loads((Path(__file__).parent/'fixtures/longway_amtraker.json').read_text())
@@ -140,8 +149,7 @@ async def test_real_book_api_tools_and_fences(db, house, client, real_repo, samp
     assert lake['guide']['what'] and lake['guide']['history'] and lake['guide']['links']
     assert 'arrived' in (await tools['out_the_window'].execute({}))['error']
     assert (await tools['ride_status'].execute({}))['ride']['id']=='14-22'
-    home=uuid4()
-    await db.execute("INSERT INTO rooms(id,created_at,token,name,is_home) VALUES ($1,now(),$2,'Home',true)",home,str(home))
+    home = await own_home(db)
     await db.execute('INSERT INTO room_memberships(room_id,user_id,joined_at) VALUES ($1,$2,now())',home,house.user.user_id)
     monkeypatch.setattr(observe,'trains',AsyncMock(return_value=sample['14']))
     chart=(await client.get(f'/rooms/{home}/longway/chart',headers={'X-Room-Token':str(home)})).json()
@@ -235,8 +243,7 @@ async def test_gap_riders_only_and_once(db, house, live_repo, sample, monkeypatc
 @pytest.mark.asyncio
 async def test_logbook_delay_author_actuals_notes_and_git(db, house, live_repo, sample, monkeypatch, offline):
     await bind(db, house)
-    home = uuid4()
-    await db.execute("INSERT INTO rooms(id,created_at,token,name,is_home) VALUES ($1,now(),$2,'Home',true)", home,str(home))
+    home = await own_home(db)
     await db.execute('INSERT INTO room_memberships(room_id,user_id,joined_at) VALUES ($1,$2,now())',home,house.user.user_id)
     follower = uuid4()
     await db.execute("INSERT INTO users(id,created_at,display_name) VALUES ($1,now(),'Follower')", follower)

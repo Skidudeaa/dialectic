@@ -66,12 +66,12 @@ def build_tools(room, db):
     proposal_properties.update({key: {'type': ['string', 'null']} for key in PROPOSAL_FIELDS if key not in ('run_id', 'load_bearing')})
     proposal_properties['load_bearing'] = {'type': 'boolean'}
     return [
-        tool("ride_status", "Read only this room's ride, broadcast fix and age, stops, lateness and history.", ride_status, {"ride": string}),
-        tool("out_the_window", "Read sights within 2 km on this ride's leg, with guide text and links. These are model predictions, not observations. Omit km only while riding.", out_the_window,
-             {"side": {"type": "string", "enum": ["left", "right", "both"]}, "km": {"type": "number"}}),
         tool("read_register", "Read the public journey register, or a candidate dossier and its S-number evidence. Shared trips expose only Established and Undecided.", read_register, {"slug": string}),
         tool("fit_window", "Compare recorded candidate seasons with a shared trip's window; hypotheses remain hypotheses.", fit_window, {"trip": string}, ("trip",)),
         tool("where_is", "Read last observed ship/train positions by vehicle name or journey slug, with unknown fixes explicit.", where_is, {"name": string}, ("name",)),
         tool("propose_evidence", "Fetch a page and file a bounded claim for human Field confirmation. Use a 3–35 word phrase occurring in the extracted page. Never writes the repo.", propose_evidence, proposal_properties, ("candidate", "url", "claim", "scope"), 26),
         tool("draft_dispatch", "Draft this room's weekly dispatch from git evidence. Does not post or push.", draft_dispatch, {}, timeout=28),
+        tool("ride_status", "Read only this room's ride, broadcast fix and age, stops, lateness and history.", ride_status, {"ride": string}),
+        tool("out_the_window", "Read sights within 2 km on this ride's leg, with guide text and links. These are model predictions, not observations. Omit km only while riding.", out_the_window,
+             {"side": {"type": "string", "enum": ["left", "right", "both"]}, "km": {"type": "number"}}),
     ]
