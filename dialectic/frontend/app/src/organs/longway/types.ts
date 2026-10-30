@@ -42,6 +42,7 @@ export interface EvidenceRow {
 
 export interface Journey {
   slug: string
+  rides?: number
   kind: JourneyKind
   title: string
   where: string | null
@@ -270,3 +271,38 @@ export interface ScoutRunMetadata {
   proposals: number
   counter_proposals: number
 }
+
+// /root/scratch/20261029-ride/CONTRACT.md. All ride times are ISO UTC.
+export type RideState = 'waiting' | 'riding' | 'arrived'
+export interface RideVehicle { name: string; kind: string; operator?: string; amtrak?: string; mmsi?: string; imo?: string }
+export interface RideFix { lat: number; lon: number; at: string; age_min: number; speed_mph: number | null; heading: string | null; source: 'amtrak' | 'ais' }
+export interface RideStop {
+  code: string; name: string; km: number | null
+  sched_arr: string | null; sched_dep: string | null; arr: string | null; dep: string | null
+  estimated: boolean; status: string | null; late_min: number | null
+}
+export interface RideData {
+  trip: { slug: string; title: string }
+  rides: { id: string; date: string; state: RideState }[]
+  ride: { id: string; date: string; board: string; alight: string; riders: string[]; leg: string | null; leg_ready: boolean; logbook: boolean; vehicle: RideVehicle; state: RideState }
+  run: string | null; fix: RideFix | null; fix_unavailable_reason: string | null; km: number | null
+  stops: RideStop[]; history: { days: number; at: Record<string, { median: number; worst: number; n: number }> } | null
+  track: [string, number, number, number | null][]; fetched_at: string
+}
+export type KmRow = [number, number, number, number, number, string?, string?]
+export interface SightWindow {
+  kind: 'view' | 'peak'; name: string; side: 'left' | 'right'; km0: number; km1: number; length_km: number
+  minutes: number; t0: number; t1: number; from_code: string; to_code: string; f0: number; f1: number
+  start: string; end: string; lat: number; lon: number; best: [number, number]; to?: [number, number]
+  light: string; note: string; major?: boolean; covered?: boolean; size?: number; sky?: number | null; peaks?: string[]
+}
+export interface SignalGap { km0: number; km1: number; length_km: number; minutes: number; near: string; from_code: string; t0: number; t1: number }
+export interface GuideEntry { title: string; what?: string; history?: string; img?: string; img_credit?: string; links?: { url: string; label: string; src?: string }[] }
+export interface RideLeg {
+  id: string; leg: { id: string; kind: string; km: number; built?: string } | null
+  sights: { built: string; classes: { label: string; color: string }[]; km: KmRow[]; left: { c: number; pts: [number, number][] }[]; right: { c: number; pts: [number, number][] }[]; sights: SightWindow[]; stations: { code: string; name: string; km: number; lat: number; lon: number; time: string }[]; peaks: { name: string; lat: number; lon: number; ele: number }[] }
+  coverage: { classes: { label: string; color: string }[]; segments: { c: number; pts: [number, number][] }[]; measured?: [number, number][][]; gaps: SignalGap[] } | null
+  guide: Record<string, GuideEntry> | null
+  check: { score: { agree: number; total: number } } | null
+}
+export interface RidingData { rides: { room_id: string; room_name: string; trip: string | { slug: string; title: string }; ride: { id: string; state: RideState; vehicle: RideVehicle }; fix: RideFix | null; next_stop: { code: string; name: string; est: string | null } | null; late_min: number | null }[] }

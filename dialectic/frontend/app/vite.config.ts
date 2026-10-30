@@ -103,6 +103,17 @@ export default defineConfig(({ mode }) => {
       // that and is what let installed PWAs run stale bundles for hours.
       injectRegister: false,
       injectManifest: {
+        // The hand-written worker owns push and precaching. Add the organ's
+        // runtimeCaching module to that worker, not generateSW-only options.
+        // Only The Long Way's build: Dialectic's worker must stay byte-for-byte its own.
+        plugins: longway ? [{
+          name: 'longway-ride-runtime-caching',
+          transform(code, id) {
+            if (id.replaceAll('\\', '/').endsWith('/src/sw.ts')) {
+              return { code: code + '\nimport "./organs/longway/ride/runtimeCaching";\n', map: null }
+            }
+          },
+        }] : [],
         // React.lazy owns the complete WorldView/Cesium dependency graph.
         // Neither that JS/CSS nor Cesium's static tree belongs in the base
         // install; all are fetched only when a person opens World.

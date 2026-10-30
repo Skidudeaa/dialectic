@@ -66,3 +66,10 @@ export function longwayPath(roomId: string, resource: string) {
 export function notifyLongwayChanged(roomId: string) {
   window.dispatchEvent(new CustomEvent('longway:changed', { detail: longwayPath(roomId, '') }))
 }
+
+export const getRide = (roomId: string, ride?: string, signal?: AbortSignal) =>
+  longwayRequest<import('./types').RideData>(longwayPath(roomId, `ride${ride ? `?ride=${encodeURIComponent(ride)}` : ''}`), { signal })
+export const getRideLeg = (roomId: string, leg: string, signal?: AbortSignal) =>
+  longwayRequest<import('./types').RideLeg>(longwayPath(roomId, `ride/leg?leg=${encodeURIComponent(leg)}`), { signal })
+export const getRiding = (roomId: string, signal?: AbortSignal) =>
+  longwayRequest<import('./types').RidingData>(longwayPath(roomId, 'riding'), { signal })

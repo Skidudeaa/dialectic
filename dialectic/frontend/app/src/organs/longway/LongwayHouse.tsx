@@ -6,6 +6,7 @@ import { declineRequester, inviteRequester, listInviteRequests, longwayPath, lon
 import type { InviteRequests, RequesterInvite } from './api'
 import type { Ink, Journey, Season } from './types'
 import Chart from './chartSlot'
+import { RidingNow } from './ride/RidingNow'
 import { InkKey, JourneyStrip } from './chart/Cards'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -182,6 +183,7 @@ export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
         </div> : <p className="lw-hint lw-globe-tip">Tap a journey’s name on the globe, or pick one below, to see its route.</p>}
       </div>
       <div className="lw-atlas-list">
+        <RidingNow key={roomId} roomId={roomId} onNavigate={onNavigate} />
         <section aria-label="Your rooms" className="lw-section">
           <h2>Your rooms</h2>
           {rooms.length ? <ul className="lw-rooms">{rooms.map(room => {

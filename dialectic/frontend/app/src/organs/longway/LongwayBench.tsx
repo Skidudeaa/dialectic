@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useLongwayChart } from '../../hooks/useLongwayChart'
 import { useAppStore } from '../../stores/appStore'
@@ -6,6 +6,8 @@ import Chart from './chartSlot'
 import { InkKey, LegCard, SeasonStrip } from './chart/Cards'
 import { longwayPath, longwayRequest } from './api'
 import type { AnchorMetadata } from './types'
+
+const RideBench = lazy(() => import('./ride/RideBench'))
 
 export function LongwayBench({ roomId, record, canManageHome = false }: { roomId: string; record?: ReactNode; canManageHome?: boolean }) {
   const { data, error, refresh } = useLongwayChart(roomId)
@@ -36,6 +38,9 @@ export function LongwayBench({ roomId, record, canManageHome = false }: { roomId
     setDraft(`About ${segment.from} to ${segment.to}:`)
     setSendError('')
   }
+  // A chart refresh failure must not unmount the ride's last good fix during an outage.
+  const bound = data?.journeys.find(j => j.slug === data.room.linked_journey)
+  if (bound?.kind === 'trip' && (bound.rides ?? 0) > 0) return <Suspense fallback={<p role="status">Loading ride instrument…</p>}><RideBench key={roomId} roomId={roomId} record={record} /></Suspense>
   if (error) return <div role="alert">{error} <button onClick={refresh}>Retry chart</button></div>
   if (!data) return <p role="status">Chart loading</p>
   return <div className="longway-bench">

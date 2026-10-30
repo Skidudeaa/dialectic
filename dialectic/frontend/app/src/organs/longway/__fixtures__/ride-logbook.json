@@ -1,0 +1,205 @@
+{
+  "ride": "14-22",
+  "trip": "coast-starlight-2026",
+  "vehicle": "Coast Starlight 14",
+  "train": "14",
+  "date": "2026-10-22",
+  "board": "MTZ",
+  "alight": "SEA",
+  "leg": "amtrak-313-14",
+  "written_at": "2026-10-29",
+  "written_by": "backfill",
+  "sources": [
+    {
+      "publisher": "TransitDocs (Amtrak status archive)",
+      "url": "https://asm-backend.transitdocs.com/train/2026/10/22/A/14",
+      "checked_at": "2026-10-29",
+      "note": "ACTUAL times only; Seattle had no recorded arrival, only an estimate"
+    }
+  ],
+  "stops": [
+    {
+      "code": "MTZ",
+      "km": 0.0,
+      "sched_arr": "2026-10-23T05:14:00Z",
+      "arr": "2026-10-23T07:20:00Z",
+      "late_arr": 126,
+      "sched_dep": "2026-10-23T05:26:00Z",
+      "dep": "2026-10-23T07:27:00Z",
+      "late_dep": 121
+    },
+    {
+      "code": "DAV",
+      "km": 69.6,
+      "sched_arr": null,
+      "arr": null,
+      "late_arr": 117,
+      "sched_dep": "2026-10-23T06:11:00Z",
+      "dep": "2026-10-23T08:10:00Z",
+      "late_dep": 119
+    },
+    {
+      "code": "SAC",
+      "km": 89.6,
+      "sched_arr": null,
+      "arr": null,
+      "late_arr": 97,
+      "sched_dep": "2026-10-23T06:49:00Z",
+      "dep": "2026-10-23T08:43:00Z",
+      "late_dep": 114
+    },
+    {
+      "code": "CIC",
+      "km": 225.2,
+      "sched_arr": null,
+      "arr": null,
+      "late_arr": 98,
+      "sched_dep": "2026-10-23T08:37:00Z",
+      "dep": "2026-10-23T10:18:00Z",
+      "late_dep": 101
+    },
+    {
+      "code": "RDD",
+      "km": 343.0,
+      "sched_arr": null,
+      "arr": null,
+      "late_arr": 96,
+      "sched_dep": "2026-10-23T10:05:00Z",
+      "dep": "2026-10-23T11:45:00Z",
+      "late_dep": 100
+    },
+    {
+      "code": "DUN",
+      "km": 433.4,
+      "sched_arr": null,
+      "arr": null,
+      "late_arr": 87,
+      "sched_dep": "2026-10-23T11:58:00Z",
+      "dep": "2026-10-23T13:27:00Z",
+      "late_dep": 89
+    },
+    {
+      "code": "KFS",
+      "km": 601.6,
+      "sched_arr": "2026-10-23T14:33:00Z",
+      "arr": "2026-10-23T16:06:00Z",
+      "late_arr": 93,
+      "sched_dep": "2026-10-23T14:43:00Z",
+      "dep": "2026-10-23T16:24:00Z",
+      "late_dep": 101
+    },
+    {
+      "code": "CMO",
+      "km": 719.8,
+      "sched_arr": null,
+      "arr": null,
+      "late_arr": 100,
+      "sched_dep": "2026-10-23T15:59:00Z",
+      "dep": "2026-10-23T17:41:00Z",
+      "late_dep": 102
+    },
+    {
+      "code": "EUG",
+      "km": 916.4,
+      "sched_arr": "2026-10-23T19:29:00Z",
+      "arr": "2026-10-23T20:35:00Z",
+      "late_arr": 66,
+      "sched_dep": "2026-10-23T19:37:00Z",
+      "dep": "2026-10-23T20:49:00Z",
+      "late_dep": 72
+    },
+    {
+      "code": "ALY",
+      "km": 986.8,
+      "sched_arr": "2026-10-23T20:20:00Z",
+      "arr": "2026-10-23T21:34:00Z",
+      "late_arr": 74,
+      "sched_dep": "2026-10-23T20:23:00Z",
+      "dep": "2026-10-23T21:39:00Z",
+      "late_dep": 76
+    },
+    {
+      "code": "SLM",
+      "km": 1031.2,
+      "sched_arr": "2026-10-23T21:01:00Z",
+      "arr": "2026-10-23T22:08:00Z",
+      "late_arr": 67,
+      "sched_dep": "2026-10-23T21:04:00Z",
+      "dep": "2026-10-23T22:16:00Z",
+      "late_dep": 72
+    },
+    {
+      "code": "PDX",
+      "km": 1117.0,
+      "sched_arr": "2026-10-23T22:40:00Z",
+      "arr": "2026-10-23T23:23:00Z",
+      "late_arr": 43,
+      "sched_dep": "2026-10-23T22:56:00Z",
+      "dep": "2026-10-23T23:52:00Z",
+      "late_dep": 56
+    },
+    {
+      "code": "VAN",
+      "km": 1133.4,
+      "sched_arr": "2026-10-23T23:13:00Z",
+      "arr": "2026-10-24T00:10:00Z",
+      "late_arr": 57,
+      "sched_dep": "2026-10-23T23:16:00Z",
+      "dep": "2026-10-24T00:16:00Z",
+      "late_dep": 60
+    },
+    {
+      "code": "KEL",
+      "km": 1196.6,
+      "sched_arr": "2026-10-23T23:48:00Z",
+      "arr": "2026-10-24T00:51:00Z",
+      "late_arr": 63,
+      "sched_dep": "2026-10-23T23:51:00Z",
+      "dep": "2026-10-24T00:53:00Z",
+      "late_dep": 62
+    },
+    {
+      "code": "CTL",
+      "km": 1266.8,
+      "sched_arr": "2026-10-24T00:33:00Z",
+      "arr": "2026-10-24T01:35:00Z",
+      "late_arr": 62,
+      "sched_dep": "2026-10-24T00:36:00Z",
+      "dep": "2026-10-24T01:37:00Z",
+      "late_dep": 61
+    },
+    {
+      "code": "OLW",
+      "km": 1302.4,
+      "sched_arr": "2026-10-24T00:59:00Z",
+      "arr": "2026-10-24T01:58:00Z",
+      "late_arr": 59,
+      "sched_dep": "2026-10-24T01:01:00Z",
+      "dep": "2026-10-24T02:03:00Z",
+      "late_dep": 62
+    },
+    {
+      "code": "TAC",
+      "km": 1347.6,
+      "sched_arr": "2026-10-24T01:38:00Z",
+      "arr": "2026-10-24T02:43:00Z",
+      "late_arr": 65,
+      "sched_dep": "2026-10-24T01:43:00Z",
+      "dep": "2026-10-24T02:45:00Z",
+      "late_dep": 62
+    },
+    {
+      "code": "SEA",
+      "km": 1412.4,
+      "sched_arr": "2026-10-24T02:51:00Z",
+      "arr": null,
+      "late_arr": null,
+      "sched_dep": null,
+      "dep": null,
+      "late_dep": null
+    }
+  ],
+  "track": [],
+  "track_basis": "none: positions were not stored during this ride; the house places the train between the observed stop times",
+  "notes": []
+}
