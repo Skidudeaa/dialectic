@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useRide } from './useRide'
-import { estimatedKm, headingDegrees, positionAt, replayEvents, replayKm, trackHeading } from './rideCard'
+import { estimatedKm, firstLitSight, headingDegrees, positionAt, replayEvents, replayKm, trackHeading } from './rideCard'
 import { RideCard } from './RideCard'
 import RideMap from './RideMap'
 import './ride.css'
@@ -13,7 +13,8 @@ export default function RideBench({ roomId, record }: { roomId: string; record?:
   if (!data) return <div className="longway-bench longway-ride"><p role={error ? 'alert' : 'status'}>{error || 'Loading ride…'} {error && <button onClick={refresh}>Retry ride</button>}</p>{record && <div className="longway-bench-record">{record}</div>}</div>
   const replay = data.ride.state === 'arrived', events = replayEvents(data.stops)
   const start = events[0]?.t, end = events.at(-1)?.t
-  const time = replay && start !== undefined && end !== undefined ? Math.max(start, Math.min(end, scrub ?? start)) : now
+  const opening = replay && leg ? firstLitSight(leg, data.stops) : null
+  const time = replay && start !== undefined && end !== undefined ? Math.max(start, Math.min(end, scrub ?? opening ?? start)) : now
   const km = replay ? replayKm(data.stops, time) : offline ? estimatedKm(data, now) : data.km
   const position: [number, number] | null = !replay && !offline && data.fix ? [data.fix.lon, data.fix.lat] : leg && km !== null ? positionAt(leg.sights.km, km) : null
   const heading = headingDegrees(replay || offline ? null : data.fix?.heading, leg && km !== null ? trackHeading(leg.sights.km, km) : 0)

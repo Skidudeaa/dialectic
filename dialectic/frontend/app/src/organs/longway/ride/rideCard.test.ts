@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { estimatedKm, gapsAhead, historyLine, lightAt, mergeSights, positionAt, replayKm, sightEntities, sightsAhead, stopTimeline, sunEl, viewsNow } from './rideCard'
+import { estimatedKm, firstLitSight, gapsAhead, historyLine, lightAt, mergeSights, positionAt, replayKm, sightEntities, sightsAhead, stopTimeline, sunEl, viewsNow } from './rideCard'
 import { fixtureLeg as leg, fixtureRide as ride } from './fixtures'
 import { rideStyle } from './rideLayers'
 const at = Date.parse('2026-10-23T09:53:00-07:00')
@@ -68,5 +68,12 @@ describe('ride instrument against the original leg and logbook', () => {
     expect(tooth.paint).toMatchObject({ 'line-width': 14, 'line-offset': -12, 'line-color': '#ff2fd6' })
     expect(style.layers.find(l => l.id === 'teeth-right-2')!.paint).toMatchObject({ 'line-width': 7, 'line-offset': 8.5 })
     expect(style.layers.find(l => l.id === 'signal')!.layout).toMatchObject({ visibility: 'none' })
+  })
+  it('opens an arrived replay on the first major sight in daylight, never at a dark boarding', () => {
+    const t = firstLitSight(leg, ride.stops)!
+    const km = replayKm(ride.stops, t)!, at = positionAt(leg.sights.km, km)!
+    expect(lightAt(at[1], at[0], t)).toBe('daylight')
+    expect(viewsNow(leg, ride.stops, km).some(v => v.c === 3)).toBe(true)
+    expect(firstLitSight({ ...leg, sights: { ...leg.sights, sights: [] } }, ride.stops)).toBeNull()
   })
 })

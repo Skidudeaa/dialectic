@@ -114,6 +114,14 @@ export function viewsNow(leg: RideLeg, stops: RideStop[], km: number) {
     return { side, c, label: c === 3 ? "Don't miss" : c === 2 ? 'Worth a look' : 'Nothing', name: w?.name ?? row[i + 5] as string ?? '', remaining, minutes: remaining !== null && pace !== null ? remaining * pace : null }
   })
 }
+/** Where an arrived ride's replay opens: mid-way through its first major sight seen in daylight, not at a dark boarding. */
+export function firstLitSight(leg: RideLeg, stops: RideStop[]): number | null {
+  for (const w of majorWindows(leg)) {
+    const km = (w.km0 + w.km1) / 2, t = timeAtKm(stops, km), at = positionAt(leg.sights.km, km)
+    if (t !== null && at && lightAt(at[1], at[0], t) === 'daylight') return t
+  }
+  return null
+}
 export function sightsAhead(leg: RideLeg, stops: RideStop[], km: number | null, now: number) {
   return majorWindows(leg).map(w => ({ ...w, at0: timeAtKm(stops, w.km0), at1: timeAtKm(stops, w.km1) }))
     .filter(w => (km === null || w.km0 > km) && w.at1 !== null && w.at1 > now).slice(0, 6)
