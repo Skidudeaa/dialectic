@@ -215,11 +215,12 @@ class InterjectionEngine:
             else self.semantic_novelty_threshold
         )
         if semantic_novelty is not None and semantic_novelty >= effective_novelty_threshold:
+            from organ import active
             return InterjectionDecision(
                 should_interject=True,
                 reason=f"semantic_novelty_spike ({semantic_novelty:.2f})",
                 confidence=semantic_novelty,
-                use_provoker=True,
+                use_provoker=getattr(active, "provoker", True),
                 considered_reasons=considered_reasons,
             )
         else:

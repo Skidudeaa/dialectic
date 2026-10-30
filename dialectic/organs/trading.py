@@ -10,7 +10,7 @@ def tools(room, db):
     return _build_trading_tools(room)
 
 
-def base_identity():
+def base_identity(room=None):
     from llm.prompts import PromptBuilder
     return PromptBuilder.BASE_IDENTITY
 

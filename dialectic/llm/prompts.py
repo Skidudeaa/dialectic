@@ -299,7 +299,7 @@ would have gone."""
             identity = self.PROVOKER_IDENTITY
         else:
             from organ import active
-            identity = active.base_identity()
+            identity = active.base_identity(room)
 
         room_context = self._build_room_context(room)
         user_context = self._blend_user_modifiers(users)

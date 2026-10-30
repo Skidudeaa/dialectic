@@ -275,3 +275,22 @@ async def chart_overlay(db, chart, room_id):
                 (p['leg_from'], p['leg_to']) in ((segment['from'], segment['to']), (segment['to'], segment['from']))
                 for p in overlay.get(journey['slug'], []))
     return dict(chart, proposals=overlay)
+
+
+AWAITING_CAP = 15
+
+
+async def awaiting_lines(db, room_id):
+    """The Scout's unwritten proposals for this room's journey, newest first: one line each with a
+    short P-id, its marks (contested, contradicting), the claim and the publisher. Room record only."""
+    rows = await db.fetch('''SELECT p.id,p.claim,p.publisher,p.url,p.contradicts,
+        EXISTS (SELECT 1 FROM field_marks parent JOIN field_marks m ON m.target_mark_id=parent.id
+            AND m.mark_kind='review' AND m.action='contest'
+            WHERE parent.room_id=p.room_id AND parent.mark_kind='relation' AND parent.relation='evidence_attachment'
+            AND parent.subjects @> jsonb_build_array(jsonb_build_object('entity','longway_evidence_proposals','id',p.id::text))) AS contested
+        FROM longway_evidence_proposals p JOIN rooms r ON r.id=p.room_id
+        WHERE p.room_id=$1 AND p.candidate=r.linked_journey AND p.written_at IS NULL
+        ORDER BY p.created_at DESC,p.id LIMIT $2''', room_id, AWAITING_CAP)
+    return [f"P{str(r['id'])[:8]}" + (" [contested]" if r['contested'] else "")
+            + (f" [contradicts P{str(r['contradicts'])[:8]}]" if r['contradicts'] else "")
+            + f" {r['claim']} ({r['publisher'] or urlsplit(r['url']).hostname})" for r in rows]

@@ -62,6 +62,20 @@ async def seed(db, room_id, user_id=None):
             for text in item.get('questions', [])]
 
 
+# The three of charter §05's five useful questions that a search can answer. WHY: the inherited dossiers ask
+# only about risk and logistics, so the Scout's agenda never reached the pull.
+# ponytail: a closed pull question stays closed for its journey (dedup by text); re-ask in other words to reopen.
+PULL_QUESTIONS = (
+    "Why this approach? Which boats, roads or routes would carry us, and what does each add?",
+    "Where is the human dimension? Who receives visitors, works alongside them or shares the transit?",
+    "Where is the room for surprise? Where could we linger, and what could change the route?",
+)
+
+
+async def seed_pull(db, room_id):
+    return [await add(db, room_id, text, source='scout') for text in PULL_QUESTIONS]
+
+
 async def researchable(db, journey, limit=5):
     """The oldest open questions that have no answer waiting on the Field's desk.
 

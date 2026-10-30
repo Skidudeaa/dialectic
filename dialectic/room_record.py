@@ -28,6 +28,12 @@
 # room's settled record — an echo, not new information. A mark only
 # belongs here once a human has made it directly (origin='explicit') or
 # ruled on it (review derived to confirmed/contested).
+#
+# EXCEPTION (2026-10-30, The Long Way): the organ's `room_record_lines`
+# hook adds the Scout's unwritten evidence proposals, labelled as awaiting
+# the Field. They are quoted passages from fetched pages with URLs, not
+# inferred interpretations; without them the Scout in the Sepik room knew
+# none of the 35 things it had found and answered "unknown".
 
 import secrets
 from dataclasses import dataclass, field
@@ -132,6 +138,8 @@ class RoomRecord:
     reading_lines: list = field(default_factory=list)
     geography_lines: list = field(default_factory=list)
     world_lines: list = field(default_factory=list)
+    organ_lines: list = field(default_factory=list)
+    organ_title: str = ""
 
     def to_prompt_section(self, max_chars: int = 6000) -> str:
         """Nonce-delimited data section — home_activity.py's
@@ -144,6 +152,7 @@ class RoomRecord:
         """
         blocks = [
             b for b in (
+                self._block(self.organ_title, self.organ_lines),
                 self._block(
                     "Field (human-reviewed or human-made, newest first, ≤25)",
                     self.field_lines,
@@ -349,8 +358,13 @@ async def build_room_record(conn, room_id: UUID) -> RoomRecord:
         conn, room_id, geo_scopes,
     )
     world_lines = await _world_lines(conn, room_id, bound_scope_ids)
+    from organ import active
+    organ_title, organ_lines = (await active.room_record_lines(conn, room_id)
+                                if hasattr(active, "room_record_lines") else ("", []))
 
     return RoomRecord(
+        organ_lines=organ_lines,
+        organ_title=organ_title,
         field_lines=_field_lines(marks),
         correction_lines=(
             _render_digest(digest_rows[:CORRECTIONS_CAP]).split("\n")

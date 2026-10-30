@@ -144,6 +144,10 @@ class Room(BaseModel):
     # idx_rooms_single_home enforces the singleton; one additive boolean
     # (no room-kind enum) keeps every existing Room consumer unchanged.
     is_home: bool = False
+    # The Long Way: the journey or trip this room is about. WHY: like
+    # linked_book_id, the column existed but Room(**dict(row)) dropped it, so
+    # the Scout in the Cyprus room asked where the friends were going.
+    linked_journey: Optional[str] = None
 
     @field_validator("trading_config", mode="before")
     @classmethod

@@ -227,7 +227,7 @@ async def scout_nightly(ctx, *, now=None):
     if os.environ.get('LONGWAY_SCOUT_ENABLED') != '1':
         return {'skipped': 'disabled'}
     from .scout import run, AlreadyRunning
-    from .questions import seed, researchable
+    from .questions import seed, seed_pull, researchable
     now = now or datetime.now(timezone.utc)
     today = now.astimezone(ZoneInfo('America/Chicago')).date()
     async with ctx.pool.acquire() as db:
@@ -246,6 +246,7 @@ async def scout_nightly(ctx, *, now=None):
         for room in rooms:
             if not await db.fetchval("SELECT 1 FROM longway_questions WHERE journey=$1 AND closed_at IS NULL LIMIT 1", room['linked_journey']):
                 seeded[str(room['id'])] = len(await seed(db, room['id']))
+            await seed_pull(db, room['id'])
         work = {room['id']: [q['id'] for q in await researchable(db, room['linked_journey'])] for room in rooms}
     result = {'seeded': seeded} if seeded else {}
     for room in rooms:

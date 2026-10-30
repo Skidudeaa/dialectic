@@ -133,3 +133,19 @@ def test_scout_prompt_preserves_room_rules_and_other_personas(longway_repo,monke
     assert "Each friend can decline" in prompt.system
     assert "A claim is not a booking" in prompt.system
     assert "You are the Scout" not in builder.build(room,[],[],[],is_provoker=True).system
+
+
+def test_bound_room_knows_its_journey_and_never_provokes(longway_repo,monkeypatch):
+    import organ
+    from organs import longway
+    from llm.prompts import PromptBuilder
+    from llm.heuristics import InterjectionEngine
+    from tests.conftest import make_room, make_message
+    monkeypatch.setattr(organ,"active",longway)
+    system=lambda slug: PromptBuilder().build(make_room(linked_journey=slug),[],[],[]).system
+    assert "## This room" in system("ogasawara") and "Ocean crossing" in system("ogasawara")
+    trip=system("friends-2027")
+    assert "Autumn journey" in trip and "Which month?" in trip and "BOOKING-PRIVATE-123" not in trip
+    assert "## This room" not in system(None)
+    decision=InterjectionEngine(turn_threshold=4,semantic_novelty_threshold=0.7).decide([make_message("status")],semantic_novelty=0.85)
+    assert decision.should_interject and decision.use_provoker is False

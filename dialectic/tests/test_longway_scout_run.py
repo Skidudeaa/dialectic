@@ -93,8 +93,10 @@ class ScriptedProvider:
         if step==2 and not counter:
             page=json.loads(request.messages[-1]['content'][0]['content'])
             assert len(page['text'])==8148 and 'CANTIKA' in page['text'] and not page['truncated']
-            q=json.loads(request.messages[0]['content'])['questions'][0]
+            q=json.loads(request.messages[0]['content'].split('\n')[-1])['questions'][0]
             assert q['text']==QUESTION
+            # The run starts from the journey's pull and the charter's research brief, not from bare question text.
+            assert '## This room' in request.messages[0]['content'] and '### Research instruction' in request.system
             # The live model named the candidate by its title; the run files under its own journey regardless.
             return response('propose',{'candidate':'Banda Islands','url':URL,'claim':CLAIM,
                 'scope':'schedule, Ambon to Banda', 'load_bearing':True, 'question_id':q['id'],
@@ -486,6 +488,12 @@ async def test_restart_recovery_closes_running_rows(db,house,banda):
     await scout.reserve(house.pool,house.room,'banda-islands')   # the journey's slot is free again
 
 
+async def close_pull(db,house):
+    """These tests are about the desk, not the standing pull questions; close them (seeding never reopens one)."""
+    for q in await questions.seed_pull(db,house.room):
+        await questions.close(db,house.room,q['id'],house.user.user_id)
+
+
 @pytest.mark.asyncio
 async def test_nightly_seeds_dossier_questions_for_a_quiet_room(db,house,banda,monkeypatch):
     from organs.longway import jobs
@@ -499,7 +507,10 @@ async def test_nightly_seeds_dossier_questions_for_a_quiet_room(db,house,banda,m
     seeded=[q for q in await questions.list_questions(db,house.room) if q['source']=='dossier']
     assert len(seeded)==3 and result['seeded']=={str(house.room):3} and result[str(house.room)]=={'status':'done'}
     args,kwargs=fake.await_args
-    assert args[:3]==(house.pool,house.room,'banda-islands') and sorted(args[3])==sorted(q['id'] for q in seeded)
+    pull=[q for q in await questions.list_questions(db,house.room) if q['source']=='scout']
+    assert sorted(q['text'] for q in pull)==sorted(questions.PULL_QUESTIONS)
+    assert args[:3]==(house.pool,house.room,'banda-islands') and len(args[3])==5
+    assert set(args[3])>=set(q['id'] for q in seeded) and set(args[3])-set(q['id'] for q in seeded)<=set(q['id'] for q in pull)
     assert kwargs=={'trigger':'nightly','ctx':ctx}
     assert (await jobs.scout_nightly(ctx)).get('seeded') is None   # seeding happens once
 
@@ -529,6 +540,7 @@ async def test_nightly_leaves_a_question_whose_answer_waits_on_the_desk(db,house
     fake=AsyncMock(return_value={'status':'done'})
     monkeypatch.setattr(scout,'run',fake)
     monkeypatch.setenv('LONGWAY_SCOUT_ENABLED','1')
+    await close_pull(db,house)
     ctx=SimpleNamespace(pool=house.pool)
     answer=await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='a reading, not load-bearing',
         question_id=banda['id'],fetcher=captured_page)   # not load-bearing: nothing stranded, so nothing to run
@@ -555,6 +567,7 @@ async def test_nightly_still_runs_the_contrary_searches_a_waiting_desk_needs(db,
     fake=AsyncMock(return_value={'status':'done'})
     monkeypatch.setattr(scout,'run',fake)
     monkeypatch.setenv('LONGWAY_SCOUT_ENABLED','1')
+    await close_pull(db,house)
     ctx=SimpleNamespace(pool=house.pool)
     await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='schedule',load_bearing=True,
         question_id=banda['id'],fetcher=captured_page)
@@ -575,3 +588,20 @@ async def test_counter_only_run_skips_research_and_stamps_the_stranded_proposal(
     assert await db.fetchval('SELECT counter_searched_at FROM longway_evidence_proposals WHERE room_id=$1',house.room) is not None
     content=await db.fetchval("SELECT content FROM messages WHERE thread_id=$1 AND metadata ? 'longway_scout_run'",house.thread)
     assert 'Questions: none, contrary searches only.' in content
+
+
+@pytest.mark.asyncio
+async def test_room_record_shows_the_scouts_proposals_awaiting_the_field(db,house,client,banda,monkeypatch):
+    import organ
+    from organs import longway
+    from room_record import build_room_record
+    monkeypatch.setattr(organ,"active",longway)
+    assert (await build_room_record(db,house.room)).organ_lines==[]
+    row=await proposals.propose(db,house.room,candidate='banda-islands',url=URL,claim=CLAIM,scope='schedule',fetcher=captured_page)
+    lines=(await build_room_record(db,house.room)).organ_lines
+    publisher=await db.fetchval('SELECT coalesce(publisher,$2) FROM longway_evidence_proposals WHERE id=$1',row['id'],'www.dive-bluemotion.com')
+    assert lines==[f"P{str(row['id'])[:8]} {CLAIM} ({publisher})"]
+    assert (await client.post(f"/rooms/{house.room}/field/marks/{row['field_mark_id']}/review",json={'action':'contest','note':'Not October'})).status_code==200
+    record=await build_room_record(db,house.room)
+    assert record.organ_lines[0].startswith(f"P{str(row['id'])[:8]} [contested] ")
+    assert "Scout proposals awaiting the Field" in record.to_prompt_section()
