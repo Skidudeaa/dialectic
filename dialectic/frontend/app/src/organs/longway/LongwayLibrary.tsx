@@ -8,7 +8,7 @@ export function LongwayLibrary({ roomId }: { roomId: string }) {
   if (unbound) return <p>This room is not yet linked to a journey.</p>
   if (loading || !data) return <p role="status">Loading journey…</p>
   return <div className="longway-library scene-body">
-    <h2>{data.title}</h2>
+    {!/^#\s/.test(data.dossier.trimStart()) && <h2>{data.title}</h2>}
     <section aria-label="Dossier" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(data.dossier, { async: false })) }} />
     <section aria-label="Evidence ledger"><h2>Evidence ledger</h2>{data.evidence.map(row => <article key={row.id} className={`longway-card${row.faded ? ' is-faded' : ''}`}>
       <h3>{row.id} · {row.claim}</h3><p>{row.status}{row.checked_at ? ` · checked ${new Date(`${row.checked_at}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}` : ''}</p>

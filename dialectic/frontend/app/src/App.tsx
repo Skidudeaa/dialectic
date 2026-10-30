@@ -839,6 +839,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
             onCancelReply={() => setReplyToId(null)}
             placeholder={isHome ? `Sit down — ${PARTICIPANT_NAME} is already here` : undefined}
             quiet={isHome}
+            compactOptions={ORGAN === 'longway'}
           />
     </>
   )
@@ -854,7 +855,7 @@ export function ChatLayout({ nav }: { nav: RoomNavigation }) {
   // the other rooms. The conversation is the place; the pulse is the lintel
   // over it. Everything demoted is one <details> away, not gone.
   const houseSurface = ORGAN === 'longway' ? (
-    <LongwayHouse key={currentRoom.id} roomId={currentRoom.id} canManageHome={rooms.some(room => room.is_home && room.can_manage_home)} onNavigate={async roomId => { await nav.refreshRooms(); return navigate({ roomId, scene: 'record' }, 'push') }} />
+    <LongwayHouse key={currentRoom.id} roomId={currentRoom.id} canManageHome={rooms.some(room => room.is_home && room.can_manage_home)} onNavigate={async roomId => { await nav.refreshRooms(); return navigate({ roomId }, 'push') }} />
   ) : (
     <>
       <div className="house-reading-region">
@@ -1430,7 +1431,7 @@ function App() {
     return () => window.clearTimeout(timer)
   }, [isAuthenticated, accessToken, refreshToken, user, setUser, logout])
 
-  if (ORGAN === 'longway') return <LongwayShell>{!isAuthenticated ? <><p className="longway-entry-lede">{IDENTITY.lede}</p><AuthScreen /></> : <AuthenticatedWorkspace />}</LongwayShell>
+  if (ORGAN === 'longway') return <LongwayShell>{!isAuthenticated ? <AuthScreen /> : <AuthenticatedWorkspace />}</LongwayShell>
   if (!isAuthenticated) return <AuthScreen />
   return <AuthenticatedWorkspace />
 }

@@ -1,92 +1,370 @@
+/* The Long Way's skin over the shared shell. Everything here is scoped to [data-organ="longway"], so Dialectic's
+   own dossier-and-chassis look is untouched. One idea runs through it: the house is a chart table, not an
+   instrument panel. Flat surfaces, one accent (the globe's "good" ink), and the globe's own type: Libre Caslon for
+   what people wrote and read, IBM Plex Sans Condensed for the controls (vite.config.ts loads both for this organ). The room schemes, per-scene hues and bezels are switched off here, because on a
+   phone they spent most of the screen on chrome and gave every tab its own accent colour. */
+
+/* ── Palette: the globe's chart-table colours ─────────────────────────────── */
 :root[data-organ="longway"] {
-  --bg: #ecf1f0; --panel: #f7faf9; --sea: #dce7e8; --land: #f2ead8; --coast: #b4c3c2; --grat: #cddadb;
+  --bg: #ecf1f0; --panel: #f7faf9; --raise: #e2eaea; --sea: #dce7e8; --land: #f2ead8; --coast: #b4c3c2; --grat: #cddadb;
   --ink: #13283a; --ink-2: #44586a; --ink-3: #586a78; --rule: #c6d3d4;
   --good: #a51f66; --possible: #da88b2; --off: #9aabb3; --pencil: #7a8790; --contra: #c0392b;
+  --accent-ink: #ffffff; --map-icon-filter: none;
   --font-display: "Libre Caslon Display", "Libre Caslon Text", Georgia, serif;
   --font-text: "Libre Caslon Text", Georgia, "Times New Roman", serif;
   --font-ui: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-code: "JetBrains Mono", ui-monospace, monospace;
 }
 @media (prefers-color-scheme: dark) { :root[data-organ="longway"]:not([data-theme="light"]) {
-  --bg: #091117; --panel: #0e1a22; --sea: #0c1820; --land: #1a2730; --coast: #2e404b; --grat: #14232c;
+  --bg: #091117; --panel: #0e1a22; --raise: #142530; --sea: #0c1820; --land: #1a2730; --coast: #2e404b; --grat: #14232c;
   --ink: #dce5e9; --ink-2: #a5b5be; --ink-3: #8597a2; --rule: #21303a;
-  --good: #ff5aa5; --possible: #7c2f55; --off: #3d4e58; --pencil: #8494a0; --contra: #ff6b5b; color-scheme: dark } }
+  --good: #ff5aa5; --possible: #7c2f55; --off: #3d4e58; --pencil: #8494a0; --contra: #ff6b5b; --accent-ink: #22020f; --map-icon-filter: invert(.88); color-scheme: dark } }
 :root[data-organ="longway"][data-theme="dark"] {
-  --bg: #091117; --panel: #0e1a22; --sea: #0c1820; --land: #1a2730; --coast: #2e404b; --grat: #14232c;
+  --bg: #091117; --panel: #0e1a22; --raise: #142530; --sea: #0c1820; --land: #1a2730; --coast: #2e404b; --grat: #14232c;
   --ink: #dce5e9; --ink-2: #a5b5be; --ink-3: #8597a2; --rule: #21303a;
-  --good: #ff5aa5; --possible: #7c2f55; --off: #3d4e58; --pencil: #8494a0; --contra: #ff6b5b; color-scheme: dark }
-:root[data-organ="longway"] {
+  --good: #ff5aa5; --possible: #7c2f55; --off: #3d4e58; --pencil: #8494a0; --contra: #ff6b5b; --accent-ink: #22020f; --map-icon-filter: invert(.88); color-scheme: dark }
+
+/* ── The shell's tokens, pointed at the palette ───────────────────────────────
+   Repeated on every [data-room-scheme] element: tokens.css re-derives the whole palette on each one (the sidebar's
+   room cards carry their own scheme), which is what painted a room card wine-red with an amber edge. */
+:root[data-organ="longway"], [data-organ="longway"] [data-room-scheme] {
+  --accent: var(--good); --accent-soft: color-mix(in srgb, var(--good) 16%, transparent);
   --room-hue: 220; --room-chroma: .025; --room-accent-hue: 350; --room-accent-chroma: .14;
-  --color-void: var(--bg); --color-obsidian: var(--bg); --color-sheet: var(--panel);
-  --color-cacao: var(--panel); --color-espresso: var(--panel); --color-bean: var(--rule); --color-crater: var(--pencil);
+  --color-void: var(--bg); --color-obsidian: var(--bg); --color-sheet: var(--bg);
+  --color-cacao: var(--panel); --color-espresso: var(--raise); --color-bean: var(--rule); --color-crater: var(--pencil);
+  --color-chassis: var(--bg); --color-well: var(--bg);
   --color-display: var(--ink); --color-bone: var(--ink); --color-ink: var(--ink);
   --color-secondary: var(--ink-2); --color-faint: var(--ink-3); --color-ghost: var(--ink-3);
-  --color-amber: var(--good); --color-amber-hot: var(--good); --color-amber-mute: var(--good);
-  --font-serif: var(--font-text);
+  --color-amber: var(--accent); --color-amber-hot: var(--accent); --color-amber-mute: var(--accent);
+  --font-serif: var(--font-text); --font-mono: var(--font-ui);
+  --chassis-brush: none; --sheen: none; --sheen-strong: none; --engrave: none;
+  --bezel-raised: 0 0 #0000; --bezel-key: 0 0 #0000; --bezel-key-down: 0 0 #0000; --bezel-well: 0 0 #0000;
+  --depth-0: 0 0 #0000; --depth-1: 0 0 #0000; --depth-2: 0 1px 2px rgb(0 0 0 / .18);
+  --shadow-glow-indigo: 0 0 #0000; --shadow-glow-amber: 0 0 #0000;
+  --led-glow-green: 0 0 #0000; --led-glow-amber: 0 0 #0000; --led-glow-teal: 0 0 #0000; --led-glow-red: 0 0 #0000;
+  --focus-ring-color: var(--accent); --focus-ring: 0 0 0 3px var(--accent-soft);
+  --radius-control: 8px; --radius-chassis: 12px;
 }
-[data-organ="longway"] body { background: var(--bg); color: var(--ink); font-family: var(--font-text); }
-[data-organ="longway"] :is(h1, h2, h3) { font-family: var(--font-display); }
-[data-organ="longway"] :focus-visible { outline: 2px solid var(--good); outline-offset: 3px; }
-[data-organ="longway"] .scene-switcher { flex-wrap: wrap; }
-[data-organ="longway"] .scene-switcher-action { display: inline-flex; }
-[data-organ="longway"] .scene-masthead { gap: 1rem; color: var(--ink); }
-[data-organ="longway"] .scene-masthead h2 { font-size: 1.25rem; }
-.longway-chart { height: 55svh; min-height: 240px; background: var(--sea); position: relative; }
-.longway-chart > .longway-chart-ui, .longway-chart-ui > .longway-map { height: 100%; }
-.longway-chart-notes { padding: 1rem; }
-.longway-card, .longway-dispatch { border: 1px solid var(--rule); background: var(--panel); padding: 1rem; margin: .8rem 0; }
-.longway-card[data-selected] { border-color: var(--good); }
-.longway-card.is-faded { color: var(--ink-3); }
-.longway-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: .75rem; }
+/* Every scene used to light itself in its own hue (teal Chart, plum Field, gold Ledger...): one accent everywhere. */
+[data-organ="longway"] :is(.app-main, .workspace-scene, [data-scene]) {
+  --scene-accent: var(--accent); --scene-accent-soft: var(--accent-soft); --scene-tint: transparent; --scene-ambient: none;
+}
+
+[data-organ="longway"] body { background: var(--bg); color: var(--ink); font-family: var(--font-text); font-size: 16px; }
+[data-organ="longway"] :is(h1, h2) { font-family: var(--font-display); font-weight: 400; color: var(--ink); }
+[data-organ="longway"] h3 { font-family: var(--font-text); font-weight: 700; color: var(--ink); }
+[data-organ="longway"] :is(code, pre, kbd, samp) { font-family: var(--font-code); }
+[data-organ="longway"] :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+[data-organ="longway"] a { color: inherit; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+[data-organ="longway"] ::selection { background: var(--accent-soft); color: var(--ink); }
+[data-organ="longway"] .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ── Shell: rails and main column ─────────────────────────────────────────── */
+[data-organ="longway"] .app-sidebar { background: var(--bg); box-shadow: none; border-right: 1px solid var(--rule); }
+[data-organ="longway"] .app-main { background: var(--bg); box-shadow: none; }
+[data-organ="longway"] .app-main::before { display: none; }
+[data-organ="longway"] .workspace-scene-content { background: none; }
+[data-organ="longway"] .sidebar-rooms-header h2 { font: 600 .72rem/1 var(--font-ui); letter-spacing: .08em; color: var(--ink-3); }
+[data-organ="longway"] :is(.room-item, .home-pin) {
+  background: none; border: 0; border-radius: 8px; box-shadow: none; padding: .6rem .75rem; color: var(--ink-2);
+}
+[data-organ="longway"] :is(.room-item, .home-pin):hover { background: var(--raise); color: var(--ink); transform: none; }
+[data-organ="longway"] :is(.room-item, .home-pin).active { background: var(--raise); color: var(--ink); }
+[data-organ="longway"] :is(.room-item, .home-pin).active::before { background: var(--accent); box-shadow: none; width: 3px; border-radius: 2px; }
+[data-organ="longway"] :is(.room-item-name, .home-pin-label) { font: 500 .95rem/1.3 var(--font-ui); color: inherit; text-shadow: none; }
+[data-organ="longway"] .home-pin-icon { color: inherit; }
+[data-organ="longway"] .user-info-bar { font-family: var(--font-ui); border-top: 1px solid var(--rule); background: none; }
+[data-organ="longway"] .branch-node { background: none; border-color: transparent; box-shadow: none; font-family: var(--font-ui); }
+[data-organ="longway"] .branch-node.active { background: var(--raise); }
+[data-organ="longway"] .branch-node-title { font: 500 .88rem var(--font-ui); }
+[data-organ="longway"] :is(.branch-here, .branch-node-count) { font: 500 .72rem var(--font-ui); text-transform: none; letter-spacing: 0; box-shadow: none; }
+@media (max-width: 1279.98px) {
+  /* Drawers: a closed one cast its shadow onto the page edge; only an open drawer lifts. */
+  [data-organ="longway"] :is(.app-sidebar, .app-right-panel) { background: var(--panel); box-shadow: none; }
+  [data-organ="longway"] :is(.drawer-rooms .app-sidebar, .drawer-panel .app-right-panel) { box-shadow: 0 12px 40px rgb(0 0 0 / .35); }
+}
+
+/* ── Header: a plain app bar ─────────────────────────────────────────────── */
+[data-organ="longway"] .room-header { background: var(--bg); box-shadow: none; border-bottom: 1px solid var(--rule); padding: .5rem 1rem; margin: 0; }
+[data-organ="longway"] .room-header::after { display: none; }
+[data-organ="longway"] .room-title { font: 700 1.2rem/1.25 var(--font-text); text-transform: none; letter-spacing: 0; text-shadow: none; color: var(--ink); }
+[data-organ="longway"] .room-title::before { display: none; }
+[data-organ="longway"] .room-header .btn,
+[data-organ="longway"] .room-header .btn-ghost,
+[data-organ="longway"] .room-header .btn-secondary {
+  min-width: 40px; min-height: 40px; padding: 0 .55rem; border: 1px solid transparent; border-radius: 8px;
+  background: none; box-shadow: none; color: var(--ink-2); font: 500 .9rem var(--font-ui); text-transform: none; letter-spacing: 0; justify-content: center;
+}
+[data-organ="longway"] .room-header .btn:hover { background: var(--raise); color: var(--ink); border-color: transparent; }
+[data-organ="longway"] .room-header .btn:active { transform: none; box-shadow: none; }
+[data-organ="longway"] .help-action .help-unread { background: var(--accent); color: var(--accent-ink); box-shadow: none; font-family: var(--font-ui); }
+[data-organ="longway"] .thread-breadcrumb select { background: none; box-shadow: none; font-family: var(--font-ui); }
+/* Connected is the normal state and says nothing; only a lost connection earns room in the bar, in words. */
+[data-organ="longway"] .conn-status:has(.conn-dot.connected) { display: none; }
+[data-organ="longway"] .conn-status { background: none; box-shadow: none; border-color: var(--contra); color: var(--ink); font-family: var(--font-ui); }
+[data-organ="longway"] .conn-status .conn-label { display: inline; }
+
+@media (max-width: 600px) {
+  /* Phone: one bar of controls, then the room's name on a line of its own, instead of two ragged rows of keys. */
+  [data-organ="longway"] .room-header { flex-wrap: wrap; padding: .35rem .5rem .5rem; row-gap: .1rem; column-gap: .25rem; }
+  [data-organ="longway"] .room-header-left, [data-organ="longway"] .room-header-right { display: contents; }
+  [data-organ="longway"] .room-header .room-title {
+    order: 5; flex: 1 0 100%; padding: 0 .5rem; font-size: 1.15rem;
+    white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  [data-organ="longway"] .room-header .home-action { order: 1; }
+  [data-organ="longway"] .room-header .mobile-drawer-toggle:first-child { order: 0; }
+  [data-organ="longway"] .room-header .room-header-right > * { order: 3; }
+  [data-organ="longway"] .room-header .room-header-right > :first-child { margin-left: auto; }
+  [data-organ="longway"] .room-header :is(.crumb-sep, .thread-breadcrumb) { display: none; }
+}
+
+/* ── Who is here: a quiet line, not a row of stamped badges ───────────────── */
+[data-organ="longway"] .participants-bar { background: none; border-bottom: 0; padding: .35rem 1rem 0; font-family: var(--font-ui); }
+[data-organ="longway"] .participant-chip { border: 0; background: none; padding: 2px 4px; color: var(--ink-3); }
+[data-organ="longway"] .participant-chip:hover { transform: none; background: var(--raise); box-shadow: none; }
+[data-organ="longway"] .participant-chip :is(.p-name, .p-last-seen) { font: 500 .8rem var(--font-ui); text-transform: none; letter-spacing: 0; }
+
+/* ── Scene tabs: sentence case, one row, one accent underline ─────────────── */
+[data-organ="longway"] .scene-switcher-wrap { background: var(--bg); box-shadow: none; border-bottom: 1px solid var(--rule); }
+[data-organ="longway"] .scene-switcher { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: .25rem; padding: 0 .5rem; min-height: 0; }
+[data-organ="longway"] .scene-switcher::-webkit-scrollbar { display: none; }
+[data-organ="longway"] .scene-switcher-action {
+  display: inline-flex; min-height: 44px; padding: 0 .75rem; font: 500 .95rem/1 var(--font-ui); letter-spacing: 0;
+  text-transform: none; text-shadow: none; color: var(--ink-3); border-radius: 0;
+}
+[data-organ="longway"] .scene-switcher-action:hover { color: var(--ink); background: none; transform: none; box-shadow: none; }
+[data-organ="longway"] .scene-switcher-action:active { transform: none; box-shadow: none; }
+[data-organ="longway"] .scene-switcher-action.is-active { color: var(--ink); }
+[data-organ="longway"] .scene-switcher-action:focus-visible { outline-offset: -3px; }
+[data-organ="longway"] .scene-switcher-action::before { left: .75rem; right: .75rem; bottom: 0; height: 2px; border-radius: 2px; background: var(--accent); }
+[data-organ="longway"] .scene-switcher-action::after, [data-organ="longway"] .scene-switcher-glyph { display: none; }
+[data-organ="longway"] .scene-masthead { color: var(--ink-2); border: 0; background: none; box-shadow: none; padding: .9rem 1.4rem 0; }
+[data-organ="longway"] .scene-masthead::after, [data-organ="longway"] .scene-masthead::before { display: none; }
+[data-organ="longway"] .scene-masthead p { margin: 0; font: italic 400 1rem/1.45 var(--font-text); color: var(--ink-3); max-width: 1400px; margin-inline: auto; }
+[data-organ="longway"] .scene-masthead-quiet { padding: 0; }
+/* On a phone the motto would push the globe half a screen down on every visit; the sign-in card carries it. */
+@media (max-width: 600px) { [data-organ="longway"] .scene-masthead { padding: 0; } [data-organ="longway"] .scene-masthead p { display: none; } }
+
+/* ── Controls inside the Long Way's own scenes ────────────────────────────── */
 [data-organ="longway"] :is(button, input, textarea, select) { font: inherit; color: inherit; }
-[data-organ="longway"] :is(.longway-card, .longway-chart-notes, .longway-ledger, .longway-dispatch, .longway-house) button { min-height: 44px; padding: .45rem .7rem; background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; cursor: pointer; }
-[data-organ="longway"] button[aria-pressed="true"] { border-color: var(--good); box-shadow: inset 0 -2px var(--good); }
-[data-organ="longway"] button:disabled { cursor: default; opacity: .65; }
-[data-organ="longway"] form label { display: block; margin-block: .65rem; }
-[data-organ="longway"] :is(textarea, select, input:not([type="checkbox"])) { max-width: 100%; background: var(--panel); border: 1px solid var(--rule); padding: .6rem; }
-[data-organ="longway"] textarea { display: block; width: 100%; min-height: 6rem; }
+/* :where() keeps this base at low specificity so .lw-primary (one obvious action per card) wins over it. */
+[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-ledger, .longway-library, .longway-dispatch, .longway-scout, .longway-proposal, .longway-room-access) button:where(:not(.jl, .lw-journey-title, .lw-room, [class*="maplibregl"])) {
+  min-height: 44px; padding: .5rem .95rem; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px;
+  font: 500 .95rem/1.2 var(--font-ui); cursor: pointer; transition: background-color .14s, border-color .14s;
+}
+[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-ledger, .longway-library, .longway-scout, .longway-proposal) button:where(:not(.jl, .lw-journey-title, .lw-room, .lw-primary, [class*="maplibregl"], :disabled)):hover { background: var(--raise); border-color: var(--pencil); }
+[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-scout, .longway-proposal) button.lw-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-scout, .longway-proposal) button.lw-primary:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); border-color: transparent; }
+[data-organ="longway"] button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 -2px var(--accent); }
+[data-organ="longway"] button:disabled { cursor: default; opacity: .55; }
+[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-scout, .longway-proposal, .longway-ledger) form label { display: block; margin-block: .65rem; font: 500 .9rem var(--font-ui); color: var(--ink-2); }
+[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-scout, .longway-proposal, .longway-ledger) :is(textarea, select, input:not([type="checkbox"])) {
+  max-width: 100%; margin-top: .35rem; background: var(--bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px; padding: .65rem .8rem;
+  font: 400 1rem/1.4 var(--font-ui);
+}
+[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-scout, .longway-proposal, .longway-ledger) :is(textarea, select, input:not([type="checkbox"])):focus-visible { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+/* Scoped: the composer's textarea grows from one row and must not inherit a 6rem floor. */
+[data-organ="longway"] :is(.longway-chart-notes, .longway-field, .longway-ledger, .longway-house) textarea { display: block; width: 100%; min-height: 6rem; box-sizing: border-box; }
+[data-organ="longway"] :is(.longway-ledger, .longway-chart-notes) form label > :is(input:not([type="checkbox"]), select) { display: block; width: 100%; box-sizing: border-box; }
+[data-organ="longway"] .longway-ledger { max-width: 760px; }
+/* The shared shell gives every input a 44px box; a checkbox drew as a large white square. Its label is the target. */
+[data-organ="longway"] input[type="checkbox"] { min-width: 0; min-height: 0; width: 1.15rem; height: 1.15rem; margin: 0; accent-color: var(--accent); flex: none; }
+
+.longway-card, .longway-dispatch { border: 1px solid var(--rule); background: var(--panel); border-radius: 12px; padding: 1rem 1.1rem; margin: .8rem 0; }
+.longway-card[data-selected] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.longway-card.is-faded { color: var(--ink-3); }
+.longway-card h3 { margin: 0 0 .35rem; font-size: 1.15rem; line-height: 1.3; }
+.longway-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-block: .75rem 0; }
 .longway-plan { white-space: pre-wrap; }
 .longway-legs { padding-left: 1.25rem; }
-.longway-entry-lede { position: absolute; top: 1rem; left: 1rem; right: 1rem; text-align: center; color: var(--ink-2); }
+
+/* ── Shared small pieces ──────────────────────────────────────────────────── */
+.lw-section { margin-bottom: 2rem; }
+.lw-section > h2 { display: flex; align-items: baseline; gap: .6rem; margin: 0 0 .75rem; font-size: 1.35rem; }
+.lw-count { font: 500 .8rem var(--font-ui); color: var(--ink-3); }
+.lw-note, .lw-hint { font: 400 .9rem/1.45 var(--font-ui); color: var(--ink-3); margin: .25rem 0; }
+.lw-meta { font: 500 .85rem/1.45 var(--font-ui); color: var(--ink-2); margin: 0 0 .5rem; }
+.lw-eyebrow { font: 600 .72rem/1 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 .4rem; }
+.lw-chip { flex: none; font: 600 .75rem/1 var(--font-ui); padding: .3rem .55rem; border: 1px solid var(--rule); border-radius: 999px; color: var(--ink-2); white-space: nowrap; }
+.lw-alert { font: 500 .95rem/1.45 var(--font-ui); color: var(--ink); border: 1px solid var(--contra); border-left-width: 4px; border-radius: 8px; padding: .75rem 1rem; display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; background: var(--panel); }
+
+/* ── The house: the globe beside the journeys ─────────────────────────────── */
+[data-organ="longway"] .workspace-scene-bench > .workspace-scene-content { display: block; overflow-y: auto; }
+.longway-house { container-type: inline-size; padding: 0 0 3rem; }
+.longway-house.scene-body > * { max-width: 1400px; }
+.lw-atlas { display: grid; gap: 1.25rem; padding: 1rem 1.25rem 0; align-items: start; }
+.lw-atlas-globe { min-width: 0; }
+.lw-atlas-list { min-width: 0; }
+.lw-atlas-globe > .longway-chart { height: 56svh; min-height: 300px; border-radius: 14px; overflow: hidden; border: 1px solid var(--rule); background: var(--sea); flex-shrink: 0; }
+.longway-house .longway-map { min-height: 0; }
+.lw-globe-wait { height: 56svh; min-height: 300px; border-radius: 14px; border: 1px dashed var(--rule); background: var(--sea); display: grid; place-items: center; font: 500 .95rem var(--font-ui); color: var(--ink-3); }
+.lw-globe-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1.25rem; padding: .6rem .25rem 0; }
+.lw-globe-tip { padding: .5rem .25rem 0; }
+.lw-toggle { display: flex; flex-direction: column; }
+.lw-toggle label { display: inline-flex; align-items: center; gap: .55rem; min-height: 44px; margin: 0; font: 600 .92rem var(--font-ui); color: var(--ink); cursor: pointer; }
+.lw-toggle .lw-hint { margin: -.55rem 0 0 1.7rem; font-size: .8rem; }
+.lw-key { display: flex; flex-wrap: wrap; gap: .25rem 1rem; list-style: none; margin: 0; padding: 0; font: 500 .82rem var(--font-ui); color: var(--ink-2); }
+.lw-key li { display: inline-flex; align-items: center; gap: .4rem; }
+.lw-chosen { margin-top: .75rem; padding: 1rem 1.1rem; border: 1px solid var(--accent); border-radius: 12px; background: var(--panel); }
+.lw-chosen h3 { margin: 0 0 .3rem; font-size: 1.25rem; }
+.lw-rooms { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.lw-room {
+  width: 100%; min-height: 56px; display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: .75rem; text-align: left;
+  padding: .7rem 1rem; border: 1px solid var(--rule); border-radius: 12px; background: var(--panel); color: var(--ink); cursor: pointer;
+}
+.lw-room:hover { border-color: var(--accent); }
+.lw-room-name { font: 700 1.05rem/1.3 var(--font-text); }
+.lw-room-journey { grid-row: 2; font: 500 .82rem var(--font-ui); color: var(--ink-3); }
+.lw-room-go { grid-row: 1 / span 2; grid-column: 2; font: 500 1.2rem var(--font-ui); color: var(--accent); }
+.lw-journey { margin: 0 0 .75rem; }
+.lw-journey-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.lw-journey-head h3 { margin: 0; }
+.lw-journey-title {
+  all: unset; box-sizing: border-box; cursor: pointer; display: block; min-height: 44px; padding: .5rem 0 .3rem;
+  font: 700 1.18rem/1.3 var(--font-text); color: var(--ink); text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px;
+}
+.lw-journey-title:hover { text-decoration-color: var(--accent); }
+/* Shown on the globe: the title itself is underlined in the accent, beside the card's accent border. */
+[data-organ="longway"] .lw-journey-title[aria-pressed="true"] { box-shadow: none; text-decoration-color: var(--accent); text-decoration-thickness: 2px; }
+.lw-journey-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.lw-journey-head .lw-chip { margin-top: .7rem; }
+.lw-journey .longway-journey-strip { margin: 0 0 .5rem; }
+.lw-pull { margin: .25rem 0 .5rem; font: 400 1.02rem/1.55 var(--font-text); color: var(--ink); }
+.lw-feasibility { margin: 0; font: 400 .88rem/1.45 var(--font-ui); color: var(--ink-3); }
+.lw-request h3 { margin-bottom: .2rem; }
+@container (min-width: 940px) {
+  .lw-atlas { grid-template-columns: minmax(0, 1.45fr) minmax(330px, 1fr); gap: 1.75rem; }
+  /* Sticky beside the list, so it must fit the viewport with its key and the chosen journey under it. */
+  .lw-atlas-globe { position: sticky; top: 1rem; }
+  .lw-atlas-globe > .longway-chart, .lw-globe-wait { height: min(56svh, 620px); }
+}
+@container (max-width: 520px) {
+  .lw-atlas { padding: .5rem .5rem 0; }
+  .lw-atlas-globe > .longway-chart, .lw-globe-wait { height: 50svh; border-radius: 12px; }
+  .lw-atlas-list { padding: 0 .35rem; }
+  .lw-pull { font-size: 1rem; }
+}
+[data-organ="longway"] .longway-seat-requests { min-width: 0; overflow-wrap: anywhere; }
+[data-organ="longway"] .longway-seat-requests .is-decided { color: var(--ink-3); border-style: dashed; background: none; }
+[data-organ="longway"] .longway-invite-result { color: var(--ink); }
+[data-organ="longway"] .longway-invite-result code { user-select: all; -webkit-user-select: all; letter-spacing: .18em; font-size: 1.15em; white-space: nowrap; }
+
+/* ── A journey room's Chart ───────────────────────────────────────────────── */
+.longway-chart { height: 55svh; min-height: 240px; background: var(--sea); position: relative; }
+.longway-chart > .longway-chart-ui, .longway-chart-ui > .longway-map { height: 100%; }
+.longway-chart-notes { padding: 1rem 1.25rem; max-width: 860px; }
+.longway-chart-notes > label { display: inline-flex; align-items: center; gap: .55rem; min-height: 44px; font: 600 .92rem var(--font-ui); cursor: pointer; }
+.longway-chart-notes > .lw-key { margin: .25rem 0 .5rem; }
+.longway-chart-notes > h3 { margin: 1rem 0 .25rem; font-size: 1.35rem; }
+.longway-chart-notes > p { font: 400 1.02rem/1.55 var(--font-text); }
+.longway-legs { list-style: none; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
+.longway-legs li { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.longway-legs button { text-align: left; }
+.longway-dispatch-now { margin-top: 1.5rem; }
 .longway-bench-record { display: flex; flex-direction: column; min-height: 50svh; }
 .longway-bench-record .message-list { overflow: visible; }
 @media (max-width: 760px) {
   .longway-bench .longway-chart { height: 48svh; min-height: 0; position: sticky; top: 0; z-index: 2; }
   .longway-card, .longway-chart-notes { scroll-margin-top: calc(48svh + 12px); }
-  .longway-chart-notes { padding: 1rem; }
 }
 
-[data-organ="longway"] .workspace-scene-bench > .workspace-scene-content { display: block; overflow-y: auto; }
 .longway-scene-stack { min-height: 0; overflow-y: auto; flex: 1; }
 .longway-scene-stack > .scene-body { overflow: visible; flex: none; }
-.longway-house .longway-chart { flex-shrink: 0; }
-[data-organ="longway"] .longway-seat-requests { min-width: 0; overflow-wrap: anywhere; }
-[data-organ="longway"] .longway-seat-requests .is-decided { color: var(--ink-3); border-style: dashed; }
-[data-organ="longway"] .longway-invite-result { color: var(--ink); }
-[data-organ="longway"] .longway-invite-result code { user-select: all; -webkit-user-select: all; letter-spacing: .18em; font-size: 1.15em; white-space: nowrap; }
 .longway-room-context, .longway-room-access { padding: 1rem; }
-.longway-room-access[role="dialog"] { position: fixed; z-index: 100; inset: 10% max(1rem, calc((100vw - 640px) / 2)); overflow-y: auto; background: var(--panel); border: 1px solid var(--rule); box-shadow: 0 0 0 100vmax #0008; }
+.longway-room-access[role="dialog"] { position: fixed; z-index: 100; inset: 10% max(1rem, calc((100vw - 640px) / 2)); overflow-y: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; box-shadow: 0 0 0 100vmax #0008; }
 
-.longway-scout { border-bottom: 1px solid var(--rule); padding-bottom: 1rem; margin-bottom: 1.5rem; }
-.longway-scout > button { margin-top: 1rem; }
-[data-organ="longway"] .longway-scout button { min-height: 44px; padding: .45rem .7rem; background: var(--panel); border: 1px solid var(--rule); border-radius: 3px; }
+/* ── Library ──────────────────────────────────────────────────────────────── */
+.longway-library { font: 400 1.02rem/1.6 var(--font-text); }
+.longway-library > * { max-width: 760px; }
+.longway-library section[aria-label="Dossier"] h1 { font-size: 1.9rem; line-height: 1.2; margin: .5rem 0 .75rem; }
+.longway-library section[aria-label="Dossier"] h2 { font-size: 1.35rem; margin: 1.75rem 0 .5rem; }
+.longway-library section[aria-label="Dossier"] h3 { font-size: 1.12rem; margin: 1.25rem 0 .4rem; }
+.longway-library section[aria-label="Dossier"] :is(p, li) { margin: 0 0 .75rem; }
+.longway-library section[aria-label="Dossier"] code { font-size: .85em; background: var(--raise); border-radius: 4px; padding: .05em .3em; }
+.longway-library a { text-decoration-thickness: 1px; }
+.longway-library > section > h2 { margin-top: 2.25rem; }
+.longway-library .longway-card p { margin: .2rem 0; font: 400 .92rem/1.45 var(--font-ui); color: var(--ink-2); }
+.longway-library .longway-card h3 { font: 600 1rem/1.4 var(--font-text); }
+
+/* ── Field: the Scout's desk ──────────────────────────────────────────────── */
+.longway-field > * { max-width: 860px; }
+.longway-scout { border-bottom: 1px solid var(--rule); padding-bottom: 1.25rem; margin-bottom: 1.5rem; }
+.longway-scout > h2, .longway-field > section > h2 { font-size: 1.35rem; margin: .5rem 0 .6rem; }
+.longway-scout form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .5rem; }
+[data-organ="longway"] .longway-scout form label { flex: 1 1 14rem; margin: 0; }
+.longway-scout > button { margin-top: .75rem; }
+.longway-scout-receipt { font: 500 .88rem/1.45 var(--font-ui); color: var(--ink-2); }
 .longway-proposal, .longway-scout { min-width: 0; overflow-wrap: anywhere; }
-.longway-proposal blockquote { margin: 0 0 1rem; padding: .5rem .8rem; border-left: 3px solid var(--good); font-size: 1.1em; line-height: 1.6; white-space: pre-wrap; }
+.longway-proposal blockquote { margin: 0 0 1rem; padding: .6rem .9rem; border-left: 3px solid var(--accent); background: var(--bg); border-radius: 0 8px 8px 0; font-size: 1.08em; line-height: 1.6; white-space: pre-wrap; }
 .longway-proposal h3 { margin-top: 0; }
 .longway-proposal.paled { border-style: dashed; background: transparent; }
 .longway-proposal.paled :is(blockquote, h3) { color: var(--ink-3); }
-.longway-proposal-scope { font-family: var(--font-ui); }
+.longway-proposal-scope { font-family: var(--font-ui); font-size: .9rem; }
 .longway-proposal-scope > div { display: flex; flex-wrap: wrap; gap: .5rem; }
-.longway-proposal-scope dt { font-weight: 600; min-width: 5rem; }
+.longway-proposal-scope dt { font-weight: 600; min-width: 5rem; color: var(--ink-2); }
 .longway-proposal-scope dd { margin: 0; }
 .longway-review-reason { color: var(--ink-2); font-size: .9em; }
 .longway-questions { padding-left: 1.2rem; }
 .longway-questions li { margin-bottom: .65rem; }
 .longway-questions small, .longway-proposed-tag { font-family: var(--font-ui); color: var(--ink-2); }
-.longway-proposed-tag { display: inline-block; font-size: .85rem; margin-left: .5rem; border: 1px dotted var(--pencil); padding: .1rem .35rem; }
+.longway-proposed-tag { display: inline-block; font-size: .8rem; margin-left: .5rem; border: 1px dotted var(--pencil); border-radius: 999px; padding: .1rem .45rem; }
 .longway-journey-strip { display: inline-flex; flex-wrap: wrap; align-items: center; }
 .longway-scout-run { font-family: var(--font-ui); overflow-wrap: anywhere; }
 .longway-scout input, .longway-proposal input { display: block; width: 100%; box-sizing: border-box; }
 .longway-chart-ui .lg > .longway-proposed-tag { grid-column: 2; justify-self: start; margin-left: 0; }
-
 /* The claim is a bounded part of its passage: show the passage once, the claim bold inside it. */
 .longway-proposal blockquote mark { background: none; color: inherit; font-weight: 700; }
+
+/* ── Record: the conversation ─────────────────────────────────────────────── */
+[data-organ="longway"] .empty-state h3 { font: 700 1.25rem var(--font-text); color: var(--ink); }
+[data-organ="longway"] .empty-state .empty-premise { font: 400 1rem/1.55 var(--font-text); color: var(--ink-2); max-width: 34rem; }
+[data-organ="longway"] .messages-container { background: none; border-color: transparent; box-shadow: none; }
+[data-organ="longway"] .input-area-inner { border-radius: 14px; box-shadow: none; }
+[data-organ="longway"] .send-btn:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: none; }
+[data-organ="longway"] .send-btn:disabled { background: var(--raise); border-color: var(--rule); color: var(--ink-3); box-shadow: none; opacity: 1; }
+[data-organ="longway"] :is(.type-btn, .tag-btn) { text-transform: none; letter-spacing: 0; font-family: var(--font-ui); }
+[data-organ="longway"] .msg-textarea { font: 400 1rem/1.45 var(--font-ui); }
+[data-organ="longway"] .msg-textarea::placeholder { font-style: normal; color: var(--ink-3); }
+[data-organ="longway"] .research-btn { text-transform: none; letter-spacing: 0; font-family: var(--font-ui); }
+[data-organ="longway"] .input-hints { font-family: var(--font-ui); }
+@media (max-width: 600px) {
+  /* A phone keeps the line it needs to write and send; the keyboard hints are for keyboards. */
+  [data-organ="longway"] .input-hints > span:not([role]) { display: none; }
+}
+
+/* ── Front door ───────────────────────────────────────────────────────────── */
+[data-organ="longway"] .auth-screen { background: var(--bg); }
+[data-organ="longway"] .auth-screen::before { display: none; }
+[data-organ="longway"] .auth-card { background: var(--panel); border: 1px solid var(--rule); border-radius: 16px; box-shadow: none; max-width: 440px; }
+[data-organ="longway"] .auth-header { text-align: left; }
+[data-organ="longway"] .auth-logo { font: 400 2.3rem/1.1 var(--font-display); text-transform: none; letter-spacing: -.01em; color: var(--ink); text-shadow: none; }
+[data-organ="longway"] .auth-subtitle { font: italic 400 1.05rem/1.45 var(--font-text); text-transform: none; letter-spacing: 0; color: var(--ink-2); }
+[data-organ="longway"] .auth-premise { border: 0; padding: 0; background: none; text-align: left; }
+[data-organ="longway"] .auth-premise p { font: 400 1rem/1.55 var(--font-text); color: var(--ink-2); }
+[data-organ="longway"] .auth-tabs { background: var(--bg); border: 1px solid var(--rule); border-radius: 10px; box-shadow: none; padding: 3px; }
+[data-organ="longway"] .auth-tab { font: 600 .95rem/1.2 var(--font-ui); text-transform: none; letter-spacing: 0; color: var(--ink-3); background: none; border: 0; border-radius: 8px; box-shadow: none; text-shadow: none; }
+[data-organ="longway"] .auth-tab:hover { color: var(--ink); transform: none; }
+[data-organ="longway"] .auth-tab.active { color: var(--ink); background: var(--raise); box-shadow: none; }
+[data-organ="longway"] .auth-tab.active::after { display: none; }
+[data-organ="longway"] .auth-label { font: 600 .88rem var(--font-ui); text-transform: none; letter-spacing: 0; color: var(--ink-2); }
+[data-organ="longway"] .auth-card .form-input { font: 400 1rem var(--font-ui); background: var(--bg); border: 1px solid var(--rule); border-radius: 8px; box-shadow: none; color: var(--ink); }
+[data-organ="longway"] .auth-card .form-input::placeholder { font-style: normal; color: var(--ink-3); }
+[data-organ="longway"] .auth-card .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+[data-organ="longway"] .auth-card .btn { font: 600 1rem var(--font-ui); text-transform: none; letter-spacing: 0; box-shadow: none; }
+[data-organ="longway"] .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: none; text-shadow: none; }
+[data-organ="longway"] .btn-primary:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
+[data-organ="longway"] .auth-closed { border: 1px solid var(--rule); border-radius: 10px; background: var(--bg); }
+[data-organ="longway"] .auth-closed-headline { font: 600 .95rem var(--font-ui); text-transform: none; letter-spacing: 0; color: var(--ink); }
+[data-organ="longway"] .auth-closed p:not(.auth-closed-headline) { font: 400 .95rem/1.5 var(--font-ui); color: var(--ink-2); }
+/* An error is a sentence with an icon, not a rubber stamp; the icon's shape and the words carry it. */
+[data-organ="longway"] :is(.auth-error, .auth-notice) { font: 500 .95rem/1.45 var(--font-ui); text-transform: none; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-left: 4px solid var(--contra); border-radius: 8px; box-shadow: none; animation: none; }
+[data-organ="longway"] .auth-notice { border-left-color: var(--ink-3); }
+[data-organ="longway"] :is(.auth-error, .auth-notice) .auth-slip-tag { display: none; }
+[data-organ="longway"] :is(.auth-error, .auth-notice) .auth-slip-text { color: var(--ink); }
+[data-organ="longway"] .auth-error .auth-slip-icon { color: var(--contra); }
+
+/* The shared Field's empty card: same panel as everything else, not a lit stage. */
+[data-organ="longway"] .scene-empty { background: var(--panel); border: 1px dashed var(--rule); box-shadow: none; }
+[data-organ="longway"] .scene-empty::before { display: none; }
+[data-organ="longway"] .scene-empty-kicker { font: 600 .72rem var(--font-ui); letter-spacing: .08em; color: var(--ink-3); }

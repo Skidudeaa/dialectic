@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { PARTICIPANT_NAME, participantDisplayName } from '../../lib/productIdentity.ts'
+import { ORGAN } from '../../organ'
 import type { Attachment, Message, MessageAnchor, MessageRef, Reaction , ThesisSeed } from '../../types'
 import { useDocumentVisibility } from '../../hooks/useDocumentVisibility'
 import { MessageBubble } from './MessageBubble'
@@ -287,7 +288,14 @@ export function MessageList({
     return (
       <div className="messages-wrapper">
         <div className="messages-container">
-          <div className="empty-state">
+          {ORGAN === 'longway' ? <div className="empty-state">
+            <h3>Nothing said here yet</h3>
+            <p className="empty-premise" data-testid="empty-room-premise">
+              Talk it through here: what pulls you, what worries you, what you found.
+              {' '}{PARTICIPANT_NAME} reads along and joins when it has something to add.
+              Say <strong>@{PARTICIPANT_NAME}</strong> to ask it directly.
+            </p>
+          </div> : <div className="empty-state">
             <div className="empty-icon">&#9672;</div>
             <h3>Start the dialogue</h3>
             <p className="empty-premise" data-testid="empty-room-premise">
@@ -296,7 +304,7 @@ export function MessageList({
               connection, a check against live data. Say{' '}
               <strong>@{PARTICIPANT_NAME}</strong> to bring it in directly.
             </p>
-          </div>
+          </div>}
         </div>
       </div>
     )

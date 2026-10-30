@@ -18,6 +18,17 @@ function Line({ ink, x1, x2 }: { ink: Ink; x1: number; x2: number }) {
     : <line className={`ink-${ink}`} x1={x1} y1={5} x2={x2} y2={5} />
 }
 
+const KEY: [Ink, string][] = [['heavy', 'Booked'], ['dashed', 'Checked source'], ['dotted', 'Unchecked source'], ['pencil', 'Idea only'], ['contradicted', 'Contradicted']]
+
+/** The globe's key: only the inks it is drawing now, so it never explains a line nobody can see. */
+export function InkKey({ inks, myth = false }: { inks: Set<Ink>; myth?: boolean }) {
+  const shown = KEY.filter(([ink]) => inks.has(ink) && !(myth && (ink === 'pencil' || ink === 'dotted')))
+  if (!shown.length) return null
+  return <ul className="longway-chart-ui lw-key" aria-label="How routes are drawn">{shown.map(([ink, label]) => <li key={ink} title={INK[ink]}>
+    <svg viewBox="0 0 28 10" width="28" height="10" aria-hidden="true"><Line ink={ink} x1={1} x2={27} /></svg>{label}
+  </li>)}</ul>
+}
+
 /** The page's list strip, available to the shell without importing MapLibre. */
 export function JourneyStrip({ journey }: { journey: Journey }) {
   const n = journey.segments.length, gap = 4, len = n ? (96 - gap * (n - 1)) / n : 0

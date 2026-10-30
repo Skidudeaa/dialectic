@@ -11,6 +11,7 @@ export function mountMap(map: Globe, container: HTMLElement, current: () => Char
   let loaded = false
   let previous: ChartProps | null = null
   let fitted: string | null = null
+  let whole: { center: maplibregl.LngLat; zoom: number } | null = null
   let journeyLabels: Label[] = [], stopLabels: Label[] = [], vesselLabels: Label[] = []
   let frame: number | null = null
   const remove = (labels: Label[]) => labels.forEach(l => l.marker.remove())
@@ -117,6 +118,11 @@ export function mountMap(map: Globe, container: HTMLElement, current: () => Char
     applyFilters(p)
     const selected = p.data.journeys.find(j => j.slug === p.selected)
     if (selected && fitted !== selected.slug) fit(selected)
+    // Letting go of a journey returns to the whole globe; otherwise the house stays zoomed on a route it no longer names.
+    if (!selected && fitted && whole) {
+      const reduce = p.reducedMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      map.easeTo({ ...whole, duration: reduce ? 0 : 1000 })
+    }
     if (!selected) fitted = null
     previous = p
     placeLabels()
@@ -128,6 +134,7 @@ export function mountMap(map: Globe, container: HTMLElement, current: () => Char
   map.keyboard.disableRotation()
   map.on('load', () => {
     loaded = true
+    whole = { center: map.getCenter(), zoom: map.getZoom() }
     container.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show')
     update(current())
   })

@@ -50,7 +50,7 @@ import './SceneMasthead.css'
 const COMPACT_SCENES = new Set<ImplementedWorkspaceScene>(['record', 'house', 'surface'])
 
 export function SceneMasthead({ scene }: { scene: ImplementedWorkspaceScene }) {
-  if (ORGAN === 'longway') return <header className="scene-masthead scene-masthead-compact"><h2>{scene === 'bench' ? benchLabel : SCENE_LABELS[scene]}</h2>{scene === 'house' && <p>{IDENTITY.lede}</p>}</header>
+  if (ORGAN === 'longway') return <header className={`scene-masthead scene-masthead-compact${scene === 'house' ? '' : ' scene-masthead-quiet'}`}><h2 className="sr-only">{scene === 'bench' ? benchLabel : SCENE_LABELS[scene]}</h2>{scene === 'house' && <p>{IDENTITY.lede}</p>}</header>
   const compact = COMPACT_SCENES.has(scene)
   return (
     <header className={`scene-masthead${compact ? ' scene-masthead-compact' : ''}`}>

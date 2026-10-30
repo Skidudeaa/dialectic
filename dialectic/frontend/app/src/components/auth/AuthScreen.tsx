@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '../../stores/appStore.ts';
 import { api } from '../../lib/api.ts';
 import { PARTICIPANT_NAME, PRODUCT_NAME } from '../../lib/productIdentity.ts';
-import { ORGAN } from '../../organ';
+import { IDENTITY, ORGAN } from '../../organ';
 import { askForSeat } from '../../organs/longway/api';
 import './AuthScreen.css';
 
@@ -228,6 +228,21 @@ export function AuthScreen() {
   return (
     <div className="auth-screen">
       <div className="auth-card">
+        {ORGAN === 'longway' ? <>
+          {/* The Long Way's front door speaks to a friend or a stranger, not to a case officer: no dossier stamps,
+              and the premise is the house's own (a globe, a room per journey, a Scout whose findings wait for a person). */}
+          <div className="auth-header">
+            <h1 className="auth-logo">{PRODUCT_NAME}</h1>
+            <p className="auth-subtitle">{IDENTITY.lede}</p>
+          </div>
+          <div className="auth-premise" data-testid="auth-premise">
+            <p>
+              A private house where a few friends look into long journeys together: a globe of possible routes,
+              a room for each journey, and {PARTICIPANT_NAME}, who reads the sources and brings back what they say.
+              Nothing counts as checked until one of you confirms it.
+            </p>
+          </div>
+        </> : <>
         <div className="auth-stamp-row" aria-hidden="true">
           <span className="auth-stamp">Case dossier</span>
           <span className="auth-stamp-rule" />
@@ -250,6 +265,7 @@ export function AuthScreen() {
             but your tap is the only thing that makes one real.
           </p>
         </div>
+        </>}
 
         <div className="auth-tabs" role="tablist" aria-label="How to get in">
           {tab('signin', 'Sign In')}

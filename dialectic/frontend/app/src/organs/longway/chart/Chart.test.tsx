@@ -18,6 +18,7 @@ const mock = vi.hoisted(() => {
     paint: Record<string, Record<string, unknown>> = {}
     events: Record<string, ((e: { point: [number, number] }) => void)[]> = {}
     center = { lng: 45, lat: 22 }
+    zoom = 1.5
     hits: { properties: { slug: string; i: number } }[] = []
     canvas = document.createElement('canvas')
     touchZoomRotate = { disableRotation: vi.fn() }
@@ -45,6 +46,8 @@ const mock = vi.hoisted(() => {
     setLayoutProperty(id: string, key: string, value: unknown) { this.layout[id][key] = value }
     setPaintProperty(id: string, key: string, value: unknown) { this.paint[id][key] = value }
     getCenter() { return this.center }
+    getZoom() { return this.zoom }
+    easeTo = vi.fn()
     getCanvas() { return this.canvas }
     queryRenderedFeatures = vi.fn(() => this.hits)
   }
@@ -231,7 +234,7 @@ describe('Chart: the real register through MapLibre', () => {
   })
 
   it('selects from keyboard buttons and hit features, clears on background, fits with reduced motion and cleans up', async () => {
-    const p = props({ reducedMotion: true }), { map, unmount } = await ready(p)
+    const p = props({ reducedMotion: true }), { map, unmount, rerender } = await ready(p)
     const j = data.journeys.find(j => j.slug === 'ogasawara')!
     fireEvent.click(label(j.title).element)
     expect(p.onSelectJourney).toHaveBeenCalledWith('ogasawara')
@@ -242,6 +245,10 @@ describe('Chart: the real register through MapLibre', () => {
     expect(p.onSelectLeg).toHaveBeenCalledWith('ogasawara', 0)
     map.hits = []; act(() => map.emit('click'))
     expect(p.onSelectJourney).toHaveBeenLastCalledWith(null)
+    // Letting go of a journey returns to the whole globe the map opened on, not the last route's zoom.
+    expect(map.easeTo).not.toHaveBeenCalled()
+    rerender(<Chart {...p} selected={null} />)
+    expect(map.easeTo).toHaveBeenCalledWith({ center: { lng: 45, lat: 22 }, zoom: 1.5, duration: 0 })
     unmount()
     expect(map.remove).toHaveBeenCalledOnce()
     expect(live()).toHaveLength(0)

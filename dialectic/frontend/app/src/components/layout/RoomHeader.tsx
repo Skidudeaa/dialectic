@@ -89,12 +89,12 @@ export function RoomHeader({ roomName, threads, activeThreadId, onThreadChange, 
         )}
       </div>
       <div className="room-header-right">
-        <button className="btn btn-secondary btn-sm" onClick={onProtocolClick} title="Start a structured reasoning protocol" aria-label="Protocol">
+        {ORGAN !== 'longway' && <button className="btn btn-secondary btn-sm" onClick={onProtocolClick} title="Start a structured reasoning protocol" aria-label="Protocol">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <path d="M12 3v18M3 12h18"/>
           </svg>
           <span className="btn-label">Protocol</span>
-        </button>
+        </button>}
         <button className="btn btn-ghost btn-sm" onClick={onSearchClick} title="Search this room (Cmd/Ctrl+K)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>

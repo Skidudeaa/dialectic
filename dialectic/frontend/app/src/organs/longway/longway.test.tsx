@@ -9,7 +9,7 @@ import type { Message } from '../../types'
 import { api } from '../../lib/api'
 import { useAppStore } from '../../stores/appStore'
 import { LongwayBench } from './LongwayBench'
-import { LongwayHouse } from './LongwayHouse'
+import { LongwayHouse, monthRuns } from './LongwayHouse'
 import { LongwayField } from './LongwayField'
 import { LongwayLibrary } from './LongwayLibrary'
 import { LongwayLedger } from './LongwayLedger'
@@ -104,6 +104,25 @@ describe('Long Way connected scenes', () => {
     expect(writes[1].init?.headers).toMatchObject({ 'X-Room-Token': 'new-token' })
     expect(writes[1].body).toEqual({ slug: 'ogasawara' })
     expect(api.getToken()).toBe('room-token')
+  })
+  it('names seasons as month runs, joining a run across the new year', () => {
+    expect(monthRuns([9, 10, 11, 12])).toBe('Sep–Dec')
+    expect(monthRuns([12, 1, 2, 11])).toBe('Nov–Feb')
+    expect(monthRuns([1, 3, 4])).toBe('Jan, Mar–Apr')
+    expect(monthRuns([6])).toBe('Jun')
+    expect(monthRuns([])).toBe('')
+  })
+  it('lists only journey rooms, not the house itself, and shows the picked journey with a way back', async () => {
+    serve(path => path.endsWith('/chart') ? { ...projection(true), rooms: [{ id: 'room', name: 'The Long Way', linked_journey: null }, { id: 'existing', name: 'Banda room', linked_journey: 'banda-islands' }] } : undefined, true)
+    render(<LongwayHouse roomId="home" canManageHome={false} onNavigate={vi.fn()} />)
+    const rooms = await screen.findByRole('region', { name: 'Your rooms' })
+    expect(within(rooms).getAllByRole('button').map(b => b.textContent)).toEqual([expect.stringContaining('Banda room')])
+    const title = projection().journeys.find(j => j.slug === 'ogasawara')!.title
+    fireEvent.click(screen.getByRole('button', { name: title }))
+    const chosen = screen.getByRole('group', { name: `On the globe: ${title}` })
+    expect(within(chosen).getByText('No room yet. A house manager can open one.')).toBeVisible()
+    fireEvent.click(within(chosen).getByRole('button', { name: 'Show every journey' }))
+    expect(screen.queryByRole('group', { name: `On the globe: ${title}` })).not.toBeInTheDocument()
   })
   it('does not offer room creation to ordinary members', async () => {
     serve(undefined, true)

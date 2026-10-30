@@ -28,8 +28,11 @@
 .longway-chart-ui .m.possible { background-color: var(--possible, #da88b2); color: var(--ink, #13283a); }
 .longway-chart-ui .m.avoid { color: var(--off, #9aabb3); text-decoration: line-through; }
 .longway-chart-ui .months.est .m.good, .longway-chart-ui .months.est .m.possible { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.4) 0 2px, transparent 2px 6px); }
-.longway-chart-ui .key .m { width: 14px; line-height: 14px; vertical-align: -2px; margin-right: 3px; }
-.longway-chart-ui .jl, .longway-chart-ui .vl { display: block; max-width: 150px; padding: 2px 6px; border: 0; border-radius: 2px; text-align: center; font: 600 .72rem/1.25 var(--font-ui, sans-serif); color: var(--ink, #13283a); background: color-mix(in srgb, var(--panel, #f7faf9) 82%, transparent); }
+/* An empty inline-block has no line box, so line-height alone left the swatches 0px tall. */
+.longway-chart-ui .key .m { width: 14px; height: 14px; line-height: 14px; vertical-align: -2px; margin-right: 3px; }
+.longway-chart-ui .jl, .longway-chart-ui .vl { display: block; max-width: 160px; min-width: 0; min-height: 0; padding: 3px 7px; border: 1px solid color-mix(in srgb, var(--rule, #c6d3d4) 70%, transparent); border-radius: 6px; text-align: center; font: 600 .74rem/1.25 var(--font-ui, sans-serif); color: var(--ink, #13283a); background: color-mix(in srgb, var(--panel, #f7faf9) 86%, transparent); box-shadow: none; }
+.longway-chart-ui .jl:hover { border-color: var(--good, #a51f66); }
+.longway-chart-ui .vl { border-style: dashed; }
 .longway-chart-ui .jl { cursor: pointer; }
 .longway-chart-ui .vl { pointer-events: none; }
 .longway-chart-ui .sl { font: 600 .76rem/1.2 var(--font-ui, sans-serif); color: var(--ink, #13283a); white-space: nowrap; pointer-events: none; text-shadow: 0 0 3px var(--panel, #f7faf9), 0 0 3px var(--panel, #f7faf9), 0 0 2px var(--panel, #f7faf9); }
@@ -38,10 +41,21 @@
 /* The silence notes float over the globe's lower left corner inside its box; a host that fixes the chart's height
    (the house, the sticky bench) must never see them spill over the content below. */
 .longway-chart-ui > .vehicle-list, .longway-chart-ui > [role="status"] { position: absolute; left: 0; z-index: 1; max-width: min(100%, 420px); padding: 10px 12px; font: .88rem/1.45 var(--font-ui, sans-serif); background: color-mix(in srgb, var(--panel, #f7faf9) 88%, transparent); }
-.longway-chart-ui > .vehicle-list { bottom: 0; max-height: 50%; overflow: auto; box-sizing: border-box; }
+.longway-chart-ui > .vehicle-list { bottom: 8px; left: 8px; max-width: min(calc(100% - 64px), 420px); max-height: 50%; overflow: auto; box-sizing: border-box; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--rule, #c6d3d4); font-size: .8rem; color: var(--ink-2, #44586a); }
+.longway-chart-ui > .vehicle-list summary { min-height: 32px; display: flex; align-items: center; gap: 6px; font-size: .8rem; }
 .longway-chart-ui > [role="status"] { top: 0; right: 0; margin: 0; }
 .longway-chart-ui .vehicle-list p { margin: 0 0 4px; }
 .longway-chart-ui .vehicle-list ul { list-style: none; padding: 0; margin: 4px 0 0; }
 .longway-chart-ui :focus-visible, .longway-chart-ui:focus-visible { outline: 2px solid var(--good, #a51f66); outline-offset: 2px; }
 .longway-chart-ui .maplibregl-ctrl-attrib { font: .72rem var(--font-ui, sans-serif); }
+/* The shell gives every button a 44px floor, which stretched MapLibre's controls into slabs and blobs. */
+.longway-chart-ui .maplibregl-ctrl button { min-width: 0; min-height: 0; }
+.longway-chart-ui .maplibregl-ctrl-group { background: var(--panel, #f7faf9); border: 1px solid var(--rule, #c6d3d4); border-radius: 10px; box-shadow: none; overflow: hidden; }
+.longway-chart-ui .maplibregl-ctrl-group button { width: 40px; height: 40px; background-color: transparent; }
+.longway-chart-ui .maplibregl-ctrl-group button + button { border-top: 1px solid var(--rule, #c6d3d4); }
+.longway-chart-ui .maplibregl-ctrl-group button:not(:disabled):hover { background-color: var(--raise, #e2eaea); }
+.longway-chart-ui .maplibregl-ctrl-icon { filter: var(--map-icon-filter, none); }
+.longway-chart-ui .maplibregl-ctrl-attrib.maplibregl-compact { background: var(--panel, #f7faf9); color: var(--ink-2, #44586a); min-height: 24px; }
+.longway-chart-ui .maplibregl-ctrl-attrib-button { min-width: 0; min-height: 0; width: 24px; height: 24px; background-color: transparent; background-repeat: no-repeat; background-position: center; filter: var(--map-icon-filter, none); }
+.longway-chart-ui .maplibregl-ctrl-attrib a { color: inherit; }
 @media (prefers-reduced-motion: reduce) { .longway-chart-ui, .longway-chart-ui * { scroll-behavior: auto !important; } }

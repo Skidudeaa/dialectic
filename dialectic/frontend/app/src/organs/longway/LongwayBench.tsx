@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { useLongwayChart } from '../../hooks/useLongwayChart'
 import { useAppStore } from '../../stores/appStore'
 import Chart from './chartSlot'
-import { LegCard, SeasonStrip } from './chart/Cards'
+import { InkKey, LegCard, SeasonStrip } from './chart/Cards'
 import { longwayPath, longwayRequest } from './api'
 import type { AnchorMetadata } from './types'
 
@@ -44,6 +44,7 @@ export function LongwayBench({ roomId, record, canManageHome = false }: { roomId
       onSelectLeg={(slug, index) => { setSelected(slug); setLeg({ journey: slug, leg: index }); setDraft(null) }} onDiscussLeg={discuss} /></div>
     <div className="longway-chart-notes">
       <label><input type="checkbox" checked={myth} onChange={e => setMyth(e.target.checked)} /> Without the mythology</label>
+      <InkKey inks={new Set(data.journeys.filter(j => !data.room.linked_journey || j.slug === data.room.linked_journey).flatMap(j => j.segments.map(seg => seg.proposed ? 'dotted' as const : seg.ink)))} myth={myth} />
       {journey && <><h3>{journey.title}</h3><p>{journey.pull}</p><SeasonStrip season={journey.season} sources={data.sources[journey.slug] ?? {}} />
         <ul className="longway-legs">{journey.segments.map((segment, index) => <li key={index}><button aria-pressed={leg?.journey === journey.slug && leg.leg === index} onClick={() => { setLeg({ journey: journey.slug, leg: index }); setDraft(null) }}>{segment.from} to {segment.to}</button>{segment.proposed && <span className="longway-proposed-tag">proposed</span>}</li>)}</ul>
       </>}
