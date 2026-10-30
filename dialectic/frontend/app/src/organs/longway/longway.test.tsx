@@ -124,6 +124,17 @@ describe('Long Way connected scenes', () => {
     fireEvent.click(within(chosen).getByRole('button', { name: 'Show every journey' }))
     expect(screen.queryByRole('group', { name: `On the globe: ${title}` })).not.toBeInTheDocument()
   })
+  it('opens a ride room for a shared trip with rides, and offers nothing for a trip without', async () => {
+    const base = projection()
+    const ride = { ...base.journeys[0], slug: 'coast-ride', title: 'Coast ride', kind: 'trip' as const, rides: 1 }
+    const plain = { ...base.journeys[0], slug: 'plain-trip', title: 'Plain trip', kind: 'trip' as const, rides: 0 }
+    serve(path => path.endsWith('/chart') ? { ...projection(true), journeys: [...base.journeys, ride, plain] } : undefined, true)
+    render(<LongwayHouse roomId="home" canManageHome onNavigate={vi.fn()} />)
+    await screen.findByText('Your rooms')
+    const card = (title: string) => screen.getByRole('button', { name: title }).closest('article')!
+    expect(within(card('Coast ride')).getByRole('button', { name: 'Open the ride room' })).toBeVisible()
+    expect(within(card('Plain trip')).queryByRole('button', { name: /^Open/ })).not.toBeInTheDocument()
+  })
   it('does not offer room creation to ordinary members', async () => {
     serve(undefined, true)
     render(<LongwayHouse roomId="home" canManageHome={false} onNavigate={vi.fn()} />)

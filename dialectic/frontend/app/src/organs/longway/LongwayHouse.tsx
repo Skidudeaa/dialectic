@@ -159,8 +159,10 @@ export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
   const action = (journey: Journey): ReactNode => {
     const room = roomFor(journey.slug)
     if (room) return <button className="lw-primary" aria-label={`Enter the room for ${journey.title}`} onClick={() => void onNavigate(room.id)}>Enter the room</button>
-    if (journey.kind !== 'candidate') return null
-    if (canManageHome) return <button disabled={busy !== null} onClick={() => void openRoom(journey.slug, journey.title)}>{busy === journey.slug ? 'Opening…' : 'Open a room for this journey'}</button>
+    // A shared trip gets a room only once it has rides: the room is where the ride is followed.
+    const ride = journey.kind === 'trip' && (journey.rides ?? 0) > 0
+    if (journey.kind !== 'candidate' && !ride) return null
+    if (canManageHome) return <button disabled={busy !== null} onClick={() => void openRoom(journey.slug, journey.title)}>{busy === journey.slug ? 'Opening…' : ride ? 'Open the ride room' : 'Open a room for this journey'}</button>
     return <p className="lw-note">No room yet. A house manager can open one.</p>
   }
   return <div className="longway-house scene-body">
