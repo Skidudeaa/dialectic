@@ -19,6 +19,10 @@ it('renders the named current view, upcoming sight, stop table and darkness in t
   expect(screen.getByText('Too dark to see the views on either side.')).toBeInTheDocument()
   expect(screen.queryByText(/Upper Klamath Lake alongside/)).not.toBeInTheDocument()
 })
+it('says a route-guide check is unscored instead of crashing on it', () => {
+  render(<RideCard data={ride} leg={{ ...leg, check: {} }} km={635} now={at} replay offline={false} lastSuccess={null} />)
+  expect(screen.getByText('Route-guide check written, not yet scored.')).toBeInTheDocument()
+})
 it('scrubs an arrived ride through the connected API and moves the map and card together', async () => {
   vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(url.includes('/ride/leg') ? leg : ride))))
   render(<RideBench roomId="room" record={<p>Room record</p>} />)
