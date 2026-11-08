@@ -1,0 +1,142 @@
+{
+  "id": "558a1d3daa0944e5b8c2a5a1b3eb491e",
+  "intent": "Rehearsal: restore the llm alias the TypeScript contract pins",
+  "input_tree": "51d2a34373d0d12c9c6dada0c6fb398f30cf3c6f",
+  "input_commit": "dc42f5cede985a96586d9fd68b981751a0ed53ba",
+  "base": "25ee12276501c60e3a8a874ebae331ffd2a8347c",
+  "output_tree": "edcc2740c30cfa151d02f32aeb94c704934b270b",
+  "status": "PASSED",
+  "checks": [
+    {
+      "exit_code": 0,
+      "timed_out": false,
+      "cancelled": false,
+      "output_limited": false,
+      "environment": {
+        "mode": "isolated",
+        "backend": {
+          "available": true,
+          "mode": "isolated",
+          "enforced": true,
+          "backend": "bubblewrap",
+          "version": "bubblewrap 0.9.0"
+        },
+        "readonly_candidate": true,
+        "network": "none",
+        "runtime": "host-runtime-unpinned",
+        "runtime_reproducibility": "UNVERIFIED",
+        "kernel": "6.18.44-fc-v310",
+        "machine": "x86_64",
+        "executable_sha256": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f",
+        "runtime_paths": [
+          "/opt/custodian-trial/venv"
+        ],
+        "environment": {
+          "PATH": "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin",
+          "HOME": "/tmp/home",
+          "TMPDIR": "/tmp",
+          "LANG": "C.UTF-8",
+          "LC_ALL": "C.UTF-8",
+          "PYTHONDONTWRITEBYTECODE": "1",
+          "PYTHONHASHSEED": "0",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "GIT_CONFIG_GLOBAL": "/dev/null",
+          "GIT_TERMINAL_PROMPT": "0"
+        },
+        "immutable_execution": true,
+        "fingerprint": "5a32a7f237589f6582472632c9ae1c8444e6990bb21e5df6f072f1438b61e67f"
+      },
+      "infrastructure_error": false,
+      "argv": [
+        "/opt/custodian-trial/venv/bin/python",
+        "-c",
+        "import os, sys, pytest; os.chdir('dialectic'); sys.exit(pytest.main(['-q', '-p', 'no:cacheprovider', '--ignore-glob=*_pg.py', '--deselect', 'tests/test_attachments.py::TestFetchFailures::test_storage_path_escaping_the_root_is_404', '--deselect', 'tests/test_documents.py::test_render_pdf_is_a_real_pdf', '--deselect', 'tests/test_documents.py::test_store_document_files_an_llm_authored_row', '--deselect', 'tests/test_documents.py::test_write_document_tool_returns_document_provenance', '--deselect', 'tests/test_workshop.py::test_bwrap_argv_pins_the_fence', 'tests']))"
+      ],
+      "stdout_blob": "c36e78fdf3f3cf460b0ebb4790c7a9b778265e46",
+      "stderr_blob": "0994a7df3b5f10422338059d1869df6236bc8acc",
+      "started_at": 1794108432.8183155,
+      "ended_at": 1794108461.3774438,
+      "tree": "edcc2740c30cfa151d02f32aeb94c704934b270b",
+      "tree_after": "edcc2740c30cfa151d02f32aeb94c704934b270b",
+      "claim": "Command exit against a read-only candidate; not semantic correctness"
+    }
+  ],
+  "branch": "custodian/558a1d3daa09",
+  "protected": [
+    "CLAUDE.md",
+    "dialectic/CLAUDE.md",
+    "trading/CLAUDE.md",
+    "dialectic/tests",
+    "dialectic/migrations",
+    "dialectic/schema.sql",
+    "dialectic/deploy",
+    "trading/tests",
+    "custodian",
+    "docs"
+  ],
+  "started_at": 1794108430.9669914,
+  "context": {},
+  "mode": "isolated",
+  "environment": {
+    "platform": "Linux",
+    "release": "6.18.44-fc-v310",
+    "external_state": "UNVERIFIED",
+    "isolation": "isolated",
+    "immutable_execution": "read-only-candidate"
+  },
+  "execution": {
+    "exit_code": 0,
+    "timed_out": false,
+    "cancelled": false,
+    "output_limited": false,
+    "environment": {
+      "mode": "isolated",
+      "backend": {
+        "available": true,
+        "mode": "isolated",
+        "enforced": true,
+        "backend": "bubblewrap",
+        "version": "bubblewrap 0.9.0"
+      },
+      "readonly_candidate": false,
+      "network": "none",
+      "runtime": "host-runtime-unpinned",
+      "runtime_reproducibility": "UNVERIFIED",
+      "kernel": "6.18.44-fc-v310",
+      "machine": "x86_64",
+      "executable_sha256": "dc9c6efba6e3583b8a2570140928b5278d8d39858dfcfe3792ca39daba7e045f",
+      "runtime_paths": [
+        "/opt/custodian-trial/venv"
+      ],
+      "environment": {
+        "PATH": "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin",
+        "HOME": "/tmp/home",
+        "TMPDIR": "/tmp",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONHASHSEED": "0",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_TERMINAL_PROMPT": "0"
+      },
+      "immutable_execution": false,
+      "fingerprint": "ea2f9893b35410ac00d6963f4a3ed8dbef95fb568a9420a030d32e7c672a251b"
+    },
+    "infrastructure_error": false,
+    "argv": [
+      "/usr/bin/python3",
+      "-c",
+      "from pathlib import Path; p=Path(\"dialectic/llm/mentions.py\"); s=p.read_text(); assert \"(\\\"dialectic\\\", \\\"claude\\\")\" in s; p.write_text(s.replace(\"_LLM_ALIAS_PREFIXES = (\\\"dialectic\\\", \\\"claude\\\")\", \"_LLM_ALIAS_PREFIXES = (\\\"dialectic\\\", \\\"claude\\\", \\\"llm\\\")\"))"
+    ],
+    "stdout_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+    "stderr_blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+    "started_at": 1794108432.0034797,
+    "ended_at": 1794108432.067755
+  },
+  "output_commit": "9cf5b279499b744be9a90a78951018cc1c85f3f9",
+  "changed_paths": [
+    "dialectic/llm/mentions.py"
+  ],
+  "ended_at": 1794108461.5102015
+}

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "custodian-change-store"
+version = "0.2.0"
+description = "Revision-bound maintenance evidence without foreground mutations"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+custodian = "custodian.cli:main"
+
+[tool.setuptools]
+packages = ["custodian"]

@@ -1,0 +1,40 @@
+{
+  "version": "0.2.0",
+  "validated_at_utc": "2026-11-08T01:03:37.751673+00:00",
+  "suite": {
+    "command": "python3 -m unittest discover -s tests -v",
+    "passed": 105,
+    "failed": 0,
+    "duration_seconds": 14.463
+  },
+  "end_to_end": {
+    "initial_check": "FAILED",
+    "maintenance_outcome": "PASSED",
+    "input_tree": "418550529e8fc3626328ff5587093a17807654fc",
+    "output_tree": "2cf6f0f1d1c905fbeb8bdcd14f5488ca763120da",
+    "private_branch": "custodian/0576da9f70a5",
+    "foreground_git_status": "clean",
+    "foreground_code_preserved": true,
+    "evidence_audit": {
+      "ok": true,
+      "events": 14,
+      "errors": []
+    }
+  },
+  "executed_boundaries": [
+    "Linux bubblewrap namespaces",
+    "read-only verifier candidate",
+    "no worker network",
+    "foreground and credential isolation",
+    "content-pinned userspace runtime",
+    "SIGKILL recovery",
+    "foreground preemption",
+    "MCP stdio protocol",
+    "loopback provider accounting and edit validation"
+  ],
+  "not_executed": [
+    "live paid Anthropic request",
+    "native service activation (cloud lacks user systemd bus)",
+    "DigitalOcean deployment (desktop SSH alias digitalicean inaccessible while desktop is offline)"
+  ]
+}

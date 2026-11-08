@@ -1,0 +1,91 @@
+{
+  "id": "c75e2a4c1b8b4df89374618b2e2947d8",
+  "intent": "Binding trial 2: verify the current dialectic draft (cwd dialectic/, five host-resource tests deselected)",
+  "input_tree": "2abcc77d2f1a517948747c2237bf10a11e7ce25d",
+  "input_commit": "eccb58b75f28414a3d4418f3be1f095f846668ba",
+  "base": "25ee12276501c60e3a8a874ebae331ffd2a8347c",
+  "output_tree": "2abcc77d2f1a517948747c2237bf10a11e7ce25d",
+  "status": "PASSED",
+  "checks": [
+    {
+      "exit_code": 0,
+      "timed_out": false,
+      "cancelled": false,
+      "output_limited": false,
+      "environment": {
+        "mode": "isolated",
+        "backend": {
+          "available": true,
+          "mode": "isolated",
+          "enforced": true,
+          "backend": "bubblewrap",
+          "version": "bubblewrap 0.9.0"
+        },
+        "readonly_candidate": true,
+        "network": "none",
+        "runtime": "host-runtime-unpinned",
+        "runtime_reproducibility": "UNVERIFIED",
+        "kernel": "6.18.44-fc-v310",
+        "machine": "x86_64",
+        "executable_sha256": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f",
+        "runtime_paths": [
+          "/opt/custodian-trial/venv"
+        ],
+        "environment": {
+          "PATH": "/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin",
+          "HOME": "/tmp/home",
+          "TMPDIR": "/tmp",
+          "LANG": "C.UTF-8",
+          "LC_ALL": "C.UTF-8",
+          "PYTHONDONTWRITEBYTECODE": "1",
+          "PYTHONHASHSEED": "0",
+          "GIT_CONFIG_NOSYSTEM": "1",
+          "GIT_CONFIG_GLOBAL": "/dev/null",
+          "GIT_TERMINAL_PROMPT": "0"
+        },
+        "immutable_execution": true,
+        "fingerprint": "5a32a7f237589f6582472632c9ae1c8444e6990bb21e5df6f072f1438b61e67f"
+      },
+      "infrastructure_error": false,
+      "argv": [
+        "/opt/custodian-trial/venv/bin/python",
+        "-c",
+        "import os, sys, pytest; os.chdir('dialectic'); sys.exit(pytest.main(['-q', '-p', 'no:cacheprovider', '--ignore-glob=*_pg.py', '--deselect', 'tests/test_attachments.py::TestFetchFailures::test_storage_path_escaping_the_root_is_404', '--deselect', 'tests/test_documents.py::test_render_pdf_is_a_real_pdf', '--deselect', 'tests/test_documents.py::test_store_document_files_an_llm_authored_row', '--deselect', 'tests/test_documents.py::test_write_document_tool_returns_document_provenance', '--deselect', 'tests/test_workshop.py::test_bwrap_argv_pins_the_fence', 'tests']))"
+      ],
+      "stdout_blob": "c5a98b43128e2f43766001339f37801f742076c4",
+      "stderr_blob": "0994a7df3b5f10422338059d1869df6236bc8acc",
+      "started_at": 1794108090.7881079,
+      "ended_at": 1794108119.070888,
+      "tree": "2abcc77d2f1a517948747c2237bf10a11e7ce25d",
+      "tree_after": "2abcc77d2f1a517948747c2237bf10a11e7ce25d",
+      "claim": "Command exit against a read-only candidate; not semantic correctness"
+    }
+  ],
+  "branch": null,
+  "protected": [
+    "CLAUDE.md",
+    "dialectic/CLAUDE.md",
+    "trading/CLAUDE.md",
+    "dialectic/tests",
+    "dialectic/migrations",
+    "dialectic/schema.sql",
+    "dialectic/deploy",
+    "trading/tests",
+    "custodian",
+    "docs"
+  ],
+  "started_at": 1794108089.760191,
+  "context": {},
+  "mode": "isolated",
+  "environment": {
+    "platform": "Linux",
+    "release": "6.18.44-fc-v310",
+    "external_state": "UNVERIFIED",
+    "isolation": "isolated",
+    "immutable_execution": "read-only-candidate"
+  },
+  "execution": null,
+  "output_commit": "bce162c247ecd50ad21135cf105722c36e005c8f",
+  "changed_paths": [],
+  "ended_at": 1794108119.2405844
+}
