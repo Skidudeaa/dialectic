@@ -335,3 +335,36 @@ sandbox, read-only, against the live draft: **1925 passed, 83 skipped, 5
 deselected in 27 s**, attempt `PASSED`, candidate bytes unchanged. The
 `deploy/droplet/` runbook carries the install, the verification commands and
 the rollback.
+
+### The model now sees what failed
+
+`build_context` disclosed the HEAD of a failed check's stderr. On dialectic the
+stderr of a 3-failure pytest run was one deprecation warning; the `FAILED`
+lines and assertion diffs were on stdout, at the end. `failed_check` now
+carries `stdout_tail` and `stderr_tail` (last 8 KiB each). Still not executed:
+a live paid request — this build environment authenticates no scripted call
+to the Anthropic API (a count_tokens probe with a placeholder key returned
+401, which does confirm the `Authorization: Bearer` header is parsed as the
+credential).
+
+### The live daemon under fault injection, on the real repository
+
+`deploy/droplet/soak_driver.py` runs the daemon against the dialectic clone
+and asserts every expectation against the append-only ledger (record:
+`validation/2026-11-08-droplet-build/soak-live-daemon.{json,log}`, 27 of 27
+assertions, audit ok over 45 events). What it proved, in order: an edit that
+lands while a check runs cancels the attempt (`CANCELLED`, exit −9, no
+branch); the edited draft is then verified on its own tree; a broken
+contract-pinned tuple is `FAILED`, retried exactly once with backoff, then
+left alone; **restoring the tuple reproduced an already-PASSED tree and the
+scheduler did not re-verify it** — scheduling is keyed by candidate identity,
+so identical bytes cost nothing twice; a `SIGKILL` of the controller mid-check
+killed the sandboxed pytest with it (`--die-with-parent`), left no finish
+record, and on restart recovery marked that attempt `INTERRUPTED` ("outcome
+unknown"), removed its workspaces, and a fresh attempt re-verified the same
+tree to `PASSED`; a registered `custodian session` lease deferred dispatch for
+its whole lifetime, and the next attempt passed after it exited. Trees are
+reproducible across runs: the same draft produced tree `6fa0af73…` in both
+soak runs. One lesson is recorded in the driver itself: the first run's
+step 5 "failed" because it expected a re-verification the daemon correctly
+refused.

@@ -166,6 +166,13 @@ session exactly that distinction. The month 1–3 attack continues where the
 daemon runs — controller deaths, policy changes and foreground preemption on
 the droplet under the live service.
 
+Later the same day the attack's first round ran HERE against the live daemon
+on the real clone (`deploy/droplet/soak_driver.py`, 27/27 assertions):
+cancel-on-edit, bounded retry then silence, no re-verification of an
+already-PASSED tree, `SIGKILL` mid-check → `INTERRUPTED` on recovery with no
+partial run promoted, foreground lease deferral. Zero results attributed to
+different candidate bytes; every PASSED named a captured tree.
+
 ## 12-MONTH CRITICAL PATH — where the needle sits
 
 Q1's first serial step, "bind one repository's actual dependency closure and

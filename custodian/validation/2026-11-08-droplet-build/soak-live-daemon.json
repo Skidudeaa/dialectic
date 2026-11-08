@@ -1,0 +1,121 @@
+{
+  "ok": true,
+  "attempts": [
+    {
+      "id": "831dcb6b58cd",
+      "status": "CANCELLED",
+      "input_tree": "fdfa2ed9d4a1",
+      "output_tree": "fdfa2ed9d4a1",
+      "reason": "Foreground activity or controller stop"
+    },
+    {
+      "id": "7d67785ab663",
+      "status": "PASSED",
+      "input_tree": "6fa0af73b7b7",
+      "output_tree": "6fa0af73b7b7",
+      "reason": null
+    },
+    {
+      "id": "5f233ec31c0b",
+      "status": "FAILED",
+      "input_tree": "8e41844adcac",
+      "output_tree": "8e41844adcac",
+      "reason": "Check failed or changed candidate bytes"
+    },
+    {
+      "id": "eab0c989d058",
+      "status": "FAILED",
+      "input_tree": "8e41844adcac",
+      "output_tree": "8e41844adcac",
+      "reason": "Check failed or changed candidate bytes"
+    },
+    {
+      "id": "6744e370191f",
+      "status": "INTERRUPTED",
+      "input_tree": "8525e678a3e2",
+      "output_tree": "",
+      "reason": "Recovered abandoned controller; outcome unknown"
+    },
+    {
+      "id": "5a7d3532fa53",
+      "status": "PASSED",
+      "input_tree": "8525e678a3e2",
+      "output_tree": "8525e678a3e2",
+      "reason": null
+    },
+    {
+      "id": "ce5800cf6cb8",
+      "status": "PASSED",
+      "input_tree": "8192949a74fa",
+      "output_tree": "8192949a74fa",
+      "reason": null
+    }
+  ],
+  "timeline": [
+    "[04:56:29] daemon started pid 9790",
+    "[04:56:51] attempt 1 started (+22s)",
+    "[04:56:57] PASS a sandboxed pytest is running during attempt 1",
+    "[04:56:57] edited dialectic/presence.py while attempt 1's check was running",
+    "[04:56:58] attempt 1 finished (+1s)",
+    "[04:56:58] PASS attempt 1 is CANCELLED (Foreground activity or controller stop)",
+    "[04:56:58] PASS attempt 1 minted no branch and its check evidence is marked cancelled",
+    "[04:57:52] attempt 2 finished (+54s)",
+    "[04:57:52] PASS attempt 2 is PASSED on tree 6fa0af73b7b7",
+    "[04:57:52] PASS attempt 2 verified a different tree than the cancelled attempt",
+    "[04:57:52] broke the alias tuple in dialectic/llm/mentions.py",
+    "[04:58:46] attempt 3 finished (+54s)",
+    "[04:58:46] PASS attempt 3 is FAILED (Check failed or changed candidate bytes)",
+    "[04:59:33] attempt 4 (the one bounded retry) finished (+47s)",
+    "[04:59:33] PASS retry re-verified the same broken tree and FAILED",
+    "[05:00:23] PASS no further retry after max_retries (attempts started: 4)",
+    "[05:00:23] restored the alias tuple (tree now identical to attempt 2's)",
+    "[05:01:08] PASS an already-verified tree is not re-verified (started: 4)",
+    "[05:01:08] new edit to presence.py -> a tree never seen before",
+    "[05:01:29] attempt 5 started (+21s)",
+    "[05:01:35] PASS a sandboxed pytest is running during attempt 5",
+    "[05:01:35] SIGKILLed the daemon process group (pid 9790) mid-check",
+    "[05:01:38] PASS the sandboxed check died with its controller (die-with-parent)",
+    "[05:01:38] PASS attempt 5 has no finish record after the kill (4 finished)",
+    "[05:01:38] abandoned workspaces on disk: ['6744e370191f46f6a0bc1f030c83cf02', '6744e370191f46f6a0bc1f030c83cf02-verify']",
+    "[05:01:38] daemon started pid 16719",
+    "[05:01:39] recovery recorded attempt 5 (+1s)",
+    "[05:01:39] PASS attempt 5 is INTERRUPTED: Recovered abandoned controller; outcome unknown",
+    "[05:01:39] PASS one recovery event",
+    "[05:02:31] attempt 6 finished (+52s)",
+    "[05:02:31] PASS attempt 6 re-verified the interrupted tree and is PASSED",
+    "[05:02:31] PASS abandoned workspaces were removed by recovery",
+    "[05:02:33] edited presence.py under `custodian session -- sleep 40`",
+    "[05:03:05] PASS no attempt dispatched while the session lease was held (started: 6)",
+    "[05:03:11] foreground session exited",
+    "[05:04:03] attempt 7 finished (+52s)",
+    "[05:04:03] PASS attempt 7 is PASSED after the lease was released",
+    "[05:04:03] PASS session start/end recorded once each",
+    "[05:04:04] daemon stopped cleanly on SIGTERM",
+    "[05:04:04] foreground restored with git checkout",
+    "[05:04:04] PASS audit ok with 45 events",
+    "[05:04:04] PASS CANCELLED 831dcb6b58cd minted no proposal branch",
+    "[05:04:04] PASS PASSED 7d67785ab663 names a captured tree and changed nothing (no mutator in this soak)",
+    "[05:04:04] PASS FAILED 5f233ec31c0b minted no proposal branch",
+    "[05:04:04] PASS FAILED eab0c989d058 minted no proposal branch",
+    "[05:04:04] PASS INTERRUPTED 6744e370191f minted no proposal branch",
+    "[05:04:04] PASS PASSED 5a7d3532fa53 names a captured tree and changed nothing (no mutator in this soak)",
+    "[05:04:04] PASS PASSED ce5800cf6cb8 names a captured tree and changed nothing (no mutator in this soak)"
+  ],
+  "audit": {
+    "ok": true,
+    "events": 45,
+    "errors": []
+  },
+  "event_kinds": {
+    "attempt_finished": 7,
+    "attempt_progress": 6,
+    "attempt_started": 7,
+    "daemon_error": 1,
+    "job_done": 7,
+    "job_start": 7,
+    "observation": 7,
+    "recovery": 1,
+    "session_ended": 1,
+    "session_started": 1
+  }
+}

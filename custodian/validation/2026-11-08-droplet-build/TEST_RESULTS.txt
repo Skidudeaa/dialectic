@@ -46,6 +46,7 @@ test_three_waiting_branches_withhold_the_fourth (test_engine.EngineIntegrationTe
 test_timed_out_checker_is_failed (test_engine.EngineIntegrationTests.test_timed_out_checker_is_failed) ... ok
 test_verifier_cannot_inherit_ignored_artifacts_from_mutator (test_engine.EngineIntegrationTests.test_verifier_cannot_inherit_ignored_artifacts_from_mutator) ... ok
 test_disclosure_policy_excludes_nested_secret_files (test_maintenance.MaintenanceIntegrationTests.test_disclosure_policy_excludes_nested_secret_files) ... ok
+test_failed_check_evidence_carries_the_tail_of_stdout_and_stderr (test_maintenance.MaintenanceIntegrationTests.test_failed_check_evidence_carries_the_tail_of_stdout_and_stderr) ... ok
 test_foreground_edit_during_model_request_cannot_inherit_candidate_evidence (test_maintenance.MaintenanceIntegrationTests.test_foreground_edit_during_model_request_cannot_inherit_candidate_evidence) ... ok
 test_model_abstention_retains_rationale_without_creating_an_attempt (test_maintenance.MaintenanceIntegrationTests.test_model_abstention_retains_rationale_without_creating_an_attempt) ... ok
 test_model_code_cannot_write_absolute_foreground_path_during_check (test_maintenance.MaintenanceIntegrationTests.test_model_code_cannot_write_absolute_foreground_path_during_check) ... ok
@@ -110,6 +111,6 @@ test_system_scope_renders_a_system_unit_and_drives_the_system_manager (test_serv
 test_systemd_render_is_absolute_and_escapes_no_shell (test_service.ServiceTests.test_systemd_render_is_absolute_and_escapes_no_shell) ... ok
 
 ----------------------------------------------------------------------
-Ran 110 tests in 23.886s
+Ran 111 tests in 25.163s
 
 OK

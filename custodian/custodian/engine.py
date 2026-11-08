@@ -27,7 +27,10 @@ def execute(argv, *, cwd=None, env=None, data=None):
     result = subprocess.run(argv, cwd=cwd, env=env, input=data,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode:
-        raise CustodianError(result.stderr.decode(errors="replace").strip())
+        detail = result.stderr.decode(errors="replace").strip()
+        # A git failure with an empty stderr used to surface as a blank daemon_error;
+        # name the command and exit code so the ledger entry means something.
+        raise CustodianError(detail or f"{' '.join(argv[:4])} exited {result.returncode} without output")
     return result.stdout
 
 
