@@ -1,0 +1,136 @@
+{
+  "build": "2026-11-08 droplet build: Custodian imported into Skidudeaa/dialectic as custodian/, bound to the dialectic monorepo",
+  "validated_at_utc": "2026-11-08",
+  "host": {
+    "kind": "Linux x86-64 build container, NOT the droplet",
+    "kernel": "6.18.44-fc-v310",
+    "bubblewrap": "0.9.0 (Ubuntu noble package, installed this session)",
+    "python_controller": "/usr/bin/python3 = 3.13.18 (via /etc/alternatives)",
+    "python_checks": "/opt/custodian-trial/venv/bin/python = 3.12.3 venv outside the repository, dialectic/requirements.txt installed with uv",
+    "git": "2.43.0",
+    "user": "root",
+    "systemd": "binary present, no running manager (PID 1 is not systemd)"
+  },
+  "suite": {
+    "command": "cd custodian && python3 -m unittest discover -s tests -v",
+    "passed": 111,
+    "failed": 0,
+    "new_tests": [
+      "test_engine.test_in_process_blob_ids_reproduce_git_trees_and_spawn_nothing_for_stored_blobs",
+      "test_engine.test_sha256_repositories_keep_their_object_format_end_to_end",
+      "test_service.test_system_scope_renders_a_system_unit_and_drives_the_system_manager",
+      "test_service.test_environment_file_and_scope_are_validated_before_anything_is_written",
+      "test_service.test_health_follows_the_requested_scope",
+      "test_maintenance.test_failed_check_evidence_carries_the_tail_of_stdout_and_stderr"
+    ],
+    "before_fixes": "105 tests, 21 failures, all one cause: /usr/bin/python3 -> /etc/alternatives/python3 dangling inside the sandbox"
+  },
+  "target_repository": {
+    "path": "/home/user/dialectic (clone of Skidudeaa/dialectic)",
+    "head": "25ee12276501c60e3a8a874ebae331ffd2a8347c",
+    "tracked_files": 1571,
+    "policy": "deploy/droplet/dialectic.toml (local rehearsal variant mounts the venv via runtime_paths; the droplet uses /usr/bin/python3's dist-packages)"
+  },
+  "attempts": {
+    "first_binding_run": {
+      "status": "FAILED",
+      "pytest": "6 failed, 1924 passed, 83 skipped in 26.54s",
+      "cause": "one cwd-relative test (transport/handlers.py opened relative to dialectic/) plus five tests reaching host resources: /etc/passwd, headless Chrome (3), /var/lib/dialectic/workshop/venv",
+      "resolution": "check argv chdirs into dialectic/ (the documented invocation); the five host-resource tests are deselected by name with the reason written in the policy"
+    },
+    "verify_passed": {
+      "file": "attempt-verify-passed.json",
+      "id": "c75e2a4c1b8b4df89374618b2e2947d8",
+      "status": "PASSED",
+      "input_tree": "2abcc77d2f1a517948747c2237bf10a11e7ce25d",
+      "pytest": "1925 passed, 83 skipped, 5 deselected in 26.96s",
+      "check_duration_seconds": 28.3,
+      "verifier": "read-only candidate, no network, host-runtime-unpinned, tree_after == tree"
+    },
+    "broken_draft_failed": {
+      "file": "attempt-broken-draft-failed.json",
+      "id": "30d5dc6679e74067900445c58d930936",
+      "foreground_edit": "dialectic/llm/mentions.py: _LLM_ALIAS_PREFIXES lost 'llm'",
+      "status": "FAILED",
+      "input_tree": "51d2a34373d0d12c9c6dada0c6fb398f30cf3c6f",
+      "pytest": "3 failed, 1922 passed, 83 skipped, 5 deselected in 27.88s",
+      "failed_tests": [
+        "tests/test_llm_mentions.py::test_a_typo_in_our_handle_still_counts_as_being_addressed",
+        "tests/test_mentions_contract.py::test_typescript_aliases_match_the_python_tuple",
+        "tests/test_mentions_contract.py::test_both_sides_agree_on_the_prefix_rule"
+      ]
+    },
+    "repair_passed": {
+      "file": "attempt-repair-passed.json",
+      "id": "558a1d3daa0944e5b8c2a5a1b3eb491e",
+      "command": "python -c rewrite of the tuple inside the WRITABLE sandbox candidate",
+      "status": "PASSED",
+      "input_tree": "51d2a34373d0d12c9c6dada0c6fb398f30cf3c6f",
+      "output_tree": "edcc2740c30cfa151d02f32aeb94c704934b270b",
+      "changed_paths": [
+        "dialectic/llm/mentions.py"
+      ],
+      "branch": "custodian/558a1d3daa09",
+      "verifier": "fresh read-only worktree, exit 0, tree_after == output_tree",
+      "foreground_after": "git status still ' M dialectic/llm/mentions.py' with the broken tuple; custodian state: applicable=false, latest=PASSED bound to edcc2740",
+      "disposition": "withdrawn (rehearsal); branch deleted, evidence retained; foreground restored by git checkout"
+    },
+    "hook": "SessionStart hook with cwd=/home/user/dialectic returned hookSpecificOutput.additionalContext naming current_tree 51d2a343\u2026 and the PASSED attempt bound to a different tree",
+    "audit": {
+      "ok": true,
+      "events": 30,
+      "errors": []
+    }
+  },
+  "measurements": {
+    "capture_old_engine_seconds": {
+      "cold_with_history_fetch": 8.53,
+      "warm": 7.15
+    },
+    "capture_new_engine_seconds": {
+      "cold_with_history_fetch": 0.82,
+      "warm": 0.33
+    },
+    "state_new_engine_seconds": 0.23,
+    "tree_identity": "old and new engine captured the same working tree back-to-back: both 2abcc77d2f1a517948747c2237bf10a11e7ce25d"
+  },
+  "install_rehearsal": {
+    "command": "CUSTODIAN_TARGET_REPO=/home/user/dialectic CUSTODIAN_SOURCE_DIR=\u2026/custodian CUSTODIAN_HOME=/opt/custodian-trial/home-repo CUSTODIAN_STATE_DIR=/opt/custodian-trial/install-state CUSTODIAN_POLICY=/opt/custodian-trial/etc/dialectic.toml CUSTODIAN_ENV_FILE=/opt/custodian-trial/etc/dialectic.env CUSTODIAN_INSTALL_SERVICE=0 bash deploy/droplet/install.sh",
+    "result": "exit 0; home repo commit 'sync: custodian/ from dialectic@25ee122'; doctor sandbox enforced; trial attempt b838c46306cc4a3699ff2b61f84f87ef PASSED; foreground git status and .git/index byte-identical before and after",
+    "skipped": "step 6 (system unit install/start) \u2014 no systemd manager in this container"
+  },
+  "executed_boundaries": [
+    "Linux bubblewrap namespaces as root",
+    "read-only verifier candidate against a 1,571-file real repository",
+    "no worker network",
+    "foreground and credential isolation",
+    "/etc/alternatives read-only mount",
+    "in-process blob ids in sha1 and sha256 archives, identity against git-native hashing",
+    "system-scope unit render/install/start/status/uninstall against a fake systemctl",
+    "install.sh steps 1-5 against the real clone",
+    "live daemon fault injection on the real repository (soak_live_daemon)"
+  ],
+  "not_executed": [
+    "anything on the droplet itself: port 22 refused from this network and no key available (same wall as the 0.2.0 bundle's record)",
+    "native systemd activation (no manager here)",
+    "live paid Anthropic request: ANTHROPIC_API_KEY is not exposed to this session's shells, the session proxy does not authenticate scripted calls (count_tokens probe with a placeholder key -> 401 'invalid x-api-key', which confirms Authorization: Bearer is parsed as the credential), and the harness accepts no user credential for Anthropic hosts; only the loopback fixture ran",
+    "droplet Python >= 3.11 and bubblewrap >= 0.6 (CLAUDE.md says 3.12 and bubblewrap-backed Workshop; install.sh preflight and doctor verify at install time)"
+  ],
+  "soak_live_daemon": {
+    "driver": "deploy/droplet/soak_driver.py",
+    "record": "soak-live-daemon.json / soak-live-daemon.log",
+    "policy": "dialectic checks, quiet 20 s, poll 2 s, max_retries 1, backoff 15 s",
+    "assertions": "27 of 27 PASS; audit ok over 45 events",
+    "sequence": [
+      "attempt 1 CANCELLED: foreground edit while the sandboxed check ran (exit -9, no branch)",
+      "attempt 2 PASSED on the edited draft (tree 6fa0af73, identical in both soak runs)",
+      "attempt 3 FAILED on the broken alias tuple; attempt 4 the single bounded retry FAILED on the same tree; no further retry",
+      "restoring the tuple reproduced attempt 2's tree and was NOT re-verified (scheduling keyed by candidate identity)",
+      "SIGKILL of the controller mid-check: sandboxed pytest died with it, no finish record",
+      "restart: recovery marked attempt 5 INTERRUPTED ('outcome unknown'), removed workspaces; attempt 6 PASSED on that tree",
+      "custodian session lease held 40 s: no dispatch; attempt 7 PASSED after release"
+    ],
+    "first_run_lesson": "run 1 timed out waiting for a re-verification of an already-PASSED tree; the daemon was right and the script was corrected",
+    "daemon_error": "one blank-reason daemon_error at shutdown (a git command failing with empty stderr); execute() now names the command and exit code"
+  }
+}

@@ -1,0 +1,8 @@
+=========================== short test summary info ============================
+FAILED dialectic/tests/test_annotator_kill_switch.py::test_handler_consults_the_switch
+FAILED dialectic/tests/test_attachments.py::TestFetchFailures::test_storage_path_escaping_the_root_is_404
+FAILED dialectic/tests/test_documents.py::test_render_pdf_is_a_real_pdf - Run...
+FAILED dialectic/tests/test_documents.py::test_store_document_files_an_llm_authored_row
+FAILED dialectic/tests/test_documents.py::test_write_document_tool_returns_document_provenance
+FAILED dialectic/tests/test_workshop.py::test_bwrap_argv_pins_the_fence - Run...
+6 failed, 1924 passed, 83 skipped, 5 warnings in 26.54s

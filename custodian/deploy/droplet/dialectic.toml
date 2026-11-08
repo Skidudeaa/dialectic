@@ -1,0 +1,88 @@
+# Custodian execution policy for the dialectic monorepo on the droplet.
+# Lives at /etc/custodian/dialectic.toml -- OUTSIDE the repository, by law:
+# a candidate (or a model) can never rewrite the policy that judges it.
+#
+# Checks run inside bubblewrap against a READ-ONLY copy of the captured draft at
+# /work, with no network, no home, no credentials, no foreground checkout.
+# Only /usr (+ /etc/alternatives) and /work are visible, so the interpreter and
+# every dependency must live under /usr -- on this host that is the system
+# python3 and its dist-packages, the same interpreter dialectic.service runs.
+#
+# The check is dialectic's documented invocation (`cd dialectic && pytest tests`)
+# written as one argv: a python -c that chdirs into the subproject, because the
+# repository's own tests open files relative to that directory
+# (tests/test_annotator_kill_switch.py reads transport/handlers.py).
+#
+# Why only the Postgres-free tests: the *_pg.py modules need a live database
+# over TCP, which the sandbox deliberately cannot reach, and they MUTATE
+# dialectic_test, which is exactly the unrecordable external state Custodian
+# refuses to launder into a verdict. They remain the operator's job, run by hand
+# (CLAUDE.md Quick Start). Frontend vitest is excluded for the same structural
+# reason: node_modules is ignored (never in a candidate) and may not be mounted
+# from inside the repository.
+#
+# The five deselected tests each reach for a HOST resource the sandbox does
+# not and must not provide; each is a finding about the test, not about the
+# draft:
+#   test_attachments ... escaping_the_root_is_404   asserts /etc/passwd exists (no host /etc)
+#   test_documents (three)                           need the host's headless Chrome
+#   test_workshop::test_bwrap_argv_pins_the_fence    reads /var/lib/dialectic/workshop/venv
+#
+# Measured 2026-11-08 against dialectic @ 25ee122 (1,571 tracked files) on a
+# Linux x86-64 build host, Python 3.12.3, bubblewrap 0.9.0, the dependency
+# closure mounted from a venv outside the repo: 1925 passed, 83 skipped,
+# 5 deselected in 27 s; the attempt PASSED with the candidate bytes unchanged.
+# Record: custodian/validation/2026-11-08-droplet-build/.
+checks = [["/usr/bin/python3", "-c",
+  "import os, sys, pytest; os.chdir('dialectic'); sys.exit(pytest.main(['-q', '-p', 'no:cacheprovider', '--ignore-glob=*_pg.py', '--deselect', 'tests/test_attachments.py::TestFetchFailures::test_storage_path_escaping_the_root_is_404', '--deselect', 'tests/test_documents.py::test_render_pdf_is_a_real_pdf', '--deselect', 'tests/test_documents.py::test_store_document_files_an_llm_authored_row', '--deselect', 'tests/test_documents.py::test_write_document_tool_returns_document_provenance', '--deselect', 'tests/test_workshop.py::test_bwrap_argv_pins_the_fence', 'tests']))"]]
+
+# Paths a maintenance attempt may never change relative to its imported input.
+# They express policy and evidence contracts, not execution status.
+protected = [
+  "CLAUDE.md",
+  "dialectic/CLAUDE.md",
+  "trading/CLAUDE.md",
+  "dialectic/tests",
+  "dialectic/migrations",
+  "dialectic/schema.sql",
+  "dialectic/deploy",
+  "trading/tests",
+  "custodian",
+  "docs",
+]
+
+execution_mode = "isolated"
+
+# The owner edits in long stretches; capture only after fifteen quiet minutes so
+# half-typed drafts are not spent as attempts. Registered `custodian session`
+# leases, index.lock and in-progress merges defer and cancel on their own.
+quiet_seconds = 900
+poll_seconds = 5
+
+# 27 s measured for the subset; a shared production box gets room.
+timeout_seconds = 900
+max_retries = 2
+retry_backoff_seconds = 300
+
+# No extra mounts: the system interpreter's dist-packages live under /usr.
+# UNVERIFIED on the droplet itself: that /usr/bin/python3 is >= 3.11 and that
+# every dialectic dependency is installed for it (CLAUDE.md says both; the
+# install trial is what checks it).
+runtime_paths = []
+
+# Model maintenance is OFF until this table is uncommented AND
+# /etc/custodian/dialectic.env carries ANTHROPIC_API_KEY. The adapter calls the
+# Messages API directly (no subscription, no `claude -p`). Prices are the
+# first-party rates cached 2026-10-06 for claude-opus-5-5 ($4 / $20 per MTok);
+# confirm them before enabling -- accounting is at the rates YOU write here.
+# No live paid request has been made through this adapter in any build so far.
+# [model]
+# model = "claude-opus-5-5"
+# input_usd_per_million = "4"
+# output_usd_per_million = "20"
+# daily_budget_usd = "5"
+# api_key_env = "ANTHROPIC_API_KEY"
+# include = ["dialectic/*.py", "dialectic/api/*.py", "dialectic/llm/*.py", "dialectic/memory/*.py", "dialectic/transport/*.py"]
+# allow_new = []
+# max_output_tokens = 16384
+# auto_on_failure = false

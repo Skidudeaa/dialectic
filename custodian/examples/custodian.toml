@@ -1,0 +1,20 @@
+# Copy this policy outside the target repository and choose its real checks.
+# This example uses only the Python standard library; no model is enabled.
+checks = [["/usr/bin/python3", "-m", "unittest", "discover", "-s", "tests"]]
+protected = ["SPEC.md", "AGENTS.md", "CLAUDE.md", "tests"]
+execution_mode = "isolated"
+quiet_seconds = 600
+poll_seconds = 5
+timeout_seconds = 120
+max_retries = 2
+retry_backoff_seconds = 60
+runtime_paths = []
+
+# Optional, after defining a real maintenance command in your project:
+# [[jobs]]
+# name = "maintenance"
+# command = ["/usr/bin/python3", "tools/maintenance.py"]
+# interval_seconds = 86400
+# enabled = true
+
+# Model use is deliberately absent. See README.md for explicit opt-in fields.

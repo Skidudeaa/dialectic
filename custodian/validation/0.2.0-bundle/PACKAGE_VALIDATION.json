@@ -1,0 +1,11 @@
+{
+  "packaged_at_utc": "2026-11-08T01:51:48.318088+00:00",
+  "version": "0.2.0",
+  "wheel_built_without_network": true,
+  "wheel_installed_in_clean_virtualenv": true,
+  "installed_cli_help_passed": true,
+  "wheel_application_sources_match_enclosed_source": true,
+  "example_policy_loads_and_models_disabled": true,
+  "implementation_test_record": "105 tests passed; see VALIDATION.json and TEST_RESULTS.txt",
+  "source_modified_for_packaging": false
+}
