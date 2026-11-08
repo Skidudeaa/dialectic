@@ -28,9 +28,18 @@ def build_context(engine, snapshot, config, intent, failed_attempt=None):
     if failed_attempt:
         failed = next((c for c in failed_attempt.get("checks", []) if c["exit_code"] != 0), None)
         if failed:
-            raw = subprocess.check_output(["git", "--git-dir", str(engine.archive), "cat-file", "blob", failed["stderr_blob"]])
+            # WHY the TAIL of BOTH streams: pytest and most runners print the failure
+            # report and the short summary on STDOUT, at the end; stderr often holds
+            # only warnings. Measured on dialectic: the stderr blob of a 3-failure run
+            # was one pytest-asyncio deprecation notice, so the head-of-stderr the
+            # model used to receive said nothing about what failed.
+            def tail(oid, limit=8192):
+                raw = subprocess.check_output(["git", "--git-dir", str(engine.archive), "cat-file", "blob", oid])
+                return raw[-limit:].decode(errors="replace")
             context["failed_check"] = dict(attempt=failed_attempt["id"], argv=failed["argv"],
-                                           exit_code=failed["exit_code"], stderr=raw[:8192].decode(errors="replace"))
+                                           exit_code=failed["exit_code"],
+                                           stdout_tail=tail(failed["stdout_blob"]),
+                                           stderr_tail=tail(failed["stderr_blob"]))
     manifest = subprocess.check_output(["git", "--git-dir", str(engine.archive), "ls-tree", "-r", "-z", snapshot["tree"]])
     for entry in manifest.split(b"\0"):
         if not entry:

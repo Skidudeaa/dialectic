@@ -149,6 +149,21 @@ class MaintenanceIntegrationTests(unittest.TestCase):
                     propose(self.engine, config, "Must not dispatch")
                 broker.assert_not_called()
 
+    def test_failed_check_evidence_carries_the_tail_of_stdout_and_stderr(self):
+        # pytest reports failures on STDOUT at the END; a head-of-stderr disclosure told the model nothing.
+        failed = self.engine.run("observe a failure", None, [[
+            "/usr/bin/python3", "-c",
+            "import sys; sys.stdout.write('.' * 9000 + 'FAILED tests/test_x.py::test_y - AssertionError\\n'); "
+            "sys.stderr.write('warning only\\n'); raise SystemExit(1)"]])
+        self.assertEqual(failed["status"], "FAILED", failed)
+        context = build_context(self.engine, self.engine.capture(), self.config, "Repair", failed_attempt=failed)
+        evidence = context["failed_check"]
+        self.assertEqual(evidence["exit_code"], 1)
+        self.assertIn("FAILED tests/test_x.py::test_y", evidence["stdout_tail"])
+        self.assertLessEqual(len(evidence["stdout_tail"].encode()), 8192)
+        self.assertEqual(evidence["stderr_tail"], "warning only\n")
+        self.assertNotIn("stderr", {k for k in evidence if k not in ("stderr_tail",)})
+
     def test_disclosure_policy_excludes_nested_secret_files(self):
         (self.repo / ".env").write_text("SECRET=root-value\n")
         (self.repo / "config").mkdir()
