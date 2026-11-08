@@ -480,3 +480,51 @@ never the pid; a Stop with no watcher retires the row as `lost` and signals
 nothing. Live proof on the new PID: job `851ed554…` in the E2E room, report
 turn `a6d16a62…` with `rounds.csv` bound, orphans 0. Suites:
 `tests/test_workshop_jobs.py` 16, 202 across the Workshop cone.
+
+## Amendment 2026-11-08 — Custodian: the fourth co-project, built against this repo (amend-beside)
+
+`custodian/` joins the table above (the originals stay per the amend-beside
+rule): **Custodian** — a maintenance daemon whose durable unit is an attempted
+change, stdlib-only Python 3.11+, bubblewrap-isolated, imported from the
+`Chaperone.zip` 0.2.0 bundle and bound to THIS monorepo. Runtime on the
+droplet: a system-scope unit `custodian-<sha256(repo)[:24]>.service` from
+`/root/custodian` (its own repository, synced from `custodian/` — the daemon
+never runs from inside the tree it maintains), evidence at
+`/var/lib/custodian/dialectic`, policy at `/etc/custodian/dialectic.toml`.
+`custodian/ARCHITECTURE.md` is the charter; its 2026-11-08 amendment and
+`custodian/validation/2026-11-08-droplet-build/` are the record. Facts a
+future session should not re-derive:
+
+- **What it does to this repo's status discipline.** The "Suites at this
+  gate: N" lines in this file are prose claims of test passage; Custodian
+  replaces them with attempt ids bound to tree ids. Proven here against
+  `25ee122`: a draft with the `llm` alias dropped from
+  `dialectic/llm/mentions.py` was attempt `30d5dc66…` **FAILED** (3 failed /
+  1922 passed); a sandboxed repair was attempt `558a1d3d…` **PASSED** on tree
+  `edcc2740…` with branch `custodian/558a1d3daa09`, while the foreground stayed
+  on `51d2a343…` and `custodian state` said `applicable: false`. Nothing
+  touched the working tree, index or refs.
+- **The checks it can run for dialectic** are the documented
+  `cd dialectic && pytest tests` with `*_pg.py` ignored and five host-resource
+  tests deselected by name (`custodian/deploy/droplet/dialectic.toml` carries
+  each reason): **1925 passed, 83 skipped, 5 deselected in 27 s** inside the
+  read-only sandbox. The 34 Postgres modules and frontend vitest remain
+  hand-run gates — a sandbox without network must not launder `dialectic_test`
+  into a verdict, and `node_modules` is never in a candidate.
+- **Four fixes landed on the way in**, each failing first: `/etc/alternatives`
+  is mounted read-only (on a host where `/usr/bin/python3` is an alternatives
+  link every check died with `execvp`); blob ids are computed in-process
+  (capture 7.15 s → 0.33 s on 1,571 files, identical tree ids; the
+  SessionStart hook/MCP path 0.23 s); `service --scope system
+  --environment-file` for root hosts; provider `max_output_tokens` default
+  16384 because thinking shares `max_tokens`.
+- **Deploy is one root command**: `bash custodian/deploy/droplet/install.sh`
+  (runbook `custodian/deploy/droplet/README.md`; pre-merge, clone the branch
+  beside the production tree and set `CUSTODIAN_SOURCE_DIR` — never switch the
+  production checkout's branch). Rehearsed end-to-end here against the real
+  clone with the service step disabled; the unit itself is proven only against
+  a fake `systemctl`. Suites: custodian **110/110**; dialectic untouched.
+- **Not done, named**: nothing ran on the droplet (port 22 is refused from the
+  build network and no key exists); no live paid Anthropic request has ever
+  gone through the provider adapter; droplet Python/bubblewrap versions are
+  checked by `install.sh` preflight + `doctor`, not assumed.
