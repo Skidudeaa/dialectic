@@ -319,6 +319,7 @@ export interface FriendNote {
   about?: string | null
   state: 'open' | 'drafted' | 'accepted' | 'set aside'
   note?: string | null
+  steer?: { by: string; at: string; text: string } | null
   draft?: {
     name: string
     kicker?: string

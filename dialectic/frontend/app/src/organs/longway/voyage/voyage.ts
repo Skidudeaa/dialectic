@@ -20,22 +20,29 @@ export function isObject(value: Json | undefined): value is JsonObject {
 }
 
 type Kind = 'line' | 'prose' | 'list' | 'number' | 'json'
-export interface Field { path: string; label: string; kind: Kind }
+export type FieldGroup = 'story' | 'reach' | 'photos' | 'camera'
+export interface Field { path: string; label: string; kind: Kind; group?: FieldGroup; half?: boolean }
+export const stopFieldGroups: { id: FieldGroup; title: string }[] = [
+  { id: 'story', title: 'Story and caption' },
+  { id: 'reach', title: 'Access and reach' },
+  { id: 'photos', title: 'Photographs' },
+  { id: 'camera', title: 'Camera and pacing' },
+]
 export const stopFields: Field[] = [
-  { path: 'name', label: 'Name', kind: 'line' },
-  { path: 'kicker', label: 'Kicker', kind: 'line' },
-  { path: 'moment/text', label: 'Moment', kind: 'prose' },
-  { path: 'moment/cite', label: 'Moment citations (comma separated)', kind: 'list' },
-  { path: 'text', label: 'Long text', kind: 'prose' },
-  { path: 'reach', label: 'Reach', kind: 'line' },
-  { path: 'reach_why', label: 'Reason for reach', kind: 'prose' },
-  { path: 'reach_cite', label: 'Reach citations (comma separated)', kind: 'list' },
-  { path: 'photos', label: 'Photo keys in order (comma separated)', kind: 'list' },
-  { path: 'photo', label: 'Lead photo', kind: 'line' },
-  { path: 'camera/zoom', label: 'Camera zoom', kind: 'number' },
-  { path: 'camera/pitch', label: 'Camera pitch', kind: 'number' },
-  { path: 'camera/bearing', label: 'Camera bearing', kind: 'number' },
-  { path: 'pace/hold', label: 'Hold', kind: 'number' },
+  { path: 'name', label: 'Name', kind: 'line', group: 'story', half: true },
+  { path: 'kicker', label: 'Kicker', kind: 'line', group: 'story', half: true },
+  { path: 'moment/text', label: 'Moment', kind: 'prose', group: 'story' },
+  { path: 'moment/cite', label: 'Moment citations (comma separated)', kind: 'list', group: 'story' },
+  { path: 'text', label: 'Long text', kind: 'prose', group: 'story' },
+  { path: 'reach', label: 'Reach', kind: 'line', group: 'reach', half: true },
+  { path: 'reach_cite', label: 'Reach citations (comma separated)', kind: 'list', group: 'reach', half: true },
+  { path: 'reach_why', label: 'Reason for reach', kind: 'prose', group: 'reach' },
+  { path: 'photo', label: 'Lead photo', kind: 'line', group: 'photos', half: true },
+  { path: 'photos', label: 'Photo keys in order (comma separated)', kind: 'list', group: 'photos', half: true },
+  { path: 'camera/zoom', label: 'Camera zoom', kind: 'number', group: 'camera', half: true },
+  { path: 'camera/pitch', label: 'Camera pitch', kind: 'number', group: 'camera', half: true },
+  { path: 'camera/bearing', label: 'Camera bearing', kind: 'number', group: 'camera', half: true },
+  { path: 'pace/hold', label: 'Hold', kind: 'number', group: 'camera', half: true },
 ]
 
 export function fieldText(value: Json | undefined, kind: Kind): string {

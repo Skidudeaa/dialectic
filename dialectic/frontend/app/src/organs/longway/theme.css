@@ -6,23 +6,33 @@
 
 /* ── Palette: the globe's chart-table colours ─────────────────────────────── */
 :root[data-organ="longway"] {
-  --bg: #ecf1f0; --panel: #f7faf9; --raise: #e2eaea; --sea: #dce7e8; --land: #f2ead8; --coast: #b4c3c2; --grat: #cddadb;
-  --ink: #13283a; --ink-2: #44586a; --ink-3: #586a78; --rule: #c6d3d4;
-  --good: #a51f66; --possible: #da88b2; --off: #9aabb3; --pencil: #7a8790; --contra: #c0392b;
-  --accent-ink: #ffffff; --map-icon-filter: none;
+  --bg: #d9e3e2; --panel: #fcfefe; --raise: #b7cacb; --sea: #b8ced2; --land: #f2ead8; --coast: #9cb2b2; --grat: #c3d5d7;
+  --ink: #0b1c2a; --ink-2: #324758; --ink-3: #435766; --rule: #b0c2c4; --rule-strong: #879fa2;
+  --good: #96195b; --possible: #da88b2; --off: #576974; --pencil: #5c6e78; --contra: #b83227;
+  --accent-ink: #ffffff; --map-icon-filter: none; --scrim: rgb(11 28 42 / .44);
+  --stage-bg: #080d0f; --stage-panel: #162226; --stage-raise: #25363c;
+  --stage-ink: #f5f0e4; --stage-ink-2: #cfc9bc; --stage-ink-3: #96978f; --stage-rule: #212d31; --stage-border: #324247;
   --font-display: "Libre Caslon Display", "Libre Caslon Text", Georgia, serif;
   --font-text: "Libre Caslon Text", Georgia, "Times New Roman", serif;
   --font-ui: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
   --font-code: "JetBrains Mono", ui-monospace, monospace;
 }
 @media (prefers-color-scheme: dark) { :root[data-organ="longway"]:not([data-theme="light"]) {
-  --bg: #091117; --panel: #0e1a22; --raise: #142530; --sea: #0c1820; --land: #1a2730; --coast: #2e404b; --grat: #14232c;
-  --ink: #dce5e9; --ink-2: #a5b5be; --ink-3: #8597a2; --rule: #21303a;
-  --good: #ff5aa5; --possible: #7c2f55; --off: #3d4e58; --pencil: #8494a0; --contra: #ff6b5b; --accent-ink: #22020f; --map-icon-filter: invert(.88); color-scheme: dark } }
+  --bg: #070d12; --panel: #14242f; --raise: #243c4c; --sea: #081016; --land: #1a2730; --coast: #2e404b; --grat: #14232c;
+  --ink: #f2f6f8; --ink-2: #b9cbd5; --ink-3: #96abb7; --rule: #273d4b; --rule-strong: #3e596b;
+  --good: #ff5aa5; --possible: #7c2f55; --off: #7e919c; --pencil: #93a7b3; --contra: #ff6b5b;
+  --accent-ink: #1c020c; --map-icon-filter: invert(.88); --scrim: rgb(3 7 10 / .68);
+  --stage-bg: #080d0f; --stage-panel: #162226; --stage-raise: #25363c;
+  --stage-ink: #f5f0e4; --stage-ink-2: #cfc9bc; --stage-ink-3: #96978f; --stage-rule: #212d31; --stage-border: #324247;
+  color-scheme: dark } }
 :root[data-organ="longway"][data-theme="dark"] {
-  --bg: #091117; --panel: #0e1a22; --raise: #142530; --sea: #0c1820; --land: #1a2730; --coast: #2e404b; --grat: #14232c;
-  --ink: #dce5e9; --ink-2: #a5b5be; --ink-3: #8597a2; --rule: #21303a;
-  --good: #ff5aa5; --possible: #7c2f55; --off: #3d4e58; --pencil: #8494a0; --contra: #ff6b5b; --accent-ink: #22020f; --map-icon-filter: invert(.88); color-scheme: dark }
+  --bg: #070d12; --panel: #14242f; --raise: #243c4c; --sea: #081016; --land: #1a2730; --coast: #2e404b; --grat: #14232c;
+  --ink: #f2f6f8; --ink-2: #b9cbd5; --ink-3: #96abb7; --rule: #273d4b; --rule-strong: #3e596b;
+  --good: #ff5aa5; --possible: #7c2f55; --off: #7e919c; --pencil: #93a7b3; --contra: #ff6b5b;
+  --accent-ink: #1c020c; --map-icon-filter: invert(.88); --scrim: rgb(3 7 10 / .68);
+  --stage-bg: #080d0f; --stage-panel: #162226; --stage-raise: #25363c;
+  --stage-ink: #f5f0e4; --stage-ink-2: #cfc9bc; --stage-ink-3: #96978f; --stage-rule: #212d31; --stage-border: #324247;
+  color-scheme: dark }
 
 /* ── The shell's tokens, pointed at the palette ───────────────────────────────
    Repeated on every [data-room-scheme] element: tokens.css re-derives the whole palette on each one (the sidebar's
@@ -50,18 +60,18 @@
   --scene-accent: var(--accent); --scene-accent-soft: var(--accent-soft); --scene-tint: transparent; --scene-ambient: none;
 }
 
-[data-organ="longway"] body { background: var(--bg); color: var(--ink); font-family: var(--font-text); font-size: 16px; }
+[data-organ="longway"] body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-text); font-size: 16px; -webkit-font-smoothing: antialiased; }
 [data-organ="longway"] :is(h1, h2) { font-family: var(--font-display); font-weight: 400; color: var(--ink); }
 [data-organ="longway"] h3 { font-family: var(--font-text); font-weight: 700; color: var(--ink); }
 [data-organ="longway"] :is(code, pre, kbd, samp) { font-family: var(--font-code); }
-[data-organ="longway"] :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+[data-organ="longway"] :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 [data-organ="longway"] a { color: inherit; text-decoration-color: var(--accent); text-underline-offset: 3px; }
 [data-organ="longway"] ::selection { background: var(--accent-soft); color: var(--ink); }
 [data-organ="longway"] .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* ── Shell: rails and main column ─────────────────────────────────────────── */
 [data-organ="longway"] .app-sidebar { background: var(--bg); box-shadow: none; border-right: 1px solid var(--rule); }
-[data-organ="longway"] .app-main { background: var(--bg); box-shadow: none; }
+[data-organ="longway"] .app-main { background: transparent; box-shadow: none; }
 [data-organ="longway"] .app-main::before { display: none; }
 [data-organ="longway"] .workspace-scene-content { background: none; }
 [data-organ="longway"] .sidebar-rooms-header h2 { font: 600 .72rem/1 var(--font-ui); letter-spacing: .08em; color: var(--ink-3); }
@@ -150,14 +160,41 @@
 [data-organ="longway"] :is(button, input, textarea, select) { font: inherit; color: inherit; }
 /* :where() keeps this base at low specificity so .lw-primary (one obvious action per card) wins over it. */
 [data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-ledger, .longway-library, .longway-dispatch, .longway-scout, .longway-proposal, .longway-room-access) button:where(:not(.jl, .lw-journey-title, .lw-room, [class*="maplibregl"])) {
-  min-height: 44px; padding: .5rem .95rem; background: var(--panel); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px;
-  font: 500 .95rem/1.2 var(--font-ui); cursor: pointer; transition: background-color .14s, border-color .14s;
+  display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+  min-height: 44px; padding: .5rem .95rem; background: var(--panel); color: var(--ink); border: 1px solid var(--rule-strong); border-radius: 8px;
+  font: 500 .95rem/1.2 var(--font-ui); cursor: pointer; transition: background-color .14s, border-color .14s, color .14s;
 }
 [data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-ledger, .longway-library, .longway-scout, .longway-proposal) button:where(:not(.jl, .lw-journey-title, .lw-room, .lw-primary, [class*="maplibregl"], :disabled)):hover { background: var(--raise); border-color: var(--pencil); }
-[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-scout, .longway-proposal) button.lw-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
-[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-scout, .longway-proposal) button.lw-primary:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); border-color: transparent; }
+[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-library, .longway-scout, .longway-proposal) button.lw-primary {
+  background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600;
+}
+[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-library, .longway-scout, .longway-proposal) button.lw-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--accent) 86%, var(--ink)); border-color: transparent;
+}
+/* Secondary ride button on a House card where Enter the room already holds the primary accent fill. */
+[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-library) button.lw-ride-secondary {
+  background: var(--bg); border-color: var(--accent); color: var(--ink); font-weight: 600;
+}
+[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-library) button.lw-ride-secondary:not(:disabled):hover {
+  background: var(--raise); border-color: var(--accent);
+}
+[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-library) button.lw-quiet-btn {
+  background: transparent; border-color: var(--rule); color: var(--ink-2); font-weight: 500;
+}
+[data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-library) button.lw-quiet-btn:not(:disabled):hover {
+  background: var(--bg); border-color: var(--rule-strong); color: var(--ink);
+}
+/* Buttons sitting inside a --panel card step back onto --bg so touching surfaces stay >= 10 dE apart. */
+[data-organ="longway"] :is(.longway-card, .lw-chosen, .lw-journey-hero) button:where(:not(.lw-primary, .lw-journey-title, .lw-quiet-btn, .lw-draft-preview-btn, .lw-draft-back-btn, .lw-draft-aside-btn, .lw-ride-secondary)) {
+  background: var(--bg); border-color: var(--rule-strong);
+}
+[data-organ="longway"] :is(.longway-card, .lw-chosen, .lw-journey-hero) button:where(:not(.lw-primary, .lw-journey-title, .lw-quiet-btn, .lw-draft-preview-btn, .lw-draft-back-btn, .lw-draft-aside-btn, .lw-ride-secondary, :disabled)):hover {
+  background: var(--raise); border-color: var(--pencil);
+}
 [data-organ="longway"] button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 -2px var(--accent); }
-[data-organ="longway"] button:disabled { cursor: default; opacity: .55; }
+[data-organ="longway"] button:disabled { cursor: default; opacity: .45; }
+.lw-ride-glyph { flex: none; }
+.lw-action-status { flex: 1 0 100%; margin: .25rem 0 0; }
 [data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-scout, .longway-proposal, .longway-ledger) form label { display: block; margin-block: .65rem; font: 500 .9rem var(--font-ui); color: var(--ink-2); }
 [data-organ="longway"] :is(.longway-house, .longway-chart-notes, .longway-field, .longway-scout, .longway-proposal, .longway-ledger) :is(textarea, select, input:not([type="checkbox"])) {
   max-width: 100%; margin-top: .35rem; background: var(--bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px; padding: .65rem .8rem;
@@ -206,8 +243,22 @@
 .lw-toggle .lw-hint { margin: -.55rem 0 0 1.7rem; font-size: .8rem; }
 .lw-key { display: flex; flex-wrap: wrap; gap: .25rem 1rem; list-style: none; margin: 0; padding: 0; font: 500 .82rem var(--font-ui); color: var(--ink-2); }
 .lw-key li { display: inline-flex; align-items: center; gap: .4rem; }
-.lw-chosen { margin-top: .75rem; padding: 1rem 1.1rem; border: 1px solid var(--accent); border-radius: 12px; background: var(--panel); }
-.lw-chosen h3 { margin: 0 0 .3rem; font-size: 1.25rem; }
+.lw-chosen {
+  container-type: inline-size; margin-top: .85rem; padding: 1.15rem 1.25rem;
+  border: 1px solid var(--accent); border-radius: 14px; background: var(--panel);
+}
+.lw-chosen-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem .75rem; margin-bottom: .35rem; }
+.lw-chosen-bar .lw-eyebrow { margin: 0; }
+.lw-chosen-heading {
+  margin: 0 0 .35rem; font: 400 clamp(1.45rem, 2.4vw, 1.85rem)/1.12 var(--font-display);
+  letter-spacing: -.015em; color: var(--ink);
+}
+.lw-chosen-meta { margin-bottom: 0; }
+[data-organ="longway"] .lw-chosen-close { min-height: 40px; padding: .35rem .75rem; font-size: .86rem; flex: none; }
+.lw-chosen-pull { margin: .7rem 0 0; max-width: 62ch; text-wrap: pretty; }
+.lw-chosen .lw-from-friends { margin-block: 1.25rem 0; }
+.lw-chosen .lw-empty-friends { background: var(--bg); }
+.lw-chosen > .lw-alert, .lw-chosen .lw-scout-bar .lw-alert { background: var(--bg); }
 .lw-rooms { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
 .lw-room {
   width: 100%; min-height: 56px; display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: .75rem; text-align: left;
@@ -217,33 +268,49 @@
 .lw-room-name { font: 700 1.05rem/1.3 var(--font-text); }
 .lw-room-journey { grid-row: 2; font: 500 .82rem var(--font-ui); color: var(--ink-3); }
 .lw-room-go { grid-row: 1 / span 2; grid-column: 2; font: 500 1.2rem var(--font-ui); color: var(--accent); }
-.lw-journey { margin: 0 0 .75rem; }
+.lw-journey { container-type: inline-size; margin: 0 0 .85rem; padding: 1.05rem 1.15rem 1.15rem; }
 .lw-journey-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
-.lw-journey-head h3 { margin: 0; }
+.lw-journey-head h3 { margin: 0; min-width: 0; }
 .lw-journey-title {
-  all: unset; box-sizing: border-box; cursor: pointer; display: block; min-height: 44px; padding: .5rem 0 .3rem;
-  font: 700 1.18rem/1.3 var(--font-text); color: var(--ink); text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px;
+  all: unset; box-sizing: border-box; cursor: pointer; display: block; min-height: 44px; padding: .35rem 0 .25rem;
+  font: 400 1.36rem/1.18 var(--font-display); letter-spacing: -.012em; color: var(--ink);
+  text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px;
 }
 .lw-journey-title:hover { text-decoration-color: var(--accent); }
 /* Shown on the globe: the title itself is underlined in the accent, beside the card's accent border. */
 [data-organ="longway"] .lw-journey-title[aria-pressed="true"] { box-shadow: none; text-decoration-color: var(--accent); text-decoration-thickness: 2px; }
 .lw-journey-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-.lw-journey-head .lw-chip { margin-top: .7rem; }
+.lw-journey-head .lw-chip { margin-top: .5rem; }
+.lw-journey-meta { margin: 0 0 .45rem; }
 .lw-journey .longway-journey-strip { margin: 0 0 .5rem; }
-.lw-pull { margin: .25rem 0 .5rem; font: 400 1.02rem/1.55 var(--font-text); color: var(--ink); }
-.lw-feasibility { margin: 0; font: 400 .88rem/1.45 var(--font-ui); color: var(--ink-3); }
+.lw-pull { margin: .25rem 0 0; font: 400 .98rem/1.55 var(--font-text); color: var(--ink); text-wrap: pretty; }
+.lw-journey-notes {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .85rem;
+  margin-top: .65rem;
+}
+.lw-friend-tally {
+  margin: 0; display: inline-flex; align-items: center; gap: .4rem;
+  font: 600 .86rem/1.4 var(--font-ui); color: var(--ink-2);
+}
+.lw-friend-tally::before {
+  content: ''; width: 7px; height: 7px; border-radius: 999px; flex: none; background: var(--accent);
+}
+.lw-feasibility { margin: 0; font: 400 .86rem/1.42 var(--font-ui); color: var(--ink-3); }
 .lw-request h3 { margin-bottom: .2rem; }
 @container (min-width: 940px) {
   .lw-atlas { grid-template-columns: minmax(0, 1.45fr) minmax(330px, 1fr); gap: 1.75rem; }
-  /* Sticky beside the list, so it must fit the viewport with its key and the chosen journey under it. */
-  .lw-atlas-globe { position: sticky; top: 1rem; }
+  /* Sticky beside the list; scrolls internally once a picked journey expands with From friends underneath the globe. */
+  .lw-atlas-globe {
+    position: sticky; top: 1rem; max-height: calc(100dvh - 2rem);
+    overflow-y: auto; overscroll-behavior: contain; padding: 2px 4px 1.25rem 2px; margin: -2px -4px 0 -2px;
+  }
   .lw-atlas-globe > .longway-chart, .lw-globe-wait { height: min(56svh, 620px); }
 }
 @container (max-width: 520px) {
   .lw-atlas { padding: .5rem .5rem 0; }
   .lw-atlas-globe > .longway-chart, .lw-globe-wait { height: 50svh; border-radius: 12px; }
   .lw-atlas-list { padding: 0 .35rem; }
-  .lw-pull { font-size: 1rem; }
+  .lw-pull { font-size: .96rem; line-height: 1.5; }
 }
 [data-organ="longway"] .longway-seat-requests { min-width: 0; overflow-wrap: anywhere; }
 [data-organ="longway"] .longway-seat-requests .is-decided { color: var(--ink-3); border-style: dashed; background: none; }
@@ -251,22 +318,40 @@
 [data-organ="longway"] .longway-invite-result code { user-select: all; -webkit-user-select: all; letter-spacing: .18em; font-size: 1.15em; white-space: nowrap; }
 
 /* ── A journey room's Chart ───────────────────────────────────────────────── */
-.longway-chart { height: 55svh; min-height: 240px; background: var(--sea); position: relative; }
+.longway-chart { height: 52svh; min-height: 240px; background: transparent; position: relative; border-bottom: 1px solid var(--rule); }
 .longway-chart > .longway-chart-ui, .longway-chart-ui > .longway-map { height: 100%; }
-.longway-chart-notes { padding: 1rem 1.25rem; max-width: 860px; }
-.longway-chart-notes > label { display: inline-flex; align-items: center; gap: .55rem; min-height: 44px; font: 600 .92rem var(--font-ui); cursor: pointer; }
-.longway-chart-notes > .lw-key { margin: .25rem 0 .5rem; }
-.longway-chart-notes > h3 { margin: 1rem 0 .25rem; font-size: 1.35rem; }
-.longway-chart-notes > p { font: 400 1.02rem/1.55 var(--font-text); }
-.longway-legs { list-style: none; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
-.longway-legs li { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.longway-chart-notes { box-sizing: border-box; width: 100%; max-width: 1240px; margin-inline: auto; padding: 1.1rem clamp(1rem, 3.5vw, 2.25rem) 3rem; }
+.lw-chart-bar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1.5rem;
+  padding-bottom: .85rem; margin-bottom: 1.35rem; border-bottom: 1px solid var(--rule);
+}
+.lw-chart-bar > label { display: inline-flex; align-items: center; gap: .55rem; min-height: 44px; font: 600 .92rem var(--font-ui); color: var(--ink); cursor: pointer; }
+.lw-chart-spread { display: grid; gap: 2rem; align-items: start; }
+.lw-chart-main, .lw-chart-friends { min-width: 0; }
+.lw-chart-head h3 { margin: 0; font: 400 clamp(1.65rem, 3vw, 2.25rem)/1.12 var(--font-display); letter-spacing: -.015em; color: var(--ink); }
+.lw-chart-actions { margin: .95rem 0 1.1rem; }
+.lw-chart-pull { margin: 0 0 1.2rem; font: 400 1.04rem/1.62 var(--font-text); color: var(--ink); max-width: 62ch; text-wrap: pretty; }
+.lw-chart-season { padding: 1rem 1.15rem; margin: 0 0 1.35rem; background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; }
+.lw-chart-season .months { max-width: 360px; }
+.lw-chart-leg-detail { margin: 1rem 0; padding: 1rem 1.15rem; background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; }
+.lw-chart-draft { margin: 1rem 0; padding: 1rem 1.15rem; background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; }
+.longway-legs { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; flex-wrap: wrap; gap: .5rem; }
+.longway-legs li { display: inline-flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
 .longway-legs button { text-align: left; }
 .longway-dispatch-now { margin-top: 1.5rem; }
 .longway-bench-record { display: flex; flex-direction: column; min-height: 50svh; }
 .longway-bench-record .message-list { overflow: visible; }
+@media (min-width: 960px) {
+  .lw-chart-spread { grid-template-columns: minmax(0, 1.12fr) minmax(360px, 1fr); gap: 2rem 2.75rem; }
+  .lw-chart-friends .lw-from-friends { margin-block: 0; }
+}
 @media (max-width: 760px) {
-  .longway-bench .longway-chart { height: 48svh; min-height: 0; position: sticky; top: 0; z-index: 2; }
-  .longway-card, .longway-chart-notes { scroll-margin-top: calc(48svh + 12px); }
+  .longway-bench .longway-chart { height: 44svh; min-height: 0; position: sticky; top: 0; z-index: 2; }
+  .longway-card, .longway-chart-notes { scroll-margin-top: calc(44svh + 12px); }
+}
+@media (max-width: 520px) {
+  .lw-chart-actions > .lw-ride-btn { flex: 1 0 100%; }
+  .lw-chart-actions > .lw-friend-action { flex: 1 1 0; }
 }
 
 .longway-scene-stack { min-height: 0; overflow-y: auto; flex: 1; }
@@ -275,17 +360,109 @@
 .longway-room-access[role="dialog"] { position: fixed; z-index: 100; inset: 10% max(1rem, calc((100vw - 640px) / 2)); overflow-y: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; box-shadow: 0 0 0 100vmax #0008; }
 
 /* ── Library ──────────────────────────────────────────────────────────────── */
-.longway-library { font: 400 1.02rem/1.6 var(--font-text); }
-.longway-library > * { max-width: 760px; }
-.longway-library section[aria-label="Dossier"] h1 { font-size: 1.9rem; line-height: 1.2; margin: .5rem 0 .75rem; }
-.longway-library section[aria-label="Dossier"] h2 { font-size: 1.35rem; margin: 1.75rem 0 .5rem; }
-.longway-library section[aria-label="Dossier"] h3 { font-size: 1.12rem; margin: 1.25rem 0 .4rem; }
-.longway-library section[aria-label="Dossier"] :is(p, li) { margin: 0 0 .75rem; }
-.longway-library section[aria-label="Dossier"] code { font-size: .85em; background: var(--raise); border-radius: 4px; padding: .05em .3em; }
+.longway-library {
+  box-sizing: border-box; font: 400 1.02rem/1.6 var(--font-text);
+  padding: clamp(.85rem, 3vw, 2.25rem) clamp(.85rem, 3.5vw, 2.5rem) 3.5rem;
+  display: flex; flex-direction: column; gap: clamp(1.35rem, 2.8vw, 2rem);
+}
+.longway-library > * { box-sizing: border-box; width: 100%; max-width: 1220px; margin-inline: auto; }
+.lw-journey-hero {
+  display: grid; gap: .95rem; padding: 1.05rem 1.1rem 1.15rem;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 14px;
+}
+.lw-hero-copy { min-width: 0; }
+.lw-hero-meta { margin: 0 0 .4rem; letter-spacing: .09em; line-height: 1.38; color: var(--ink-3); }
+.lw-journey-hero h1 {
+  margin: 0; font: 400 clamp(1.9rem, 3.6vw, 2.9rem)/1.08 var(--font-display);
+  letter-spacing: -.02em; color: var(--ink);
+}
+.lw-hero-lead {
+  margin: .65rem 0 0; font: 400 .96rem/1.52 var(--font-text); color: var(--ink);
+  max-width: 64ch; text-wrap: pretty;
+}
+.lw-hero-lead p { margin: 0; }
+.lw-hero-lead p + p { margin-top: .65rem; }
+.lw-hero-actions { min-width: 0; }
+.lw-action-dock { display: flex; flex-direction: column; gap: .55rem; }
+.lw-action-main { display: flex; flex-direction: column; gap: .5rem; }
+.lw-lead-row { display: grid; grid-template-columns: 1fr; gap: .5rem; }
+.lw-lead-row > .lw-ride-btn { width: 100%; min-height: 46px; font-size: 1rem; letter-spacing: .01em; }
+.lw-lead-row > button { width: 100%; }
+.lw-friend-row { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.lw-friend-row > button { width: 100%; }
+.lw-manager-tools {
+  display: grid; grid-template-columns: 1fr 1fr; gap: .5rem;
+  padding-top: .55rem; margin-top: .1rem; border-top: 1px solid var(--rule);
+}
+.lw-manager-tools > button { width: 100%; min-height: 40px; font-size: .88rem; }
+.lw-manager-tools-single { display: flex; flex-wrap: wrap; }
+.lw-manager-tools-single > button { width: auto; }
+.lw-house-dock { margin-top: .9rem; }
+.lw-room-note {
+  margin: .1rem 0 0; padding-top: .55rem; border-top: 1px solid var(--rule);
+  font: 400 .86rem/1.4 var(--font-ui); color: var(--ink-3);
+}
+@container (min-width: 440px) {
+  .lw-house-dock .lw-action-main { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .lw-house-dock .lw-lead-row { display: flex; flex-wrap: wrap; flex: none; }
+  .lw-house-dock .lw-lead-row > .lw-ride-btn { width: auto; min-width: 10.5rem; padding-inline: 1.15rem; }
+  .lw-house-dock .lw-lead-row > button { width: auto; }
+  .lw-house-dock .lw-friend-row { display: flex; flex-wrap: wrap; }
+  .lw-house-dock .lw-friend-row > button { width: auto; min-width: 7.75rem; }
+}
+
+.lw-library-spread { display: grid; gap: 2rem; align-items: start; }
+.lw-library-main, .lw-library-aside { min-width: 0; }
+.lw-library-aside { display: flex; flex-direction: column; gap: 1.75rem; }
+
+.lw-dossier-panel {
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; padding: 1.15rem 1.25rem;
+}
+.lw-dossier-panel:empty { display: none; }
+.lw-dossier-custom-head h1 { margin: 0 0 .5rem; font: 400 1.65rem/1.15 var(--font-display); }
+.lw-dossier-card-head h2 { margin: 0 0 .45rem; font: 400 1.35rem/1.2 var(--font-display); }
+.lw-dossier-disclosure summary {
+  display: inline-flex; align-items: center; gap: .5rem; min-height: 40px; cursor: pointer;
+  font: 600 .92rem/1.2 var(--font-ui); color: var(--accent); list-style: none;
+}
+.lw-dossier-disclosure summary::-webkit-details-marker { display: none; }
+.lw-dossier-disclosure summary::before { content: '▸'; display: inline-block; transition: transform .15s ease; }
+.lw-dossier-disclosure[open] summary::before { transform: rotate(90deg); }
+.lw-dossier-body { margin-top: .85rem; padding-top: .85rem; border-top: 1px solid var(--rule); font: 400 .98rem/1.62 var(--font-text); color: var(--ink); }
+.lw-dossier-body h1 { font-size: 1.65rem; line-height: 1.2; margin: .25rem 0 .7rem; }
+.lw-dossier-body h2 { font-size: 1.28rem; margin: 1.5rem 0 .45rem; }
+.lw-dossier-body h2:first-child { margin-top: 0; }
+.lw-dossier-body h3 { font-size: 1.06rem; margin: 1.15rem 0 .35rem; }
+.lw-dossier-body :is(p, li) { margin: 0 0 .7rem; }
+.lw-dossier-body ul { padding-left: 1.2rem; margin: 0 0 .85rem; }
+.lw-dossier-body code { font-size: .84em; background: var(--bg); border: 1px solid var(--rule); border-radius: 4px; padding: .05em .35em; }
+
+.lw-library-vehicles h2, .lw-library-evidence h2 {
+  display: flex; align-items: baseline; gap: .6rem; margin: 0 0 .85rem;
+  font: 400 1.4rem/1.2 var(--font-display);
+}
+.lw-library-vehicles .lw-vehicle-card { margin: 0 0 .75rem; }
+.lw-library-vehicles .lw-vehicle-card:last-child { margin-bottom: 0; }
+.lw-vehicle-fix { font: 500 .84rem/1.4 var(--font-ui); color: var(--ink-3); }
+
+.lw-library-evidence { padding-top: 1.75rem; border-top: 1px solid var(--rule); }
+.lw-evidence-grid { display: grid; gap: .75rem; }
+.lw-evidence-grid .longway-card { margin: 0; }
 .longway-library a { text-decoration-thickness: 1px; }
-.longway-library > section > h2 { margin-top: 2.25rem; }
-.longway-library .longway-card p { margin: .2rem 0; font: 400 .92rem/1.45 var(--font-ui); color: var(--ink-2); }
-.longway-library .longway-card h3 { font: 600 1rem/1.4 var(--font-text); }
+.longway-library .longway-card p { margin: .25rem 0; font: 400 .9rem/1.45 var(--font-ui); color: var(--ink-2); }
+.longway-library .longway-card h3 { font: 600 .98rem/1.4 var(--font-text); margin: 0 0 .3rem; }
+.lw-library-readings-heading { margin: .5rem 0 0; padding-top: 1.5rem; border-top: 1px solid var(--rule); font-size: 1.4rem; }
+
+@media (min-width: 960px) {
+  .lw-journey-hero {
+    grid-template-columns: minmax(0, 1.5fr) minmax(270px, 340px);
+    gap: 1.5rem 2.75rem; align-items: center; padding: 1.85rem 2.15rem;
+  }
+  .lw-hero-lead { margin-top: .8rem; font-size: 1.02rem; line-height: 1.58; }
+  .lw-library-spread { grid-template-columns: minmax(0, 1.38fr) minmax(300px, .85fr); gap: 2.25rem; }
+  .lw-library-main .lw-from-friends { margin-block: 0; }
+  .lw-evidence-grid { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: .85rem; }
+}
 
 /* ── Field: the Scout's desk ──────────────────────────────────────────────── */
 .longway-field > * { max-width: 860px; }
@@ -369,77 +546,368 @@
 [data-organ="longway"] .scene-empty::before { display: none; }
 [data-organ="longway"] .scene-empty-kicker { font: 600 .72rem var(--font-ui); letter-spacing: .08em; color: var(--ink-3); }
 
-/* The voyage occupies the browser's top layer. The bar has its own row so the
-   film's viewport and map controls end at the visible edges of the frame. */
+/* ── Full-screen film stage ─────────────────────────────────────────────────
+   The voyage occupies the browser's top layer. The bar sits on the film's own
+   dark cinema frame (--stage-bg) in both light and dark themes so it belongs
+   to the film underneath without stealing focus or space. */
 [data-organ="longway"] :is(.lw-voyage-stage, .lw-voyage-editor) {
   position: fixed; box-sizing: border-box; margin: 0; max-width: none; max-height: none;
   border: 0; padding: 0; color: var(--ink); background: var(--panel); font: 400 1rem/1.45 var(--font-ui);
 }
+[data-organ="longway"] .lw-voyage-stage {
+  background: var(--stage-bg); color: var(--stage-ink);
+}
 [data-organ="longway"] .lw-voyage-stage[open] {
   inset: 0; width: 100%; height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
 }
-.lw-voyage-stage iframe { display: block; width: 100%; flex: 1; min-height: 0; border: 0; background: var(--sea); }
+.lw-voyage-stage iframe { display: block; width: 100%; flex: 1; min-height: 0; border: 0; background: var(--stage-bg); }
+.lw-stage-state {
+  flex: 1; display: grid; place-items: center; padding: 2rem; text-align: center;
+  background: var(--stage-bg); color: var(--stage-ink-2); font: 400 1rem/1.5 var(--font-ui);
+}
+.lw-stage-state button { margin-left: .65rem; }
+
 .lw-voyage-bar {
-  box-sizing: border-box; height: calc(48px + env(safe-area-inset-top)); flex: none;
-  display: flex; align-items: center; gap: .5rem; padding: env(safe-area-inset-top) .5rem 0; border-bottom: 1px solid var(--rule);
+  box-sizing: border-box; height: calc(56px + env(safe-area-inset-top)); flex: none;
+  display: flex; align-items: center; justify-content: space-between; gap: .65rem;
+  padding: env(safe-area-inset-top) .95rem 0 .65rem;
+  background: var(--stage-bg); color: var(--stage-ink); border-bottom: 1px solid var(--stage-rule);
 }
-.lw-voyage-bar :is(strong, span) { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lw-voyage-bar strong { flex: 1; font-family: var(--font-text); }
-.lw-voyage-bar span { max-width: 32%; font-size: .88rem; }
-[data-organ="longway"] :is(.lw-voyage-bar, .lw-voyage-editor) button {
-  flex: none; white-space: nowrap; min-height: 40px; padding: .35rem .6rem; border: 1px solid var(--rule);
-  border-radius: 6px; background: var(--panel); color: var(--ink); font: 600 .88rem/1.2 var(--font-ui); cursor: pointer;
+.lw-stage-left { display: flex; align-items: center; gap: .6rem; min-width: 0; flex: 1; }
+.lw-stage-actions { display: flex; align-items: center; gap: .4rem; flex: none; }
+.lw-stage-sep { width: 1px; height: 16px; background: var(--stage-rule); flex: none; }
+.lw-stage-title {
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font: 400 1.08rem/1.15 var(--font-display); letter-spacing: -.01em; color: var(--stage-ink);
 }
-[data-organ="longway"] .lw-voyage-editor {
-  inset: 0 0 0 auto; width: min(34rem, 100%); height: 100dvh; overflow-y: auto; overscroll-behavior: contain;
-  padding: 1rem max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) 1rem; border-left: 1px solid var(--rule);
+.lw-stage-stop {
+  min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font: 600 .76rem/1 var(--font-ui); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--stage-ink-2);
 }
-[data-organ="longway"] .lw-voyage-editor.on-stage {
-  top: calc(48px + env(safe-area-inset-top)); height: calc(100dvh - 48px - env(safe-area-inset-top));
+.lw-stage-title + .lw-stage-stop::before { content: '·'; margin-right: .55rem; color: var(--stage-ink-3); }
+[data-organ="longway"] .lw-voyage-bar button {
+  display: inline-flex; align-items: center; justify-content: center; gap: .35rem;
+  flex: none; white-space: nowrap; min-height: 40px; padding: .35rem .8rem;
+  border: 1px solid var(--stage-border); border-radius: 999px;
+  background: transparent; color: var(--stage-ink);
+  font: 500 .86rem/1 var(--font-ui); letter-spacing: .02em; cursor: pointer;
+  transition: background-color .15s, border-color .15s, color .15s;
 }
-.lw-voyage-editor::backdrop { background: transparent; }
-.lw-voyage-editor header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-.lw-voyage-editor h2 { margin: 0; font-size: 1.5rem; overflow-wrap: anywhere; }
-.lw-voyage-editor fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
-.lw-voyage-editor label { display: block; margin: .85rem 0; font: 500 .9rem/1.4 var(--font-ui); }
-[data-organ="longway"] .lw-voyage-editor :is(select, input, textarea) {
-  box-sizing: border-box; display: block; width: 100%; min-width: 0; margin-top: .25rem; padding: .55rem;
-  background: var(--bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 5px; font: 400 1rem/1.45 var(--font-text);
+[data-organ="longway"] .lw-voyage-bar button:not(:disabled):hover {
+  background: var(--stage-raise); border-color: var(--stage-ink-2);
 }
-.lw-voyage-editor textarea { resize: vertical; }
-.lw-voyage-editor :read-only:is(textarea, input) { color: var(--ink-3); }
-.lw-voyage-editor details { margin: 1rem 0; }
-.lw-voyage-editor summary { cursor: pointer; color: var(--accent); }
-[data-organ="longway"] .lw-voyage-editor button.lw-primary { background: var(--accent); color: var(--accent-ink); }
+[data-organ="longway"] .lw-voyage-bar button.lw-stage-back {
+  border-color: transparent; padding: .35rem .55rem; color: var(--stage-ink-2);
+}
+[data-organ="longway"] .lw-voyage-bar button.lw-stage-back:hover {
+  background: var(--stage-raise); border-color: transparent; color: var(--stage-ink);
+}
+[data-organ="longway"] .lw-voyage-bar button:disabled { opacity: .4; cursor: default; }
+.lw-stage-arrow { font-size: 1rem; line-height: 1; }
+.lw-voyage-bar .lw-short-label { display: none; }
+
 .lw-voyage-saved, .lw-voyage-error { white-space: pre-wrap; overflow-wrap: anywhere; }
-.lw-voyage-saved { margin: 0; padding: .35rem .6rem; font: 500 .85rem/1.3 var(--font-ui); max-height: 20dvh; overflow: auto; }
-@media (prefers-reduced-motion: no-preference) {
-  .lw-voyage-editor[open] { animation: lw-open-editor .16s ease-out; }
-  @keyframes lw-open-editor { from { transform: translateX(100%); } }
+.lw-voyage-saved {
+  margin: 0; padding: .45rem .85rem; font: 500 .85rem/1.35 var(--font-ui);
+  max-height: 20dvh; overflow: auto;
+}
+.lw-voyage-stage > .lw-voyage-saved {
+  background: var(--stage-panel); color: var(--stage-ink); border-bottom: 1px solid var(--stage-rule);
 }
 
-.lw-from-friends { margin-block: 1.35rem; overflow-wrap: anywhere; }
-.lw-from-friends > h2 { margin: 0 0 .6rem; font-size: 1.4rem; }
-.lw-from-friends article { padding: .85rem 0; border-top: 1px solid var(--rule); }
-.lw-from-friends article > p, .lw-friend-review p { margin: .3rem 0; }
-.lw-friend-review { margin-top: .75rem; padding-inline-start: .9rem; border-inline-start: 2px solid var(--accent); }
-.lw-friend-review h4 { margin: 0; }
-.lw-friend-review label, .lw-friend-review input { display: block; }
-[data-organ="longway"] .lw-friend-panel {
-  inset: auto 0 0; margin: auto; width: min(30rem, 100%); height: fit-content; max-height: 90dvh;
-  border: 1px solid var(--rule); border-radius: 10px 10px 0 0; animation: none;
+/* ── Shared editorial dialog header & controls (composer + editor) ─────────── */
+.lw-sheet-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem;
 }
-.lw-friend-panel::backdrop { background: rgb(0 0 0 / .28); }
-.lw-friend-panel header { margin-bottom: .4rem; }
-.lw-thought-about p { margin-bottom: .35rem; }
-.lw-voyage-bar .lw-short-label { display: none; }
-@media (max-width: 520px) {
-  .lw-voyage-bar { gap: .25rem; padding-inline: .25rem; }
-  .lw-voyage-bar .lw-wide-label, .lw-voyage-bar strong:has(+ span) { display: none; }
+.lw-sheet-title { min-width: 0; }
+.lw-sheet-kicker {
+  margin: 0 0 .25rem; font: 600 .72rem/1.2 var(--font-ui); letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.lw-sheet-head h2 {
+  margin: 0; font: 400 1.55rem/1.12 var(--font-display); letter-spacing: -.015em;
+  color: var(--ink); overflow-wrap: anywhere;
+}
+[data-organ="longway"] .lw-voyage-editor button {
+  display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+  flex: none; white-space: nowrap; min-height: 40px; padding: .45rem .85rem;
+  border: 1px solid var(--rule-strong); border-radius: 8px;
+  background: var(--bg); color: var(--ink); font: 600 .9rem/1.2 var(--font-ui); cursor: pointer;
+  transition: background-color .14s, border-color .14s, color .14s;
+}
+[data-organ="longway"] .lw-voyage-editor button:not(:disabled):hover {
+  background: var(--raise); border-color: var(--pencil);
+}
+[data-organ="longway"] .lw-voyage-editor button.lw-sheet-close {
+  background: transparent; border-color: var(--rule); color: var(--ink-2); font-weight: 500;
+}
+[data-organ="longway"] .lw-voyage-editor button.lw-sheet-close:not(:disabled):hover {
+  background: var(--bg); border-color: var(--rule-strong); color: var(--ink);
+}
+[data-organ="longway"] .lw-voyage-editor button.lw-primary {
+  background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; min-height: 44px; padding-inline: 1.3rem;
+}
+[data-organ="longway"] .lw-voyage-editor button.lw-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--accent) 86%, var(--ink)); border-color: transparent;
+}
+[data-organ="longway"] .lw-voyage-editor button:disabled { opacity: .45; cursor: default; }
+
+/* ── Manager's stop / dossier / record editor drawer ──────────────────────── */
+[data-organ="longway"] .lw-voyage-editor:not(.lw-friend-panel) {
+  inset: 0 0 0 auto; width: min(36rem, 100%); height: 100dvh;
+  border-left: 1px solid var(--rule-strong); overflow: hidden;
+}
+[data-organ="longway"] .lw-voyage-editor:not(.lw-friend-panel)[open] {
+  display: flex; flex-direction: column;
+}
+[data-organ="longway"] .lw-voyage-editor.on-stage {
+  top: calc(56px + env(safe-area-inset-top)); height: calc(100dvh - 56px - env(safe-area-inset-top));
+}
+.lw-voyage-editor::backdrop { background: transparent; }
+.lw-editor-top {
+  flex: none; padding: 1.15rem max(1.25rem, env(safe-area-inset-right)) .95rem 1.25rem;
+  border-bottom: 1px solid var(--rule); background: var(--panel);
+}
+.lw-editor-pickers {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .75rem;
+  margin-top: .85rem;
+}
+.lw-editor-pickers label { margin: 0; }
+.lw-editor-notice { padding: .85rem 1.25rem 0; margin: 0; }
+.lw-editor-form { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.lw-editor-body {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: 1.1rem max(1.25rem, env(safe-area-inset-right)) 1.5rem 1.25rem;
+}
+.lw-editor-group { margin: 0 0 1.4rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--rule); }
+.lw-editor-group:last-of-type { margin-bottom: 1rem; }
+.lw-editor-group > h3 {
+  margin: 0 0 .75rem; font: 600 .74rem/1.2 var(--font-ui); letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.lw-editor-grid { display: grid; grid-template-columns: 1fr; gap: .8rem; }
+.lw-voyage-editor fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.lw-voyage-editor label { display: block; margin: 0; font: 600 .88rem/1.35 var(--font-ui); color: var(--ink-2); }
+.lw-editor-body > fieldset > .lw-field + .lw-field { margin-top: .95rem; }
+[data-organ="longway"] .lw-voyage-editor :is(select, input, textarea) {
+  box-sizing: border-box; display: block; width: 100%; min-width: 0; margin-top: .32rem;
+  padding: .6rem .75rem; background: var(--bg); color: var(--ink);
+  border: 1px solid var(--rule-strong); border-radius: 8px; font: 400 1rem/1.45 var(--font-text);
+  transition: border-color .14s;
+}
+[data-organ="longway"] .lw-voyage-editor select { font-family: var(--font-ui); min-height: 42px; }
+[data-organ="longway"] .lw-voyage-editor .lw-code-input { font: 400 .88rem/1.45 var(--font-code); }
+[data-organ="longway"] .lw-voyage-editor :is(select, input, textarea):focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent;
+}
+.lw-voyage-editor textarea { resize: vertical; }
+.lw-voyage-editor [data-readonly] { color: var(--ink-3); }
+.lw-voyage-editor :read-only:is(textarea, input) { color: var(--ink-3); border-style: dashed; }
+.lw-editor-json { margin-top: 1rem; }
+.lw-editor-json summary {
+  display: inline-flex; align-items: center; gap: .4rem; min-height: 40px; cursor: pointer;
+  font: 600 .88rem var(--font-ui); color: var(--accent);
+}
+.lw-editor-foot {
+  flex: none; display: flex; flex-direction: column; gap: .65rem;
+  padding: .85rem max(1.25rem, env(safe-area-inset-right)) max(.95rem, env(safe-area-inset-bottom)) 1.25rem;
+  border-top: 1px solid var(--rule); background: var(--panel);
+}
+.lw-editor-foot button.lw-primary { align-self: flex-end; min-width: 7rem; }
+
+@media (min-width: 460px) {
+  .lw-editor-grid { grid-template-columns: 1fr 1fr; gap: .8rem .85rem; }
+  .lw-editor-grid > .lw-field:not(.lw-field-half) { grid-column: 1 / -1; }
+}
+
+/* ── Two friend composer panels (Add a place / Add a thought) ─────────────── */
+[data-organ="longway"] .lw-friend-panel {
+  inset: auto 0 0; margin: auto; width: min(32rem, 100%); height: fit-content; max-height: 90dvh;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 1.35rem 1.45rem max(1.4rem, env(safe-area-inset-bottom));
+  background: var(--panel); border: 1px solid var(--rule-strong); border-radius: 16px 16px 0 0;
+}
+.lw-friend-panel::backdrop { background: var(--scrim); }
+.lw-friend-panel .lw-sheet-head { padding-bottom: .9rem; margin-bottom: 1rem; border-bottom: 1px solid var(--rule); }
+.lw-sheet-form fieldset { display: flex; flex-direction: column; gap: .95rem; }
+.lw-sheet-form .lw-alert { margin: .85rem 0 0; }
+.lw-sheet-foot {
+  display: flex; align-items: center; justify-content: flex-end; gap: .6rem;
+  margin-top: 1.15rem; padding-top: .95rem; border-top: 1px solid var(--rule);
+}
+.lw-thought-about {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem .75rem;
+  padding: .6rem .8rem; background: var(--bg); border: 1px solid var(--rule); border-radius: 8px;
+}
+.lw-thought-current { margin: 0; font: 600 .92rem/1.3 var(--font-ui); color: var(--ink); }
+[data-organ="longway"] .lw-thought-about .lw-thought-switch {
+  background: var(--panel); border: 1px solid var(--rule-strong); color: var(--ink);
+  min-height: 40px; padding: .35rem .75rem; font-size: .86rem; font-weight: 500;
+}
+[data-organ="longway"] .lw-thought-about .lw-thought-switch:hover {
+  background: var(--raise); border-color: var(--pencil);
+}
+
+/* ── From friends list & manager's draft review card ──────────────────────── */
+.lw-from-friends { margin-block: 1.5rem; overflow-wrap: anywhere; }
+.lw-from-friends-head {
+  display: flex; align-items: baseline; gap: .65rem;
+  margin: 0 0 1rem; padding-bottom: .6rem; border-bottom: 1px solid var(--rule);
+}
+.lw-from-friends-head h2 { margin: 0; font: 400 1.55rem/1.15 var(--font-display); color: var(--ink); }
+.lw-empty-friends {
+  padding: 1.15rem 1.25rem; background: var(--panel); border: 1px dashed var(--rule-strong);
+  border-radius: 12px; color: var(--ink-2);
+}
+.lw-friend-list { display: flex; flex-direction: column; gap: .9rem; }
+.lw-friend-note {
+  padding: 1.1rem 1.25rem; background: var(--panel); border: 1px solid var(--rule); border-radius: 12px;
+}
+.lw-friend-note[data-state="drafted"] { border-color: var(--rule-strong); }
+.lw-friend-note[data-state="set aside"] { background: transparent; border-style: dashed; border-color: var(--rule-strong); }
+.lw-friend-note[data-kind="thought"] { padding: .95rem 1.2rem; }
+/* Inside the House's chosen-journey card (already --panel), step friend cards onto --bg for >= 10 dE separation. */
+.lw-chosen .lw-friend-note { background: var(--bg); }
+.lw-chosen .lw-friend-note[data-state="set aside"] { background: transparent; }
+
+.lw-friend-by { margin: 0; font: 600 .86rem/1.3 var(--font-ui); color: var(--ink); }
+.lw-friend-by time { font-weight: 400; color: var(--ink-2); }
+.lw-friend-place {
+  margin: .35rem 0 0; font: 400 1.32rem/1.18 var(--font-display); letter-spacing: -.01em; color: var(--ink);
+}
+.lw-friend-note[data-state="set aside"] .lw-friend-place { color: var(--ink-2); }
+.lw-friend-words {
+  margin: .45rem 0 0; font: 400 1.03rem/1.55 var(--font-text); color: var(--ink); text-wrap: pretty;
+}
+.lw-friend-note[data-kind="thought"] .lw-friend-words { margin-top: .35rem; }
+.lw-friend-note[data-state="set aside"] .lw-friend-words { color: var(--ink-2); }
+
+.lw-friend-foot {
+  margin-top: .85rem; padding-top: .75rem; border-top: 1px solid var(--rule);
+  display: flex; flex-direction: column; gap: .35rem;
+}
+.lw-friend-steer {
+  margin: 0 0 .25rem; padding: .42rem .75rem;
+  border-left: 2px solid var(--accent); background: transparent;
+  font: 500 .9rem/1.45 var(--font-ui); color: var(--ink);
+}
+.lw-friend-status {
+  margin: 0; display: flex; align-items: baseline; gap: .5rem;
+  font: 600 .86rem/1.4 var(--font-ui); color: var(--ink-2);
+}
+.lw-friend-status::before {
+  content: ''; width: 8px; height: 8px; border-radius: 999px; flex: none;
+  transform: translateY(-1px); background: var(--pencil);
+}
+.lw-friend-status[data-state="drafted"] { color: var(--ink); }
+.lw-friend-status[data-state="drafted"]::before { background: var(--accent); }
+.lw-friend-status[data-state="open"]::before { background: transparent; border: 2px solid var(--ink-2); box-sizing: border-box; }
+.lw-friend-status[data-state="accepted"] { color: var(--ink); }
+.lw-friend-status[data-state="accepted"]::before { background: var(--ink); }
+.lw-friend-status[data-state="set aside"] { color: var(--ink-3); font-weight: 500; }
+.lw-friend-status[data-state="set aside"]::before { background: var(--ink-3); }
+.lw-friend-scout-note { margin: 0; font: 400 .88rem/1.45 var(--font-ui); color: var(--ink-3); }
+
+/* Manager's draft stop review plate */
+.lw-friend-review {
+  container-type: inline-size; margin-top: .75rem;
+  background: var(--bg); border: 1px solid var(--rule-strong); border-left: 3px solid var(--accent);
+  border-radius: 10px; overflow: hidden;
+}
+.lw-chosen .lw-friend-review { background: var(--panel); }
+.lw-draft-plate { display: grid; grid-template-columns: 1fr; }
+.lw-draft-figure { margin: 0; background: transparent; border-bottom: 1px solid var(--rule); }
+.lw-draft-photo { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+.lw-draft-credit {
+  margin: 0; padding: .45rem .85rem; background: transparent;
+  font: 400 .78rem/1.35 var(--font-ui); color: var(--ink-2);
+}
+.lw-draft-copy { padding: .95rem 1.05rem .85rem; display: flex; flex-direction: column; justify-content: center; gap: .3rem; }
+.lw-draft-kicker {
+  margin: 0; font: 600 .72rem/1.3 var(--font-ui); letter-spacing: .14em;
+  text-transform: uppercase; color: var(--accent);
+}
+.lw-draft-name { margin: 0; font: 400 1.42rem/1.12 var(--font-display); color: var(--ink); }
+.lw-draft-moment { margin: .15rem 0 0; font: 400 1rem/1.5 var(--font-text); color: var(--ink); text-wrap: pretty; }
+
+.lw-draft-actions {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .55rem;
+  padding: .8rem 1.05rem .95rem; border-top: 1px solid var(--rule);
+}
+[data-organ="longway"] .lw-friend-review button.lw-primary { min-width: 6.25rem; }
+[data-organ="longway"] .lw-friend-review button:is(.lw-draft-preview-btn, .lw-draft-back-btn) {
+  background: var(--panel); border-color: var(--rule-strong); color: var(--ink); font-weight: 500;
+}
+[data-organ="longway"] .lw-friend-review button:is(.lw-draft-preview-btn, .lw-draft-back-btn):not(:disabled):hover {
+  background: var(--raise); border-color: var(--pencil);
+}
+[data-organ="longway"] .lw-chosen .lw-friend-review button:is(.lw-draft-preview-btn, .lw-draft-back-btn) {
+  background: var(--bg);
+}
+[data-organ="longway"] .lw-chosen .lw-friend-review button:is(.lw-draft-preview-btn, .lw-draft-back-btn):not(:disabled):hover {
+  background: var(--raise);
+}
+[data-organ="longway"] .lw-friend-review button.lw-draft-aside-btn {
+  background: transparent; border-color: var(--rule); color: var(--ink-2); font-weight: 500;
+}
+[data-organ="longway"] .lw-friend-review button.lw-draft-aside-btn:not(:disabled):hover {
+  background: var(--raise); border-color: var(--rule-strong); color: var(--ink);
+}
+.lw-draft-reason-form { padding: .85rem 1.05rem .95rem; border-top: 1px solid var(--rule); }
+.lw-draft-reason-form label { display: block; margin: 0 0 .7rem; font: 600 .88rem var(--font-ui); color: var(--ink-2); }
+.lw-draft-reason-form input {
+  box-sizing: border-box; display: block; width: 100%; margin-top: .3rem; padding: .55rem .75rem;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--rule-strong); border-radius: 8px; font: 400 .96rem/1.4 var(--font-ui);
+}
+.lw-chosen .lw-friend-review .lw-draft-reason-form input { background: var(--bg); }
+.lw-draft-reason-form .lw-draft-actions { padding: 0; border-top: 0; }
+.lw-friend-review > .lw-alert { margin: 0 1.05rem .9rem; }
+.lw-chosen .lw-friend-review > .lw-alert { background: var(--bg); }
+
+.lw-scout-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .75rem;
+  margin-top: 1rem; padding-top: .9rem; border-top: 1px solid var(--rule);
+}
+
+@container (min-width: 500px) {
+  .lw-draft-plate.has-photo { grid-template-columns: minmax(210px, 44%) 1fr; }
+  .lw-draft-plate.has-photo .lw-draft-figure { display: flex; flex-direction: column; border-bottom: 0; border-right: 1px solid var(--rule); }
+  .lw-draft-plate.has-photo .lw-draft-photo { flex: 1; aspect-ratio: auto; min-height: 175px; }
+}
+@container (min-width: 520px) {
+  .lw-draft-actions .lw-draft-aside-btn { margin-inline-start: auto; }
+}
+
+@media (max-width: 560px) {
+  .lw-voyage-bar { height: calc(52px + env(safe-area-inset-top)); gap: .25rem; padding-inline: .35rem; }
+  [data-organ="longway"] .lw-voyage-editor.on-stage {
+    top: calc(52px + env(safe-area-inset-top)); height: calc(100dvh - 52px - env(safe-area-inset-top));
+  }
+  .lw-stage-left { gap: .3rem; }
+  .lw-stage-actions { gap: .25rem; }
+  .lw-voyage-bar .lw-wide-label, .lw-stage-sep, .lw-stage-title:has(+ .lw-stage-stop) { display: none; }
   .lw-voyage-bar .lw-short-label { display: inline; }
-  .lw-voyage-bar > span { flex: 1; }
-  [data-organ="longway"] .lw-voyage-bar button { padding-inline: .35rem; }
+  .lw-stage-title + .lw-stage-stop::before { display: none; }
+  .lw-stage-title { font-size: .95rem; }
+  .lw-stage-stop { font-size: .74rem; letter-spacing: .08em; }
+  [data-organ="longway"] .lw-voyage-bar button { padding: .3rem .52rem; font-size: .82rem; }
+  [data-organ="longway"] .lw-voyage-bar button.lw-stage-back { padding: .3rem .4rem; }
 }
 @media (min-width: 600px) {
-  [data-organ="longway"] .lw-friend-panel { inset: 0; border-radius: 10px; }
+  [data-organ="longway"] .lw-friend-panel { inset: 0; border-radius: 14px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lw-voyage-editor:not(.lw-friend-panel)[open] { animation: lw-open-editor .18s ease-out; }
+  .lw-friend-panel[open] { animation: lw-open-sheet .16s ease-out; }
+  @keyframes lw-open-editor { from { transform: translateX(100%); } }
+  @keyframes lw-open-sheet { from { opacity: 0; transform: translateY(10px); } }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-organ="longway"] .lw-voyage-editor,
+  [data-organ="longway"] .lw-friend-panel,
+  [data-organ="longway"] .lw-dossier-disclosure summary::before,
+  [data-organ="longway"] .lw-voyage-bar button {
+    animation: none !important; transition: none !important;
+  }
 }

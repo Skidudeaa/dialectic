@@ -11,6 +11,7 @@ import type { Ink, Journey, Season } from './types'
 import Chart from './chartSlot'
 import { RidingNow } from './ride/RidingNow'
 import { InkKey, JourneyStrip } from './chart/Cards'
+import { cleanPull } from './pull'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -164,15 +165,26 @@ export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
   const roomFor = (slug: string) => rooms.find(room => room.linked_journey === slug)
   const inks = new Set<Ink>(data.journeys.flatMap(journey => journey.segments.map(segment => segment.proposed ? 'dotted' : segment.ink)))
   const chosen = data.journeys.find(journey => journey.slug === selected)
-  const action = (journey: Journey): ReactNode => {
+  const roomAction = (journey: Journey): ReactNode => {
     const room = roomFor(journey.slug)
-    if (room) return <button className="lw-primary" aria-label={`Enter the room for ${journey.title}`} onClick={() => void onNavigate(room.id)}>Enter the room</button>
-    // A shared trip gets a room only once it has rides: the room is where the ride is followed.
-    const ride = journey.kind === 'trip' && (journey.rides ?? 0) > 0
-    if (journey.kind !== 'candidate' && !ride) return null
-    if (canManageHome) return <button disabled={busy !== null} onClick={() => void openRoom(journey.slug, journey.title)}>{busy === journey.slug ? 'Opening…' : ride ? 'Open the ride room' : 'Open a room for this journey'}</button>
-    return <p className="lw-note">No room yet. A house manager can open one.</p>
+    if (!room) return null
+    return <button className={journey.voyage === true ? 'lw-room-enter' : 'lw-primary'} aria-label={`Enter the room for ${journey.title}`} onClick={() => void onNavigate(room.id)}>Enter the room</button>
   }
+  const needsRoomSlot = (journey: Journey) => {
+    if (roomFor(journey.slug)) return false
+    // A shared trip gets a room only once it has rides: the room is where the ride is followed.
+    return journey.kind === 'candidate' || (journey.kind === 'trip' && (journey.rides ?? 0) > 0)
+  }
+  const managerAction = (journey: Journey): ReactNode => {
+    if (!canManageHome || !needsRoomSlot(journey)) return null
+    const ride = journey.kind === 'trip' && (journey.rides ?? 0) > 0
+    return <button className="lw-quiet-btn" disabled={busy !== null} onClick={() => void openRoom(journey.slug, journey.title)}>{busy === journey.slug ? 'Opening…' : ride ? 'Open the ride room' : 'Open a room for this journey'}</button>
+  }
+  const roomNote = (journey: Journey): ReactNode => {
+    if (canManageHome || !needsRoomSlot(journey)) return null
+    return <p className="lw-note lw-room-note">No room yet. A house manager can open one.</p>
+  }
+  const chosenPull = chosen?.pull ? cleanPull(chosen.pull) : ''
   return <div className="longway-house scene-body">
     {error && <p role="alert" className="lw-alert">{error} <button onClick={refresh}>Retry house</button></p>}
     <div className="lw-atlas">
@@ -186,11 +198,16 @@ export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
           </div>
         </div>
         {chosen ? <div className="lw-chosen" aria-label={`On the globe: ${chosen.title}`} role="group">
-          <p className="lw-eyebrow">On the globe</p>
-          <h3>{chosen.title}</h3>
-          {meta(chosen) && <p className="lw-meta">{meta(chosen)}</p>}
-          <div className="longway-actions">{action(chosen)}<VoyageActions key={chosen.slug} notes={notes} roomId={roomId} journey={chosen} canEdit={data.room.can_edit} /><button onClick={() => setSelected(null)}>Show every journey</button></div>
-          <FromFriends key={chosen.slug} roomId={roomId} journey={chosen} notes={notes} />
+          <div className="lw-chosen-bar">
+            <p className="lw-eyebrow">On the globe</p>
+            <button className="lw-quiet-btn lw-chosen-close" onClick={() => setSelected(null)}>Show every journey</button>
+          </div>
+          <h3 className="lw-chosen-heading">{chosen.title}</h3>
+          {meta(chosen) && <p className="lw-meta lw-chosen-meta">{meta(chosen)}</p>}
+          {chosenPull && <p className="lw-pull lw-chosen-pull">{chosenPull}</p>}
+          <VoyageActions key={`actions-${chosen.slug}`} dock notes={notes} roomId={roomId} journey={chosen} canEdit={data.room.can_edit}
+            roomAction={roomAction(chosen)} managerAction={managerAction(chosen)} footerNote={roomNote(chosen)} />
+          <FromFriends key={`friends-${chosen.slug}`} roomId={roomId} journey={chosen} notes={notes} />
           {writeError && <p role="alert" className="lw-alert">{writeError}</p>}
         </div> : <p className="lw-hint lw-globe-tip">Tap a journey’s name on the globe, or pick one below, to see its route.</p>}
       </div>
@@ -212,18 +229,27 @@ export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
         <section aria-label="Journeys" className="lw-section">
           <h2>Journeys{' '}<span className="lw-count">{data.journeys.length}</span></h2>
           {data.journeys.length === 0 && <p className="lw-note">The register has no journeys yet.</p>}
-          {data.journeys.map(journey => <article key={journey.slug} className="longway-card lw-journey" data-selected={selected === journey.slug || undefined} aria-labelledby={`lw-j-${journey.slug}`}>
-            <div className="lw-journey-head">
-              <h3><button id={`lw-j-${journey.slug}`} className="lw-journey-title" aria-pressed={selected === journey.slug} onClick={() => show(journey.slug)}>{journey.title}</button></h3>
-              <span className="lw-chip">{stage(journey.status)}</span>
-            </div>
-            {meta(journey) && <p className="lw-meta">{meta(journey)}</p>}
-            {journey.segments.length > 0 && <JourneyStrip journey={journey} />}
-            <p className="lw-pull">{journey.pull}</p>
-            {friendCount(journey) > 0 && <p className="lw-note">{friendCount(journey)} from friends</p>}
-            {feasibility(journey.feasibility) && <p className="lw-feasibility">{feasibility(journey.feasibility)}</p>}
-            <div className="longway-actions">{action(journey)}<VoyageActions notes={selected === journey.slug ? notes : undefined} onOpen={() => setSelected(journey.slug)} roomId={roomId} journey={journey} canEdit={data.room.can_edit} /></div>
-          </article>)}
+          {data.journeys.map(journey => {
+            const pull = journey.pull ? cleanPull(journey.pull) : ''
+            const count = friendCount(journey)
+            const feas = feasibility(journey.feasibility)
+            return <article key={journey.slug} className="longway-card lw-journey" data-selected={selected === journey.slug || undefined} aria-labelledby={`lw-j-${journey.slug}`}>
+              <div className="lw-journey-head">
+                <h3><button id={`lw-j-${journey.slug}`} className="lw-journey-title" aria-pressed={selected === journey.slug} onClick={() => show(journey.slug)}>{journey.title}</button></h3>
+                <span className="lw-chip">{stage(journey.status)}</span>
+              </div>
+              {meta(journey) && <p className="lw-meta lw-journey-meta">{meta(journey)}</p>}
+              {journey.segments.length > 0 && <JourneyStrip journey={journey} />}
+              {pull && <p className="lw-pull">{pull}</p>}
+              {(count > 0 || feas) && <div className="lw-journey-notes">
+                {count > 0 && <p className="lw-note lw-friend-tally">{count} from friends</p>}
+                {feas && <p className="lw-feasibility">{feas}</p>}
+              </div>}
+              <VoyageActions dock notes={selected === journey.slug ? notes : undefined} onOpen={() => setSelected(journey.slug)}
+                roomId={roomId} journey={journey} canEdit={data.room.can_edit}
+                roomAction={roomAction(journey)} managerAction={managerAction(journey)} footerNote={roomNote(journey)} />
+            </article>
+          })}
         </section>
       </div>
     </div>

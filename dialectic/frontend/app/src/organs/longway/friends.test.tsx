@@ -18,11 +18,11 @@ const base = '/rooms/home/longway/'
 const book = base + 'notebook/nile'
 const button = (name: string) => screen.getByRole('button', { name })
 const list = () => within(screen.getByRole('region', { name: 'From friends' }))
-function serve({ manager = false, voyage = false, locked = false, refuse = '', scoutConflict = false,
-  initial = [] as FriendNote[] } = {}) {
+function serve({ manager = false, voyage = false, locked = false, refuse = '', sendBackRefuse = '', scoutConflict = false,
+  pull = raw.journeys[0].pull, dossier = '# The Nile', initial = [] as FriendNote[] } = {}) {
   let notes = [...initial]
   const calls: { path: string; method: string; body: unknown }[] = []
-  const journey = { ...raw.journeys[0], slug: 'nile', title: 'The Nile', voyage }
+  const journey = { ...raw.journeys[0], slug: 'nile', title: 'The Nile', voyage, pull }
   vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit = {}) => {
     const method = init.method ?? 'GET'
     const body = init.body && JSON.parse(String(init.body))
@@ -31,13 +31,25 @@ function serve({ manager = false, voyage = false, locked = false, refuse = '', s
       notes: { open: notes.filter(n => n.state === 'open').length, drafted: notes.filter(n => n.state === 'drafted').length } }],
       rooms: [], room: { id: 'home', linked_journey: 'nile', is_home: false, can_edit: manager }, fixes_state: { stale: false } })
     if (path === base + 'riding') return Response.json({ rides: [] })
-    if (path === base + 'journey/nile') return Response.json({ ...journey, dossier: '# The Nile', evidence: [], vehicles: [] })
+    if (path === base + 'journey/nile') return Response.json({ ...journey, dossier, evidence: [], vehicles: [] })
     if (path === book && method === 'GET') return Response.json({ slug: 'nile', notes, can_review: manager, writable: !locked, why: locked ? 'The house is resting.' : null })
     if (path === book && method === 'POST') {
       if (refuse) return Response.json({ detail: refuse }, { status: 400 })
       const note = { ...body, by: 'Amo', at: '2026-11-21', state: 'open', id: 'N' + (10 + notes.length) }
       notes = [...notes, note]
       return Response.json({ note, commit: 'abc0000' })
+    }
+    if (path === book + '/N3/send-back' && method === 'POST') {
+      if (sendBackRefuse) return Response.json({ detail: sendBackRefuse }, { status: 400 })
+      const note: FriendNote = {
+        ...drafted,
+        state: 'open',
+        draft: null,
+        note: null,
+        steer: { by: 'Amo', at: '2026-11-21', text: body.why },
+      }
+      notes = notes.map(item => item.id === note.id ? note : item)
+      return Response.json({ note, commit: 'eed0000' })
     }
     if ([book + '/N3/accept', book + '/N3/set-aside'].includes(path) && method === 'POST') {
       const note: FriendNote = { ...drafted, state: path.endsWith('/accept') ? 'accepted' : 'set aside', note: body.why }
@@ -101,7 +113,7 @@ it('gives a friend plain place statuses, thoughts without status, and no managem
   for (const line of ['The Scout has drafted this stop. Waiting for a house manager.', 'In the journey.', 'Set aside.',
     'Looking for a crossing.', 'Found a way in.', 'Too far this time.']) expect(list().getByText(line)).toBeVisible()
   expect(list().getByText('An extra day here.').closest('article')).toHaveTextContent(/^Mia · 21 NovAn extra day here\.$/)
-  for (const name of ['Accept', 'Set aside', 'See it in the film', 'Send the Scout now', 'Edit dossier', 'Edit record']) {
+  for (const name of ['Accept', 'Send back', 'Set aside', 'See it in the film', 'Send the Scout now', 'Edit dossier', 'Edit record']) {
     expect(screen.queryByRole('button', { name })).toBeNull()
   }
   expect(button('Add a place')).toBeEnabled()
@@ -177,4 +189,99 @@ it('gives the server’s reason when adding is closed', async () => {
   expect(await screen.findByText('The house is resting.')).toBeVisible()
   expect(button('Add a place')).toBeDisabled()
   expect(button('Add a thought')).toBeDisabled()
+})
+
+it('sends a drafted place back with steer, re-reads the list, and never sends a blank reason', async () => {
+  const calls = serve({ manager: true, initial: [drafted] })
+  render(<LongwayLibrary roomId="home" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Send back' }))
+  const input = screen.getByLabelText('What should change?')
+  expect(button('Send back')).toBeDisabled()
+  fireEvent.change(input, { target: { value: '   ' } })
+  expect(button('Send back')).toBeDisabled()
+  fireEvent.submit(input.closest('form')!)
+  expect(calls.filter(c => c.method === 'POST')).toHaveLength(0)
+  fireEvent.change(input, { target: { value: 'The photograph is the wrong temple.' } })
+  expect(button('Send back')).toBeEnabled()
+  fireEvent.click(button('Send back'))
+  expect(await screen.findByText('Sent back to the Scout by Amo: The photograph is the wrong temple.')).toBeVisible()
+  expect(list().getByText('New. The Scout will look into it.')).toBeVisible()
+  expect(screen.queryByRole('button', { name: 'Send back' })).toBeNull()
+  expect(calls.filter(c => c.path.startsWith(book)).map(c => [c.method, c.path, c.body])).toEqual([
+    ['GET', book, undefined],
+    ['POST', book + '/N3/send-back', { why: 'The photograph is the wrong temple.' }],
+    ['GET', book, undefined],
+  ])
+})
+
+it('shows the server’s refusal on send-back 400 and keeps what was typed', async () => {
+  serve({ manager: true, sendBackRefuse: 'Say what to change, in a few words', initial: [drafted] })
+  render(<LongwayLibrary roomId="home" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Send back' }))
+  const input = screen.getByLabelText('What should change?')
+  fireEvent.change(input, { target: { value: 'Use the ceiling photo.' } })
+  fireEvent.click(button('Send back'))
+  expect(await screen.findByRole('alert')).toHaveTextContent(/^Say what to change, in a few words$/)
+  expect(screen.getByLabelText('What should change?')).toHaveValue('Use the ceiling photo.')
+})
+
+it('shows the sent-back steer line and open status to both friend and manager without exposing controls to a friend', async () => {
+  const sentBack: FriendNote = {
+    ...open,
+    id: 'N8',
+    place: 'Dendera',
+    text: 'The zodiac ceiling at dusk.',
+    note: null,
+    steer: { by: 'Amo', at: '2026-11-21', text: 'The photograph is the wrong temple.' },
+  }
+  for (const manager of [false, true]) {
+    serve({ manager, initial: [sentBack] })
+    render(<LongwayLibrary roomId="home" />)
+    expect(await screen.findByText('Sent back to the Scout by Amo: The photograph is the wrong temple.')).toBeVisible()
+    expect(list().getByText('New. The Scout will look into it.')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Send back' })).toBeNull()
+    if (!manager) expect(screen.queryByRole('button', { name: 'Send the Scout now' })).toBeNull()
+    cleanup()
+  }
+})
+
+it('strips citation markers from pulls on House cards, picked panel, Chart and Library hero while keeping them in the full dossier', async () => {
+  const pullWithCites = 'Covers Old Nubia S123, a dahabiya under sail S177 S173, and the 2027 window S8 S9.'
+  const cleanText = 'Covers Old Nubia, a dahabiya under sail, and the 2027 window.'
+  const dossier = [
+    '# The Nile',
+    '',
+    '## The pull',
+    'Covers Old Nubia [S123](https://kasribrim.com/), a dahabiya under sail [S177](https://a.example) [S173](https://b.example), and the 2027 window [S8](https://c.example) [S9](https://d.example).',
+    '',
+    '## Notes',
+    'Full evidence reference [S123](https://kasribrim.com/) stays here.',
+  ].join('\n')
+
+  serve({ pull: pullWithCites, dossier })
+  render(<LongwayHouse roomId="home" canManageHome={false} onNavigate={vi.fn()} />)
+  const card = await screen.findByRole('article', { name: 'The Nile' })
+  expect(within(card).getByText(cleanText)).toBeVisible()
+  expect(within(card).queryByText(/S123|S177|S173|S8|S9/)).toBeNull()
+  fireEvent.click(within(card).getByRole('button', { name: 'The Nile' }))
+  const chosen = screen.getByRole('group', { name: 'On the globe: The Nile' })
+  expect(within(chosen).getByText(cleanText)).toBeVisible()
+  expect(within(chosen).queryByText(/S123|S177|S173|S8|S9/)).toBeNull()
+  cleanup()
+
+  serve({ pull: pullWithCites, dossier })
+  render(<LongwayBench roomId="home" />)
+  const chartPull = await screen.findByText(cleanText)
+  expect(chartPull).toBeVisible()
+  expect(chartPull.textContent).not.toMatch(/S123|S177|S173|S8|S9/)
+  expect(screen.queryByText(/S123|S177|S173/)).toBeNull()
+  cleanup()
+
+  serve({ pull: pullWithCites, dossier })
+  render(<LongwayLibrary roomId="home" />)
+  const hero = (await screen.findByRole('heading', { level: 1, name: 'The Nile' })).closest('header')!
+  expect(within(hero).getByText(cleanText)).toBeVisible()
+  expect(within(hero).queryByText(/S123|S177|S173|S8|S9/)).toBeNull()
+  const dossierSection = screen.getByRole('region', { name: 'Dossier' })
+  expect(within(dossierSection).getAllByRole('link', { name: 'S123' }).length).toBeGreaterThan(0)
 })

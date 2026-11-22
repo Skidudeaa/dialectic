@@ -21,7 +21,7 @@ export function FriendActions({ notes, title, stop, onOpen, onSent }: {
     setDraft({ kind, stop: kind === 'thought' ? stop ?? null : null })
   }
   return <>
-    {(['place', 'thought'] as const).map(kind => <button key={kind} disabled={notes?.data?.writable === false}
+    {(['place', 'thought'] as const).map(kind => <button key={kind} className="lw-friend-action" disabled={notes?.data?.writable === false}
       onClick={() => open(kind)}>{labels[kind]}</button>)}
     {draft && <Composer kind={draft.kind} stop={draft.stop} title={title} notes={notes} close={() => setDraft(null)}
       onSent={() => {
@@ -54,23 +54,30 @@ function Composer({ kind, title, stop, notes, close, onSent }: {
   }
   const stopLabel = stop?.name ? 'About ' + stop.name : 'About this stop'
   return <VoyageDialog label={labels[kind]} className="lw-voyage-editor lw-friend-panel" close={() => { if (!sending) close() }}>
-    <header><h2>{labels[kind]}</h2><button disabled={sending} onClick={close}>Close</button></header>
-    <p className="lw-meta">{title}</p>
-    <form onSubmit={send}>
+    <header className="lw-sheet-head">
+      <div className="lw-sheet-title">
+        <p className="lw-sheet-kicker">{title}</p>
+        <h2>{labels[kind]}</h2>
+      </div>
+      <button className="lw-sheet-close" disabled={sending} onClick={close}>Close</button>
+    </header>
+    <form className="lw-sheet-form" onSubmit={send}>
       <fieldset disabled={sending || notes?.data?.writable === false}>
         {stop && <div className="lw-thought-about">
-          <p>{aboutStop ? stopLabel : 'About the whole journey'}</p>
-          <button type="button" onClick={() => setAboutStop(!aboutStop)}>{aboutStop ? 'About the whole journey' : stopLabel}</button>
+          <p className="lw-thought-current">{aboutStop ? stopLabel : 'About the whole journey'}</p>
+          <button type="button" className="lw-thought-switch" onClick={() => setAboutStop(!aboutStop)}>{aboutStop ? 'About the whole journey' : stopLabel}</button>
         </div>}
-        {kind === 'place' && <label>Where?<input autoFocus value={place} onChange={e => setPlace(e.target.value)} /></label>}
-        <label>{kind === 'place' ? 'Why this place?' : 'Your thought'}
+        {kind === 'place' && <label className="lw-field">Where?<input autoFocus value={place} onChange={e => setPlace(e.target.value)} /></label>}
+        <label className="lw-field">{kind === 'place' ? 'Why this place?' : 'Your thought'}
           <textarea autoFocus={kind === 'thought'} rows={4} value={text} onChange={e => setText(e.target.value)} />
         </label>
       </fieldset>
-      {notes?.error && <p role="alert">{notes.error} <button type="button" onClick={notes.refresh}>Retry</button></p>}
-      {notes?.data?.writable === false && <p>{notes.data.why || 'Adding is closed.'}</p>}
-      {error && <p role="alert">{error}</p>}
-      <button className="lw-primary" disabled={!ready || sending}>{sending ? 'Sending…' : 'Send'}</button>
+      {notes?.error && <p role="alert" className="lw-alert">{notes.error} <button type="button" onClick={notes.refresh}>Retry</button></p>}
+      {notes?.data?.writable === false && <p className="lw-note">{notes.data.why || 'Adding is closed.'}</p>}
+      {error && <p role="alert" className="lw-alert">{error}</p>}
+      <div className="lw-sheet-foot">
+        <button className="lw-primary" disabled={!ready || sending}>{sending ? 'Sending…' : 'Send'}</button>
+      </div>
     </form>
   </VoyageDialog>
 }

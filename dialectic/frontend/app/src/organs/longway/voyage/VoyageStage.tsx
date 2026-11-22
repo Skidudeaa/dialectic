@@ -53,10 +53,23 @@ export function VoyageStage({ roomId, journey, canEdit = false, close, preview, 
     (preview ? `?preview=${encodeURIComponent(preview)}` : resume.id ? `?station=${encodeURIComponent(resume.id)}` : '')
   return <VoyageDialog label={journey.title + ' voyage'} className="lw-voyage-stage" close={close}>
     <header className="lw-voyage-bar">
-      <button onClick={close} aria-label="The house"><span className="lw-wide-label">The house</span><span className="lw-short-label">House</span></button><strong title={journey.title}>{journey.title}</strong>
-      {stop?.name && <span title={stop.name}>{stop.name}</span>}
-      <FriendActions notes={notes} title={journey.title} stop={stop} onOpen={() => { pause(); setMessage('') }} onSent={setMessage} />
-      {canEdit && !preview && <button disabled={!stop} onClick={edit} aria-label="Edit this stop"><span className="lw-wide-label">Edit this stop</span><span className="lw-short-label">Edit</span></button>}
+      <div className="lw-stage-left">
+        <button className="lw-stage-back" onClick={close} aria-label="The house">
+          <span className="lw-stage-arrow" aria-hidden="true">←</span>
+          <span className="lw-wide-label">The house</span>
+          <span className="lw-short-label">House</span>
+        </button>
+        <span className="lw-stage-sep" aria-hidden="true" />
+        <strong className="lw-stage-title" title={journey.title}>{journey.title}</strong>
+        {stop?.name && <span className="lw-stage-stop" title={stop.name}>{stop.name}</span>}
+      </div>
+      <div className="lw-stage-actions">
+        <FriendActions notes={notes} title={journey.title} stop={stop} onOpen={() => { pause(); setMessage('') }} onSent={setMessage} />
+        {canEdit && !preview && <button className="lw-stage-edit" disabled={!stop} onClick={edit} aria-label="Edit this stop">
+          <span className="lw-wide-label">Edit this stop</span>
+          <span className="lw-short-label">Edit</span>
+        </button>}
+      </div>
     </header>
     {notes.data?.writable === false && <p className="lw-voyage-saved">{notes.data.why || 'Adding is closed.'}</p>}
     {message && <p role="status" className="lw-voyage-saved">{message}</p>}
@@ -81,8 +94,8 @@ const forwardEscape = `<script>window.addEventListener('keydown', function (even
 
 function Film({ path, title, frame }: { path: string; title: string; frame: React.RefObject<HTMLIFrameElement | null> }) {
   const { data, error, refresh } = useLongwaySnapshot<{ html: string }>(path)
-  if (error) return <p role="alert">{error} <button onClick={refresh}>Retry voyage</button></p>
-  if (!data) return <p role="status">Loading voyage…</p>
+  if (error) return <div className="lw-stage-state"><p role="alert">{error} <button onClick={refresh}>Retry voyage</button></p></div>
+  if (!data) return <div className="lw-stage-state"><p role="status">Loading voyage…</p></div>
   return <iframe ref={frame} title={title + ' voyage film'} sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
     allow="fullscreen; autoplay" srcDoc={data.html + forwardEscape} />
 }

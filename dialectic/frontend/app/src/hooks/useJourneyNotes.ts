@@ -19,7 +19,7 @@ export function useJourneyNotes(roomId: string, slug?: string | null) {
   function add(contribution: Contribution) {
     return postNote('', contribution)
   }
-  function review(id: string, decision: 'accept' | 'set-aside', why: string) {
+  function review(id: string, decision: 'accept' | 'send-back' | 'set-aside', why: string) {
     return postNote(`/${encodeURIComponent(id)}/${decision}`, { why })
   }
   async function scout() {

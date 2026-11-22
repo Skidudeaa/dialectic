@@ -8,6 +8,7 @@ import { useAppStore } from '../../stores/appStore'
 import Chart from './chartSlot'
 import { InkKey, LegCard, SeasonStrip } from './chart/Cards'
 import { longwayPath, longwayRequest } from './api'
+import { cleanPull } from './pull'
 import type { AnchorMetadata } from './types'
 
 const RideBench = lazy(() => import('./ride/RideBench'))
@@ -60,31 +61,51 @@ export function LongwayBench({ roomId, record, canManageHome = false }: { roomId
       onSelectJourney={slug => { setSelected(slug); setLeg(null); setDraft(null) }}
       onSelectLeg={(slug, index) => { setSelected(slug); setLeg({ journey: slug, leg: index }); setDraft(null) }} onDiscussLeg={discuss} /></div>
     <div className="longway-chart-notes">
-      <label><input type="checkbox" checked={myth} onChange={e => setMyth(e.target.checked)} /> Without the mythology</label>
-      <InkKey inks={new Set(data.journeys.filter(j => !data.room.linked_journey || j.slug === data.room.linked_journey).flatMap(j => j.segments.map(seg => seg.proposed ? 'dotted' as const : seg.ink)))} myth={myth} />
-      {journey && <><h3>{journey.title}</h3><p>{journey.pull}</p><SeasonStrip season={journey.season} sources={data.sources[journey.slug] ?? {}} />
-        <div className="longway-actions"><VoyageActions key={journey.slug} roomId={roomId} journey={journey} notes={notes} canEdit={data.room.can_edit} /></div>
-        <FromFriends key={journey.slug} roomId={roomId} journey={journey} notes={notes} />
-        <ul className="longway-legs">{journey.segments.map((segment, index) => <li key={index}><button aria-pressed={leg?.journey === journey.slug && leg.leg === index} onClick={() => { setLeg({ journey: journey.slug, leg: index }); setDraft(null) }}>{segment.from} to {segment.to}</button>{segment.proposed && <span className="longway-proposed-tag">proposed</span>}</li>)}</ul>
+      <div className="lw-chart-bar">
+        <label><input type="checkbox" checked={myth} onChange={e => setMyth(e.target.checked)} /> Without the mythology</label>
+        <InkKey inks={new Set(data.journeys.filter(j => !data.room.linked_journey || j.slug === data.room.linked_journey).flatMap(j => j.segments.map(seg => seg.proposed ? 'dotted' as const : seg.ink)))} myth={myth} />
+      </div>
+      {journey && <div className="lw-chart-spread">
+        <div className="lw-chart-main">
+          <div className="lw-chart-head">
+            <h3>{journey.title}</h3>
+            <div className="longway-actions lw-chart-actions"><VoyageActions key={journey.slug} roomId={roomId} journey={journey} notes={notes} canEdit={data.room.can_edit} /></div>
+          </div>
+          {journey.pull && <p className="lw-chart-pull">{cleanPull(journey.pull)}</p>}
+          <div className="lw-chart-season"><SeasonStrip season={journey.season} sources={data.sources[journey.slug] ?? {}} /></div>
+          <ul className="longway-legs">{journey.segments.map((segment, index) => <li key={index}><button aria-pressed={leg?.journey === journey.slug && leg.leg === index} onClick={() => { setLeg({ journey: journey.slug, leg: index }); setDraft(null) }}>{segment.from} to {segment.to}</button>{segment.proposed && <span className="longway-proposed-tag">proposed</span>}</li>)}</ul>
+          {leg && <div className="lw-chart-leg-detail"><LegCard roomId={roomId} proposals={data.proposals?.[journey.slug]} journey={journey} index={leg.leg} sources={data.sources[journey.slug] ?? {}} />
+            <button onClick={() => discuss(journey.slug, leg.leg)}>Discuss this leg</button></div>}
+          {draft !== null && <form className="lw-chart-draft" onSubmit={e => {
+            e.preventDefault()
+            const { wsSend, currentThread, currentRoom } = useAppStore.getState()
+            if (!leg || currentRoom?.id !== roomId || !currentThread || !wsSend?.('send_message', { thread_id: currentThread.id, type: 'text', content: draft, metadata: { longway_anchor: leg } })) {
+              setSendError('Reconnect before sending. Your draft is still here.'); return
+            }
+            setDraft(null); setSendError('')
+          }}><label>About this leg<textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} /></label>
+            <div className="longway-actions"><button className="lw-primary" disabled={!draft.trim()}>Send to Record</button><button type="button" onClick={() => setDraft(null)}>Cancel</button></div>
+            {sendError && <p role="alert" className="lw-alert">{sendError}</p>}
+          </form>}
+          {canManageHome && (data.room.linked_journey || data.room.is_home) && <p className="longway-dispatch-now">
+            <button type="button" disabled={dispatching} onClick={() => void sendDispatch()}>{dispatching ? 'Sending…' : 'Send this week’s dispatch now'}</button>
+            {dispatchNote && <span role="status"> {dispatchNote}</span>}
+          </p>}
+          {data.fixes_state.stale && <p className="lw-note">{data.fixes_state.why ?? 'Vehicle listener is stale'}</p>}
+          {data.vehicles.filter(v => !v.heard && (!data.room.linked_journey || v.journey === data.room.linked_journey)).map(v => <p key={`${v.journey}:${v.name}`} className="lw-note">{v.name} · never heard</p>)}
+        </div>
+        <div className="lw-chart-friends">
+          <FromFriends key={journey.slug} roomId={roomId} journey={journey} notes={notes} />
+        </div>
+      </div>}
+      {!journey && <>
+        {canManageHome && (data.room.linked_journey || data.room.is_home) && <p className="longway-dispatch-now">
+          <button type="button" disabled={dispatching} onClick={() => void sendDispatch()}>{dispatching ? 'Sending…' : 'Send this week’s dispatch now'}</button>
+          {dispatchNote && <span role="status"> {dispatchNote}</span>}
+        </p>}
+        {data.fixes_state.stale && <p className="lw-note">{data.fixes_state.why ?? 'Vehicle listener is stale'}</p>}
+        {data.vehicles.filter(v => !v.heard && (!data.room.linked_journey || v.journey === data.room.linked_journey)).map(v => <p key={`${v.journey}:${v.name}`} className="lw-note">{v.name} · never heard</p>)}
       </>}
-      {journey && leg && <><LegCard roomId={roomId} proposals={data.proposals?.[journey.slug]} journey={journey} index={leg.leg} sources={data.sources[journey.slug] ?? {}} />
-        <button onClick={() => discuss(journey.slug, leg.leg)}>Discuss this leg</button></>}
-      {draft !== null && <form onSubmit={e => {
-        e.preventDefault()
-        const { wsSend, currentThread, currentRoom } = useAppStore.getState()
-        if (!leg || currentRoom?.id !== roomId || !currentThread || !wsSend?.('send_message', { thread_id: currentThread.id, type: 'text', content: draft, metadata: { longway_anchor: leg } })) {
-          setSendError('Reconnect before sending. Your draft is still here.'); return
-        }
-        setDraft(null); setSendError('')
-      }}><label>About this leg<textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} /></label>
-        <button disabled={!draft.trim()}>Send to Record</button><button type="button" onClick={() => setDraft(null)}>Cancel</button>{sendError && <p role="alert">{sendError}</p>}
-      </form>}
-      {canManageHome && (data.room.linked_journey || data.room.is_home) && <p className="longway-dispatch-now">
-        <button type="button" disabled={dispatching} onClick={() => void sendDispatch()}>{dispatching ? 'Sending…' : 'Send this week’s dispatch now'}</button>
-        {dispatchNote && <span role="status"> {dispatchNote}</span>}
-      </p>}
-      {data.fixes_state.stale && <p>{data.fixes_state.why ?? 'Vehicle listener is stale'}</p>}
-      {data.vehicles.filter(v => !v.heard && (!data.room.linked_journey || v.journey === data.room.linked_journey)).map(v => <p key={`${v.journey}:${v.name}`}>{v.name} · never heard</p>)}
     </div>
     {record && <div className="longway-bench-record">{record}</div>}
   </div>

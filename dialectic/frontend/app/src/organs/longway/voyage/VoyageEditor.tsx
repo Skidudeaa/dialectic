@@ -3,7 +3,7 @@ import { longwayPath, longwayRequest, notifyLongwayChanged } from '../api'
 import type { Journey } from '../types'
 import { useLongwaySnapshot } from '../useLongwayResource'
 import { VoyageDialog } from './VoyageDialog'
-import { fieldText, fieldValue, isObject, pretty, readField, stopFields, withField } from './voyage'
+import { fieldText, fieldValue, isObject, pretty, readField, stopFieldGroups, stopFields, withField } from './voyage'
 import type { DocumentName, EditBody, EditorView, Field, JourneyDocument, Json, Receipt, SetOp } from './voyage'
 
 type Props = {
@@ -47,25 +47,34 @@ export function VoyageEditor({ roomId, journey, station, initialView, close, onS
   }
   const finish = () => { if (!busy) close() }
   return <VoyageDialog label={'Edit ' + journey.title} className={'lw-voyage-editor' + (station ? ' on-stage' : '')} close={finish}>
-    <header><h2>{view === 'stop' ? chosen?.label ?? 'This stop' : view === 'everything' ? 'The voyage' : view === 'record' ? 'Record' : 'Dossier'}</h2>
-      <button disabled={busy} onClick={finish}>Close editor</button></header>
-    <label>What to edit<select value={view} disabled={busy} onChange={e => {
-      if (leaveDraft()) setView(e.target.value as EditorView)
-    }}>
-      <option value="stop" disabled={!station}>This stop</option>
-      <option value="everything" disabled={!journey.voyage}>Everything in the voyage</option>
-      <option value="dossier">Dossier</option><option value="record">Record</option>
-    </select></label>
-    {error && <p role="alert">{error} <button onClick={refresh}>Retry</button></p>}
-    {!data && !error && <p role="status">Loading…</p>}
+    <div className="lw-editor-top">
+      <header className="lw-sheet-head">
+        <div className="lw-sheet-title">
+          <p className="lw-sheet-kicker">{journey.title}</p>
+          <h2>{view === 'stop' ? chosen?.label ?? 'This stop' : view === 'everything' ? 'The voyage' : view === 'record' ? 'Record' : 'Dossier'}</h2>
+        </div>
+        <button className="lw-sheet-close" disabled={busy} onClick={finish}>Close editor</button>
+      </header>
+      <div className="lw-editor-pickers">
+        <label>What to edit<select value={view} disabled={busy} onChange={e => {
+          if (leaveDraft()) setView(e.target.value as EditorView)
+        }}>
+          <option value="stop" disabled={!station}>This stop</option>
+          <option value="everything" disabled={!journey.voyage}>Everything in the voyage</option>
+          <option value="dossier">Dossier</option><option value="record">Record</option>
+        </select></label>
+        {data && view === 'everything' && <label>Everything<select value={chosen?.path ?? ''} disabled={busy}
+          onChange={e => { if (leaveDraft()) setPart(e.target.value) }}>
+          {parts.map(item => <option key={item.path} value={item.path}>{item.label}</option>)}
+        </select></label>}
+      </div>
+    </div>
+    {error && <div className="lw-editor-notice"><p role="alert" className="lw-alert">{error} <button onClick={refresh}>Retry</button></p></div>}
+    {!data && !error && <p role="status" className="lw-editor-notice lw-note">Loading…</p>}
     {data && <>
-      {view === 'everything' && <label>Everything<select value={chosen?.path ?? ''} disabled={busy}
-        onChange={e => { if (leaveDraft()) setPart(e.target.value) }}>
-        {parts.map(item => <option key={item.path} value={item.path}>{item.label}</option>)}
-      </select></label>}
-      {!data.writable && <p>{data.why ?? 'Editing is closed.'}</p>}
+      {!data.writable && <p className="lw-editor-notice lw-note">{data.why ?? 'Editing is closed.'}</p>}
       {(view === 'stop' || view === 'everything') && !chosen
-        ? <p>This stop is unavailable.</p>
+        ? <p className="lw-editor-notice lw-note">This stop is unavailable.</p>
         : <DocumentForm key={[path, view, chosen?.path].join(':')} view={view} data={data}
           path={chosen?.path ?? ''} value={name === 'voyage' && chosen ? chosen.value : data.value}
           busy={busy} dirty={() => { dirty.current = true }} save={save} />}
@@ -77,9 +86,9 @@ function FieldInput({ field, text, change, readOnly }: {
   field: Field; text: string; change: (text: string) => void; readOnly?: boolean
 }) {
   const props = { 'aria-label': field.label, value: text, readOnly, onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => change(e.target.value) }
-  return <label>{field.label}
+  return <label className={field.half ? 'lw-field lw-field-half' : 'lw-field'} data-readonly={readOnly || undefined}>{field.label}
     {field.kind === 'prose' || field.kind === 'json'
-      ? <textarea {...props} rows={field.kind === 'json' ? 8 : 3} spellCheck={field.kind !== 'json'} />
+      ? <textarea {...props} className={field.kind === 'json' ? 'lw-code-input' : undefined} rows={field.kind === 'json' ? 8 : 3} spellCheck={field.kind !== 'json'} />
       : <input {...props} type={field.kind === 'number' ? 'number' : 'text'} step={field.kind === 'number' ? 'any' : undefined} />}
   </label>
 }
@@ -150,21 +159,31 @@ function DocumentForm({ view, data, value, path, busy, dirty, save }: {
     finally { saving.current = false }
   }
   const rawText = Object.keys(inputs).length && !invalid ? pretty(draft) : raw ?? pretty(value)
-  return <form onSubmit={submit}>
-    <fieldset disabled={busy || readOnly}>
-      {fields.map(field => {
-        const current = currentValue(field)
-        return <FieldInput key={field.path} field={field} text={inputs[field.path] ?? fieldText(current, field.kind)}
-          readOnly={(isRecord && data.protected.includes(field.path)) || (isStop && raw !== null && !!invalid && !Object.keys(inputs).length)}
-          change={text => { setInputs(old => ({ ...old, [field.path]: text })); setError(''); dirty() }} />
-      })}
-      {view === 'dossier' && <label>Dossier markdown<textarea rows={20} value={raw ?? String(value)} onChange={e => changeRaw(e.target.value)} /></label>}
-      {view === 'everything' && <FieldInput field={rawField} text={rawText} change={changeRaw} />}
-      {isStop && <details><summary>All fields (JSON)</summary>
-        <FieldInput field={rawField} text={rawText} change={changeRaw} readOnly={!!invalid && Object.keys(inputs).length > 0} />
-      </details>}
-    </fieldset>
-    {(invalid || error) && <p role="alert" className="lw-voyage-error">{invalid || error}</p>}
-    <button className="lw-primary" disabled={busy || readOnly || !body}>{busy ? 'Saving…' : 'Save'}</button>
+  const renderField = (field: Field) => {
+    const current = currentValue(field)
+    return <FieldInput key={field.path} field={field} text={inputs[field.path] ?? fieldText(current, field.kind)}
+      readOnly={(isRecord && data.protected.includes(field.path)) || (isStop && raw !== null && !!invalid && !Object.keys(inputs).length)}
+      change={text => { setInputs(old => ({ ...old, [field.path]: text })); setError(''); dirty() }} />
+  }
+  return <form className="lw-editor-form" onSubmit={submit}>
+    <div className="lw-editor-body">
+      <fieldset disabled={busy || readOnly}>
+        {isStop ? stopFieldGroups.map(group => <section key={group.id} className="lw-editor-group">
+          <h3>{group.title}</h3>
+          <div className="lw-editor-grid">
+            {fields.filter(field => field.group === group.id).map(renderField)}
+          </div>
+        </section>) : fields.map(renderField)}
+        {view === 'dossier' && <label className="lw-field">Dossier markdown<textarea rows={20} value={raw ?? String(value)} onChange={e => changeRaw(e.target.value)} /></label>}
+        {view === 'everything' && <FieldInput field={rawField} text={rawText} change={changeRaw} />}
+        {isStop && <details className="lw-editor-json"><summary>All fields (JSON)</summary>
+          <FieldInput field={rawField} text={rawText} change={changeRaw} readOnly={!!invalid && Object.keys(inputs).length > 0} />
+        </details>}
+      </fieldset>
+    </div>
+    <footer className="lw-editor-foot">
+      {(invalid || error) && <p role="alert" className="lw-alert lw-voyage-error">{invalid || error}</p>}
+      <button className="lw-primary" disabled={busy || readOnly || !body}>{busy ? 'Saving…' : 'Save'}</button>
+    </footer>
   </form>
 }
