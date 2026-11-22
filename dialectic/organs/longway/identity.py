@@ -39,7 +39,11 @@ def scout_identity():
 
 def note_line(note):
     subject = note.get("place") or note.get("about") or "whole journey"
-    return f"{note['id']} · {note['kind']} · {subject} · {note['by']}: {note['text']} · {note['state']}"
+    line = f"{note['id']} · {note['kind']} · {subject} · {note['by']}: {note['text']} · {note['state']}"
+    if steer := note.get("steer"):
+        draft = "the last draft" if note["state"] == "open" else "an earlier draft"
+        line += f" · {steer['by']} sent {draft} back: {steer['text']}"
+    return line
 
 
 def journey_brief(slug, *, notes=None):

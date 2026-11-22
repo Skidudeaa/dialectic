@@ -244,6 +244,11 @@ class Register:
             lambda: self.candidates.notebook_accept(self.root, slug, note_id, author_name),
             lambda n: f"Accept {slug} {note_id}: {n['became']}", "Accepted", accepting=True)
 
+    def send_back_note(self, slug, note_id, why, author_name, author_email):
+        return self._write_note(slug, author_name, author_email,
+            lambda: self.candidates.notebook_send_back(self.root, slug, note_id, author_name, why),
+            lambda n: f"Send back {slug} {note_id}: {n['place']}", "Sent-Back")
+
     def set_aside_note(self, slug, note_id, author_name, author_email, why=""):
         return self._write_note(slug, author_name, author_email,
             lambda: self.candidates.notebook_set_aside(self.root, slug, note_id, author_name, why),

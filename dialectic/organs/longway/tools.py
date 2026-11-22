@@ -37,7 +37,7 @@ def build_tools(room, db):
         item = await asyncio.to_thread(register.journey, args["slug"])
         if item["kind"] == "candidate":
             notes = await asyncio.to_thread(register.notebook, args["slug"])
-            friends = [{k: n[k] for k in ("id", "kind", "place", "about", "by", "text", "state") if k in n}
+            friends = [{k: n[k] for k in ("id", "kind", "place", "about", "by", "text", "state", "steer") if k in n}
                        for n in notes if n["state"] != "set aside"]
             if friends:
                 return {"notebook": friends, **item}

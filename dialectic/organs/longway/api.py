@@ -124,6 +124,11 @@ class SetAside(BaseModel):
     why: str = ""
 
 
+class SendBack(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    why: str
+
+
 @router.get("/notebook/{slug}")
 async def get_notebook(room_id: UUID, slug: str, user=Depends(authorized), db=Depends(get_db)):
     register = get_register()
@@ -150,6 +155,13 @@ async def set_aside_note(room_id: UUID, slug: str, note_id: str, body: SetAside 
     await require_notebook_manager(user, db)
     return await notebook_call(get_register().set_aside_note, slug, note_id, *await git_author(user, db),
                                body.why if body else "")
+
+
+@router.post("/notebook/{slug}/{note_id}/send-back")
+async def send_back_note(room_id: UUID, slug: str, note_id: str, body: SendBack,
+                         user=Depends(authorized), db=Depends(get_db)):
+    await require_notebook_manager(user, db)
+    return await notebook_call(get_register().send_back_note, slug, note_id, body.why, *await git_author(user, db))
 
 
 @router.post("/notebook/{slug}/scout")

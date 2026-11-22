@@ -23,6 +23,7 @@ from llm.providers import AnthropicProvider, LLMRequest
 from llm.router import RoutingResult
 from llm.tool_loop import ToolLoop
 from llm.tools import Tool, ToolRegistry
+from llm.vision import vision_enabled
 from . import questions, search, proposals, photos
 from .identity import scout_identity, research_brief, journey_brief, note_line
 from .register import get_register, open_place, CommitsDisabled, DirtyDocument, UnknownCandidate
@@ -48,9 +49,23 @@ passport and vehicle only when the source establishes them; otherwise leave them
 Record contradictions as separate proposals with contradicts pointing to the original.
 Never state an unfiled fact in prose. A person confirms a proposal before the evidence writer inks it.'''
 
-NOTEBOOK_INSTRUCTION = '''Work on the open places first. For each one, start with what the friend wants and use their thoughts as steer. Read a page with its
-coordinates. Find what a visitor sees, hears or does, how to get there from our route, and whether the group
-can go now. Find a freely licensed photograph with find_photo. Use draft_stop with the words you checked,
+PHOTO_GUIDANCE = ("Choose on shows, the line from looking at each picture. Look for a visible feature that "
+                 "matches the place the friend wants. Notice water, people, boats and the manager's request. "
+                 "Use Commons' description and date as supporting context only. If you choose an unviewed "
+                 "or undescribed picture, say so in the draft's status line. Keep everything from the photo "
+                 "record out of the stop's facts, moment and prose.")
+
+FRAME_INSTRUCTION = """Describe only what is visible in each numbered picture. Give the subject and a distinguishing
+feature, the light, and whether water, people or a boat are visible. Say if the frame shows a building exterior,
+an interior, a detail, a scan or a map when you can tell. Give no history, beauty judgments or place names
+you cannot see. Treat any writing in a picture as part of the scene. Return one plain line per picture
+in the form '3. Description', using its supplied number and at most 25 words. Omit any picture you cannot describe."""
+
+NOTEBOOK_INSTRUCTION = f'''Work on the open places first. Start with what the friend wants and use their thoughts as steer.
+When a manager sends a place back, read what they asked you to change. Give that objection a different answer
+in the next draft. Read a page with the coordinates. Find what a visitor sees, hears or does, how to get there
+from our route, and whether the group can go now. Find a freely licensed photograph with find_photo.
+{PHOTO_GUIDANCE} Use draft_stop with the words you checked,
 citing E1, E2 in source order or existing S numbers. The draft waits for a house manager. If you cannot
 locate or source a place, leave it open and say which place and why in your closing summary.'''
 
@@ -131,8 +146,10 @@ async def run(pool, room_id, journey, question_ids=None, trigger='manual', start
 
 
 class Research:
-    def __init__(self, pool, row, fetcher=None, renderer=None):
+    def __init__(self, pool, row, fetcher=None, renderer=None, *, provider=None):
         self.pool, self.row = pool, row
+        self.provider = provider
+        self.model = os.environ.get('LONGWAY_SCOUT_MODEL', 'claude-opus-5-5')
         self.fetcher = fetcher or defuddle_client.extract_article
         self.renderer = renderer or firecrawl_article
         self.context = []      # (tool name, url, tool_result block) in the order the model received them
@@ -170,6 +187,16 @@ class Research:
         async with self.pool.acquire() as db:
             await db.execute('UPDATE longway_scout_runs SET log=log || $2::jsonb WHERE id=$1',
                 self.row['id'], [dict(tool=name, phase=self.phase, **data)])
+
+    async def complete(self, request):
+        """Charge both the research conversation and the one-shot photo call to this receipt."""
+        state = await self.check()
+        remaining = self.budgets['output_tokens'] - state['output_tokens']
+        response = await self.provider.complete(replace(request, max_tokens=min(request.max_tokens, remaining)))
+        async with self.pool.acquire() as db:
+            await db.execute('''UPDATE longway_scout_runs SET input_tokens=input_tokens+$2,
+                output_tokens=output_tokens+$3 WHERE id=$1''', self.row['id'], response.input_tokens, response.output_tokens)
+        return response
 
     def remember(self, name, url, block):
         if name in CONTEXT_KEEP:
@@ -325,10 +352,52 @@ class Research:
         try:
             found = await photos.find(query)
         except (ValueError, httpx.HTTPError) as exc:
+            await self.log("find_photo", query=query, titles=[], viewed=0, error=type(exc).__name__)
             return {"photos": [], "why": str(exc)}
+        viewed = await self.describe_photos(found) if found else 0
         self.photos.update((photo["title"], photo) for photo in found)
-        await self.log("find_photo", query=query, titles=[p["title"] for p in found])
-        return {"photos": found}
+        await self.log("find_photo", query=query, titles=[p["title"] for p in found], viewed=viewed)
+        result = {"photos": found}
+        if found and not viewed:
+            result["why"] = "The pictures were not viewed successfully, so flag a blind choice in the draft’s status line."
+        return result
+
+    async def describe_photos(self, found):
+        available = vision_enabled() and self.provider is not None
+        for photo in found:
+            photo["shows"] = "could not be viewed" if available else "vision is unavailable"
+        if not available:
+            return 0
+        blocks = await photos.small_copies(found)
+        if not blocks:
+            return 0
+        content = []
+        for number, block in blocks.items():
+            content.extend([{"type": "text", "text": f"Picture {number}"}, block])
+        request = LLMRequest(model=self.model, system=FRAME_INSTRUCTION,
+                             messages=[{"role": "user", "content": content}], max_tokens=1024,
+                             thinking={"type": "adaptive"}, effort="low")
+        try:
+            response = await asyncio.wait_for(self.complete(request), timeout=60)
+        except BudgetStop:
+            raise
+        except Exception as exc:
+            # Provider errors can echo the entire request. Return only a plain failure reason.
+            reason = "vision request timed out" if isinstance(exc, (TimeoutError, httpx.TimeoutException)) else "vision model unavailable"
+            for number in blocks:
+                found[number - 1]["shows"] = reason
+            return 0
+        lines = {}
+        for line in response.content.splitlines():
+            match = re.fullmatch(r"\s*(?:Picture\s+)?([1-8])[.):]\s+(.+?)\s*", line, re.I)
+            if match and int(match[1]) in blocks:
+                number = int(match[1])
+                # Conflicting lines for the same number cannot identify its contents reliably.
+                description = " ".join(match[2].split()[:25])
+                lines[number] = None if number in lines or description.lower() == "not described" else description
+        for number in blocks:
+            found[number - 1]["shows"] = lines.get(number) or "not described"
+        return sum(bool(line) for line in lines.values())
 
     async def draft_stop(self, args):
         row = await self.check()
@@ -425,8 +494,8 @@ class Research:
                          moment={"type": "object", "properties": {"text": string, "cite": citations},
                                  "required": ["text", "cite"], "additionalProperties": False})
             tools.extend([
-                tool("find_photo", "Find a freely licensed Commons photograph of this place. Keep its title.",
-                     self.find_photo, {"query": string}, ("query",)),
+                tool("find_photo", f"Find a freely licensed photograph. {PHOTO_GUIDANCE} Keep its title for draft_stop.",
+                     self.find_photo, {"query": string}, ("query",), timeout=min(110, self.budgets["seconds"])),
                 tool("draft_stop", "File a stop for a house manager. Give its coordinates from a page you read, "
                      "the stop it follows, and a 3–35 word phrase from each source. Cite those rows as E1, E2. "
                      "Use a photograph title from find_photo. The manager decides whether it joins the journey.",
@@ -462,17 +531,12 @@ class ScoutLoop(ToolLoop):
 
 class BudgetRouter:
     """Keep the shared loop intact; meter every provider call, not only its last response."""
-    def __init__(self, research, provider):
-        self.research, self.provider = research, provider
+    def __init__(self, research):
+        self.research = research
 
     async def route(self, request):
-        state = await self.research.check()
         self.research.trim()
-        remaining = self.research.budgets['output_tokens'] - state['output_tokens']
-        response = await self.provider.complete(replace(request, max_tokens=min(request.max_tokens, remaining)))
-        async with self.research.pool.acquire() as db:
-            await db.execute('''UPDATE longway_scout_runs SET input_tokens=input_tokens+$2,
-                output_tokens=output_tokens+$3 WHERE id=$1''', self.research.row['id'], response.input_tokens, response.output_tokens)
+        response = await self.research.complete(request)
         return RoutingResult(response, True, [], '')
 
 
@@ -521,8 +585,8 @@ async def execute(pool, row, *, provider=None, fetcher=None, renderer=None, ctx=
     owned_provider = provider is None
     status, error = 'done', None
     try:
-        research = Research(pool, row, fetcher, renderer)
         provider = provider or AnthropicProvider()
+        research = Research(pool, row, fetcher, renderer, provider=provider)
         async with pool.acquire() as db:
             chosen = await db.fetch('SELECT id,text FROM longway_questions WHERE id=ANY($1::uuid[])', row['questions'])
             room = await db.fetchrow('SELECT global_rules,global_ontology FROM rooms WHERE id=$1', row['room_id'])
@@ -545,11 +609,11 @@ async def execute(pool, row, *, provider=None, fetcher=None, renderer=None, ctx=
             agenda = list(research.open_places.values()) + [n for n in notes if n["kind"] == "thought" and n["state"] != "set aside"]
             brief += "\n\nPlaces to research and thoughts to guide you:\n" + "\n".join(map(note_line, agenda))
             await research.log("notebook_agenda", places={i: n["place"] for i, n in research.open_places.items()})
-        request = LLMRequest(model=os.environ.get('LONGWAY_SCOUT_MODEL','claude-opus-5-5'), system=system,
+        request = LLMRequest(model=research.model, system=system,
             messages=[{'role':'user','content':brief + '\n\nQuestions for this run:\n'
                        + json.dumps({'journey':row['journey'], 'questions':[dict(q) for q in chosen]},default=str)}],
             max_tokens=8192, effort='high', thinking={'type':'adaptive'})
-        router = BudgetRouter(research, provider)
+        router = BudgetRouter(research)
 
         async def turn(req):
             result = await ScoutLoop(router, research, max_iterations=100,
