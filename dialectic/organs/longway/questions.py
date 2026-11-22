@@ -1,4 +1,5 @@
 """Journey question queue: text is deduplicated durably, provenance is retained."""
+import asyncio
 from uuid import uuid4
 
 from .register import get_register
@@ -12,7 +13,7 @@ async def binding(db, room_id, journey=None):
     slug = journey or room['linked_journey']
     if not slug or (not room['is_home'] and slug != room['linked_journey']):
         raise ValueError("A question must name this room's journey")
-    get_register().journey(slug)
+    await asyncio.to_thread(get_register().journey, slug)
     return slug
 
 
@@ -57,7 +58,7 @@ async def close(db, room_id, question_id, user_id):
 
 async def seed(db, room_id, user_id=None):
     slug = await binding(db, room_id)
-    item = get_register().journey(slug)
+    item = await asyncio.to_thread(get_register().journey, slug)
     return [await add(db, room_id, text, journey=slug, source='dossier', asked_by=user_id)
             for text in item.get('questions', [])]
 

@@ -42,6 +42,7 @@ export interface EvidenceRow {
 
 export interface Journey {
   slug: string
+  notes?: { open?: number; drafted?: number }
   voyage?: boolean
   rides?: number
   kind: JourneyKind
@@ -307,3 +308,29 @@ export interface RideLeg {
   check: { score?: { agree: number; total: number; misses?: { name: string; why: string }[] } } | null
 }
 export interface RidingData { rides: { room_id: string; room_name: string; trip: string | { slug: string; title: string }; ride: { id: string; state: RideState; vehicle: RideVehicle }; fix: RideFix | null; next_stop: { code: string; name: string; est: string | null } | null; late_min: number | null }[] }
+
+export interface FriendNote {
+  id: string
+  kind: 'place' | 'thought'
+  by: string
+  at: string
+  text: string
+  place?: string | null
+  about?: string | null
+  state: 'open' | 'drafted' | 'accepted' | 'set aside'
+  note?: string | null
+  draft?: {
+    name: string
+    kicker?: string
+    moment?: { text: string; cite: string[] }
+    photo?: { url: string; page: string; author: string; licence: string }
+  } | null
+}
+
+export interface JourneyNotebook {
+  slug: string
+  notes: FriendNote[]
+  can_review: boolean
+  writable: boolean
+  why: string | null
+}

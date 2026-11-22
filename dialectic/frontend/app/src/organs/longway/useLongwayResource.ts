@@ -33,6 +33,11 @@ function useResource<T>(path: string | null, refreshKey: string, interval: numbe
     const timer = interval ? window.setInterval(() => void read(), interval) : undefined
     return () => { controller.abort(); window.clearInterval(timer); window.removeEventListener('longway:changed', changed) }
   }, [path, refreshKey, interval, version, live])
+  // Apply a confirmed write immediately, including while the projection re-reads.
+  const update = useCallback((apply: (data: T) => T) => {
+    setResult(previous => previous && previous.path === path && previous.data !== undefined
+      ? { ...previous, data: apply(previous.data) } : previous)
+  }, [path])
   const current = result?.path === path ? result : null
-  return { data: current?.data, error: current?.error, loading: Boolean(path && !current), refresh }
+  return { data: current?.data, error: current?.error, loading: Boolean(path && !current), refresh, update }
 }

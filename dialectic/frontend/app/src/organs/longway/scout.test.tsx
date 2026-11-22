@@ -29,6 +29,7 @@ function serve(extra: (path: string, init?: RequestInit) => unknown = () => unde
       : path.endsWith('/questions') ? [question] : path.endsWith('/scout/runs') ? [run]
       : path.endsWith('/scout') ? { run_id: run.id }
       : path.endsWith('/field') ? { marks: [{ id: 'field_mark:mark-1', relation: 'evidence_attachment', review: 'proposed', subjects: [{ entity: 'longway_evidence_proposals', id: proposal.id }] }] }
+      : path.includes('/longway/notebook/') ? { slug: journey.slug, notes: [], can_review: false, writable: true, why: null }
       : path.endsWith('/chart') ? { ...chart, journeys: [journey] } : {})
     return new Response(JSON.stringify(result), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }))

@@ -13,7 +13,7 @@ from api.token_utils import extract_room_token
 from api.field import _authorize
 from api.home import _require_home_manager
 from api.rate_limit import _reject_if_limited
-from .register import CommitsDisabled, DirtyDocument, UnknownCandidate, get_register
+from .register import CommitsDisabled, DirtyDocument, UnknownCandidate, get_register, open_place
 from .fixes import overlay
 from .proposals import propose, list_proposals, chart_overlay
 from . import invites, questions as question_queue, scout as scout_runner
@@ -73,7 +73,7 @@ def journey(slug):
 
 @router.get("/chart")
 async def chart(room_id: UUID, user=Depends(authorized), db=Depends(get_db)):
-    result = await chart_overlay(db, await overlay(get_register().chart()), room_id)
+    result = await chart_overlay(db, await overlay(await asyncio.to_thread(get_register().chart)), room_id)
     room = await db.fetchrow("SELECT id,linked_journey,is_home FROM rooms WHERE id=$1", room_id)
     rooms = await db.fetch("""SELECT r.id,r.name,r.linked_journey FROM rooms r
         JOIN room_memberships m ON m.room_id=r.id WHERE m.user_id=$1 ORDER BY r.created_at,r.id""", user.user_id)
@@ -87,14 +87,94 @@ async def get_journey(room_id: UUID, slug: str, user=Depends(authorized)):
     return dict(result, vehicles=live["vehicles"])
 
 
-@router.get("/voyage/{slug}/page")
-def get_voyage_page(room_id: UUID, slug: str, response: Response, station: str | None = None, user=Depends(authorized)):
+async def require_notebook_manager(user, db):
+    if not await can_edit(user, db):
+        raise HTTPException(403, "Only a house manager can review a draft or start the Scout.")
+
+
+async def notebook_call(method, *args):
     try:
-        html = get_register().voyage_page(slug, station)
+        return await asyncio.to_thread(method, *args)
     except (UnknownCandidate, FileNotFoundError) as exc:
         raise HTTPException(404, "Unknown journey") from exc
+    except KeyError as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
+    except (CommitsDisabled, DirtyDocument) as exc:
+        raise HTTPException(409, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+async def git_author(user, db):
+    actor = await db.fetchrow("""SELECT u.display_name,c.email FROM users u
+        JOIN user_credentials c ON c.user_id=u.id WHERE u.id=$1""", user.user_id)
+    return (actor["display_name"], actor["email"]) if actor else (None, None)
+
+
+class NotebookNote(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["place", "thought"]
+    text: str = Field(min_length=1, max_length=2000)
+    place: str | None = None
+    about: str | None = None
+
+
+class SetAside(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    why: str = ""
+
+
+@router.get("/notebook/{slug}")
+async def get_notebook(room_id: UUID, slug: str, user=Depends(authorized), db=Depends(get_db)):
+    register = get_register()
+    notes = await notebook_call(register.notebook, slug)
+    why = "Notebook writes are disabled in this house." if register.edit_disabled_reason() else None
+    return dict(slug=slug, notes=notes, can_review=await can_edit(user, db), writable=why is None, why=why)
+
+
+@router.post("/notebook/{slug}")
+async def add_note(room_id: UUID, slug: str, body: NotebookNote, user=Depends(authorized), db=Depends(get_db)):
+    return await notebook_call(get_register().add_note, slug, body.kind, body.text, body.place, body.about,
+                               *await git_author(user, db))
+
+
+@router.post("/notebook/{slug}/{note_id}/accept")
+async def accept_note(room_id: UUID, slug: str, note_id: str, user=Depends(authorized), db=Depends(get_db)):
+    await require_notebook_manager(user, db)
+    return await notebook_call(get_register().accept_note, slug, note_id, *await git_author(user, db))
+
+
+@router.post("/notebook/{slug}/{note_id}/set-aside")
+async def set_aside_note(room_id: UUID, slug: str, note_id: str, body: SetAside | None = None,
+                        user=Depends(authorized), db=Depends(get_db)):
+    await require_notebook_manager(user, db)
+    return await notebook_call(get_register().set_aside_note, slug, note_id, *await git_author(user, db),
+                               body.why if body else "")
+
+
+@router.post("/notebook/{slug}/scout")
+async def scout_notebook(room_id: UUID, slug: str, user=Depends(authorized), db=Depends(get_db)):
+    await require_notebook_manager(user, db)
+    notes = await notebook_call(get_register().notebook, slug)
+    if not any(open_place(n) for n in notes):
+        raise HTTPException(409, "This journey has no open place for the Scout.")
+    target = await scout_runner.notebook_room(db, slug)
+    if target is None:
+        raise HTTPException(409, "This journey needs a bound room or a house room for its Scout run.")
+    question_ids = [q["id"] for q in await question_queue.researchable(db, slug)]
+    try:
+        run_id = await scout_runner.start(_pool, target, slug, question_ids, started_by=user.user_id, ctx=scout_context())
+    except scout_runner.AlreadyRunning as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"run_id": str(run_id)}
+
+
+@router.get("/voyage/{slug}/page")
+async def get_voyage_page(room_id: UUID, slug: str, response: Response, station: str | None = None,
+                          preview: str | None = None, user=Depends(authorized), db=Depends(get_db)):
+    if preview is not None:
+        await require_notebook_manager(user, db)
+    html = await notebook_call(get_register().voyage_page, slug, station, preview)
     response.headers["Cache-Control"] = "no-store"
     return {"html": html}
 
@@ -126,11 +206,9 @@ class DocumentEdit(BaseModel):
 async def edit_document(room_id: UUID, slug: str, name: str, body: DocumentEdit, user=Depends(authorized), db=Depends(get_db)):
     if not await can_edit(user, db):
         raise HTTPException(403, MANAGERS_ONLY)
-    actor = await db.fetchrow("""SELECT u.display_name,c.email FROM users u
-        JOIN user_credentials c ON c.user_id=u.id WHERE u.id=$1""", user.user_id)
     try:
         return await asyncio.to_thread(get_register().edit_document, slug, name, body.ops, body.text,
-                                       actor["display_name"] if actor else None, actor["email"] if actor else None)
+                                       *await git_author(user, db))
     except (UnknownCandidate, KeyError, FileNotFoundError) as exc:
         raise HTTPException(404, "Unknown document") from exc
     except (CommitsDisabled, DirtyDocument) as exc:

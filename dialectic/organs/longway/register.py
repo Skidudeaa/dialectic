@@ -28,6 +28,10 @@ class CommitsDisabled(RuntimeError):
     pass
 
 
+def open_place(note):
+    return note["kind"] == "place" and note["state"] == "open"
+
+
 def _load(path):
     spec = importlib.util.spec_from_file_location("_longway_register", path)
     module = importlib.util.module_from_spec(spec)
@@ -149,9 +153,101 @@ class Register:
         self.candidate(slug)
         return self.candidates.voyage_data(self.root, slug)
 
-    def voyage_page(self, slug, station=None):
+    def voyage_page(self, slug, station=None, preview=None):
         self.candidate(slug)
-        return self.candidates.voyage_page(self.root, slug, station=station, embed=True)
+        return self.candidates.voyage_page(self.root, slug, station=station, embed=True, preview=preview)
+
+    def notebook(self, slug):
+        self.candidate(slug)
+        return self.candidates.notebook(self.root, slug)
+
+    def journeys_with_open_places(self):
+        return {p.parent.name for p in self.root.glob("candidates/*/notebook.jsonl")
+                if any(open_place(note) for note in self.notebook(p.parent.name))}
+
+    @staticmethod
+    def _validate_author(author_name, author_email):
+        for value in (author_name, author_email):
+            if not value or not value.strip() or any(c in value for c in "\r\n<>\0"):
+                raise ValueError("The asking member needs a valid git name and email")
+
+    def _write_note(self, slug, author_name, author_email, mutate, subject, trailer,
+                    *, accepting=False, extra_trailers=()):
+        self._candidate_slug(slug)
+        if self.edit_disabled_reason():
+            self.candidate(slug)
+            raise CommitsDisabled("Notebook writes are disabled in this house.")
+        self._validate_author(author_name, author_email)
+        folder = f"candidates/{slug}"
+        git_dir = Path(self.git("rev-parse", "--absolute-git-dir"))
+        with (git_dir / "longway-evidence.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            names = ["notebook.jsonl"]
+            if accepting:
+                target = "voyage.json" if self.local(f"{folder}/voyage.json").exists() else "record.json"
+                names.extend(("evidence.jsonl", target))
+            targets = [f"{folder}/{name}" for name in names]
+            # A locally deleted voyage must not silently redirect acceptance into record.json.
+            guarded = list(targets)
+            if accepting and target == "record.json":
+                guarded.append(f"{folder}/voyage.json")
+            dirty = self.git("status", "--porcelain", "--untracked-files=all", "--ignored=matching", "--", *guarded)
+            if dirty:
+                raise DirtyDocument(f"Refusing to overwrite uncommitted changes: {dirty}")
+            self.candidate(slug)
+            originals = {}
+            for relative in targets:
+                path = self.local(relative)
+                scratch = path.with_name(f".{path.name}.edit")
+                if scratch.exists() or scratch.is_symlink():
+                    raise DirtyDocument(f"An edit is already present at {scratch.relative_to(self.root)}")
+                originals[path] = path.read_bytes() if path.exists() else None
+            staged = False
+            try:
+                result = mutate()
+                note = result["note"]
+                paths = result["paths"] if "paths" in result else [result["path"]]
+                if not set(paths).issubset(targets):
+                    raise RuntimeError("Unexpected notebook write path")
+                message = "\n".join((" ".join(subject(note).split()), "", f"{trailer}-In: The Long Way house", *extra_trailers))
+                staged = True
+                self.git("add", "--", *paths)
+                self.git("-c", "user.name=The Long Way", "-c", "user.email=longway@localhost",
+                         "commit", "--only", f"--author={author_name} <{author_email}>", "-m", message, "--", *paths)
+            except Exception:
+                for path, original in originals.items():
+                    scratch = path.with_name(f".{path.name}.edit")
+                    if original is None:
+                        path.unlink(missing_ok=True)
+                    elif not path.exists() or path.read_bytes() != original:
+                        scratch.write_bytes(original)
+                        scratch.replace(path)
+                    scratch.unlink(missing_ok=True)
+                if staged:
+                    self.git("reset", "-q", "HEAD", "--", *paths)
+                raise
+            return {"note": note, "commit": self.git("rev-parse", "HEAD")}
+
+    def add_note(self, slug, kind, text, place, about, author_name, author_email, *, extra_trailers=()):
+        return self._write_note(slug, author_name, author_email,
+            lambda: self.candidates.notebook_add(self.root, slug, kind, author_name, text, place, about),
+            lambda n: f"Note {slug} {n['id']}: {n.get('place') or n['text'][:60]}", "Added",
+            extra_trailers=extra_trailers)
+
+    def draft_note(self, slug, note_id, draft, status):
+        return self._write_note(slug, "The Long Way Scout", "scout@thelongway.world",
+            lambda: self.candidates.notebook_draft(self.root, slug, note_id, draft, status=status),
+            lambda n: f"Draft {slug} {note_id}: {n['draft']['name']}", "Drafted")
+
+    def accept_note(self, slug, note_id, author_name, author_email):
+        return self._write_note(slug, author_name, author_email,
+            lambda: self.candidates.notebook_accept(self.root, slug, note_id, author_name),
+            lambda n: f"Accept {slug} {note_id}: {n['became']}", "Accepted", accepting=True)
+
+    def set_aside_note(self, slug, note_id, author_name, author_email, why=""):
+        return self._write_note(slug, author_name, author_email,
+            lambda: self.candidates.notebook_set_aside(self.root, slug, note_id, author_name, why),
+            lambda n: f"Set aside {slug} {note_id}: {n.get('place') or n['text'][:60]}", "Set-Aside")
 
     def _document_path(self, slug, name):
         self._candidate_slug(slug)
@@ -178,9 +274,7 @@ class Register:
         if reason := self.edit_disabled_reason():
             self.candidate(slug)
             raise CommitsDisabled(reason)
-        for value in (author_name, author_email):
-            if not value or not value.strip() or any(c in value for c in "\r\n<>\0"):
-                raise ValueError("The asking member needs a valid git name and email")
+        self._validate_author(author_name, author_email)
 
         relative = str(path.relative_to(self.root))
         git_dir = Path(self.git("rev-parse", "--absolute-git-dir"))

@@ -32,7 +32,16 @@ def build_tools(room, db):
                 if len(json.dumps(result)) <= TOOL_RESULT_CHAR_CAP:
                     return result
                 end = start + (end - start) // 2
-        return register.journey(args["slug"]) if args.get("slug") else register.chart()
+        if not args.get("slug"):
+            return await asyncio.to_thread(register.chart)
+        item = await asyncio.to_thread(register.journey, args["slug"])
+        if item["kind"] == "candidate":
+            notes = await asyncio.to_thread(register.notebook, args["slug"])
+            friends = [{k: n[k] for k in ("id", "kind", "place", "about", "by", "text", "state") if k in n}
+                       for n in notes if n["state"] != "set aside"]
+            if friends:
+                return {"notebook": friends, **item}
+        return item
 
     async def read_voyage(args):
         try:
@@ -48,7 +57,7 @@ def build_tools(room, db):
             return {"stations": [{"id": s["id"], "name": s["name"]} for s in stations], "keys": list(voyage)}
         return next((s for s in stations if s["id"] == station), {"error": f"No station {station!r} in this voyage"})
 
-    async def edit_journey(args):
+    async def member_write(args, *, notebook):
         binding = await db.fetchrow("SELECT linked_journey, is_home FROM rooms WHERE id=$1", room.id)
         if not binding or not (binding["is_home"] or binding["linked_journey"] == args["slug"]):
             return {"error": "This room can only change its linked journey."}
@@ -78,9 +87,13 @@ def build_tools(room, db):
             WHERE recent.id=$2""", room.id, message_id)
         if not actor or not (actor["display_name"] or "").strip() or not (actor["email"] or "").strip():
             return refusal
-        if not actor["manager"]:
+        if not notebook and not actor["manager"]:
             return {"error": "Only a house manager can ask for a change to the voyage, dossier or record."}
         try:
+            if notebook:
+                return await asyncio.to_thread(get_register().add_note, args["slug"], args["kind"], args["text"],
+                                              args.get("place"), args.get("about"), actor["display_name"], actor["email"],
+                                              extra_trailers=(f"Asked-In: {message_id}",))
             return await asyncio.to_thread(get_register().edit_document, args["slug"], args["document"],
                                            args.get("ops"), args.get("text"), actor["display_name"], actor["email"],
                                            extra_trailers=(f"Asked-In: {message_id}",))
@@ -88,6 +101,12 @@ def build_tools(room, db):
             return {"error": "Unknown document"}
         except (ValueError, CommitsDisabled, DirtyDocument) as exc:
             return {"error": str(exc)}
+
+    async def add_note(args):
+        return await member_write(args, notebook=True)
+
+    async def edit_journey(args):
+        return await member_write(args, notebook=False)
 
     async def fit_window(args):
         return {"fit": get_register().fit_window(args["trip"])}
@@ -145,7 +164,7 @@ def build_tools(room, db):
     proposal_properties.update({key: {'type': ['string', 'null']} for key in PROPOSAL_FIELDS if key not in ('run_id', 'load_bearing')})
     proposal_properties['load_bearing'] = {'type': 'boolean'}
     return [
-        tool("read_register", "Read the public register, or a journey and its evidence. For an entire editable candidate document, "
+        tool("read_register", "Read the public register, or a journey, its evidence and its friends’ notes. For an entire editable candidate document, "
              "supply slug and document and continue at next_start_char until null. Shared trips expose only Established and Undecided.",
              read_register, {"slug": string, "document": document_name, "start_char": {"type": "integer", "minimum": 0}}),
         tool("fit_window", "Compare recorded candidate seasons with a shared trip's window; hypotheses remain hypotheses.", fit_window, {"trip": string}, ("trip",)),
@@ -157,6 +176,10 @@ def build_tools(room, db):
              {"side": {"type": "string", "enum": ["left", "right", "both"]}, "km": {"type": "number"}}),
         tool("read_voyage", "Read one river stop by station ID, or list the stops and the voyage's top-level keys.",
              read_voyage, {"slug": string, "station": string}, ("slug",)),
+        tool("add_note", "Put a friend's place or thought in the notebook in their words. Pass the id of their asking message.",
+             add_note, {"slug": string, "kind": {"type": "string", "enum": ["place", "thought"]},
+                        "text": string, "place": string, "about": string, "message_id": {"type": "string", "format": "uuid"}},
+             ("slug", "kind", "text", "message_id"), timeout=28),
         tool("edit_journey", "Change the journey's voyage, record or dossier in the repository in the asking member's name. "
              "Use only when a member's message addressed to you in this room asks for that specific change. "
              "Pass that message's UUID in message_id. Keep every fact's S-number citations. "

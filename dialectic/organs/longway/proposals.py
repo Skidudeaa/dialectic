@@ -103,8 +103,36 @@ def requires_counter(proposal):
     return bool(proposal['load_bearing'] and not proposal['counter_searched_at'] and not proposal['contradicts'])
 
 
+def validate_source(url, claim, scope):
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname or parts.username or parts.password:
+        raise ValueError("Evidence needs an original http(s) URL without credentials")
+    if not claim.strip() or not scope.strip():
+        raise ValueError("claim and scope are required")
+
+
+async def checked_source(url, phrase, fetcher):
+    """Match the page's own words and retain their surrounding sentence for review."""
+    article = await fetcher(url)
+    passage = supported_passage(phrase, str(article.get("content") or "")) if isinstance(article, dict) else None
+    if not passage:
+        hint = closest_unit(phrase, str(article.get("content") or "")) if isinstance(article, dict) else None
+        return {"filed": False, "why": "the page does not contain the claim's key phrase; quote the page's own words"
+                + (f'; the closest line on the page: "{hint}"' if hint else '')}
+    passage = whole_sentence_passage(phrase, str(article.get('content') or ''))
+    if not passage:
+        return {"filed": False, "why": "support must be a whole sentence or paragraph of main text under 40 words"}
+    publisher = article.get("site") or urlsplit(url).hostname
+    published = None
+    try:
+        published = date.fromisoformat(str(article.get("published"))[:10])
+    except ValueError:
+        pass
+    return {"support": passage, "publisher": publisher, "published_at": published}
+
+
 async def propose(db, room_id, candidate, url, claim, scope, *, proposed_by="llm", user_id=None, source_message_id=None, fetcher=None, **fields):
-    get_register().candidate(candidate)
+    await asyncio.to_thread(get_register().candidate, candidate)
     if set(fields) - set(PROPOSAL_FIELDS):
         raise ValueError("Unknown proposal fields")
     values = {key: fields.get(key) for key in PROPOSAL_FIELDS}
@@ -131,34 +159,19 @@ async def propose(db, room_id, candidate, url, claim, scope, *, proposed_by="llm
     values['load_bearing'] = bool(values['load_bearing'] or re.search(
         r'\b(schedules?|timetables?|operating status|entry rules?|entry requirements?|prices?|fares?)\b', scope, re.I))
     if values['leg_from'] is not None or values['leg_to'] is not None:
-        route = get_register().journey(candidate)['route']
+        route = (await asyncio.to_thread(get_register().journey, candidate))['route']
         pairs = [(a[2], b[2]) for a,b in zip(route, route[1:])]
         pair = (values['leg_from'], values['leg_to'])
         if pair not in pairs and pair[::-1] not in pairs:
             raise ValueError('leg_from and leg_to must name neighbouring route stops')
-    parts = urlsplit(url)
-    if parts.scheme not in ("http", "https") or not parts.hostname or parts.username or parts.password:
-        raise ValueError("Evidence needs an original http(s) URL without credentials")
-    if not claim.strip() or not scope.strip():
-        raise ValueError("claim and scope are required")
+    validate_source(url, claim, scope)
     room = await db.fetchrow("SELECT linked_journey, is_home FROM rooms WHERE id=$1", room_id)
     if not room or (not room["is_home"] and room["linked_journey"] != candidate):
         raise ValueError("Propose evidence in the candidate's bound room or the house")
-    article = await asyncio.wait_for((fetcher or defuddle_client.extract_article)(url), timeout=22)
-    passage = supported_passage(claim, str(article.get("content") or "")) if isinstance(article, dict) else None
-    if not passage:
-        hint = closest_unit(claim, str(article.get("content") or "")) if isinstance(article, dict) else None
-        return {"filed": False, "why": "the page does not contain the claim's key phrase; quote the page's own words"
-                + (f'; the closest line on the page: "{hint}"' if hint else '')}
-    passage = whole_sentence_passage(claim, str(article.get('content') or ''))
-    if not passage:
-        return {"filed": False, "why": "support must be a whole sentence or paragraph of main text under 40 words"}
-    publisher = article.get("site") or parts.hostname
-    published = None
-    try:
-        published = date.fromisoformat(str(article.get("published"))[:10])
-    except ValueError:
-        pass
+    source = await asyncio.wait_for(checked_source(url, claim, fetcher or defuddle_client.extract_article), timeout=22)
+    if "why" in source:
+        return source
+    passage, publisher, published = source['support'], source['publisher'], source['published_at']
     proposal_id, mark_id = uuid4(), uuid4()
     subjects = [{"entity": "longway_evidence_proposals", "id": str(proposal_id)}]
     async with db.transaction():

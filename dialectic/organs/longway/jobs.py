@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from scheduler import Job
 from models import SpeakerType, MessageType, EventType
 from transport.websocket import OutboundMessage, MessageTypes
-from .register import append_evidence, CommitsDisabled
+from .register import append_evidence, CommitsDisabled, get_register
 from .proposals import review
 from .dispatch import draft
 from .ride_watch import watch as ride_watch
@@ -226,7 +226,7 @@ async def sunday_dispatch(ctx, *, now=None):
 async def scout_nightly(ctx, *, now=None):
     if os.environ.get('LONGWAY_SCOUT_ENABLED') != '1':
         return {'skipped': 'disabled'}
-    from .scout import run, AlreadyRunning
+    from .scout import run, AlreadyRunning, notebook_room
     from .questions import seed, seed_pull, researchable
     now = now or datetime.now(timezone.utc)
     today = now.astimezone(ZoneInfo('America/Chicago')).date()
@@ -247,28 +247,41 @@ async def scout_nightly(ctx, *, now=None):
             if not await db.fetchval("SELECT 1 FROM longway_questions WHERE journey=$1 AND closed_at IS NULL LIMIT 1", room['linked_journey']):
                 seeded[str(room['id'])] = len(await seed(db, room['id']))
             await seed_pull(db, room['id'])
-        work = {room['id']: [q['id'] for q in await researchable(db, room['linked_journey'])] for room in rooms}
+        places = await asyncio.to_thread(get_register().journeys_with_open_places)
+        work = []
+        scheduled = set()
+        for room in rooms:
+            slug = room['linked_journey']
+            if slug in places and slug in scheduled:
+                continue
+            ids = [q['id'] for q in await researchable(db, slug)]
+            work.append((room['id'], slug, ids, str(room['id'])))
+            scheduled.add(slug)
+        for slug in sorted(places - scheduled):
+            # Several unbound journeys can share one house. Keep their results separate.
+            ids = [q['id'] for q in await researchable(db, slug)]
+            work.append((await notebook_room(db, slug), slug, ids, slug))
     result = {'seeded': seeded} if seeded else {}
-    for room in rooms:
+    for room_id, slug, question_ids, key in work:
         counter_only = False
-        if not work[room['id']]:
+        if not question_ids and slug not in places:
             # Nothing to research, but a load-bearing proposal an earlier run left without its contrary
             # search cannot be confirmed by anyone; the run does only those searches.
             async with ctx.pool.acquire() as db:
                 stranded = await db.fetchval('''SELECT 1 FROM longway_evidence_proposals WHERE room_id=$1 AND candidate=$2
-                    AND load_bearing AND contradicts IS NULL AND counter_searched_at IS NULL LIMIT 1''', room['id'], room['linked_journey'])
+                    AND load_bearing AND contradicts IS NULL AND counter_searched_at IS NULL LIMIT 1''', room_id, slug)
             if not stranded:
-                result[str(room['id'])] = {'skipped': 'answers waiting in the Field' if await _open_questions(ctx.pool, room['linked_journey']) else 'no open questions'}
+                result[key] = {'skipped': 'answers waiting in the Field' if await _open_questions(ctx.pool, slug) else 'no open questions'}
                 continue
             counter_only = True
         try:
-            result[str(room['id'])] = await run(ctx.pool, room['id'], room['linked_journey'], work[room['id']], trigger='nightly', ctx=ctx,
+            result[key] = await run(ctx.pool, room_id, slug, question_ids, trigger='nightly', ctx=ctx,
                                                 **({'counter_only': True} if counter_only else {}))
         except AlreadyRunning:
-            result[str(room['id'])] = {'skipped': 'running'}
+            result[key] = {'skipped': 'running'}
         except Exception as exc:
-            logger.exception("Nightly Scout run failed for %s", room['id'])
-            result[str(room['id'])] = {'error': type(exc).__name__}
+            logger.exception("Nightly Scout run failed for %s", room_id)
+            result[key] = {'error': type(exc).__name__}
     return result
 
 

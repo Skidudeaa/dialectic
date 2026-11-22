@@ -494,3 +494,39 @@ The Scout's bound-room brief lists the voyage's stops with their IDs, names, rea
 When a member addresses the Scout and requests an edit, the Scout passes the UUID of that message in `message_id`. The server looks up the message among the room's last 12 non-deleted human messages across all its threads. Its sender must still belong to the room and have a display name and account email. That account supplies the Git author. If Alice asks and Bob speaks next, Alice's message ID still signs the edit as Alice. An ineligible or malformed ID refuses the edit before any write.
 
 Scout commits carry a second Git trailer, `Asked-In: <message_id>`, linking the edit to the member's request. Direct HTTP edits use the signed-in member's identity and carry only the `Edited-In` trailer.
+
+## 15. The journey notebook (2026-11-21)
+
+Amo described the house on 2026-11-21. Friends “go into the journey's, and can add destinations, their thoughts, etc, then thelongway engine will drive enhancement and refinement”. The boundary on presentation was equally direct. “i don't want them changing the dam camera angle”.
+
+Any signed-in room member can suggest a place with a reason, or leave a thought about a stop or the whole journey. It appears immediately under their name in the candidate’s notebook. The Scout researches open places and files drafts. A house manager can preview a draft in the film, accept it into the journey, or set a note aside with a reason. The document editor in §14 keeps its manager permission.
+
+### HTTP contract
+
+These routes use the room token and membership checks from §5. The house room works for every candidate, including one with no room of its own.
+
+| Method and path under `/rooms/{room_id}/longway/` | Effect |
+| --- | --- |
+| `GET notebook/{slug}` | Returns `{slug, notes, can_review, writable, why}`. Notes are oldest first. `can_review` is the house-manager capability. `writable` reflects the house commit switch, with a reason when disabled. |
+| `POST notebook/{slug}` | Accepts `{kind, text, place?, about?}`. A place needs its name and why. A thought can name a voyage station ID or route stop in `about`. Text is 1–2,000 characters. |
+| `POST notebook/{slug}/{note_id}/accept` | A manager accepts a drafted place. The response identifies the stop in `note.became`. The next film request includes it. A journey without a film receives a route stop instead. |
+| `POST notebook/{slug}/{note_id}/set-aside` | A manager sets a note aside. The optional body is `{"why":"..."}`. The row retains the manager’s name and the reason. |
+| `GET voyage/{slug}/page?preview={note_id}` | A manager gets `{html}` for the film opened on the proposed stop. Preview writes nothing and uses `Cache-Control: no-store`. |
+| `POST notebook/{slug}/scout` | A manager starts research now and receives `{run_id}`. An empty place agenda or an active run for the journey returns 409. |
+| `GET chart` | Each candidate carries the repository’s `notes` counts for open and drafted rows when present. |
+
+Notebook writes return `{note, commit}`. A repository refusal returns 400 with its sentence. Unknown candidates, trips and missing note IDs return 404. Manager actions return 403 to other members. Disabled writes and dirty targets return 409.
+
+Each note lives in `candidates/<slug>/notebook.jsonl`. With `LONGWAY_COMMIT_ENABLED=1`, the organ holds the evidence writer’s file lock through the repository operation and the Git commit. A friend’s addition and a Scout draft each touch only the notebook. Acceptance commits the notebook, new evidence rows and the voyage or route together in the manager’s name. Failed commits restore the target files and their index entries.
+
+### What the Scout does
+
+In conversation, the bound journey’s **From friends** section lists places and thoughts with the friend’s words, attribution, stop and state. Set-aside rows stay in the notebook history. In the house the Scout can read a named journey with `read_register`. A friend can ask “@Scout add Kom Ombo, I want a night moored there”. The `add_note` tool takes the asking message’s UUID, uses §14’s recent human-message and membership check, and signs the commit with the sender’s name and email. The commit records `Added-In: The Long Way house` and `Asked-In: <message_id>`.
+
+With the nightly Scout enabled, the 02:00 Chicago batch also picks up each candidate with an open place. Thoughts steer research. Thoughts and completed drafts alone do not start a run. The existing question and contrary-search work for bound rooms continues. Manual and nightly notebook runs use the journey’s bound room when present, otherwise the house. Receipts and Field proposals belong to that room. The journey slug keeps the agenda, question selection and one-active-run rule distinct when several journeys share the house.
+
+The first research message names the open places, who asked, why, and the friends’ thoughts. The Scout looks for coordinates on a page it reads, what a visitor sees or does, how to reach the place from the route and whether the group can visit now.
+
+- `find_photo(query)` searches Wikimedia Commons files and returns up to eight images at least 1,200 pixels wide with a 1,600-pixel thumbnail request. It keeps the file page, image URL, artist, licence, licence URL and dimensions. It admits CC0, public domain, CC BY and CC BY-SA. Requests are spaced by at least two seconds and back off on HTTP 429.
+- `draft_stop` takes the note ID, name, coordinates, preceding stop, draft words, optional Commons title, sources and a status line. It uses the run’s page budget and cache. Each source gives a URL, claim, scope and a 3–35-word phrase. The proposal passage gate must find the phrase in the fetched main text and retain its sentence or table/list unit under 40 words. A single refusal returns the reason before any write. The photograph’s title must come from this run’s search. Credit comes from Commons.
+- A successful draft records the publisher, checked date, verified status and matched passage for each source in order. Draft prose cites those rows as `[E1]`, `[E2]`, or uses existing S-numbers. Only acceptance gives the new rows their permanent S-numbers. The Scout’s commit is authored by `The Long Way Scout <scout@thelongway.world>`. A place the Scout cannot locate or source stays open, with the research gap reported in the run receipt.

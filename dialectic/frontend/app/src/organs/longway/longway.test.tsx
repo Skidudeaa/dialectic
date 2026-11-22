@@ -31,6 +31,7 @@ function serve(extra: (path: string, init?: RequestInit) => unknown = () => unde
     const path = String(input)
     calls.push({ path, init, body: init?.body ? JSON.parse(String(init.body)) : undefined })
     const custom = extra(path, init)
+    if (custom === undefined && path.includes('/longway/notebook/')) return Response.json({ slug: path.split('/').pop(), notes: [], can_review: false, writable: true, why: null })
     if (custom instanceof Response) return custom
     if (custom === undefined && path.endsWith('/invite-requests')) return new Response(JSON.stringify({ mail_configured: true, requests: [] }))
     const result = custom ?? (path.endsWith('/chart') ? projection(home) : path.endsWith('/proposals') ? [proposed] : path.endsWith('/field/marks') ? (init?.method === 'POST' ? { id: 'mark1' } : { marks: [] }) : path.endsWith('/questions') || path.endsWith('/scout/runs') || path === '/users/me/rooms' ? [] : {})

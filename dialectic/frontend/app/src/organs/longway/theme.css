@@ -417,3 +417,29 @@
   .lw-voyage-editor[open] { animation: lw-open-editor .16s ease-out; }
   @keyframes lw-open-editor { from { transform: translateX(100%); } }
 }
+
+.lw-from-friends { margin-block: 1.35rem; overflow-wrap: anywhere; }
+.lw-from-friends > h2 { margin: 0 0 .6rem; font-size: 1.4rem; }
+.lw-from-friends article { padding: .85rem 0; border-top: 1px solid var(--rule); }
+.lw-from-friends article > p, .lw-friend-review p { margin: .3rem 0; }
+.lw-friend-review { margin-top: .75rem; padding-inline-start: .9rem; border-inline-start: 2px solid var(--accent); }
+.lw-friend-review h4 { margin: 0; }
+.lw-friend-review label, .lw-friend-review input { display: block; }
+[data-organ="longway"] .lw-friend-panel {
+  inset: auto 0 0; margin: auto; width: min(30rem, 100%); height: fit-content; max-height: 90dvh;
+  border: 1px solid var(--rule); border-radius: 10px 10px 0 0; animation: none;
+}
+.lw-friend-panel::backdrop { background: rgb(0 0 0 / .28); }
+.lw-friend-panel header { margin-bottom: .4rem; }
+.lw-thought-about p { margin-bottom: .35rem; }
+.lw-voyage-bar .lw-short-label { display: none; }
+@media (max-width: 520px) {
+  .lw-voyage-bar { gap: .25rem; padding-inline: .25rem; }
+  .lw-voyage-bar .lw-wide-label, .lw-voyage-bar strong:has(+ span) { display: none; }
+  .lw-voyage-bar .lw-short-label { display: inline; }
+  .lw-voyage-bar > span { flex: 1; }
+  [data-organ="longway"] .lw-voyage-bar button { padding-inline: .35rem; }
+}
+@media (min-width: 600px) {
+  [data-organ="longway"] .lw-friend-panel { inset: 0; border-radius: 10px; }
+}

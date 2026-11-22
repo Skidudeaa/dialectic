@@ -29,6 +29,7 @@ function serve({ refuse = false, locked = false, hasVoyage = true, manager = tru
     const resource = path.split('/longway/')[1]
     if (resource === 'chart') return Response.json({ ...raw, journeys: [{ ...journey, voyage: hasVoyage }, raw.journeys[1]], rooms: [],
       room: { id: 'room', linked_journey: 'nile', is_home: false, can_edit: manager }, fixes_state: { stale: false }, vehicles: [] })
+    if (resource.startsWith('notebook/')) return Response.json({ slug: resource.slice(9), notes: [], can_review: manager, writable: true, why: null })
     if (resource === 'riding') return Response.json({ rides: [] })
     if (resource === 'journey/nile') return Response.json({ ...journey, voyage: undefined, dossier: saved ? '# Saved dossier' : '# The Nile', evidence: [], vehicles: [] })
     if (resource.startsWith('voyage/nile/page')) return Response.json({ html: saved ? html.replace('First light', 'New light') : html })
