@@ -113,7 +113,7 @@ export interface ChartProjection {
   generated: string
   fetched_at: string
   name: string
-  room: { id: string; linked_journey: string | null; is_home: boolean }
+  room: { id: string; linked_journey: string | null; is_home: boolean; can_edit?: boolean }
   rooms: RoomLink[]
   journeys: Journey[]
   sources: Record<string, Record<string, EvidenceRow>>

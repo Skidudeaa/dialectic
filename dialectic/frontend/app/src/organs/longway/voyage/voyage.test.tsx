@@ -21,14 +21,14 @@ const refusal = 'voyage.json cites S999, missing from candidates/nile/evidence.j
 const changed = ['stations/aswan/kicker']
 const html = '<!doctype html><html><title>Nile</title><body><p>First light</p></body></html>'
 const button = (name: string) => screen.getByRole('button', { name })
-function serve({ refuse = false, locked = false, hasVoyage = true } = {}) {
+function serve({ refuse = false, locked = false, hasVoyage = true, manager = true } = {}) {
   const calls: { path: string; init: RequestInit; body?: unknown }[] = []
   let saved = false
   vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit = {}) => {
     calls.push({ path, init, body: init.body && JSON.parse(String(init.body)) })
     const resource = path.split('/longway/')[1]
     if (resource === 'chart') return Response.json({ ...raw, journeys: [{ ...journey, voyage: hasVoyage }, raw.journeys[1]], rooms: [],
-      room: { id: 'room', linked_journey: 'nile', is_home: false }, fixes_state: { stale: false }, vehicles: [] })
+      room: { id: 'room', linked_journey: 'nile', is_home: false, can_edit: manager }, fixes_state: { stale: false }, vehicles: [] })
     if (resource === 'riding') return Response.json({ rides: [] })
     if (resource === 'journey/nile') return Response.json({ ...journey, voyage: undefined, dossier: saved ? '# Saved dossier' : '# The Nile', evidence: [], vehicles: [] })
     if (resource.startsWith('voyage/nile/page')) return Response.json({ html: saved ? html.replace('First light', 'New light') : html })
@@ -70,6 +70,20 @@ it('offers the film only on flagged House cards and on the picked journey, inclu
   expect(calls.find(c => c.path === '/rooms/home/longway/voyage/nile/page')?.init.headers).toMatchObject({ Authorization: 'Bearer jwt', 'X-Room-Token': 'room-token' })
   fireEvent.click(button('The house'))
   expect(within(chosen).getByText('Ride the voyage')).toBeVisible()
+})
+
+it('lets a member who is not a house manager ride and read, with no control that edits', async () => {
+  const calls = serve({ manager: false })
+  render(<><LongwayBench roomId="room" /><LongwayLibrary roomId="room" /></>)
+  await screen.findByRole('heading', { name: 'The Nile' })
+  expect(screen.queryByText('Edit dossier')).toBeNull()
+  expect(screen.queryByText('Edit record')).toBeNull()
+  fireEvent.click((await screen.findAllByText('Ride the voyage'))[0])
+  const film = await screen.findByTitle('The Nile voyage film') as HTMLIFrameElement
+  atStop(film.contentWindow)
+  expect(await screen.findByText('Aswan')).toBeVisible()
+  expect(screen.queryByText('Edit this stop')).toBeNull()
+  expect(calls.some(c => c.path.includes('/document/'))).toBe(false)
 })
 
 it('rides from the chart, authenticates film messages, retains a refused draft and resumes the accepted stop', async () => {

@@ -7,21 +7,22 @@ import { VoyageEditor } from './VoyageEditor'
 import type { Receipt } from './voyage'
 
 type Target = Pick<Journey, 'slug' | 'title' | 'voyage'>
-type Props = { roomId: string; journey: Target }
+// canEdit comes from the chart (room.can_edit): house managers edit, everyone rides.
+type Props = { roomId: string; journey: Target; canEdit?: boolean }
 
 function Saved({ receipt }: { receipt: Receipt }) {
   return <p role="status" className="lw-voyage-saved">Saved <code>{receipt.commit.slice(0, 7)}</code> · {receipt.changed.join(', ')}</p>
 }
 
-export function VoyageActions({ roomId, journey, library = false }: Props & { library?: boolean }) {
+export function VoyageActions({ roomId, journey, canEdit = false, library = false }: Props & { library?: boolean }) {
   const [open, setOpen] = useState<'stage' | 'dossier' | 'record' | null>(null)
   const [receipt, setReceipt] = useState<Receipt | null>(null)
   return <>
     {journey.voyage === true && <button onClick={() => setOpen('stage')}>Ride the voyage</button>}
-    {library && <><button onClick={() => setOpen('dossier')}>Edit dossier</button>
+    {library && canEdit && <><button onClick={() => setOpen('dossier')}>Edit dossier</button>
       <button onClick={() => setOpen('record')}>Edit record</button></>}
     {receipt && <Saved receipt={receipt} />}
-    {open === 'stage' && <VoyageStage roomId={roomId} journey={journey} close={() => setOpen(null)} />}
+    {open === 'stage' && <VoyageStage roomId={roomId} journey={journey} canEdit={canEdit} close={() => setOpen(null)} />}
     {(open === 'dossier' || open === 'record') && <VoyageEditor roomId={roomId} journey={journey} initialView={open}
       close={() => setOpen(null)} onSaved={result => { setReceipt(result); setOpen(null) }} />}
   </>
@@ -29,7 +30,7 @@ export function VoyageActions({ roomId, journey, library = false }: Props & { li
 
 interface Stop { id: string; name: string | null }
 
-function VoyageStage({ roomId, journey, close }: Props & { close: () => void }) {
+function VoyageStage({ roomId, journey, canEdit = false, close }: Props & { close: () => void }) {
   const frame = useRef<HTMLIFrameElement>(null)
   const [stop, setStop] = useState<Stop | null>(null)
   const [editing, setEditing] = useState<Stop | null>(null)
@@ -61,7 +62,7 @@ function VoyageStage({ roomId, journey, close }: Props & { close: () => void }) 
     <header className="lw-voyage-bar">
       <button onClick={close}>The house</button><strong title={journey.title}>{journey.title}</strong>
       {stop?.name && <span title={stop.name}>{stop.name}</span>}
-      <button disabled={!stop} onClick={edit}>Edit this stop</button>
+      {canEdit && <button disabled={!stop} onClick={edit}>Edit this stop</button>}
     </header>
     {receipt && <Saved receipt={receipt} />}
     <Film key={resume.revision} path={path} title={journey.title} frame={frame} />

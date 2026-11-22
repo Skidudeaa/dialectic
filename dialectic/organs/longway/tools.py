@@ -69,13 +69,17 @@ def build_tools(room, db):
                 WHERE t.room_id=$1 AND m.speaker_type='human' AND NOT m.is_deleted
                 ORDER BY m.created_at DESC, m.id DESC LIMIT 12
             )
-            SELECT u.display_name, c.email FROM recent
+            SELECT u.display_name, c.email, EXISTS(
+                SELECT 1 FROM rooms h JOIN room_memberships hm ON hm.room_id=h.id
+                WHERE h.is_home AND hm.user_id=u.id AND hm.can_manage_home) AS manager FROM recent
             JOIN users u ON u.id=recent.user_id
             JOIN room_memberships rm ON rm.user_id=u.id AND rm.room_id=$1
             JOIN user_credentials c ON c.user_id=u.id
             WHERE recent.id=$2""", room.id, message_id)
         if not actor or not (actor["display_name"] or "").strip() or not (actor["email"] or "").strip():
             return refusal
+        if not actor["manager"]:
+            return {"error": "Only a house manager can ask for a change to the voyage, dossier or record."}
         try:
             return await asyncio.to_thread(get_register().edit_document, args["slug"], args["document"],
                                            args.get("ops"), args.get("text"), actor["display_name"], actor["email"],

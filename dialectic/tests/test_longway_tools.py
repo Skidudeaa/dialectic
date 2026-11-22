@@ -6,7 +6,7 @@ from organs.longway import proposals, fixes
 from organs.longway.tools import build_tools
 from tests.conftest import make_room
 from tests.test_longway_register import longway_repo, voyage_repo, git
-from tests.test_longway_api import db, house, home_room, client
+from tests.test_longway_api import db, house, home_room, client, make_manager
 
 
 async def add_member(db, house, name):
@@ -95,7 +95,7 @@ async def test_undated_train_is_heard_but_not_a_fabricated_fix(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_scout_voyage_and_member_edit(db, house, voyage_repo, monkeypatch):
+async def test_scout_voyage_and_member_edit(db, house, home_room, voyage_repo, monkeypatch):
     monkeypatch.setenv("LONGWAY_COMMIT_ENABLED", "1")
     tools = {t.name: t for t in build_tools(make_room(id=house.room), db)}
     read = tools["read_voyage"].execute
@@ -121,6 +121,11 @@ async def test_scout_voyage_and_member_edit(db, house, voyage_repo, monkeypatch)
     await assert_request_refused(edit, args, root)
     email = f"{bob}@example.org"
     await db.execute("INSERT INTO user_credentials(user_id,email,password_hash) VALUES ($1,$2,'unused')", bob, email)
+    # A real member with an account who asked in this room, but not a house manager: friends do not edit the record.
+    head = git(root, "rev-parse", "HEAD")
+    assert "Only a house manager" in (await edit(args))["error"]
+    assert git(root, "rev-parse", "HEAD") == head and not git(root, "status", "--porcelain")
+    await make_manager(db, home_room, bob)
     result = await edit(args)
     assert result["commit"] == git(root, "rev-parse", "HEAD") and result["changed"] == ["stations/aswan/kicker"]
     assert (await read({"slug": "nile", "station": "aswan"}))["kicker"] == "A late sail"
@@ -131,9 +136,11 @@ async def test_scout_voyage_and_member_edit(db, house, voyage_repo, monkeypatch)
 
 
 @pytest.mark.asyncio
-async def test_scout_keeps_the_asking_member_when_bob_speaks_later(db, house, voyage_repo, monkeypatch):
+async def test_scout_keeps_the_asking_member_when_bob_speaks_later(db, house, home_room, voyage_repo, monkeypatch):
     monkeypatch.setenv("LONGWAY_COMMIT_ENABLED", "1")
     bob = await add_member(db, house, "Bob")
+    await make_manager(db, home_room, bob)
+    await make_manager(db, home_room, house.user.user_id)
     await db.execute("INSERT INTO user_credentials(user_id,email,password_hash) VALUES ($1,$2,'unused')", bob, f"{bob}@example.org")
     alice = house.user.user_id
     alice_id = await post_message(db, house.thread, 1, alice, "@Scout change our dossier to Ocean crossing in autumn")
@@ -201,7 +208,7 @@ async def test_scout_refuses_ineligible_request_ids(db, house, home_room, voyage
 async def test_house_scout_can_edit_an_unbound_candidate(db, house, home_room, voyage_repo, monkeypatch):
     monkeypatch.setenv("LONGWAY_COMMIT_ENABLED", "1")
     home = home_room["id"]
-    await db.execute("INSERT INTO room_memberships(room_id,user_id,joined_at) VALUES ($1,$2,now())", home, house.user.user_id)
+    await make_manager(db, home_room, house.user.user_id)
     thread = uuid4()
     await db.execute("INSERT INTO threads(id,room_id,created_at,title) VALUES ($1,$2,now(),'Main')", thread, home)
     request_id = await post_message(db, thread, 1, house.user.user_id, "@Scout rename the Nile record to River fixture")

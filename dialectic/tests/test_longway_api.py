@@ -70,6 +70,12 @@ async def home_room(db):
     return home
 
 
+async def make_manager(db, home_room, user_id):
+    """Journey edits are the house managers' only."""
+    await db.execute("""INSERT INTO room_memberships(room_id,user_id,joined_at,can_manage_home) VALUES ($1,$2,clock_timestamp(),true)
+        ON CONFLICT (room_id,user_id) DO UPDATE SET can_manage_home=true""", home_room["id"], user_id)
+
+
 @pytest_asyncio.fixture
 async def client(db,house):
     app = FastAPI()
@@ -93,7 +99,7 @@ async def test_chart_projection_and_membership(client,house,db,longway_repo,monk
     response=await client.get(f"/rooms/{house.room}/longway/chart")
     assert response.status_code == 200
     data=response.json()
-    assert data["room"] == {"id":str(house.room),"linked_journey":"ogasawara","is_home":False}
+    assert data["room"] == {"id":str(house.room),"linked_journey":"ogasawara","is_home":False,"can_edit":False}
     assert len(data["rooms"]) == 1
     assert data["fixes_state"]["stale"] is True
     assert data["vehicles"][0]["fix"] is None and data["vehicles"][0]["heard"] is False
@@ -146,15 +152,17 @@ async def test_real_repo_contract(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_voyage_round_trip(client, house, voyage_repo, monkeypatch):
+async def test_voyage_round_trip(client, house, db, home_room, voyage_repo, monkeypatch):
     from unittest.mock import AsyncMock
     monkeypatch.setenv("LONGWAY_COMMIT_ENABLED", "1")
+    await make_manager(db, home_room, house.user.user_id)
     root = voyage_repo.root
     prefix = f"/rooms/{house.room}/longway"
     # The fixture room is linked to Ogasawara. A voyage needs no room of its own.
     monkeypatch.setattr(fixes, "fetch_feed", AsyncMock(return_value={"fixes": {}}))
     chart = (await client.get(f"{prefix}/chart")).json()
     assert next(j for j in chart["journeys"] if j["slug"] == "nile")["voyage"] is True
+    assert chart["room"]["can_edit"] is True
     page = f"{prefix}/voyage/nile/page?station=aswan"
     original = await client.get(page)
     assert original.status_code == 200 and original.headers["cache-control"] == "no-store"
@@ -184,7 +192,7 @@ async def test_voyage_round_trip(client, house, voyage_repo, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_house_only_member_edits_candidate_without_a_room(client, house, home_room, db, voyage_repo, monkeypatch):
+async def test_a_member_rides_and_reads_but_only_a_manager_edits(client, house, home_room, db, voyage_repo, monkeypatch):
     monkeypatch.setenv("LONGWAY_COMMIT_ENABLED", "1")
     home = home_room["id"]
     await db.execute("""UPDATE room_memberships SET room_id=$1, can_manage_home=false
@@ -201,10 +209,21 @@ async def test_house_only_member_edits_candidate_without_a_room(client, house, h
     assert page.status_code == 200 and "Original bank" in page.json()["html"]
     document = f"{url}/document/nile/voyage"
     response = await client.get(document, headers=headers)
-    assert response.status_code == 200 and response.json()["writable"] is True
+    assert response.status_code == 200 and response.json()["writable"] is False
+    assert response.json()["why"] == api.MANAGERS_ONLY
     assert response.json()["value"]["stations"][0]["kicker"] == "Original bank"
     path = "stations/aswan/kicker"
-    edited = await client.post(document, headers=headers, json={"ops": [{"op": "set", "path": path, "value": "From the House"}]})
+    body = {"ops": [{"op": "set", "path": path, "value": "From the House"}]}
+    target = root / "candidates/nile/voyage.json"
+    before = target.read_bytes()
+    refused = await client.post(document, headers=headers, json=body)
+    assert refused.status_code == 403 and refused.json()["detail"] == api.MANAGERS_ONLY
+    assert git(root, "rev-parse", "HEAD") == head and target.read_bytes() == before
+    assert (await client.get(f"{url}/chart", headers=headers)).json()["room"]["can_edit"] is False
+
+    await make_manager(db, home_room, house.user.user_id)
+    assert (await client.get(document, headers=headers)).json()["writable"] is True
+    edited = await client.post(document, headers=headers, json=body)
     assert edited.status_code == 200, edited.text
     assert edited.json()["commit"] == git(root, "rev-parse", "HEAD")
     assert git(root, "rev-list", "--count", f"{head}..HEAD") == "1"
@@ -213,7 +232,8 @@ async def test_house_only_member_edits_candidate_without_a_room(client, house, h
 
 
 @pytest.mark.asyncio
-async def test_document_refusals(client, house, voyage_repo, monkeypatch):
+async def test_document_refusals(client, house, db, home_room, voyage_repo, monkeypatch):
+    await make_manager(db, home_room, house.user.user_id)
     root = voyage_repo.root
     head = git(root, "rev-parse", "HEAD")
     prefix = f"/rooms/{house.room}/longway/document/nile"
@@ -254,8 +274,9 @@ async def test_document_refusals(client, house, voyage_repo, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_voyage_lookup_and_room_fences(client, house, db, voyage_repo, monkeypatch):
+async def test_voyage_lookup_and_room_fences(client, house, db, home_room, voyage_repo, monkeypatch):
     monkeypatch.setenv("LONGWAY_COMMIT_ENABLED", "1")
+    await make_manager(db, home_room, house.user.user_id)
     original = Path.open
     def guard(path, *args, **kwargs):
         if "trips" in path.parts:

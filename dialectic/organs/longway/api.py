@@ -55,6 +55,15 @@ async def manager(user, db):
     await _require_home_manager(token, user.user_id, db)
 
 
+MANAGERS_ONLY = "Only a house manager changes a journey's voyage, dossier or record here."
+
+
+async def can_edit(user, db):
+    """Amo, 2026-11-21: the record-level editor is not for everyone. Members ride and read; house managers edit."""
+    return bool(await db.fetchval("""SELECT m.can_manage_home FROM rooms r JOIN room_memberships m ON m.room_id=r.id
+        WHERE r.is_home AND m.user_id=$1""", user.user_id))
+
+
 def journey(slug):
     try:
         return get_register().journey(slug)
@@ -68,7 +77,7 @@ async def chart(room_id: UUID, user=Depends(authorized), db=Depends(get_db)):
     room = await db.fetchrow("SELECT id,linked_journey,is_home FROM rooms WHERE id=$1", room_id)
     rooms = await db.fetch("""SELECT r.id,r.name,r.linked_journey FROM rooms r
         JOIN room_memberships m ON m.room_id=r.id WHERE m.user_id=$1 ORDER BY r.created_at,r.id""", user.user_id)
-    return dict(result, room=dict(room), rooms=[dict(r) for r in rooms])
+    return dict(result, room=dict(room, can_edit=await can_edit(user, db)), rooms=[dict(r) for r in rooms])
 
 
 @router.get("/journey/{slug}")
@@ -91,13 +100,13 @@ def get_voyage_page(room_id: UUID, slug: str, response: Response, station: str |
 
 
 @router.get("/document/{slug}/{name}")
-def get_document(room_id: UUID, slug: str, name: str, user=Depends(authorized)):
+async def get_document(room_id: UUID, slug: str, name: str, user=Depends(authorized), db=Depends(get_db)):
     register = get_register()
     try:
-        document = register.document(slug, name)
+        document = await asyncio.to_thread(register.document, slug, name)
     except (UnknownCandidate, KeyError, FileNotFoundError) as exc:
         raise HTTPException(404, "Unknown document") from exc
-    why = register.edit_disabled_reason()
+    why = register.edit_disabled_reason() or (None if await can_edit(user, db) else MANAGERS_ONLY)
     return dict(document, writable=why is None, why=why)
 
 
@@ -115,6 +124,8 @@ class DocumentEdit(BaseModel):
 
 @router.post("/document/{slug}/{name}")
 async def edit_document(room_id: UUID, slug: str, name: str, body: DocumentEdit, user=Depends(authorized), db=Depends(get_db)):
+    if not await can_edit(user, db):
+        raise HTTPException(403, MANAGERS_ONLY)
     actor = await db.fetchrow("""SELECT u.display_name,c.email FROM users u
         JOIN user_credentials c ON c.user_id=u.id WHERE u.id=$1""", user.user_id)
     try:

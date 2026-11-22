@@ -42,7 +42,7 @@ export function LongwayBench({ roomId, record, canManageHome = false }: { roomId
   // A chart refresh failure must not unmount the ride's last good fix during an outage.
   const bound = data?.journeys.find(j => j.slug === data.room.linked_journey)
   if (bound?.kind === 'trip' && (bound.rides ?? 0) > 0) return <>
-    {bound.voyage && <div className="longway-chart-notes"><VoyageActions key={bound.slug} roomId={roomId} journey={bound} /></div>}
+    {bound.voyage && <div className="longway-chart-notes"><VoyageActions key={bound.slug} roomId={roomId} journey={bound} canEdit={data?.room.can_edit} /></div>}
     <Suspense fallback={<p role="status">Loading ride instrument…</p>}><RideBench key={roomId} roomId={roomId} record={record} /></Suspense>
   </>
   if (error && !data) return <div role="alert">{error} <button onClick={refresh}>Retry chart</button></div>
@@ -56,7 +56,7 @@ export function LongwayBench({ roomId, record, canManageHome = false }: { roomId
       <label><input type="checkbox" checked={myth} onChange={e => setMyth(e.target.checked)} /> Without the mythology</label>
       <InkKey inks={new Set(data.journeys.filter(j => !data.room.linked_journey || j.slug === data.room.linked_journey).flatMap(j => j.segments.map(seg => seg.proposed ? 'dotted' as const : seg.ink)))} myth={myth} />
       {journey && <><h3>{journey.title}</h3><p>{journey.pull}</p><SeasonStrip season={journey.season} sources={data.sources[journey.slug] ?? {}} />
-        <VoyageActions key={journey.slug} roomId={roomId} journey={journey} />
+        <VoyageActions key={journey.slug} roomId={roomId} journey={journey} canEdit={data.room.can_edit} />
         <ul className="longway-legs">{journey.segments.map((segment, index) => <li key={index}><button aria-pressed={leg?.journey === journey.slug && leg.leg === index} onClick={() => { setLeg({ journey: journey.slug, leg: index }); setDraft(null) }}>{segment.from} to {segment.to}</button>{segment.proposed && <span className="longway-proposed-tag">proposed</span>}</li>)}</ul>
       </>}
       {journey && leg && <><LegCard roomId={roomId} proposals={data.proposals?.[journey.slug]} journey={journey} index={leg.leg} sources={data.sources[journey.slug] ?? {}} />

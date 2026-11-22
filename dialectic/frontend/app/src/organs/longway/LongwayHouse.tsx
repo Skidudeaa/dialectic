@@ -182,7 +182,7 @@ export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
           <p className="lw-eyebrow">On the globe</p>
           <h3>{chosen.title}</h3>
           {meta(chosen) && <p className="lw-meta">{meta(chosen)}</p>}
-          <div className="longway-actions">{action(chosen)}<VoyageActions roomId={roomId} journey={chosen} /><button onClick={() => setSelected(null)}>Show every journey</button></div>
+          <div className="longway-actions">{action(chosen)}<VoyageActions roomId={roomId} journey={chosen} canEdit={data.room.can_edit} /><button onClick={() => setSelected(null)}>Show every journey</button></div>
           {writeError && <p role="alert" className="lw-alert">{writeError}</p>}
         </div> : <p className="lw-hint lw-globe-tip">Tap a journey’s name on the globe, or pick one below, to see its route.</p>}
       </div>
@@ -213,7 +213,7 @@ export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
             {journey.segments.length > 0 && <JourneyStrip journey={journey} />}
             <p className="lw-pull">{journey.pull}</p>
             {feasibility(journey.feasibility) && <p className="lw-feasibility">{feasibility(journey.feasibility)}</p>}
-            <div className="longway-actions">{action(journey)}<VoyageActions roomId={roomId} journey={journey} /></div>
+            <div className="longway-actions">{action(journey)}<VoyageActions roomId={roomId} journey={journey} canEdit={data.room.can_edit} /></div>
           </article>)}
         </section>
       </div>

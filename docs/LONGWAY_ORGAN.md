@@ -465,7 +465,9 @@ parser, not deployment, the live house database, or device push receipt.
 
 ## 14. River voyages and member edits (2026-11-21)
 
-Amo authorized this extension to §3's evidence-row write rule: "everything should be accessable, reachable, discoverable, dynamically modifyable through thelongway". Any member of a room may use its room token and signed-in account to read or edit any candidate, including one without a room. Trips are outside these routes. The chart marks a candidate with a river film with `"voyage": true`.
+Amo authorized this extension to §3's evidence-row write rule: "everything should be accessable, reachable, discoverable, dynamically modifyable through thelongway". **Amended the same evening.** Amo, on seeing the editor: "i don't want all this software engineering/thelongway website editing config level edits for the everyone" and "i don't want them changing the dam camera angle to the site. that would be a disaster". Reading is for any member of the room. Editing is for house managers only (`can_manage_home` on the house room): the POST route answers 403 to anyone else, the GET document says `writable: false` with the reason, the chart's `room.can_edit` tells the shell whether to show any edit control, and `edit_journey` refuses when the asking message's sender is not a house manager. Friends contribute places and thoughts another way, not through this editor. Where the text below says "any member" may edit, read "any house manager".
+
+Any member of a room may use its room token and signed-in account to read or edit any candidate, including one without a room. Trips are outside these routes. The chart marks a candidate with a river film with `"voyage": true`.
 
 All paths below are relative to `/rooms/{room_id}/longway/`.
 
