@@ -42,6 +42,7 @@ export interface EvidenceRow {
 
 export interface Journey {
   slug: string
+  voyage?: boolean
   rides?: number
   kind: JourneyKind
   title: string

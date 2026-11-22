@@ -368,3 +368,52 @@
 [data-organ="longway"] .scene-empty { background: var(--panel); border: 1px dashed var(--rule); box-shadow: none; }
 [data-organ="longway"] .scene-empty::before { display: none; }
 [data-organ="longway"] .scene-empty-kicker { font: 600 .72rem var(--font-ui); letter-spacing: .08em; color: var(--ink-3); }
+
+/* The voyage occupies the browser's top layer. The bar has its own row so the
+   film's viewport and map controls end at the visible edges of the frame. */
+[data-organ="longway"] :is(.lw-voyage-stage, .lw-voyage-editor) {
+  position: fixed; box-sizing: border-box; margin: 0; max-width: none; max-height: none;
+  border: 0; padding: 0; color: var(--ink); background: var(--panel); font: 400 1rem/1.45 var(--font-ui);
+}
+[data-organ="longway"] .lw-voyage-stage[open] {
+  inset: 0; width: 100%; height: 100dvh; display: flex; flex-direction: column; overflow: hidden;
+}
+.lw-voyage-stage iframe { display: block; width: 100%; flex: 1; min-height: 0; border: 0; background: var(--sea); }
+.lw-voyage-bar {
+  box-sizing: border-box; height: calc(48px + env(safe-area-inset-top)); flex: none;
+  display: flex; align-items: center; gap: .5rem; padding: env(safe-area-inset-top) .5rem 0; border-bottom: 1px solid var(--rule);
+}
+.lw-voyage-bar :is(strong, span) { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lw-voyage-bar strong { flex: 1; font-family: var(--font-text); }
+.lw-voyage-bar span { max-width: 32%; font-size: .88rem; }
+[data-organ="longway"] :is(.lw-voyage-bar, .lw-voyage-editor) button {
+  flex: none; white-space: nowrap; min-height: 40px; padding: .35rem .6rem; border: 1px solid var(--rule);
+  border-radius: 6px; background: var(--panel); color: var(--ink); font: 600 .88rem/1.2 var(--font-ui); cursor: pointer;
+}
+[data-organ="longway"] .lw-voyage-editor {
+  inset: 0 0 0 auto; width: min(34rem, 100%); height: 100dvh; overflow-y: auto; overscroll-behavior: contain;
+  padding: 1rem max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) 1rem; border-left: 1px solid var(--rule);
+}
+[data-organ="longway"] .lw-voyage-editor.on-stage {
+  top: calc(48px + env(safe-area-inset-top)); height: calc(100dvh - 48px - env(safe-area-inset-top));
+}
+.lw-voyage-editor::backdrop { background: transparent; }
+.lw-voyage-editor header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.lw-voyage-editor h2 { margin: 0; font-size: 1.5rem; overflow-wrap: anywhere; }
+.lw-voyage-editor fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.lw-voyage-editor label { display: block; margin: .85rem 0; font: 500 .9rem/1.4 var(--font-ui); }
+[data-organ="longway"] .lw-voyage-editor :is(select, input, textarea) {
+  box-sizing: border-box; display: block; width: 100%; min-width: 0; margin-top: .25rem; padding: .55rem;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 5px; font: 400 1rem/1.45 var(--font-text);
+}
+.lw-voyage-editor textarea { resize: vertical; }
+.lw-voyage-editor :read-only:is(textarea, input) { color: var(--ink-3); }
+.lw-voyage-editor details { margin: 1rem 0; }
+.lw-voyage-editor summary { cursor: pointer; color: var(--accent); }
+[data-organ="longway"] .lw-voyage-editor button.lw-primary { background: var(--accent); color: var(--accent-ink); }
+.lw-voyage-saved, .lw-voyage-error { white-space: pre-wrap; overflow-wrap: anywhere; }
+.lw-voyage-saved { margin: 0; padding: .35rem .6rem; font: 500 .85rem/1.3 var(--font-ui); max-height: 20dvh; overflow: auto; }
+@media (prefers-reduced-motion: no-preference) {
+  .lw-voyage-editor[open] { animation: lw-open-editor .16s ease-out; }
+  @keyframes lw-open-editor { from { transform: translateX(100%); } }
+}

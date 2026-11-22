@@ -16,6 +16,14 @@ from functools import lru_cache
 from pathlib import Path
 
 
+class UnknownCandidate(ValueError):
+    pass
+
+
+class DirtyDocument(RuntimeError):
+    pass
+
+
 class CommitsDisabled(RuntimeError):
     pass
 
@@ -124,12 +132,86 @@ class Register:
         self.module.valid_slug(slug)
         return [json.loads(line) for line in self.local(f"candidates/{slug}/evidence.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
 
+    def _candidate_slug(self, slug):
+        try:
+            return self.module.valid_slug(slug)
+        except ValueError as exc:
+            raise UnknownCandidate(str(exc)) from exc
+
     def candidate(self, slug):
-        self.module.valid_slug(slug)
+        self._candidate_slug(slug)
         path = self.local(f"candidates/{slug}/record.json")
         if not path.is_file() or self.module.obj(path).get("kind") != "candidate":
-            raise ValueError(f"Unknown candidate: {slug}")
+            raise UnknownCandidate(f"Unknown candidate: {slug}")
         return slug
+
+    def voyage(self, slug):
+        self.candidate(slug)
+        return self.candidates.voyage_data(self.root, slug)
+
+    def voyage_page(self, slug, station=None):
+        self.candidate(slug)
+        return self.candidates.voyage_page(self.root, slug, station=station, embed=True)
+
+    def _document_path(self, slug, name):
+        self._candidate_slug(slug)
+        filename = self.candidates.DOCUMENTS[name]
+        path = self.local(f"candidates/{slug}/{filename}")
+        if not path.is_file():
+            raise KeyError(f"{slug} has no {filename}")
+        return path
+
+    def document(self, slug, name):
+        self.candidate(slug)
+        if name not in self.candidates.DOCUMENTS:
+            raise KeyError(name)
+        return self.candidates.document_read(self.root, slug, name)
+
+    @staticmethod
+    def edit_disabled_reason():
+        if os.environ.get("LONGWAY_COMMIT_ENABLED") != "1":
+            return "Document edits are disabled in this house."
+        return None
+
+    def edit_document(self, slug, name, ops, text, author_name, author_email, *, extra_trailers=()):
+        path = self._document_path(slug, name)
+        if reason := self.edit_disabled_reason():
+            self.candidate(slug)
+            raise CommitsDisabled(reason)
+        for value in (author_name, author_email):
+            if not value or not value.strip() or any(c in value for c in "\r\n<>\0"):
+                raise ValueError("The asking member needs a valid git name and email")
+
+        relative = str(path.relative_to(self.root))
+        git_dir = Path(self.git("rev-parse", "--absolute-git-dir"))
+        with (git_dir / "longway-evidence.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            if self.git("status", "--porcelain", "--", relative):
+                raise DirtyDocument(f"Refusing to overwrite uncommitted changes to {relative}")
+            # The target may itself be a half-written record.json. Check Git before parsing it.
+            self.candidate(slug)
+            scratch = path.with_name(f".{path.name}.edit")
+            if scratch.is_symlink() or scratch.exists():
+                raise DirtyDocument(f"An edit is already present at {scratch.relative_to(self.root)}")
+            original = path.read_bytes()
+            try:
+                try:
+                    result = self.candidates.document_edit(self.root, slug, name, ops=ops, text=text)
+                except (KeyError, TypeError, AttributeError) as exc:
+                    # An operation can remove or replace a field the voyage projection requires.
+                    raise ValueError(f"Invalid {name} structure: {exc}") from exc
+                self.git("add", "--", relative)
+                summary = " ".join(result["summary"].split())[:72]
+                message = "\n".join((f"Edit {slug} {name}: {summary}", "", "Edited-In: The Long Way house", *extra_trailers))
+                self.git("-c", "user.name=The Long Way", "-c", "user.email=longway@localhost",
+                         "commit", "--only", f"--author={author_name} <{author_email}>", "-m", message, "--", relative)
+            except Exception:
+                if path.read_bytes() != original:
+                    scratch.write_bytes(original)
+                    scratch.replace(path)
+                self.git("reset", "-q", "HEAD", "--", relative)
+                raise
+            return {"commit": self.git("rev-parse", "HEAD"), "changed": result["changed"], "summary": result["summary"]}
 
     def fit_window(self, trip):
         item = self.journey(trip)

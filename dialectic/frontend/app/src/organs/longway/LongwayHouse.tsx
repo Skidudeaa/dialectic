@@ -1,3 +1,4 @@
+import { VoyageActions } from './voyage/VoyageActions'
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { api } from '../../lib/api'
@@ -149,7 +150,7 @@ export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
       globe.current?.scrollIntoView?.({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 'auto' : 'smooth', block: 'start' })
     }
   }
-  if (error) return <div className="longway-house scene-body"><p role="alert" className="lw-alert">The house could not load: {error} <button onClick={refresh}>Retry house</button></p></div>
+  if (error && !data) return <div className="longway-house scene-body"><p role="alert" className="lw-alert">The house could not load: {error} <button onClick={refresh}>Retry house</button></p></div>
   if (!data) return <div className="longway-house scene-body"><div className="lw-atlas"><div className="lw-globe-wait" role="status">Loading the globe and the journeys…</div></div></div>
 
   const rooms = data.rooms.filter(room => room.id !== data.room.id)
@@ -166,6 +167,7 @@ export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
     return <p className="lw-note">No room yet. A house manager can open one.</p>
   }
   return <div className="longway-house scene-body">
+    {error && <p role="alert" className="lw-alert">{error} <button onClick={refresh}>Retry house</button></p>}
     <div className="lw-atlas">
       <div className="lw-atlas-globe" ref={globe}>
         <div className="longway-chart"><Chart data={data} focus={null} selected={selected} myth={myth} onSelectJourney={setSelected} onSelectLeg={slug => setSelected(slug)} /></div>
@@ -180,7 +182,7 @@ export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
           <p className="lw-eyebrow">On the globe</p>
           <h3>{chosen.title}</h3>
           {meta(chosen) && <p className="lw-meta">{meta(chosen)}</p>}
-          <div className="longway-actions">{action(chosen)}<button onClick={() => setSelected(null)}>Show every journey</button></div>
+          <div className="longway-actions">{action(chosen)}<VoyageActions roomId={roomId} journey={chosen} /><button onClick={() => setSelected(null)}>Show every journey</button></div>
           {writeError && <p role="alert" className="lw-alert">{writeError}</p>}
         </div> : <p className="lw-hint lw-globe-tip">Tap a journey’s name on the globe, or pick one below, to see its route.</p>}
       </div>
@@ -211,7 +213,7 @@ export function LongwayHouse({ roomId, canManageHome, onNavigate }: {
             {journey.segments.length > 0 && <JourneyStrip journey={journey} />}
             <p className="lw-pull">{journey.pull}</p>
             {feasibility(journey.feasibility) && <p className="lw-feasibility">{feasibility(journey.feasibility)}</p>}
-            <div className="longway-actions">{action(journey)}</div>
+            <div className="longway-actions">{action(journey)}<VoyageActions roomId={roomId} journey={journey} /></div>
           </article>)}
         </section>
       </div>

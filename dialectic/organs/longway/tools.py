@@ -1,15 +1,89 @@
-"""Five participant tools; repository mutation belongs exclusively to the writer."""
-from .register import get_register
+"""Scout conversation tools for reading the house and committing member-requested candidate edits."""
+import asyncio
+import json
+from uuid import UUID
+
+from .register import CommitsDisabled, DirtyDocument, UnknownCandidate, get_register
 from .fixes import overlay
 from .proposals import propose, PROPOSAL_FIELDS
 
 
 def build_tools(room, db):
-    from llm.tools import Tool
+    from llm.tools import TOOL_RESULT_CHAR_CAP, Tool
 
     async def read_register(args):
         register = get_register()
+        if args.get("document"):
+            if not args.get("slug"):
+                return {"error": "Choose a candidate slug to read its document."}
+            try:
+                doc = await asyncio.to_thread(register.document, args["slug"], args["document"])
+            except (KeyError, UnknownCandidate):
+                return {"error": "Unknown document"}
+            content = doc["value"] if doc["format"] == "text" else json.dumps(doc["value"], ensure_ascii=False, indent=2)
+            start = args.get("start_char", 0)
+            if type(start) is not int or not 0 <= start <= len(content):
+                return {"error": "Choose a character offset within this document."}
+            end = min(len(content), start + TOOL_RESULT_CHAR_CAP)
+            # The conversation loop caps serialized JSON, including escaping.
+            while True:
+                result = {"name": doc["name"], "format": doc["format"], "protected": doc["protected"],
+                          "content": content[start:end], "next_start_char": end if end < len(content) else None}
+                if len(json.dumps(result)) <= TOOL_RESULT_CHAR_CAP:
+                    return result
+                end = start + (end - start) // 2
         return register.journey(args["slug"]) if args.get("slug") else register.chart()
+
+    async def read_voyage(args):
+        try:
+            data = await asyncio.to_thread(get_register().voyage, args["slug"])
+        except (FileNotFoundError, UnknownCandidate):
+            return {"error": "Unknown journey or no voyage"}
+        except ValueError as exc:
+            return {"error": str(exc)}
+        voyage = data["voyage"]
+        stations = voyage["stations"]
+        station = args.get("station")
+        if station is None:
+            return {"stations": [{"id": s["id"], "name": s["name"]} for s in stations], "keys": list(voyage)}
+        return next((s for s in stations if s["id"] == station), {"error": f"No station {station!r} in this voyage"})
+
+    async def edit_journey(args):
+        binding = await db.fetchrow("SELECT linked_journey, is_home FROM rooms WHERE id=$1", room.id)
+        if not binding or not (binding["is_home"] or binding["linked_journey"] == args["slug"]):
+            return {"error": "This room can only change its linked journey."}
+        refusal = {"error": "Pass the message_id of the message in which a member of this room asked you for this change."}
+        raw_id = args.get("message_id")
+        if not isinstance(raw_id, str):
+            return refusal
+        try:
+            message_id = UUID(raw_id)
+        except ValueError:
+            return refusal
+        if str(message_id) != raw_id:
+            return refusal
+
+        actor = await db.fetchrow("""
+            WITH recent AS (
+                SELECT m.id, m.user_id FROM messages m JOIN threads t ON t.id=m.thread_id
+                WHERE t.room_id=$1 AND m.speaker_type='human' AND NOT m.is_deleted
+                ORDER BY m.created_at DESC, m.id DESC LIMIT 12
+            )
+            SELECT u.display_name, c.email FROM recent
+            JOIN users u ON u.id=recent.user_id
+            JOIN room_memberships rm ON rm.user_id=u.id AND rm.room_id=$1
+            JOIN user_credentials c ON c.user_id=u.id
+            WHERE recent.id=$2""", room.id, message_id)
+        if not actor or not (actor["display_name"] or "").strip() or not (actor["email"] or "").strip():
+            return refusal
+        try:
+            return await asyncio.to_thread(get_register().edit_document, args["slug"], args["document"],
+                                           args.get("ops"), args.get("text"), actor["display_name"], actor["email"],
+                                           extra_trailers=(f"Asked-In: {message_id}",))
+        except KeyError:
+            return {"error": "Unknown document"}
+        except (ValueError, CommitsDisabled, DirtyDocument) as exc:
+            return {"error": str(exc)}
 
     async def fit_window(args):
         return {"fit": get_register().fit_window(args["trip"])}
@@ -62,11 +136,14 @@ def build_tools(room, db):
                     name.replace("_", " "), timeout_s=timeout)
 
     string = {"type": "string"}
+    document_name = {"type": "string", "enum": ["voyage", "record", "dossier"]}
     proposal_properties = {key: string for key in ('candidate', 'url', 'claim', 'scope')}
     proposal_properties.update({key: {'type': ['string', 'null']} for key in PROPOSAL_FIELDS if key not in ('run_id', 'load_bearing')})
     proposal_properties['load_bearing'] = {'type': 'boolean'}
     return [
-        tool("read_register", "Read the public journey register, or a candidate dossier and its S-number evidence. Shared trips expose only Established and Undecided.", read_register, {"slug": string}),
+        tool("read_register", "Read the public register, or a journey and its evidence. For an entire editable candidate document, "
+             "supply slug and document and continue at next_start_char until null. Shared trips expose only Established and Undecided.",
+             read_register, {"slug": string, "document": document_name, "start_char": {"type": "integer", "minimum": 0}}),
         tool("fit_window", "Compare recorded candidate seasons with a shared trip's window; hypotheses remain hypotheses.", fit_window, {"trip": string}, ("trip",)),
         tool("where_is", "Read last observed ship/train positions by vehicle name or journey slug, with unknown fixes explicit.", where_is, {"name": string}, ("name",)),
         tool("propose_evidence", "Fetch a page and file a bounded claim for human Field confirmation. Use a 3–35 word phrase occurring in the extracted page. Never writes the repo.", propose_evidence, proposal_properties, ("candidate", "url", "claim", "scope"), 26),
@@ -74,4 +151,18 @@ def build_tools(room, db):
         tool("ride_status", "Read only this room's ride, broadcast fix and age, stops, lateness and history.", ride_status, {"ride": string}),
         tool("out_the_window", "Read sights within 2 km on this ride's leg, with guide text and links. These are model predictions, not observations. Omit km only while riding.", out_the_window,
              {"side": {"type": "string", "enum": ["left", "right", "both"]}, "km": {"type": "number"}}),
+        tool("read_voyage", "Read one river stop by station ID, or list the stops and the voyage's top-level keys.",
+             read_voyage, {"slug": string, "station": string}, ("slug",)),
+        tool("edit_journey", "Change the journey's voyage, record or dossier in the repository in the asking member's name. "
+             "Use only when a member's message addressed to you in this room asks for that specific change. "
+             "Pass that message's UUID in message_id. Keep every fact's S-number citations. "
+             "Status and review fields cannot be changed. Supply ops for voyage or record, or the whole markdown text for dossier.",
+             edit_journey, {"slug": string, "document": document_name, "message_id": {"type": "string", "format": "uuid"},
+                            "ops": {"type": "array", "maxItems": 200, "items": {"type": "object", "properties": {
+                                "op": {"type": "string", "enum": ["set", "remove", "move"]},
+                                "path": {"type": "string", "description": "Slash-separated keys, item IDs or positions, e.g. stations/aswan/kicker"},
+                                "value": {"description": "New JSON value for set"},
+                                "before": {"type": ["string", "null"], "description": "Move before this item, or null for the end"}},
+                                "required": ["op", "path"]}},
+                            "text": {"type": "string", "maxLength": 200_000}}, ("slug", "document", "message_id"), timeout=28),
     ]

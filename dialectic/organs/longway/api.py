@@ -1,10 +1,11 @@
 """Room-fenced Long Way projections, evidence proposals, consent ledger, and the public door for asking for a seat."""
+import asyncio
 import hashlib
 from datetime import date
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 from typing import Literal
 
 from api.auth.dependencies import get_current_user
@@ -12,7 +13,7 @@ from api.token_utils import extract_room_token
 from api.field import _authorize
 from api.home import _require_home_manager
 from api.rate_limit import _reject_if_limited
-from .register import get_register
+from .register import CommitsDisabled, DirtyDocument, UnknownCandidate, get_register
 from .fixes import overlay
 from .proposals import propose, list_proposals, chart_overlay
 from . import invites, questions as question_queue, scout as scout_runner
@@ -75,6 +76,56 @@ async def get_journey(room_id: UUID, slug: str, user=Depends(authorized)):
     result = journey(slug)
     live = await overlay({"vehicles": result["vehicles"]})
     return dict(result, vehicles=live["vehicles"])
+
+
+@router.get("/voyage/{slug}/page")
+def get_voyage_page(room_id: UUID, slug: str, response: Response, station: str | None = None, user=Depends(authorized)):
+    try:
+        html = get_register().voyage_page(slug, station)
+    except (UnknownCandidate, FileNotFoundError) as exc:
+        raise HTTPException(404, "Unknown journey") from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    response.headers["Cache-Control"] = "no-store"
+    return {"html": html}
+
+
+@router.get("/document/{slug}/{name}")
+def get_document(room_id: UUID, slug: str, name: str, user=Depends(authorized)):
+    register = get_register()
+    try:
+        document = register.document(slug, name)
+    except (UnknownCandidate, KeyError, FileNotFoundError) as exc:
+        raise HTTPException(404, "Unknown document") from exc
+    why = register.edit_disabled_reason()
+    return dict(document, writable=why is None, why=why)
+
+
+class DocumentEdit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    ops: list[dict] | None = Field(default=None, max_length=200)
+    text: str | None = Field(default=None, max_length=200_000)
+
+    @model_validator(mode="after")
+    def one_edit(self):
+        if (self.ops is None) == (self.text is None):
+            raise ValueError("Supply exactly one of ops or text")
+        return self
+
+
+@router.post("/document/{slug}/{name}")
+async def edit_document(room_id: UUID, slug: str, name: str, body: DocumentEdit, user=Depends(authorized), db=Depends(get_db)):
+    actor = await db.fetchrow("""SELECT u.display_name,c.email FROM users u
+        JOIN user_credentials c ON c.user_id=u.id WHERE u.id=$1""", user.user_id)
+    try:
+        return await asyncio.to_thread(get_register().edit_document, slug, name, body.ops, body.text,
+                                       actor["display_name"] if actor else None, actor["email"] if actor else None)
+    except (UnknownCandidate, KeyError, FileNotFoundError) as exc:
+        raise HTTPException(404, "Unknown document") from exc
+    except (CommitsDisabled, DirtyDocument) as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.get("/ride")

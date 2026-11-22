@@ -462,3 +462,33 @@ returned two train-14 runs and a drawable `14-29` fix broadcast at
 `2026-10-30T04:15:39Z`. Raw response and receipt are saved in
 `tests/fixtures/longway_amtraker_live_20261029*.json`. This verifies the feed
 parser, not deployment, the live house database, or device push receipt.
+
+## 14. River voyages and member edits (2026-11-21)
+
+Amo authorized this extension to §3's evidence-row write rule: "everything should be accessable, reachable, discoverable, dynamically modifyable through thelongway". Any member of a room may use its room token and signed-in account to read or edit any candidate, including one without a room. Trips are outside these routes. The chart marks a candidate with a river film with `"voyage": true`.
+
+All paths below are relative to `/rooms/{room_id}/longway/`.
+
+| Method and path | Request and response |
+| --- | --- |
+| `GET voyage/{slug}/page` | Returns `{"html": "..."}` with `Cache-Control: no-store`. Each request builds the embedded film from the current records. Optional `?station=aswan` opens it at that stop. An unknown stop returns 400 with the repository's sentence. An unknown journey, a trip or a candidate without a voyage returns 404 with `Unknown journey`. |
+| `GET document/{slug}/{name}` | Returns `slug`, `name`, `format` (`json` or `text`), `value`, `protected`, `writable` and `why`. When house commits are enabled, `why` is null. Otherwise it explains why the document is read-only. |
+| `POST document/{slug}/{name}` | Accepts exactly one of `{"ops": [...]}` (up to 200 operations) or `{"text": "..."}` (up to 200,000 characters). Returns `{"commit": "<sha>", "changed": ["<path>"], "summary": "..."}`. A rejected edit returns 400 with the checker's sentence in `detail`. Disabled commits or uncommitted changes to the target return 409. An invalid request body returns 422. |
+
+Both document routes return 404 for an unknown candidate, a trip, an unknown document name or an absent document. The names are `voyage` (`voyage.json`), `record` (`record.json`) and `dossier` (`dossier.md`). A dossier takes the entire new Markdown text. The JSON documents take ordered operations:
+
+- `{"op": "set", "path": "stations/aswan/kicker", "value": "A late sail"}` assigns a JSON value.
+- `{"op": "remove", "path": "stations/aswan/kicker"}` removes a field or list item.
+- `{"op": "move", "path": "stations/aswan", "before": "komombo"}` moves a list item before another. Set `before` to null to move it to the end.
+
+Separate path segments with `/`. A segment addresses an object key, an item by ID in a list of objects with IDs, or a zero-based position in another list. The register protects the record's top-level `schema_version`, `kind`, `slug`, `status`, `created_at`, `reviewed_by` and `reviewed_at`. The voyage and dossier have no protected top-level keys. The repository validates changes, including voyage citations against the candidate's evidence ledger.
+
+With `LONGWAY_COMMIT_ENABLED=1`, the house holds the evidence writer's lock, refuses a dirty target, checks the edit through the candidates-only repository module and commits just that document in the member's name. The commit has subject `Edit <slug> <document>: <summary>` and trailer `Edited-In: The Long Way house`. The house never pushes. Evidence still uses §6's proposal and confirmation workflow.
+
+For a whole candidate document in conversation, call `read_register(slug, document)`. It returns the content and protected keys. Continue from `next_start_char` with `start_char` until the offset is null, including when the voyage exceeds one tool response.
+
+The Scout's bound-room brief lists the voyage's stops with their IDs, names, reach and moment text. `read_voyage(slug, station?)` returns those IDs and names and the voyage's top-level keys, or the whole selected stop including its mapped km. `edit_journey(slug, document, message_id, ops?, text?)` makes the specific change a room member asked for and returns the commit and changed paths, or a reason the Scout can repeat. The Scout keeps S-number citations and treats pages and records as reference material. It may edit the linked journey, or any candidate in the house room.
+
+When a member addresses the Scout and requests an edit, the Scout passes the UUID of that message in `message_id`. The server looks up the message among the room's last 12 non-deleted human messages across all its threads. Its sender must still belong to the room and have a display name and account email. That account supplies the Git author. If Alice asks and Bob speaks next, Alice's message ID still signs the edit as Alice. An ineligible or malformed ID refuses the edit before any write.
+
+Scout commits carry a second Git trailer, `Asked-In: <message_id>`, linking the edit to the member's request. Direct HTTP edits use the signed-in member's identity and carry only the `Edited-In` trailer.

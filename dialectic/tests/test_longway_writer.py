@@ -102,3 +102,21 @@ async def test_scouted_writer_dates_scope_and_confirmer(db,house,client,longway_
     assert entry['scope']=='schedule; direction: outbound; passport: US; vehicle: Ogasawara Maru'
     errors,_=longway_repo.candidates.check(longway_repo.root)
     assert not errors,errors
+
+
+def test_document_commit_failure_restores_file_and_index(longway_repo, monkeypatch):
+    import subprocess
+    root = longway_repo.root
+    path = root / "candidates/ogasawara/dossier.md"
+    original, head = path.read_bytes(), git(root, "rev-parse", "HEAD")
+    (root / "other").write_text("someone else's staged work")
+    git(root, "add", "other")
+    hook = root / ".git/hooks/pre-commit"
+    hook.write_text("#!/bin/sh\nexit 1\n")
+    hook.chmod(0o755)
+    monkeypatch.setenv("LONGWAY_COMMIT_ENABLED", "1")
+    with pytest.raises(subprocess.CalledProcessError) as refused:
+        longway_repo.edit_document("ogasawara", "dossier", None, "Edited pull.", "Alice", "alice@example.org")
+    assert "commit" in refused.value.cmd
+    assert path.read_bytes() == original and git(root, "rev-parse", "HEAD") == head
+    assert git(root, "diff", "--cached", "--name-only") == "other"

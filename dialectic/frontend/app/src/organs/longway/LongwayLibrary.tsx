@@ -1,14 +1,17 @@
+import { VoyageActions } from './voyage/VoyageActions'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { useLongwayJourney } from '../../hooks/useLongwayJourney'
 
 export function LongwayLibrary({ roomId }: { roomId: string }) {
-  const { data, error, loading, unbound, refresh } = useLongwayJourney(roomId)
-  if (error) return <p role="alert">{error} <button onClick={refresh}>Retry journey</button></p>
+  const { data, error, loading, unbound, hasVoyage, refresh } = useLongwayJourney(roomId)
+  if (error && !data) return <p role="alert">{error} <button onClick={refresh}>Retry journey</button></p>
   if (unbound) return <p>This room is not yet linked to a journey.</p>
   if (loading || !data) return <p role="status">Loading journey…</p>
   return <div className="longway-library scene-body">
+    {error && <p role="alert" className="lw-alert">{error} <button onClick={refresh}>Retry journey</button></p>}
     {!/^#\s/.test(data.dossier.trimStart()) && <h2>{data.title}</h2>}
+    <div className="longway-actions"><VoyageActions key={data.slug} roomId={roomId} journey={{ slug: data.slug, title: data.title, voyage: hasVoyage }} library /></div>
     <section aria-label="Dossier" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(data.dossier, { async: false })) }} />
     <section aria-label="Evidence ledger"><h2>Evidence ledger</h2>{data.evidence.map(row => <article key={row.id} className={`longway-card${row.faded ? ' is-faded' : ''}`}>
       <h3>{row.id} · {row.claim}</h3><p>{row.status}{row.checked_at ? ` · checked ${new Date(`${row.checked_at}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}` : ''}</p>

@@ -8,5 +8,6 @@ export function useLongwayJourney(roomId: string | null) {
   const slug = chart.data?.room.linked_journey
   const journey = useLongwayResource<JourneyDetail>(roomId && slug ? longwayPath(roomId, `journey/${encodeURIComponent(slug)}`) : null)
   const refresh = () => { chart.refresh(); journey.refresh() }
-  return { ...journey, refresh, error: chart.error ?? journey.error, loading: chart.loading || journey.loading, unbound: Boolean(chart.data && !slug) }
+  const hasVoyage = chart.data?.journeys.some(item => item.slug === slug && item.voyage === true) ?? false
+  return { ...journey, hasVoyage, refresh, error: chart.error ?? journey.error, loading: chart.loading || journey.loading, unbound: Boolean(chart.data && !slug) }
 }

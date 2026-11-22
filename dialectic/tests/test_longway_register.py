@@ -149,3 +149,33 @@ def test_bound_room_knows_its_journey_and_never_provokes(longway_repo,monkeypatc
     assert "## This room" not in system(None)
     decision=InterjectionEngine(turn_threshold=4,semantic_novelty_threshold=0.7).decide([make_message("status")],semantic_novelty=0.85)
     assert decision.should_interject and decision.use_provoker is False
+
+
+@pytest.fixture
+def voyage_repo(longway_repo):
+    """Two synthetic stops and one synthetic citation on the real Nile geometry."""
+    root, module = longway_repo.root, longway_repo.module
+    folder = module.new_record(root, "candidate", "nile", "Fixture Nile")
+    shutil.copyfile(SOURCE / "templates/voyage.html", root / "templates/voyage.html")
+    shutil.copyfile(SOURCE / "candidates/nile/river.json", folder / "river.json")
+    stations = [
+        {"id": "aswan", "name": "Aswan", "path": "main", "lon": 32.89, "lat": 24.09,
+         "reach": "open", "kicker": "Original bank", "moment": {"text": "A sail rounds the bend.", "cite": ["S1"]}},
+        {"id": "luxor", "name": "Luxor", "path": "main", "lon": 32.64, "lat": 25.69,
+         "reach": "unknown", "moment": {"text": "Light on the water.", "cite": ["S1"]}},
+    ]
+    module.put_json(folder / "voyage.json", {"title": "Fixture Nile", "start": "aswan", "stations": stations})
+    (folder / "evidence.jsonl").write_text(json.dumps(dict(evidence(), id="S1", claim="Fixture observation")) + "\n")
+    git(root, "add", "candidates/nile", "templates/voyage.html")
+    git(root, "commit", "-qm", "Add synthetic voyage")
+    return longway_repo
+
+
+def test_journey_brief_selects_stops_only_for_a_voyage(voyage_repo):
+    from organs.longway.identity import journey_brief
+    brief = journey_brief("nile")
+    assert "aswan · Aswan · open · A sail rounds the bend." in brief
+    assert "luxor · Luxor · unknown · Light on the water." in brief
+    assert "edit_journey" in brief
+    other = journey_brief("ogasawara")
+    assert "Ocean crossing" in other and "Voyage stops" not in other and "edit_journey" not in other
