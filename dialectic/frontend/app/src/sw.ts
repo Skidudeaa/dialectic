@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { IDENTITY } from './organ'
+import { IDENTITY, ORGAN } from './organ'
 /**
  * Dialectic service worker.
  *
@@ -24,14 +24,20 @@ clientsClaim()
 cleanupOutdatedCaches()
 precacheAndRoute(self.__WB_MANIFEST)
 
-// The SPA fallback must never swallow API or WebSocket routes — nginx proxies
-// this whole set to the backend on the same origin. Keep in step with the dev
-// proxy list in vite.config.ts.
-registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html'), {
-  denylist: [
-    /^\/(api|ws|auth|rooms|threads|users|health|analytics|graph|replay|stakes|messages|memories|notifications|openapi)\b/,
-  ],
-}))
+// The SPA fallback must never swallow API, WebSocket, or (in The Long Way)
+// top-level public voyage paths like /nile. The house SPA uses only / and
+// query parameters (workspaceRoute.ts), so allowlisting /^\/$/ lets every
+// public voyage reach nginx and FastAPI even after the PWA is installed.
+registerRoute(new NavigationRoute(
+  createHandlerBoundToURL('index.html'),
+  ORGAN === 'longway'
+    ? { allowlist: [/^\/$/] }
+    : {
+        denylist: [
+          /^\/(api|ws|auth|rooms|threads|users|health|analytics|graph|replay|stakes|messages|memories|notifications|openapi)\b/,
+        ],
+      },
+))
 
 registerRoute(
   ({ url }) => url.origin === 'https://fonts.googleapis.com',

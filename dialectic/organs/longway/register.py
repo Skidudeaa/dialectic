@@ -153,9 +153,30 @@ class Register:
         self.candidate(slug)
         return self.candidates.voyage_data(self.root, slug)
 
+    def _voyage_candidate(self, slug):
+        self.candidate(slug)
+        if not self.local(f"candidates/{slug}/voyage.json").is_file():
+            raise UnknownCandidate(f"No voyage for candidate: {slug}")
+        return slug
+
     def voyage_page(self, slug, station=None, preview=None):
         self.candidate(slug)
         return self.candidates.voyage_page(self.root, slug, station=station, embed=True, preview=preview)
+
+    def public_voyage_page(self, slug, station=None, note_api=None):
+        self._voyage_candidate(slug)
+        return self.candidates.voyage_page(self.root, slug, station=station, embed=False, note_api=note_api)
+
+    def add_public_note(self, slug, kind, by, text, place=None, about=None):
+        self._voyage_candidate(slug)
+        clean_by = " ".join(re.sub(r"[\r\n<>\0]+", " ", str(by or "")).split())
+        if not clean_by or len(clean_by) > 60:
+            raise ValueError("Add your name (up to 60 characters).")
+        return self.add_note(
+            slug, kind, text, place, about,
+            clean_by, "friend@thelongway.world",
+            extra_trailers=("Via: Public voyage page",),
+        )
 
     def notebook(self, slug):
         self.candidate(slug)

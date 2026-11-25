@@ -147,4 +147,14 @@ describe('notification message destinations', () => {
     await click({ room_id: 'legacy room' })
     expect(openWindow).toHaveBeenCalledWith('/?room=legacy+room')
   })
+
+  it('restricts longway SPA navigation fallback to root so public voyages like /nile bypass the SW', async () => {
+    const { NavigationRoute } = await import('workbox-routing')
+    vi.mocked(NavigationRoute).mockClear()
+    vi.stubEnv('VITE_ORGAN', 'longway')
+    vi.resetModules()
+    await import('./sw')
+    expect(NavigationRoute).toHaveBeenCalledWith(expect.any(Function), { allowlist: [/^\/$/] })
+    vi.unstubAllEnvs()
+  })
 })

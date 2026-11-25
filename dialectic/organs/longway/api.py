@@ -5,6 +5,7 @@ from datetime import date
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 from typing import Literal
 
@@ -505,3 +506,45 @@ async def ask_for_seat(request: Request, body: Ask, db=Depends(get_db)):
     row = await invites.ask(db, body.email.lower(), name, body.note.strip(), _asker_ip(request))
     await invites.announce(db, row)
     return {'ok': True}
+
+
+class PublicNotebookNote(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["place", "thought"]
+    by: str = Field(min_length=1, max_length=60)
+    text: str = Field(min_length=1, max_length=2000)
+    place: str | None = Field(default=None, max_length=120)
+    about: str | None = Field(default=None, max_length=120)
+    website: str = Field(default="", max_length=200)
+
+
+@public.api_route("/voyage/{slug}", methods=["GET", "HEAD"], response_class=HTMLResponse)
+async def public_voyage(slug: str, station: str | None = None):
+    """Public voyage page for any candidate with a voyage.json; never trips, rides or private data."""
+    register = get_register()
+    note_api = None if register.edit_disabled_reason() else f"/organ/longway/voyage/{slug}/notebook"
+    html = await notebook_call(register.public_voyage_page, slug, station, note_api)
+    return HTMLResponse(
+        html,
+        headers={
+            "Cache-Control": "no-store",
+            "X-Robots-Tag": "noindex, nofollow",
+            "Referrer-Policy": "no-referrer",
+        },
+    )
+
+
+@public.post("/voyage/{slug}/notebook")
+async def add_public_note(request: Request, slug: str, body: PublicNotebookNote):
+    """A friend drops a place or thought on a public voyage without signing in.
+
+    Places wait in open state for the Scout to research and a house manager to review.
+    """
+    if body.website.strip():
+        return {"ok": True, "note": None}
+    _reject_if_limited(f"ip:{_asker_ip(request)}:longway-public-note", 20, 86400)
+    saved = await notebook_call(
+        get_register().add_public_note,
+        slug, body.kind, body.by, body.text, body.place, body.about,
+    )
+    return {"ok": True, "note": saved["note"]}
