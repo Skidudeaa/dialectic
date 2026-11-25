@@ -1,4 +1,4 @@
-"""Public voyage page and no-sign-in friend notebook endpoint on /organ/longway/voyage/{slug}."""
+"""Passphrase-gated public voyage page and no-sign-in friend notebook on /organ/longway/voyage/{slug}."""
 import httpx
 import pytest
 import pytest_asyncio
@@ -13,21 +13,65 @@ from tests.test_longway_register import git, longway_repo, voyage_repo  # noqa: 
 async def public_client(voyage_repo, monkeypatch):  # noqa: F811
     rate_limiter._requests.clear()
     monkeypatch.setenv("LONGWAY_COMMIT_ENABLED", "1")
+    monkeypatch.setenv("LONGWAY_VOYAGE_PASSPHRASE", "testpass")
     app = FastAPI()
     app.include_router(api.public)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         yield client, voyage_repo
 
 
+async def unlock(client, slug="nile", passphrase="  TestPass  ", ip="203.0.113.41"):
+    return await client.post(
+        f"/organ/longway/voyage/{slug}/unlock",
+        json={"passphrase": passphrase},
+        headers={"CF-Connecting-IP": ip},
+    )
+
+
 @pytest.mark.asyncio
-async def test_public_voyage_serves_live_html_and_refuses_non_voyages(public_client, monkeypatch):
+async def test_public_voyage_gates_behind_passphrase_then_serves_live_html(public_client, monkeypatch):
     client, repo = public_client
+
+    # Locked request returns the passphrase gate with zero voyage data or noteApi.
+    locked = await client.get("/organ/longway/voyage/nile")
+    assert locked.status_code == 200
+    assert locked.headers["content-type"].startswith("text/html")
+    assert locked.headers["cache-control"] == "private, no-store"
+    assert locked.headers["x-robots-tag"] == "noindex, nofollow"
+    assert locked.headers["referrer-policy"] == "no-referrer"
+    assert "Enter passphrase" in locked.text
+    assert '"noteApi":' not in locked.text
+    assert "A sail rounds the bend." not in locked.text
+
+    # Trips, candidates without voyage.json, and missing slugs still 404 (never show a gate).
+    for slug in ("friends-2027", "banda-islands", "missing", "bad_slug"):
+        assert (await client.get(f"/organ/longway/voyage/{slug}")).status_code == 404
+        assert (await unlock(client, slug=slug)).status_code == 404
+
+    # Posting a note before unlocking is refused with 401.
+    unauth = await client.post(
+        "/organ/longway/voyage/nile/notebook",
+        json={"kind": "thought", "by": "Sam", "text": "Blocked"},
+        headers={"CF-Connecting-IP": "203.0.113.41"},
+    )
+    assert unauth.status_code == 401
+
+    # Wrong passphrase returns 403 and sets no cookie; forged cookie is ignored.
+    wrong = await unlock(client, passphrase="nope")
+    assert wrong.status_code == 403
+    assert api.VOYAGE_PASS_COOKIE not in client.cookies
+    client.cookies.set(api.VOYAGE_PASS_COOKIE, "v1.9999999999.deadbeef")
+    assert "Enter passphrase" in (await client.get("/organ/longway/voyage/nile")).text
+    client.cookies.clear()
+
+    # Correct passphrase (case- and whitespace-insensitive) sets HttpOnly cookie and unlocks.
+    ok = await unlock(client, passphrase="  TestPass  ")
+    assert ok.status_code == 200 and ok.json() == {"ok": True}
+    assert api.VOYAGE_PASS_COOKIE in client.cookies
+
     res = await client.get("/organ/longway/voyage/nile")
     assert res.status_code == 200
-    assert res.headers["content-type"].startswith("text/html")
-    assert res.headers["cache-control"] == "no-store"
-    assert res.headers["x-robots-tag"] == "noindex, nofollow"
-    assert res.headers["referrer-policy"] == "no-referrer"
+    assert "A sail rounds the bend." in res.text
     assert '"noteApi": "/organ/longway/voyage/nile/notebook"' in res.text
     assert '<meta property="og:title" content="Fixture Nile — The Long Way">' in res.text
     assert '<meta property="og:description"' in res.text
@@ -40,14 +84,14 @@ async def test_public_voyage_serves_live_html_and_refuses_non_voyages(public_cli
     assert stop_res.status_code == 200
     assert '"station": "aswan"' in stop_res.text
 
-    bad_stop = await client.get("/organ/longway/voyage/nile?station=atlantis")
-    assert bad_stop.status_code == 400
+    assert (await client.get("/organ/longway/voyage/nile?station=atlantis")).status_code == 400
 
-    # Trips, candidates without voyage.json, and missing slugs must 404.
-    for slug in ("friends-2027", "banda-islands", "missing", "bad_slug"):
-        assert (await client.get(f"/organ/longway/voyage/{slug}")).status_code == 404
+    # Rotating the passphrase invalidates old cookies immediately.
+    monkeypatch.setenv("LONGWAY_VOYAGE_PASSPHRASE", "rotated")
+    assert "Enter passphrase" in (await client.get("/organ/longway/voyage/nile")).text
+    monkeypatch.setenv("LONGWAY_VOYAGE_PASSPHRASE", "testpass")
 
-    # When commits are off, the page still opens read-only without exposing noteApi.
+    # When commits are off, the unlocked page still opens read-only without exposing noteApi.
     monkeypatch.setenv("LONGWAY_COMMIT_ENABLED", "0")
     readonly = await client.get("/organ/longway/voyage/nile")
     assert readonly.status_code == 200
@@ -56,10 +100,21 @@ async def test_public_voyage_serves_live_html_and_refuses_non_voyages(public_cli
 
 
 @pytest.mark.asyncio
+async def test_unlock_rate_limits_brute_force(public_client):
+    client, _ = public_client
+    ip = "198.51.100.55"
+    for _ in range(15):
+        assert (await unlock(client, passphrase="wrong", ip=ip)).status_code == 403
+    assert (await unlock(client, passphrase="testpass", ip=ip)).status_code == 429
+
+
+@pytest.mark.asyncio
 async def test_public_notebook_commits_friend_notes_and_guards_writes(public_client, monkeypatch):
     client, repo = public_client
     root = repo.root
     head = git(root, "rev-parse", "HEAD")
+
+    assert (await unlock(client)).status_code == 200
 
     # Add a place with just a name (no sign-in).
     res = await client.post(
@@ -156,3 +211,21 @@ async def test_public_notebook_commits_friend_notes_and_guards_writes(public_cli
         headers={"CF-Connecting-IP": ip},
     )
     assert limited.status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_a_house_with_no_passphrase_in_its_environment_opens_for_nobody(public_client, monkeypatch):
+    client, _ = public_client
+    assert (await unlock(client)).status_code == 200
+    assert "A sail rounds the bend." in (await client.get("/organ/longway/voyage/nile")).text
+    monkeypatch.delenv("LONGWAY_VOYAGE_PASSPHRASE")
+    monkeypatch.delenv("LONGWAY_VOYAGE_PASSPHRASE_HASH", raising=False)
+    # No verifier is kept in the code, so with nothing set no passphrase and no earlier cookie opens the door.
+    for guess in ("testpass", "anything"):
+        refused = await unlock(client, passphrase=guess, ip="203.0.113.77")
+        assert refused.status_code == 503 and "No passphrase is set" in refused.json()["detail"]
+    locked = await client.get("/organ/longway/voyage/nile")
+    assert "Enter passphrase" in locked.text and "A sail rounds the bend." not in locked.text
+    note = await client.post("/organ/longway/voyage/nile/notebook", json={"kind": "thought", "by": "Sam", "text": "Blocked"},
+                             headers={"CF-Connecting-IP": "203.0.113.77"})
+    assert note.status_code == 401

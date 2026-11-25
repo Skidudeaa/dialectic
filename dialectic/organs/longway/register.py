@@ -163,6 +163,11 @@ class Register:
         self.candidate(slug)
         return self.candidates.voyage_page(self.root, slug, station=station, embed=True, preview=preview)
 
+    def public_voyage_meta(self, slug):
+        self._voyage_candidate(slug)
+        voyage = self.candidates.obj(self.local(f"candidates/{slug}/voyage.json"))
+        return {"slug": slug, "title": voyage.get("title") or slug.title(), "subtitle": voyage.get("subtitle") or ""}
+
     def public_voyage_page(self, slug, station=None, note_api=None):
         self._voyage_candidate(slug)
         return self.candidates.voyage_page(self.root, slug, station=station, embed=False, note_api=note_api)

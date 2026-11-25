@@ -1,6 +1,10 @@
 """Room-fenced Long Way projections, evidence proposals, consent ledger, and the public door for asking for a seat."""
 import asyncio
 import hashlib
+import hmac
+import html as html_mod
+import os
+import time
 from datetime import date
 from uuid import UUID, uuid4
 
@@ -508,6 +512,199 @@ async def ask_for_seat(request: Request, body: Ask, db=Depends(get_db)):
     return {'ok': True}
 
 
+VOYAGE_PASS_COOKIE = "longway_voyage_pass"
+VOYAGE_PASS_TTL = 90 * 86400
+# The passphrase lives only in the house's environment (LONGWAY_VOYAGE_PASSPHRASE). Nothing derived from it is kept
+# in git: this repository is public, and a fast hash of a short passphrase gives the passphrase away to a word list.
+_PUBLIC_VOYAGE_HEADERS = {
+    "Cache-Control": "private, no-store",
+    "X-Robots-Tag": "noindex, nofollow",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+def _passphrase_hash(value: str) -> str:
+    normalized = " ".join(str(value or "").strip().lower().split())
+    return hashlib.sha256(f"longway-voyage-pass:{normalized}".encode("utf-8")).hexdigest()
+
+
+def _active_passphrase_hash() -> str | None:
+    """The gate's passphrase as its hash, read from the environment. None when the house has none set: the gate
+    then opens for nobody."""
+    override = os.environ.get("LONGWAY_VOYAGE_PASSPHRASE")
+    if override and override.strip():
+        return _passphrase_hash(override)
+    return os.environ.get("LONGWAY_VOYAGE_PASSPHRASE_HASH") or None
+
+
+def _cookie_secret() -> bytes:
+    server_secret = os.environ.get("JWT_SECRET_KEY") or "longway-local"
+    return hashlib.sha256(f"longway-voyage-cookie:{_active_passphrase_hash()}:{server_secret}".encode("utf-8")).digest()
+
+
+def _issue_pass_cookie() -> str:
+    exp = int(time.time()) + VOYAGE_PASS_TTL
+    payload = f"v1.{exp}"
+    sig = hmac.new(_cookie_secret(), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{payload}.{sig}"
+
+
+def _has_valid_pass(request: Request) -> bool:
+    if _active_passphrase_hash() is None:
+        return False
+    raw = request.cookies.get(VOYAGE_PASS_COOKIE) or ""
+    parts = raw.split(".")
+    if len(parts) != 3:
+        return False
+    ver, exp_s, sig = parts
+    if ver != "v1" or not exp_s.isdigit() or int(exp_s) <= int(time.time()):
+        return False
+    expected = hmac.new(_cookie_secret(), f"{ver}.{exp_s}".encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(sig, expected)
+
+
+def _gate_html(slug: str, title: str, subtitle: str) -> str:
+    esc_title = html_mod.escape(title, quote=True)
+    esc_sub = html_mod.escape(subtitle or "Private voyage", quote=True)
+    esc_slug = html_mod.escape(slug, quote=True)
+    page_title = html_mod.escape(f"{title} — The Long Way", quote=True)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070c0c">
+<title>{page_title}</title>
+<meta name="description" content="{esc_sub}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{page_title}">
+<meta property="og:description" content="{esc_sub}">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=Libre+Caslon+Display&family=Libre+Caslon+Text:ital,wght@0,400;1,400&display=swap">
+<style>
+:root {{
+  color-scheme: dark;
+  --bg: #070c0c;
+  --surface: rgba(13, 21, 21, 0.9);
+  --ink: #f6f1e4;
+  --ink-soft: #d7d4c8;
+  --muted: #9ea9a1;
+  --rule: rgba(232, 196, 116, 0.24);
+  --rule-soft: rgba(246, 241, 228, 0.14);
+  --gold: #e8c474;
+  --gold-bright: #f5da94;
+  --display: "Libre Caslon Display", Georgia, serif;
+  --body: "Libre Caslon Text", Georgia, serif;
+  --ui: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+}}
+* {{ box-sizing: border-box; }}
+html, body {{ margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--body); -webkit-font-smoothing: antialiased; }}
+body {{
+  min-height: 100dvh; display: grid; place-items: center; padding: 1.5rem;
+  background: radial-gradient(circle at 60% 34%, #111c21 0%, #070c0d 58%, #040708 100%);
+}}
+main {{
+  width: min(26rem, 100%); padding: 2.2rem 2rem 2rem; border-radius: 16px;
+  background: var(--surface); border: 1px solid var(--rule);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.65); backdrop-filter: blur(18px);
+}}
+.brand {{
+  margin: 0 0 0.7rem; font: 600 0.72rem/1 var(--ui); letter-spacing: 0.22em;
+  text-transform: uppercase; color: var(--gold);
+}}
+h1 {{
+  margin: 0; font: 400 clamp(2.5rem, 9vw, 3.4rem)/0.98 var(--display);
+  letter-spacing: -0.04em; color: var(--ink);
+}}
+.sub {{
+  margin: 0.55rem 0 1.6rem; font: italic 1.02rem/1.38 var(--body); color: var(--ink-soft);
+}}
+form {{ display: flex; flex-direction: column; gap: 0.85rem; }}
+label {{
+  display: block; font: 600 0.7rem/1.2 var(--ui); letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 0.35rem;
+}}
+input {{
+  width: 100%; padding: 0.72rem 0.85rem; border-radius: 10px;
+  background: rgba(246, 241, 228, 0.06); border: 1px solid var(--rule-soft);
+  color: var(--ink); font: 400 16px/1.35 var(--body);
+  transition: border-color 0.2s, background-color 0.2s;
+}}
+input:focus {{ outline: none; border-color: var(--gold); background: rgba(246, 241, 228, 0.09); }}
+button {{
+  appearance: none; border: 1px solid var(--gold); background: var(--gold); color: #16140d;
+  border-radius: 999px; padding: 0.78rem 1.4rem; cursor: pointer;
+  font: 600 0.92rem/1.1 var(--ui); letter-spacing: 0.1em; text-transform: uppercase;
+  transition: background-color 0.2s, transform 0.2s, opacity 0.2s;
+}}
+button:hover {{ background: var(--gold-bright); transform: translateY(-1px); }}
+button:disabled {{ opacity: 0.45; cursor: default; transform: none; }}
+.err {{
+  margin: 0; font: 500 0.86rem/1.35 var(--ui); color: #ea9c87;
+  padding: 0.55rem 0.75rem; border-radius: 8px;
+  background: rgba(214, 122, 99, 0.12); border: 1px solid rgba(214, 122, 99, 0.38);
+}}
+.hint {{ margin: 0.25rem 0 0; font: 400 0.78rem/1.4 var(--ui); color: var(--muted); }}
+</style>
+</head>
+<body>
+<main>
+  <p class="brand">The Long Way</p>
+  <h1>{esc_title}</h1>
+  <p class="sub">{esc_sub}</p>
+  <form id="gateForm" novalidate>
+    <div>
+      <label for="pass">Passphrase</label>
+      <input id="pass" name="passphrase" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Enter passphrase" autofocus required>
+    </div>
+    <p id="err" class="err" role="alert" hidden></p>
+    <button id="go" type="submit">Enter &#8594;</button>
+    <p class="hint">No account needed. Once unlocked, this browser remembers it.</p>
+  </form>
+</main>
+<script>
+"use strict";
+const form = document.getElementById("gateForm");
+const input = document.getElementById("pass");
+const err = document.getElementById("err");
+const btn = document.getElementById("go");
+form.addEventListener("submit", async (e) => {{
+  e.preventDefault();
+  const passphrase = input.value.trim();
+  if (!passphrase) {{ err.textContent = "Enter the passphrase."; err.hidden = false; input.focus(); return; }}
+  btn.disabled = true;
+  err.hidden = true;
+  try {{
+    const res = await fetch("/organ/longway/voyage/{esc_slug}/unlock", {{
+      method: "POST",
+      headers: {{"Content-Type": "application/json"}},
+      body: JSON.stringify({{passphrase}}),
+    }});
+    const body = await res.json().catch(() => ({{}}));
+    if (!res.ok) {{
+      err.textContent = typeof body.detail === "string" ? body.detail : "Could not unlock right now.";
+      err.hidden = false;
+      input.select();
+      return;
+    }}
+    location.reload();
+  }} catch {{
+    err.textContent = "Could not reach the server. Try again.";
+    err.hidden = false;
+  }} finally {{
+    btn.disabled = false;
+  }}
+}});
+</script>
+</body>
+</html>
+"""
+
+
+class VoyageUnlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    passphrase: str = Field(min_length=1, max_length=120)
+
+
 class PublicNotebookNote(BaseModel):
     model_config = ConfigDict(extra="forbid")
     kind: Literal["place", "thought"]
@@ -519,27 +716,48 @@ class PublicNotebookNote(BaseModel):
 
 
 @public.api_route("/voyage/{slug}", methods=["GET", "HEAD"], response_class=HTMLResponse)
-async def public_voyage(slug: str, station: str | None = None):
-    """Public voyage page for any candidate with a voyage.json; never trips, rides or private data."""
+async def public_voyage(request: Request, slug: str, station: str | None = None):
+    """Passphrase-gated voyage page for candidates with voyage.json; never trips, rides or private data."""
     register = get_register()
+    meta = await notebook_call(register.public_voyage_meta, slug)
+    if not _has_valid_pass(request):
+        return HTMLResponse(_gate_html(slug, meta["title"], meta["subtitle"]), headers=_PUBLIC_VOYAGE_HEADERS)
     note_api = None if register.edit_disabled_reason() else f"/organ/longway/voyage/{slug}/notebook"
     html = await notebook_call(register.public_voyage_page, slug, station, note_api)
-    return HTMLResponse(
-        html,
-        headers={
-            "Cache-Control": "no-store",
-            "X-Robots-Tag": "noindex, nofollow",
-            "Referrer-Policy": "no-referrer",
-        },
+    return HTMLResponse(html, headers=_PUBLIC_VOYAGE_HEADERS)
+
+
+@public.post("/voyage/{slug}/unlock")
+async def unlock_public_voyage(request: Request, response: Response, slug: str, body: VoyageUnlock):
+    """Verify the short shared voyage passphrase and issue a 90-day signed HttpOnly cookie."""
+    await notebook_call(get_register().public_voyage_meta, slug)
+    _reject_if_limited(f"ip:{_asker_ip(request)}:longway-voyage-unlock", 15, 900)
+    active = _active_passphrase_hash()
+    if active is None:
+        raise HTTPException(503, "No passphrase is set on this house yet.")
+    if not hmac.compare_digest(_passphrase_hash(body.passphrase), active):
+        raise HTTPException(403, "That's not it — try again.")
+    is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    response.set_cookie(
+        key=VOYAGE_PASS_COOKIE,
+        value=_issue_pass_cookie(),
+        max_age=VOYAGE_PASS_TTL,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=is_https,
     )
+    return {"ok": True}
 
 
 @public.post("/voyage/{slug}/notebook")
 async def add_public_note(request: Request, slug: str, body: PublicNotebookNote):
-    """A friend drops a place or thought on a public voyage without signing in.
+    """A friend drops a place or thought on an unlocked voyage without signing in.
 
     Places wait in open state for the Scout to research and a house manager to review.
     """
+    if not _has_valid_pass(request):
+        raise HTTPException(401, "Enter the voyage passphrase first.")
     if body.website.strip():
         return {"ok": True, "note": None}
     _reject_if_limited(f"ip:{_asker_ip(request)}:longway-public-note", 20, 86400)
