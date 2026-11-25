@@ -109,6 +109,55 @@ async def test_unlock_rate_limits_brute_force(public_client):
 
 
 @pytest.mark.asyncio
+async def test_public_globe_shares_passphrase_cookie_and_omits_trips(public_client):
+    client, repo = public_client
+    # Copy templates/globe.html and land-50m.json into the synthetic repo so globe_page renders live.
+    import shutil
+    from pathlib import Path
+    src = Path("/root/theLongWay/templates")
+    for name in ("globe.html", "land-50m.json"):
+        shutil.copyfile(src / name, repo.root / "templates" / name)
+
+    locked = await client.get("/organ/longway/globe")
+    assert locked.status_code == 200
+    assert locked.headers["cache-control"] == "private, no-store"
+    assert locked.headers["x-robots-tag"] == "noindex, nofollow"
+    assert "Enter passphrase" in locked.text
+    assert "Not danger tourism" in locked.text
+    assert "const DATA =" not in locked.text
+
+    # Wrong passphrase refused.
+    bad = await client.post(
+        "/organ/longway/globe/unlock",
+        json={"passphrase": "nope"},
+        headers={"CF-Connecting-IP": "203.0.113.88"},
+    )
+    assert bad.status_code == 403
+
+    # Unlocking via /globe/unlock opens BOTH /globe and /voyage/nile with the same cookie.
+    ok = await client.post(
+        "/organ/longway/globe/unlock",
+        json={"passphrase": "testpass"},
+        headers={"CF-Connecting-IP": "203.0.113.88"},
+    )
+    assert ok.status_code == 200 and ok.json() == {"ok": True}
+
+    globe = await client.get("/organ/longway/globe")
+    assert globe.status_code == 200
+    assert "const DATA =" in globe.text
+    assert "Not danger tourism" in globe.text
+    assert "Fixture Nile" in globe.text
+    assert "friends-2027" not in globe.text  # trips never appear on the globe
+
+    head_globe = await client.head("/organ/longway/globe")
+    assert head_globe.status_code == 200
+
+    # Same cookie immediately opens /voyage/nile without re-entering the passphrase.
+    nile = await client.get("/organ/longway/voyage/nile")
+    assert nile.status_code == 200 and "A sail rounds the bend." in nile.text
+
+
+@pytest.mark.asyncio
 async def test_public_notebook_commits_friend_notes_and_guards_writes(public_client, monkeypatch):
     client, repo = public_client
     root = repo.root
@@ -224,6 +273,10 @@ async def test_a_house_with_no_passphrase_in_its_environment_opens_for_nobody(pu
     for guess in ("testpass", "anything"):
         refused = await unlock(client, passphrase=guess, ip="203.0.113.77")
         assert refused.status_code == 503 and "No passphrase is set" in refused.json()["detail"]
+    globe = await client.post("/organ/longway/globe/unlock", json={"passphrase": "testpass"},
+                              headers={"CF-Connecting-IP": "203.0.113.78"})
+    assert globe.status_code == 503
+    assert "Enter passphrase" in (await client.get("/organ/longway/globe")).text
     locked = await client.get("/organ/longway/voyage/nile")
     assert "Enter passphrase" in locked.text and "A sail rounds the bend." not in locked.text
     note = await client.post("/organ/longway/voyage/nile/notebook", json={"kind": "thought", "by": "Sam", "text": "Blocked"},

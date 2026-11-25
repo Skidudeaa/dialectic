@@ -80,6 +80,15 @@ describe('The Long Way seat request door', () => {
     expect(screen.getByRole('button', { name: 'Asking...' })).toBeDisabled()
   })
 
+  it('shows the plain pitch and passphrase-only links to the globe and Nile voyage', async () => {
+    render(<AuthScreen />)
+    await screen.findByRole('tab', { name: 'Ask for a seat' })
+    expect(screen.getByText('Do we actually want to live through this, or just tell a story about it?')).toBeVisible()
+    expect(screen.getByTestId('auth-premise')).toHaveTextContent('Not danger tourism, not a resort itinerary, not a brochure.')
+    expect(screen.getByRole('link', { name: /Explore the globe/i })).toHaveAttribute('href', '/globe')
+    expect(screen.getByRole('link', { name: /The Nile voyage/i })).toHaveAttribute('href', '/nile')
+  })
+
   it('retains account creation when signups are enabled', async () => {
     vi.mocked(api.getCapabilities).mockResolvedValue({ signups_enabled: true, guest_access_enabled: false })
     render(<AuthScreen />)

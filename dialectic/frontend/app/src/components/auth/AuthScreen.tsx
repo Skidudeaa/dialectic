@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from '../../stores/appStore.ts';
 import { api } from '../../lib/api.ts';
 import { PARTICIPANT_NAME, PRODUCT_NAME } from '../../lib/productIdentity.ts';
-import { IDENTITY, ORGAN } from '../../organ';
+import { ORGAN } from '../../organ';
 import { askForSeat } from '../../organs/longway/api';
 import './AuthScreen.css';
 
@@ -229,18 +229,26 @@ export function AuthScreen() {
     <div className="auth-screen">
       <div className="auth-card">
         {ORGAN === 'longway' ? <>
-          {/* The Long Way's front door speaks to a friend or a stranger, not to a case officer: no dossier stamps,
-              and the premise is the house's own (a globe, a room per journey, a Scout whose findings wait for a person). */}
+          {/* Plain, zero-cringe statement of what The Long Way is, plus direct passphrase-only doors
+              to the globe and Nile voyage so friends do not have to create an account just to browse. */}
           <div className="auth-header">
             <h1 className="auth-logo">{PRODUCT_NAME}</h1>
-            <p className="auth-subtitle">{IDENTITY.lede}</p>
+            <p className="auth-subtitle">Do we actually want to live through this, or just tell a story about it?</p>
           </div>
           <div className="auth-premise" data-testid="auth-premise">
             <p>
-              A private house where a few friends look into long journeys together: a globe of possible routes,
-              a room for each journey, and {PARTICIPANT_NAME}, who reads the sources and brings back what they say.
-              Nothing counts as checked until one of you confirms it.
+              Real trips outside the US with close friends—mostly by working boat, river, or rail—to places
+              with their own priorities instead of ones performing for tourists. Not danger tourism, not a
+              resort itinerary, not a brochure. Good hotels when they help, public ferries when they’re the
+              point, room for detours, and a good meal at the end of the day.
             </p>
+          </div>
+          <div className="auth-explore" data-testid="auth-explore">
+            <div className="auth-explore-links">
+              <a className="auth-explore-link auth-explore-link--primary" href="/globe">Explore the globe &#8594;</a>
+              <a className="auth-explore-link" href="/nile">The Nile voyage &#8594;</a>
+            </div>
+            <p className="auth-explore-hint">Passphrase only — no account needed. Sign in below for the house.</p>
           </div>
         </> : <>
         <div className="auth-stamp-row" aria-hidden="true">

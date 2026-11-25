@@ -563,11 +563,14 @@ def _has_valid_pass(request: Request) -> bool:
     return hmac.compare_digest(sig, expected)
 
 
-def _gate_html(slug: str, title: str, subtitle: str) -> str:
+def _gate_html(unlock_url: str, title: str, subtitle: str, pitch: str | None = None, kicker: str = "The Long Way") -> str:
     esc_title = html_mod.escape(title, quote=True)
+    esc_kicker = html_mod.escape(kicker, quote=True)
     esc_sub = html_mod.escape(subtitle or "Private voyage", quote=True)
-    esc_slug = html_mod.escape(slug, quote=True)
-    page_title = html_mod.escape(f"{title} — The Long Way", quote=True)
+    esc_unlock = html_mod.escape(unlock_url, quote=True)
+    page_title = html_mod.escape(title if title == "The Long Way" else f"{title} — The Long Way", quote=True)
+    pitch_html = f'<p class="pitch">{html_mod.escape(pitch)}</p>' if pitch else ""
+    og_desc = html_mod.escape(pitch or subtitle or "Private voyage", quote=True)
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -575,10 +578,10 @@ def _gate_html(slug: str, title: str, subtitle: str) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#070c0c">
 <title>{page_title}</title>
-<meta name="description" content="{esc_sub}">
+<meta name="description" content="{og_desc}">
 <meta property="og:type" content="website">
 <meta property="og:title" content="{page_title}">
-<meta property="og:description" content="{esc_sub}">
+<meta property="og:description" content="{og_desc}">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=Libre+Caslon+Display&family=Libre+Caslon+Text:ital,wght@0,400;1,400&display=swap">
 <style>
 :root {{
@@ -603,7 +606,7 @@ body {{
   background: radial-gradient(circle at 60% 34%, #111c21 0%, #070c0d 58%, #040708 100%);
 }}
 main {{
-  width: min(26rem, 100%); padding: 2.2rem 2rem 2rem; border-radius: 16px;
+  width: min(28rem, 100%); padding: 2.2rem 2rem 2rem; border-radius: 16px;
   background: var(--surface); border: 1px solid var(--rule);
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.65); backdrop-filter: blur(18px);
 }}
@@ -616,7 +619,10 @@ h1 {{
   letter-spacing: -0.04em; color: var(--ink);
 }}
 .sub {{
-  margin: 0.55rem 0 1.6rem; font: italic 1.02rem/1.38 var(--body); color: var(--ink-soft);
+  margin: 0.55rem 0 1.2rem; font: italic 1.02rem/1.38 var(--body); color: var(--ink-soft);
+}}
+.pitch {{
+  margin: 0 0 1.5rem; font: 400 0.92rem/1.55 var(--body); color: var(--muted);
 }}
 form {{ display: flex; flex-direction: column; gap: 0.85rem; }}
 label {{
@@ -648,9 +654,10 @@ button:disabled {{ opacity: 0.45; cursor: default; transform: none; }}
 </head>
 <body>
 <main>
-  <p class="brand">The Long Way</p>
+  <p class="brand">{esc_kicker}</p>
   <h1>{esc_title}</h1>
   <p class="sub">{esc_sub}</p>
+  {pitch_html}
   <form id="gateForm" novalidate>
     <div>
       <label for="pass">Passphrase</label>
@@ -674,7 +681,7 @@ form.addEventListener("submit", async (e) => {{
   btn.disabled = true;
   err.hidden = true;
   try {{
-    const res = await fetch("/organ/longway/voyage/{esc_slug}/unlock", {{
+    const res = await fetch("{esc_unlock}", {{
       method: "POST",
       headers: {{"Content-Type": "application/json"}},
       body: JSON.stringify({{passphrase}}),
@@ -700,6 +707,33 @@ form.addEventListener("submit", async (e) => {{
 """
 
 
+_GLOBE_PITCH = (
+    "Real trips outside the US with close friends—mostly by working boat, river, or rail—to places "
+    "with their own priorities instead of ones performing for tourists. Not danger tourism, not a resort "
+    "itinerary, not a brochure."
+)
+
+
+def _verify_and_set_pass(request: Request, response: Response, passphrase: str) -> dict:
+    _reject_if_limited(f"ip:{_asker_ip(request)}:longway-voyage-unlock", 15, 900)
+    active = _active_passphrase_hash()
+    if active is None:
+        raise HTTPException(503, "No passphrase is set on this house yet.")
+    if not hmac.compare_digest(_passphrase_hash(passphrase), active):
+        raise HTTPException(403, "That's not it — try again.")
+    is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    response.set_cookie(
+        key=VOYAGE_PASS_COOKIE,
+        value=_issue_pass_cookie(),
+        max_age=VOYAGE_PASS_TTL,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=is_https,
+    )
+    return {"ok": True}
+
+
 class VoyageUnlock(BaseModel):
     model_config = ConfigDict(extra="forbid")
     passphrase: str = Field(min_length=1, max_length=120)
@@ -715,13 +749,40 @@ class PublicNotebookNote(BaseModel):
     website: str = Field(default="", max_length=200)
 
 
+@public.api_route("/globe", methods=["GET", "HEAD"], response_class=HTMLResponse)
+async def public_globe(request: Request):
+    """Passphrase-gated 19-destination candidate globe; never includes trips or private details."""
+    if not _has_valid_pass(request):
+        return HTMLResponse(
+            _gate_html(
+                "/organ/longway/globe/unlock",
+                "The Long Way",
+                "Do we actually want to live through this, or just tell a story about it?",
+                pitch=_GLOBE_PITCH,
+                kicker="Private atlas · 19 journeys",
+            ),
+            headers=_PUBLIC_VOYAGE_HEADERS,
+        )
+    html = await asyncio.to_thread(get_register().globe_page)
+    return HTMLResponse(html, headers=_PUBLIC_VOYAGE_HEADERS)
+
+
+@public.post("/globe/unlock")
+async def unlock_public_globe(request: Request, response: Response, body: VoyageUnlock):
+    """Verify the shared voyage passphrase and unlock both /globe and all public voyages for 90 days."""
+    return _verify_and_set_pass(request, response, body.passphrase)
+
+
 @public.api_route("/voyage/{slug}", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def public_voyage(request: Request, slug: str, station: str | None = None):
     """Passphrase-gated voyage page for candidates with voyage.json; never trips, rides or private data."""
     register = get_register()
     meta = await notebook_call(register.public_voyage_meta, slug)
     if not _has_valid_pass(request):
-        return HTMLResponse(_gate_html(slug, meta["title"], meta["subtitle"]), headers=_PUBLIC_VOYAGE_HEADERS)
+        return HTMLResponse(
+            _gate_html(f"/organ/longway/voyage/{slug}/unlock", meta["title"], meta["subtitle"]),
+            headers=_PUBLIC_VOYAGE_HEADERS,
+        )
     note_api = None if register.edit_disabled_reason() else f"/organ/longway/voyage/{slug}/notebook"
     html = await notebook_call(register.public_voyage_page, slug, station, note_api)
     return HTMLResponse(html, headers=_PUBLIC_VOYAGE_HEADERS)
@@ -731,23 +792,7 @@ async def public_voyage(request: Request, slug: str, station: str | None = None)
 async def unlock_public_voyage(request: Request, response: Response, slug: str, body: VoyageUnlock):
     """Verify the short shared voyage passphrase and issue a 90-day signed HttpOnly cookie."""
     await notebook_call(get_register().public_voyage_meta, slug)
-    _reject_if_limited(f"ip:{_asker_ip(request)}:longway-voyage-unlock", 15, 900)
-    active = _active_passphrase_hash()
-    if active is None:
-        raise HTTPException(503, "No passphrase is set on this house yet.")
-    if not hmac.compare_digest(_passphrase_hash(body.passphrase), active):
-        raise HTTPException(403, "That's not it — try again.")
-    is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
-    response.set_cookie(
-        key=VOYAGE_PASS_COOKIE,
-        value=_issue_pass_cookie(),
-        max_age=VOYAGE_PASS_TTL,
-        path="/",
-        httponly=True,
-        samesite="lax",
-        secure=is_https,
-    )
-    return {"ok": True}
+    return _verify_and_set_pass(request, response, body.passphrase)
 
 
 @public.post("/voyage/{slug}/notebook")
